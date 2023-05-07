@@ -11,22 +11,20 @@
 # You should have received a copy of the GNU General Public License
 # along with A³ Core.  If not, see <https://www.gnu.org/licenses/>.
 
-# © Copyright 202-2022 Raphael Eismann
+# © Copyright 2021-2022 Raphael Eismann
 
-[Unit]                                                                          
-Description=a3core execute osc-router
+[Unit]                                                                                     
+Description=a3-core reaper
 After=jack.service
+After=a3xinit.service
 
 [Service]
-Type=idle
 PrivateTmp=true
-#ExecStartPre=/bin/sleep 2
-#WorkingDirectory=
-#Environment="QT_QPA_PLATFORM=minimal"
-#Environment=QT_QPA_PLATFORM=offscreen
-ExecStart=/usr/bin/python3 /home/aaa/a3-system/a3core/a3_interface.py
-#LimitRTPRIO=70
+WorkingDirectory=/home/aaa/opt/REAPER
+ExecStartPre=/bin/sleep 3
+ExecStart=/bin/bash -c "/home/aaa/opt/REAPER/reaper -ignoreerrors"
+ExecStop=/home/aaa/opt/REAPER/reaper -close all :save
+LimitRTPRIO=09
 
 [Install]
-#WantedBy=default.target
 WantedBy=default.target

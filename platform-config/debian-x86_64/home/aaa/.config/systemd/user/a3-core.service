@@ -14,19 +14,14 @@
 # © Copyright 2021 Raphael Eismann
 
 [Unit]                                                                                     
-Description=a3core execute osc-router
+Description=a3-core osc receiver
 After=jack.service
 
 [Service]
 Type=idle
 PrivateTmp=true
-#ExecStartPre=/bin/sleep 2
-#WorkingDirectory=
-#Environment="QT_QPA_PLATFORM=minimal"
-#Environment=QT_QPA_PLATFORM=offscreen
-ExecStart=/usr/bin/python3 /home/aaa/a3-system/a3core/a3_osc_router.py
+ExecStart=/usr/bin/python3 /home/aaa/a3-core/engine/scripts/a3-core.py
 LimitRTPRIO=70
 
 [Install]
-#WantedBy=default.target
 WantedBy=default.target

@@ -14,23 +14,16 @@
 # © Copyright 2021-2022 Raphael Eismann
 
 [Unit]                                                                                     
-Description=A³ Core - Reaper
+Description=a3-core vu-meter
 After=jack.service
-After=a3xinit.service
 
 [Service]
-#Type=idle
+Type=idle
 PrivateTmp=true
-WorkingDirectory=/home/aaa/opt/REAPER
-#EnvironmentFile=/etc/environment
-#ExecStartPre=/bin/sleep 3
-#Environment="QT_QPA_PLATFORM=minimal"
-#Environment=QT_QPA_PLATFORM=offscreen
-#Environment=DISPLAY=:0
-#Environment="XAUTHORITY=/home/aaa/.Xauthority"
-ExecStart=/bin/bash -c "/home/aaa/opt/REAPER/reaper -ignoreerrors"
-ExecStop=/home/aaa/opt/REAPER/reaper -close all :save
-LimitRTPRIO=09
+WorkingDirectory=/home/aaa/a3-core/engine/supercollider
+ExecStartPre=/bin/sleep 5
+ExecStart=/usr/bin/sclang /home/aaa/a3-core/engine/supercollider/a3-vu-meter.scd
+LimitRTPRIO=80
 
 [Install]
 WantedBy=default.target
