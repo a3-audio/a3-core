@@ -14,15 +14,13 @@
 # © Copyright 2021 Raphael Eismann
 
 [Unit]                                                                                     
-Description=a3-core osc receiver
+Description=a2jmidid
 After=jack.service
-After=a3-a2jmidid.service
 
 [Service]
 Type=idle
 PrivateTmp=true
-ExecStart=/usr/bin/python3 /home/aaa/a3-core/engine/scripts/a3-core.py
-LimitRTPRIO=70
+ExecStart=/usr/bin/a2jmidid
 
 [Install]
 WantedBy=default.target

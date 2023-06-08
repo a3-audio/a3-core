@@ -1,5 +1,9 @@
 import mido
 import time
+from pythonosc.udp_client import SimpleUDPClient  # type: ignore
+
+# OSC clients
+osc_mic = SimpleUDPClient('192.168.43.51', 7771)
 
 # Define MIDI CC messages to receive tempo control
 TEMPO_CC = 20  # MIDI CC number to receive tempo control
@@ -46,6 +50,7 @@ while True:
         if ticks % 24 == 0:
             # Send a MIDI clock start message every 24 ticks
             output.send(mido.Message('start'))
+            osc_mic.send_message(f"/clock", 1)
         if ticks >= 96:
             # Reset the tick count every quarter note
             ticks = 0

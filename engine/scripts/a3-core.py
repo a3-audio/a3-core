@@ -23,7 +23,7 @@ values and sends them to destinations.
 import argparse
 import numpy as np
 import time
-import rtmidi
+import mido
 from typing import List, Any
 from enum import Enum
 from dataclasses import dataclass
@@ -46,13 +46,9 @@ udp_clients_iem = tuple(SimpleUDPClient('127.0.0.1', 1337 + index)
                         for index in range(4))
 
 # Midi client
-midiout = rtmidi.MidiOut()
-available_ports = midiout.get_ports()
-
-if available_ports:
-    midiout.open_port(0)
-else:
-    midiout.open_virtual_port("a3 osc router")
+mido.set_backend('mido.backends.rtmidi')
+midoout = mido.open_output('tap', virtual=True)
+midotap = mido.Message('note_on')
 
 @dataclass
 class MasterInfo:
@@ -67,9 +63,7 @@ class MasterInfo:
         HIGH_PASS = 1
     fx_mode: FXMode = FXMode.LOW_PASS
 
-
 master_info = MasterInfo()
-
 
 @dataclass
 class ChannelInfo:
@@ -357,8 +351,7 @@ def osc_handler_tap(address: str,
     parameter: str = words[1]
 
     if parameter == "tap" and value == "1":
-        note = [0x90, 60, 0] # Clock tap
-        midiout.send_message(note)
+        midoout.send(midotap)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
