@@ -32,14 +32,16 @@ s.boot;
 
 s.waitForBoot({
 
-//syntax: SendPeakRMS.ar(sig, replyRate: 20.0, peakLag: 3, cmdName: '/reply', replyID: -1)
+// syntax: SendPeakRMS.ar(sig, replyRate: 20.0, peakLag: 3, cmdName: '/reply', replyID: -1)
 
+// input vu-meter for a3mixer (pre fader, post gain)
 ~num_input_vu.do{
 		arg item;
 		{SendPeakRMS.ar(In.ar(2 + item, 1), ~replyrate, ~peaklag_in, "/reply" ++ item)}.play;
 		OSCFunc({ |msg| ~mic.sendMsg("/vu/" ++ item, msg[3], msg[4]);}, "/reply" ++ item);
 	};
 
+// output vu-meter for a3mixer (post master and phones volume) 
 ~num_output_vu.do{
 		arg item;
 		var after_in_vu;
@@ -48,12 +50,13 @@ s.waitForBoot({
 		OSCFunc({ |msg| ~mic.sendMsg("/vu/" ++ after_in_vu, msg[3], msg[4]);}, "/reply" ++ after_in_vu);
 	};
 
-~num_input_vu.do{
-		arg item;
-		var after_out_vu, channel;
-		channel = 1 + item;
-		after_out_vu = ~num_input_vu + ~num_output_vu + item;
-		{SendPeakRMS.ar(In.ar(2 + after_out_vu, 1), ~replyrate, ~peaklag_vid, "/reply" ++ after_out_vu)}.play;
-		OSCFunc({ |msg| ~vid.sendMsg("/vu/" ++ channel, msg[3], msg[4]);}, "/reply" ++ after_out_vu);
-	};
+// input vu for 3rd party osc receiver (post fader) 
+//~num_input_vu.do{
+//		arg item;
+//		var after_out_vu, channel;
+//		channel = 1 + item;
+//		after_out_vu = ~num_input_vu + ~num_output_vu + item;
+//		{SendPeakRMS.ar(In.ar(2 + after_out_vu, 1), ~replyrate, ~peaklag_vid, "/reply" ++ after_out_vu)}.play;
+//		OSCFunc({ |msg| ~vid.sendMsg("/vu/" ++ channel, msg[3], msg[4]);}, "/reply" ++ after_out_vu);
+//	};
 });
