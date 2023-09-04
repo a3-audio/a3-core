@@ -23,7 +23,7 @@ values and sends them to destinations.
 import argparse
 import numpy as np
 import time
-import rtmidi
+#import rtmidi
 from typing import List, Any
 from enum import Enum
 from dataclasses import dataclass
@@ -46,13 +46,13 @@ udp_clients_iem = tuple(SimpleUDPClient('127.0.0.1', 1337 + index)
                         for index in range(4))
 
 # Midi client
-midiout = rtmidi.MidiOut()
-available_ports = midiout.get_ports()
+#midiout = rtmidi.MidiOut()
+#available_ports = midiout.get_ports()
 
-if available_ports:
-    midiout.open_port(0)
-else:
-    midiout.open_virtual_port("a3 osc router")
+#if available_ports:
+#    midiout.open_port(0)
+#else:
+#    midiout.open_virtual_port("a3 osc router")
 
 @dataclass
 class MasterInfo:
@@ -67,9 +67,7 @@ class MasterInfo:
         HIGH_PASS = 1
     fx_mode: FXMode = FXMode.LOW_PASS
 
-
 master_info = MasterInfo()
-
 
 @dataclass
 class ChannelInfo:
@@ -119,6 +117,58 @@ channel_infos = (
     ),
 )
 
+# Setup Mixer behavior
+# Measurements in reaper: 
+## 0.022 = -26db, 0.673 = -6db ReaEQ
+
+def slope_master_volume(value):
+    val = np.interp(value, [0, 1], [0, 1])
+    return val
+
+def slope_booth_volume(value):
+    val = np.interp(value, [0, 1], [0, 1])
+    return val
+
+def slope_booth_volume_adjuster(value):
+    val = np.interp(value, [0, 1], [0, 0.5])
+    return val
+
+def slope_fx_freq(value):
+    val = np.interp(value, [0, 1], [0.2, 0.8])
+    return val
+
+def slope_fx_res(value):
+    val = np.interp(value, [0, 1], [0, 1])
+    return val
+
+def slope_phones_mix(value):
+    val = np.interp(value, [0, 1], [0, 1])
+    return val
+
+def slope_phones_pfl(value):
+    vali = np.interp(value, [0, 1], [0, 1])
+    val = 1 - vali
+    return val
+
+def slope_phones_volume(value):
+    val = np.interp(value, [0, 1], [0, 1])
+    return val
+
+def slope_fx_send(value):
+    val = np.interp(value, [0, 1], [0, 1])
+    return val
+
+def slope_gain(value):
+    val = np.interp(value, [0, 1], [0, 1])
+    return val
+
+def slope_eq(value):
+    val = np.interp(value, [0, 1], [0.022, 0.673])
+    return val
+
+def slope_channel_volume(value):
+    val = np.interp(value, [0, 1], [0, 1])
+    return val
 
 def set_filters() -> None:
     for channel_index in range(4):
@@ -176,35 +226,37 @@ def osc_handler_channel(address: str,
     channel_index = int(channel)
     track_input = channel_infos[channel_index].track_input
 
-# A3MIX-POTENTIOMETER
+    # A3MIX-POTENTIOMETER
 
-    if parameter == "gain":
-        osc_reaper.send_message(f"/track/{track_input}/fxeq/gain", value)
-
-    elif parameter == "volume":
+    if parameter == "fx-send":
+        val = slope_fx_send(value)
         track_channelbus = channel_infos[channel_index].track_channelbus
-        osc_reaper.send_message(f"/track/{track_channelbus}/volume", value)
+        osc_reaper.send_message(f"/track/{track_channelbus}/send/1/volume", val)
+
+    elif parameter == "gain":
+        val = slope_gain(value)
+        osc_reaper.send_message(f"/track/{track_input}/fxeq/gain", val)
 
     elif parameter == "eq":
         eq_parameter : str = words[4]
         if eq_parameter == "high":
-            val = np.interp(value, [0, 1], [0.01, 0.8])
+            val = slope_eq(value)
             osc_reaper.send_message(f"/track/{track_input}/fxeq/hishelf/gain", val)
 
         elif eq_parameter == "mid":
-            val = np.interp(value, [0, 1], [0.01, 0.8])
+            val = slope_eq(value)
             osc_reaper.send_message(f"/track/{track_input}/fxeq/band/0/gain", val)
 
         elif eq_parameter == "low":
-            val = np.interp(value, [0, 1], [0.01, 0.8])
+            val = slope_eq(value)
             osc_reaper.send_message(f"/track/{track_input}/fxeq/loshelf/gain", val)
-
-    elif parameter == "fx-send":
+    
+    elif parameter == "volume":
+        val = slope_channel_volume(value)
         track_channelbus = channel_infos[channel_index].track_channelbus
-        osc_reaper.send_message(f"/track/{track_channelbus}/send/1/volume", value)
+        osc_reaper.send_message(f"/track/{track_channelbus}/volume", val)
 
-
-# A3MIX-BUTTONS
+    # A3MIX-BUTTONS
 
     elif parameter == "pfl" and value == 1:
         channel_infos[channel_index].toggle_pfl = (
@@ -234,7 +286,7 @@ def osc_handler_channel(address: str,
         osc_reaper.send_message(
             f"/track/{track_bformat}/mute", float(not is_enabled))
 
-# A3MOTION
+    # A3MOTION
 
     elif parameter == "azimuth":
         val = np.interp(value, [-180, 180], [0, 1])
@@ -281,32 +333,31 @@ def osc_handler_master(address: str,
     parameter: str = words[2]
 
     if parameter == "volume":
-        val = np.interp(value, [0, 1], [0.01, 0.72])
+        val_master = slope_master_volume(value)
+        val_booth = slope_booth_volume_adjuster(value)
         track = master_info.track_masterbus
-        #track_b = master_info.track_booth
-        osc_reaper.send_message(f"/track/{track}/volume", value)
-        #osc_reaper.send_message(f"/track/{track_b}/volume", val)
+        track_booth_booth = master_info.track_booth
+        osc_reaper.send_message(f"/track/{track}/volume", val_master)
+        osc_reaper.send_message(f"/track/{track_booth_booth}/fx/4/fxparam/1/value", val_booth)
 
     if parameter == "booth":
-        val = np.interp(value, [0, 1], [0.01, 0.72])
+        val = slope_booth_volume(value)
         track = master_info.track_booth
-        osc_reaper.send_message(f"/track/{track}/volume", value)
-        #osc_reaper.send_message(f"/track/{track + 1}/volume", val)
-        #osc_reaper.send_message(f"/track/{track + 2}/volume", val)
-        #osc_reaper.send_message(f"/track/{track + 3}/volume", val)
+        osc_reaper.send_message(f"/track/{track}/volume", val)
 
     if parameter == "phones_mix":
-        val = np.interp(value, [0, 1], [0.01, 0.72])
+        phones_mix = slope_phones_mix(value)
+        phones_pfl = slope_phones_pfl(value)
         track_mainmixbus = master_info.track_mainmixbus
-        osc_reaper.send_message(f"/track/{track_mainmixbus}/volume", value)
+        osc_reaper.send_message(f"/track/{track_mainmixbus}/volume", phones_mix)
         for channel_index in range(4):
             track_pfl = channel_infos[channel_index].track_pfl
-            osc_reaper.send_message(f"/track/{track_pfl}/volume", 1 - value)
+            osc_reaper.send_message(f"/track/{track_pfl}/volume", phones_pfl)
 
     if parameter == "phones_volume":
-        val = np.interp(value, [0, 1], [0.01, 0.72])
+        val = slope_phones_volume(value)
         track_phones = master_info.track_phones
-        osc_reaper.send_message(f"/track/{track_phones}/volume", value)
+        osc_reaper.send_message(f"/track/{track_phones}/volume", val)
 
 
 def osc_handler_fx(address: str,
@@ -326,25 +377,18 @@ def osc_handler_fx(address: str,
         set_filters()
 
     elif parameter == "frequency":
+        val = slope_fx_freq(value)
         for channel_index in range(4):
             track_input = channel_infos[channel_index].track_input
-            osc_reaper.send_message(
-                f"/track/{track_input}"  # Hi-Pass Freq
-                f"/fx/{FX_INDEX_HIPASS}/fxparam/7/value", float(value))
-            osc_reaper.send_message(
-                f"/track/{track_input}"  # Lo-Pass Freq
-                f"/fx/{FX_INDEX_LOPASS}/fxparam/7/value", float(value))
+            osc_reaper.send_message(f"/track/{track_input}/fx/{FX_INDEX_HIPASS}/fxparam/7/value", val)
+            osc_reaper.send_message(f"/track/{track_input}/fx/{FX_INDEX_LOPASS}/fxparam/7/value", val)
 
     elif parameter == "resonance":
-        val = np.interp(float(value), [0, 1], [0, 0.9])
+        val = slope_fx_res(value)
         for channel_index in range(4):
             track_input = channel_infos[channel_index].track_input
-            osc_reaper.send_message(
-                f"/track/{track_input}"  # Hi-pass Resonance
-                f"/fx/{FX_INDEX_HIPASS}/fxparam/6/value", val)
-            osc_reaper.send_message(
-                f"/track/{track_input}"  # Lo-Pass Resonance
-                f"/fx/{FX_INDEX_LOPASS}/fxparam/6/value", val)
+            osc_reaper.send_message(f"/track/{track_input}/fx/{FX_INDEX_HIPASS}/fxparam/6/value", val)
+            osc_reaper.send_message(f"/track/{track_input}/fx/{FX_INDEX_LOPASS}/fxparam/6/value", val)
 
 def osc_handler_tap(address: str,
                    *osc_arguments: List[Any]) -> None:
