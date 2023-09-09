@@ -57,10 +57,14 @@ udp_clients_iem = tuple(SimpleUDPClient('127.0.0.1', 1337 + index)
 @dataclass
 class MasterInfo:
     track_masterbus: int = 1
-    track_mainmixbus: int = 16
-    track_booth: int = 5
-    track_phones: int = 9
-    track_reverb_aux_nr: int = 11
+    track_master_booth: int = 5
+    track_booth: int = 6
+    
+    track_master_phones: int = 10
+    track_phones: int = 11
+    track_mainmixbus: int = 18
+    
+    track_reverb_aux_nr: int = 64
 
     class FXMode(Enum):
         LOW_PASS = 0
@@ -85,35 +89,35 @@ class ChannelInfo:
 channel_infos = (
     # Channel 1
     ChannelInfo(
-        track_input=20,
-        track_stereo=19,
-        track_bformat=18,
-        track_channelbus=17,
-        track_pfl=12,
+        track_input=22,
+        track_stereo=21,
+        track_bformat=20,
+        track_channelbus=19,
+        track_pfl=14,
     ),
     # Channel 2
     ChannelInfo(
-        track_input=24,
-        track_stereo=23,
-        track_bformat=22,
-        track_channelbus=21,
-        track_pfl=13,
+        track_input=26,
+        track_stereo=25,
+        track_bformat=24,
+        track_channelbus=23,
+        track_pfl=15,
     ),
     # Channel 3
     ChannelInfo(
-        track_input=28,
-        track_stereo=27,
-        track_bformat=26,
-        track_channelbus=25,
-        track_pfl=14,
+        track_input=30,
+        track_stereo=29,
+        track_bformat=28,
+        track_channelbus=27,
+        track_pfl=16,
     ),
     # Channel 4
     ChannelInfo(
-        track_input=32,
-        track_stereo=31,
-        track_bformat=30,
-        track_channelbus=29,
-        track_pfl=15,
+        track_input=34,
+        track_stereo=33,
+        track_bformat=32,
+        track_channelbus=31,
+        track_pfl=17,
     ),
 )
 
@@ -130,7 +134,7 @@ def slope_booth_volume(value):
     return val
 
 def slope_booth_volume_adjuster(value):
-    val = np.interp(value, [0, 1], [0, 0.5])
+    val = np.interp(value, [0, 1], [0, 1])
     return val
 
 def slope_fx_freq(value):
@@ -305,20 +309,16 @@ def osc_handler_channel(address: str,
             f"/track/{track_bformat}/fx/1/fxparam/8/value", val)
 
     elif parameter == "width":
-        val = np.interp(value, [0, 1], [0.5, 0.9])
+        val = np.interp(value, [0, 180], [0.5, 0.75])
         track_bformat = channel_infos[channel_index].track_bformat
         osc_reaper.send_message(
             f"/track/{track_bformat}/fx/1/fxparam/10/value", val)
-        #udp_client = udp_clients_iem[channel_index]
-        #udp_client.send_message("/StereoEncoder/width", val)
-        #print(str(value))
 
-    elif parameter == "reverb":
-        track_channelbus = channel_infos[channel_index].track_channelbus
-        reverb_value = master_info.track_reverb_aux_nr
-        #osc_reaper.send_message(
-        #f"/track/{track_channelbus}/send/{reverb_value}/volume", value)
-
+    elif parameter == "order":
+        val = np.interp(value, [0, 3], [0.1, 0.5])
+        track_bformat = channel_infos[channel_index].track_bformat
+        osc_reaper.send_message(
+            f"/track/{track_bformat}/fx/1/fxparam/1/value", val)
 
 def osc_handler_master(address: str,
                        *osc_arguments: List[Any]) -> None:
@@ -334,11 +334,12 @@ def osc_handler_master(address: str,
 
     if parameter == "volume":
         val_master = slope_master_volume(value)
-        val_booth = slope_booth_volume_adjuster(value)
-        track = master_info.track_masterbus
-        track_booth_booth = master_info.track_booth
-        osc_reaper.send_message(f"/track/{track}/volume", val_master)
-        osc_reaper.send_message(f"/track/{track_booth_booth}/fx/4/fxparam/1/value", val_booth)
+        masterbus = master_info.track_masterbus
+        master_booth = master_info.track_master_booth
+        master_phones = master_info.track_master_phones
+        osc_reaper.send_message(f"/track/{masterbus}/volume", val_master)
+        osc_reaper.send_message(f"/track/{master_booth}/volume", val_master)
+        osc_reaper.send_message(f"/track/{master_phones}/volume", val_master)
 
     if parameter == "booth":
         val = slope_booth_volume(value)
