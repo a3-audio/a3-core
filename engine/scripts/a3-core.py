@@ -62,10 +62,12 @@ class MasterInfo:
     
     track_master_phones: int = 10
     track_phones: int = 11
-    
     track_mainmixbus: int = 18
+    
     track_master_rec: int = 35
-    track_reverb_aux_nr: int = 64
+    
+    track_reverb_binaural: int = 38
+    track_reverb_stereo: int = 39
 
     class FXMode(Enum):
         LOW_PASS = 0
@@ -162,10 +164,6 @@ def slope_phones_pfl_constant_power(value):
     val = np.interp(value, resolution, slope)
     return val
 
-def slope_gain(value):
-    val = np.interp(value, [0, 1], [0, 1])
-    return val
-
 def set_filters() -> None:
     for channel_index in range(4):
         for fx_index, bypass_active in (
@@ -228,9 +226,10 @@ def osc_handler_channel(address: str,
         val = slope_constant_power(value)
         track_channelbus = channel_infos[channel_index].track_channelbus
         osc_reaper.send_message(f"/track/{track_channelbus}/send/13/volume", val)
+        osc_reaper.send_message(f"/track/{track_channelbus}/send/14/volume", val)
 
     elif parameter == "gain":
-        val = slope_gain(value)
+        val = slope_constant_power(value)
         osc_reaper.send_message(f"/track/{track_input}/fxeq/gain", val)
 
     elif parameter == "eq":
@@ -251,6 +250,7 @@ def osc_handler_channel(address: str,
         val = slope_constant_power(value)
         track_channelbus = channel_infos[channel_index].track_channelbus
         osc_reaper.send_message(f"/track/{track_channelbus}/volume", val)
+
 
     # A3MIX-BUTTONS
 
@@ -350,6 +350,12 @@ def osc_handler_master(address: str,
         track_phones = master_info.track_phones
         osc_reaper.send_message(f"/track/{track_phones}/volume", val)
 
+    elif parameter == "return":
+        val = slope_constant_power(value)
+        track_reverb_binaural = master_info.track_reverb_binaural
+        track_reverb_stereo = master_info.track_reverb_stereo
+        osc_reaper.send_message(f"/track/{track_reverb_binaural}/volume", val)
+        osc_reaper.send_message(f"/track/{track_reverb_stereo}/volume", val)
 
 def osc_handler_fx(address: str,
                    *osc_arguments: List[Any]) -> None:
