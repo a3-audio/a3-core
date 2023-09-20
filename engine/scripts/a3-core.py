@@ -60,8 +60,8 @@ class MasterInfo:
     track_master_booth: int = 5
     track_booth: int = 6
     
-    track_master_phones: int = 10
-    track_phones: int = 11
+    track_master_phones: int = 17
+    track_phones: int = 10
     track_mainmixbus: int = 18
     
     track_master_rec: int = 35
