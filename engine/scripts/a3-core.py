@@ -87,7 +87,11 @@ class ChannelInfo:
     toggle_fx: bool = False
     toggle_pfl: bool = False
     toggle_3d: bool = False
-    position_xyz: tuple[int, int, int] = (0, 0, 0)
+
+    # we cache elevation and width because elevation is used to
+    # recalculate the width, which is narrowed towards the zenith.
+    elevation: float = 0.0
+    width: float = 0.0
 
 channel_infos = (
     # Channel 1
@@ -181,6 +185,21 @@ def set_filters() -> None:
             # osc_reaper expects 1 for "plugin active" and 0 for bypass
             osc_reaper.send_message(message, float(not bypass_active))
 
+def send_elevation(channel_index):
+    elevation = channel_infos[channel_index].elevation
+    normalized_value = np.interp(elevation, [-180, 180], [0, 1])
+    track_bformat = channel_infos[channel_index].track_bformat
+    osc_reaper.send_message(f"/track/{track_bformat}/fx/1/fxparam/8/value", normalized_value)
+    #osc_vid.send_message(f"/track/{track_bformat}/fx/1/fxparam/8/value", normalized_value)
+
+def send_width(channel_index):
+    elevation_in_radians = channel_infos[channel_index].elevation / 360.0 * 2.0 * math.pi
+    # perform narrowing towards zenith, maybe consider sharper falloff
+    width = np.interp(channel_infos[channel_index].width * math.cos(elevation_in_radians)
+    normalized_value = np.interp(value, [0, 180], [0.5, 0.75])
+    track_bformat = channel_infos[channel_index].track_bformat
+    osc_reaper.send_message(
+        f"/track/{track_bformat}/fx/1/fxparam/10/value", normalized_value)
 
 def param_handler(address: str,
                   *osc_arguments: List[Any]) -> None:
@@ -291,16 +310,13 @@ def osc_handler_channel(address: str,
         #osc_vid.send_message(f"/track/{track_bformat}/fx/1/fxparam/7/value", val)
 
     elif parameter == "elevation":
-        val = np.interp(value, [-180, 180], [0, 1])
-        track_bformat = channel_infos[channel_index].track_bformat
-        osc_reaper.send_message(f"/track/{track_bformat}/fx/1/fxparam/8/value", val)
-        #osc_vid.send_message(f"/track/{track_bformat}/fx/1/fxparam/8/value", val)
+        channel_infos[channel_index].elevation = value
+        send_elevation(channel_index)
+        send_width(channel_index) # width depends on elevation, narrowing at zenith
 
     elif parameter == "width":
-        val = np.interp(value, [0, 180], [0.5, 0.75])
-        track_bformat = channel_infos[channel_index].track_bformat
-        osc_reaper.send_message(
-            f"/track/{track_bformat}/fx/1/fxparam/10/value", val)
+        channel_infos[channel_index].width = value
+        send_width(channel_index)
 
     elif parameter == "order":
         val = np.interp(value, [0, 3], [0.1, 0.5])
