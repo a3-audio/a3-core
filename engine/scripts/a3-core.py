@@ -24,6 +24,7 @@ import argparse
 import numpy as np
 import time
 #import rtmidi
+import math
 from typing import List, Any
 from enum import Enum
 from dataclasses import dataclass
@@ -57,17 +58,15 @@ udp_clients_iem = tuple(SimpleUDPClient('127.0.0.1', 1337 + index)
 @dataclass
 class MasterInfo:
     track_masterbus: int = 1
-    track_master_booth: int = 5
-    track_booth: int = 6
+    track_booth: int = 5
     
-    track_master_phones: int = 17
-    track_phones: int = 10
-    track_mainmixbus: int = 18
+    track_phones: int = 9
+    track_mainmixbus: int = 16
     
-    track_master_rec: int = 35
+    track_master_rec: int = 33
     
-    track_reverb_binaural: int = 38
-    track_reverb_stereo: int = 39
+    track_reverb_binaural: int = 36
+    track_reverb_stereo: int = 37
 
     class FXMode(Enum):
         LOW_PASS = 0
@@ -96,35 +95,35 @@ class ChannelInfo:
 channel_infos = (
     # Channel 1
     ChannelInfo(
-        track_input=22,
-        track_stereo=21,
-        track_bformat=20,
-        track_channelbus=19,
-        track_pfl=14,
+        track_input=20,
+        track_stereo=19,
+        track_bformat=18,
+        track_channelbus=17,
+        track_pfl=12,
     ),
     # Channel 2
     ChannelInfo(
-        track_input=26,
-        track_stereo=25,
-        track_bformat=24,
-        track_channelbus=23,
-        track_pfl=15,
+        track_input=24,
+        track_stereo=23,
+        track_bformat=22,
+        track_channelbus=21,
+        track_pfl=13,
     ),
     # Channel 3
     ChannelInfo(
-        track_input=30,
-        track_stereo=29,
-        track_bformat=28,
-        track_channelbus=27,
-        track_pfl=16,
+        track_input=28,
+        track_stereo=27,
+        track_bformat=26,
+        track_channelbus=25,
+        track_pfl=14,
     ),
     # Channel 4
     ChannelInfo(
-        track_input=34,
-        track_stereo=33,
-        track_bformat=32,
-        track_channelbus=31,
-        track_pfl=17,
+        track_input=32,
+        track_stereo=31,
+        track_bformat=30,
+        track_channelbus=29,
+        track_pfl=15,
     ),
 )
 
@@ -195,8 +194,8 @@ def send_elevation(channel_index):
 def send_width(channel_index):
     elevation_in_radians = channel_infos[channel_index].elevation / 360.0 * 2.0 * math.pi
     # perform narrowing towards zenith, maybe consider sharper falloff
-    width = np.interp(channel_infos[channel_index].width * math.cos(elevation_in_radians)
-    normalized_value = np.interp(value, [0, 180], [0.5, 0.75])
+    width = channel_infos[channel_index].width * math.cos(elevation_in_radians)
+    normalized_value = np.interp(width, [0, 180], [0.5, 0.75])
     track_bformat = channel_infos[channel_index].track_bformat
     osc_reaper.send_message(
         f"/track/{track_bformat}/fx/1/fxparam/10/value", normalized_value)
@@ -339,12 +338,8 @@ def osc_handler_master(address: str,
     if parameter == "volume":
         val_master = slope_constant_power(value)
         masterbus = master_info.track_masterbus
-        master_booth = master_info.track_master_booth
-        master_phones = master_info.track_master_phones
         master_rec = master_info.track_master_rec
         osc_reaper.send_message(f"/track/{masterbus}/volume", val_master)
-        osc_reaper.send_message(f"/track/{master_booth}/volume", val_master)
-        osc_reaper.send_message(f"/track/{master_phones}/volume", val_master)
         osc_reaper.send_message(f"/track/{master_rec}/volume", val_master)
 
     if parameter == "booth":
