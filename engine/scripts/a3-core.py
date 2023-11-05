@@ -189,7 +189,7 @@ def send_elevation(channel_index):
     normalized_value = np.interp(elevation, [-180, 180], [0, 1])
     track_bformat = channel_infos[channel_index].track_bformat
     osc_reaper.send_message(f"/track/{track_bformat}/fx/1/fxparam/8/value", normalized_value)
-    #osc_vid.send_message(f"/track/{track_bformat}/fx/1/fxparam/8/value", normalized_value)
+    osc_vid.send_message(f"/track/{channel_index+1}/elevation", normalized_value)
 
 def send_width(channel_index):
     elevation_in_radians = channel_infos[channel_index].elevation / 360.0 * 2.0 * math.pi
@@ -197,8 +197,9 @@ def send_width(channel_index):
     width = channel_infos[channel_index].width * math.cos(elevation_in_radians)
     normalized_value = np.interp(width, [0, 180], [0.5, 0.75])
     track_bformat = channel_infos[channel_index].track_bformat
-    osc_reaper.send_message(
-        f"/track/{track_bformat}/fx/1/fxparam/10/value", normalized_value)
+    osc_reaper.send_message(f"/track/{track_bformat}/fx/1/fxparam/10/value", normalized_value)
+    osc_vid.send_message(f"/track/{channel_index+1}/width", normalized_value)
+
 
 def param_handler(address: str,
                   *osc_arguments: List[Any]) -> None:
@@ -306,7 +307,7 @@ def osc_handler_channel(address: str,
         val = np.interp(value, [-180, 180], [0, 1])
         track_bformat = channel_infos[channel_index].track_bformat
         osc_reaper.send_message(f"/track/{track_bformat}/fx/1/fxparam/7/value", val)
-        #osc_vid.send_message(f"/track/{track_bformat}/fx/1/fxparam/7/value", val)
+        osc_vid.send_message(f"/track/{channel_index+1}/azimuth", val)
 
     elif parameter == "elevation":
         channel_infos[channel_index].elevation = value
@@ -320,8 +321,7 @@ def osc_handler_channel(address: str,
     elif parameter == "order":
         val = np.interp(value, [0, 3], [0.1, 0.5])
         track_bformat = channel_infos[channel_index].track_bformat
-        osc_reaper.send_message(
-            f"/track/{track_bformat}/fx/1/fxparam/1/value", val)
+        osc_reaper.send_message(f"/track/{track_bformat}/fx/1/fxparam/1/value", val)
 
 def osc_handler_master(address: str,
                        *osc_arguments: List[Any]) -> None:
