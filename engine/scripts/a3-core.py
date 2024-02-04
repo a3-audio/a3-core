@@ -41,7 +41,7 @@ FX_INDEX_LOPASS: int = 3
 osc_mic = SimpleUDPClient('192.168.43.51', 7771)
 osc_moc = SimpleUDPClient('192.168.43.52', 8700)
 osc_reaper = SimpleUDPClient('127.0.0.1', 9001)
-osc_vid = SimpleUDPClient('192.168.43.102', 7771)
+osc_vid = SimpleUDPClient('192.168.43.103', 7771)
 
 udp_clients_iem = tuple(SimpleUDPClient('127.0.0.1', 1337 + index)
                         for index in range(4))
@@ -143,12 +143,16 @@ def slope_constant_power(value):
 
 def slope_eq(value):
     resolution = np.arange(start=0, stop=1, step=0.1)
-    slope = [0.22, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.673]
+    slope = [0.01, 0.1, 0.25, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.673]
     val = np.interp(value, resolution, slope)
     return val
 
-def slope_fx_freq(value):
+def slope_fx_freq_hipass(value):
     val = np.interp(value, [0, 1], [0.2, 0.8])
+    return val
+
+def slope_fx_freq_lopass(value):
+    val = np.interp(value, [0, 1], [0.8, 0.2])
     return val
 
 def slope_fx_res(value):
@@ -385,11 +389,12 @@ def osc_handler_fx(address: str,
         set_filters()
 
     elif parameter == "frequency":
-        val = slope_fx_freq(value)
+        val_hipass = slope_fx_freq_hipass(value)
+        val_lopass = slope_fx_freq_lopass(value)
         for channel_index in range(4):
             track_input = channel_infos[channel_index].track_input
-            osc_reaper.send_message(f"/track/{track_input}/fx/{FX_INDEX_HIPASS}/fxparam/7/value", val)
-            osc_reaper.send_message(f"/track/{track_input}/fx/{FX_INDEX_LOPASS}/fxparam/7/value", val)
+            osc_reaper.send_message(f"/track/{track_input}/fx/{FX_INDEX_HIPASS}/fxparam/7/value", val_hipass)
+            osc_reaper.send_message(f"/track/{track_input}/fx/{FX_INDEX_LOPASS}/fxparam/7/value", val_lopass)
 
     elif parameter == "resonance":
         val = slope_fx_res(value)
