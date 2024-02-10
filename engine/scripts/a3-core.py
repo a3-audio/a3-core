@@ -143,7 +143,7 @@ def slope_constant_power(value):
 
 def slope_eq(value):
     resolution = np.arange(start=0, stop=1, step=0.1)
-    slope = [0.01, 0.1, 0.25, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.673]
+    slope = [0.0, 0.1, 0.25, 0.4, 0.45, 0.5, 0.52, 0.53, 0.54, 0.55]
     val = np.interp(value, resolution, slope)
     return val
 
@@ -252,22 +252,26 @@ def osc_handler_channel(address: str,
         osc_reaper.send_message(f"/track/{track_channelbus}/send/14/volume", val)
 
     elif parameter == "gain":
-        val = slope_constant_power(value)
-        osc_reaper.send_message(f"/track/{track_input}/fxeq/gain", val)
+        #val = slope_constant_power(value)
+        #osc_reaper.send_message(f"/track/{track_input}/fxeq/gain", val)
+        osc_reaper.send_message(f"/track/{track_input}/fx/1/fxparam/6/value", value)
 
     elif parameter == "eq":
         eq_parameter : str = words[4]
         if eq_parameter == "high":
             val = slope_eq(value)
-            osc_reaper.send_message(f"/track/{track_input}/fxeq/hishelf/gain", val)
+            #osc_reaper.send_message(f"/track/{track_input}/fxeq/hishelf/gain", val)
+            osc_reaper.send_message(f"/track/{track_input}/fx/1/fxparam/5/value", val)
 
         elif eq_parameter == "mid":
             val = slope_eq(value)
-            osc_reaper.send_message(f"/track/{track_input}/fxeq/band/0/gain", val)
+            #osc_reaper.send_message(f"/track/{track_input}/fxeq/band/0/gain", val)
+            osc_reaper.send_message(f"/track/{track_input}/fx/1/fxparam/3/value", val)
 
         elif eq_parameter == "low":
             val = slope_eq(value)
-            osc_reaper.send_message(f"/track/{track_input}/fxeq/loshelf/gain", val)
+            #osc_reaper.send_message(f"/track/{track_input}/fxeq/loshelf/gain", val)
+            osc_reaper.send_message(f"/track/{track_input}/fx/1/fxparam/1/value", val)
     
     elif parameter == "volume":
         val = slope_constant_power(value)
