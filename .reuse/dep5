@@ -12,10 +12,14 @@ Files: platform-config/*
 Copyright: 2023 A3 Audio <contact@a3-audio.com>
 License: CC-BY-SA-4.0
 
-Files: engine/*
+Files: software/*
 Copyright: 2023 A3 Audio <contact@a3-audio.com>
 License: GPL-3.0-or-later
 
 Files: platform-config/debian-x86_64/presets/*
+Copyright: 2023 A3 Audio <contact@a3-audio.com>
+License: CC0-1.0
+
+Files: README.md
 Copyright: 2023 A3 Audio <contact@a3-audio.com>
 License: CC0-1.0
