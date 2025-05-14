@@ -215,7 +215,7 @@ def param_handler(address: str,
     #  mypy 0.920 reports a false positive, retest!
     value: float = float(osc_arguments[0])  # type: ignore
     assert type(value) == float
-    print(section + "." + parameter + " : " + str(value))
+    # print(section + "." + parameter + " : " + str(value))
 
     for channel_index in range(4):
         if section == str(channel_index):
@@ -234,7 +234,7 @@ def osc_handler_channel(address: str,
     value: float = float(osc_arguments[0])  # type: ignore
     assert type(value) == float
 
-    print(address + " : " + str(value))
+    # print(address + " : " + str(value))
 
     words: List[str] = address.split("/")
     channel: str = words[2]
@@ -306,9 +306,9 @@ def osc_handler_channel(address: str,
         is_enabled = channel_infos[channel_index].toggle_3d
         osc_mic.send_message(f"/channel/{channel_index}/led/3d", float(is_enabled))
         osc_reaper.send_message(
-            f"/track/{track_stereo}/mute", float(is_enabled))
+            f"/track/{track_stereo}/volume", float(not is_enabled))
         osc_reaper.send_message(
-            f"/track/{track_bformat}/mute", float(not is_enabled))
+            f"/track/{track_bformat}/volume", float(is_enabled))
 
     # A3MOTION
 
@@ -339,7 +339,7 @@ def osc_handler_master(address: str,
     value: float = float(osc_arguments[0])  # type: ignore
     assert type(value) == float
 
-    print(address + " : " + str(value))
+    # print(address + " : " + str(value))
 
     words: List[str] = address.split("/")
     parameter: str = words[2]
@@ -382,7 +382,7 @@ def osc_handler_fx(address: str,
 
     value = osc_arguments[0]
 
-    print(address + " : " + str(value))
+    # print(address + " : " + str(value))
 
     words: List[str] = address.split("/")
     parameter: str = words[2]
@@ -413,7 +413,7 @@ def osc_handler_tap(address: str,
 
     value = osc_arguments[0]
 
-    print(address + " : " + str(value))
+    # print(address + " : " + str(value))
 
     words: List[str] = address.split("/")
     parameter: str = words[1]
@@ -444,164 +444,3 @@ if __name__ == "__main__":
     server = osc_server.ThreadingOSCUDPServer((args.ip, args.port), dispatcher)
     print("Serving on {}".format(server.server_address))
     server.serve_forever()
-
-
-# def vu_handler(address: str, *osc_arguments: List[Any]) -> None:
-
-#     words = address.split("/")
-#     section: str = words[3]
-
-#     #  mypy 0.920 reports a false positive, retest!
-#     value: float = float(osc_arguments[0])  # type: ignore
-#     assert type(value) == float
-
-#     fp = [0, 0.05, 0.10, 0.15, 0.20, 0.40, 0.60, 0.65, 0.75, 0.90]
-#     xp = [0, 0.25, 0.30, 0.37, 0.43, 0.50, 0.55, 0.58, 0.60, 0.64]
-#     val = np.interp(value, xp, fp)
-#     osc_mic.send_message(f"/track/{section}/vu", val)
-#     # print(str(value))
-
-
-# def ctrlMotionToIem_handler(address: str,
-#                             *osc_arguments: List[Any]) -> None:
-#     words = address.split("/")
-#     track = words[3]
-#     param = words[4]
-
-#     # print(words)
-#     # value = osc_arguments
-#     # print("/ctrlMotion/track/" + track + "/" + param + "/ : " + str(value))
-
-#     if track == "1":
-#         if param == "xyz":
-#             iem_1.send_message("/CoordinateConverter/xPos",
-#                                np.interp(osc_arguments[1], [0, 1], [-1, 1]))
-#             iem_1.send_message("/CoordinateConverter/yPos",
-#                                np.interp(osc_arguments[0], [0, 1], [1, -1]))
-
-#     if track == "2":
-#         match_xyz = re.match(param, "xyz")
-#         if match_xyz:
-#             iem_2.send_message("/CoordinateConverter/xPos",
-#                                np.interp(osc_arguments[1], [0, 1], [-1, 1]))
-#             iem_2.send_message("/CoordinateConverter/yPos",
-#                                np.interp(osc_arguments[0], [0, 1], [1, -1]))
-#             # iem_2.send_message("/CoordinateConverter/zPos", osc_arguments[2])
-#         if param == "width":
-#             iem_2.send_message("/CoordinateConverter/radius", osc_arguments[0])
-#         if param == "side":
-#             osc_reaper.send_message("/track/" + dj2_in + "/fx/2/fxparam/1/value",
-#                                 osc_arguments[0])
-
-#     if track == "3":
-#         match_xyz = re.match(param, "xyz")
-#         if match_xyz:
-#             iem_3.send_message("/CoordinateConverter/xPos",
-#                                np.interp(osc_arguments[1], [0, 1], [-1, 1]))
-#             iem_3.send_message("/CoordinateConverter/yPos",
-#                                np.interp(osc_arguments[0], [0, 1], [1, -1]))
-#             # iem_3.send_message("/CoordinateConverter/zPos", osc_arguments[2])
-#         if param == "width":
-#             iem_3.send_message("/CoordinateConverter/radius", osc_arguments[0])
-#         if param == "side":
-#             osc_reaper.send_message("/track/" + dj3_in + "/fx/2/fxparam/1/value",
-#                                 osc_arguments[0])
-
-#     if track == "4":
-#         match_xyz = re.match(param, "xyz")
-#         if match_xyz:
-#             iem_4.send_message("/CoordinateConverter/xPos",
-#                                np.interp(osc_arguments[1], [0, 1], [-1, 1]))
-#             iem_4.send_message("/CoordinateConverter/yPos",
-#                                np.interp(osc_arguments[0], [0, 1], [1, -1]))
-#             # iem_4.send_message("/CoordinateConverter/zPos", osc_arguments[2])
-#         if param == "width":
-#             iem_4.send_message("/CoordinateConverter/radius", osc_arguments[0])
-#         if param == "side":
-#             osc_reaper.send_message("/track/" + dj4_in + "/fx/2/fxparam/1/value",
-#                                 osc_arguments[0])
-
-
-# def iemToCtrlMotion_handler(address: str,
-#                             *osc_arguments: List[Any]) -> None:
-#     words = address.split("/")
-#     track = words[1]
-#     param = words[2]
-
-#     print(words)
-#     # value = osc_arguments[0]
-#     # print("/CoordinateConverter/" + track + "/" + param + " : " + str(value))
-
-#     if track == "1":
-#         if (param == "xPos" or param == "yPos" or param == "yPos"):
-#             if param == "xPos":
-#                 val_send_ch1_xyz[1] = (np.interp(
-#                     osc_arguments[0], [-1, 1], [0, 1]))
-#             if param == "yPos":
-#                 val_send_ch1_xyz[0] = (np.interp(
-#                     osc_arguments[0], [-1, 1], [1, 0]))
-#             else:
-#                 val_send_ch1_xyz[2] = (np.interp(
-#                     osc_arguments[0], [-1, 1], [0, 1]))
-#             osc_moc.send_message(
-#                 "/moc/channel/1/pos/xyz", val_send_ch1_xyz)
-
-#         if param == "radius":
-#             osc_moc.send_message(
-#                 "/ctrlMotion/track/1/width", osc_arguments[0])
-
-#     if track == "2":
-#         if (param == "xPos" or param == "yPos" or param == "yPos"):
-#             if param == "xPos":
-#                 val_send_ch2_xyz[1] = (np.interp(
-#                     osc_arguments[0], [-1, 1], [0, 1]))
-#             if param == "yPos":
-#                 val_send_ch2_xyz[0] = (np.interp(
-#                     osc_arguments[0], [-1, 1], [1, 0]))
-#             else:
-#                 val_send_ch2_xyz[2] = (np.interp(
-#                     osc_arguments[0], [-1, 1], [0, 1]))
-#             osc_moc.send_message(
-#                 "/moc/channel/2/pos/xyz", val_send_ch2_xyz)
-
-#         if param == "radius":
-#             osc_moc.send_message(
-#                 "/ctrlMotion/track/2/width", osc_arguments[0])
-
-#     if track == "3":
-#         if (param == "xPos" or param == "yPos" or param == "yPos"):
-#             if param == "xPos":
-#                 val_send_ch3_xyz[1] = (np.interp(
-#                     osc_arguments[0], [-1, 1], [0, 1]))
-#             if param == "yPos":
-#                 val_send_ch3_xyz[0] = (np.interp(
-#                     osc_arguments[0], [-1, 1], [1, 0]))
-#             else:
-#                 val_send_ch3_xyz[2] = (np.interp(
-#                     osc_arguments[0], [-1, 1], [0, 1]))
-#             osc_moc.send_message(
-#                 "/moc/channel/3/pos/xyz", val_send_ch3_xyz)
-
-#         if param == "radius":
-#             osc_moc.send_message(
-#                 "/ctrlMotion/track/3/width", osc_arguments[0])
-
-#     if track == "4":
-#         if (param == "xPos" or param == "yPos" or param == "yPos"):
-#             if param == "xPos":
-#                 val_send_ch4_xyz[1] = (np.interp(
-#                     osc_arguments[0], [-1, 1], [0, 1]))
-#             if param == "yPos":
-#                 val_send_ch4_xyz[0] = (np.interp(
-#                     osc_arguments[0], [-1, 1], [1, 0]))
-#             else:
-#                 val_send_ch4_xyz[2] = (np.interp(
-#                     osc_arguments[0], [-1, 1], [0, 1]))
-#             osc_moc.send_message(
-#                 "/moc/channel/4/pos/xyz", val_send_ch4_xyz)
-
-#         if param == "radius":
-#             osc_moc.send_message(
-#                 "/ctrlMotion/track/4/width", osc_arguments[0])
-
-
