@@ -183,7 +183,8 @@ def set_filters() -> None:
 
             message = ("/track/"
                        f"{channel_infos[channel_index].track_input}"
-                       f"/fx/{fx_index}/bypass")
+                       f"/fx/{fx_index}/wetdry")
+                       #f"/fx/{fx_index}/bypass")
 
             # osc_reaper expects 1 for "plugin active" and 0 for bypass
             osc_reaper.send_message(message, float(not bypass_active))
