@@ -249,30 +249,23 @@ def osc_handler_channel(address: str,
     if parameter == "fx-send":
         val = slope_constant_power(value)
         track_channelbus = channel_infos[channel_index].track_channelbus
-        osc_reaper.send_message(f"/track/{track_channelbus}/send/14/volume", val)
-        osc_reaper.send_message(f"/track/{track_channelbus}/send/15/volume", val)
-        osc_reaper.send_message(f"/track/{track_channelbus}/send/16/volume", val)
+        osc_reaper.send_message(f"/track/{track_channelbus}/send/9/volume", val)
 
     elif parameter == "gain":
-        #val = slope_constant_power(value)
-        #osc_reaper.send_message(f"/track/{track_input}/fxeq/gain", val)
-        osc_reaper.send_message(f"/track/{track_input}/fx/1/fxparam/6/value", value)
+        osc_reaper.send_message(f"/track/{track_input}/volume", value)
 
     elif parameter == "eq":
         eq_parameter : str = words[4]
         if eq_parameter == "high":
             val = slope_eq(value)
-            #osc_reaper.send_message(f"/track/{track_input}/fxeq/hishelf/gain", val)
             osc_reaper.send_message(f"/track/{track_input}/fx/1/fxparam/5/value", val)
 
         elif eq_parameter == "mid":
             val = slope_eq(value)
-            #osc_reaper.send_message(f"/track/{track_input}/fxeq/band/0/gain", val)
             osc_reaper.send_message(f"/track/{track_input}/fx/1/fxparam/3/value", val)
 
         elif eq_parameter == "low":
             val = slope_eq(value)
-            #osc_reaper.send_message(f"/track/{track_input}/fxeq/loshelf/gain", val)
             osc_reaper.send_message(f"/track/{track_input}/fx/1/fxparam/1/value", val)
     
     elif parameter == "volume":
@@ -373,10 +366,7 @@ def osc_handler_master(address: str,
 
     elif parameter == "return":
         val = slope_constant_power(value)
-        track_reverb_binaural = master_info.track_reverb_binaural
-        track_reverb_stereo = master_info.track_reverb_stereo
-        osc_reaper.send_message(f"/track/{track_reverb_binaural}/volume", val)
-        osc_reaper.send_message(f"/track/{track_reverb_stereo}/volume", val)
+        osc_reaper.send_message(f"/track/41/volume", val)
 
 def osc_handler_fx(address: str,
                    *osc_arguments: List[Any]) -> None:
