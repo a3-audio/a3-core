@@ -249,7 +249,7 @@ def osc_handler_channel(address: str,
     if parameter == "fx-send":
         val = slope_constant_power(value)
         track_channelbus = channel_infos[channel_index].track_channelbus
-        osc_reaper.send_message(f"/track/{track_channelbus}/send/9/volume", val)
+        #osc_reaper.send_message(f"/track/{track_channelbus}/send/9/volume", val)
 
     elif parameter == "gain":
         osc_reaper.send_message(f"/track/{track_input}/volume", value)

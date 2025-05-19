@@ -13,7 +13,7 @@
 
 // © Copyright 2021 Raphael Eismann
 
-s.options.device_("BlackHole 16ch");
+s.options.device_("Supercollider");
 
 s.options.numInputBusChannels  = 16;
 s.options.numOutputBusChannels = 2;
