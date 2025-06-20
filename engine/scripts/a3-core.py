@@ -38,8 +38,8 @@ FX_INDEX_HIPASS: int = 2
 FX_INDEX_LOPASS: int = 3
 
 # OSC clients
-osc_mic = SimpleUDPClient('192.168.43.51', 7771)
-osc_moc = SimpleUDPClient('192.168.43.52', 8700)
+osc_mic = SimpleUDPClient('192.168.43.55', 7771)
+osc_moc = SimpleUDPClient('192.168.43.54', 8700)
 osc_reaper = SimpleUDPClient('127.0.0.1', 9001)
 # osc_vid = SimpleUDPClient('192.168.43.100', 7771)
 
