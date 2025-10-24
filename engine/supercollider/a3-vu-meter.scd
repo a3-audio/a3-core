@@ -26,8 +26,8 @@ s.boot;
 ~mic = NetAddr.new("192.168.43.55", 7771);    // create the NetAddr
 //~vid = NetAddr.new("192.168.43.100", 7771);    // create the NetAddr
 ~replyrate = 25;
-~peaklag_in = 0;
-~peaklag_out = 0;
+~peaklag_in = 2;
+~peaklag_out = 3;
 ~peaklag_vid = 0;
 ~num_vu_meter = 16;
 ~num_input_vu = 4;
