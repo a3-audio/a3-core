@@ -18,18 +18,18 @@ s.options.device_("BlackHole 16ch");
 s.options.numInputBusChannels  = 16;
 s.options.numOutputBusChannels = 2;
 
-s.options.memSize = 65536;
-s.options.numBuffers = 4096;
+s.options.memSize = 512;
+s.options.numBuffers = 1;
 
 s.boot;
 
 //~core = NetAddr.new("192.168.43.50", 9000);    // create the NetAddr
-~mic = NetAddr.new("192.168.43.51", 7771);    // create the NetAddr
+~mic = NetAddr.new("192.168.1.6", 7771);    // create the NetAddr
 //~vid = NetAddr.new("192.168.43.100", 7771);    // create the NetAddr
-~replyrate = 20;
+~replyrate = 25;
 ~peaklag_in = 2;
-~peaklag_out = 5;
-~peaklag_vid = 3;
+~peaklag_out = 3;
+~peaklag_vid = 0;
 ~num_vu_meter = 16;
 ~num_input_vu = 4;
 ~num_output_vu = 8;
