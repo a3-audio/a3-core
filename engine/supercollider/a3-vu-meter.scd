@@ -18,8 +18,8 @@ s.options.device_("Supercollider");
 s.options.numInputBusChannels  = 16;
 s.options.numOutputBusChannels = 2;
 
-s.options.memSize = 512;
-s.options.numBuffers = 1;
+s.options.memSize = 128;
+s.options.numBuffers = 2;
 
 s.boot;
 

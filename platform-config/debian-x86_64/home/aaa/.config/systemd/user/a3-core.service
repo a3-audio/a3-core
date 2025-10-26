@@ -1,27 +1,12 @@
-# A³ Core is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-
-# A³ Core is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-
-# You should have received a copy of the GNU General Public License
-# along with A³ Core.  If not, see <https://www.gnu.org/licenses/>.
-
-# © Copyright 2021 Raphael Eismann
-
 [Unit]                                                                                     
-Description=a3-core osc receiver
+Description=a3-core (python osc servera)
+PartOf=a3-main.service
 After=jack.service
 
 [Service]
 Type=idle
 PrivateTmp=true
-ExecStart=/usr/bin/python3 /home/aaa/a3-core/engine/scripts/a3-core.py
-LimitRTPRIO=70
+ExecStart=/home/aaa/venv/bin/python3 /home/aaa/a3-core/engine/scripts/a3-core.py
 
 [Install]
 WantedBy=default.target

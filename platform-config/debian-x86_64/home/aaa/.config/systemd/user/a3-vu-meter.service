@@ -23,7 +23,7 @@ PrivateTmp=true
 WorkingDirectory=/home/aaa/a3-core/engine/supercollider
 ExecStartPre=/bin/sleep 5
 ExecStart=/usr/bin/sclang /home/aaa/a3-core/engine/supercollider/a3-vu-meter.scd
-LimitRTPRIO=80
+LimitRTPRIO=2
 
 [Install]
 WantedBy=default.target

@@ -1,0 +1,10 @@
+[Unit]                                                                                     
+Description=a3-jack
+PartOf=a3-main.service
+
+[Service]
+ExecStart=/usr/bin/jackd -P 19 -v -aa -dalsa -dhw:USB -r44100 -p128 
+Type=simple
+
+[Install]
+WantedBy=default.target
