@@ -10,4 +10,4 @@
 - configure irq priorities in /etc/rtirq.conf
 - configure realtime privileges (limits.conf?)
 - install realtime kernel image
-- ...?
+- get Airwindows plugin suite (we're using the SmoothEQ) https://airwindows.com/vsts 

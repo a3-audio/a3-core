@@ -1,6 +1,7 @@
 [Unit]                                                                                     
-Description=a3-core vu-meter
-After=jack.service
+Description=a3-supercollider (vu-meters)
+PartOf=a3-main.service
+After=a3-jack.service
 
 [Service]
 Type=idle

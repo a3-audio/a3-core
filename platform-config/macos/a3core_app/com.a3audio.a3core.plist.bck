@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.a3audio.a3-core</string>
+    <key>ProgramArguments</key>
+    <array>
+	<string>/Users/aaa/Library/venv/bin/python3</string>
+	<string>/Users/aaa/a3-core/engine/scripts/a3-core.py</string>
+    </array>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <true/>
+    </dict>
+</dict>
+</plist>

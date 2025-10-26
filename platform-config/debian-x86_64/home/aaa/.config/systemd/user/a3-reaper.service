@@ -1,15 +1,15 @@
 [Unit]                                                                                     
-Description=a3-core reaper
-After=jack.service
-After=a3xinit.service
+Description=a3-reaper
+PartOf=a3-main.service
+After=a3-jack.service
 
 [Service]
 PrivateTmp=true
 WorkingDirectory=/home/aaa/opt/REAPER
 ExecStartPre=/bin/sleep 3
-ExecStart=/bin/bash -c "/home/aaa/opt/REAPER/reaper -ignoreerrors"
+ExecStart=/bin/bash -c "/home/aaa/opt/REAPER/reaper -nosplash -ignoreerrors -template /home/aaa/a3-core/engine/reaper/a3_reaper.RPP"
 ExecStop=/home/aaa/opt/REAPER/reaper -close all :save
-LimitRTPRIO=09
+#LimitRTPRIO=19
 
 [Install]
 WantedBy=default.target

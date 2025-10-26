@@ -1,12 +1,12 @@
 [Unit]                                                                                     
-Description=a3-core osc receiver
+Description=a3-core (python osc servera)
+PartOf=a3-main.service
 After=jack.service
 
 [Service]
 Type=idle
 PrivateTmp=true
-ExecStart=/usr/bin/python3 /home/aaa/a3-core/engine/scripts/a3-core.py
-LimitRTPRIO=70
+ExecStart=/home/aaa/venv/bin/python3 /home/aaa/a3-core/engine/scripts/a3-core.py
 
 [Install]
 WantedBy=default.target

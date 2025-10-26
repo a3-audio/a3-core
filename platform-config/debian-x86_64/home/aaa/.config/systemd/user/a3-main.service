@@ -1,0 +1,11 @@
+[Unit]                                                                                     
+Description=a3-main
+Requires=a3-jack.service a3-reaper.service a3-supercollider.service a3-core.service
+
+[Service]
+ExecStartPre=/bin/sleep 6
+ExecStart=/usr/bin/qjackctl
+Type=simple
+
+[Install]
+WantedBy=default.target

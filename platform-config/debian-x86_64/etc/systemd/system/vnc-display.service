@@ -1,0 +1,9 @@
+[Unit]
+Description=Configure VNC dummy screen
+After=systemd-user-sessions.service
+
+[Service]
+ExecStart=/usr/local/bin/vnc-display.sh
+
+[Install]
+WantedBy=multi-user.target
