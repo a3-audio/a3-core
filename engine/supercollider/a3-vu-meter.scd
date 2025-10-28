@@ -23,7 +23,7 @@ s.options.numBuffers = 1;
 
 s.boot;
 
-~mic = NetAddr.new("192.168.43.55", 7771);    // create the NetAddr
+~mic = NetAddr.new("192.168.43.61", 7771);    // create the NetAddr
 //~vid = NetAddr.new("192.168.43.100", 7771);    // create the NetAddr
 ~replyrate = 25;
 ~peaklag_in = 2;

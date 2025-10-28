@@ -38,9 +38,9 @@ FX_INDEX_HIPASS: int = 2
 FX_INDEX_LOPASS: int = 3
 
 # OSC clients
-osc_mic = SimpleUDPClient('192.168.43.55', 7771)
-osc_moc = SimpleUDPClient('192.168.43.54', 8700)
-osc_reaper = SimpleUDPClient('127.0.0.1', 9001)
+osc_mic = SimpleUDPClient('192.168.43.61', 7771)
+osc_moc = SimpleUDPClient('192.168.43.62', 8700)
+osc_reaper = SimpleUDPClient('192.168.43.58', 9001)
 # osc_vid = SimpleUDPClient('192.168.43.100', 7771)
 
 udp_clients_iem = tuple(SimpleUDPClient('127.0.0.1', 1337 + index)
@@ -63,7 +63,7 @@ class MasterInfo:
     track_phones: int = 9
     track_mainmixbus: int = 16
     
-    track_master_rec: int = 33
+    aux_return: int = 33
     
     track_reverb_binaural: int = 36
     track_reverb_stereo: int = 37
@@ -249,7 +249,7 @@ def osc_handler_channel(address: str,
     if parameter == "fx-send":
         val = slope_constant_power(value)
         track_channelbus = channel_infos[channel_index].track_channelbus
-        #osc_reaper.send_message(f"/track/{track_channelbus}/send/9/volume", val)
+        osc_reaper.send_message(f"/track/{track_channelbus}/send/11/volume", val)
 
     elif parameter == "gain":
         osc_reaper.send_message(f"/track/{track_input}/volume", value)
@@ -344,9 +344,7 @@ def osc_handler_master(address: str,
     if parameter == "volume":
         val_master = slope_constant_power(value)
         masterbus = master_info.track_masterbus
-        master_rec = master_info.track_master_rec
         osc_reaper.send_message(f"/track/{masterbus}/volume", val_master)
-        osc_reaper.send_message(f"/track/{master_rec}/volume", val_master)
 
     if parameter == "booth":
         val = slope_constant_power(value)
@@ -369,7 +367,8 @@ def osc_handler_master(address: str,
 
     elif parameter == "return":
         val = slope_constant_power(value)
-        osc_reaper.send_message(f"/track/41/volume", val)
+        aux_return = master_info.aux_return
+        osc_reaper.send_message(f"/track/{aux_return}/volume", val)
 
 def osc_handler_fx(address: str,
                    *osc_arguments: List[Any]) -> None:
