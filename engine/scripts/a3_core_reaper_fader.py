@@ -34,16 +34,13 @@ from pythonosc.udp_client import SimpleUDPClient  # type: ignore
 
 OSC_PORT_CORE: int = 9000
 
-FX_INDEX_GAIN: int = 1
-FX_INDEX_EQ: int = 2
-FX_INDEX_HIPASS: int = 3
-FX_INDEX_LOPASS: int = 4
-FX_INDEX_CHANNEL_VOLUME: int = 1
+FX_INDEX_HIPASS: int = 2
+FX_INDEX_LOPASS: int = 3
 
 # OSC clients
-osc_mic = SimpleUDPClient('192.168.43.55', 7771)
-osc_moc = SimpleUDPClient('192.168.43.54', 8700)
-osc_reaper = SimpleUDPClient('192.168.43.57', 9001)
+osc_mic = SimpleUDPClient('192.168.43.61', 7771)
+osc_moc = SimpleUDPClient('192.168.43.62', 8700)
+osc_reaper = SimpleUDPClient('192.168.43.58', 9001)
 # osc_vid = SimpleUDPClient('192.168.43.100', 7771)
 
 udp_clients_iem = tuple(SimpleUDPClient('127.0.0.1', 1337 + index)
@@ -144,20 +141,11 @@ def slope_constant_power(value):
     val = np.interp(value, resolution, slope)
     return val
 
-def slope_volume(value):
-    val = np.interp(value, [0, 1], [0, 0.5])
-    return val
-
 def slope_eq(value):
     resolution = np.arange(start=0, stop=1, step=0.1)
-    slope = [0.0, 0.1, 0.2, 0.3, 0.5, 0.52, 0.54, 0.56, 0.58, 0.6]
+    slope = [0.0, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
     #slope = [0.0, 0.0, 0.2, 0.4, 0.5, 0.5, 0.6, 0.8, 0.9, 1]
     val = np.interp(value, resolution, slope)
-    #val = np.interp(value, [0, 1], [0, 0.6])
-    return val
-
-def slope_fx_gain(value):
-    val = np.interp(value, [0, 1], [0, 0.6])
     return val
 
 def slope_fx_freq_hipass(value):
@@ -173,23 +161,15 @@ def slope_fx_res(value):
     return val
 
 def slope_phones_mix_constant_power(value):
-    #resolution = np.arange(start=0, stop=1, step=0.1)
-    #slope = [0, 0.7, 0.85, 0.87, 0.91, 0.93, 0.95, 0.97, 0.99, 1]
-    #val = np.interp(value, resolution, slope)
-    resolution = np.arange(start=0, stop=0.5, step=0.1)
-    slope = [0, 0.35, 0.4, 0.47, 0.5]
+    resolution = np.arange(start=0, stop=1, step=0.1)
+    slope = [0, 0.7, 0.85, 0.87, 0.91, 0.93, 0.95, 0.97, 0.99, 1]
     val = np.interp(value, resolution, slope)
-    #val = np.interp(value, [0, 1], [0, 0.5])
     return val
 
 def slope_phones_pfl_constant_power(value):
-    #resolution = np.arange(start=0, stop=1, step=0.1)
-    #slope = [1, 0.99, 0.97, 0.95, 0.93, 0.91, 0.87, 0.85, 0.7, 0]
-    #val = np.interp(value, resolution, slope)
-    resolution = np.arange(start=0, stop=0.5, step=0.1)
-    slope = [0.5, 0.47, 0.4, 0.3, 0]
+    resolution = np.arange(start=0, stop=1, step=0.1)
+    slope = [1, 0.99, 0.97, 0.95, 0.93, 0.91, 0.87, 0.85, 0.7, 0]
     val = np.interp(value, resolution, slope)
-    #val = np.interp(value, [0, 1], [0.5, 0])
     return val
 
 def set_filters() -> None:
@@ -273,34 +253,30 @@ def osc_handler_channel(address: str,
         osc_reaper.send_message(f"/track/{track_channelbus}/send/11/volume", val)
 
     elif parameter == "gain":
-        val = slope_fx_gain(value)
-        osc_reaper.send_message(f"/track/{track_input}/fx/{FX_INDEX_GAIN}/fxparam/1/value", val) # PurestGain (airwindows)
+        osc_reaper.send_message(f"/track/{track_input}/fx/1/fxparam/1/value", val) # Smooth-EQ
         #osc_reaper.send_message(f"/track/{track_input}/volume", value)
 
     elif parameter == "eq":
         eq_parameter : str = words[4]
         if eq_parameter == "high":
             val = slope_eq(value)
-            osc_reaper.send_message(f"/track/{track_input}/fx/{FX_INDEX_EQ}/fxparam/1/value", val) # Smooth-EQ (airwindows)
-            #osc_reaper.send_message(f"/track/{track_input}/fx/1/fxparam/5/value", val) # 3-Band-EQ (airwindows) 
+            osc_reaper.send_message(f"/track/{track_input}/fx/1/fxparam/1/value", val) # Smooth-EQ
+            #osc_reaper.send_message(f"/track/{track_input}/fx/1/fxparam/5/value", val) # 3-Band-EQ
 
         elif eq_parameter == "mid":
             val = slope_eq(value)
-            osc_reaper.send_message(f"/track/{track_input}/fx/{FX_INDEX_EQ}/fxparam/2/value", val) # Smooth-EQ (airwindows)
-            #osc_reaper.send_message(f"/track/{track_input}/fx/1/fxparam/3/value", val) # 3-Band-EQ (airwindows)
+            osc_reaper.send_message(f"/track/{track_input}/fx/1/fxparam/2/value", val) # Smooth-EQ
+            #osc_reaper.send_message(f"/track/{track_input}/fx/1/fxparam/3/value", val) # 3-Band-EQ
 
         elif eq_parameter == "low":
             val = slope_eq(value)
-            osc_reaper.send_message(f"/track/{track_input}/fx/{FX_INDEX_EQ}/fxparam/3/value", val) # Smooth-EQ (airwindows)
-            #osc_reaper.send_message(f"/track/{track_input}/fx/1/fxparam/1/value", val) # 3-Band-EQ (airwindows)
+            osc_reaper.send_message(f"/track/{track_input}/fx/1/fxparam/3/value", val) # Smooth-EQ
+            #osc_reaper.send_message(f"/track/{track_input}/fx/1/fxparam/1/value", val) # 3-Band-EQ
     
     elif parameter == "volume":
-        #val = slope_constant_power(value)
-        val = slope_volume(value)
+        val = slope_constant_power(value)
         track_channelbus = channel_infos[channel_index].track_channelbus
-        for gain_vst_plugins_on_channelbus in range(1, 12):
-            osc_reaper.send_message(f"/track/{track_channelbus}/fx/{gain_vst_plugins_on_channelbus}/fxparam/1/value", val)
-        #osc_reaper.send_message(f"/track/{track_channelbus}/volume", val)
+        osc_reaper.send_message(f"/track/{track_channelbus}/volume", val)
 
 
     # A3MIX-BUTTONS
@@ -344,6 +320,13 @@ def osc_handler_channel(address: str,
     elif parameter == "elevation":
         channel_infos[channel_index].elevation = value
         send_elevation(channel_index)
+        track_bformat = channel_infos[channel_index].track_bformat
+        osc_reaper.send_message(f"/track/{track_bformat}/fx/1/fxparam/7/value", val)
+        # osc_vid.send_message(f"/track/{channel_index+1}/azimuth", val)
+
+    elif parameter == "elevation":
+        channel_infos[channel_index].elevation = value
+        send_elevation(channel_index)
         send_width(channel_index) # width depends on elevation, narrowing at zenith
 
     elif parameter == "width":
@@ -368,39 +351,28 @@ def osc_handler_master(address: str,
     parameter: str = words[2]
 
     if parameter == "volume":
-        #val_master = slope_constant_power(value)
-        val = slope_volume(value)
+        val_master = slope_constant_power(value)
         masterbus = master_info.track_masterbus
-        #osc_reaper.send_message(f"/track/{masterbus}/volume", val_master)
-        for gain_vst_plugins_on_masterbus in range(1, 11):
-            osc_reaper.send_message(f"/track/{masterbus}/fx/{gain_vst_plugins_on_masterbus}/fxparam/1/value", val)
+        osc_reaper.send_message(f"/track/{masterbus}/volume", val_master)
 
     if parameter == "booth":
-        #val = slope_constant_power(value)
-        val = slope_volume(value)
-        boothbus = master_info.track_booth
-        #osc_reaper.send_message(f"/track/{boothbus}/volume", val)
-        for gain_vst_plugins_on_boothbus in range(1, 11):
-            osc_reaper.send_message(f"/track/{boothbus}/fx/{gain_vst_plugins_on_boothbus}/fxparam/1/value", val)
+        val = slope_constant_power(value)
+        track = master_info.track_booth
+        osc_reaper.send_message(f"/track/{track}/volume", val)
 
     if parameter == "phones_mix":
         phones_mix = slope_phones_mix_constant_power(value)
         phones_pfl = slope_phones_pfl_constant_power(value)
         track_mainmixbus = master_info.track_mainmixbus
-        #osc_reaper.send_message(f"/track/{track_mainmixbus}/volume", phones_mix)
-        for gain_vst_plugins_on_phones_mixbus in range(1, 9):
-            osc_reaper.send_message(f"/track/{track_mainmixbus}/fx/{gain_vst_plugins_on_phones_mixbus}/fxparam/1/value", phones_mix)
+        osc_reaper.send_message(f"/track/{track_mainmixbus}/volume", phones_mix)
         for channel_index in range(4):
             track_pfl = channel_infos[channel_index].track_pfl
-            #osc_reaper.send_message(f"/track/{track_pfl}/volume", phones_pfl)
-            for gain_vst_plugins_on_track_pfl in range(1, 11):
-                osc_reaper.send_message(f"/track/{track_pfl}/fx/{gain_vst_plugins_on_track_pfl}/fxparam/1/value", phones_pfl)
+            osc_reaper.send_message(f"/track/{track_pfl}/volume", phones_pfl)
 
     if parameter == "phones_volume":
-        val = slope_volume(value)
+        val = slope_constant_power(value)
         track_phones = master_info.track_phones
-        #osc_reaper.send_message(f"/track/{track_phones}/volume", val)
-        osc_reaper.send_message(f"/track/{track_phones}/fx/1/fxparam/1/value", val)
+        osc_reaper.send_message(f"/track/{track_phones}/volume", val)
 
     elif parameter == "return":
         val = slope_constant_power(value)
@@ -467,10 +439,3 @@ if __name__ == "__main__":
     dispatcher.map("/tap", osc_handler_tap)
 
     # # Motion-Controller
-    # # dispatcher.map("/CoordinateConverter/*", iemToCtrlMotion_handler)
-    # # dispatcher.map("/moc/channel/*", ctrlMotionToIem_handler)
-    # # dispatcher.map("/moc/channel/*", ctrlMotionToIem_handler)
-
-    server = osc_server.ThreadingOSCUDPServer((args.ip, args.port), dispatcher)
-    print("Serving on {}".format(server.server_address))
-    server.serve_forever()
