@@ -274,8 +274,10 @@ def osc_handler_channel(address: str,
 
     elif parameter == "gain":
         val = slope_fx_gain(value)
-        osc_reaper.send_message(f"/track/{track_input}/fx/{FX_INDEX_GAIN}/fxparam/1/value", val) # PurestGain (airwindows)
+        #osc_reaper.send_message(f"/track/{track_input}/fx/{FX_INDEX_GAIN}/fxparam/1/value", val) # PurestGain (airwindows)
         #osc_reaper.send_message(f"/track/{track_input}/volume", value)
+        for gain_vst_plugins_on_channel in range(2, 8):
+            osc_reaper.send_message(f"/track/{track_input}/fx/{gain_vst_plugins_on_channel}/fxparam/1/value", val)
 
     elif parameter == "eq":
         eq_parameter : str = words[4]
