@@ -3,8 +3,12 @@ Description=a3-jack
 PartOf=a3-main.service
 
 [Service]
+ExecStartPre=/bin/sleep 3
 ExecStart=/usr/bin/jackd -P 19 -v -aa -dalsa -dhw:USB -r44100 -p128 
 Type=simple
+CPUAffinity=1 2 3
+CPUSchedulingPolicy=rr
+CPUSchedulingPriority=85
 
 [Install]
 WantedBy=default.target

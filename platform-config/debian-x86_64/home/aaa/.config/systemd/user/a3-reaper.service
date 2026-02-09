@@ -6,9 +6,13 @@ After=a3-jack.service
 [Service]
 PrivateTmp=true
 WorkingDirectory=/home/aaa/opt/REAPER
-ExecStartPre=/bin/sleep 3
+ExecStartPre=/bin/sleep 2
 ExecStart=/bin/bash -c "/home/aaa/opt/REAPER/reaper -nosplash -ignoreerrors -template /home/aaa/a3-core/engine/reaper/a3_reaper.RPP"
-ExecStop=/home/aaa/opt/REAPER/reaper -close all :save
+ExecStop=/home/aaa/opt/REAPER/reaper -saveas /home/aaa/a3-core/engine/reaper/a3_reaper.RPP -close all :nosave
+CPUAffinity=1 2 3
+CPUSchedulingPolicy=rr
+CPUSchedulingPriority=75
+
 #LimitRTPRIO=19
 
 [Install]
