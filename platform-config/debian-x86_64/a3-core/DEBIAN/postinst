@@ -29,9 +29,6 @@ systemctl enable x11vnc
 
 echo "enable userservices..."
 loginctl enable-linger $APPUSER
-#systemctl --user daemon-reload
-#sudo -u $APPUSER systemctl --user enable a3-main
-#sudo -u $APPUSER systemctl --user enable beat-analyzer
 sudo -u $APPUSER XDG_RUNTIME_DIR=/run/user/$(id -u $APPUSER) systemctl --user enable a3-main
 
 echo "update grub..."
