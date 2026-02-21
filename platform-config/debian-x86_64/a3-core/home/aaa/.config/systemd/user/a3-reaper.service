@@ -7,8 +7,8 @@ After=a3-jack.service
 Environment=DISPLAY=:0
 WorkingDirectory=/home/aaa/opt/REAPER
 ExecStartPre=/bin/sleep 2
-ExecStart=/bin/bash -c "/home/aaa/opt/REAPER/reaper -nosplash -ignoreerrors -template /opt/a3-core/engine/reaper/a3_reaper.RPP"
-ExecStop=/home/aaa/opt/REAPER/reaper -saveas /home/aaa/a3-reaper-sessions/a3_reaper.RPP -close all :nosave
+ExecStart=/bin/bash -c "/opt/REAPER/reaper -nosplash -ignoreerrors -template /home/aaa/a3-core/engine/reaper/a3_reaper.RPP"
+ExecStop=/opt/REAPER/reaper -saveas /home/aaa/a3-reaper-sessions/a3_reaper.RPP -close all :nosave
 CPUAffinity=1 2 3
 CPUSchedulingPolicy=rr
 CPUSchedulingPriority=75

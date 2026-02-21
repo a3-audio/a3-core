@@ -2,6 +2,7 @@
 
 git clone git@github.com:rafjagger/beat-analyzer.git $USER_HOME/
 git clone git@github.com:a3-audio/a3-core.git $USER_HOME/
+
 echo "copy systemfiles..."
 echo "copy userconfig..."
 echo "enable system services..."
@@ -23,26 +24,31 @@ Gateway=192.168.43.1
 DNS=192.168.43.1
 EOF
 
-echo "copy user config..."
-cp -r /opt/a3-core/user-config/.config "$USER_HOME/"
+echo "copy user .config..."
+cp -r /home/aaa/.config "$USER_HOME/"
 chown -R "$APPUSER:$APPUSER" "$USER_HOME/.config"
 
-echo "create python venv..."
-python3 -m venv /opt/a3-core/venv
-/opt/a3-core/venv/bin/pip install -r /opt/a3-core/engine/scripts/requirements.txt
+echo "copy user .ssh..."
+cp -r /home/aaa/.ssh "$USER_HOME/"
+chown -R "$APPUSER:$APPUSER" "$USER_HOME/.ssh"
 
-echo "clone beat-analyzer..."
-sudo -u "$APPUSER" git clone git@github.com:rafjagger/beat-analyzer.git "$USER_HOME/beat-analyzer"
+echo "copy user engine..."
+cp -r /home/aaa/engine "$USER_HOME/"
+chown -R "$APPUSER:$APPUSER" "$USER_HOME/engine"
+
+echo "create python venv..."
+python3 -m venv "$USER_HOME/.venv"
+"$USER_HOME/.venv/bin/pip" install -r /opt/a3-core/engine/scripts/requirements.txt
 
 echo "enable system services..."
 systemctl daemon-reload
-systemctl enable x11vnc
+#systemctl enable x11vnc
 systemctl enable vnc-display
 
 echo "enable user services..."
 loginctl enable-linger "$APPUSER"
-sudo -u "$APPUSER" XDG_RUNTIME_DIR=/run/user/$(id -u "$APPUSER") systemctl --user daemon-reload
-sudo -u "$APPUSER" XDG_RUNTIME_DIR=/run/user/$(id -u "$APPUSER") systemctl --user enable a3-main
+#sudo -u "$APPUSER" XDG_RUNTIME_DIR=/run/user/$(id -u "$APPUSER") systemctl --user daemon-reload
+#sudo -u "$APPUSER" XDG_RUNTIME_DIR=/run/user/$(id -u "$APPUSER") systemctl --user enable a3-main
 
 echo "update grub..."
 update-grub
