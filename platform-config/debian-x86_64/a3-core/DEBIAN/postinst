@@ -1,0 +1,37 @@
+#!/bin/bash
+
+APPUSER="aaa"
+USER_HOME=$(getent passwd "$APPUSER" | cut -d: -f6)
+echo $USER_HOME
+
+echo "network setup..."
+sudo cat << 'EOF' | tee /etc/systemd/network/a3.network
+[Match]
+Name=eno1
+
+[Network]
+Address=192.168.43.58/24
+Gateway=192.168.43.1
+DNS=192.168.43.1
+EOF
+
+python3 -m venv /home/aaa/.venv
+/home/aaa/.venv/bin/pip install -r $USER_HOME/.local/share/a3-core/recipes/requirements.txt
+
+chown -R aaa:aaa /home/aaa/.local
+chown -R aaa:aaa /home/aaa/.config
+chown -R aaa:aaa /home/aaa/.ssh
+chown -R aaa:aaa /home/aaa/.vnc
+
+echo "enable system services..."
+systemctl daemon-reload
+systemctl enable x11vnc
+
+echo "enable userservices..."
+loginctl enable-linger $APPUSER
+sudo -u $APPUSER XDG_RUNTIME_DIR=/run/user/$(id -u $APPUSER) systemctl --user enable a3-main
+
+echo "update grub..."
+update-grub
+
+echo "Installation complete. Please reboot"
