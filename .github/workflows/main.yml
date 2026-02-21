@@ -7,16 +7,42 @@ on:
     types: [published]
 
 jobs:
-  build-deb:
+  build-and-release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Optional: Add test steps here
+      # - name: Run tests
+      #   run: pytest
       - name: Build .deb
         run: |
-          cd platform-config/debian-x86_64/a3-core
-          dpkg-deb --build . ../../a3-core.deb
+          cd platform-config/debian-x86_64
+          dpkg-deb --build --root-owner-group a3-core
       - name: Upload Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: a3-core.deb
-          path: platform-config/debian-x86_64/a3-core/a3-core.deb
+          path: platform-config/debian-x86_64/a3-core.deb
+      - name: Import GPG Key
+        env:
+          GPG_KEY: ${{ secrets.PGP_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.PGP_SECRET }}
+        run: |
+          echo "$GPG_KEY" | gpg --batch --import
+      - name: Create apt repo
+        run: |
+          mkdir -p repo
+          cp platform-config/debian-x86_64/a3-core.deb repo/
+          cd repo
+          dpkg-scanpackages . /dev/null | gzip -9c > Packages.gz
+      - name: Sign Packages.gz
+        env:
+          GPG_PASSPHRASE: ${{ secrets.PGP_SECRET }}
+        run: |
+          cd repo
+          gpg --batch --yes --passphrase "$GPG_PASSPHRASE" --armor --detach-sign Packages.gz
+      - name: Upload apt repo to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: repo
