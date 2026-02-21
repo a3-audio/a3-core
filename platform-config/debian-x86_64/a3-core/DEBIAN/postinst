@@ -16,7 +16,13 @@ DNS=192.168.43.1
 EOF
 
 python3 -m venv /home/aaa/.venv
-/home/aaa/.venv/bin/pip install -r $USER_HOME/.local/share/a3-core/docs/reciepes/requirements.txt
+/home/aaa/.venv/bin/pip install -r $USER_HOME/.local/share/a3-core/recipes/requirements.txt
+
+chown -R aaa:aaa /home/aaa/.local
+chown -R aaa:aaa /home/aaa/.config
+chown -R aaa:aaa /home/aaa/.ssh
+chown -R aaa:aaa /home/aaa/.vnc
+
 echo "enable system services..."
 systemctl daemon-reload
 systemctl enable x11vnc
@@ -26,9 +32,9 @@ loginctl enable-linger $APPUSER
 #systemctl --user daemon-reload
 #sudo -u $APPUSER systemctl --user enable a3-main
 #sudo -u $APPUSER systemctl --user enable beat-analyzer
+sudo -u $APPUSER XDG_RUNTIME_DIR=/run/user/$(id -u $APPUSER) systemctl --user enable a3-main
 
 echo "update grub..."
 update-grub
-
 
 echo "Installation complete. Please reboot"

@@ -6,8 +6,6 @@ After=graphical.target
 User=aaa
 WorkingDirectory=/home/aaa
 Environment=DISPLAY=:0
-#ExecStart=/usr/bin/x11vnc -forever -rfbport 5901 -usepw -passwdfile /home/aaa/.vnc/passwd -scale 14/16 -ncache
-#ExecStart=/usr/bin/x11vnc -reopen -forever -rfbport 5901 -usepw -passwdfile /home/aaa/.vnc/passwd -ncache 0 -display :0
 ExecStart=/usr/bin/x11vnc -reopen -shared -forever -rfbport 5901 -display :0 -ncache 0 -auth guess
 
 [Install]
