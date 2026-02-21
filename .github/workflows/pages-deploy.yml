@@ -39,7 +39,7 @@ jobs:
             Description: a3-core apt repository
             Date: $(date -Ru)
           EOF
-          gpg --batch --yes --detach-sign Release
+          gpg --batch --yes --output Release.gpg --detach-sign Release
       - name: Add index.html for repo
         run: |
           cat > repo/index.html <<'EOF'
