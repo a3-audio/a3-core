@@ -1,0 +1,45 @@
+name: Deploy apt repo to GitHub Pages
+
+on:
+  push:
+    branches: [ main, deploy ]
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build .deb
+        run: |
+          cd platform-config/debian-x86_64
+          dpkg-deb --build --root-owner-group a3-core
+      - name: Import GPG Key
+        env:
+          GPG_KEY: ${{ secrets.PGP_KEY }}
+        run: |
+          echo "$GPG_KEY" | gpg --batch --import
+      - name: Create apt repo
+        run: |
+          mkdir -p repo
+          cp platform-config/debian-x86_64/a3-core.deb repo/
+          cd repo
+          dpkg-scanpackages . /dev/null | gzip -9c > Packages.gz
+          gpg --batch --yes --armor --detach-sign Packages.gz
+          gpg --export --armor $(gpg --list-keys --with-colons | awk -F: '/^pub/{print $5}') > KEY.gpg
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: repo
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
+        with:
+          artifact_name: github-pages
