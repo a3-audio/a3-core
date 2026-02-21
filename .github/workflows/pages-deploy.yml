@@ -28,6 +28,22 @@ jobs:
           fi
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
 
+      - name: Debug GPG state
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          echo "--- gpg version ---"
+          gpg --version
+          echo "--- public keys (with-colons) ---"
+          gpg --list-keys --with-colons || true
+          echo "--- secret keys (with-colons) ---"
+          gpg --list-secret-keys --with-colons || true
+          echo "--- first secret keyid (if any) ---"
+          gpg --list-secret-keys --with-colons | awk -F: '/^sec/{print $5; exit}' || true
+          # show whether the secret is non-empty (do NOT print the secret)
+          echo "GPG_PRIVATE_KEY length: ${#GPG_PRIVATE_KEY}" || true
+
       - name: Export public GPG key
         run: |
           # export the first public key (armored) for clients to import
