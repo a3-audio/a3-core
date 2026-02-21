@@ -1,0 +1,92 @@
+#!/bin/bash
+
+PACKAGES=(
+git
+vim
+i3
+htop
+lightdm
+linux-image-rt-amd64
+liblo-tools
+qjackctl
+supercollider
+x11vnc
+iem-plugin-suite-vst3
+)
+
+PACKAGES_TO_REMOVE=(
+wpasupplicant
+modemmanager
+bluez*
+network-manager
+)
+
+APPUSER="aaa"
+USER_HOME=$(getent passwd "$APPUSER" | cut -d: -f6)
+
+
+echo $USER_HOME
+echo "network setup..."
+sudo cat << 'EOF' | tee /etc/systemd/network/a3.network
+[Match]
+Name=eno1
+
+[Network]
+Address=192.168.43.58/24
+Gateway=192.168.43.1
+DNS=192.168.43.1
+EOF
+
+git clone git@github.com:rafjagger/beat-analyzer.git $USER_HOME/
+git clone git@github.com:a3-audio/a3-core.git $USER_HOME/
+
+echo "copy systemfiles..."
+cp -vr $USER_HOME/a3-core/platform-config/debian-x86_64/a3-core/etc/* /etc/
+
+echo "copy userconfig..."
+cp -vr  $USER_HOME/a3-core/platform-config/debian-x86_64/a3-core/home/aaa/.config /$USER_HOME/
+
+chown -R "$APPUSER:$APPUSER" "$USER_HOME/.config"
+
+find "$USER_HOME/.config" -type d -exec chmod 775 {} \;
+find "$USER_HOME/.config" -type f -exec chmod 775 {} \;
+
+cp -vr  $USER_HOME/a3-core/platform-config/debian-x86_64/a3-core/home/aaa/.ssh /$USER_HOME/
+
+chown -R "$APPUSER:$APPUSER" "$USER_HOME/.ssh"
+find "$USER_HOME/.ssh" -type d -exec chmod 775 {} \;
+find "$USER_HOME/.ssh" -type f -exec chmod 755 {} \;
+
+echo "enable system services..."
+systemctl daemon-reload
+systemctl enable x11vnc
+
+echo "enable userservices..."
+loginctl enable-linger $APPUSER
+#systemctl --user daemon-reload
+#sudo -u $APPUSER systemctl --user enable a3-main
+#sudo -u $APPUSER systemctl --user enable beat-analyzer
+
+echo "update grub..."
+update-grub
+
+#echo "Installing reaper..."
+#sudo -u $APPUSER wget https://www.reaper.fm/files/7.x/reaper761_linux_x86_64.tar.xz -O /tmp/reaper.tar.xz
+#tar -xf /tmp/reaper.tar.xz -C /tmp
+#cd /tmp/reaper_linux_*
+#./install-reaper.sh --install /opt --no-desktop --usr-local-bin-symlink
+
+#echo "Updating package list..."
+#apt update
+#apt full-upgrade -y
+
+#echo "Installing packages: ${PACKAGES[*]}"
+#apt install -y "${PACKAGES[@]}"
+
+#echo "All packages installed."
+
+#echo "Removing packages: ${PACKAGES_TO_REMOVE[*]}"
+#apt purge -y "${PACKAGES_TO_REMOVE[@]}"
+#apt autoremove -y
+
+echo "Installation complete. Please reboot"
