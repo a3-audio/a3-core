@@ -3,125 +3,64 @@ name: Build APT Repo
 on:
   push:
     branches: [ main ]
+    paths:
+      - "a3-core.deb"
+      - ".github/workflows/repo.yml"
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Build .deb
+        run: |
+          cd platform-config/debian-x86_64
+          dpkg-deb --build --root-owner-group a3-core
+          cp a3-core.deb $GITHUB_WORKSPACE/
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install tools
         run: |
           sudo apt update
-          sudo apt install -y dpkg-dev gnupg coreutils
+          sudo apt install -y dpkg-dev gnupg
 
-      - name: Import GPG private key
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      - name: Import private key
         run: |
-          set -euo pipefail
-          if [ -z "${GPG_PRIVATE_KEY:-}" ]; then
-            echo "Missing secret GPG_PRIVATE_KEY. Please add it to repository secrets." >&2
-            exit 2
-          fi
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
-
-      - name: Debug GPG state
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          echo "--- gpg version ---"
-          gpg --version
-          echo "--- public keys (with-colons) ---"
-          gpg --list-keys --with-colons || true
-          echo "--- secret keys (with-colons) ---"
-          gpg --list-secret-keys --with-colons || true
-          echo "--- first secret keyid (if any) ---"
-          gpg --list-secret-keys --with-colons | awk -F: '/^sec/{print $5; exit}' || true
-          # show whether the secret is non-empty (do NOT print the secret)
-          echo "GPG_PRIVATE_KEY length: ${#GPG_PRIVATE_KEY}" || true
 
-      - name: Export public GPG key
+      - name: Generate Packages and Release
         run: |
-          # export the first public key (armored) for clients to import
-          KEYID=$(gpg --list-keys --with-colons | awk -F: '/^pub/{print $5; exit}')
-          if [ -z "$KEYID" ]; then
-            echo "No public key found after import" >&2
-            exit 2
-          fi
-          gpg --armor --export "$KEYID" > KEY.gpg
+          mkdir -p repo
+          cp a3-core.deb repo/
 
-      - name: Build repo structure
-        run: |
-          rm -rf repo
-          mkdir -p repo/pool
-          cp a3-core.deb repo/pool/
+          dpkg-scanpackages repo /dev/null > Packages
+          gzip -9c Packages > Packages.gz
 
-          mkdir -p repo/dists/stable/main/binary-amd64
-          dpkg-scanpackages repo/pool /dev/null > repo/dists/stable/main/binary-amd64/Packages
-          gzip -9c repo/dists/stable/main/binary-amd64/Packages > repo/dists/stable/main/binary-amd64/Packages.gz
-
-      - name: Generate Release
-        working-directory: repo/dists/stable
-        run: |
-          set -euo pipefail
-          DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
           cat > Release <<EOF
-              Origin: a3-audio
-              Label: a3-core
-              Suite: stable
-              Codename: stable
-              Date: $DATE
-              Architectures: amd64
-              Components: main
-              Description: a3-core apt repository
-            EOF
-
-          echo "MD5Sum:" >> Release
-          find . -type f -name "Packages*" | while read -r f; do
-            fno=${f#./}
-            size=$(stat -c%s "$f")
-            md5=$(md5sum "$f" | cut -d' ' -f1)
-            printf " %s %d %s\n" "$md5" "$size" "$fno" >> Release
-          done
+Origin: a3-audio
+Label: a3-core
+Suite: stable
+Codename: stable
+Date: $(date -Ru)
+Architectures: amd64
+Components: main
+Description: a3-core apt repository
+EOF
 
           echo "SHA256:" >> Release
-          find . -type f -name "Packages*" | while read -r f; do
-            fno=${f#./}
-            size=$(stat -c%s "$f")
-            sha=$(sha256sum "$f" | cut -d' ' -f1)
-            printf " %s %d %s\n" "$sha" "$size" "$fno" >> Release
+          for f in a3-core.deb Packages Packages.gz Release; do
+            [ -f "$f" ] && printf " %s %d %s\n" "$(sha256sum "$f" | cut -d' ' -f1)" "$(stat -c%s "$f")" "$f" >> Release
           done
 
       - name: Sign Release
-        working-directory: repo/dists/stable
-        env:
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
-          # create ASCII-armored detached signature so GitHub Pages serves a text file
-          if [ -n "${GPG_PASSPHRASE:-}" ]; then
-            # use loopback pinentry so passphrase can be provided non-interactively
-            gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --armor --detach-sign -o Release.gpg Release
-          else
-            gpg --batch --yes --armor --detach-sign -o Release.gpg Release
-          fi
+          gpg --batch --yes --armor --detach-sign -o Release.gpg Release
 
-      - name: Flatten repo for GitHub Pages
-        run: |
-          rm -rf public
-          mkdir -p public
-
-          cp repo/pool/a3-core.deb public/
-          cp repo/dists/stable/main/binary-amd64/Packages.gz public/
-          cp repo/dists/stable/Release public/Release
-          cp repo/dists/stable/Release.gpg public/Release.gpg
-          cp KEY.gpg public/KEY.gpg
-
-      - name: Deploy to GitHub Pages
+      - name: Publish to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./public
+          publish_dir: .
