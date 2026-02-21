@@ -33,6 +33,15 @@ jobs:
           cp a3-core.deb repo/pool/
 
           mkdir -p repo/dists/stable/main/binary-amd64
+          - name: Export public GPG key
+            run: |
+              # extract first pub keyid and export armored public key
+              KEYID=$(gpg --list-keys --with-colons | awk -F: '/^pub/{print $5; exit}')
+              if [ -z "$KEYID" ]; then
+                echo "No GPG key found after import" >&2
+                exit 2
+              fi
+              gpg --armor --export "$KEYID" > KEY.gpg
 
           dpkg-scanpackages repo/pool /dev/null > repo/dists/stable/main/binary-amd64/Packages
           gzip -9c repo/dists/stable/main/binary-amd64/Packages > repo/dists/stable/main/binary-amd64/Packages.gz
