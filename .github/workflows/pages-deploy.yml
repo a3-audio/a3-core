@@ -68,7 +68,7 @@ jobs:
                 </ul>
               </body>
             </html>
-            EOF
+          EOF
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
