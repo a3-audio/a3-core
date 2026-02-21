@@ -49,7 +49,7 @@ jobs:
             $SHA1SUM $SIZE Packages.gz
             SHA256:
             $SHA256SUM $SIZE Packages.gz
-            EOF
+          EOF
           gpg --batch --yes --armor --output Release.gpg --detach-sign Release
       - name: Add index.html for repo
         run: |
