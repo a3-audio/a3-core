@@ -28,6 +28,11 @@ jobs:
           dpkg-scanpackages . /dev/null | gzip -9c > Packages.gz
           gpg --batch --yes --armor --detach-sign Packages.gz
           gpg --export --armor $(gpg --list-keys --with-colons | awk -F: '/^pub/{print $5}') > KEY.gpg
+          MD5SUM=$(md5sum Packages.gz | awk '{print $1}')
+          SHA1SUM=$(sha1sum Packages.gz | awk '{print $1}')
+          SHA256SUM=$(sha256sum Packages.gz | awk '{print $1}')
+          SIZE=$(stat -c%s Packages.gz)
+          DATE=$(date -R)
           cat > Release <<EOF
             Origin: a3-core
             Label: a3-core
@@ -37,8 +42,14 @@ jobs:
             Architectures: amd64
             Components: main
             Description: a3-core apt repository
-            Date: $(date -Ru)
-          EOF
+            Date: $DATE
+            MD5Sum:
+            $MD5SUM $SIZE Packages.gz
+            SHA1:
+            $SHA1SUM $SIZE Packages.gz
+            SHA256:
+            $SHA256SUM $SIZE Packages.gz
+            EOF
           gpg --batch --yes --armor --output Release.gpg --detach-sign Release
       - name: Add index.html for repo
         run: |
