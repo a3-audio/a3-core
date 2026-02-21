@@ -14,7 +14,7 @@ jobs:
       - name: Build .deb
         run: |
           cd platform-config/debian-x86_64
-          dpkg-deb --build a3-core ../a3-core.deb
+          dpkg-deb --build --root-owner-group a3-core
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
