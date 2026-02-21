@@ -6,7 +6,7 @@ PartOf=a3-main.service
 [Service]
 Type=idle
 PrivateTmp=true
-ExecStart=/home/aaa/venv/bin/python3 /home/aaa/a3-core.lokal/a3-core.py
+ExecStart=/home/aaa/.venv/bin/python3 /home/aaa/.local/bin/a3-core.py
 CPUAffinity=0
 
 [Install]

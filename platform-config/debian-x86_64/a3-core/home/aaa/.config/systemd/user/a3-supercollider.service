@@ -6,9 +6,9 @@ After=a3-jack.service
 [Service]
 Type=idle
 PrivateTmp=true
-WorkingDirectory=/home/aaa/a3-core/engine/supercollider
+WorkingDirectory=/home/aaa/.local/share/a3-core/supercollider
 ExecStartPre=/bin/sleep 2
-ExecStart=/usr/bin/sclang /home/aaa/a3-core/engine/supercollider/a3-vu-meter.scd
+ExecStart=/usr/bin/sclang /home/aaa/.local/share/a3-core/supercollider/a3-vu-meter.scd
 LimitRTPRIO=2
 CPUAffinity=1 2 3
 
