@@ -34,22 +34,22 @@ jobs:
           SIZE=$(stat -c%s Packages.gz)
           DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
           cat > Release <<EOF
-Origin: a3-core
-Label: a3-core
-Suite: stable
-Version: 1.0
-Codename: a3core
-Architectures: amd64
-Components: main
-Description: a3-core apt repository
-Date: $DATE
-MD5Sum:
-$MD5SUM $SIZE Packages.gz
-SHA1:
-$SHA1SUM $SIZE Packages.gz
-SHA256:
-$SHA256SUM $SIZE Packages.gz
-EOF
+            Origin: a3-core
+            Label: a3-core
+            Suite: stable
+            Version: 1.0
+            Codename: a3core
+            Architectures: amd64
+            Components: main
+            Description: a3-core apt repository
+            Date: $DATE
+            MD5Sum:
+            $MD5SUM $SIZE Packages.gz
+            SHA1:
+            $SHA1SUM $SIZE Packages.gz
+            SHA256:
+            $SHA256SUM $SIZE Packages.gz
+          EOF
           gpg --batch --yes --armor --output Release.gpg --detach-sign Release
       - name: Add index.html for repo
         run: |
