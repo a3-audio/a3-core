@@ -28,9 +28,9 @@ jobs:
           dpkg-scanpackages . /dev/null | gzip -9c > Packages.gz
           gpg --batch --yes --armor --detach-sign Packages.gz
           gpg --export --armor $(gpg --list-keys --with-colons | awk -F: '/^pub/{print $5}') > KEY.gpg
-        - name: Add index.html for repo
-          run: |
-            cat > repo/index.html <<'EOF'
+      - name: Add index.html for repo
+        run: |
+          cat > repo/index.html <<'EOF'
             <!DOCTYPE html>
             <html>
               <head><title>a3-core apt repo</title></head>
@@ -43,7 +43,7 @@ jobs:
                 </ul>
               </body>
             </html>
-            EOF
+          EOF
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
