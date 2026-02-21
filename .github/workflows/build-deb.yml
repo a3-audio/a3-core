@@ -19,9 +19,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: a3-core.deb
-          path: platform-config/debian-x86_64/a3-core/a3-core.deb
+          path: platform-config/debian-x86_64/a3-core.deb
       - name: Upload Release Asset
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: platform-config/debian-x86_64/a3-core/a3-core.deb
+          files: platform-config/debian-x86_64/a3-core.deb
