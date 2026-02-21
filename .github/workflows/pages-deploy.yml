@@ -54,21 +54,21 @@ jobs:
       - name: Add index.html for repo
         run: |
           cat > repo/index.html <<'EOF'
-<!DOCTYPE html>
-<html>
-  <head><title>a3-core apt repo</title></head>
-  <body>
-    <h1>a3-core apt repository</h1>
-    <ul>
-      <li><a href="Packages.gz">Packages.gz</a></li>
-      <li><a href="KEY.gpg">KEY.gpg</a></li>
-      <li><a href="a3-core.deb">a3-core.deb</a></li>
-      <li><a href="Release">Release</a></li>
-      <li><a href="Release.gpg">Release.gpg</a></li>
-    </ul>
-  </body>
-</html>
-EOF
+            <!DOCTYPE html>
+            <html>
+              <head><title>a3-core apt repo</title></head>
+              <body>
+                <h1>a3-core apt repository</h1>
+                <ul>
+                  <li><a href="Packages.gz">Packages.gz</a></li>
+                  <li><a href="KEY.gpg">KEY.gpg</a></li>
+                  <li><a href="a3-core.deb">a3-core.deb</a></li>
+                  <li><a href="Release">Release</a></li>
+                  <li><a href="Release.gpg">Release.gpg</a></li>
+                </ul>
+              </body>
+            </html>
+            EOF
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
