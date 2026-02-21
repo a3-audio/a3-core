@@ -13,8 +13,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build .deb
         run: |
-          cd platform-config/debian-x86_64/a3-core
-          dpkg-deb --build . ../../a3-core.deb
+          cd platform-config/debian-x86_64
+          dpkg-deb --build a3-core ../a3-core.deb
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
