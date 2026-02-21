@@ -1,86 +1,90 @@
-name: Deploy apt repo to GitHub Pages
+name: Build APT Repo
 
 on:
   push:
-    branches: [ main, deploy ]
-  release:
-    types: [published]
+    branches: [ main ]
+    paths:
+      - "a3-core.deb"
+      - ".github/workflows/build-repo.yml"
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Build .deb
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install tools
         run: |
-          cd platform-config/debian-x86_64
-          dpkg-deb --build --root-owner-group a3-core
-      - name: Import GPG Key
+          sudo apt update
+          sudo apt install -y dpkg-dev gnupg
+
+      - name: Import GPG key
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
         env:
-          GPG_KEY: ${{ secrets.PGP_KEY }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+
+      - name: Build repo structure
         run: |
-          echo "$GPG_KEY" | gpg --batch --import
-      - name: Create apt repo
+          rm -rf repo
+          mkdir -p repo/pool
+          cp a3-core.deb repo/pool/
+
+          mkdir -p repo/dists/stable/main/binary-amd64
+
+          dpkg-scanpackages repo/pool /dev/null > repo/dists/stable/main/binary-amd64/Packages
+          gzip -9c repo/dists/stable/main/binary-amd64/Packages > repo/dists/stable/main/binary-amd64/Packages.gz
+
+      - name: Generate Release
+        working-directory: repo/dists/stable
         run: |
-          mkdir -p repo
-          cp platform-config/debian-x86_64/a3-core.deb repo/
-          cd repo
-          dpkg-scanpackages . /dev/null | gzip -9c > Packages.gz
-          gpg --batch --yes --armor --detach-sign Packages.gz
-          gpg --export --armor $(gpg --list-keys --with-colons | awk -F: '/^pub/{print $5}') > KEY.gpg
-          MD5SUM=$(md5sum Packages.gz | awk '{print $1}')
-          SHA1SUM=$(sha1sum Packages.gz | awk '{print $1}')
-          SHA256SUM=$(sha256sum Packages.gz | awk '{print $1}')
-          SIZE=$(stat -c%s Packages.gz)
-          DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
           cat > Release <<EOF
-            Origin: a3-core
-            Label: a3-core
-            Suite: stable
-            Version: 1.0
-            Codename: a3core
-            Architectures: amd64
-            Components: main
-            Description: a3-core apt repository
-            Date: $DATE
-            MD5Sum:
-            $MD5SUM $SIZE Packages.gz
-            SHA1:
-            $SHA1SUM $SIZE Packages.gz
-            SHA256:
-            $SHA256SUM $SIZE Packages.gz
-          EOF
-          gpg --batch --yes --armor --output Release.gpg --detach-sign Release
-      - name: Add index.html for repo
+Origin: a3-audio
+Label: a3-core
+Suite: stable
+Codename: stable
+Date: $(date -Ru)
+Architectures: amd64
+Components: main
+Description: a3-core apt repository
+EOF
+
+          echo "MD5Sum:" >> Release
+          find . -type f -name "Packages*" | while read f; do
+            size=$(stat -c%s "$f")
+            md5=$(md5sum "$f" | cut -d' ' -f1)
+            printf " %s %d %s\n" "$md5" "$size" "$f" >> Release
+          done
+
+          echo "SHA256:" >> Release
+          find . -type f -name "Packages*" | while read f; do
+            size=$(stat -c%s "$f")
+            sha=$(sha256sum "$f" | cut -d' ' -f1)
+            printf " %s %d %s\n" "$sha" "$size" "$f" >> Release
+          done
+
+      - name: Sign Release
+        working-directory: repo/dists/stable
         run: |
-          cat > repo/index.html <<'EOF'
-            <!DOCTYPE html>
-            <html>
-              <head><title>a3-core apt repo</title></head>
-              <body>
-                <h1>a3-core apt repository</h1>
-                <ul>
-                  <li><a href="Packages.gz">Packages.gz</a></li>
-                  <li><a href="KEY.gpg">KEY.gpg</a></li>
-                  <li><a href="a3-core.deb">a3-core.deb</a></li>
-                  <li><a href="Release">Release</a></li>
-                  <li><a href="Release.gpg">Release.gpg</a></li>
-                </ul>
-              </body>
-            </html>
-          EOF
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: repo
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    steps:
+          gpg --batch --yes --armor --detach-sign -o Release.gpg Release
+        env:
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+
+      - name: Flatten repo for GitHub Pages
+        run: |
+          rm -rf public
+          mkdir public
+
+          cp repo/pool/a3-core.deb public/
+          cp repo/dists/stable/main/binary-amd64/Packages.gz public/
+          cp repo/dists/stable/Release public/
+          cp repo/dists/stable/Release.gpg public/
+          cp KEY.gpg public/
+
       - name: Deploy to GitHub Pages
-        uses: actions/deploy-pages@v4
+        uses: peaceiris/actions-gh-pages@v3
         with:
-          artifact_name: github-pages
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
