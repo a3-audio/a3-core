@@ -1,0 +1,13 @@
+[Unit]
+Description=a3-core vu-meter
+After=a3-jack.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/a3-core/engine/supercollider
+ExecStartPre=/bin/sleep 5
+ExecStart=/usr/bin/sclang /opt/a3-core/engine/supercollider/a3-vu-meter.scd
+LimitRTPRIO=2
+
+[Install]
+WantedBy=default.target

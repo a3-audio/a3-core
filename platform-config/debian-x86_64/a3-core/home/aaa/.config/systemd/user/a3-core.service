@@ -1,0 +1,11 @@
+[Unit]
+Description=a3-core (python osc server)
+PartOf=a3-main.service
+
+[Service]
+Type=simple
+ExecStart=/opt/a3-core/venv/bin/python3 /opt/a3-core/engine/scripts/a3-core.py
+CPUAffinity=0
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,10 @@
+[Unit]
+Description=a3-core midiclock
+After=a3-reaper.service
+
+[Service]
+Type=simple
+ExecStart=/opt/a3-core/venv/bin/python3 /opt/a3-core/engine/scripts/a3-midiclock.py
+
+[Install]
+WantedBy=default.target
