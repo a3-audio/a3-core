@@ -5,10 +5,10 @@ After=a3-jack.service
 
 [Service]
 PrivateTmp=true
-WorkingDirectory=/home/aaa/.local/bin/REAPER
+WorkingDirectory=/home/aaa/.local/opt/REAPER
 ExecStartPre=/bin/sleep 2
-ExecStart=/bin/bash -c "/home/aaa/.local/bin/REAPER/reaper -nosplash -ignoreerrors -template /home/aaa/.local/share/a3-core/reaper/a3_reaper.RPP"
-ExecStop=//home/aaa/.local/bin/REAPER/reaper -saveas /home/aaa/.local/share/a3-core/reaper/a3_reaper.RPP -close all :nosave
+ExecStart=/bin/bash -c "/home/aaa/.local/opt/REAPER/reaper -nosplash -ignoreerrors -template /home/aaa/.local/share/a3-core/reaper/a3_reaper.RPP"
+ExecStop=/home/aaa/.local/opt/REAPER/reaper -saveas /home/aaa/.local/share/a3-core/reaper/a3_reaper.RPP -close all :nosave
 CPUAffinity=1 2 3
 CPUSchedulingPolicy=rr
 CPUSchedulingPriority=75
