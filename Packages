@@ -6,9 +6,9 @@ Depends: systemd, git, vim, i3, htop, lightdm, linux-image-rt-amd64, liblo-tools
 Conflicts: wpasupplicant, modemmanager, blueman, bluetooth,bluez, bluez-obexd, network-manager
 Replaces: wpasupplicant, modemmanager, blueman, bluetooth,bluez, bluez-obexd, network-manager
 Filename: repo/a3-core.deb
-Size: 113764
-MD5sum: 4d19e21a5629a21f423bea6d468a22b4
-SHA1: ce67fa5c50674d5f46c9f4d099ecc20a15ebb69e
-SHA256: eb462dc83945b5e4462157082a498ba59750a95d419ae39d0c8f06ef4351f287
+Size: 113786
+MD5sum: a79fcd259b1ef2d53da3e5c34d5e641e
+SHA1: f88cee12289733d5c119b51ba67751e4447b2d88
+SHA256: a06cee1ce9fd0edd8b706d668f4846b886c2f18f0311683507a47305d6e5df38
 Description: a3core is part of a3-system
 
