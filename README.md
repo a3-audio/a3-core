@@ -17,7 +17,7 @@
 - VST Plugins
   - iem-plugin-suite https://plugins.iem.at
 
-# Manual Instaructions
+# Manual Instructions
 - install reaper
   - `.local/share/a3-core/reaper-oneshot-install.sh`
   - apply config in reaper (settings > general > import config) 
