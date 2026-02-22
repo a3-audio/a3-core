@@ -73,10 +73,10 @@ python3 -m venv "${USER_HOME}/.venv" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.local" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.config" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.ssh" || true
-chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.vnc" || true
 
 find "$USER_HOME/.config" -type d -exec chmod 775 {} \;
 find "$USER_HOME/.config" -type f -exec chmod 775 {} \;
+find "$USER_HOME/.config/REAPER" -type f -exec chmod 775 {} \;
 
 echo "enable system services..."
 systemctl daemon-reload || true
