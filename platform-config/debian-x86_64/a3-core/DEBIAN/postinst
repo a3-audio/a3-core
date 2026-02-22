@@ -103,12 +103,11 @@ if [ -f "$UNIT_SRC" ]; then
   chown -R "${APPUSER}:${APPUSER}" "$USER_SYSTEMD_DIR" || true
 fi
 
-# If a user systemd runtime exists right now, do a best-effort reload/enable so it takes effect immediately.
-# (This will silently do nothing if no user instance is active.)
+# Best-effort: only attempt user systemctl if the per-user bus socket exists
 USER_RUN="/run/user/$(id -u "${APPUSER}")"
-if [ -d "$USER_RUN" ]; then
-  su -s /bin/sh -c "XDG_RUNTIME_DIR=${USER_RUN} systemctl --user daemon-reload || true" "${APPUSER}" || true
-  su -s /bin/sh -c "XDG_RUNTIME_DIR=${USER_RUN} systemctl --user enable ${UNIT_NAME} || true" "${APPUSER}" || true
+if [ -S "${USER_RUN}/bus" ]; then
+  # run as user with proper XDG_RUNTIME_DIR so systemctl --user can reach the bus
+  su -s /bin/sh -c "XDG_RUNTIME_DIR=${USER_RUN} systemctl --user daemon-reload || true; XDG_RUNTIME_DIR=${USER_RUN} systemctl --user enable ${UNIT_NAME} || true" "${APPUSER}" || true
 fi
 
 
