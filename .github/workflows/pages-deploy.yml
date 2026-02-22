@@ -84,8 +84,31 @@ jobs:
         run: |
           gpg --batch --yes --armor --detach-sign -o Release.gpg Release
 
+      - name: Export public key
+        run: |
+          KEYID=$(gpg --list-keys --with-colons | awk -F: '/^pub/{print $5; exit}') || true
+          if [ -n "$KEYID" ]; then
+            gpg --armor --export "$KEYID" > KEY.gpg || true
+          fi
+
+      - name: Show Release (debug)
+        run: |
+          echo "--- Release content start ---"
+          sed -n '1,200p' Release || true
+          echo "--- Release content end ---"
+
+      - name: Prepare public dir for Pages
+        run: |
+          rm -rf public
+          mkdir -p public
+          cp a3-core.deb public/ || true
+          cp Packages.gz public/ || true
+          cp Release public/Release || true
+          cp Release.gpg public/Release.gpg || true
+          [ -f KEY.gpg ] && cp KEY.gpg public/KEY.gpg || true
+
       - name: Publish to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: .
+          publish_dir: ./public
