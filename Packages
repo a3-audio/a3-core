@@ -1,0 +1,14 @@
+Package: a3-core
+Version: 1.0.0
+Architecture: amd64
+Maintainer: Rafjagger
+Depends: systemd, git, vim, i3, htop, lightdm, linux-image-rt-amd64, liblo-tools, qjackctl, x11vnc, iem-plugin-suite-vst3, python3, python3-pip, python3-venv, python3-rtmidi, xserver-xorg-video-dummy, net-tools, xinit
+Conflicts: wpasupplicant, modemmanager, blueman, bluetooth,bluez, bluez-obexd, network-manager
+Replaces: wpasupplicant, modemmanager, blueman, bluetooth,bluez, bluez-obexd, network-manager
+Filename: repo/a3-core.deb
+Size: 113764
+MD5sum: 4d19e21a5629a21f423bea6d468a22b4
+SHA1: ce67fa5c50674d5f46c9f4d099ecc20a15ebb69e
+SHA256: eb462dc83945b5e4462157082a498ba59750a95d419ae39d0c8f06ef4351f287
+Description: a3core is part of a3-system
+

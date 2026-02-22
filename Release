@@ -1,0 +1,12 @@
+Origin: a3-audio
+Label: a3-core
+Suite: stable
+Codename: stable
+Date: Sun, 22 Feb 2026 00:27:44 +0000
+Architectures: amd64
+Components: main
+Description: a3-core apt repository
+SHA256:
+ 0f23a6d1f693fb4ceb44fa7806b2a93b1b2d38a827eb4115111989e2444234b7 724 Packages
+ ad8c3d9a3618a01b3a55d630b4ec1500e7d93137dcbaf053239422c2b73c8c6d 466 Packages.gz
+ f1aeb94621666906c4bb259499203aa1af116bc0297a9390e98a9219dcf5d5fe 344 Release
