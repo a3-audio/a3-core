@@ -74,12 +74,9 @@ chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.local" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.config" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.ssh" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.vnc" || true
-if [ -d "${USER_HOME}/.config/REAPER" ]; then
-  for _f in "${USER_HOME}/.config/REAPER/"*; do
-    [ -e "$_f" ] || continue
-    chmod 664 "$_f" || true
-  done
-fi
+
+find "$USER_HOME/.config" -type d -exec chmod 775 {} \;
+find "$USER_HOME/.config" -type f -exec chmod 775 {} \;
 
 echo "enable system services..."
 systemctl daemon-reload || true
@@ -96,6 +93,6 @@ fi
 echo "update grub..."
 update-grub || true
 
-echo "Installation complete. Please reboot"
+echo "Installation complete."
 
 # End of postinst
