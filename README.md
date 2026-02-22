@@ -42,3 +42,6 @@ update & install
 sudo apt update
 sudo apt install a3-core
 ```
+
+# Configure Network
+`sudo dpkg-reconfigure a3-core`q
