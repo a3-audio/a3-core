@@ -39,7 +39,7 @@ jobs:
           dpkg-scanpackages repo /dev/null > Packages
           gzip -9c Packages > Packages.gz
 
-          cat > Release <<'EOF'
+          cat > Release <<EOF
 Origin: a3-audio
 Label: a3-core
 Suite: stable
