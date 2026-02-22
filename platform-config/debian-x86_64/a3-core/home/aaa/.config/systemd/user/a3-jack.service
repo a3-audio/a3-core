@@ -1,5 +1,6 @@
 [Unit]                                                                                     
 Description=a3-jack
+Before=pipewire-pulse
 PartOf=a3-main.service
 
 [Service]
