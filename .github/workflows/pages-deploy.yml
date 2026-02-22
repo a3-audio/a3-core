@@ -106,6 +106,8 @@ jobs:
           cp Release public/Release || true
           cp Release.gpg public/Release.gpg || true
           [ -f KEY.gpg ] && cp KEY.gpg public/KEY.gpg || true
+          # prevent GitHub Pages (Jekyll) from processing files — serve raw files as-is
+          touch public/.nojekyll
 
       - name: Publish to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
