@@ -77,6 +77,8 @@ jobs:
               printf " %s %d %s\n" "$sha256" "$size" "$f" >> Release
             fi
           done
+          # remove any leading whitespace at line starts (ensure apt-friendly formatting)
+          sed -i 's/^[[:space:]]*//' Release || true
 
       - name: Sign Release
         run: |
