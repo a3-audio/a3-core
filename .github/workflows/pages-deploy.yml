@@ -103,7 +103,9 @@ jobs:
         run: |
           rm -rf public
           mkdir -p public
-          cp a3-core.deb public/ || true
+          # publish repo files under public/repo so package paths in Packages match
+          mkdir -p public/repo
+          cp -r repo/* public/repo/ || true
           cp Packages.gz public/ || true
           # copy Release into public/Release (Release was normalized earlier)
           cp Release public/Release || true
