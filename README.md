@@ -13,12 +13,13 @@
 - get Airwindows plugin suite (we're using the SmoothEQ) https://airwindows.com/vsts 
 
 
-## Repository einbinden (Schritt-für-Schritt)
+**Repository einbinden**
 
-1. GPG-Key importieren:
-	wget -O - https://a3-audio.github.io/a3-core/KEY.gpg | sudo gpg --dearmor -o /usr/share/keyrings/a3-core-archive-keyring.gpg
+GPG-Key importieren:
+wget -O - https://a3-audio.github.io/a3-core/KEY.gpg | sudo gpg --dearmor -o /usr/share/keyrings/a3-core-archive-keyring.gpg
 
-2. edit /etc/apt/sources.list.d/a3-core.sources 
+apt sources
+edit /etc/apt/sources.list.d/a3-core.sources 
 
 Types: deb
 URIs: https://a3-audio.github.io/a3-core/
@@ -26,7 +27,7 @@ Suites: ./
 Components: 
 Signed-By: /usr/share/keyrings/a3-core-archive-keyring.gpg
 
-3. update & install
+update & install
 
 sudo apt update
 sudo apt install a3-core
