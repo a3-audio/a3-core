@@ -3,9 +3,9 @@ name: Build APT Repo
 on:
   push:
     branches: [ main ]
-    paths:
-      - "a3-core.deb"
-      - ".github/workflows/repo.yml"
+  workflow_dispatch: {}
+  release:
+    types: [published]
 
 jobs:
   build:
