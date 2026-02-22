@@ -1,4 +1,0 @@
-numpy
-python-osc
-mido
-FreeSimpleGUI
