@@ -105,8 +105,8 @@ jobs:
           mkdir -p public
           cp a3-core.deb public/ || true
           cp Packages.gz public/ || true
-          # rewrite Release into public/Release stripping any leading whitespace
-          awk '{ sub(/^[[:space:]]+/, ""); print }' Release > public/Release || cp Release public/Release || true
+          # copy Release into public/Release (Release was normalized earlier)
+          cp Release public/Release || true
           cp Release.gpg public/Release.gpg || true
           [ -f KEY.gpg ] && cp KEY.gpg public/KEY.gpg || true
           # prevent GitHub Pages (Jekyll) from processing files — serve raw files as-is
