@@ -10,20 +10,23 @@
   - a3-main.service
 - enable lightdm autologin for user aaa
 - configure audio interface in a3-jack.service
-- xonfigure channel routing in qjackctl make patchbay persistant .lokal/share/qjackctl
+- onfigure channel routing in qjackctl make patchbay persistant .lokal/share/qjackctl
 - configure irq priorities in /etc/rtirq.conf (rtirq package not in testing repo atm)
 - configure core osc .lokal/bin/a3-core.py
 - configure realtime privileges
-- Download VST Plugins
-  - Airwindows plugin suite (SmoothEQ / purestGain) https://airwindows.com/vsts
-  - TAL Software talfilter 2
-  - iem-plugin-suite
+- VST Plugins
+  - iem-plugin-suite https://plugins.iem.at
 
 # Manual Instaructions
-- download talfilter and airwindows
-- enter reaper license key
+- install reaper
+  - `.local/share/a3-core/reaper-oneshot-install.sh`
+  - enter reaper license key
+  - https://www.reaper.fm
+- Download VST plugins
+  - Airwindows plugin suite (SmoothEQ / purestGain) https://airwindows.com/vsts
+  - TAL Software talfilter 2 https://tal-software.com/products/tal-filter
 
-**Repository einbinden**
+# Debian Repository
 
 GPG-Key importieren: `wget -O - https://a3-audio.github.io/a3-core/KEY.gpg | sudo gpg --dearmor -o /usr/share/keyrings/a3-core-archive-keyring.gpg`
 
