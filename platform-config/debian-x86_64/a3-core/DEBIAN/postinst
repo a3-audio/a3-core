@@ -74,9 +74,13 @@ chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.local" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.config" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.ssh" || true
 
-find "$USER_HOME/.config" -type d -exec chmod 755 {} \;
-find "$USER_HOME/.config" -type f -exec chmod 664 {} \;
-#find "$USER_HOME/.config/REAPER" -type f -exec chmod 664 {} \;
+find "$USER_HOME/.config" -type d -exec chmod 0755 {} \;
+find "$USER_HOME/.config" -type f -exec chmod 0644 {} \;
+
+if [ -d /home/aaa/.ssh ]; then
+  chmod 0700 /home/aaa/.ssh
+  find /home/aaa/.ssh -type f -exec chmod 0600 {} \;
+fi
 
 echo "enable system services..."
 systemctl daemon-reload || true
