@@ -20,6 +20,8 @@
 # Manual Instaructions
 - install reaper
   - `.local/share/a3-core/reaper-oneshot-install.sh`
+  - apply config in reaper (settings > general > import config) 
+    - `.local/share/a3-core/a3_reaper_config..`
   - enter reaper license key
   - https://www.reaper.fm
 - Download VST plugins
@@ -44,4 +46,4 @@ sudo apt install a3-core
 ```
 
 # Configure Network
-`sudo dpkg-reconfigure a3-core`q
+`sudo dpkg-reconfigure a3-core`
