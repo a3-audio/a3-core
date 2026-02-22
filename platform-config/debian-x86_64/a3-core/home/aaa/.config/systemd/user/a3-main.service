@@ -4,7 +4,7 @@ Requires=a3-jack.service a3-reaper.service a3-core.service
 #beat-analyzer.service
 
 [Service]
-#ExecStartPre=/bin/sleep 6
+ExecStartPre=/bin/sleep 6
 ExecStart=/usr/bin/qjackctl
 Type=simple
 CPUAffinity=1 2 3
