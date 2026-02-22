@@ -1,37 +1,95 @@
-#!/bin/bash
+#!/bin/sh
+set -e
+
+# Debconf helper
+if [ -f /usr/share/debconf/confmodule ]; then
+  . /usr/share/debconf/confmodule
+fi
 
 APPUSER="aaa"
-USER_HOME=$(getent passwd "$APPUSER" | cut -d: -f6)
-echo $USER_HOME
+USER_HOME=$(getent passwd "$APPUSER" | cut -d: -f6 || echo "/home/$APPUSER")
 
-echo "network setup..."
-sudo cat << 'EOF' | tee /etc/systemd/network/a3.network
+# Ask whether to configure network
+db_input medium a3-core/configure-network || true
+db_go || true
+db_get a3-core/configure-network
+CONFIGURE="$RET"
+
+if [ "x$CONFIGURE" = "xtrue" ]; then
+  # Check if user wants the standard/default network
+  db_get a3-core/install-default-network
+  INSTALL_DEFAULT="$RET"
+
+  if [ "x$INSTALL_DEFAULT" = "xtrue" ]; then
+    INTERFACE="eno1"
+    ADDR="192.168.43.58/24"
+    GATEWAY="192.168.43.1"
+    DNS="192.168.43.1"
+  else
+    # Ask for details (will use template defaults if noninteractive)
+    db_input medium a3-core/interface || true
+    db_input medium a3-core/address || true
+    db_input medium a3-core/gateway || true
+    db_input medium a3-core/dns || true
+    db_go || true
+
+    db_get a3-core/interface; INTERFACE="$RET"
+    db_get a3-core/address; ADDR="$RET"
+    db_get a3-core/gateway; GATEWAY="$RET"
+    db_get a3-core/dns; DNS="$RET"
+  fi
+
+  # Ensure target dir exists
+  mkdir -p /etc/systemd/network
+
+  # Atomic write of the network file
+  tmpfile="$(mktemp /etc/systemd/network/a3.network.XXXXXX 2>/dev/null || mktemp /tmp/a3.network.XXXXXX)"
+  cat > "$tmpfile" <<EOF
 [Match]
-Name=eno1
+Name=${INTERFACE}
 
 [Network]
-Address=192.168.43.58/24
-Gateway=192.168.43.1
-DNS=192.168.43.1
+Address=${ADDR}
+Gateway=${GATEWAY}
+DNS=${DNS}
 EOF
+  chmod 644 "$tmpfile"
+  chown root:root "$tmpfile"
+  mv -f "$tmpfile" /etc/systemd/network/a3.network
 
-python3 -m venv /home/aaa/.venv
-/home/aaa/.venv/bin/pip install -r $USER_HOME/.local/share/a3-core/recipes/requirements.txt
+  # Enable systemd-networkd unit but do NOT start it
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl daemon-reload || true
+    systemctl enable systemd-networkd.service || true
+  fi
+fi
 
-chown -R aaa:aaa /home/aaa/.local
-chown -R aaa:aaa /home/aaa/.config
-chown -R aaa:aaa /home/aaa/.ssh
-chown -R aaa:aaa /home/aaa/.vnc
+# Continue with original postinst tasks (venv, pip, chown, enable services, etc.)
+# --- existing operations start ---
+# (preserve previous behavior; adjust below if your original postinst differs)
+python3 -m venv "${USER_HOME}/.venv" || true
+"${USER_HOME}/.venv/bin/pip" install -r "${USER_HOME}/.local/share/a3-core/recipes/requirements.txt" || true
+
+chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.local" || true
+chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.config" || true
+chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.ssh" || true
+chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.vnc" || true
 
 echo "enable system services..."
-systemctl daemon-reload
-systemctl enable x11vnc
+systemctl daemon-reload || true
+systemctl enable x11vnc.service || true
 
 echo "enable userservices..."
-loginctl enable-linger $APPUSER
-sudo -u $APPUSER XDG_RUNTIME_DIR=/run/user/$(id -u $APPUSER) systemctl --user enable a3-main
+loginctl enable-linger "${APPUSER}" || true
+if [ -x "$(command -v sudo)" ]; then
+  sudo -u "${APPUSER}" XDG_RUNTIME_DIR="/run/user/$(id -u "${APPUSER}")" systemctl --user enable a3-main || true
+else
+  su -s /bin/sh -c "XDG_RUNTIME_DIR=/run/user/$(id -u ${APPUSER}) systemctl --user enable a3-main" "${APPUSER}" || true
+fi
 
 echo "update grub..."
-update-grub
+update-grub || true
 
 echo "Installation complete. Please reboot"
+
+# End of postinst

@@ -1,0 +1,29 @@
+Template: a3-core/configure-network
+Type: boolean
+Default: false
+_Description: Do you want to configure networking for a3-core?
+
+Template: a3-core/install-default-network
+Type: boolean
+Default: false
+_Description: Install the standard default network configuration automatically?
+
+Template: a3-core/interface
+Type: string
+Default: eno1
+_Description: Network interface to match (e.g. eno1)
+
+Template: a3-core/address
+Type: string
+Default: 192.168.43.58/24
+_Description: Static IP address (CIDR), e.g. 192.168.43.58/24
+
+Template: a3-core/gateway
+Type: string
+Default: 192.168.43.1
+_Description: Gateway address
+
+Template: a3-core/dns
+Type: string
+Default: 192.168.43.1
+_Description: DNS server address
