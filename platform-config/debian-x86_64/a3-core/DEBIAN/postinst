@@ -83,12 +83,30 @@ systemctl daemon-reload || true
 systemctl enable x11vnc.service || true
 
 echo "enable userservices..."
+# allow user services to run without an interactive session
 loginctl enable-linger "${APPUSER}" || true
-if [ -x "$(command -v sudo)" ]; then
-  sudo -u "${APPUSER}" XDG_RUNTIME_DIR="/run/user/$(id -u "${APPUSER}")" systemctl --user enable a3-main || true
-else
-  su -s /bin/sh -c "XDG_RUNTIME_DIR=/run/user/$(id -u ${APPUSER}) systemctl --user enable a3-main" "${APPUSER}" || true
+
+# Emulate `systemctl --user enable` by creating the symlink in the user's config
+USER_SYSTEMD_DIR="${USER_HOME}/.config/systemd/user"
+WANTS_DIR="${USER_SYSTEMD_DIR}/default.target.wants"
+UNIT_NAME="a3-main.service"
+UNIT_SRC="/usr/lib/systemd/user/${UNIT_NAME}"
+
+mkdir -p "$WANTS_DIR" || true
+
+if [ -f "$UNIT_SRC" ]; then
+  ln -sf "$UNIT_SRC" "$WANTS_DIR/$UNIT_NAME" || true
+  chown -R "${APPUSER}:${APPUSER}" "$USER_SYSTEMD_DIR" || true
 fi
+
+# If a user systemd runtime exists right now, do a best-effort reload/enable so it takes effect immediately.
+# (This will silently do nothing if no user instance is active.)
+USER_RUN="/run/user/$(id -u "${APPUSER}")"
+if [ -d "$USER_RUN" ]; then
+  su -s /bin/sh -c "XDG_RUNTIME_DIR=${USER_RUN} systemctl --user daemon-reload || true" "${APPUSER}" || true
+  su -s /bin/sh -c "XDG_RUNTIME_DIR=${USER_RUN} systemctl --user enable ${UNIT_NAME} || true" "${APPUSER}" || true
+fi
+
 
 echo "update grub..."
 update-grub || true
