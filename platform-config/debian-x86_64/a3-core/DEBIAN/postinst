@@ -74,6 +74,7 @@ chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.local" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.config" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.ssh" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.vnc" || true
+chmod 664 "${USER_HOME}/.config/REAPER/*" || true
 
 echo "enable system services..."
 systemctl daemon-reload || true
