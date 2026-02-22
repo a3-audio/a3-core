@@ -1,10 +1,10 @@
 [Unit]                                                                                     
 Description=a3-jack
-Before=pipewire-pulse
+#Before=pipewire-pulse
 PartOf=a3-main.service
 
 [Service]
-ExecStartPre=/bin/sleep 3
+#ExecStartPre=/bin/sleep 3
 ExecStart=/usr/bin/jackd -P 19 -v -aa -dalsa -dhw:USB -r44100 -p128 
 Type=simple
 CPUAffinity=1 2 3
