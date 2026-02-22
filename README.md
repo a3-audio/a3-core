@@ -25,13 +25,9 @@
 
 **Repository einbinden**
 
-GPG-Key importieren:
-`wget -O - https://a3-audio.github.io/a3-core/KEY.gpg | sudo gpg --dearmor -o /usr/share/keyrings/a3-core-archive-keyring.gpg`
+GPG-Key importieren: `wget -O - https://a3-audio.github.io/a3-core/KEY.gpg | sudo gpg --dearmor -o /usr/share/keyrings/a3-core-archive-keyring.gpg`
 
-apt sources
-`vim /etc/apt/sources.list.d/a3-core.sources`
-
-Types: deb
+apt sources: `vim /etc/apt/sources.list.d/a3-core.sources`
 ```
 URIs: https://a3-audio.github.io/a3-core/
 Suites: ./
