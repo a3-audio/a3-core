@@ -39,18 +39,43 @@ jobs:
           dpkg-scanpackages repo /dev/null > Packages
           gzip -9c Packages > Packages.gz
 
+          DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
           printf '%s\n' \
             "Origin: a3-audio" \
             "Label: a3-core" \
             "Suite: stable" \
             "Codename: stable" \
-            "Date: $(date -Ru)" \
+            "Date: $DATE" \
             "Architectures: amd64" \
             "Components: main" \
             "Description: a3-core apt repository" > Release
+
+          # produce MD5Sum, SHA1 and SHA256 blocks with relative filenames
+          echo "MD5Sum:" >> Release
+          for f in a3-core.deb Packages Packages.gz Release; do
+            if [ -f "$f" ]; then
+              md5=$(md5sum "$f" | cut -d' ' -f1)
+              size=$(stat -c%s "$f")
+              printf " %s %d %s\n" "$md5" "$size" "$f" >> Release
+            fi
+          done
+
+          echo "SHA1:" >> Release
+          for f in a3-core.deb Packages Packages.gz Release; do
+            if [ -f "$f" ]; then
+              sha1=$(sha1sum "$f" | cut -d' ' -f1)
+              size=$(stat -c%s "$f")
+              printf " %s %d %s\n" "$sha1" "$size" "$f" >> Release
+            fi
+          done
+
           echo "SHA256:" >> Release
           for f in a3-core.deb Packages Packages.gz Release; do
-            [ -f "$f" ] && printf " %s %d %s\n" "$(sha256sum "$f" | cut -d' ' -f1)" "$(stat -c%s "$f")" "$f" >> Release
+            if [ -f "$f" ]; then
+              sha256=$(sha256sum "$f" | cut -d' ' -f1)
+              size=$(stat -c%s "$f")
+              printf " %s %d %s\n" "$sha256" "$size" "$f" >> Release
+            fi
           done
 
       - name: Sign Release
