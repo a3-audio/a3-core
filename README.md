@@ -29,6 +29,8 @@
   - TAL Software talfilter 2 https://tal-software.com/products/tal-filter
 
 # Debian Repository
+setup debian repositories to testing in `/etc/apt/sources.list`
+`apt update & full-upgrade & apt install wget gpg`
 
 GPG-Key importieren: `wget -O - https://a3-audio.github.io/a3-core/KEY.gpg | sudo gpg --dearmor -o /usr/share/keyrings/a3-core-archive-keyring.gpg`
 
