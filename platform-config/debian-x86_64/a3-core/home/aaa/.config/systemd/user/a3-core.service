@@ -1,7 +1,6 @@
 [Unit]                                                                                     
 Description=a3-core (python osc servera)
 PartOf=a3-main.service
-#After=a3-jack.service
 
 [Service]
 Type=idle
