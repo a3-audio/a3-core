@@ -40,16 +40,15 @@ jobs:
           gzip -9c Packages > Packages.gz
 
           cat > Release <<'EOF'
-          Origin: a3-audio
-          Label: a3-core
-          Suite: stable
-          Codename: stable
-          Date: $(date -Ru)
-          Architectures: amd64
-          Components: main
-          Description: a3-core apt repository
-          EOF
-
+  Origin: a3-audio
+  Label: a3-core
+  Suite: stable
+  Codename: stable
+  Date: $(date -Ru)
+  Architectures: amd64
+  Components: main
+  Description: a3-core apt repository
+EOF
           echo "SHA256:" >> Release
           for f in a3-core.deb Packages Packages.gz Release; do
             [ -f "$f" ] && printf " %s %d %s\n" "$(sha256sum "$f" | cut -d' ' -f1)" "$(stat -c%s "$f")" "$f" >> Release
