@@ -34,6 +34,7 @@ GPG-Key importieren: `wget -O - https://a3-audio.github.io/a3-core/KEY.gpg | sud
 
 apt sources: `vim /etc/apt/sources.list.d/a3-core.sources`
 ```
+Types: deb
 URIs: https://a3-audio.github.io/a3-core/
 Suites: ./
 Components: 
