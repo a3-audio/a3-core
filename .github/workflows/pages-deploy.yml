@@ -50,6 +50,9 @@ jobs:
             "Components: main" \
             "Description: a3-core apt repository" > Release
 
+          # normalize Release (strip any leading whitespace) before computing hashes
+          sed -i 's/^[[:space:]]*//' Release || true
+
           # produce MD5Sum, SHA1 and SHA256 blocks with relative filenames
           echo "MD5Sum:" >> Release
           for f in a3-core.deb Packages Packages.gz Release; do
@@ -77,8 +80,7 @@ jobs:
               printf " %s %d %s\n" "$sha256" "$size" "$f" >> Release
             fi
           done
-          # remove any leading whitespace at line starts (ensure apt-friendly formatting)
-          sed -i 's/^[[:space:]]*//' Release || true
+          # (Release was normalized before hashes)
 
       - name: Sign Release
         run: |
