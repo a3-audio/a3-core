@@ -31,9 +31,4 @@ sudo apt install a3-core
 4. Paket installieren:
 	sudo apt install a3-core
 
-### Troubleshooting
-- Prüfe, ob Release.gpg ASCII-armored ist (soll mit -----BEGIN PGP SIGNATURE----- beginnen).
-- Prüfe, ob KEY.gpg korrekt importiert wurde und in sources.list referenziert ist.
-- Prüfe, ob die Release-Datei und Release.gpg im Repo aktuell sind.
-- Bei Fehlern: apt update mit -o Debug::Acquire::gpgv=true ausführen für mehr Details.
 
