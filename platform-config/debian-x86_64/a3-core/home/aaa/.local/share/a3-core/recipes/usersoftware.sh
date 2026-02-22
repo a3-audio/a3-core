@@ -19,6 +19,6 @@ echo "Installing Airwindows vst..."
 wget https://github.com/baconpaul/airwin2rack/releases/download/DAWPlugin/AirwindowsConsolidated-2026-02-22-b0ec35c-Linux.zip
 unzip AirwindowsConsolidated-2026-02-22-b0ec35c-Linux.zip
 rm AirwindowsConsolidated-2026-02-22-b0ec35c-Linux.zip
-mv awcons-products/Airwindows\ Consolidated.vst3 ~/.local/vst/
+mv awcons-products/Airwindows\ Consolidated.vst3 /home/aaa/.local/vst/
 echo "done. /home/aaa/.local/vst ..."
 
