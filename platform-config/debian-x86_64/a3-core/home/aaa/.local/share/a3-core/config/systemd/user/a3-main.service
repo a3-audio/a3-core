@@ -1,7 +1,6 @@
 [Unit]                                                                                     
 Description=a3-main
-Requires=a3-jack.service a3-reaper.service a3-core.service 
-#beat-analyzer.service
+Requires=a3-jack.service a3-reaper.service a3-core.service
 
 [Service]
 ExecStartPre=/bin/sleep 6
