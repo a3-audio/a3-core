@@ -7,6 +7,7 @@ if [ -f /usr/share/debconf/confmodule ]; then
 fi
 
 APPUSER="aaa"
+UID=$(id -u $APPUSER)
 USER_HOME=$(getent passwd "$APPUSER" | cut -d: -f6 || echo "/home/$APPUSER")
 
 # Ask whether to configure network
@@ -90,27 +91,12 @@ echo "enable userservices..."
 # allow user services to run without an interactive session
 loginctl enable-linger "${APPUSER}" || true
 
-# Emulate `systemctl --user enable` by creating the symlink in the user's config
-USER_SYSTEMD_DIR="${USER_HOME}/.config/systemd/user"
-WANTS_DIR="${USER_SYSTEMD_DIR}/default.target.wants"
-UNIT_NAME="a3-main.service"
-UNIT_NAME1="a3-install-reaper.service"
-UNIT_SRC="/usr/lib/systemd/user/${UNIT_NAME}"
+sudo -u "$APPUSER" XDG_RUNTIME_DIR="/run/user/$UID" systemctl --user daemon-reload || true
+sudo -u "$APPUSER" XDG_RUNTIME_DIR="/run/user/$UID" systemctl --user enable a3-main.service || true
+sudo -u "$APPUSER" XDG_RUNTIME_DIR="/run/user/$UID" systemctl --user start a3-main.service || true
 
-mkdir -p "$WANTS_DIR" || true
-
-if [ -f "$UNIT_SRC" ]; then
-  ln -sf "$UNIT_SRC" "$WANTS_DIR/$UNIT_NAME" || true
-  chown -R "${APPUSER}:${APPUSER}" "$USER_SYSTEMD_DIR" || true
-fi
-
-# Best-effort: only attempt user systemctl if the per-user bus socket exists
-USER_RUN="/run/user/$(id -u "${APPUSER}")"
-if [ -S "${USER_RUN}/bus" ]; then
-  # run as user with proper XDG_RUNTIME_DIR so systemctl --user can reach the bus
-  su -s /bin/sh -c "XDG_RUNTIME_DIR=${USER_RUN} systemctl --user daemon-reload || true; XDG_RUNTIME_DIR=${USER_RUN} systemctl --user enable ${UNIT_NAME} || true" "${APPUSER}" || true
-  su -s /bin/sh -c "XDG_RUNTIME_DIR=${USER_RUN} systemctl --user daemon-reload || true; XDG_RUNTIME_DIR=${USER_RUN} systemctl --user start ${UNIT_NAME1} || true" "${APPUSER}" || true
-fi
+# optional: start the "install reaper" unit if present
+sudo -u "$APPUSER" XDG_RUNTIME_DIR="/run/user/$UID" systemctl --user start a3-install-reaper.service || true
 
 echo "update grub..."
 update-grub || true
