@@ -12,15 +12,14 @@ echo "Installing TAL Filter vst..."
 wget https://tal-software.com/downloads/plugins/TAL-Filter-2_64_linux.zip
 unzip -o TAL-Filter-2_64_linux.zip
 rm TAL-Filter-2_64_linux.zip
-mv -f TAL-Filter-2/TAL-Filter-2.vst3 ~/.local/vst/
+mv -f TAL-Filter-2/TAL-Filter-2.vst3 /home/aaa/.local/vst/TAL-Filter-2.vst3
 rm -rf TAL-Filter-2
-echo "done. /home/aaa/.local/vst ..."
+echo "done: /home/aaa/.local/vst/TAL-Filter-2.vst3"
 
 echo "Installing Airwindows vst..."
 wget https://github.com/baconpaul/airwin2rack/releases/download/DAWPlugin/AirwindowsConsolidated-2026-02-22-b0ec35c-Linux.zip
 unzip -o AirwindowsConsolidated-2026-02-22-b0ec35c-Linux.zip
 rm AirwindowsConsolidated-2026-02-22-b0ec35c-Linux.zip
-mv -f awcons-products/Airwindows\ Consolidated.vst3 /home/aaa/.local/vst/
+mv -f awcons-products/Airwindows\ Consolidated.vst3 /home/aaa/.local/vst/AirwindowsConsolidated.vst3
 rm -rf awcons-products
-echo "done. /home/aaa/.local/vst ..."
-
+echo "done: /home/aaa/.local/vst/AirwindowsConsolidated.vst3"
