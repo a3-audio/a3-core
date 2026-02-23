@@ -38,33 +38,23 @@ Signed-By: $KEYRING
 EOF
 chmod 644 "$SOURCES_FILE_A3"
 
-# Backup original debian.sources if present
-if [ -f "$SOURCES_FILE_DEBIAN" ]; then
-  cp "$SOURCES_FILE_DEBIAN" "$SOURCES_FILE_DEBIAN_BACKUP"
-  echo "Backup: $SOURCES_FILE_DEBIAN_BACKUP"
+mv /etc/apt/sources.list /etc/apt/sources.list.bck
 
-  # Replace known Debian suite names (trixie/stable and their updates/security variants)
-  tmpfile=$(mktemp /tmp/debian.sources.XXXXXX)
-  sed -E '
-    s/^(Suites:\s*)trixie( +trixie-updates)?/\1testing testing-updates/g;
-    s/^(Suites:\s*)trixie-security/\1testing-security/g;
-    s/^(Suites:\s*)stable( +stable-updates)?/\1testing testing-updates/g;
-    s/^(Suites:\s*)stable-security/\1testing-security/g;
-  ' "$SOURCES_FILE_DEBIAN" > "$tmpfile"
+cat << 'EOF' > /etc/apt/sources.list
+deb http://deb.debian.org/debian/ testing main non-free-firmware
+deb-src http://deb.debian.org/debian/ testing main non-free-firmware
 
-  # Atomically install the modified file with correct permissions
-  install -m 644 "$tmpfile" "$SOURCES_FILE_DEBIAN"
-  rm -f "$tmpfile"
-else
-  echo "Hinweis: $SOURCES_FILE_DEBIAN nicht gefunden — Transformation übersprungen."
-fi
+deb http://security.debian.org/debian-security testing-security main non-free-firmware
+deb-src http://security.debian.org/debian-security testing-security main non-free-firmware
 
-echo "Neue deb822-Quelle(n):"
-[ -f "$SOURCES_FILE_DEBIAN" ] && cat "$SOURCES_FILE_DEBIAN" || echo "(keine Datei vorhanden)"
+deb http://deb.debian.org/debian/ testing-updates main non-free-firmware
+deb-src http://deb.debian.org/debian/ testing-updates main non-free-firmware
+EOF
 
 echo "4/4: Paketlisten aktualisieren und a3-core installieren..."
-apt-get update
-apt-get install -y a3-core
+apt update
+apt full-upgrade -y
+apt install -y a3-core
 
 echo "Installation complete."
 
