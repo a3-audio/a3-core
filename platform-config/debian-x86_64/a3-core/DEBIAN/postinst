@@ -79,7 +79,7 @@ chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.config" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.ssh" || true
 
 find "$USER_HOME/.config" -type d -exec chmod 0755 {} \;
-find "$USER_HOME/.config" -type f -exec chmod 0644 {} \;
+find "$USER_HOME/.config" -type f -exec chmod 0664 {} \;
 
 if [ -d /home/aaa/.ssh ]; then
   chmod 0700 /home/aaa/.ssh
