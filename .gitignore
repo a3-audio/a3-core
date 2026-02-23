@@ -2,4 +2,5 @@
 #
 # SPDX-License-Identifier: CC0-1.0
 platform-config/debian-x86_64/a3-core.deb
+platform-config/debian-x86_64/a3-core/home/aaa/.local/share/a3-core/config/REAPER/ProjectTemplates/Backups
 *.swp
