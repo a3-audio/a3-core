@@ -96,7 +96,7 @@ sudo -u "$APPUSER" XDG_RUNTIME_DIR="/run/user/$UID" systemctl --user enable a3-m
 #sudo -u "$APPUSER" XDG_RUNTIME_DIR="/run/user/$UID" systemctl --user start a3-main.service || true
 
 # optional: start the "install reaper" unit if present
-sudo -u "$APPUSER" XDG_RUNTIME_DIR="/run/user/$UID" systemctl --user start a3-install-reaper.service || true
+sudo -u "$APPUSER" XDG_RUNTIME_DIR="/run/user/$UID" systemctl --user start a3-user-install.service || true
 
 echo "update grub..."
 update-grub || true
