@@ -38,8 +38,16 @@ Signed-By: $KEYRING
 EOF
 chmod 644 "$SOURCES_FILE_A3"
 
-rm -f /etc/apt/sources.list
-rm -f /etc/apt/sources.list.bck
+QUELLE="/etc/apt/sources.list"
+ZIEL="/etc/apt/sources.list.bck"
+
+# Überprüfen, ob die Datei existiert
+if [ -f "$QUELLE" ]; then
+    mv "$QUELLE" "$ZIEL"    # Datei verschieben
+    echo "Datei wurde verschoben."
+else
+    echo "sources.list nicht vorhanden."
+fi
 
 cat << 'EOF' > /etc/apt/sources.list.d/debian.sources
 Types: deb deb-src
