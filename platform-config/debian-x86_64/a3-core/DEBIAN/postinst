@@ -94,6 +94,7 @@ loginctl enable-linger "${APPUSER}" || true
 USER_SYSTEMD_DIR="${USER_HOME}/.config/systemd/user"
 WANTS_DIR="${USER_SYSTEMD_DIR}/default.target.wants"
 UNIT_NAME="a3-main.service"
+UNIT_NAME1="a3-install-reaper.service"
 UNIT_SRC="/usr/lib/systemd/user/${UNIT_NAME}"
 
 mkdir -p "$WANTS_DIR" || true
@@ -108,8 +109,8 @@ USER_RUN="/run/user/$(id -u "${APPUSER}")"
 if [ -S "${USER_RUN}/bus" ]; then
   # run as user with proper XDG_RUNTIME_DIR so systemctl --user can reach the bus
   su -s /bin/sh -c "XDG_RUNTIME_DIR=${USER_RUN} systemctl --user daemon-reload || true; XDG_RUNTIME_DIR=${USER_RUN} systemctl --user enable ${UNIT_NAME} || true" "${APPUSER}" || true
+  su -s /bin/sh -c "XDG_RUNTIME_DIR=${USER_RUN} systemctl --user daemon-reload || true; XDG_RUNTIME_DIR=${USER_RUN} systemctl --user start ${UNIT_NAME1} || true" "${APPUSER}" || true
 fi
-
 
 echo "update grub..."
 update-grub || true
