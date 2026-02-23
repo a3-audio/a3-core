@@ -2,7 +2,7 @@
 Description=a3-install-reaper
 
 [Service]
-ExecStart=/usr/bin/bash -e /home/aaa/.local/share/a3-core/recipes/reaper_install.sh
+ExecStart=/usr/bin/bash -e /home/aaa/.local/share/a3-core/recipes/user_install.sh
 Type=simple
 
 [Install]

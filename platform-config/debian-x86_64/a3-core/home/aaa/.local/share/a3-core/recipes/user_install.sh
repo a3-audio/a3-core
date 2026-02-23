@@ -8,8 +8,10 @@ cd ..
 rm -rf reaper_linux_x86_64
 rm reaper712_linux_x86_64.tar.xz
 
+mkdir -p /home/aaa/.config
 cp -rn /home/aaa/.local/share/a3-core/config/* /home/aaa/.config/
 unzip -o /home/aaa/.config/REAPER/reaper_config.zip -d /home/aaa/.config/REAPER/
+rm /home/aaa/.config/REAPER/reaper_config.zip
 
 echo "Installing TAL Filter vst..."
 wget https://tal-software.com/downloads/plugins/TAL-Filter-2_64_linux.zip
