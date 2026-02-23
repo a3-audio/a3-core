@@ -1,5 +1,6 @@
 # Prerequisites
 - Blank debian installation
+  - user: aaa
   - without desktop environment
   - with ssh server
 
