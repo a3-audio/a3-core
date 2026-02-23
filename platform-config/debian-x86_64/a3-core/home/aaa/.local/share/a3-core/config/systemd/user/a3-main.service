@@ -5,7 +5,7 @@ Requires=a3-jack.service a3-reaper.service a3-core.service
 
 [Service]
 ExecStartPre=/bin/sleep 6
-ExecStart=/usr/bin/qjackctl -a /home/.config/qjackctl/a3-patchbay
+ExecStart=/usr/bin/qjackctl -a /home/.config/qjackctl/a3-patchbay.xml
 Type=simple
 CPUAffinity=1 2 3
 
