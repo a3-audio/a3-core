@@ -71,6 +71,9 @@ fi
 python3 -m venv "${USER_HOME}/.venv" || true
 "${USER_HOME}/.venv/bin/pip" install -r "${USER_HOME}/.local/share/a3-core/recipes/requirements.txt" || true
 
+mkdir -p /home/aaa/.config
+cp -rn /home/aaa/.local/share/a3-core/config/* /home/aaa/.config/
+
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.local" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.config" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.ssh" || true
