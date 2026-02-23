@@ -1,5 +1,7 @@
-# APT package actions
+# Install
+wget -qO- "https://raw.githubusercontent.com/a3-audio/a3-core/main/platform-config/debian-x86_64/a3-core_install.sh" | bash
 
+# DEB postinst
 - configure network interface in /etc/systemd/network/a3-core.network
 - setup user aaa
 - enable system services
@@ -14,39 +16,20 @@
 - configure irq priorities in /etc/rtirq.conf (rtirq package not in testing repo atm)
 - configure core osc .lokal/bin/a3-core.py
 - configure realtime privileges
-- VST Plugins
-  - iem-plugin-suite https://plugins.iem.at
+- install iem-plugin-suite 
 
-# Manual Instructions
-- install reaper
-  - `.local/share/a3-core/reaper-oneshot-install.sh`
-  - apply config in reaper (settings > general > import config) 
-    - `.local/share/a3-core/a3_reaper_config..`
-  - enter reaper license key
-  - https://www.reaper.fm
-- Download VST plugins
-  - Airwindows plugin suite (SmoothEQ / purestGain) https://airwindows.com/vsts
-  - TAL Software talfilter 2 https://tal-software.com/products/tal-filter
+# a3-user-install.service
+this one-shot service is triggert by `apt install a3-core`
+- install reaper & config
+- install Airwindows plugin suite
+- install TAL Software - talfilter 2
+- install beat-analyzer & build
 
-# Debian Repository
-setup debian repositories to testing in `/etc/apt/sources.list`
-`apt update & full-upgrade & apt install wget gpg`
-
-GPG-Key importieren: `wget -O - https://a3-audio.github.io/a3-core/KEY.gpg | sudo gpg --dearmor -o /usr/share/keyrings/a3-core-archive-keyring.gpg`
-
-apt sources: `vim /etc/apt/sources.list.d/a3-core.sources`
-```
-Types: deb
-URIs: https://a3-audio.github.io/a3-core/
-Suites: ./
-Components: 
-Signed-By: /usr/share/keyrings/a3-core-archive-keyring.gpg
-```
-update & install
-```
-sudo apt update
-sudo apt install a3-core
-```
+# Links:
+- https://airwindows.com/vsts
+- https://tal-software.com/products/tal-filter
+- https://github.com/rafjagger/beat-analyzer
+- https://plugins.iem.at
 
 # Configure Network
 `sudo dpkg-reconfigure a3-core`
