@@ -40,15 +40,24 @@ chmod 644 "$SOURCES_FILE_A3"
 
 mv -f /etc/apt/sources.list /etc/apt/sources.list.bck
 
-cat << 'EOF' > /etc/apt/sources.list
-deb http://deb.debian.org/debian/ testing main non-free-firmware
-deb-src http://deb.debian.org/debian/ testing main non-free-firmware
+cat << 'EOF' > /etc/apt/sources.list.d/debian.sources
+Types: deb deb-src
+URIs: http://deb.debian.org/debian/
+Suites: testing
+Components: main non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 
-deb http://security.debian.org/debian-security testing-security main non-free-firmware
-deb-src http://security.debian.org/debian-security testing-security main non-free-firmware
+Types: deb deb-src
+URIs: http://security.debian.org/debian-security/
+Suites: testing-security
+Components: main non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 
-deb http://deb.debian.org/debian/ testing-updates main non-free-firmware
-deb-src http://deb.debian.org/debian/ testing-updates main non-free-firmware
+Types: deb deb-src
+URIs: http://deb.debian.org/debian/
+Suites: testing-updates
+Components: main non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 EOF
 
 echo "4/4: Paketlisten aktualisieren und a3-core installieren..."
