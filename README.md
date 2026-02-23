@@ -46,6 +46,3 @@ this one-shot service is triggert by `apt install a3-core`
 - https://tal-software.com/products/tal-filter
 - https://github.com/rafjagger/beat-analyzer
 - https://plugins.iem.at
-
-# Configure Network
-`sudo dpkg-reconfigure a3-core`
