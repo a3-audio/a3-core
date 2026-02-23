@@ -1,5 +1,5 @@
 # Install
-wget -qO- "https://raw.githubusercontent.com/a3-audio/a3-core/main/platform-config/debian-x86_64/a3-core_install.sh" | bash
+`wget -qO- "https://raw.githubusercontent.com/a3-audio/a3-core/main/platform-config/debian-x86_64/a3-core_install.sh" | bash`
 
 # DEB postinst
 - configure network interface in /etc/systemd/network/a3-core.network
