@@ -12,6 +12,10 @@
 - logout and back in
   - `wget -qO- "https://raw.githubusercontent.com/a3-audio/a3-core/main/platform-config/debian-x86_64/a3-core_install.sh" | sudo bash`
 
+# Config
+- enable realtime priorities `sudo dpkg-reconfigure jackd2`
+- configure network `sudo dpkg-reconfigure a3-core`
+
 # apt install a3-core - postinst
 - configure network interface in /etc/systemd/network/a3-core.network
 - setup user aaa
