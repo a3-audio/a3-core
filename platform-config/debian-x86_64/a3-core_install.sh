@@ -38,7 +38,7 @@ Signed-By: $KEYRING
 EOF
 chmod 644 "$SOURCES_FILE_A3"
 
-mv /etc/apt/sources.list /etc/apt/sources.list.bck
+cp /etc/apt/sources.list /etc/apt/sources.list.bck
 
 cat << 'EOF' > /etc/apt/sources.list
 deb http://deb.debian.org/debian/ testing main non-free-firmware
