@@ -103,6 +103,9 @@ sudo -u "$APPUSER" XDG_RUNTIME_DIR="/run/user/$UID" systemctl --user start a3-us
 echo "update grub..."
 update-grub || true
 
+echo "Configure Network."
+dpkg-reconfigure a3-core
+
 echo "Installation complete."
 
 # End of postinst
