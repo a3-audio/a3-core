@@ -11,8 +11,8 @@ fi
 KEY_URL="https://a3-audio.github.io/a3-core/KEY.gpg"
 KEYRING="/usr/share/keyrings/a3-core-archive-keyring.gpg"
 SOURCES_FILE_A3="/etc/apt/sources.list.d/a3-core.sources"
-SOURCES_FILE_DEBIAN="/etc/apt/sources.list.d/debian.sources"
-SOURCES_FILE_DEBIAN_BACKUP="/etc/apt/sources.list.d/debian.sources.bak"
+SOURCES_FILE_DEBIAN="/etc/apt/sources.list"
+SOURCES_FILE_DEBIAN_BACKUP="/etc/apt/sources.list.bak"
 REPO_URI="https://a3-audio.github.io/a3-core/"
 # Note: we intentionally write 'Suites: ./' and leave Components empty per your request.
 
