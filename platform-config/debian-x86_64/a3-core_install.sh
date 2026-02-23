@@ -38,7 +38,8 @@ Signed-By: $KEYRING
 EOF
 chmod 644 "$SOURCES_FILE_A3"
 
-mv -f /etc/apt/sources.list /etc/apt/sources.list.bck
+rm -f /etc/apt/sources.list
+rm -f /etc/apt/sources.list.bck
 
 cat << 'EOF' > /etc/apt/sources.list.d/debian.sources
 Types: deb deb-src
