@@ -4,10 +4,12 @@
   - with ssh server
 
 # Install
-`wget -qO- "https://raw.githubusercontent.com/a3-audio/a3-core/main/platform-config/debian-x86_64/a3-core_install.sh" | sudo bash`
-
-- add gpg key to apt sources.d/a3-core.sources
-- apt update && apt upgrade && apt install -y a3-core >>
+- login to your debian
+  - `su root`
+  - `apt install sudo`
+  - `/usr/sbin/usermod -aG sudo`
+- logout and back in
+  - `wget -qO- "https://raw.githubusercontent.com/a3-audio/a3-core/main/platform-config/debian-x86_64/a3-core_install.sh" | sudo bash`
 
 # apt install a3-core - postinst
 - configure network interface in /etc/systemd/network/a3-core.network
