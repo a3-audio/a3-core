@@ -16,7 +16,7 @@ wget https://tal-software.com/downloads/plugins/TAL-Filter-2_64_linux.zip
 unzip -o TAL-Filter-2_64_linux.zip
 rm TAL-Filter-2_64_linux.zip
 rm -rf /home/aaa/.local/vst/TAL-Filter-2.vst3
-mv -f TAL-Filter-2/TAL-Filter-2.vst3 /home/aaa/.local/vst
+cp -rf TAL-Filter-2/TAL-Filter-2.vst3 /home/aaa/.local/vst
 rm -rf TAL-Filter-2
 echo "done: /home/aaa/.local/vst/TAL-Filter-2.vst3"
 

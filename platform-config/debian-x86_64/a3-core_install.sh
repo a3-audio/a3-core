@@ -18,7 +18,7 @@ REPO_URI="https://a3-audio.github.io/a3-core/"
 
 echo "1/4: Paketlisten aktualisieren und Werkzeuge installieren..."
 apt-get update
-apt-get install -y --no-install-recommends wget gnupg ca-certificates
+apt-get install -y wget gnupg ca-certificates
 
 echo "2/4: GPG-Key herunterladen und als Keyring installieren..."
 if command -v curl >/dev/null 2>&1; then
@@ -38,7 +38,7 @@ Signed-By: $KEYRING
 EOF
 chmod 644 "$SOURCES_FILE_A3"
 
-mv /etc/apt/sources.list /etc/apt/sources.list.bck
+mv -f /etc/apt/sources.list /etc/apt/sources.list.bck
 
 cat << 'EOF' > /etc/apt/sources.list
 deb http://deb.debian.org/debian/ testing main non-free-firmware
