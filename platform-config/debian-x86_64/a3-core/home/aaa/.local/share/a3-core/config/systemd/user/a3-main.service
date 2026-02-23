@@ -4,7 +4,7 @@ Requires=a3-jack.service a3-reaper.service a3-core.service beat-analyzer.service
 
 [Service]
 ExecStartPre=/bin/sleep 6
-ExecStart=/usr/bin/qjackctl -a /home/aaa/.config/qjackctl/a3-patchbay.xml
+ExecStart=/usr/bin/qjackctl -a /home/aaa/.config/rnbc.org/a3-patchbay.xml
 ExecStop=/usr/bin/pkill -9 qjackctl
 
 Type=simple
