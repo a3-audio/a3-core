@@ -6,8 +6,8 @@
 # Install
 - login to your debian
   - `su root`
-  - `apt install sudo`
-  - `/usr/sbin/usermod -aG sudo`
+  - `apt install sudo wget`
+  - `/usr/sbin/usermod -aG sudo aaa`
 - logout and back in
   - `wget -qO- "https://raw.githubusercontent.com/a3-audio/a3-core/main/platform-config/debian-x86_64/a3-core_install.sh" | sudo bash`
 
