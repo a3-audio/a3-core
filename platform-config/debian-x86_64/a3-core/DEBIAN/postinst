@@ -105,3 +105,4 @@ update-grub || true
 
 echo "Installation complete."
 echo "use 'dpkg-reconfigure a3-core' to confirure network"
+echo "use 'systemctl --user status a3-user-install.service' to check status" 
