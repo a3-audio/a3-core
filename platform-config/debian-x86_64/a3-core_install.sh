@@ -6,7 +6,7 @@ if [ "$(id -u)" -ne 0 ]; then
   echo "Bitte als root / mit sudo ausführen."
   exit 1
 fi
-
+export DEBIAN_FRONTEND=noninteractive
 # Config
 KEY_URL="https://a3-audio.github.io/a3-core/KEY.gpg"
 KEYRING="/usr/share/keyrings/a3-core-archive-keyring.gpg"
