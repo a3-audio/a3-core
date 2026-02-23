@@ -28,3 +28,8 @@ rm -rf /home/aaa/.local/vst/Airwindows\ Consolidated.vst3
 mv -f awcons-products/Airwindows\ Consolidated.vst3 /home/aaa/.local/vst
 rm -rf awcons-products
 echo "done: /home/aaa/.local/vst/AirwindowsConsolidated.vst3"
+
+echo "Installing Beat Analyzer..."
+cd ~ && git clone https://github.com/rafjagger/beat-analyzer.git
+cd beat-analyzer
+./build.sh
