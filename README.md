@@ -1,7 +1,10 @@
 # Install
 `wget -qO- "https://raw.githubusercontent.com/a3-audio/a3-core/main/platform-config/debian-x86_64/a3-core_install.sh" | sudo bash`
 
-# DEB postinst
+- add gpg key to apt sources.d/a3-core.sources
+- apt update && apt upgrade && apt install -y a3-core >>
+
+# apt install a3-core - postinst
 - configure network interface in /etc/systemd/network/a3-core.network
 - setup user aaa
 - enable system services
@@ -16,7 +19,8 @@
 - configure irq priorities in /etc/rtirq.conf (rtirq package not in testing repo atm)
 - configure core osc .lokal/bin/a3-core.py
 - configure realtime privileges
-- install iem-plugin-suite 
+- install iem-plugin-suite
+- trigger a3-user-install.service >> 
 
 # a3-user-install.service
 this one-shot service is triggert by `apt install a3-core`
