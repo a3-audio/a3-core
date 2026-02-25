@@ -214,10 +214,8 @@ exec /usr/bin/xset s noblank &
 exec /usr/bin/xrandr --dpi 120 &
 #exec /usr/bin/qasmixer -t &
 #exec /home/aaa/a3-core.lokal/alsa-scarlett-gui &
-for_window [class="QjackCtl"] move container to workspace 10
-for_window [title="Scarlett 18i20 USB"] move container to workspace 9
-for_window [class="midisnoop"] move container to workspace 10
-for_window [class="Mixxx"] move container to workspace 1
-for_window [class="REAPER"] move container to workspace 3
+for_window [class="QjackCtl"] move container to workspace 2
+for_window [class="REAPER"] move container to workspace 1
+for_window [title="Scarlett 18i20 USB"] move container to workspace 3
 for_window [title="VST3: VCV Rack"] move container to workspace 2
 for_window [title="VST3: VCV Rack"] floating disable

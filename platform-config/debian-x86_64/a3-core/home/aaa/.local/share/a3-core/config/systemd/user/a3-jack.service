@@ -1,10 +1,10 @@
 [Unit]                                                                                     
 Description=a3-jack
 PartOf=a3-main.service
-After=default.target sound.target
+After=sound.target
 
 [Service]
-ExecStartPre=/usr/bin/sleep 2
+ExecStartPre=/usr/bin/sleep 1
 ExecStart=/usr/bin/jackd -P 19 -v -aa -dalsa -dhw:USB -r44100 -p128 
 ExecStop=/usr/bin/pkill -9 jackd
 Type=simple

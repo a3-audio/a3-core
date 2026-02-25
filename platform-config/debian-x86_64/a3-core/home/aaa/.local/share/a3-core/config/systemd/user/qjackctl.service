@@ -1,16 +1,17 @@
 [Unit]                                                                                     
 Description=qjackctl.service
 PartOf=a3-main.service
-After=jack.service
+After=graphical.target a3-jack.service a3-reaper.service
 
 [Service]
-ExecStartPre=/bin/sleep 3
+ExecStartPre=/bin/sleep 2
 ExecStart=/usr/bin/qjackctl -a /home/aaa/.config/rncbc.org/a3-patchbay.xml
 ExecStop=/usr/bin/pkill -9 qjackctl
 Type=simple
 CPUAffinity=1 2 3
 CPUSchedulingPolicy=rr
 CPUSchedulingPriority=83
+Restart=on-failure
 
 [Install]
 WantedBy=default.target

@@ -1,9 +1,13 @@
 [Unit]                                                                                     
 Description=a3-main
+After=graphical.target
 Requires=a3-jack.service qjackctl.service a3-reaper.service a3-core.service beat-analyzer.service
 
 [Service]
-ExecStart=/usr/bin/sleep 0
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+ExecStop=/bin/systemctl stop a3-jack.service qjackctl.service a3-reaper.service a3-core.service beat-analyzer.service
 
 [Install]
 WantedBy=default.target
