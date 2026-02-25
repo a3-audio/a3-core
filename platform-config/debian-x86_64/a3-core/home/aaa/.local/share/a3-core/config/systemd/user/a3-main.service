@@ -1,14 +1,9 @@
 [Unit]                                                                                     
 Description=a3-main
-Requires=a3-jack.service a3-reaper.service a3-core.service beat-analyzer.service
+Requires=a3-jack.service qjackctl.service a3-reaper.service a3-core.service beat-analyzer.service
 
 [Service]
-ExecStartPre=/bin/sleep 6
-ExecStart=/usr/bin/qjackctl -a /home/aaa/.config/rncbc.org/a3-patchbay.xml
-ExecStop=/usr/bin/pkill -9 qjackctl
-
-Type=simple
-CPUAffinity=1 2 3
+ExecStart=/usr/bin/sleep 0
 
 [Install]
 WantedBy=default.target
