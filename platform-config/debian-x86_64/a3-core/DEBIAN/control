@@ -2,7 +2,7 @@ Package: a3-core
 Version: 1.0.0
 Architecture: amd64
 Maintainer: Rafjagger
-Depends: systemd, git, vim, i3, htop, lightdm, linux-image-rt-amd64, liblo-tools, qjackctl, x11vnc, iem-plugin-suite-vst3, python3, python3-pip, python3-venv, python3-rtmidi, xserver-xorg-video-dummy, curl, net-tools, xinit, sudo, wget, gpg, unzip, build-essential, cmake, pkg-config, jackd2, libjack-jackd2-dev, libsamplerate0-dev, libgtk2.0-0 gvfs
+Depends: systemd, git, vim, i3, htop, lightdm, linux-image-rt-amd64, liblo-tools, qjackctl, x11vnc, iem-plugin-suite-vst3, python3, python3-pip, python3-venv, python3-rtmidi, xserver-xorg-video-dummy, curl, net-tools, xinit, sudo, wget, gpg, unzip, build-essential, cmake, pkg-config, jackd2, libjack-jackd2-dev, libsamplerate0-dev, libgtk2.0-0, gvfs
 Description: a3core is part of a3-system
 Conflicts: wpasupplicant, modemmanager, blueman, bluetooth,bluez, bluez-obexd, network-manager, plymouth, cron
 Replaces: wpasupplicant, modemmanager, blueman, bluetooth,bluez, bluez-obexd, network-manager, plymouth, cron
