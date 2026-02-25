@@ -24,10 +24,10 @@ echo "Installing Airwindows vst..."
 wget https://github.com/baconpaul/airwin2rack/releases/download/DAWPlugin/AirwindowsConsolidated-2026-02-22-b0ec35c-Linux.zip
 unzip -o AirwindowsConsolidated-2026-02-22-b0ec35c-Linux.zip
 rm AirwindowsConsolidated-2026-02-22-b0ec35c-Linux.zip
-rm -rf /home/aaa/.local/vst/Airwindows\ Consolidated.vst3
-mv -f awcons-products/Airwindows\ Consolidated.vst3 /home/aaa/.local/vst
+rm -rf /home/aaa/.local/vst/Airwindows\ Consolidated.clap
+mv -f awcons-products/Airwindows\ Consolidated.clap /home/aaa/.local/clap
 rm -rf awcons-products
-echo "done: /home/aaa/.local/vst/AirwindowsConsolidated.vst3"
+echo "done: /home/aaa/.local/clap/AirwindowsConsolidated.clap"
 
 echo "Installing Beat Analyzer..."
 cd ~ && git clone --recurse-submodules https://github.com/rafjagger/beat-analyzer.git
