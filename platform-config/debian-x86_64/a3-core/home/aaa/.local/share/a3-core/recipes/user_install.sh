@@ -25,7 +25,9 @@ wget https://github.com/baconpaul/airwin2rack/releases/download/DAWPlugin/Airwin
 unzip -o AirwindowsConsolidated-2026-02-22-b0ec35c-Linux.zip
 rm AirwindowsConsolidated-2026-02-22-b0ec35c-Linux.zip
 rm -rf /home/aaa/.local/vst/Airwindows\ Consolidated.clap
-mv -f awcons-products/Airwindows\ Consolidated.clap /home/aaa/.local/clap
+mkdir -p /home/aaa/.local/clap
+mv -f awcons-products/Airwindows\ Consolidated.clap /home/aaa/.local/clap/airwindows.clap
+
 rm -rf awcons-products
 echo "done: /home/aaa/.local/clap/AirwindowsConsolidated.clap"
 
