@@ -1,10 +1,9 @@
 [Unit]                                                                                     
 Description=qjackctl.service
 PartOf=a3-main.service
-After=graphical.target a3-jack.service a3-reaper.service
-
+After=graphical.target a3-jack.service a3-reaper.service beat-analyzer.service
 [Service]
-ExecStartPre=/bin/sleep 2
+ExecStartPre=/bin/sleep 4
 ExecStart=/usr/bin/qjackctl -a /home/aaa/.config/rncbc.org/a3-patchbay.xml
 ExecStop=/usr/bin/pkill -9 qjackctl
 Type=simple

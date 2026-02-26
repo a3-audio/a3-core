@@ -6,7 +6,7 @@ After=graphical.target a3-jack.service
 [Service]
 PrivateTmp=true
 #WorkingDirectory=/home/aaa/.config/REAPER
-ExecStartPre=/bin/sleep 1
+ExecStartPre=/bin/sleep 2
 ExecStart=/bin/bash -c "/home/aaa/.local/opt/REAPER/reaper -nosplash -ignoreerrors -template /home/aaa/.config/REAPER/ProjectTemplates/a3-reaper.RPP"
 ExecStop=/home/aaa/.local/opt/REAPER/reaper -saveas -template /home/aaa/.config/REAPER/ProjectTemplates/a3-reaper.RPP -close all :nosave
 CPUAffinity=1 2 3
