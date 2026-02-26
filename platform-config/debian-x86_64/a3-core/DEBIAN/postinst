@@ -94,11 +94,12 @@ echo "enable userservices..."
 # allow user services to run without an interactive session
 loginctl enable-linger "${APPUSER}" || true
 
-sudo -u "$APPUSER" XDG_RUNTIME_DIR="/run/user/$UID" systemctl --user daemon-reload || true
-sudo -u "$APPUSER" XDG_RUNTIME_DIR="/run/user/$UID" systemctl --user enable a3-main.service || true
-
-# optional: start the "install reaper" unit if present
-sudo -u "$APPUSER" XDG_RUNTIME_DIR="/run/user/$UID" systemctl --user start a3-user-install.service || true
+if sudo -u "$APPUSER" systemctl --user daemon-reload; then
+    sudo -u "$APPUSER" systemctl --user enable a3-main.service || true
+    sudo -u "$APPUSER" systemctl --user start a3-user-install.service || true
+else
+    echo "Failed to reload user daemon for $APPUSER"
+fi
 
 echo "update grub..."
 update-grub || true
