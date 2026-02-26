@@ -49,25 +49,25 @@ else
     echo "sources.list nicht vorhanden."
 fi
 
-#cat << 'EOF' > /etc/apt/sources.list.d/debian.sources
-#Types: deb deb-src
-#URIs: http://deb.debian.org/debian/
-#Suites: testing
-#Components: main non-free-firmware
-#Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+cat << 'EOF' > /etc/apt/sources.list.d/debian.sources
+Types: deb deb-src
+URIs: http://deb.debian.org/debian/
+Suites: testing
+Components: main non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 
-#Types: deb deb-src
-#URIs: http://security.debian.org/debian-security/
-#Suites: testing-security
-#Components: main non-free-firmware
-#Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+Types: deb deb-src
+URIs: http://security.debian.org/debian-security/
+Suites: testing-security
+Components: main non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 
-#Types: deb deb-src
-#URIs: http://deb.debian.org/debian/
-#Suites: testing-updates
-#Components: main non-free-firmware
-#Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
-#EOF
+Types: deb deb-src
+URIs: http://deb.debian.org/debian/
+Suites: testing-updates
+Components: main non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+EOF
 
 echo "4/4: Paketlisten aktualisieren und a3-core installieren..."
 apt update
