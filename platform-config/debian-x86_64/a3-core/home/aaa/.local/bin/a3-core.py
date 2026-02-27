@@ -44,10 +44,6 @@ FX_INDEX_CHANNEL_VOLUME: int = 1
 osc_mic = SimpleUDPClient('192.168.43.55', 7771)
 osc_moc = SimpleUDPClient('192.168.43.54', 8700)
 osc_reaper = SimpleUDPClient('192.168.43.57', 9001)
-# osc_vid = SimpleUDPClient('192.168.43.100', 7771)
-
-udp_clients_iem = tuple(SimpleUDPClient('127.0.0.1', 1337 + index)
-                        for index in range(4))
 
 # Midi client
 #midiout = rtmidi.MidiOut()
@@ -66,9 +62,9 @@ class MasterInfo:
     track_phones_mix: int = 8
     
     enc_fx: int = 25
+    
     track_main_multienc: int = 26
     track_phones_multienc: int = 27
-    
     
     class FXMode(Enum):
         LOW_PASS = 0
@@ -84,6 +80,7 @@ class ChannelInfo:
     track_channelbus: int
     track_pfl: int
     track_bformat: int
+    track_enc: int 
 
     toggle_fx: bool = False
     toggle_pfl: bool = False
@@ -102,6 +99,7 @@ channel_infos = (
         track_bformat=11,
         track_input=12,
         track_pfl=4,
+        track_enc=8,
     ),
     # Channel 2
     ChannelInfo(
@@ -110,6 +108,7 @@ channel_infos = (
         track_bformat=15,
         track_input=16,
         track_pfl=5,
+        track_enc=13,
     ),
     # Channel 3
     ChannelInfo(
@@ -118,6 +117,7 @@ channel_infos = (
         track_bformat=19,
         track_input=20,
         track_pfl=6,
+        track_enc=18,
     ),
     # Channel 4
     ChannelInfo(
@@ -126,6 +126,7 @@ channel_infos = (
         track_bformat=23,
         track_input=24,
         track_pfl=7,
+        track_enc=23,
     ),
 )
 
@@ -338,9 +339,10 @@ def osc_handler_channel(address: str,
 
     elif parameter == "azimuth":
         val = np.interp(value, [-180, 180], [0, 1])
-        track_bformat = channel_infos[channel_index].track_bformat
-        osc_reaper.send_message(f"/track/{track_bformat}/fx/1/fxparam/7/value", val)
-        # osc_vid.send_message(f"/track/{channel_index+1}/azimuth", val)
+        track_enc = channel_infos[channel_index].track_enc
+        track_main_multienc = master_info.track_main_multienc
+        #osc_reaper.send_message(f"/track/{track_bformat}/fx/1/fxparam/7/value", val)
+        osc_reaper.send_message(f"/track/{track_main_multienc}/fx/1/fxparam/{track_enc}/value", val)
 
     elif parameter == "elevation":
         channel_infos[channel_index].elevation = value
