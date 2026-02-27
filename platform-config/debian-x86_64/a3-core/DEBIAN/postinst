@@ -99,11 +99,13 @@ XDG_RUNTIME_DIR="/run/user/$UID"
 DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
 
 if sudo -u "$APPUSER" env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" systemctl --user daemon-reload; then
-    sudo -u "$APPUSER" env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" systemctl --user enable a3-main.service || true
+   # sudo -u "$APPUSER" env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" systemctl --user enable a3-main.service || true
     sudo -u "$APPUSER" env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" systemctl --user start a3-user-install.service || true
 else
     echo "Failed to reload user daemon for $APPUSER"
 fi
+
+loginctl disable-linger "${APPUSER}" || true
 
 echo "update grub..."
 update-grub || true
