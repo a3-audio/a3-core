@@ -20,7 +20,7 @@ wget https://tal-software.com/downloads/plugins/TAL-Filter-2_64_linux.zip
 unzip -o TAL-Filter-2_64_linux.zip
 rm TAL-Filter-2_64_linux.zip
 rm -rf /home/aaa/.local/vst/TAL-Filter-2.vst3
-cp -rf TAL-Filter-2/TAL-Filter-2.vst3 /home/aaa/.local/vst/
+mv -f /home/aaa/TAL-Filter-2/TAL-Filter-2.vst3 /home/aaa/.local/vst/
 rm -rf TAL-Filter-2
 echo "done: /home/aaa/.local/vst/TAL-Filter-2.vst3"
 
@@ -39,6 +39,6 @@ echo "done: /home/aaa/.local/clap/AirwindowsConsolidated.clap"
 #### Install Beat Analyzer
 
 echo "Installing Beat Analyzer..."
-cd ~ && git clone --recurse-submodules https://github.com/rafjagger/beat-analyzer.git
-cd beat-analyzer && ./build.sh && cp .env.example build/.env
+cd /home/aaa && git clone --recurse-submodules https://github.com/rafjagger/beat-analyzer.git
+cd /home/aaa/beat-analyzer && ./build.sh && cp .env.example build/.env
 
