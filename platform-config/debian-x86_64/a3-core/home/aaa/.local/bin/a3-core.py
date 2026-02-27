@@ -60,17 +60,16 @@ udp_clients_iem = tuple(SimpleUDPClient('127.0.0.1', 1337 + index)
 
 @dataclass
 class MasterInfo:
-    track_masterbus: int = 1
-    track_booth: int = 5
+    track_dec_master: int = 1
+    track_dec_booth: int = 2
+    track_dec_phones: int = 3
+    track_phones_mix: int = 8
     
-    track_phones: int = 9
-    track_mainmixbus: int = 16
+    enc_fx: int = 25
+    track_main_multienc: int = 26
+    track_phones_multienc: int = 27
     
-    aux_return: int = 33
     
-    track_reverb_binaural: int = 36
-    track_reverb_stereo: int = 37
-
     class FXMode(Enum):
         LOW_PASS = 0
         HIGH_PASS = 1
@@ -98,35 +97,35 @@ class ChannelInfo:
 channel_infos = (
     # Channel 1
     ChannelInfo(
-        track_input=20,
-        track_stereo=19,
-        track_bformat=18,
-        track_channelbus=17,
-        track_pfl=12,
+        track_channelbus=9,
+        track_stereo=10,
+        track_bformat=11,
+        track_input=12,
+        track_pfl=4,
     ),
     # Channel 2
     ChannelInfo(
-        track_input=24,
-        track_stereo=23,
-        track_bformat=22,
-        track_channelbus=21,
-        track_pfl=13,
+        track_channelbus=13,
+        track_stereo=14,
+        track_bformat=15,
+        track_input=16,
+        track_pfl=5,
     ),
     # Channel 3
     ChannelInfo(
-        track_input=28,
-        track_stereo=27,
-        track_bformat=26,
-        track_channelbus=25,
-        track_pfl=14,
+        track_channelbus=17,
+        track_stereo=18,
+        track_bformat=19,
+        track_input=20,
+        track_pfl=6,
     ),
     # Channel 4
     ChannelInfo(
-        track_input=32,
-        track_stereo=31,
-        track_bformat=30,
-        track_channelbus=29,
-        track_pfl=15,
+        track_channelbus=21,
+        track_stereo=22,
+        track_bformat=23,
+        track_input=24,
+        track_pfl=7,
     ),
 )
 
@@ -372,7 +371,7 @@ def osc_handler_master(address: str,
     if parameter == "volume":
         #val_master = slope_constant_power(value)
         val = slope_volume(value)
-        masterbus = master_info.track_masterbus
+        masterbus = master_info.track_dec_master
         #osc_reaper.send_message(f"/track/{masterbus}/volume", val_master)
         for gain_vst_plugins_on_masterbus in range(1, 11):
             osc_reaper.send_message(f"/track/{masterbus}/fx/{gain_vst_plugins_on_masterbus}/fxparam/1/value", val)
@@ -380,7 +379,7 @@ def osc_handler_master(address: str,
     if parameter == "booth":
         #val = slope_constant_power(value)
         val = slope_volume(value)
-        boothbus = master_info.track_booth
+        boothbus = master_info.track_dec_booth
         #osc_reaper.send_message(f"/track/{boothbus}/volume", val)
         for gain_vst_plugins_on_boothbus in range(1, 11):
             osc_reaper.send_message(f"/track/{boothbus}/fx/{gain_vst_plugins_on_boothbus}/fxparam/1/value", val)
@@ -388,10 +387,10 @@ def osc_handler_master(address: str,
     if parameter == "phones_mix":
         phones_mix = slope_phones_mix_constant_power(value)
         phones_pfl = slope_phones_pfl_constant_power(value)
-        track_mainmixbus = master_info.track_mainmixbus
-        #osc_reaper.send_message(f"/track/{track_mainmixbus}/volume", phones_mix)
+        track_phones_mix = master_info.track_phones_mix
+        #osc_reaper.send_message(f"/track/{track_phones_mix}/volume", phones_mix)
         for gain_vst_plugins_on_phones_mixbus in range(1, 9):
-            osc_reaper.send_message(f"/track/{track_mainmixbus}/fx/{gain_vst_plugins_on_phones_mixbus}/fxparam/1/value", phones_mix)
+            osc_reaper.send_message(f"/track/{track_phones_mix}/fx/{gain_vst_plugins_on_phones_mixbus}/fxparam/1/value", phones_mix)
         for channel_index in range(4):
             track_pfl = channel_infos[channel_index].track_pfl
             #osc_reaper.send_message(f"/track/{track_pfl}/volume", phones_pfl)
@@ -400,14 +399,14 @@ def osc_handler_master(address: str,
 
     if parameter == "phones_volume":
         val = slope_volume(value)
-        track_phones = master_info.track_phones
-        #osc_reaper.send_message(f"/track/{track_phones}/volume", val)
-        osc_reaper.send_message(f"/track/{track_phones}/fx/1/fxparam/1/value", val)
+        track_dec_phones = master_info.track_dec_phones
+        #osc_reaper.send_message(f"/track/{track_dec_phones}/volume", val)
+        osc_reaper.send_message(f"/track/{track_dec_phones}/fx/1/fxparam/1/value", val)
 
     elif parameter == "return":
         val = slope_constant_power(value)
-        aux_return = master_info.aux_return
-        osc_reaper.send_message(f"/track/{aux_return}/volume", val)
+        enc_fx = master_info.enc_fx
+        osc_reaper.send_message(f"/track/{enc_fx}/volume", val)
 
 def osc_handler_fx(address: str,
                    *osc_arguments: List[Any]) -> None:
