@@ -20,7 +20,8 @@ wget https://tal-software.com/downloads/plugins/TAL-Filter-2_64_linux.zip
 unzip -o TAL-Filter-2_64_linux.zip
 rm TAL-Filter-2_64_linux.zip
 rm -rf /home/aaa/.local/vst/TAL-Filter-2.vst3
-mv -f /home/aaa/TAL-Filter-2/TAL-Filter-2.vst3 /home/aaa/.local/vst/
+mkdir -p /home/aaa/.local/vst
+mv -f /home/aaa/TAL-Filter-2/TAL-Filter-2.vst3 /home/aaa/.local/vst/TAL-Filter-2.vst3
 rm -rf TAL-Filter-2
 echo "done: /home/aaa/.local/vst/TAL-Filter-2.vst3"
 
@@ -30,7 +31,7 @@ echo "Installing Airwindows vst..."
 wget https://github.com/baconpaul/airwin2rack/releases/download/DAWPlugin/AirwindowsConsolidated-2026-02-22-b0ec35c-Linux.zip
 unzip -o AirwindowsConsolidated-2026-02-22-b0ec35c-Linux.zip
 rm AirwindowsConsolidated-2026-02-22-b0ec35c-Linux.zip
-rm -rf /home/aaa/.local/vst/Airwindows\ Consolidated.clap
+rm -rf /home/aaa/.local/clap/Airwindows\ Consolidated.clap
 mkdir -p /home/aaa/.local/clap
 mv -f awcons-products/Airwindows\ Consolidated.clap /home/aaa/.local/clap/airwindows.clap
 rm -rf awcons-products
