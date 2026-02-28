@@ -54,7 +54,7 @@ osc_reaper = SimpleUDPClient('127.0.0.1', 9001) #57
 # osc_vid = SimpleUDPClient('192.168.43.100', 7771)
 
 udp_clients_iem = tuple(SimpleUDPClient('127.0.0.1', 1337 + index)
-                        for index in range(4))
+                        for index in range(3))
 
 @dataclass
 class MasterInfo:
@@ -350,29 +350,31 @@ def osc_handler_channel(address: str,
 
     # A3MOTION
 
-    elif parameter == "azimuth":
-        val = np.interp(value, [-180, 180], [0, 1])
-        track_azimuth = channel_infos[channel_index].enc_main_azimuth
-        osc_reaper.send_message(
-            f"/track/{CHANNEL_ENC_MAIN}/fx/{FX_INDEX_ENC}/fxparam/{track_azimuth}/value", val)
+    if parameter == "azimuth":
+        # clamp -180..180 und sende als float an alle IEM-Empfänger
+        az = float(max(min(value, 180.0), -180.0))
+        addr = f"/MultiEncoder/azimuth{channel_index}"
+        for client in udp_clients_iem:
+            client.send_message(addr, az)
 
     elif parameter == "elevation":
-        val = np.interp(value, [-180, 180], [0, 1])
-        track_elevation = channel_infos[channel_index].enc_main_elevation
-        osc_reaper.send_message(
-            f"/track/{CHANNEL_ENC_MAIN}/fx/{FX_INDEX_ENC}/fxparam/{track_elevation}/value", val)
+        # clamp -90..90 und sende als float an alle IEM-Empfänger
+        el = float(max(min(value, 90.0), -90.0))
+        addr = f"/MultiEncoder/elevation{channel_index}"
+        for client in udp_clients_iem:
+            client.send_message(addr, el)
 
     elif parameter == "pot_1":
-        val = np.interp(value, [0, 1], [0.1, 0.8])
+        val = np.interp(value, [0, 1], [0.05, 0.9])
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
         osc_reaper.send_message(
-            f"/track/{track_stereo_enc}/fx/2/fxparam/1/value", val)
+            f"/track/{track_stereo_enc}/fx/2/fxparam/1/value", value)
 
     elif parameter == "pot_2":
-        val = np.interp(value, [0, 1], [0.2, 0.8])
+        val = np.interp(value, [0, 1], [0.05, 0.9])
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
         osc_reaper.send_message(
-            f"/track/{track_stereo_enc}/fx/2/fxparam/2/value", val)
+            f"/track/{track_stereo_enc}/fx/2/fxparam/2/value", value)
 
 def osc_handler_master(address: str,
                        *osc_arguments: List[Any]) -> None:

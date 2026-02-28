@@ -4,7 +4,7 @@ desc:Band Splitter 2->4 (Freq + BW + Slope)
 slider1:400<400,2500>Frequenz (Hz)
 slider2:5000<500,5000>Bandbreite (Hz)
 slider3:4<1,4,1>Flankensteilheit (1?4 Stages)
-slider4:0<-24,24>Rest Gain (dB)
+slider4:0<-40,24>Rest Gain (dB)
 
 @init
 pi = 3.14159265358979;
