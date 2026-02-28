@@ -208,8 +208,7 @@ def set_filters() -> None:
 
             message = ("/track/"
                        f"{channel_infos[channel_index].track_input}"
-                       f"/fx/{fx_index}/wetdry")
-                       #f"/fx/{fx_index}/bypass")
+                       f"/fx/{fx_index}/bypass")
 
             # osc_reaper expects 1 for "plugin active" and 0 for bypass
             osc_reaper.send_message(message, float(not bypass_active))
@@ -220,7 +219,6 @@ def send_elevation(channel_index):
     track_stereo_enc = channel_infos[channel_index].track_stereo_enc
     osc_reaper.send_message(
         f"/track/{track_stereo_enc}/fx/{FX_INDEX_STEREO_ENC}/fxparam/8/value", normalized_value)
-    # osc_vid.send_message(f"/track/{channel_index+1}/elevation", normalized_value)
 
 def param_handler(address: str,
                   *osc_arguments: List[Any]) -> None:
@@ -260,13 +258,13 @@ def osc_handler_channel(address: str,
     channel_index = int(channel)
     track_input = channel_infos[channel_index].track_input
 
-    # A3MIX-POTENTIOMETER
+    # POTENTIOMETER
 
     if parameter == "fx-send":
         val = slope_constant_power(value)
         track_channelbus = channel_infos[channel_index].track_channelbus
         osc_reaper.send_message(
-            f"/track/{track_channelbus}/send/11/volume", val)
+            f"/track/{track_channelbus}/send/3/volume", val)
 
     elif parameter == "gain":
         #val = (value)
@@ -278,13 +276,10 @@ def osc_handler_channel(address: str,
         #track_multi_enc = channel_infos[channel_index].track_multi_enc
         #osc_reaper.send_message(f"/track/{track_multi_enc}/fx/{FX_INDEX_GAIN}/fxparam/1/value", phones_mix)
         #osc_reaper.send_message(f"/track/{track_stereo_enc}/fx/{FX_INDEX_GAIN}/fxparam/1/value", phones_pfl)
+        val = slope_volume(value)
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
-        track_multi_enc = channel_infos[channel_index].track_multi_enc
-        gain1, gain2 = slope_crossfade_gain(value)
         osc_reaper.send_message(
-            f"/track/{track_stereo_enc}/fx/{FX_INDEX_GAIN}/fxparam/1/value", gain2)
-        osc_reaper.send_message(
-            f"/track/{track_multi_enc}/fx/{FX_INDEX_GAIN}/fxparam/1/value", gain1)
+            f"/track/{track_stereo_enc}/fx/2/fxparam/4/value", val)
 
     elif parameter == "eq":
         eq_parameter : str = words[4]
@@ -306,12 +301,11 @@ def osc_handler_channel(address: str,
     elif parameter == "volume":
         val = slope_volume(value)
         track_channelbus = channel_infos[channel_index].track_channelbus
-        for gain_vst_plugins_on_channelbus in range(1, 8):
+        for gain_vst_plugins_on_channelbus in [1, 15]:
             osc_reaper.send_message(
                 f"/track/{track_channelbus}/fx/1/fxparam/{gain_vst_plugins_on_channelbus}/value", val)
 
-
-    # A3MIX-BUTTONS
+    # BUTTONS
 
     elif parameter == "pfl" and value == 1:
         channel_infos[channel_index].toggle_pfl = (
@@ -333,14 +327,26 @@ def osc_handler_channel(address: str,
 
     elif parameter == "3d" and value == 1:
         channel_infos[channel_index].toggle_3d = (
-            not channel_infos[channel_index].toggle_3d)
+            not channel_infos[channel_index].toggle_3d
+        )
         is_enabled = channel_infos[channel_index].toggle_3d
-        osc_a3mixer.send_message(f"/channel/{channel_index}/led/3d", float(is_enabled))
-        track_solo = channel_infos[channel_index].enc_phones_solo
+        osc_a3mixer.send_message(
+            f"/channel/{channel_index}/led/3d",
+            float(is_enabled)
+        )
+        track_stereo_enc = channel_infos[channel_index].track_stereo_enc
+        track_multi_enc = channel_infos[channel_index].track_multi_enc
+        osc_val = 0.5 if is_enabled else 0.0
+        osc_val_inverse = 0.5 if not is_enabled else 0.0
+        for gain_vst_plugins_on_channelbus in [1, 15]:
+            osc_reaper.send_message(
+                f"/track/{track_stereo_enc}/fx/1/fxparam/{gain_vst_plugins_on_channelbus}/value",
+                osc_val
+            )
         osc_reaper.send_message(
-            f"/track/{CHANNEL_ENC_PHONES}/fx/{FX_INDEX_ENC}/fxparam/{track_solo}/value", float(not is_enabled))
-        osc_reaper.send_message(
-            f"/track/{CHANNEL_ENC_PHONES}/fx/{FX_INDEX_ENC}/fxparam/{track_solo}/value", float(is_enabled))
+            f"/track/{track_multi_enc}/fx/1/fxparam/1/value",
+            osc_val_inverse
+        )
 
     # A3MOTION
 
@@ -357,15 +363,16 @@ def osc_handler_channel(address: str,
             f"/track/{CHANNEL_ENC_MAIN}/fx/{FX_INDEX_ENC}/fxparam/{track_elevation}/value", val)
 
     elif parameter == "pot_1":
-        #val = np.interp(value, [0, 180], [0, 1])
+        val = np.interp(value, [0, 1], [0.1, 0.8])
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
         osc_reaper.send_message(
-            f"/track/{track_stereo_enc}/fx/{FX_INDEX_EQ_ENC}/fxparam/1/value", value)
+            f"/track/{track_stereo_enc}/fx/2/fxparam/1/value", val)
 
     elif parameter == "pot_2":
+        val = np.interp(value, [0, 1], [0.2, 0.8])
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
         osc_reaper.send_message(
-            f"/track/{track_stereo_enc}/fx/{FX_INDEX_EQ_ENC}/fxparam/2/value", value)
+            f"/track/{track_stereo_enc}/fx/2/fxparam/2/value", val)
 
 def osc_handler_master(address: str,
                        *osc_arguments: List[Any]) -> None:
@@ -380,44 +387,45 @@ def osc_handler_master(address: str,
     parameter: str = words[2]
 
     if parameter == "volume":
-        #val_master = slope_constant_power(value)
         val = slope_volume(value)
         masterbus = master_info.track_masterbus
-        #osc_reaper.send_message(f"/track/{masterbus}/volume", val_master)
-        for gain_vst_plugins_on_masterbus in range(1, 8):
+        for gain_vst_plugins_on_masterbus in [1,15,29,43,57,71,85,99]:
             osc_reaper.send_message(f"/track/{masterbus}/fx/1/fxparam/{gain_vst_plugins_on_masterbus}/value", val)
 
     if parameter == "booth":
-        #val = slope_constant_power(value)
         val = slope_volume(value)
         boothbus = master_info.track_booth
-        #osc_reaper.send_message(f"/track/{boothbus}/volume", val)
-        for gain_vst_plugins_on_boothbus in range(1, 8):
+        for gain_vst_plugins_on_boothbus in [1,15,29,43,57,71,85,99]:
             osc_reaper.send_message(f"/track/{boothbus}/fx/1/fxparam/{gain_vst_plugins_on_boothbus}/value", val)
 
     if parameter == "phones_mix":
-        phones_mix = slope_crossover_1b(value)
-        phones_pfl = slope_crossover_1a(value)
         track_ph_mix = master_info.track_ph_mix
-        #osc_reaper.send_message(f"/track/{track_ph_mix}/volume", phones_mix)
-        for gain_vst_plugins_on_phones_mixbus in range(1, 9):
-            osc_reaper.send_message(f"/track/{track_ph_mix}/fx/{gain_vst_plugins_on_phones_mixbus}/fxparam/1/value", phones_mix)
+        val = value * 0.5    
+        #val = slope_crossover_1a(value)
+        inv_val = 1 - value
+        osc_reaper.send_message(f"/track/{track_ph_mix}/volume", value)
         for channel_index in range(4):
             track_pfl = channel_infos[channel_index].track_pfl
-            #osc_reaper.send_message(f"/track/{track_pfl}/volume", phones_pfl)
-            for gain_vst_plugins_on_track_pfl in range(1, 11):
-                osc_reaper.send_message(f"/track/{track_pfl}/fx/{gain_vst_plugins_on_track_pfl}/fxparam/1/value", phones_pfl)
+            osc_reaper.send_message(f"/track/{track_pfl}/volume", inv_val)
+        
+
+        #for mix_param in [1, 15, 29, 43, 57, 71, 85, 99]:
+        #    osc_reaper.send_message(f"/track/{track_ph_mix}/fx/1/fxparam/{mix_param}/value", val)
+        #for channel_index in range(4):
+        #    track_pfl = channel_infos[channel_index].track_pfl
+        #    for pfl_param in [1, 15]:
+        #        osc_reaper.send_message(f"/track/{track_pfl}/fx/1/fxparam/{pfl_param}/value", inv_val)
 
     if parameter == "phones_volume":
         val = slope_volume(value)
         track_phones = master_info.track_phones
-        #osc_reaper.send_message(f"/track/{track_phones}/volume", val)
         osc_reaper.send_message(f"/track/{track_phones}/fx/2/fxparam/1/value", val)
 
     elif parameter == "return":
         val = slope_constant_power(value)
         aux_return = master_info.aux_return
-        osc_reaper.send_message(f"/track/{aux_return}/volume", val)
+        for gain_vst_plugins_on_return in [1,15,29,43,57,71,85,99]:
+            osc_reaper.send_message(f"/track/{aux_return}/fx/3/fxparam/{gain_vst_plugins_on_return}/value", val)
 
 def osc_handler_fx(address: str,
                    *osc_arguments: List[Any]) -> None:
@@ -476,12 +484,12 @@ if __name__ == "__main__":
     dispatcher.map("/channel/*", osc_handler_channel)
     dispatcher.map("/master/*", osc_handler_master)
     dispatcher.map("/fx/*", osc_handler_fx)
-    dispatcher.map("/tap", osc_handler_tap)
+    #dispatcher.map("/tap", osc_handler_tap)
 
-    # # Motion-Controller
-    # # dispatcher.map("/CoordinateConverter/*", iemToCtrlMotion_handler)
-    # # dispatcher.map("/moc/channel/*", ctrlMotionToIem_handler)
-    # # dispatcher.map("/moc/channel/*", ctrlMotionToIem_handler)
+    # Motion-Controller
+    # dispatcher.map("/CoordinateConverter/*", iemToCtrlMotion_handler)
+    # dispatcher.map("/moc/channel/*", ctrlMotionToIem_handler)
+    # dispatcher.map("/moc/channel/*", ctrlMotionToIem_handler)
 
     server = osc_server.ThreadingOSCUDPServer((args.ip, args.port), dispatcher)
     print("Serving on {}".format(server.server_address))
