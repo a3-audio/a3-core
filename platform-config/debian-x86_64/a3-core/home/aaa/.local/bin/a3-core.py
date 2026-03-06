@@ -146,6 +146,12 @@ def slope_constant_power(value):
     val = np.interp(value, resolution, slope)
     return val
 
+def slope_3d(value):
+    resolution = np.arange(start=0, stop=1, step=0.1)
+    slope = [0, 0.3, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 1]
+    val = np.interp(value, resolution, slope)
+    return val
+
 def slope_volume(value):
     val = np.interp(value, [0, 1], [0, 0.5])
     return val
@@ -154,6 +160,7 @@ def slope_eq(value):
     resolution = np.arange(start=0, stop=1, step=0.1)
     slope = [0.0, 0.1, 0.2, 0.3, 0.5, 0.52, 0.54, 0.56, 0.58, 0.6]
     val = np.interp(value, resolution, slope)
+    #val = np.interp(value, [0, 1], [0, 0.6])
     return val
 
 def slope_fx_gain(value):
@@ -267,6 +274,32 @@ def osc_handler_channel(address: str,
             f"/track/{track_channelbus}/send/3/volume", val)
 
     elif parameter == "gain":
+        x = value  # 0–1 vom OSC
+
+        track_stereo_enc = channel_infos[channel_index].track_stereo_enc
+        track_multi_enc  = channel_infos[channel_index].track_multi_enc
+
+        # Crossfade-Kurven
+        stereo_gain = 0.5 * (1 - max(0, (x - 0.5) * 2))   # 0.5 → 0
+        multi_gain  = 0.5 * min(1, x * 2)                 # 0 → 0.5
+
+        # Stereo hat 2 Gain-Plugins → beide gleich ansteuern
+        osc_reaper.send_message(
+            f"/track/{track_stereo_enc}/fx/1/fxparam/1/value",
+            stereo_gain
+        )
+        osc_reaper.send_message(
+            f"/track/{track_stereo_enc}/fx/1/fxparam/15/value",
+            stereo_gain
+        )
+
+        # Multi hat 1 Gain-Plugin
+        osc_reaper.send_message(
+            f"/track/{track_multi_enc}/fx/1/fxparam/1/value",
+            multi_gain
+        )
+
+    elif parameter == "gain":
         #val = (value)
         #osc_reaper.send_message(f"/track/{track_input}/fx/{FX_INDEX_GAIN}/fxparam/1/value", val)
         #osc_reaper.send_message(f"/track/{track_input}/volume", value)
@@ -276,10 +309,18 @@ def osc_handler_channel(address: str,
         #track_multi_enc = channel_infos[channel_index].track_multi_enc
         #osc_reaper.send_message(f"/track/{track_multi_enc}/fx/{FX_INDEX_GAIN}/fxparam/1/value", phones_mix)
         #osc_reaper.send_message(f"/track/{track_stereo_enc}/fx/{FX_INDEX_GAIN}/fxparam/1/value", phones_pfl)
-        val = slope_volume(value)
+        val = slope_3d(value)
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
-        osc_reaper.send_message(
-            f"/track/{track_stereo_enc}/fx/2/fxparam/4/value", val)
+        track_multi_enc = channel_infos[channel_index].track_multi_enc
+       
+        val_stereo_enc = np.interp(slope_3d, [0, 1], [0, 0.5])
+        val_multi_enc = np.interp(slope_3d, [0, 1], [0.5, 0])
+
+        # Stereo ENC 
+        osc_reaper.send_message(f"/track/{track_stereo_enc}/fx/1/fxparam/1/value", val_stereo_enc)
+        osc_reaper.send_message(f"/track/{track_stereo_enc}/fx/1/fxparam/15/value", val_stereo_enc)
+        # Multi ENC
+        osc_reaper.send_message(f"/track/{track_multi_enc}/fx/1/fxparam/1/value", val_multi_enc)
 
     elif parameter == "eq":
         eq_parameter : str = words[4]
@@ -367,14 +408,20 @@ def osc_handler_channel(address: str,
     elif parameter == "pot_1":
         val = np.interp(value, [0, 1], [0.05, 0.9])
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
+        #osc_reaper.send_message(
+        #    f"/track/{track_stereo_enc}/fx/2/fxparam/1/value", value)
         osc_reaper.send_message(
-            f"/track/{track_stereo_enc}/fx/2/fxparam/1/value", value)
+            f"/track/{track_stereo_enc}/fx/2/fxparam/1/value", val)
+        track_stereo_enc = channel_infos[channel_index].track_stereo_enc
 
     elif parameter == "pot_2":
         val = np.interp(value, [0, 1], [0.05, 0.9])
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
+        #osc_reaper.send_message(
+        #    f"/track/{track_stereo_enc}/fx/2/fxparam/2/value", value)
         osc_reaper.send_message(
-            f"/track/{track_stereo_enc}/fx/2/fxparam/2/value", value)
+            f"/track/{track_stereo_enc}/fx/2/fxparam/2/value", val)
+        track_stereo_enc = channel_infos[channel_index].track_stereo_enc
 
 def osc_handler_master(address: str,
                        *osc_arguments: List[Any]) -> None:

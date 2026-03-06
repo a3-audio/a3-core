@@ -89,6 +89,7 @@ fi
 echo "enable system services..."
 systemctl daemon-reload || true
 systemctl enable x11vnc.service || true
+systemctl enable set_irq_prio.service || true
 
 echo "enable userservices..."
 # allow user services to run without an interactive session
