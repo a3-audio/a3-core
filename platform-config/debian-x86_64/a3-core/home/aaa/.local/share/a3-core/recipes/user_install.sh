@@ -28,7 +28,7 @@ echo "done: /home/aaa/.local/vst/TAL-Filter-2.vst3"
 #### Install Airwindows
 
 echo "Installing Airwindows vst..."
-wget https://github.com/baconpaul/airwin2rack/releases/download/DAWPlugin/AirwindowsConsolidated-*-Linux.zip
+wget https://github.com/baconpaul/airwin2rack/releases/download/DAWPlugin/AirwindowsConsolidated-2026-03-14-faeb57a-Linux.zip
 unzip -o AirwindowsConsolidated-*-Linux.zip
 rm AirwindowsConsolidated-*-Linux.zip
 rm -rf /home/aaa/.local/clap/Airwindows\ Consolidated.clap
