@@ -273,6 +273,9 @@ def osc_handler_channel(address: str,
         x = value  # 0–1 vom OSC
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
         track_multi_enc  = channel_infos[channel_index].track_multi_enc
+        # Multi laeuft von 0.5 nach 0, Stereo von 0 nach 0.5. Der alte
+        # gain-Zweig hatte es andersherum und war damit falsch -- nicht
+        # zurueckdrehen.
         multi_gain = 0.5 * (1 - max(0, (x - 0.5) * 2))   # 0.5 → 0
         stereo_gain  = 0.5 * min(1, x * 2)                 # 0 → 0.5
         osc_reaper.send_message(
@@ -295,6 +298,9 @@ def osc_handler_channel(address: str,
         x = value  # 0–1 vom OSC
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
         track_multi_enc  = channel_infos[channel_index].track_multi_enc
+        # Multi laeuft von 0.5 nach 0, Stereo von 0 nach 0.5. Der alte
+        # gain-Zweig hatte es andersherum und war damit falsch -- nicht
+        # zurueckdrehen.
         multi_gain = 0.5 * (1 - max(0, (x - 0.5) * 2))   # 0.5 → 0
         stereo_gain  = 0.5 * min(1, x * 2)                 # 0 → 0.5
         osc_reaper.send_message(
