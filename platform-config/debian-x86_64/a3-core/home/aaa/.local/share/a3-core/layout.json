@@ -1,0 +1,60 @@
+{
+  "_comment": [
+    "The map between an A3 channel and the REAPER project, plus the OSC",
+    "addresses this system speaks. Lifted out of a3-core.py, where both",
+    "were literals -- four records of eight track numbers, and forty-five",
+    "address templates with placeholders taken from them.",
+    "",
+    "It ships with the package, beside the REAPER project it has to agree",
+    "with, and an update replaces it. That is on purpose: a track number",
+    "that no longer matches the shipped project is worse than a lost local",
+    "edit. The files under /etc are the other case -- see",
+    "issues/a3-core-update-ueberschreibt-lokale-konfiguration.md.",
+    "",
+    "Channels are in order, one record each. Every field listed in",
+    "a3_core_layout.CHANNEL_FIELDS has to be there: a missing number would",
+    "read as track 0 and quietly drive whatever REAPER has there."
+  ],
+  "channels": [
+    {
+      "enc_main_azimuth": 8,
+      "enc_main_elevation": 9,
+      "enc_phones_solo": 12,
+      "track_input": 12,
+      "track_multi_enc": 11,
+      "track_stereo_enc": 10,
+      "track_channelbus": 9,
+      "track_pfl": 4
+    },
+    {
+      "enc_main_azimuth": 13,
+      "enc_main_elevation": 14,
+      "enc_phones_solo": 17,
+      "track_input": 16,
+      "track_multi_enc": 15,
+      "track_stereo_enc": 14,
+      "track_channelbus": 13,
+      "track_pfl": 5
+    },
+    {
+      "enc_main_azimuth": 18,
+      "enc_main_elevation": 19,
+      "enc_phones_solo": 22,
+      "track_input": 20,
+      "track_multi_enc": 19,
+      "track_stereo_enc": 18,
+      "track_channelbus": 17,
+      "track_pfl": 6
+    },
+    {
+      "enc_main_azimuth": 23,
+      "enc_main_elevation": 24,
+      "enc_phones_solo": 27,
+      "track_input": 24,
+      "track_multi_enc": 23,
+      "track_stereo_enc": 22,
+      "track_channelbus": 21,
+      "track_pfl": 7
+    }
+  ]
+}

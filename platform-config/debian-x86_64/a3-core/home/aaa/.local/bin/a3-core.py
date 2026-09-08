@@ -21,6 +21,8 @@ values and sends them to destinations.
 """
 
 import argparse
+import sys
+from pathlib import Path
 import numpy as np
 import time
 #import rtmidi
@@ -30,6 +32,15 @@ from enum import Enum
 from dataclasses import dataclass
 from pythonosc import dispatcher  # type: ignore
 from pythonosc import osc_server
+
+# The layout lives beside this script in the package, not on sys.path. Added
+# explicitly so a3-core.py can be started from anywhere -- systemd does not
+# promise a working directory.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+from a3_core_layout import load_layout   # noqa: E402
+
+LAYOUT_PATH = (Path(__file__).resolve().parent.parent
+               / "share/a3-core/layout.json")
 from pythonosc.udp_client import SimpleUDPClient  # type: ignore
 
 OSC_PORT_CORE: int = 9000
@@ -92,51 +103,31 @@ class ChannelInfo:
     elevation: float = 0.0
     width: float = 0.0
 
-channel_infos = (
-    # Channel 1
+# Built from the layout file rather than written out here.
+#
+# The track numbers are the map between an A3 channel and the REAPER project:
+# change the project and they have to follow, and as a literal nothing about
+# them said so. They are data now, beside the REAPER project they must agree
+# with -- see .local/share/a3-core/layout.json.
+#
+# What stays in the dataclass is what changes while the thing runs:
+# toggle_3d, toggle_fx, toggle_pfl and the cached elevation and width. A
+# number that describes the rig and a flag that describes the moment are two
+# different kinds of thing, and only one of them belongs in a file that ships.
+_layout = load_layout(LAYOUT_PATH)
+
+channel_infos = tuple(
     ChannelInfo(
-        enc_main_azimuth=8,
-        enc_main_elevation=9,
-        enc_phones_solo=12,
-        track_input=12,
-        track_multi_enc=11,
-        track_stereo_enc=10,
-        track_channelbus=9,
-        track_pfl=4,
-    ),
-    # Channel 2
-    ChannelInfo(
-        enc_main_azimuth=13,
-        enc_main_elevation=14,
-        enc_phones_solo=17,
-        track_input=16,
-        track_multi_enc=15,
-        track_stereo_enc=14,
-        track_channelbus=13,
-        track_pfl=5,
-    ),
-    # Channel 3
-    ChannelInfo(
-        enc_main_azimuth=18,
-        enc_main_elevation=19,
-        enc_phones_solo=22,
-        track_input=20,
-        track_multi_enc=19,
-        track_stereo_enc=18, 
-        track_channelbus=17,
-        track_pfl=6,
-    ),
-    # Channel 4
-    ChannelInfo(
-        enc_main_azimuth=23,
-        enc_main_elevation=24,
-        enc_phones_solo=27,
-        track_input=24,
-        track_multi_enc=23,
-        track_stereo_enc=22,
-        track_channelbus=21,
-        track_pfl=7,
-    ),
+        enc_main_azimuth=_layout.channel(index).enc_main_azimuth,
+        enc_main_elevation=_layout.channel(index).enc_main_elevation,
+        enc_phones_solo=_layout.channel(index).enc_phones_solo,
+        track_input=_layout.channel(index).track_input,
+        track_channelbus=_layout.channel(index).track_channelbus,
+        track_pfl=_layout.channel(index).track_pfl,
+        track_multi_enc=_layout.channel(index).track_multi_enc,
+        track_stereo_enc=_layout.channel(index).track_stereo_enc,
+    )
+    for index in range(_layout.channel_count)
 )
 
 def slope_constant_power(value):
