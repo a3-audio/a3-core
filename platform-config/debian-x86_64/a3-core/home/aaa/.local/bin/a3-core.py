@@ -50,8 +50,7 @@ CHANNEL_ENC_DELAY: int = 25
 # OSC clients
 osc_a3mixer = SimpleUDPClient('192.168.43.55', 7771)
 osc_a3motion = SimpleUDPClient('192.168.43.54', 8700)
-osc_reaper = SimpleUDPClient('127.0.0.1', 9001) #57
-# osc_vid = SimpleUDPClient('192.168.43.100', 7771)
+osc_reaper = SimpleUDPClient('127.0.0.1', 9001) 
 
 udp_clients_iem = tuple(SimpleUDPClient('127.0.0.1', 1337 + index)
                         for index in range(3))
@@ -267,23 +266,27 @@ def osc_handler_channel(address: str,
 
     # POTENTIOMETER
 
+    # fx-send drives the stereo/multi crossfade, which is not what its name
+    # says, and that is on purpose for now.
+    #
+    # The 3D function used to be reached through the mixer's FX-send knob --
+    # that was the only continuous control there was for it. A3 Motion's
+    # per-channel pot does it now, on /channel/n/3d, and that is new. Until
+    # the mixer stops sending fx-send for this, both roads have to arrive:
+    # taking this one away would take the 3D function off the mixer before
+    # anyone had agreed to that.
+    #
+    # So the channel FX send itself does nothing at the moment. See
+    # issues/a3-core-fx-send-fuehrt-noch-die-3d-funktion.md for what has to be
+    # true before this block goes and the send below comes back.
     if parameter == "fx-send":
-        val = slope_constant_power(value)
-        track_channelbus = channel_infos[channel_index].track_channelbus
-        osc_reaper.send_message(
-            f"/track/{track_channelbus}/send/3/volume", val)
-
-    elif parameter == "gain":
-        x = value  # 0–1 vom OSC
-
+        x = value
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
-        track_multi_enc  = channel_infos[channel_index].track_multi_enc
-
-        # Crossfade-Kurven
-        stereo_gain = 0.5 * (1 - max(0, (x - 0.5) * 2))   # 0.5 → 0
-        multi_gain  = 0.5 * min(1, x * 2)                 # 0 → 0.5
-
-        # Stereo hat 2 Gain-Plugins → beide gleich ansteuern
+        track_multi_enc = channel_infos[channel_index].track_multi_enc
+        # Multi runs 0.5 -> 0 and stereo 0 -> 0.5. The old gain branch had it
+        # the other way round and was wrong; do not turn it back.
+        multi_gain = 0.5 * (1 - max(0, (x - 0.5) * 2))
+        stereo_gain = 0.5 * min(1, x * 2)
         osc_reaper.send_message(
             f"/track/{track_stereo_enc}/fx/1/fxparam/1/value",
             stereo_gain
@@ -292,35 +295,36 @@ def osc_handler_channel(address: str,
             f"/track/{track_stereo_enc}/fx/1/fxparam/15/value",
             stereo_gain
         )
+        osc_reaper.send_message(
+            f"/track/{track_multi_enc}/fx/1/fxparam/1/value",
+            multi_gain
+        )
 
-        # Multi hat 1 Gain-Plugin
+    # What 3d is for: A3 Motion's per-channel pot, crossfading the channel
+    # between its stereo and its multi encoder. The same curves as fx-send
+    # above, which is the road this arrived by until now.
+    if parameter == "3d":
+        x = value
+        track_stereo_enc = channel_infos[channel_index].track_stereo_enc
+        track_multi_enc = channel_infos[channel_index].track_multi_enc
+        multi_gain = 0.5 * (1 - max(0, (x - 0.5) * 2))
+        stereo_gain = 0.5 * min(1, x * 2)
+        osc_reaper.send_message(
+            f"/track/{track_stereo_enc}/fx/1/fxparam/1/value",
+            stereo_gain
+        )
+        osc_reaper.send_message(
+            f"/track/{track_stereo_enc}/fx/1/fxparam/15/value",
+            stereo_gain
+        )
         osc_reaper.send_message(
             f"/track/{track_multi_enc}/fx/1/fxparam/1/value",
             multi_gain
         )
 
     elif parameter == "gain":
-        #val = (value)
-        #osc_reaper.send_message(f"/track/{track_input}/fx/{FX_INDEX_GAIN}/fxparam/1/value", val)
-        #osc_reaper.send_message(f"/track/{track_input}/volume", value)
-        #phones_mix = slope_crossover_1a(value)
-        #phones_pfl = slope_crossover_1b(value)
-        #track_stereo_enc = channel_infos[channel_index].track_stereo_enc
-        #track_multi_enc = channel_infos[channel_index].track_multi_enc
-        #osc_reaper.send_message(f"/track/{track_multi_enc}/fx/{FX_INDEX_GAIN}/fxparam/1/value", phones_mix)
-        #osc_reaper.send_message(f"/track/{track_stereo_enc}/fx/{FX_INDEX_GAIN}/fxparam/1/value", phones_pfl)
-        val = slope_3d(value)
-        track_stereo_enc = channel_infos[channel_index].track_stereo_enc
-        track_multi_enc = channel_infos[channel_index].track_multi_enc
-       
-        val_stereo_enc = np.interp(slope_3d, [0, 1], [0, 0.5])
-        val_multi_enc = np.interp(slope_3d, [0, 1], [0.5, 0])
-
-        # Stereo ENC 
-        osc_reaper.send_message(f"/track/{track_stereo_enc}/fx/1/fxparam/1/value", val_stereo_enc)
-        osc_reaper.send_message(f"/track/{track_stereo_enc}/fx/1/fxparam/15/value", val_stereo_enc)
-        # Multi ENC
-        osc_reaper.send_message(f"/track/{track_multi_enc}/fx/1/fxparam/1/value", val_multi_enc)
+        val = slope_volume(value)
+        osc_reaper.send_message(f"/track/{track_input}/fx/{FX_INDEX_GAIN}/fxparam/1/value", val)
 
     elif parameter == "eq":
         eq_parameter : str = words[4]
@@ -366,7 +370,7 @@ def osc_handler_channel(address: str,
             f"/channel/{channel_index}/led/fx", float(is_enabled))
         set_filters()
 
-    elif parameter == "3d" and value == 1:
+    elif parameter == "4d" and value == 1:
         channel_infos[channel_index].toggle_3d = (
             not channel_infos[channel_index].toggle_3d
         )
