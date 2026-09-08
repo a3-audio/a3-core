@@ -26,6 +26,7 @@ Addresses are named against layout.json where they can be, so a line reads as
 
 import argparse
 import sys
+import time
 from collections import Counter
 from pathlib import Path
 
@@ -73,10 +74,17 @@ def main():
     layout = load_layout(args.layout)
     seen = Counter()
 
+    started = time.monotonic()
+
     def heard(address, *values):
         seen[address] += 1
         if args.quiet:
             return
+        # Seconds since this started, to a thousandth. Without it a burst of
+        # three thousand messages and a slow trickle look identical in a log,
+        # and telling those apart is the whole question: does REAPER report
+        # every change, or only dump everything when the surface reconnects?
+        when = time.monotonic() - started
         named = describe(layout, address)
         shown = " ".join(f"{v:.4f}" if isinstance(v, float) else str(v)
                          for v in values)
@@ -84,7 +92,8 @@ def main():
         # Python buffers stdout when it is not a terminal -- piped to a file
         # or through tee, every line would sit in the buffer until the process
         # ended, which for a listener is until you gave up on it.
-        print(f"{address:52} {shown:>12}  {named}", flush=True)
+        print(f"{when:9.3f}  {address:52} {shown:>12}  {named}",
+              flush=True)
 
     dispatcher = osc_dispatcher.Dispatcher()
     dispatcher.set_default_handler(heard)
