@@ -4,3 +4,8 @@
 platform-config/debian-x86_64/a3-core.deb
 platform-config/debian-x86_64/a3-core/home/aaa/.local/share/a3-core/config/REAPER/ProjectTemplates/Backups
 *.swp
+
+# Python-Bytecode. Er wird beim ersten Lauf erzeugt, ist an die
+# Interpreter-Version gebunden und gehört keinem Repository.
+__pycache__/
+*.py[cod]
