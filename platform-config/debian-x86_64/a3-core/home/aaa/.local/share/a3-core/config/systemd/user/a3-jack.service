@@ -4,7 +4,10 @@ PartOf=a3-main.service
 After=sound.target
 
 [Service]
-ExecStartPre=/usr/bin/sleep 1
+# The sound card, not a guess at how long it takes to appear. jackd is
+# started with -dhw:USB and fails outright if that card is not there yet;
+# sound.target above says the subsystem is up, not that this device is.
+ExecStartPre=/bin/sh -c 'until [ -d /proc/asound/USB ]; do sleep 0.1; done'
 ExecStart=/usr/bin/jackd -P 19 -v -aa -dalsa -dhw:USB -r44100 -p128 
 ExecStop=/usr/bin/pkill -9 jackd
 Type=simple

@@ -3,7 +3,10 @@ Description=qjackctl.service
 PartOf=a3-main.service
 After=graphical.target a3-jack.service a3-reaper.service beat-analyzer.service
 [Service]
-ExecStartPre=/bin/sleep 4
+# Only jack has to be there. The patchbay reconnects clients as they appear,
+# so REAPER and the beat-analyzer do not have to be up first -- the four
+# seconds were waiting for something that waits for itself.
+ExecStartPre=/usr/bin/jack_wait -w
 ExecStart=/usr/bin/qjackctl -a /home/aaa/.config/rncbc.org/a3-patchbay.xml
 ExecStop=/usr/bin/pkill -9 qjackctl
 Type=simple
