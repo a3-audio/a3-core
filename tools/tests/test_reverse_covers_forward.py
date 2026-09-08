@@ -33,8 +33,10 @@ NOT_REVERSED = {
     # Sent together with the hipass from one A3 control: /fx/frequency drives
     # both filters at once. Reversing either would be reversing half a
     # control, and the hipass already answers for it.
-    "slope_fx_freq_lopass": "one A3 control drives both filters; the hipass "
-                            "reverses for both",
+    "slope_fx_freq_hipass": "arrives on /fx/*, which is global rather than "
+                            "per channel, and has no way back yet",
+    "slope_fx_freq_lopass": "the same control, the other filter",
+    "slope_fx_res": "the same control's resonance",
     # The channel fx-send, which currently carries the 3D crossfade -- see
     # issues/a3-core-fx-send-fuehrt-noch-die-3d-funktion.md. One input becomes
     # two gains on two tracks and a single number cannot say which input it
@@ -88,3 +90,59 @@ class EveryCurveIsAccountedFor(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def controls_the_forward_handler_accepts():
+    """Every `/channel/n/...` the forward handler answers to.
+
+    Read out of `osc_handler_channel`'s if/elif chain: the names it compares
+    `parameter` against, and under `eq` the names it compares `eq_parameter`
+    against. A control the handler does not name is one the mixer can send
+    and Core will drop.
+    """
+    tree = ast.parse((PACKAGE / "bin/a3-core.py").read_text())
+    handler = next(node for node in ast.walk(tree)
+                   if isinstance(node, ast.FunctionDef)
+                   and node.name == "osc_handler_channel")
+
+    def compared_against(name):
+        for node in ast.walk(handler):
+            if (isinstance(node, ast.Compare)
+                    and isinstance(node.left, ast.Name)
+                    and node.left.id == name
+                    and isinstance(node.comparators[0], ast.Constant)):
+                yield node.comparators[0].value
+
+    controls = set(compared_against("parameter"))
+    controls.discard("eq")
+    return controls | {f"eq/{band}"
+                       for band in compared_against("eq_parameter")}
+
+
+class TheWayBackIsSpelledLikeTheWayOut(unittest.TestCase):
+    """A returned value has to arrive on the address it was set on.
+
+    The two halves are written in different places -- the forward handler
+    splits an address into words, the reverse table names a suffix -- and
+    nothing but this connects them. Spelled `eq-high` on the way back where
+    the way out says `eq/high`, the mixer would simply never hear it, and no
+    part of either side would be wrong on its own.
+    """
+
+    def setUp(self):
+        from a3_core_layout import load_layout
+        self.layout = load_layout(PACKAGE / "share/a3-core/layout.json")
+        self.accepted = controls_the_forward_handler_accepts()
+
+    def test_every_reversal_names_a_control_the_forward_path_knows(self):
+        for entry in CHANNEL_REVERSALS:
+            self.assertIn(
+                entry.address, self.accepted,
+                f"{entry.address} is reported back but the forward handler "
+                f"answers to {sorted(self.accepted)}")
+
+    def test_the_address_is_built_by_the_layout(self):
+        self.assertEqual(
+            self.layout.address("channel_control", channel=2,
+                                control="eq/high"),
+            "/channel/2/eq/high")

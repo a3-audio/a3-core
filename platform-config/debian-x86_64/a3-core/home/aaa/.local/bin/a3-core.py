@@ -21,7 +21,10 @@ values and sends them to destinations.
 """
 
 import argparse
+import json
 import sys
+import threading
+from collections import Counter
 from pathlib import Path
 import numpy as np
 import time
@@ -31,6 +34,7 @@ from typing import List, Any
 from enum import Enum
 from dataclasses import dataclass
 from pythonosc import dispatcher  # type: ignore
+from pythonosc import dispatcher as osc_dispatcher  # type: ignore
 from pythonosc import osc_server
 
 # The layout lives beside this script in the package, not on sys.path. Added
@@ -38,9 +42,16 @@ from pythonosc import osc_server
 # promise a working directory.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 from a3_core_layout import load_layout   # noqa: E402
+from a3_core_curves import CurveNotInvertible, invert, load_curves  # noqa: E402
+from a3_core_echo import EchoFilter   # noqa: E402
+from a3_core_reverse import reverse_for   # noqa: E402
 
 LAYOUT_PATH = (Path(__file__).resolve().parent.parent
                / "share/a3-core/layout.json")
+
+#: The curves as they were recorded, which is what makes them invertible.
+CURVES_PATH = (Path(__file__).resolve().parent.parent
+               / "share/a3-core/curves-golden.json")
 
 # Read once, at the top, because everything below is built out of it -- the FX
 # slot numbers, the master tracks and the per-channel ones. A layout that
@@ -68,9 +79,36 @@ CHANNEL_ENC_PHONES: int = 27
 CHANNEL_ENC_DELAY: int = 25
 
 # OSC clients
-osc_a3mixer = SimpleUDPClient('192.168.43.55', 7771)
-osc_a3motion = SimpleUDPClient('192.168.43.54', 8700)
-osc_reaper = SimpleUDPClient('127.0.0.1', 9001) 
+# Where the two devices live. Addresses rather than constants so this can be
+# run against a listener on a bench: without that the only way to see what
+# Core sends is to stand in front of the rig, and a path nobody can watch is a
+# path nobody can test.
+A3MIXER_HOST, A3MIXER_PORT = '192.168.43.55', 7771
+A3MOTION_HOST, A3MOTION_PORT = '192.168.43.54', 8700
+
+osc_a3mixer = SimpleUDPClient(A3MIXER_HOST, A3MIXER_PORT)
+osc_a3motion = SimpleUDPClient(A3MOTION_HOST, A3MOTION_PORT)
+# What Core sends, remembered so the echo can be told from news.
+#
+# Wrapped rather than recorded at each of the thirty call sites: one place
+# that cannot be forgotten when a thirty-first is added.
+echo_filter = EchoFilter()
+
+
+class WatchedClient:
+    """A client that remembers what it sent."""
+
+    def __init__(self, client):
+        self._client = client
+
+    def send_message(self, address, value):
+        echo_filter.sent(address, value)
+        self._client.send_message(address, value)
+
+
+REAPER_HOST, REAPER_PORT = '127.0.0.1', 9001
+
+osc_reaper = WatchedClient(SimpleUDPClient(REAPER_HOST, REAPER_PORT))
 
 udp_clients_iem = tuple(SimpleUDPClient('127.0.0.1', 1337 + index)
                         for index in range(3))
@@ -529,12 +567,109 @@ def osc_handler_tap(address: str,
         note = [0x90, 60, 0] # Clock tap
         midiout.send_message(note)
 
+#: Where REAPER's feedback is heard. Its own port, not Core's: REAPER speaks
+#: /track/* and /fx/*, and /fx/* is what the mixer uses for its filter -- one
+#: port for both would have Core reading REAPER's reports as commands and
+#: answering them, which is a loop on a rig that makes sound.
+OSC_PORT_REAPER_FEEDBACK: int = 9002
+
+_curves = load_curves(json.loads(CURVES_PATH.read_text()))
+
+#: What arrived that nothing knows how to pass on. Counted rather than
+#: dropped in silence: the list of what is not handled should be visible.
+_unhandled = Counter()
+
+
+def reaper_feedback_handler(address: str, *osc_arguments: List[Any]) -> None:
+    """One value REAPER reports, on its way back to the device that set it.
+
+    Everything Core does not recognise is counted and left alone. That is most
+    of what arrives -- REAPER reports names, strings, sends, pans and the
+    decibel spelling of every volume -- and none of it is A3's.
+    """
+    if not osc_arguments:
+        return
+
+    try:
+        value = float(osc_arguments[0])   # type: ignore
+    except (TypeError, ValueError):
+        return                            # a name or a string, not a value
+
+    # Core's own confirmation. Passing it on would tell the mixer what the
+    # mixer just said, after a trip through a curve and back -- and on the
+    # curves with plateaus it would come back changed.
+    if echo_filter.is_echo(address, value):
+        return
+
+    parts = address.strip("/").split("/")
+    if len(parts) < 2 or parts[0] != "track":
+        _unhandled[address] += 1
+        return
+
+    try:
+        track = int(parts[1])
+    except ValueError:
+        _unhandled[address] += 1
+        return
+
+    role = _layout.track_role(track)
+    if role is None:
+        _unhandled[address] += 1   # master, or a track A3 does not name
+        return
+
+    channel_index, field = role
+    entry = reverse_for(_layout, address, field)
+    if entry is None:
+        _unhandled[address] += 1
+        return
+
+    try:
+        a3_value = invert(_curves[entry.curve], value)
+    except (CurveNotInvertible, KeyError):
+        _unhandled[address] += 1
+        return
+
+    target = osc_a3mixer if entry.to == "mixer" else osc_a3motion
+    target.send_message(_layout.address("channel_control",
+                                        channel=channel_index,
+                                        control=entry.address), a3_value)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--ip", default="0.0.0.0", help="The ip to listen on")
     parser.add_argument("--port", type=int,
                         default=OSC_PORT_CORE, help="The port to listen on")
+    parser.add_argument("--feedback-port", type=int,
+                        default=OSC_PORT_REAPER_FEEDBACK,
+                        help="The port REAPER reports back on")
+    parser.add_argument("--mixer", default=f"{A3MIXER_HOST}:{A3MIXER_PORT}",
+                        help="host:port of A3 Mixer")
+    parser.add_argument("--motion", default=f"{A3MOTION_HOST}:{A3MOTION_PORT}",
+                        help="host:port of A3 Motion")
+    parser.add_argument("--reaper", default=f"{REAPER_HOST}:{REAPER_PORT}",
+                        help="host:port of REAPER's OSC input. Point it "
+                             "somewhere else to exercise this without "
+                             "driving the rig.")
     args = parser.parse_args()
+
+    # Pointed somewhere else for a bench run. Rebound at module scope, which
+    # is where the handlers read them -- there is no main() here, the argument
+    # parsing runs under `if __name__` at the top level. (A `global`
+    # declaration was tried first and is a syntax error there, since the names
+    # are already bound above.)
+    for name, spec in (("mixer", args.mixer), ("motion", args.motion),
+                       ("reaper", args.reaper)):
+        host, _, port = spec.rpartition(":")
+        client = SimpleUDPClient(host, int(port))
+        if name == "mixer":
+            osc_a3mixer = client
+        elif name == "motion":
+            osc_a3motion = client
+        else:
+            # Still watched: the echo filter is the whole reason a bench run
+            # can show what the rig does.
+            osc_reaper = WatchedClient(client)
 
     dispatcher = dispatcher.Dispatcher()
 
@@ -547,6 +682,25 @@ if __name__ == "__main__":
     # dispatcher.map("/CoordinateConverter/*", iemToCtrlMotion_handler)
     # dispatcher.map("/moc/channel/*", ctrlMotionToIem_handler)
     # dispatcher.map("/moc/channel/*", ctrlMotionToIem_handler)
+
+    # REAPER's feedback, on its own port and its own dispatcher.
+    #
+    # Separate because REAPER speaks /track/* and /fx/*, and /fx/* is the
+    # mixer's filter -- one port for both would have Core reading REAPER's
+    # reports as commands and answering them, which is a loop on a rig that
+    # makes sound.
+    #
+    # In a thread of its own so a burst does not hold up the commands coming
+    # in on the main port: REAPER sends twenty-five thousand messages when the
+    # surface reconnects, and a set does not wait for that.
+    feedback_dispatcher = osc_dispatcher.Dispatcher()
+    feedback_dispatcher.set_default_handler(reaper_feedback_handler)
+    feedback_server = osc_server.ThreadingOSCUDPServer(
+        (args.ip, args.feedback_port), feedback_dispatcher)
+    threading.Thread(target=feedback_server.serve_forever,
+                     daemon=True).start()
+    print(f"listening for REAPER feedback on "
+          f"{args.ip}:{args.feedback_port}")
 
     server = osc_server.ThreadingOSCUDPServer((args.ip, args.port), dispatcher)
     print("Serving on {}".format(server.server_address))

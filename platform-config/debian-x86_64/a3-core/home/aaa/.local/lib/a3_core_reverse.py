@@ -31,22 +31,30 @@ from collections import namedtuple
 #: One way back. `field` is which of a channel's tracks it is, `slot` and
 #: `param` locate the plugin parameter, `curve` is what bent it on the way
 #: out, and `address` is the A3 message it came from.
-Reverse = namedtuple("Reverse", "field slot param curve address")
+Reverse = namedtuple("Reverse", "field slot param curve address to")
 
 #: Keyed the way a REAPER address arrives, once the track has been resolved to
 #: a channel: (field, fx slot, fx parameter).
 #:
-#: The slot is written as the layout's name rather than a number so this reads
-#: as "the gain plugin" and not "plugin 1", and so it follows a project where
-#: a plugin moves.
+#: The slot is the layout's name rather than a number, so this reads as "the
+#: gain plugin" and follows a project where a plugin moves.
+#:
+#: `to` is which device the message goes back to, and it has to be said: these
+#: are the mixer's channel strip, and telling Motion about them would be
+#: telling it about controls it does not have.
+#:
+#: **Only the per-channel mixer controls are here.** The filter's frequency
+#: and resonance arrive on /fx/*, which is global rather than per channel --
+#: the first version of this table gave them a channel address, which would
+#: have sent four contradictory messages for one control. They need their own
+#: way back and do not have one yet.
 CHANNEL_REVERSALS = (
-    Reverse("track_input", "gain", 1, "slope_volume", "gain"),
-    Reverse("track_input", "eq", 1, "slope_eq", "eq/high"),
-    Reverse("track_input", "eq", 2, "slope_eq", "eq/mid"),
-    Reverse("track_input", "eq", 3, "slope_eq", "eq/low"),
-    Reverse("track_input", "hipass", 7, "slope_fx_freq_hipass", "frequency"),
-    Reverse("track_input", "hipass", 6, "slope_fx_res", "resonance"),
-    Reverse("track_channelbus", None, None, "slope_volume", "volume"),
+    Reverse("track_input", "gain", 1, "slope_volume", "gain", "mixer"),
+    Reverse("track_input", "eq", 1, "slope_eq", "eq/high", "mixer"),
+    Reverse("track_input", "eq", 2, "slope_eq", "eq/mid", "mixer"),
+    Reverse("track_input", "eq", 3, "slope_eq", "eq/low", "mixer"),
+    Reverse("track_channelbus", None, None, "slope_volume", "volume",
+            "mixer"),
 )
 
 

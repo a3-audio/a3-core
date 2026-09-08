@@ -117,6 +117,7 @@
     ]
   },
   "addresses": {
+    "channel_control": "/channel/{channel}/{control}",
     "fx_mode_led": "/fx/led",
     "fx_param": "/track/{track}/fx/{slot}/fxparam/{param}/value",
     "led_3d": "/channel/{channel}/led/3d",
