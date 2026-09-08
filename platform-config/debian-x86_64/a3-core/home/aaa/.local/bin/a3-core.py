@@ -266,18 +266,27 @@ def osc_handler_channel(address: str,
 
     # POTENTIOMETER
 
+    # fx-send drives the stereo/multi crossfade, which is not what its name
+    # says, and that is on purpose for now.
+    #
+    # The 3D function used to be reached through the mixer's FX-send knob --
+    # that was the only continuous control there was for it. A3 Motion's
+    # per-channel pot does it now, on /channel/n/3d, and that is new. Until
+    # the mixer stops sending fx-send for this, both roads have to arrive:
+    # taking this one away would take the 3D function off the mixer before
+    # anyone had agreed to that.
+    #
+    # So the channel FX send itself does nothing at the moment. See
+    # issues/a3-core-fx-send-fuehrt-noch-die-3d-funktion.md for what has to be
+    # true before this block goes and the send below comes back.
     if parameter == "fx-send":
-        #val = slope_constant_power(value)
-        #track_channelbus = channel_infos[channel_index].track_channelbus
-        #osc_reaper.send_message(f"/track/{track_channelbus}/send/3/volume", val)
-        x = value  # 0–1 vom OSC
+        x = value
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
-        track_multi_enc  = channel_infos[channel_index].track_multi_enc
-        # Multi laeuft von 0.5 nach 0, Stereo von 0 nach 0.5. Der alte
-        # gain-Zweig hatte es andersherum und war damit falsch -- nicht
-        # zurueckdrehen.
-        multi_gain = 0.5 * (1 - max(0, (x - 0.5) * 2))   # 0.5 → 0
-        stereo_gain  = 0.5 * min(1, x * 2)                 # 0 → 0.5
+        track_multi_enc = channel_infos[channel_index].track_multi_enc
+        # Multi runs 0.5 -> 0 and stereo 0 -> 0.5. The old gain branch had it
+        # the other way round and was wrong; do not turn it back.
+        multi_gain = 0.5 * (1 - max(0, (x - 0.5) * 2))
+        stereo_gain = 0.5 * min(1, x * 2)
         osc_reaper.send_message(
             f"/track/{track_stereo_enc}/fx/1/fxparam/1/value",
             stereo_gain
@@ -291,18 +300,15 @@ def osc_handler_channel(address: str,
             multi_gain
         )
 
+    # What 3d is for: A3 Motion's per-channel pot, crossfading the channel
+    # between its stereo and its multi encoder. The same curves as fx-send
+    # above, which is the road this arrived by until now.
     if parameter == "3d":
-        #val = slope_constant_power(value)
-        #track_channelbus = channel_infos[channel_index].track_channelbus
-        #osc_reaper.send_message(f"/track/{track_channelbus}/send/3/volume", val)
-        x = value  # 0–1 vom OSC
+        x = value
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
-        track_multi_enc  = channel_infos[channel_index].track_multi_enc
-        # Multi laeuft von 0.5 nach 0, Stereo von 0 nach 0.5. Der alte
-        # gain-Zweig hatte es andersherum und war damit falsch -- nicht
-        # zurueckdrehen.
-        multi_gain = 0.5 * (1 - max(0, (x - 0.5) * 2))   # 0.5 → 0
-        stereo_gain  = 0.5 * min(1, x * 2)                 # 0 → 0.5
+        track_multi_enc = channel_infos[channel_index].track_multi_enc
+        multi_gain = 0.5 * (1 - max(0, (x - 0.5) * 2))
+        stereo_gain = 0.5 * min(1, x * 2)
         osc_reaper.send_message(
             f"/track/{track_stereo_enc}/fx/1/fxparam/1/value",
             stereo_gain
