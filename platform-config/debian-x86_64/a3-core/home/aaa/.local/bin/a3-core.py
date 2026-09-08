@@ -22,6 +22,8 @@ values and sends them to destinations.
 
 import argparse
 import json
+import os
+import signal
 import sys
 import threading
 from collections import Counter
@@ -45,9 +47,17 @@ from a3_core_layout import load_layout   # noqa: E402
 from a3_core_curves import CurveNotInvertible, invert, load_curves  # noqa: E402
 from a3_core_echo import EchoFilter   # noqa: E402
 from a3_core_reverse import reverse_for   # noqa: E402
+from a3_core_state import StateFile, apply_state, state_of   # noqa: E402
 
 LAYOUT_PATH = (Path(__file__).resolve().parent.parent
                / "share/a3-core/layout.json")
+
+#: Cores eigener Stand. Under XDG's state directory rather than beside the
+#: layout: the layout describes the rig and ships with the package, this is
+#: what the evening did to it and must survive an update untouched.
+STATE_PATH = (Path(os.environ.get("XDG_STATE_HOME",
+                                  Path.home() / ".local/state"))
+              / "a3-core/state.json")
 
 #: The curves as they were recorded, which is what makes them invertible.
 CURVES_PATH = (Path(__file__).resolve().parent.parent
@@ -163,10 +173,14 @@ class ChannelInfo:
 # them said so. They are data now, beside the REAPER project they must agree
 # with -- see .local/share/a3-core/layout.json.
 #
-# What stays in the dataclass is what changes while the thing runs:
-# toggle_3d, toggle_fx, toggle_pfl and the cached elevation and width. A
-# number that describes the rig and a flag that describes the moment are two
-# different kinds of thing, and only one of them belongs in a file that ships.
+# What stays in the dataclass is what changes while the thing runs: toggle_3d,
+# toggle_fx and toggle_pfl. A number that describes the rig and a flag that
+# describes the moment are two different kinds of thing, and only one of them
+# belongs in a file that ships.
+#
+# `elevation` and `width` look like they belong to that second kind and do
+# not: nothing assigns either, and send_elevation() -- the one reader -- is
+# never called. See issues/a3-core-elevation-cache-ist-tot.md.
 channel_infos = tuple(
     ChannelInfo(
         enc_main_azimuth=_layout.channel(index).enc_main_azimuth,
@@ -180,6 +194,28 @@ channel_infos = tuple(
     )
     for index in range(_layout.channel_count)
 )
+
+#: What the evening did to the rig, as far as Core alone knows it.
+#:
+#: Only what has no REAPER parameter behind it is in here -- the three toggles
+#: a channel carries, the filter mode, and the cached elevation and width.
+#: Everything continuous is REAPER's and comes back from REAPER; see
+#: a3_core_reverse.
+_state_file = StateFile(STATE_PATH)
+apply_state(_state_file.load(), channel_infos, master_info)
+
+
+def remember_state():
+    """Note the state after handling a message.
+
+    Called from the two handlers rather than from the six places a flag is
+    flipped: a handler is where a message is finished with, and six call sites
+    are six chances for the seventh to be forgotten. It costs nothing to
+    offer a state that has not changed -- StateFile compares before it starts
+    its clock.
+    """
+    _state_file.remember(state_of(channel_infos, master_info))
+
 
 def slope_constant_power(value):
     resolution = np.arange(start=0, stop=1, step=0.1)
@@ -469,6 +505,8 @@ def osc_handler_channel(address: str,
             f"/track/{track_stereo_enc}/fx/2/fxparam/2/value", val)
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
 
+    remember_state()
+
 def osc_handler_master(address: str,
                        *osc_arguments: List[Any]) -> None:
 
@@ -552,6 +590,8 @@ def osc_handler_fx(address: str,
             track_input = channel_infos[channel_index].track_input
             osc_reaper.send_message(f"/track/{track_input}/fx/{FX_INDEX_HIPASS}/fxparam/6/value", val)
             osc_reaper.send_message(f"/track/{track_input}/fx/{FX_INDEX_LOPASS}/fxparam/6/value", val)
+
+    remember_state()
 
 def osc_handler_tap(address: str,
                    *osc_arguments: List[Any]) -> None:
@@ -701,6 +741,17 @@ if __name__ == "__main__":
                      daemon=True).start()
     print(f"listening for REAPER feedback on "
           f"{args.ip}:{args.feedback_port}")
+
+    # A stop is a stop, but the last change may still be inside the state
+    # file's delay. systemd stops this with SIGTERM and a hand with SIGINT,
+    # and neither runs anything by itself -- without this, switching the
+    # filter and immediately stopping Core forgets the switch.
+    def stop(signum, frame):
+        _state_file.flush()
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
 
     server = osc_server.ThreadingOSCUDPServer((args.ip, args.port), dispatcher)
     print("Serving on {}".format(server.server_address))
