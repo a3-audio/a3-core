@@ -48,6 +48,8 @@ from a3_core_curves import CurveNotInvertible, invert, load_curves  # noqa: E402
 from a3_core_echo import EchoFilter   # noqa: E402
 from a3_core_reverse import reverse_for   # noqa: E402
 from a3_core_state import StateFile, apply_state, state_of   # noqa: E402
+from a3_core_recall import (FX_MODE_WORDS, Relayed, led_message,   # noqa: E402
+                            recall_messages)   # noqa: E402
 
 LAYOUT_PATH = (Path(__file__).resolve().parent.parent
                / "share/a3-core/layout.json")
@@ -203,6 +205,20 @@ channel_infos = tuple(
 #: a3_core_reverse.
 _state_file = StateFile(STATE_PATH)
 apply_state(_state_file.load(), channel_infos, master_info)
+
+
+#: What Core has passed on, so it can say it again. In memory only -- see
+#: a3_core_recall for why this is not a file.
+_relayed = Relayed()
+
+
+def client_for(device):
+    """The client a device name stands for.
+
+    Looked up rather than held, because --mixer and --motion rebind these at
+    module scope after this module has been read.
+    """
+    return osc_a3mixer if device == "mixer" else osc_a3motion
 
 
 def remember_state():
@@ -438,14 +454,15 @@ def osc_handler_channel(address: str,
         osc_reaper.send_message(
             f"/track/{track_pfl}/mute", float(muted))
         osc_a3mixer.send_message(
-            f"/channel/{channel_index}/led/pfl", float(muted))
+            *led_message(_layout, "pfl", channel_index,
+                         channel_infos[channel_index]))
 
     elif parameter == "fx" and value == 1:
         channel_infos[channel_index].toggle_fx = (
             not channel_infos[channel_index].toggle_fx)
-        is_enabled = channel_infos[channel_index].toggle_fx
         osc_a3mixer.send_message(
-            f"/channel/{channel_index}/led/fx", float(is_enabled))
+            *led_message(_layout, "fx", channel_index,
+                         channel_infos[channel_index]))
         set_filters()
 
     elif parameter == "4d" and value == 1:
@@ -454,9 +471,8 @@ def osc_handler_channel(address: str,
         )
         is_enabled = channel_infos[channel_index].toggle_3d
         osc_a3mixer.send_message(
-            f"/channel/{channel_index}/led/3d",
-            float(is_enabled)
-        )
+            *led_message(_layout, "3d", channel_index,
+                         channel_infos[channel_index]))
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
         track_multi_enc = channel_infos[channel_index].track_multi_enc
         osc_val = 0.5 if is_enabled else 0.0
@@ -573,7 +589,9 @@ def osc_handler_fx(address: str,
     if parameter == "mode":
         high_pass = value == "high_pass"
         master_info.fx_mode = MasterInfo.FXMode.HIGH_PASS if high_pass else MasterInfo.FXMode.LOW_PASS
-        osc_a3mixer.send_message("/fx/led", "high_pass" if high_pass else "low_pass")
+        osc_a3mixer.send_message(
+            _layout.address("fx_mode_led"),
+            FX_MODE_WORDS[master_info.fx_mode.name])
         set_filters()
 
     elif parameter == "frequency":
@@ -606,6 +624,27 @@ def osc_handler_tap(address: str,
     if parameter == "tap" and value == "1":
         note = [0x90, 60, 0] # Clock tap
         midiout.send_message(note)
+
+#: Where a device asks Core to say the state again. One address rather than
+#: one per value: the answer is the ordinary messages, so nothing new has to
+#: be understood at the other end.
+OSC_ADDRESS_RECALL: str = "/state/recall"
+
+
+def osc_handler_recall(address: str, *osc_arguments: List[Any]) -> None:
+    """Say the whole state again, as the messages it would have arrived as.
+
+    Sent to the device each value belongs to rather than back to whoever
+    asked. A mixer being told the lights it already shows is a repaint; a
+    mixer *not* being told because Motion happened to be the one that asked
+    would be a rig where two devices disagree and neither can find out.
+    """
+    messages = list(recall_messages(_layout, channel_infos, master_info,
+                                    _relayed))
+    for device, out, value in messages:
+        client_for(device).send_message(out, value)
+    print(f"{address}: replayed {len(messages)} messages")
+
 
 #: Where REAPER's feedback is heard. Its own port, not Core's: REAPER speaks
 #: /track/* and /fx/*, and /fx/* is what the mixer uses for its filter -- one
@@ -669,10 +708,10 @@ def reaper_feedback_handler(address: str, *osc_arguments: List[Any]) -> None:
         _unhandled[address] += 1
         return
 
-    target = osc_a3mixer if entry.to == "mixer" else osc_a3motion
-    target.send_message(_layout.address("channel_control",
-                                        channel=channel_index,
-                                        control=entry.address), a3_value)
+    out = _layout.address("channel_control", channel=channel_index,
+                          control=entry.address)
+    _relayed.note(entry.to, out, a3_value)
+    client_for(entry.to).send_message(out, a3_value)
 
 
 if __name__ == "__main__":
@@ -716,6 +755,7 @@ if __name__ == "__main__":
     dispatcher.map("/channel/*", osc_handler_channel)
     dispatcher.map("/master/*", osc_handler_master)
     dispatcher.map("/fx/*", osc_handler_fx)
+    dispatcher.map(OSC_ADDRESS_RECALL, osc_handler_recall)
     #dispatcher.map("/tap", osc_handler_tap)
 
     # Motion-Controller
