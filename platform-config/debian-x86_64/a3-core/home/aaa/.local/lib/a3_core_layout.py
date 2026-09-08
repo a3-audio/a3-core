@@ -73,10 +73,12 @@ class Master(Channel):
 
 
 class Layout:
-    def __init__(self, channels, master, fx_slots, gain_params, addresses):
+    def __init__(self, channels, master, fx_slots, fx_params, gain_params,
+                 addresses):
         self._channels = channels
         self._master = master
         self._fx_slots = fx_slots
+        self._fx_params = fx_params
         self._gain_params = gain_params
         self._addresses = addresses
 
@@ -94,6 +96,17 @@ class Layout:
         if name not in self._fx_slots:
             raise LayoutError(f"no fx slot named {name}")
         return int(self._fx_slots[name])
+
+    def fx_param(self, name):
+        """Which parameter of a plugin carries a given value.
+
+        `fxparam/8` said where the elevation sits and nothing about what it
+        is; finding out meant opening the REAPER project. Named here, the
+        number is in one place and the call site reads as what it does.
+        """
+        if name not in self._fx_params:
+            raise LayoutError(f"no fx parameter named {name}")
+        return int(self._fx_params[name])
 
     def gain_params(self, name):
         """Which parameters of a gain plugin carry its value.
@@ -116,12 +129,19 @@ class Layout:
     def channel_count(self):
         return len(self._channels)
 
-    def address(self, name, **values):
+    def address(self, name, /, **values):
         """The address `name`, with its placeholders filled in.
 
         Missing one is an error, not a message with a brace in it: REAPER
         drops what it cannot parse without a word, so a typo would show up as
         a control that does nothing rather than as a fault.
+
+        `name` is positional-only. It was found to have to be: an address
+        with a `{name}` placeholder could never have it filled in, because the
+        keyword collided with this parameter. That address has since been
+        split into three of its own and the collision is gone -- the guard
+        stays because the next such placeholder would hit it again, and
+        because nothing is paid for it.
         """
         if name not in self._addresses:
             raise LayoutError(f"no address named {name}")
@@ -158,5 +178,6 @@ def load_layout(path):
 
     return Layout(channels, master,
                   dict(parsed.get("fx_slots", {})),
+                  dict(parsed.get("fx_params", {})),
                   dict(parsed.get("gain_params", {})),
                   dict(parsed.get("addresses", {})))

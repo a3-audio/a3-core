@@ -146,3 +146,57 @@ class TheRestOfTheMap(unittest.TestCase):
         # master bus of all places.
         with self.assertRaises(LayoutError):
             load_layout(written(json.dumps({"channels": [], "addresses": {}})))
+
+
+SHAPES = json.dumps({
+    "channels": [],
+    "master": {"track_masterbus": 1, "track_booth": 2, "track_phones": 3,
+               "track_ph_mix": 8, "aux_return": 25},
+    "addresses": {
+        "fx_param": "/track/{track}/fx/{slot}/fxparam/{param}/value",
+        "track_volume": "/track/{track}/volume",
+        "track_mute": "/track/{track}/mute",
+        "led_pfl": "/channel/{channel}/led/pfl",
+        "fx_mode_led": "/fx/led",
+    },
+    "fx_params": {
+        "elevation": 8,
+        "eq_high": 1, "eq_mid": 2, "eq_low": 3,
+        "filter_frequency": 7, "filter_resonance": 6,
+    },
+})
+
+
+class AddressShapes(unittest.TestCase):
+    """Twenty-seven addresses turned out to be five shapes used twenty-seven
+    times. What differed between them was not the address but the VST
+    parameter number, written out at the call site as 1, 6, 7, 8 or 15."""
+
+    def setUp(self):
+        self.layout = load_layout(written(SHAPES))
+
+    def test_the_fx_parameter_shape_covers_most_of_them(self):
+        self.assertEqual(
+            self.layout.address("fx_param", track=10, slot=4, param=8),
+            "/track/10/fx/4/fxparam/8/value")
+
+    def test_a_parameter_number_is_named(self):
+        # fxparam/8 said where the elevation sits and nothing about what it
+        # is. Reading the project to find out is what this replaces.
+        self.assertEqual(self.layout.fx_param("elevation"), 8)
+        self.assertEqual(self.layout.fx_param("filter_resonance"), 6)
+
+    def test_a_parameter_nobody_named_is_an_error(self):
+        with self.assertRaises(LayoutError):
+            self.layout.fx_param("reverb_size")
+
+    def test_an_address_without_placeholders_needs_none(self):
+        self.assertEqual(self.layout.address("fx_mode_led"), "/fx/led")
+
+    def test_each_led_is_its_own_address(self):
+        # Named one each rather than one shape with a word in it. The three
+        # LEDs are three things a channel says, not three values of one -- and
+        # a shape whose last segment is a placeholder cannot be held against
+        # the source, where the word is written out.
+        self.assertEqual(self.layout.address("led_pfl", channel=2),
+                         "/channel/2/led/pfl")

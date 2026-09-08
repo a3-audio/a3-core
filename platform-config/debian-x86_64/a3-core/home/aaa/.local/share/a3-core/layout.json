@@ -13,7 +13,13 @@
     "",
     "Channels are in order, one record each. Every field listed in",
     "a3_core_layout.CHANNEL_FIELDS has to be there: a missing number would",
-    "read as track 0 and quietly drive whatever REAPER has there."
+    "read as track 0 and quietly drive whatever REAPER has there.",
+    "",
+    "addresses: five shapes, used twenty-seven times between them. What",
+    "differed between those twenty-seven was never the address -- it was the",
+    "VST parameter number, written out at the call site as 1, 6, 7, 8 or 15.",
+    "Those are fx_params, named for what they carry rather than where they",
+    "sit."
   ],
   "channels": [
     {
@@ -109,5 +115,26 @@
       85,
       99
     ]
+  },
+  "addresses": {
+    "fx_mode_led": "/fx/led",
+    "fx_param": "/track/{track}/fx/{slot}/fxparam/{param}/value",
+    "led_3d": "/channel/{channel}/led/3d",
+    "led_fx": "/channel/{channel}/led/fx",
+    "led_pfl": "/channel/{channel}/led/pfl",
+    "track_mute": "/track/{track}/mute",
+    "track_volume": "/track/{track}/volume"
+  },
+  "fx_params": {
+    "gain": 1,
+    "elevation": 8,
+    "eq_high": 1,
+    "eq_mid": 2,
+    "eq_low": 3,
+    "filter_frequency": 7,
+    "filter_resonance": 6,
+    "enc_pot_1": 1,
+    "enc_pot_2": 2,
+    "phones_volume": 1
   }
 }

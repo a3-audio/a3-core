@@ -111,3 +111,79 @@ class TheRestOfTheMap(unittest.TestCase):
         from a3_core_layout import MASTER_FIELDS
         used = [getattr(self.layout.master, f) for f in MASTER_FIELDS]
         self.assertEqual(len(set(used)), len(used), used)
+
+
+class AddressesMatchTheSource(unittest.TestCase):
+    """Every address a3-core.py sends, rebuilt from the layout.
+
+    The call sites still hold the literals, so this can be checked -- and it
+    is checked *before* they are rewritten, which is the lesson from the two
+    comparisons already spent: a pin that arrives after the literal is gone
+    pins nothing.
+
+    It walks every send_message in the source, turns the f-string back into a
+    template, and insists the layout can produce it. What it does not check is
+    which values are filled in -- that is the rewrite's job, and the numbers
+    it fills from are pinned by fx_params below.
+    """
+
+    def setUp(self):
+        self.layout = load_layout(PACKAGE / "share/a3-core/layout.json")
+
+    @staticmethod
+    def _templates_in_source():
+        import ast
+        src = (PACKAGE / "bin/a3-core.py").read_text()
+        found = set()
+        for node in ast.walk(ast.parse(src)):
+            if not (isinstance(node, ast.Call)
+                    and getattr(node.func, "attr", "") == "send_message"
+                    and node.args):
+                continue
+            first = node.args[0]
+            if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                if first.value.startswith("/"):
+                    found.add(first.value)
+            elif isinstance(first, ast.JoinedStr):
+                shape = ""
+                for part in first.values:
+                    shape += (str(part.value) if isinstance(part, ast.Constant)
+                              else "{}")
+                if shape.startswith("/"):
+                    found.add(shape)
+        return found
+
+    @staticmethod
+    def _normalised(address):
+        """Every number and every placeholder blanked to {}.
+
+        Some call sites fill the slot and the parameter in from a variable and
+        some write them out -- /fx/1/fxparam/15/value is the same shape as
+        /fx/{slot}/fxparam/{param}/value, and after the rewrite it will be
+        spelled that way. Normalising both sides is what lets this be checked
+        *before* the rewrite rather than after, which is when a pin is worth
+        having: a comparison that arrives after the literal is gone pins
+        nothing.
+
+        Every number in these addresses is a track, a slot or a parameter --
+        there is no fixed digit to protect.
+        """
+        import re
+        return re.sub(r"\{[^}]*\}", "{}", re.sub(r"/\d+", "/{}", address))
+
+    def test_every_address_sent_has_a_shape_in_the_layout(self):
+        shapes = {self._normalised(template)
+                  for template in self.layout._addresses.values()}
+
+        for sent in self._templates_in_source():
+            self.assertIn(
+                self._normalised(sent), shapes,
+                f"{sent} is sent but no layout address has that shape")
+
+    def test_the_named_parameters_are_the_numbers_the_source_uses(self):
+        # The ones that can be read off a literal address unambiguously.
+        expected = {"elevation": 8, "eq_high": 1, "eq_mid": 2, "eq_low": 3,
+                    "filter_frequency": 7, "filter_resonance": 6,
+                    "enc_pot_1": 1, "enc_pot_2": 2}
+        for name, number in expected.items():
+            self.assertEqual(self.layout.fx_param(name), number, name)
