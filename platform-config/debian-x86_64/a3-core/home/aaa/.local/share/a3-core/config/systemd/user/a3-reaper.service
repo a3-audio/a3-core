@@ -6,7 +6,11 @@ After=graphical.target a3-jack.service
 [Service]
 PrivateTmp=true
 #WorkingDirectory=/home/aaa/.config/REAPER
-ExecStartPre=/bin/sleep 2
+# jackd accepting clients, not two seconds. After=a3-jack.service says jackd
+# was started, which is not the same as ready -- jackd has no readiness
+# notification, and that gap is what the sleep was standing in for. jack_wait
+# blocks until the server answers.
+ExecStartPre=/usr/bin/jack_wait -w
 ExecStart=/bin/bash -c "/home/aaa/.local/opt/REAPER/reaper -nosplash -ignoreerrors -template /home/aaa/.config/REAPER/ProjectTemplates/a3-reaper.RPP"
 ExecStop=/home/aaa/.local/opt/REAPER/reaper -saveas -template /home/aaa/.config/REAPER/ProjectTemplates/a3-reaper.RPP -close all :nosave
 CPUAffinity=1 2 3
