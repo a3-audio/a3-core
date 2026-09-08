@@ -200,3 +200,53 @@ class AddressShapes(unittest.TestCase):
         # the source, where the word is written out.
         self.assertEqual(self.layout.address("led_pfl", channel=2),
                          "/channel/2/led/pfl")
+
+
+class TheMapRunsBothWays(unittest.TestCase):
+    """Which A3 channel a REAPER track belongs to.
+
+    The map has always been read one way -- channel to track, because that is
+    the direction messages travel. REAPER's feedback travels the other way and
+    arrives naming a track, so the same file has to answer both.
+
+    Derived rather than written down twice: a second list would be a second
+    thing to keep in step, and the way that goes wrong is silent -- a value
+    landing on the wrong channel's knob.
+    """
+
+    def setUp(self):
+        self.layout = load_layout(written(json.dumps({
+            "channels": [
+                {"track_input": 12, "track_multi_enc": 11,
+                 "track_stereo_enc": 10, "track_channelbus": 9,
+                 "track_pfl": 4, "enc_main_azimuth": 8,
+                 "enc_main_elevation": 9, "enc_phones_solo": 12},
+                {"track_input": 16, "track_multi_enc": 15,
+                 "track_stereo_enc": 14, "track_channelbus": 13,
+                 "track_pfl": 5, "enc_main_azimuth": 13,
+                 "enc_main_elevation": 14, "enc_phones_solo": 17},
+            ],
+            "master": {"track_masterbus": 1, "track_booth": 2,
+                       "track_phones": 3, "track_ph_mix": 8, "aux_return": 25},
+            "addresses": {},
+        })))
+
+    def test_a_track_says_which_channel_it_is(self):
+        self.assertEqual(self.layout.channel_for_track(12), 0)
+        self.assertEqual(self.layout.channel_for_track(13), 1)
+
+    def test_it_says_which_of_the_channels_tracks_it_is(self):
+        # Track 12 is channel 0's input, 9 is its channelbus. Knowing which
+        # one turns a value into a parameter rather than only a channel.
+        self.assertEqual(self.layout.track_role(12), (0, "track_input"))
+        self.assertEqual(self.layout.track_role(9), (0, "track_channelbus"))
+        self.assertEqual(self.layout.track_role(14), (1, "track_stereo_enc"))
+
+    def test_a_track_that_belongs_to_no_channel_says_so(self):
+        self.assertIsNone(self.layout.channel_for_track(1))
+        self.assertIsNone(self.layout.track_role(99))
+
+    def test_the_encoder_numbers_are_not_tracks(self):
+        # enc_main_azimuth=8 is a different numbering and must not be answered
+        # as a track -- 8 is the master's ph_mix, which is somebody else's.
+        self.assertIsNone(self.layout.channel_for_track(8))

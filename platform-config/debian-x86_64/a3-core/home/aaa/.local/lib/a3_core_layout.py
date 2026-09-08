@@ -18,6 +18,20 @@ reasoning tools/curve-characterisation/ already follows.
 import json
 from pathlib import Path
 
+#: The fields of CHANNEL_FIELDS that are REAPER track numbers.
+#:
+#: The others -- enc_main_azimuth and friends -- are a different numbering
+#: altogether, and answering one of them as a track would put a value on the
+#: wrong thing: enc_main_azimuth is 8 on channel 0, and track 8 is the
+#: master's ph_mix.
+TRACK_FIELDS = (
+    "track_input",
+    "track_multi_enc",
+    "track_stereo_enc",
+    "track_channelbus",
+    "track_pfl",
+)
+
 #: Every track number a channel has to name. A record short of one of these is
 #: refused rather than defaulted -- a missing number would read as track 0 and
 #: quietly drive whatever REAPER happens to have there.
@@ -96,6 +110,30 @@ class Layout:
         if name not in self._fx_slots:
             raise LayoutError(f"no fx slot named {name}")
         return int(self._fx_slots[name])
+
+    def track_role(self, track):
+        """Which channel a REAPER track belongs to, and as what.
+
+        The map has always been read the other way -- channel to track,
+        because that is the direction messages travel. REAPER's feedback comes
+        back naming a track, so the same file has to answer both, and it is
+        derived rather than written down twice: a second list is a second
+        thing to keep in step, and that goes wrong silently -- a value landing
+        on the wrong channel's knob.
+
+        Returns (channel index, field name), or None for a track no channel
+        claims: the master's, and anything REAPER has that A3 does not name.
+        """
+        for index, channel in enumerate(self._channels):
+            for field in TRACK_FIELDS:
+                if getattr(channel, field) == track:
+                    return (index, field)
+        return None
+
+    def channel_for_track(self, track):
+        """Just the channel, for callers that do not care which track it is."""
+        found = self.track_role(track)
+        return None if found is None else found[0]
 
     def fx_param(self, name):
         """Which parameter of a plugin carries a given value.
