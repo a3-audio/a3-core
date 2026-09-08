@@ -46,17 +46,65 @@ class LayoutError(Exception):
 class Channel:
     """One channel's REAPER tracks, by the names the code already used."""
 
+    _fields = CHANNEL_FIELDS
+
     def __init__(self, values):
-        for field in CHANNEL_FIELDS:
+        for field in self._fields:
             if field not in values:
-                raise LayoutError(f"channel is missing {field}")
+                raise LayoutError(
+                    f"{type(self).__name__.lower()} is missing {field}")
             setattr(self, field, int(values[field]))
 
 
+#: The tracks that belong to no single channel.
+MASTER_FIELDS = (
+    "track_masterbus",
+    "track_booth",
+    "track_phones",
+    "track_ph_mix",
+    "aux_return",
+)
+
+
+class Master(Channel):
+    """The master side of the REAPER project, by the same rules."""
+
+    _fields = MASTER_FIELDS
+
+
 class Layout:
-    def __init__(self, channels, addresses):
+    def __init__(self, channels, master, fx_slots, gain_params, addresses):
         self._channels = channels
+        self._master = master
+        self._fx_slots = fx_slots
+        self._gain_params = gain_params
         self._addresses = addresses
+
+    @property
+    def master(self):
+        return self._master
+
+    def fx_slot(self, name):
+        """Which FX slot on a track holds a given plugin.
+
+        Named rather than numbered at the call site: FX_INDEX_EQ = 2 said
+        where the EQ sits and nothing about why, and a slot that moves in the
+        project has to be found by reading every f-string that used it.
+        """
+        if name not in self._fx_slots:
+            raise LayoutError(f"no fx slot named {name}")
+        return int(self._fx_slots[name])
+
+    def gain_params(self, name):
+        """Which parameters of a gain plugin carry its value.
+
+        A gain plugin holds one value on several parameters at once, and the
+        list of which differs per bus. It was written out at four call sites
+        as a literal list in a for-loop.
+        """
+        if name not in self._gain_params:
+            raise LayoutError(f"no gain parameter list named {name}")
+        return list(self._gain_params[name])
 
     def channel(self, index):
         if index < 0 or index >= len(self._channels):
@@ -103,6 +151,12 @@ def load_layout(path):
         raise LayoutError(f"{path} is not JSON: {problem}") from problem
 
     channels = [Channel(entry) for entry in parsed.get("channels", [])]
-    addresses = dict(parsed.get("addresses", {}))
 
-    return Layout(channels, addresses)
+    if "master" not in parsed:
+        raise LayoutError(f"{path} has no master block")
+    master = Master(parsed["master"])
+
+    return Layout(channels, master,
+                  dict(parsed.get("fx_slots", {})),
+                  dict(parsed.get("gain_params", {})),
+                  dict(parsed.get("addresses", {})))

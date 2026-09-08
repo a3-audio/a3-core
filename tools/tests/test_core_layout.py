@@ -32,6 +32,10 @@ MINIMAL = json.dumps({
          "track_channelbus": 9, "track_pfl": 4, "enc_main_azimuth": 8,
          "enc_main_elevation": 9, "enc_phones_solo": 12}
     ],
+    # Master is required: defaulting those would drive tracks 0 and 0, on the
+    # master bus of all places.
+    "master": {"track_masterbus": 1, "track_booth": 2, "track_phones": 3,
+               "track_ph_mix": 8, "aux_return": 25},
     "addresses": {
         "reaper_track_volume": "/track/{track}/volume",
         "led_pfl": "/channel/{channel}/led/pfl",
@@ -53,8 +57,12 @@ class TrackMap(unittest.TestCase):
             layout.channel(3)
 
     def test_a_channel_missing_a_track_is_refused(self):
-        broken = json.dumps({"channels": [{"track_input": 12}],
-                             "addresses": {}})
+        broken = json.dumps({
+            "channels": [{"track_input": 12}],
+            "master": {"track_masterbus": 1, "track_booth": 2,
+                       "track_phones": 3, "track_ph_mix": 8,
+                       "aux_return": 25},
+            "addresses": {}})
         with self.assertRaises(LayoutError):
             load_layout(written(broken))
 
@@ -90,3 +98,51 @@ class BadFiles(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+FULL = json.dumps({
+    "channels": [
+        {"track_input": 12, "track_multi_enc": 11, "track_stereo_enc": 10,
+         "track_channelbus": 9, "track_pfl": 4, "enc_main_azimuth": 8,
+         "enc_main_elevation": 9, "enc_phones_solo": 12}
+    ],
+    "master": {"track_masterbus": 1, "track_booth": 2, "track_phones": 3,
+               "track_ph_mix": 8, "aux_return": 25},
+    "fx_slots": {"gain": 1, "eq": 2, "hipass": 3, "lopass": 4},
+    "gain_params": {"channelbus": [1, 15], "masterbus": [1, 15, 29]},
+    "addresses": {},
+})
+
+
+class TheRestOfTheMap(unittest.TestCase):
+    """Not everything in the REAPER project belongs to a channel."""
+
+    def setUp(self):
+        self.layout = load_layout(written(FULL))
+
+    def test_the_master_tracks_are_there(self):
+        self.assertEqual(self.layout.master.track_masterbus, 1)
+        self.assertEqual(self.layout.master.aux_return, 25)
+
+    def test_an_fx_slot_is_named_not_numbered_at_the_call_site(self):
+        # FX_INDEX_EQ = 2 said what slot the EQ is in and nothing about why.
+        self.assertEqual(self.layout.fx_slot("eq"), 2)
+
+    def test_an_fx_slot_nobody_named_is_an_error(self):
+        with self.assertRaises(LayoutError):
+            self.layout.fx_slot("reverb")
+
+    def test_the_gain_parameter_lists_come_through(self):
+        # A gain plugin has its value on several parameters at once; the list
+        # is which. Written out at four call sites before this.
+        self.assertEqual(self.layout.gain_params("channelbus"), [1, 15])
+
+    def test_a_gain_list_nobody_named_is_an_error(self):
+        with self.assertRaises(LayoutError):
+            self.layout.gain_params("nothing")
+
+    def test_a_missing_master_block_is_refused(self):
+        # Defaulting these would drive tracks 0 and 0 -- silently, and on the
+        # master bus of all places.
+        with self.assertRaises(LayoutError):
+            load_layout(written(json.dumps({"channels": [], "addresses": {}})))

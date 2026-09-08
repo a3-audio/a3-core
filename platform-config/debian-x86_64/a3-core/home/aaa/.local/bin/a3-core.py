@@ -41,18 +41,27 @@ from a3_core_layout import load_layout   # noqa: E402
 
 LAYOUT_PATH = (Path(__file__).resolve().parent.parent
                / "share/a3-core/layout.json")
+
+# Read once, at the top, because everything below is built out of it -- the FX
+# slot numbers, the master tracks and the per-channel ones. A layout that
+# cannot be read raises here and Core does not come up, which is the right
+# failure: coming up against the wrong tracks is worse than not coming up.
+_layout = load_layout(LAYOUT_PATH)
 from pythonosc.udp_client import SimpleUDPClient  # type: ignore
 
 OSC_PORT_CORE: int = 9000
 
-FX_INDEX_GAIN: int = 1
-FX_INDEX_EQ: int = 2
-FX_INDEX_EQ_ENC: int = 3
-FX_INDEX_HIPASS: int = 3
-FX_INDEX_LOPASS: int = 4
-FX_INDEX_CHANNEL_VOLUME: int = 1
-FX_INDEX_STEREO_ENC: int = 4
-FX_INDEX_ENC: int = 1
+# Which FX slot on a track holds which plugin. Out of the layout rather than
+# written here: a slot that moves in the REAPER project is a number to change
+# in one place, and the name says which plugin rather than only where it sits.
+FX_INDEX_GAIN: int = _layout.fx_slot("gain")
+FX_INDEX_EQ: int = _layout.fx_slot("eq")
+FX_INDEX_EQ_ENC: int = _layout.fx_slot("eq_enc")
+FX_INDEX_HIPASS: int = _layout.fx_slot("hipass")
+FX_INDEX_LOPASS: int = _layout.fx_slot("lopass")
+FX_INDEX_CHANNEL_VOLUME: int = _layout.fx_slot("channel_volume")
+FX_INDEX_STEREO_ENC: int = _layout.fx_slot("stereo_enc")
+FX_INDEX_ENC: int = _layout.fx_slot("enc")
 
 CHANNEL_ENC_MAIN: int = 26
 CHANNEL_ENC_PHONES: int = 27
@@ -68,20 +77,26 @@ udp_clients_iem = tuple(SimpleUDPClient('127.0.0.1', 1337 + index)
 
 @dataclass
 class MasterInfo:
-    track_masterbus: int = 1
-    track_booth: int = 2
-    
-    track_phones: int = 3
-    track_ph_mix: int = 8
-    
-    aux_return: int = 25
-    
+    # The track numbers come from the layout, the same way the channels' do;
+    # what is left here is the one thing that changes while it runs.
+    track_masterbus: int
+    track_booth: int
+    track_phones: int
+    track_ph_mix: int
+    aux_return: int
+
     class FXMode(Enum):
         LOW_PASS = 0
         HIGH_PASS = 1
     fx_mode: FXMode = FXMode.LOW_PASS
 
-master_info = MasterInfo()
+master_info = MasterInfo(
+    track_masterbus=_layout.master.track_masterbus,
+    track_booth=_layout.master.track_booth,
+    track_phones=_layout.master.track_phones,
+    track_ph_mix=_layout.master.track_ph_mix,
+    aux_return=_layout.master.aux_return,
+)
 
 @dataclass
 class ChannelInfo:
@@ -114,8 +129,6 @@ class ChannelInfo:
 # toggle_3d, toggle_fx, toggle_pfl and the cached elevation and width. A
 # number that describes the rig and a flag that describes the moment are two
 # different kinds of thing, and only one of them belongs in a file that ships.
-_layout = load_layout(LAYOUT_PATH)
-
 channel_infos = tuple(
     ChannelInfo(
         enc_main_azimuth=_layout.channel(index).enc_main_azimuth,
@@ -337,7 +350,7 @@ def osc_handler_channel(address: str,
     elif parameter == "volume":
         val = slope_volume(value)
         track_channelbus = channel_infos[channel_index].track_channelbus
-        for gain_vst_plugins_on_channelbus in [1, 15]:
+        for gain_vst_plugins_on_channelbus in _layout.gain_params("channelbus"):
             osc_reaper.send_message(
                 f"/track/{track_channelbus}/fx/1/fxparam/{gain_vst_plugins_on_channelbus}/value", val)
 
@@ -374,7 +387,7 @@ def osc_handler_channel(address: str,
         track_multi_enc = channel_infos[channel_index].track_multi_enc
         osc_val = 0.5 if is_enabled else 0.0
         osc_val_inverse = 0.5 if not is_enabled else 0.0
-        for gain_vst_plugins_on_channelbus in [1, 15]:
+        for gain_vst_plugins_on_channelbus in _layout.gain_params("channelbus"):
             osc_reaper.send_message(
                 f"/track/{track_stereo_enc}/fx/1/fxparam/{gain_vst_plugins_on_channelbus}/value",
                 osc_val
@@ -433,13 +446,13 @@ def osc_handler_master(address: str,
     if parameter == "volume":
         val = slope_volume(value)
         masterbus = master_info.track_masterbus
-        for gain_vst_plugins_on_masterbus in [1,15,29,43,57,71,85,99]:
+        for gain_vst_plugins_on_masterbus in _layout.gain_params("masterbus"):
             osc_reaper.send_message(f"/track/{masterbus}/fx/1/fxparam/{gain_vst_plugins_on_masterbus}/value", val)
 
     if parameter == "booth":
         val = slope_volume(value)
         boothbus = master_info.track_booth
-        for gain_vst_plugins_on_boothbus in [1,15,29,43,57,71,85,99]:
+        for gain_vst_plugins_on_boothbus in _layout.gain_params("boothbus"):
             osc_reaper.send_message(f"/track/{boothbus}/fx/1/fxparam/{gain_vst_plugins_on_boothbus}/value", val)
 
     if parameter == "phones_mix":
@@ -468,7 +481,7 @@ def osc_handler_master(address: str,
     elif parameter == "return":
         val = slope_constant_power(value)
         aux_return = master_info.aux_return
-        for gain_vst_plugins_on_return in [1,15,29,43,57,71,85,99]:
+        for gain_vst_plugins_on_return in _layout.gain_params("aux_return"):
             osc_reaper.send_message(f"/track/{aux_return}/fx/3/fxparam/{gain_vst_plugins_on_return}/value", val)
 
 def osc_handler_fx(address: str,

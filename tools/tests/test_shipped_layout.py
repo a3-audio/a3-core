@@ -71,3 +71,43 @@ class ShippedLayout(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheRestOfTheMap(unittest.TestCase):
+    """The FX slots and the gain parameter lists.
+
+    **These held against the source too, and could not keep doing it.** Both
+    the FX_INDEX_* constants and the four `for … in [1, 15, …]` loops were
+    compared against the layout while they were still literals; both were
+    verified to catch a wrong value ("9 != 2 : eq" and "[1, 15] != [1, 15, 29,
+    43, 57, 71, 85, 99]"). Then a3-core.py started reading them from the
+    layout and there was nothing left to compare to -- the same door the
+    track-number comparison went through one commit earlier.
+
+    One of the four gain lists was first written from memory and only checked
+    afterwards. It happened to be right. That is why they were pinned before
+    the literals went, rather than after.
+    """
+
+    def setUp(self):
+        self.layout = load_layout(PACKAGE / "share/a3-core/layout.json")
+
+    def test_every_slot_a3_core_asks_for_is_there(self):
+        # a3-core.py reads exactly these eight at import. One missing is a
+        # Core that does not start -- which is the right failure, but it
+        # should be found here.
+        for slot in ("gain", "eq", "eq_enc", "hipass", "lopass",
+                     "channel_volume", "stereo_enc", "enc"):
+            self.assertGreater(self.layout.fx_slot(slot), 0, slot)
+
+    def test_every_gain_list_a3_core_asks_for_is_there(self):
+        for name in ("channelbus", "masterbus", "boothbus", "aux_return"):
+            params = self.layout.gain_params(name)
+            self.assertTrue(params, name)
+            self.assertEqual(len(set(params)), len(params),
+                             f"{name} repeats a parameter: {params}")
+
+    def test_the_master_tracks_are_distinct(self):
+        from a3_core_layout import MASTER_FIELDS
+        used = [getattr(self.layout.master, f) for f in MASTER_FIELDS]
+        self.assertEqual(len(set(used)), len(used), used)

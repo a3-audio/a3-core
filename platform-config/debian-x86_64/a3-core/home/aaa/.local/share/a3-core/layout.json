@@ -56,5 +56,58 @@
       "track_channelbus": 21,
       "track_pfl": 7
     }
-  ]
+  ],
+  "master": {
+    "track_masterbus": 1,
+    "track_booth": 2,
+    "track_phones": 3,
+    "track_ph_mix": 8,
+    "aux_return": 25
+  },
+  "fx_slots": {
+    "gain": 1,
+    "eq": 2,
+    "eq_enc": 3,
+    "hipass": 3,
+    "lopass": 4,
+    "channel_volume": 1,
+    "stereo_enc": 4,
+    "enc": 1
+  },
+  "gain_params": {
+    "channelbus": [
+      1,
+      15
+    ],
+    "masterbus": [
+      1,
+      15,
+      29,
+      43,
+      57,
+      71,
+      85,
+      99
+    ],
+    "boothbus": [
+      1,
+      15,
+      29,
+      43,
+      57,
+      71,
+      85,
+      99
+    ],
+    "aux_return": [
+      1,
+      15,
+      29,
+      43,
+      57,
+      71,
+      85,
+      99
+    ]
+  }
 }
