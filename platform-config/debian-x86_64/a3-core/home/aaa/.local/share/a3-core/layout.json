@@ -1,0 +1,140 @@
+{
+  "_comment": [
+    "The map between an A3 channel and the REAPER project, plus the OSC",
+    "addresses this system speaks. Lifted out of a3-core.py, where both",
+    "were literals -- four records of eight track numbers, and forty-five",
+    "address templates with placeholders taken from them.",
+    "",
+    "It ships with the package, beside the REAPER project it has to agree",
+    "with, and an update replaces it. That is on purpose: a track number",
+    "that no longer matches the shipped project is worse than a lost local",
+    "edit. The files under /etc are the other case -- see",
+    "issues/a3-core-update-ueberschreibt-lokale-konfiguration.md.",
+    "",
+    "Channels are in order, one record each. Every field listed in",
+    "a3_core_layout.CHANNEL_FIELDS has to be there: a missing number would",
+    "read as track 0 and quietly drive whatever REAPER has there.",
+    "",
+    "addresses: five shapes, used twenty-seven times between them. What",
+    "differed between those twenty-seven was never the address -- it was the",
+    "VST parameter number, written out at the call site as 1, 6, 7, 8 or 15.",
+    "Those are fx_params, named for what they carry rather than where they",
+    "sit."
+  ],
+  "channels": [
+    {
+      "enc_main_azimuth": 8,
+      "enc_main_elevation": 9,
+      "enc_phones_solo": 12,
+      "track_input": 12,
+      "track_multi_enc": 11,
+      "track_stereo_enc": 10,
+      "track_channelbus": 9,
+      "track_pfl": 4
+    },
+    {
+      "enc_main_azimuth": 13,
+      "enc_main_elevation": 14,
+      "enc_phones_solo": 17,
+      "track_input": 16,
+      "track_multi_enc": 15,
+      "track_stereo_enc": 14,
+      "track_channelbus": 13,
+      "track_pfl": 5
+    },
+    {
+      "enc_main_azimuth": 18,
+      "enc_main_elevation": 19,
+      "enc_phones_solo": 22,
+      "track_input": 20,
+      "track_multi_enc": 19,
+      "track_stereo_enc": 18,
+      "track_channelbus": 17,
+      "track_pfl": 6
+    },
+    {
+      "enc_main_azimuth": 23,
+      "enc_main_elevation": 24,
+      "enc_phones_solo": 27,
+      "track_input": 24,
+      "track_multi_enc": 23,
+      "track_stereo_enc": 22,
+      "track_channelbus": 21,
+      "track_pfl": 7
+    }
+  ],
+  "master": {
+    "track_masterbus": 1,
+    "track_booth": 2,
+    "track_phones": 3,
+    "track_ph_mix": 8,
+    "aux_return": 25
+  },
+  "fx_slots": {
+    "gain": 1,
+    "eq": 2,
+    "eq_enc": 3,
+    "hipass": 3,
+    "lopass": 4,
+    "channel_volume": 1,
+    "stereo_enc": 4,
+    "enc": 1
+  },
+  "gain_params": {
+    "channelbus": [
+      1,
+      15
+    ],
+    "masterbus": [
+      1,
+      15,
+      29,
+      43,
+      57,
+      71,
+      85,
+      99
+    ],
+    "boothbus": [
+      1,
+      15,
+      29,
+      43,
+      57,
+      71,
+      85,
+      99
+    ],
+    "aux_return": [
+      1,
+      15,
+      29,
+      43,
+      57,
+      71,
+      85,
+      99
+    ]
+  },
+  "addresses": {
+    "fx_mode_led": "/fx/led",
+    "fx_param": "/track/{track}/fx/{slot}/fxparam/{param}/value",
+    "led_3d": "/channel/{channel}/led/3d",
+    "led_fx": "/channel/{channel}/led/fx",
+    "led_pfl": "/channel/{channel}/led/pfl",
+    "track_mute": "/track/{track}/mute",
+    "track_volume": "/track/{track}/volume"
+  },
+  "fx_params": {
+    "gain": 1,
+    "elevation": 8,
+    "eq_high": 1,
+    "eq_mid": 2,
+    "eq_low": 3,
+    "filter_frequency": 7,
+    "filter_resonance": 6,
+    "enc_pot_1": 1,
+    "enc_pot_2": 2,
+    "phones_volume": 1
+  }
+}
