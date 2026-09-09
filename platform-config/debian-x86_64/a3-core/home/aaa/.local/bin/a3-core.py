@@ -93,15 +93,14 @@ CHANNEL_ENC_PHONES: int = 27
 CHANNEL_ENC_DELAY: int = 25
 
 # OSC clients
-# Where the two devices live. Addresses rather than constants so this can be
-# run against a listener on a bench: without that the only way to see what
-# Core sends is to stand in front of the rig, and a path nobody can watch is a
-# path nobody can test.
+# Where the three destinations live. Named here rather than only inline so
+# all of them -- not just the two on the rig -- can be pointed at a listener
+# on a bench: without that the only way to see what Core sends is to stand in
+# front of the rig, and a path nobody can watch is a path nobody can test.
 A3MIXER_HOST, A3MIXER_PORT = '192.168.43.55', 7771
 A3MOTION_HOST, A3MOTION_PORT = '192.168.43.54', 8700
+REAPER_HOST, REAPER_PORT = '127.0.0.1', 9001
 
-osc_a3mixer = SimpleUDPClient(A3MIXER_HOST, A3MIXER_PORT)
-osc_a3motion = SimpleUDPClient(A3MOTION_HOST, A3MOTION_PORT)
 # What Core sends, remembered so the echo can be told from news.
 #
 # Wrapped rather than recorded at each of the thirty call sites: one place
@@ -110,22 +109,34 @@ echo_filter = EchoFilter()
 
 
 class WatchedClient:
-    """A client that remembers what it sent."""
+    """A client that remembers what it sent, and knows who it is.
 
-    def __init__(self, client):
+    The name is here so that one wrapper can say which destination a message
+    went to without the call sites repeating it. Every outgoing client is one
+    of these -- two kinds of client, where the caller has to know which one it
+    is holding, is a trap; and a tap that saw only some of them would answer
+    the question "is anything reaching the mixer?" with a confident no.
+    """
+
+    def __init__(self, client, name):
         self._client = client
+        self.name = name
 
     def send_message(self, address, value):
         echo_filter.sent(address, value)
         self._client.send_message(address, value)
 
 
-REAPER_HOST, REAPER_PORT = '127.0.0.1', 9001
+osc_a3mixer = WatchedClient(SimpleUDPClient(A3MIXER_HOST, A3MIXER_PORT),
+                            "mixer")
+osc_a3motion = WatchedClient(SimpleUDPClient(A3MOTION_HOST, A3MOTION_PORT),
+                             "motion")
+osc_reaper = WatchedClient(SimpleUDPClient(REAPER_HOST, REAPER_PORT),
+                           "reaper")
 
-osc_reaper = WatchedClient(SimpleUDPClient(REAPER_HOST, REAPER_PORT))
-
-udp_clients_iem = tuple(SimpleUDPClient('127.0.0.1', 1337 + index)
-                        for index in range(3))
+udp_clients_iem = tuple(
+    WatchedClient(SimpleUDPClient('127.0.0.1', 1337 + index), "iem")
+    for index in range(3))
 
 @dataclass
 class MasterInfo:
@@ -754,15 +765,13 @@ if __name__ == "__main__":
     for name, spec in (("mixer", args.mixer), ("motion", args.motion),
                        ("reaper", args.reaper)):
         host, _, port = spec.rpartition(":")
-        client = SimpleUDPClient(host, int(port))
+        client = WatchedClient(SimpleUDPClient(host, int(port)), name)
         if name == "mixer":
             osc_a3mixer = client
         elif name == "motion":
             osc_a3motion = client
         else:
-            # Still watched: the echo filter is the whole reason a bench run
-            # can show what the rig does.
-            osc_reaper = WatchedClient(client)
+            osc_reaper = client
 
     dispatcher = dispatcher.Dispatcher()
 
