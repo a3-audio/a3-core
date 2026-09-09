@@ -32,7 +32,7 @@ import numpy as np
 import time
 #import rtmidi
 import math
-from typing import List, Any
+from typing import List, Any, Tuple
 from enum import Enum
 from dataclasses import dataclass
 from pythonosc import dispatcher  # type: ignore
@@ -355,7 +355,7 @@ def param_handler(address: str,
     elif section.startswith("fx"):
         param_handler_fx(section, parameter, value)
 
-def osc_handler_channel(address: str,
+def osc_handler_channel(client_address: Tuple[str, int], address: str,
                         *osc_arguments: List[Any]) -> None:
 
     # The buttons below read the argument as it arrived rather than as a
@@ -544,7 +544,7 @@ def osc_handler_channel(address: str,
 
     remember_state()
 
-def osc_handler_master(address: str,
+def osc_handler_master(client_address: Tuple[str, int], address: str,
                        *osc_arguments: List[Any]) -> None:
 
     #  mypy 0.920 reports a false positive, retest!
@@ -597,7 +597,7 @@ def osc_handler_master(address: str,
         for gain_vst_plugins_on_return in _layout.gain_params("aux_return"):
             osc_reaper.send_message(f"/track/{aux_return}/fx/3/fxparam/{gain_vst_plugins_on_return}/value", val)
 
-def osc_handler_fx(address: str,
+def osc_handler_fx(client_address: Tuple[str, int], address: str,
                    *osc_arguments: List[Any]) -> None:
 
     value = osc_arguments[0]
@@ -656,7 +656,8 @@ def osc_handler_tap(address: str,
 OSC_ADDRESS_RECALL: str = "/state/recall"
 
 
-def osc_handler_recall(address: str, *osc_arguments: List[Any]) -> None:
+def osc_handler_recall(client_address: Tuple[str, int], address: str,
+                       *osc_arguments: List[Any]) -> None:
     """Say the whole state again, as the messages it would have arrived as.
 
     Sent to the device each value belongs to rather than back to whoever
@@ -684,7 +685,8 @@ _curves = load_curves(json.loads(CURVES_PATH.read_text()))
 _unhandled = Counter()
 
 
-def reaper_feedback_handler(address: str, *osc_arguments: List[Any]) -> None:
+def reaper_feedback_handler(client_address: Tuple[str, int], address: str,
+                            *osc_arguments: List[Any]) -> None:
     """One value REAPER reports, on its way back to the device that set it.
 
     Everything Core does not recognise is counted and left alone. That is most
@@ -775,10 +777,24 @@ if __name__ == "__main__":
 
     dispatcher = dispatcher.Dispatcher()
 
-    dispatcher.map("/channel/*", osc_handler_channel)
-    dispatcher.map("/master/*", osc_handler_master)
-    dispatcher.map("/fx/*", osc_handler_fx)
-    dispatcher.map(OSC_ADDRESS_RECALL, osc_handler_recall)
+    # needs_reply_address makes the dispatcher call
+    # handler(client_address, address, *args) instead of
+    # handler(address, *args). It is set on every map here, not only where
+    # the address is used: a handler whose signature depends on which of two
+    # ways it was mapped is a trap, and the window wants all of them.
+    #
+    # The address is (host, ephemeral_port). Only the host is any use for
+    # naming a sender: the client never binds, so the OS assigns its source
+    # port on the socket's first send and keeps it for that socket's life --
+    # stable, but unpredictable and carrying no identity of its own. Two
+    # senders on one host get two different ports that say "not the same
+    # sender" and never say which one. See a3_core_traffic.peer_name.
+    dispatcher.map("/channel/*", osc_handler_channel,
+                   needs_reply_address=True)
+    dispatcher.map("/master/*", osc_handler_master, needs_reply_address=True)
+    dispatcher.map("/fx/*", osc_handler_fx, needs_reply_address=True)
+    dispatcher.map(OSC_ADDRESS_RECALL, osc_handler_recall,
+                   needs_reply_address=True)
     #dispatcher.map("/tap", osc_handler_tap)
 
     # Motion-Controller
@@ -797,7 +813,8 @@ if __name__ == "__main__":
     # in on the main port: REAPER sends twenty-five thousand messages when the
     # surface reconnects, and a set does not wait for that.
     feedback_dispatcher = osc_dispatcher.Dispatcher()
-    feedback_dispatcher.set_default_handler(reaper_feedback_handler)
+    feedback_dispatcher.set_default_handler(reaper_feedback_handler,
+                                            needs_reply_address=True)
     feedback_server = osc_server.ThreadingOSCUDPServer(
         (args.ip, args.feedback_port), feedback_dispatcher)
     threading.Thread(target=feedback_server.serve_forever,
