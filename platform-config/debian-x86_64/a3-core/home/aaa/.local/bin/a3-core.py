@@ -45,6 +45,8 @@ from pythonosc import osc_server
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 from a3_core_layout import load_layout   # noqa: E402
 from a3_core_curves import CurveNotInvertible, invert, load_curves  # noqa: E402
+from a3_core_buttons import (NO_CHANGE, wanted_fx_mode,   # noqa: E402
+                             wanted_toggle)   # noqa: E402
 from a3_core_echo import EchoFilter   # noqa: E402
 from a3_core_reverse import reverse_for   # noqa: E402
 from a3_core_state import StateFile, apply_state, state_of   # noqa: E402
@@ -345,8 +347,14 @@ def param_handler(address: str,
 def osc_handler_channel(address: str,
                         *osc_arguments: List[Any]) -> None:
 
+    # The buttons below read the argument as it arrived rather than as a
+    # float, because its type is what tells the mixer's momentary edge from
+    # A3 Motion's state. Everything else here is continuous and wants the
+    # number. See a3_core_buttons.
+    raw: Any = osc_arguments[0]
+
     #  mypy 0.920 reports a false positive, retest!
-    value: float = float(osc_arguments[0])  # type: ignore
+    value: float = float(raw)  # type: ignore
     assert type(value) == float
 
     print(address + " : " + str(value))
@@ -446,46 +454,48 @@ def osc_handler_channel(address: str,
 
     # BUTTONS
 
-    elif parameter == "pfl" and value == 1:
-        channel_infos[channel_index].toggle_pfl = (
-            not channel_infos[channel_index].toggle_pfl)
-        track_pfl = channel_infos[channel_index].track_pfl
-        muted = not channel_infos[channel_index].toggle_pfl
-        osc_reaper.send_message(
-            f"/track/{track_pfl}/mute", float(muted))
-        osc_a3mixer.send_message(
-            *led_message(_layout, "pfl", channel_index,
-                         channel_infos[channel_index]))
-
-    elif parameter == "fx" and value == 1:
-        channel_infos[channel_index].toggle_fx = (
-            not channel_infos[channel_index].toggle_fx)
-        osc_a3mixer.send_message(
-            *led_message(_layout, "fx", channel_index,
-                         channel_infos[channel_index]))
-        set_filters()
-
-    elif parameter == "4d" and value == 1:
-        channel_infos[channel_index].toggle_3d = (
-            not channel_infos[channel_index].toggle_3d
-        )
-        is_enabled = channel_infos[channel_index].toggle_3d
-        osc_a3mixer.send_message(
-            *led_message(_layout, "3d", channel_index,
-                         channel_infos[channel_index]))
-        track_stereo_enc = channel_infos[channel_index].track_stereo_enc
-        track_multi_enc = channel_infos[channel_index].track_multi_enc
-        osc_val = 0.5 if is_enabled else 0.0
-        osc_val_inverse = 0.5 if not is_enabled else 0.0
-        for gain_vst_plugins_on_channelbus in _layout.gain_params("channelbus"):
+    elif parameter == "pfl":
+        wanted = wanted_toggle(raw, channel_infos[channel_index].toggle_pfl)
+        if wanted is not NO_CHANGE:
+            channel_infos[channel_index].toggle_pfl = wanted
+            track_pfl = channel_infos[channel_index].track_pfl
+            muted = not channel_infos[channel_index].toggle_pfl
             osc_reaper.send_message(
-                f"/track/{track_stereo_enc}/fx/1/fxparam/{gain_vst_plugins_on_channelbus}/value",
-                osc_val
+                f"/track/{track_pfl}/mute", float(muted))
+            osc_a3mixer.send_message(
+                *led_message(_layout, "pfl", channel_index,
+                             channel_infos[channel_index]))
+
+    elif parameter == "fx":
+        wanted = wanted_toggle(raw, channel_infos[channel_index].toggle_fx)
+        if wanted is not NO_CHANGE:
+            channel_infos[channel_index].toggle_fx = wanted
+            osc_a3mixer.send_message(
+                *led_message(_layout, "fx", channel_index,
+                             channel_infos[channel_index]))
+            set_filters()
+
+    elif parameter == "4d":
+        wanted = wanted_toggle(raw, channel_infos[channel_index].toggle_3d)
+        if wanted is not NO_CHANGE:
+            channel_infos[channel_index].toggle_3d = wanted
+            is_enabled = channel_infos[channel_index].toggle_3d
+            osc_a3mixer.send_message(
+                *led_message(_layout, "3d", channel_index,
+                             channel_infos[channel_index]))
+            track_stereo_enc = channel_infos[channel_index].track_stereo_enc
+            track_multi_enc = channel_infos[channel_index].track_multi_enc
+            osc_val = 0.5 if is_enabled else 0.0
+            osc_val_inverse = 0.5 if not is_enabled else 0.0
+            for gain_vst_plugins_on_channelbus in _layout.gain_params("channelbus"):
+                osc_reaper.send_message(
+                    f"/track/{track_stereo_enc}/fx/1/fxparam/{gain_vst_plugins_on_channelbus}/value",
+                    osc_val
+                )
+            osc_reaper.send_message(
+                f"/track/{track_multi_enc}/fx/1/fxparam/1/value",
+                osc_val_inverse
             )
-        osc_reaper.send_message(
-            f"/track/{track_multi_enc}/fx/1/fxparam/1/value",
-            osc_val_inverse
-        )
 
     # A3MOTION
 
@@ -587,8 +597,12 @@ def osc_handler_fx(address: str,
     parameter: str = words[2]
 
     if parameter == "mode":
-        high_pass = value == "high_pass"
-        master_info.fx_mode = MasterInfo.FXMode.HIGH_PASS if high_pass else MasterInfo.FXMode.LOW_PASS
+        # The mixer names the mode ("high_pass"), A3 Motion sends the number
+        # its own key reads (1 is HPF). What used to stand here compared
+        # against the word alone, so every number -- every message Motion has
+        # ever sent on this address -- meant LOW_PASS. See a3_core_buttons.
+        wanted = wanted_fx_mode(value, master_info.fx_mode.name.lower())
+        master_info.fx_mode = MasterInfo.FXMode[wanted.upper()]
         osc_a3mixer.send_message(
             _layout.address("fx_mode_led"),
             FX_MODE_WORDS[master_info.fx_mode.name])
