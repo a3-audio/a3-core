@@ -70,6 +70,7 @@
 <div class="bench">
   <select id="to">
     <option>mixer</option><option>motion</option><option>reaper</option>
+    <option>self</option>
   </select>
   <input id="address" placeholder="/channel/0/pfl" size="30">
   <input id="value" placeholder='1  oder  "1"' size="14">
@@ -113,10 +114,10 @@ const HISTORY_CAP = 10000;
 const $ = (id) => document.getElementById(id);
 
 // Everything drawn here arrived over OSC from three devices, and OSC has no
-// authentication. Right now that only means a hostile address or value could
-// render as markup; once Task 7's /api/send is wired into this page, a
-// script that got in this way could also drive the mixer, motion and REAPER.
-// Every network-controlled string is routed through this before it is
+// authentication. A hostile address or value could render as markup -- and
+// because /api/send is wired into this page (below), a script that got in
+// this way could also drive the mixer, motion and REAPER. Every
+// network-controlled string is routed through this before it is
 // concatenated into innerHTML or an attribute.
 function safe(text) {
   return String(text).replace(/[&<>"']/g, (c) => ({

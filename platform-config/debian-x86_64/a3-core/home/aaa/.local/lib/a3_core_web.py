@@ -1,7 +1,7 @@
 """A window onto what Core is passing about.
 
 Serves one page, a JSON snapshot, and a stream of snapshots at a fixed rate.
-It knows nothing about Core: it is handed a Traffic to read and, from Task 7,
+It knows nothing about Core: it is handed a Traffic to read and, optionally,
 something to send with. That is what makes it testable without opening an OSC
 port.
 
@@ -16,11 +16,14 @@ instead of throwing.
 """
 
 import json
+import math
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
+
+from pythonosc.osc_message_builder import BuildError  # type: ignore
 
 #: How often the stream pushes. Not per message: at a hundred messages a
 #: second, an event each would move the flood from the journal into the
@@ -42,11 +45,34 @@ def _jsonable(value: Any) -> Any:
 
     OSC carries blobs and python-osc hands them over as bytes; the type is
     reported separately, so turning one into its repr loses nothing a reader
-    needs and keeps the whole page from failing on one odd message.
+    needs. A non-finite float gets the same treatment: `json.dumps` would
+    otherwise emit a bare `NaN`/`Infinity`/`-Infinity`, which is not JSON --
+    Python's own `json.loads` accepts it as an extension, but a browser's
+    `JSON.parse` throws on it. `stream.onmessage` calls `JSON.parse`
+    unguarded and never evicts old rows, so one such value would throw on
+    every tick from then on, with the connection itself never failing --
+    a frozen table that looks live. Turning it into its repr here is what
+    actually keeps the whole page from failing on one odd message.
     """
-    if isinstance(value, (str, int, float, bool)) or value is None:
+    if isinstance(value, float):
+        return value if math.isfinite(value) else repr(value)
+    if isinstance(value, (str, int, bool)) or value is None:
         return value
     return repr(value)
+
+
+def _display_type(type_name: str) -> str:
+    """The type name shown in the table, collapsing one NumPy subtype.
+
+    `numpy.float64` subclasses `float` and serialises exactly like one --
+    Core only produces it because values bound for REAPER pass through
+    `np.interp`. The type column exists to tell a string "1" (the mixer's
+    momentary edge) from a float 1.0 (Motion's state); `float64` sitting
+    beside `float` beside `str` is noise in the one column this design
+    leans on hardest, not a message class of its own the way str vs float
+    actually is. The value itself is untouched -- only this label changes.
+    """
+    return "float" if type_name == "float64" else type_name
 
 
 def as_json(snapshot: Dict[str, Any],
@@ -83,6 +109,7 @@ def as_json(snapshot: Dict[str, Any],
     for row in snapshot["rows"]:
         out = dict(row)
         out["last_value"] = _jsonable(row["last_value"])
+        out["last_type"] = _display_type(row["last_type"])
         out["age"] = snapshot["at"] - row["last_seen"]
 
         was = before.get((row["direction"], row["address"]))
@@ -94,6 +121,7 @@ def as_json(snapshot: Dict[str, Any],
     for entry in snapshot["history"]:
         out = dict(entry)
         out["value"] = _jsonable(entry["value"])
+        out["type"] = _display_type(entry["type"])
         out["age"] = snapshot["at"] - entry["at"]
         history.append(out)
 
@@ -108,7 +136,11 @@ def parse_value(text: str) -> Any:
     Core tells the A3 Mixer's momentary edge from A3 Motion's state by the
     argument's type (a3_core_buttons). A bench that could only send numbers
     could only exercise half the rig. A bare word is text as well, which is
-    what /fx/mode wants -- `high_pass`.
+    what /fx/mode wants -- `high_pass`. So is anything else that is neither
+    quoted nor a parseable number, and that fallback is not neutral here: a
+    string reads as the mixer's momentary edge, not as an error. A mistyped
+    float (`1.2.3`) silently becomes that different message class instead of
+    being refused.
     """
     said = text.strip()
     if not said:
@@ -201,12 +233,22 @@ def _handler_class(traffic, send: Optional[Callable], page: Path):
             except KeyError:
                 refuse(f"unbekanntes Ziel: {to}")
                 return
-            except OSError as problem:
+            except (OSError, BuildError) as problem:
+                # BuildError is pythonosc's own -- a plain Exception, not an
+                # OSError -- raised for a value it cannot encode (an int
+                # outside int64's range, say). Without this, the refusal
+                # contract (400, nothing sent) is broken by a traceback
+                # through socketserver.handle_error and no HTTP response at
+                # all for exactly the input this endpoint exists to refuse.
                 refuse(str(problem))
                 return
 
+            # _jsonable, not the bare value: fire() in the page parses this
+            # response with response.json(), same as the stream, so a
+            # non-finite value typed into the bench would break that parse
+            # the same way it would have broken the stream.
             self._send(200, json.dumps({"address": address,
-                                        "value": value}).encode(),
+                                        "value": _jsonable(value)}).encode(),
                        "application/json")
 
         def _stream(self):

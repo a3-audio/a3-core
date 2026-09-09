@@ -53,7 +53,7 @@ from a3_core_state import StateFile, apply_state, state_of   # noqa: E402
 from a3_core_recall import (FX_MODE_WORDS, Relayed, led_message,   # noqa: E402
                             recall_messages)   # noqa: E402
 from a3_core_traffic import IN, OUT, Traffic, peer_name   # noqa: E402
-from a3_core_web import start_window   # noqa: E402
+from a3_core_web import start_window, window_address   # noqa: E402
 
 LAYOUT_PATH = (Path(__file__).resolve().parent.parent
                / "share/a3-core/layout.json")
@@ -107,6 +107,14 @@ REAPER_HOST, REAPER_PORT = '127.0.0.1', 9001
 #
 # Wrapped rather than recorded at each of the thirty call sites: one place
 # that cannot be forgotten when a thirty-first is added.
+#
+# Every WatchedClient feeds this now -- mixer, motion and the three IEM
+# clients besides REAPER, where before only REAPER's was wrapped. Nothing
+# reads it back except REAPER's own feedback port, so there is no live
+# collision today. But is_echo() does `abs(expected - value)`, and /fx/led
+# is stored with a string value -- so the day two destinations ever share an
+# address, this becomes a TypeError in the feedback thread rather than a
+# silently wrong comparison.
 echo_filter = EchoFilter()
 
 #: Every message Core has seen, for the window to read. One instance, at
@@ -689,6 +697,12 @@ def osc_handler_recall(client_address: Tuple[str, int], address: str,
     mixer *not* being told because Motion happened to be the one that asked
     would be a rig where two devices disagree and neither can find out.
     """
+    # The one address whose whole purpose is "did the other end come back?"
+    # -- if this is not tapped, a device returning after a drop is invisible
+    # in the window, which is exactly the case the window exists to show.
+    traffic.seen(IN, address, osc_arguments[0] if osc_arguments else None,
+                peer_name(client_address[0], PEER_HOSTS))
+
     messages = list(recall_messages(_layout, channel_infos, master_info,
                                     _relayed))
     for device, out, value in messages:
@@ -890,6 +904,11 @@ if __name__ == "__main__":
     #
     # "self" is Core's own port, which is how /state/recall is reached: it is
     # a message Core handles, not one it forwards.
+    #
+    # This branch bypasses WatchedClient on purpose, so it gets no
+    # echo_filter.sent() and no traffic.seen(OUT, ...): the message loops
+    # straight back into Core's own OSC port and is recorded there as IN --
+    # wrapping it here too would count the one message twice.
     def send_from_bench(to, address, value):
         if to == "self":
             SimpleUDPClient("127.0.0.1", args.port).send_message(
@@ -902,7 +921,12 @@ if __name__ == "__main__":
     # gets a line in the journal and the rig still makes sound.
     if not args.no_web:
         if start_window(traffic, args.web_bind, send=send_from_bench):
-            print(f"window on http://{args.web_bind}")
+            # window_address(), not args.web_bind: --web-bind accepts port 0
+            # to let the OS choose one, and printing the requested bind would
+            # then log "http://127.0.0.1:0" while the real port stays
+            # unknowable from the journal alone.
+            host, port = window_address()
+            print(f"window on http://{host}:{port}")
 
     server = osc_server.ThreadingOSCUDPServer((args.ip, args.port), dispatcher)
     print("Serving on {}".format(server.server_address))
