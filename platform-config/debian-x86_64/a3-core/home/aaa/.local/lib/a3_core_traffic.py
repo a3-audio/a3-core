@@ -52,6 +52,14 @@ def peer_name(host: str, peers: Dict[str, str]) -> str:
     nothing. On the rig the three devices are three hosts and this is exact.
     On a single box, where they share 127.0.0.1, it cannot tell them apart
     and says so rather than guessing: a wrong label is worse than none.
+
+    `peers` (`PEER_HOSTS` in a3-core.py) is built from the host part of
+    whatever was passed to --mixer/--motion/--reaper, taken as written on
+    the command line. If one of those is given as a hostname rather than an
+    IP, it is compared as text against the numeric address an incoming UDP
+    packet actually carries, and a hostname never equals an IP -- so that
+    peer never matches here and the table quietly falls back to showing the
+    raw address instead of the device name.
     """
     matches = sorted(name for name, at in peers.items() if at == host)
 
@@ -132,17 +140,31 @@ class Traffic:
         snapshot's `at` passes it here and gets only what happened since.
 
         The invariant `history_since` depends on: an entry belongs to this
-        snapshot's copy if and only if its own `at` is not greater than this
-        snapshot's `at`. That only holds if `at` is stamped here, inside the
-        lock, rather than after it -- otherwise `seen()` could append an
-        entry between this method releasing the lock and it stamping `at`
-        outside, and that entry would read as newer than a snapshot it is
-        actually part of, or be excluded from a copy taken before it existed
-        while carrying an `at` that is not later than that copy's. Either
-        way the next delta's cutoff would be wrong. Taking it as the first
-        thing inside the lock, matching `seen()`, ties the order of `at`
-        values to the order of lock acquisitions, which is the only
-        ordering that is actually true.
+        snapshot's copy if its own `at` is not greater than this snapshot's
+        `at`, and is excluded otherwise. That only holds if `at` is stamped
+        here, inside the lock, rather than after it -- otherwise `seen()`
+        could append an entry between this method releasing the lock and it
+        stamping `at` outside, and that entry would read as newer than a
+        snapshot it is actually part of, or be excluded from a copy taken
+        before it existed while carrying an `at` that is not later than that
+        copy's. Either way the next delta's cutoff would be wrong. Taking it
+        as the first thing inside the lock, matching `seen()`, ties the
+        order of `at` values to the order of lock acquisitions, which is the
+        only ordering that is actually true.
+
+        This does not make the two directions of that invariant equally
+        certain. "Excluded implies later" is exact -- `history_since`
+        compares with `>`. "Included implies not later" rests on an
+        assumption rather than a proof: it also requires that no entry's
+        `at` ever *ties* a snapshot's, since a tie would read as "later" to
+        `>` and drop that entry from every future delta. A tie needs two
+        `time.monotonic()` reads, separated by a lock acquire and release,
+        to return the identical value -- on Linux's nanosecond-resolution
+        monotonic clock that is not something a proof rules out, only
+        something this codebase has never observed. Making it exact would
+        mean cutting on a sequence number incremented inside the lock
+        instead of on a clock reading, which removes the assumption
+        entirely; deliberately not done here.
         """
         with self._lock:
             # Stamped inside the lock -- see the invariant explained above.
