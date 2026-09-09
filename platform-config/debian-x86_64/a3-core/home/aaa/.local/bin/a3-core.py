@@ -53,6 +53,7 @@ from a3_core_state import StateFile, apply_state, state_of   # noqa: E402
 from a3_core_recall import (FX_MODE_WORDS, Relayed, led_message,   # noqa: E402
                             recall_messages)   # noqa: E402
 from a3_core_traffic import IN, OUT, Traffic, peer_name   # noqa: E402
+from a3_core_web import start_window   # noqa: E402
 
 LAYOUT_PATH = (Path(__file__).resolve().parent.parent
                / "share/a3-core/layout.json")
@@ -793,6 +794,13 @@ if __name__ == "__main__":
                              "was 301,385 journal lines an hour on one "
                              "address alone, which is what made the journal "
                              "unsearchable.")
+    parser.add_argument("--web-bind", default="127.0.0.1:9080",
+                        help="host:port for the window. Localhost by "
+                             "default: a control surface with no login on "
+                             "the show network is not a default worth "
+                             "setting.")
+    parser.add_argument("--no-web", action="store_true",
+                        help="Do not open the window at all.")
     args = parser.parse_args()
 
     _print_osc = args.print_osc
@@ -874,6 +882,12 @@ if __name__ == "__main__":
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
+
+    # The window, if it will come. Its failure is not Core's: a busy port
+    # gets a line in the journal and the rig still makes sound.
+    if not args.no_web:
+        if start_window(traffic, args.web_bind):
+            print(f"window on http://{args.web_bind}")
 
     server = osc_server.ThreadingOSCUDPServer((args.ip, args.port), dispatcher)
     print("Serving on {}".format(server.server_address))
