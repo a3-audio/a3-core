@@ -14,6 +14,8 @@ import unittest
 import urllib.request
 from pathlib import Path
 
+import numpy   # already a project dependency, via a3-core.py's np.interp
+
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = (ROOT / "platform-config/debian-x86_64/a3-core"
            / "home/aaa/.local")
@@ -128,6 +130,38 @@ class EverythingSurvivesJsonDumps(unittest.TestCase):
         self.assertEqual(row["last_type"], "bytes")
         json.dumps(row)
 
+    def test_a_non_finite_float_survives_a_strict_parser(self):
+        """Python's own json.loads accepts a bare NaN/Infinity as an
+        extension, so a round trip through the lenient default would pass
+        even with the bug this guards against still live -- a browser's
+        JSON.parse has no such leniency and throws. parse_constant modeled
+        to raise, the way a strict parser would, is what actually proves the
+        page would not choke on this."""
+        traffic = Traffic()
+        traffic.seen(IN, "/a", float("nan"), "motion")
+        traffic.seen(IN, "/b", float("inf"), "motion")
+        traffic.seen(IN, "/c", float("-inf"), "motion")
+        text = json.dumps(as_json(traffic.snapshot(), None))
+
+        def reject_bare_constant(constant):
+            raise ValueError(f"not valid JSON: {constant}")
+
+        parsed = json.loads(text, parse_constant=reject_bare_constant)
+        values = {row["address"]: row["last_value"] for row in parsed["rows"]}
+        self.assertEqual(values["/a"], "nan")
+        self.assertEqual(values["/b"], "inf")
+        self.assertEqual(values["/c"], "-inf")
+
+    def test_a_numpy_float_reads_as_float_in_the_type_column(self):
+        """float64 subclasses float and serialises identically -- the type
+        column exists to tell "1" from 1.0, and float64 next to float next
+        to str is noise in that one column, not a distinct message class."""
+        traffic = Traffic()
+        traffic.seen(IN, "/a", numpy.float64(0.5), "motion")
+        row = as_json(traffic.snapshot(), None)["rows"][0]
+        self.assertEqual(row["last_type"], "float")
+        self.assertEqual(row["last_value"], 0.5)
+
 
 class TheServerAnswers(unittest.TestCase):
     def setUp(self):
@@ -205,27 +239,38 @@ class ABadBindDoesNotTakeCoreDown(unittest.TestCase):
         import socket
         from a3_core_web import stop_window
         try:
-            self.assertFalse(start_window(Traffic(), "9080"))
+            # 39080, not 9080: 9080 is this branch's own shipped --web-bind
+            # default. The moment the maintainer installs this branch and
+            # restarts the service, something *is* legitimately listening on
+            # 9080 -- and this test would fail for a reason that has nothing
+            # to do with the defect it guards. Both the malformed input and
+            # the "nothing is listening" check have to move off the shipped
+            # default, not just the check.
+            self.assertFalse(start_window(Traffic(), "39080"))
             with self.assertRaises(OSError):
-                socket.create_connection(("127.0.0.1", 9080), timeout=0.2)
+                socket.create_connection(("127.0.0.1", 39080), timeout=0.2)
         finally:
             stop_window()
 
     def test_a_colon_with_no_host_is_refused_too(self):
         """The other way to end up binding every interface.
 
-        `'9080'` is caught by the missing colon, so it never reaches the
+        `'39080'` is caught by the missing colon, so it never reaches the
         empty-host check -- and without a case that does reach it, deleting
-        that check would leave the suite green while `':9080'` bound
+        that check would leave the suite green while `':39080'` bound
         INADDR_ANY again. That is the defect this test exists to keep dead,
         not the return value.
         """
         import socket
         from a3_core_web import stop_window
         try:
-            self.assertFalse(start_window(Traffic(), ":9080"))
+            # See the sibling test above: 39080 rather than 9080, which this
+            # branch ships as --web-bind's own default and would otherwise
+            # have something legitimately listening on it by the time this
+            # test runs against an installed maintainer machine.
+            self.assertFalse(start_window(Traffic(), ":39080"))
             with self.assertRaises(OSError):
-                socket.create_connection(("127.0.0.1", 9080), timeout=0.2)
+                socket.create_connection(("127.0.0.1", 39080), timeout=0.2)
         finally:
             stop_window()
 

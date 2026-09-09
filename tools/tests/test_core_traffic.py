@@ -268,8 +268,12 @@ class ManyThreadsAtOnce(unittest.TestCase):
             for _ in range(50):
                 snapshot = traffic.snapshot()
                 self.assertLessEqual(len(snapshot["history"]), 10)
-                for row in snapshot["rows"]:
-                    self.assertIn("count", row)
+                # Every row is built with a "count" key at creation, so
+                # assertIn("count", row) could never go red -- it would pass
+                # even against a torn read. A counter a torn read left at
+                # zero is what would actually reveal the bug.
+                self.assertTrue(
+                    all(row["count"] > 0 for row in snapshot["rows"]))
         finally:
             stop.set()
             writer.join()
