@@ -796,9 +796,10 @@ if __name__ == "__main__":
                              "unsearchable.")
     parser.add_argument("--web-bind", default="127.0.0.1:9080",
                         help="host:port for the window. Localhost by "
-                             "default: a control surface with no login on "
-                             "the show network is not a default worth "
-                             "setting.")
+                             "default: the window can send OSC into a "
+                             "running rig, and a control surface with no "
+                             "login on the show network is not a default "
+                             "worth setting.")
     parser.add_argument("--no-web", action="store_true",
                         help="Do not open the window at all.")
     args = parser.parse_args()
@@ -883,10 +884,24 @@ if __name__ == "__main__":
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
 
+    # What the bench sends with. A function rather than the clients
+    # themselves, because --mixer and --motion rebind those at module scope
+    # and a captured reference would go on talking to the old address.
+    #
+    # "self" is Core's own port, which is how /state/recall is reached: it is
+    # a message Core handles, not one it forwards.
+    def send_from_bench(to, address, value):
+        if to == "self":
+            SimpleUDPClient("127.0.0.1", args.port).send_message(
+                address, value)
+            return
+        {"mixer": osc_a3mixer, "motion": osc_a3motion,
+         "reaper": osc_reaper}[to].send_message(address, value)
+
     # The window, if it will come. Its failure is not Core's: a busy port
     # gets a line in the journal and the rig still makes sound.
     if not args.no_web:
-        if start_window(traffic, args.web_bind):
+        if start_window(traffic, args.web_bind, send=send_from_bench):
             print(f"window on http://{args.web_bind}")
 
     server = osc_server.ThreadingOSCUDPServer((args.ip, args.port), dispatcher)

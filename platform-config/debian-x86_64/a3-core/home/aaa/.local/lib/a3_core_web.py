@@ -101,6 +101,32 @@ def as_json(snapshot: Dict[str, Any],
             "unhandled": snapshot["unhandled"], "full": previous is None}
 
 
+def parse_value(text: str) -> Any:
+    """What was typed into the bench, as the type it says it is.
+
+    `1` is a number and `"1"` is text, and in this rig that is not a detail:
+    Core tells the A3 Mixer's momentary edge from A3 Motion's state by the
+    argument's type (a3_core_buttons). A bench that could only send numbers
+    could only exercise half the rig. A bare word is text as well, which is
+    what /fx/mode wants -- `high_pass`.
+    """
+    said = text.strip()
+    if not said:
+        raise ValueError("nothing typed")
+
+    if len(said) >= 2 and said[0] == '"' and said[-1] == '"':
+        return said[1:-1]
+
+    try:
+        return int(said)
+    except ValueError:
+        pass
+    try:
+        return float(said)
+    except ValueError:
+        return said
+
+
 def _handler_class(traffic, send: Optional[Callable], page: Path):
 
     class Window(BaseHTTPRequestHandler):
@@ -142,6 +168,46 @@ def _handler_class(traffic, send: Optional[Callable], page: Path):
 
             else:
                 self._send(404, b"no such thing here", "text/plain")
+
+        def do_POST(self):
+            if self.path != "/api/send":
+                self._send(404, b"no such thing here", "text/plain")
+                return
+
+            def refuse(why):
+                self._send(400, json.dumps({"problem": why}).encode(),
+                           "application/json")
+
+            if send is None:
+                refuse("dieses Fenster kann nur zusehen")
+                return
+
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                asked = json.loads(self.rfile.read(length))
+                address = str(asked["address"]).strip()
+                to = str(asked["to"])
+                value = parse_value(str(asked["value"]))
+            except (ValueError, KeyError, TypeError) as problem:
+                refuse(str(problem))
+                return
+
+            if not address.startswith("/"):
+                refuse("eine Adresse fängt mit / an")
+                return
+
+            try:
+                send(to, address, value)
+            except KeyError:
+                refuse(f"unbekanntes Ziel: {to}")
+                return
+            except OSError as problem:
+                refuse(str(problem))
+                return
+
+            self._send(200, json.dumps({"address": address,
+                                        "value": value}).encode(),
+                       "application/json")
 
         def _stream(self):
             self.send_response(200)

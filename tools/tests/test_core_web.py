@@ -237,5 +237,131 @@ class ABadBindDoesNotTakeCoreDown(unittest.TestCase):
             stop_window()
 
 
+class ReadingWhatWasTyped(unittest.TestCase):
+    """A number and a quoted number are different messages.
+
+    Core tells the A3 Mixer's momentary edge from A3 Motion's state by the
+    argument's type (see a3_core_buttons), so a bench that could only send
+    numbers could not exercise half the rig.
+    """
+
+    def test_a_bare_number_is_a_number(self):
+        from a3_core_web import parse_value
+        self.assertEqual(parse_value("1"), 1)
+        self.assertIsInstance(parse_value("1"), int)
+        self.assertEqual(parse_value("0.5"), 0.5)
+        self.assertEqual(parse_value("-180"), -180)
+
+    def test_a_quoted_number_is_text(self):
+        from a3_core_web import parse_value
+        self.assertEqual(parse_value('"1"'), "1")
+        self.assertIsInstance(parse_value('"1"'), str)
+
+    def test_a_bare_word_is_text(self):
+        from a3_core_web import parse_value
+        self.assertEqual(parse_value("high_pass"), "high_pass")
+
+    def test_surrounding_space_does_not_change_the_type(self):
+        from a3_core_web import parse_value
+        self.assertEqual(parse_value("  1  "), 1)
+
+    def test_nothing_typed_is_an_error_not_an_empty_string(self):
+        from a3_core_web import parse_value
+        with self.assertRaises(ValueError):
+            parse_value("   ")
+
+
+class TheBenchSends(unittest.TestCase):
+    def setUp(self):
+        self.sent = []
+        self.traffic = Traffic()
+
+        # A stand-in for Core's send_from_bench, not a bare accept-anything
+        # lambda: the contract in the brief is that `send` raises KeyError
+        # for an unknown `to`, and test_an_unknown_destination_sends_nothing
+        # below exercises exactly that. A fake that appended regardless of
+        # `to` would let that test's "nothing was sent" assertion pass by
+        # accident, without the handler's own refusal path ever running.
+        def fake_send(to, address, value):
+            if to not in ("mixer", "motion", "reaper", "self"):
+                raise KeyError(to)
+            self.sent.append((to, address, value))
+
+        self.assertTrue(start_window(
+            self.traffic, "127.0.0.1:0", send=fake_send))
+
+    def tearDown(self):
+        from a3_core_web import stop_window
+        stop_window()
+
+    def post(self, payload):
+        from a3_core_web import window_address
+        host, port = window_address()
+        request = urllib.request.Request(
+            f"http://{host}:{port}/api/send",
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST")
+        return urllib.request.urlopen(request, timeout=5)
+
+    def test_a_number_arrives_as_a_number(self):
+        with self.post({"to": "mixer", "address": "/channel/0/pfl",
+                        "value": "1"}) as answer:
+            self.assertEqual(answer.status, 200)
+        self.assertEqual(self.sent, [("mixer", "/channel/0/pfl", 1)])
+
+    def test_a_quoted_number_arrives_as_text(self):
+        self.post({"to": "mixer", "address": "/channel/0/pfl",
+                   "value": '"1"'})
+        self.assertEqual(self.sent, [("mixer", "/channel/0/pfl", "1")])
+
+    def test_an_empty_address_sends_nothing(self):
+        import urllib.error
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.post({"to": "mixer", "address": "", "value": "1"})
+        self.assertEqual(caught.exception.code, 400)
+        self.assertEqual(self.sent, [])
+
+    def test_a_body_that_is_not_json_sends_nothing(self):
+        import urllib.error
+        from a3_core_web import window_address
+        host, port = window_address()
+        request = urllib.request.Request(
+            f"http://{host}:{port}/api/send", data=b"not json at all",
+            headers={"Content-Type": "application/json"}, method="POST")
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            urllib.request.urlopen(request, timeout=5)
+        self.assertEqual(caught.exception.code, 400)
+        self.assertEqual(self.sent, [])
+
+    def test_an_unknown_destination_sends_nothing(self):
+        import urllib.error
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.post({"to": "nowhere", "address": "/a", "value": "1"})
+        self.assertEqual(caught.exception.code, 400)
+        self.assertEqual(self.sent, [])
+
+
+class AWindowWithNothingToSendWith(unittest.TestCase):
+    def test_posting_to_a_read_only_window_is_refused_not_a_crash(self):
+        """start_window's `send` is optional, and Task 5 shipped without it."""
+        import urllib.error
+        from a3_core_web import stop_window, window_address
+
+        self.assertTrue(start_window(Traffic(), "127.0.0.1:0"))
+        try:
+            host, port = window_address()
+            request = urllib.request.Request(
+                f"http://{host}:{port}/api/send",
+                data=json.dumps({"to": "mixer", "address": "/a",
+                                 "value": "1"}).encode(),
+                headers={"Content-Type": "application/json"}, method="POST")
+            with self.assertRaises(urllib.error.HTTPError) as caught:
+                urllib.request.urlopen(request, timeout=5)
+            self.assertEqual(caught.exception.code, 400)
+        finally:
+            stop_window()
+
+
 if __name__ == "__main__":
     unittest.main()
