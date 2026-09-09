@@ -3,8 +3,14 @@
 Core routes OSC between three devices over UDP, and UDP never answers. A
 sender shouting into a dead port looks exactly like one that arrives; that is
 how A3 Motion's mixer sent its fifteen addresses to the beat-analyzer for two
-days without anyone seeing it. This is the thing that would have shown it, in
-one line: a row saying the address had been seen zero times.
+days without anyone seeing it. This is the thing that would have shown it --
+not a row saying zero, but an absence: `seen()` creates a row and increments
+it in the same step, so an address nobody has sent has no row at all. The
+table would read `/channel/0/azimuth` at 301,385 with `/channel/0/gain`
+missing entirely rather than sitting at 0. An absence is harder to notice
+than a zero would have been; showing "expected but never seen" would need a
+list of expected addresses (`layout.json`, `OscAddresses.hh`) that this
+feature does not have.
 
 It is deliberately dull. `seen()` runs about a hundred times a second, so it
 does a dict update and appends to a bounded ring, and that is all. No
