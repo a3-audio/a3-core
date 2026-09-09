@@ -1,5 +1,236 @@
 <!doctype html>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>A³ Core — Fenster</title>
-<h1>A³ Core</h1>
-<table><tr><th>Adresse</th></tr></table>
+<style>
+  /* A bench tool: dense, monospaced, everything on one screen. It is read
+     while something is broken, at a desk, not from two metres away. */
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 12px; background: #14161a; color: #d8dee9;
+         font: 13px/1.45 ui-monospace, "DejaVu Sans Mono", monospace; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em;
+       color: #8b93a1; margin: 18px 0 6px; font-weight: 600; }
+  table { border-collapse: collapse; width: 100%; }
+  th { text-align: left; color: #8b93a1; font-weight: 600;
+       border-bottom: 1px solid #2b303b; padding: 3px 8px 3px 0; }
+  td { padding: 2px 8px 2px 0; border-bottom: 1px solid #1c2027;
+       white-space: nowrap; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.picked { background: #22303f; }
+  tbody tr:hover { background: #1b2029; cursor: pointer; }
+  .peers { display: flex; gap: 22px; flex-wrap: wrap; margin-bottom: 4px; }
+  .peer { display: flex; align-items: center; gap: 7px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #4b5162; }
+  .live .dot { background: #7ee081; }
+  .stale .dot { background: #e0c97e; }
+  .dead .dot { background: #4b5162; }
+  .muted { color: #6b7280; }
+  .in { color: #7ee081; }
+  .out { color: #7eb6e0; }
+  .type { color: #6b7280; font-size: 11px; }
+  input, select, button { background: #1c2027; color: #d8dee9;
+       border: 1px solid #2b303b; border-radius: 3px; padding: 4px 7px;
+       font: inherit; }
+  button { cursor: pointer; }
+  button:hover { background: #262c37; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .bench { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+  #benchsaid { margin-left: 6px; }
+  @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+</style>
+
+<div class="peers" id="peers"></div>
+
+<h2>Adressen</h2>
+<div class="bench" style="margin-bottom:6px">
+  <input id="filter" placeholder="filtern …" size="28">
+  <label><input type="checkbox" id="onlyactive"> nur aktive</label>
+  <span class="muted" id="status">verbinde …</span>
+</div>
+<table>
+  <thead><tr>
+    <th></th><th>Adresse</th><th class="num">Anzahl</th><th class="num">/s</th>
+    <th>letzter Wert</th><th>Gegenstelle</th><th class="num">zuletzt</th>
+  </tr></thead>
+  <tbody id="rows"></tbody>
+</table>
+
+<div class="cols">
+  <div>
+    <h2>Verlauf <span class="muted" id="pickedname"></span></h2>
+    <table><tbody id="history"></tbody></table>
+  </div>
+  <div>
+    <h2>Nicht behandelt</h2>
+    <table><tbody id="unhandled"></tbody></table>
+  </div>
+</div>
+
+<h2>Prüfstand</h2>
+<div class="bench">
+  <select id="to">
+    <option>mixer</option><option>motion</option><option>reaper</option>
+  </select>
+  <input id="address" placeholder="/channel/0/pfl" size="30">
+  <input id="value" placeholder='1  oder  "1"' size="14">
+  <button id="fire">senden</button>
+  <button id="recall">/state/recall</button>
+  <span id="benchsaid" class="muted"></span>
+</div>
+
+<script>
+"use strict";
+
+// The one thing the page decides for itself: what "silent" means. Six
+// seconds is long enough that a slow control does not blink amber, short
+// enough that a device which has stopped is obvious before you look away.
+const STALE_AFTER = 6;
+const DEAD_AFTER = 60;
+
+let picked = null;      // "direction address", or null for everything
+let latest = null;
+
+const $ = (id) => document.getElementById(id);
+
+function ageText(seconds) {
+  if (seconds === null || seconds === undefined) return "–";
+  if (seconds < 1) return "gerade";
+  if (seconds < 90) return Math.round(seconds) + " s";
+  if (seconds < 5400) return Math.round(seconds / 60) + " min";
+  return Math.round(seconds / 3600) + " h";
+}
+
+function valueText(row) {
+  // The type is shown because in this rig it carries meaning: a string "1"
+  // is the mixer's momentary edge, a float 1.0 is Motion's state.
+  if (row.last_value === null) return "–";
+  const shown = row.last_type === "str"
+    ? JSON.stringify(row.last_value) : String(row.last_value);
+  return shown + ' <span class="type">' + row.last_type + "</span>";
+}
+
+function drawPeers(rows) {
+  const seen = new Map();
+  for (const row of rows) {
+    const age = seen.get(row.peer);
+    if (age === undefined || row.age < age) seen.set(row.peer, row.age);
+  }
+  const names = [...seen.keys()].sort();
+  $("peers").innerHTML = names.map((name) => {
+    const age = seen.get(name);
+    const state = age < STALE_AFTER ? "live"
+                : age < DEAD_AFTER ? "stale" : "dead";
+    return '<div class="peer ' + state + '"><span class="dot"></span>' +
+           '<span>' + name + '</span>' +
+           '<span class="muted">' + ageText(age) + "</span></div>";
+  }).join("") || '<span class="muted">noch nichts gesehen</span>';
+}
+
+function drawRows(rows) {
+  const needle = $("filter").value.trim();
+  const onlyActive = $("onlyactive").checked;
+
+  const shown = rows
+    .filter((row) => !needle || row.address.includes(needle))
+    .filter((row) => !onlyActive || row.age < STALE_AFTER)
+    .sort((a, b) => b.count - a.count);
+
+  $("rows").innerHTML = shown.map((row) => {
+    const key = row.direction + " " + row.address;
+    const arrow = row.direction === "in"
+      ? '<span class="in">↓</span>' : '<span class="out">↑</span>';
+    return '<tr data-key="' + key + '"' +
+      (key === picked ? ' class="picked"' : "") + ">" +
+      "<td>" + arrow + "</td>" +
+      "<td>" + row.address + "</td>" +
+      '<td class="num">' + row.count + "</td>" +
+      '<td class="num">' + (row.rate === null ? "–" : row.rate.toFixed(1)) +
+      "</td>" +
+      "<td>" + valueText(row) + "</td>" +
+      '<td class="muted">' + row.peer + "</td>" +
+      '<td class="num muted">' + ageText(row.age) + "</td></tr>";
+  }).join("");
+
+  for (const tr of $("rows").children) {
+    tr.onclick = () => {
+      picked = picked === tr.dataset.key ? null : tr.dataset.key;
+      $("pickedname").textContent = picked ? "— " + picked : "";
+      if (latest) draw(latest);
+    };
+  }
+}
+
+function drawHistory(history) {
+  // Only the tail, and only what is picked. The ring holds ten thousand;
+  // pouring those into the DOM would be the same flood in another window.
+  const shown = history
+    .filter((e) => !picked || picked === e.direction + " " + e.address)
+    .slice(-120).reverse();
+
+  $("history").innerHTML = shown.map((e) => {
+    const arrow = e.direction === "in"
+      ? '<span class="in">↓</span>' : '<span class="out">↑</span>';
+    const value = e.type === "str" ? JSON.stringify(e.value) : String(e.value);
+    return "<tr><td class='num muted'>" + ageText(e.age) + "</td><td>" +
+      arrow + '</td><td class="muted">' + e.peer + "</td><td>" +
+      e.address + "</td><td>" + value +
+      ' <span class="type">' + e.type + "</span></td></tr>";
+  }).join("") || '<tr><td class="muted">nichts</td></tr>';
+}
+
+function drawUnhandled(unhandled) {
+  const entries = Object.entries(unhandled).sort((a, b) => b[1] - a[1]);
+  $("unhandled").innerHTML = entries.slice(0, 40).map(
+    ([address, count]) =>
+      "<tr><td>" + address + '</td><td class="num">' + count + "</td></tr>"
+  ).join("") || '<tr><td class="muted">nichts</td></tr>';
+}
+
+function draw(payload) {
+  latest = payload;
+  drawPeers(payload.rows);
+  drawRows(payload.rows);
+  drawHistory(payload.history);
+  drawUnhandled(payload.unhandled);
+}
+
+function listen() {
+  const stream = new EventSource("/api/stream");
+  stream.onmessage = (event) => {
+    $("status").textContent = "";
+    draw(JSON.parse(event.data));
+  };
+  stream.onerror = () => {
+    $("status").textContent = "Verbindung weg — versuche es weiter";
+    // EventSource reconnects on its own; saying so beats a dead page.
+  };
+}
+
+$("filter").oninput = () => { if (latest) draw(latest); };
+$("onlyactive").onchange = () => { if (latest) draw(latest); };
+
+async function fire(to, address, raw) {
+  const said = $("benchsaid");
+  try {
+    const answer = await fetch("/api/send", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({to: to, address: address, value: raw})
+    });
+    const body = await answer.json();
+    said.textContent = answer.ok
+      ? "gesendet: " + body.address + " " + JSON.stringify(body.value)
+      : "ging nicht: " + body.problem;
+  } catch (problem) {
+    said.textContent = "ging nicht: " + problem;
+  }
+}
+
+$("fire").onclick = () =>
+  fire($("to").value, $("address").value, $("value").value);
+
+// The most-typed one-liner of the whole project, as a button.
+$("recall").onclick = () => fire("self", "/state/recall", "1");
+
+listen();
+</script>
