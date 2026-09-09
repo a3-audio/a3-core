@@ -52,6 +52,7 @@ from a3_core_reverse import reverse_for   # noqa: E402
 from a3_core_state import StateFile, apply_state, state_of   # noqa: E402
 from a3_core_recall import (FX_MODE_WORDS, Relayed, led_message,   # noqa: E402
                             recall_messages)   # noqa: E402
+from a3_core_traffic import IN, OUT, Traffic, peer_name   # noqa: E402
 
 LAYOUT_PATH = (Path(__file__).resolve().parent.parent
                / "share/a3-core/layout.json")
@@ -107,6 +108,20 @@ REAPER_HOST, REAPER_PORT = '127.0.0.1', 9001
 # that cannot be forgotten when a thirty-first is added.
 echo_filter = EchoFilter()
 
+#: Every message Core has seen, for the window to read. One instance, at
+#: module scope, because the handlers are module-level functions and there is
+#: no object here to hang it on.
+traffic = Traffic()
+
+#: Which host is which device, for naming an incoming message's sender.
+#: Rebuilt from the arguments below, since --mixer, --motion and --reaper can
+#: each be pointed somewhere else for a bench run.
+PEER_HOSTS = {"mixer": A3MIXER_HOST, "motion": A3MOTION_HOST,
+              "reaper": REAPER_HOST}
+
+#: Whether to also print every message. See --print-osc.
+_print_osc = False
+
 
 class WatchedClient:
     """A client that remembers what it sent, and knows who it is.
@@ -124,6 +139,7 @@ class WatchedClient:
 
     def send_message(self, address, value):
         echo_filter.sent(address, value)
+        traffic.seen(OUT, address, value, self.name)
         self._client.send_message(address, value)
 
 
@@ -368,7 +384,9 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
     value: float = float(raw)  # type: ignore
     assert type(value) == float
 
-    print(address + " : " + str(value))
+    traffic.seen(IN, address, raw, peer_name(client_address[0], PEER_HOSTS))
+    if _print_osc:
+        print(address + " : " + str(value))
 
     words: List[str] = address.split("/")
     channel: str = words[2]
@@ -551,7 +569,10 @@ def osc_handler_master(client_address: Tuple[str, int], address: str,
     value: float = float(osc_arguments[0])  # type: ignore
     assert type(value) == float
 
-    print(address + " : " + str(value))
+    traffic.seen(IN, address, osc_arguments[0],
+                peer_name(client_address[0], PEER_HOSTS))
+    if _print_osc:
+        print(address + " : " + str(value))
 
     words: List[str] = address.split("/")
     parameter: str = words[2]
@@ -602,7 +623,9 @@ def osc_handler_fx(client_address: Tuple[str, int], address: str,
 
     value = osc_arguments[0]
 
-    print(address + " : " + str(value))
+    traffic.seen(IN, address, value, peer_name(client_address[0], PEER_HOSTS))
+    if _print_osc:
+        print(address + " : " + str(value))
 
     words: List[str] = address.split("/")
     parameter: str = words[2]
@@ -707,32 +730,39 @@ def reaper_feedback_handler(client_address: Tuple[str, int], address: str,
     if echo_filter.is_echo(address, value):
         return
 
+    traffic.seen(IN, address, value, peer_name(client_address[0], PEER_HOSTS))
+
     parts = address.strip("/").split("/")
     if len(parts) < 2 or parts[0] != "track":
         _unhandled[address] += 1
+        traffic.unhandled(address)
         return
 
     try:
         track = int(parts[1])
     except ValueError:
         _unhandled[address] += 1
+        traffic.unhandled(address)
         return
 
     role = _layout.track_role(track)
     if role is None:
         _unhandled[address] += 1   # master, or a track A3 does not name
+        traffic.unhandled(address)
         return
 
     channel_index, field = role
     entry = reverse_for(_layout, address, field)
     if entry is None:
         _unhandled[address] += 1
+        traffic.unhandled(address)
         return
 
     try:
         a3_value = invert(_curves[entry.curve], value)
     except (CurveNotInvertible, KeyError):
         _unhandled[address] += 1
+        traffic.unhandled(address)
         return
 
     out = _layout.address("channel_control", channel=channel_index,
@@ -757,7 +787,19 @@ if __name__ == "__main__":
                         help="host:port of REAPER's OSC input. Point it "
                              "somewhere else to exercise this without "
                              "driving the rig.")
+    parser.add_argument("--print-osc", action="store_true",
+                        help="Also print every message, the way Core did "
+                             "before the window existed. Off by default: it "
+                             "was 301,385 journal lines an hour on one "
+                             "address alone, which is what made the journal "
+                             "unsearchable.")
     args = parser.parse_args()
+
+    _print_osc = args.print_osc
+
+    PEER_HOSTS = {"mixer": args.mixer.rpartition(":")[0],
+                  "motion": args.motion.rpartition(":")[0],
+                  "reaper": args.reaper.rpartition(":")[0]}
 
     # Pointed somewhere else for a bench run. Rebound at module scope, which
     # is where the handlers read them -- there is no main() here, the argument
