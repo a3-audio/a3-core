@@ -120,6 +120,69 @@ class TheRingHoldsItsBound(unittest.TestCase):
         self.assertEqual(traffic.snapshot()["rows"][0]["count"], 50)
 
 
+class ChainedDeltasLoseAndDuplicateNothing(unittest.TestCase):
+    """The delta stream's whole invariant: an entry belongs to a snapshot's
+    copy if and only if its own `at` is not greater than that snapshot's
+    `at`. `seen()` and `snapshot()` both stamp `at` as the first thing
+    inside the shared lock so that the order of `at` values matches the
+    order of lock acquisitions -- without that, a snapshot can stamp `at`
+    before an entry that was appended a moment later, and that entry then
+    reads as "already sent" to every future cutoff without ever having been
+    sent at all."""
+
+    def test_the_union_of_every_delta_is_everything_written_once_each(self):
+        writers = 8
+        writes_each = 200
+        total = writers * writes_each
+        # Comfortably above `total` so the ring never evicts anything here --
+        # this test is about the delta race, not about ring size.
+        traffic = Traffic(history=total + 100)
+
+        counter_lock = threading.Lock()
+        counter = [0]
+
+        def next_id():
+            with counter_lock:
+                counter[0] += 1
+                return counter[0]
+
+        def hammer():
+            for _ in range(writes_each):
+                traffic.seen(IN, "/a/0", next_id(), "motion")
+
+        writer_threads = [threading.Thread(target=hammer)
+                          for _ in range(writers)]
+
+        collected = []
+        stop = threading.Event()
+
+        def consume():
+            since = None
+            while not stop.is_set():
+                snap = traffic.snapshot(history_since=since)
+                collected.extend(entry["value"] for entry in snap["history"])
+                since = snap["at"]
+            # One more pass after the writers are confirmed joined, to pick
+            # up whatever landed between the last loop iteration and stop().
+            snap = traffic.snapshot(history_since=since)
+            collected.extend(entry["value"] for entry in snap["history"])
+
+        consumer = threading.Thread(target=consume)
+        consumer.start()
+        for thread in writer_threads:
+            thread.start()
+        for thread in writer_threads:
+            thread.join()
+        stop.set()
+        consumer.join()
+
+        # Sorted equality catches both a gap (a value missing) and a
+        # duplicate (a value appearing twice, which would make the sorted
+        # list longer than range(1, total + 1) even if every value is
+        # present).
+        self.assertEqual(sorted(collected), list(range(1, total + 1)))
+
+
 class TheReaderComputesTheRate(unittest.TestCase):
     def test_two_snapshots_carry_what_a_rate_needs(self):
         traffic = Traffic()
@@ -131,6 +194,33 @@ class TheReaderComputesTheRate(unittest.TestCase):
         self.assertGreater(second["at"], first["at"])
         self.assertEqual(second["rows"][0]["count"], 10)
         self.assertEqual(first["rows"], [])
+
+
+class HistorySinceMakesTheStreamACheapDelta(unittest.TestCase):
+    """A stream ticking four times a second must not resend the whole ring
+    every tick -- that is a bigger flood than the one this feature replaces.
+    `history_since` is how a caller who already has an earlier `at` asks for
+    only what is new. Rows and unhandled stay whole regardless: there are
+    only a few hundred addresses, and the reader needs their current totals,
+    not a delta."""
+
+    def test_the_cutoff_splits_history_but_leaves_rows_and_unhandled_whole(
+            self):
+        traffic = Traffic()
+        traffic.seen(IN, "/a/0", 1, "motion")
+        traffic.unhandled("/track/3/name")
+        cutoff = traffic.snapshot()["at"]
+        traffic.seen(IN, "/a/0", 2, "motion")
+        traffic.seen(IN, "/a/1", 3, "motion")
+
+        since_cutoff = traffic.snapshot(history_since=cutoff)
+        self.assertEqual([e["address"] for e in since_cutoff["history"]],
+                         ["/a/0", "/a/1"])
+        self.assertEqual(since_cutoff["rows"][0]["count"], 2)
+        self.assertEqual(since_cutoff["unhandled"], {"/track/3/name": 1})
+
+        whole = traffic.snapshot()
+        self.assertEqual(len(whole["history"]), 3)
 
 
 class TheUnhandledAreVisible(unittest.TestCase):

@@ -59,6 +59,18 @@ def as_json(snapshot: Dict[str, Any],
     -- gets None rather than 0. Zero would read as "nothing is arriving",
     which is a much louder claim than "not known yet", and this window is for
     telling those two apart.
+
+    `full` tells the page whether `history` is the complete ring or only
+    what happened since `previous`. `_stream()` calls `traffic.snapshot()`
+    with `history_since=None` exactly when it has no `previous` to give a
+    cutoff from -- the first tick of a connection -- so `previous is None`
+    here means the same thing `history_since is None` meant there. The page
+    needs this because a dropped connection makes `EventSource` reconnect on
+    its own -- ordinary behaviour, not an error -- and that reconnect's
+    first event is a full ring again, same as any other connection's first
+    event. Without a flag saying so, the page cannot tell "the whole
+    picture" from "everything since last time" and appending the former
+    duplicates every entry it already had.
     """
     before: Dict[Tuple[str, str], int] = {}
     span = 0.0
@@ -86,7 +98,7 @@ def as_json(snapshot: Dict[str, Any],
         history.append(out)
 
     return {"at": snapshot["at"], "rows": rows, "history": history,
-            "unhandled": snapshot["unhandled"]}
+            "unhandled": snapshot["unhandled"], "full": previous is None}
 
 
 def _handler_class(traffic, send: Optional[Callable], page: Path):
@@ -140,7 +152,13 @@ def _handler_class(traffic, send: Optional[Callable], page: Path):
             previous = None
             try:
                 while True:
-                    snapshot = traffic.snapshot()
+                    # Only history is asked for incrementally -- rows and
+                    # unhandled are small and the page wants them whole every
+                    # tick. Without this, a full ring streamed four times a
+                    # second is the flood this feature exists to remove, just
+                    # moved into the browser instead of the journal.
+                    since = previous["at"] if previous is not None else None
+                    snapshot = traffic.snapshot(history_since=since)
                     payload = as_json(snapshot, previous)
                     previous = snapshot
                     self.wfile.write(

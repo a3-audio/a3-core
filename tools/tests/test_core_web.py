@@ -91,6 +91,23 @@ class TheRateComesFromTwoSnapshots(unittest.TestCase):
         self.assertAlmostEqual(rows[(OUT, "/a")]["rate"], 1.0)
 
 
+class TheFullFlagSaysWhichKindOfHistoryThisIs(unittest.TestCase):
+    """`_stream()` gives `as_json` no `previous` exactly when it asked
+    `Traffic.snapshot()` for the whole ring rather than a cutoff -- the
+    first tick of any connection, reconnects included. `full` is that same
+    distinction, carried into the payload, and it is what the page's
+    replace-vs-append choice is supposed to be driven by."""
+
+    def test_with_no_previous_snapshot_the_history_is_reported_full(self):
+        snapshot = {"at": 100.0, "rows": [], "history": [], "unhandled": {}}
+        self.assertTrue(as_json(snapshot, None)["full"])
+
+    def test_with_a_previous_snapshot_the_history_is_reported_not_full(self):
+        previous = {"at": 99.0, "rows": [], "history": [], "unhandled": {}}
+        snapshot = {"at": 100.0, "rows": [], "history": [], "unhandled": {}}
+        self.assertFalse(as_json(snapshot, previous)["full"])
+
+
 class EverythingSurvivesJsonDumps(unittest.TestCase):
     def test_a_snapshot_of_real_traffic_serialises(self):
         traffic = Traffic()

@@ -90,7 +90,39 @@ const DEAD_AFTER = 60;
 let picked = null;      // "direction address", or null for everything
 let latest = null;
 
+// The stream sends only new history entries each tick after the first (see
+// _stream() in a3_core_web.py) -- resending the whole ring four times a
+// second would cost more than the flood this page replaces. This is where
+// the new entries pile up on this side.
+//
+// Matches a3_core_traffic.DEFAULT_HISTORY (10000). The two are separate
+// numbers that have to agree: the page is a static file and cannot import
+// the Python one, so a change to either has to be carried across by hand.
+// It has to be this big because the very first SSE event this page ever
+// receives -- not /api/traffic, which this page never calls -- carries the
+// server's whole ring, and a smaller cap would silently throw most of that
+// away on the next few ticks. 10000 is about two minutes at this rig's
+// rate, long enough that "that was odd just now" is still in here when you
+// go looking. Holding that many small objects costs a couple of megabytes
+// and no CPU; what was expensive was serialising them four times a second,
+// and the delta stream already fixed that -- so this is not a size
+// compromise.
+let historyBuffer = [];
+const HISTORY_CAP = 10000;
+
 const $ = (id) => document.getElementById(id);
+
+// Everything drawn here arrived over OSC from three devices, and OSC has no
+// authentication. Right now that only means a hostile address or value could
+// render as markup; once Task 7's /api/send is wired into this page, a
+// script that got in this way could also drive the mixer, motion and REAPER.
+// Every network-controlled string is routed through this before it is
+// concatenated into innerHTML or an attribute.
+function safe(text) {
+  return String(text).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[c]);
+}
 
 function ageText(seconds) {
   if (seconds === null || seconds === undefined) return "–";
@@ -100,13 +132,18 @@ function ageText(seconds) {
   return Math.round(seconds / 3600) + " h";
 }
 
+function formatValue(value, type) {
+  // The type decides quoting, not display: a string "1" is the mixer's
+  // momentary edge, a float 1.0 is Motion's state (see a3_core_buttons), and
+  // only quoting keeps those apart on screen. Shared by the address table
+  // and the history so the rule is written once.
+  return type === "str" ? JSON.stringify(value) : String(value);
+}
+
 function valueText(row) {
-  // The type is shown because in this rig it carries meaning: a string "1"
-  // is the mixer's momentary edge, a float 1.0 is Motion's state.
   if (row.last_value === null) return "–";
-  const shown = row.last_type === "str"
-    ? JSON.stringify(row.last_value) : String(row.last_value);
-  return shown + ' <span class="type">' + row.last_type + "</span>";
+  return safe(formatValue(row.last_value, row.last_type)) +
+    ' <span class="type">' + safe(row.last_type) + "</span>";
 }
 
 function drawPeers(rows) {
@@ -121,7 +158,7 @@ function drawPeers(rows) {
     const state = age < STALE_AFTER ? "live"
                 : age < DEAD_AFTER ? "stale" : "dead";
     return '<div class="peer ' + state + '"><span class="dot"></span>' +
-           '<span>' + name + '</span>' +
+           '<span>' + safe(name) + '</span>' +
            '<span class="muted">' + ageText(age) + "</span></div>";
   }).join("") || '<span class="muted">noch nichts gesehen</span>';
 }
@@ -136,18 +173,20 @@ function drawRows(rows) {
     .sort((a, b) => b.count - a.count);
 
   $("rows").innerHTML = shown.map((row) => {
+    // Raw, not escaped: used only for the picked-row comparison below, never
+    // written into the page. What goes into data-key is safe(key).
     const key = row.direction + " " + row.address;
     const arrow = row.direction === "in"
       ? '<span class="in">↓</span>' : '<span class="out">↑</span>';
-    return '<tr data-key="' + key + '"' +
+    return '<tr data-key="' + safe(key) + '"' +
       (key === picked ? ' class="picked"' : "") + ">" +
       "<td>" + arrow + "</td>" +
-      "<td>" + row.address + "</td>" +
+      "<td>" + safe(row.address) + "</td>" +
       '<td class="num">' + row.count + "</td>" +
       '<td class="num">' + (row.rate === null ? "–" : row.rate.toFixed(1)) +
       "</td>" +
       "<td>" + valueText(row) + "</td>" +
-      '<td class="muted">' + row.peer + "</td>" +
+      '<td class="muted">' + safe(row.peer) + "</td>" +
       '<td class="num muted">' + ageText(row.age) + "</td></tr>";
   }).join("");
 
@@ -160,9 +199,10 @@ function drawRows(rows) {
   }
 }
 
-function drawHistory(history) {
-  // Only the tail, and only what is picked. The ring holds ten thousand;
-  // pouring those into the DOM would be the same flood in another window.
+function drawHistory(history, now) {
+  // Only the tail, and only what is picked. The buffer holds up to
+  // HISTORY_CAP; pouring all of it into the DOM would be the same flood in
+  // another window.
   const shown = history
     .filter((e) => !picked || picked === e.direction + " " + e.address)
     .slice(-120).reverse();
@@ -170,11 +210,14 @@ function drawHistory(history) {
   $("history").innerHTML = shown.map((e) => {
     const arrow = e.direction === "in"
       ? '<span class="in">↓</span>' : '<span class="out">↑</span>';
-    const value = e.type === "str" ? JSON.stringify(e.value) : String(e.value);
-    return "<tr><td class='num muted'>" + ageText(e.age) + "</td><td>" +
-      arrow + '</td><td class="muted">' + e.peer + "</td><td>" +
-      e.address + "</td><td>" + value +
-      ' <span class="type">' + e.type + "</span></td></tr>";
+    // Recomputed against the current snapshot's time rather than read off
+    // e.age: an entry can sit in the buffer for many ticks after the server
+    // sent it, and e.age was only ever right at the moment it was sent.
+    const age = now - e.at;
+    return "<tr><td class='num muted'>" + ageText(age) + "</td><td>" +
+      arrow + '</td><td class="muted">' + safe(e.peer) + "</td><td>" +
+      safe(e.address) + "</td><td>" + safe(formatValue(e.value, e.type)) +
+      ' <span class="type">' + safe(e.type) + "</span></td></tr>";
   }).join("") || '<tr><td class="muted">nichts</td></tr>';
 }
 
@@ -182,15 +225,37 @@ function drawUnhandled(unhandled) {
   const entries = Object.entries(unhandled).sort((a, b) => b[1] - a[1]);
   $("unhandled").innerHTML = entries.slice(0, 40).map(
     ([address, count]) =>
-      "<tr><td>" + address + '</td><td class="num">' + count + "</td></tr>"
+      "<tr><td>" + safe(address) + '</td><td class="num">' + count + "</td></tr>"
   ).join("") || '<tr><td class="muted">nichts</td></tr>';
+}
+
+function rememberHistory(entries, full) {
+  // Called once per payload that actually arrived from the server, never
+  // from a redraw -- draw() runs again on every keystroke in the filter box
+  // with the same payload it already saw, and appending there would count
+  // each of those keystrokes as new traffic.
+  //
+  // `full` is true exactly when `entries` is the whole ring rather than
+  // what happened since the last tick -- the first event of any connection,
+  // including one EventSource opened on its own after a drop. Reconnecting
+  // is ordinary behaviour for EventSource, not a failure, and it happens
+  // however this page is treated: replacing here on `full` is what makes a
+  // reconnect refresh the buffer instead of appending the whole ring onto
+  // whatever it already had and duplicating every entry still in it.
+  if (full) {
+    historyBuffer = [];
+  }
+  historyBuffer.push(...entries);
+  if (historyBuffer.length > HISTORY_CAP) {
+    historyBuffer.splice(0, historyBuffer.length - HISTORY_CAP);
+  }
 }
 
 function draw(payload) {
   latest = payload;
   drawPeers(payload.rows);
   drawRows(payload.rows);
-  drawHistory(payload.history);
+  drawHistory(historyBuffer, payload.at);
   drawUnhandled(payload.unhandled);
 }
 
@@ -198,7 +263,9 @@ function listen() {
   const stream = new EventSource("/api/stream");
   stream.onmessage = (event) => {
     $("status").textContent = "";
-    draw(JSON.parse(event.data));
+    const payload = JSON.parse(event.data);
+    rememberHistory(payload.history, payload.full);
+    draw(payload);
   };
   stream.onerror = () => {
     $("status").textContent = "Verbindung weg — versuche es weiter";
