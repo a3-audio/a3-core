@@ -17,7 +17,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core"
                        / "home/aaa/.local/lib"))
 
-from a3_core_traffic import IN, OUT, Traffic, peer_name   # noqa: E402
+from a3_core_traffic import (ANSWERERS, COMMANDERS, IN,   # noqa: E402
+                            OUT, Traffic, peer_name)   # noqa: E402
 
 
 RIG = {"mixer": "192.168.43.55",
@@ -44,6 +45,47 @@ class NamingWhoItWas(unittest.TestCase):
                    "reaper": "127.0.0.1"}
         self.assertEqual(peer_name("127.0.0.1", one_box),
                          "127.0.0.1 (mehrdeutig)")
+
+    def test_cores_own_port_breaks_the_tie(self):
+        """Motion on Core itself, which is how the rig runs since 2026-09-10.
+
+        The window stopped naming Motion at all that day: `--motion
+        127.0.0.1` met REAPER's default 127.0.0.1, and every incoming
+        message became "127.0.0.1 (mehrdeutig)". The tie is breakable after
+        all, just not by the *source* port -- by Core's own receiving port,
+        which is fixed and carries an identity: REAPER only ever answers on
+        the feedback port, the controllers only ever command on the main one.
+        """
+        motion_and_reaper = {"mixer": "192.168.8.11",
+                             "motion": "127.0.0.1",
+                             "reaper": "127.0.0.1"}
+        self.assertEqual(
+            peer_name("127.0.0.1", motion_and_reaper, only=COMMANDERS),
+            "motion")
+        self.assertEqual(
+            peer_name("127.0.0.1", motion_and_reaper, only=ANSWERERS),
+            "reaper")
+
+    def test_a_narrowed_list_still_refuses_a_real_tie(self):
+        """Narrowing must not become guessing.
+
+        Both controllers on one box is the case no port can resolve -- they
+        send to the same port. It has to stay ambiguous.
+        """
+        both_controllers = {"mixer": "127.0.0.1", "motion": "127.0.0.1",
+                            "reaper": "192.168.8.20"}
+        self.assertEqual(
+            peer_name("127.0.0.1", both_controllers, only=COMMANDERS),
+            "127.0.0.1 (mehrdeutig)")
+
+    def test_a_device_that_cannot_be_on_this_port_is_not_named(self):
+        """REAPER commanding on the main port does not happen.
+
+        If something on REAPER's host ever does, it is not REAPER, and the
+        raw host is the honest answer.
+        """
+        self.assertEqual(peer_name("127.0.0.1", RIG, only=COMMANDERS),
+                         "127.0.0.1")
 
 
 class CountingByAddressAndDirection(unittest.TestCase):

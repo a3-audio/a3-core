@@ -26,7 +26,7 @@ anything took minutes.
 import threading
 import time
 from collections import OrderedDict, deque
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 #: A message Core received.
 IN = "in"
@@ -53,16 +53,38 @@ DEFAULT_UNKNOWN_CAP = 50000
 #: What a host is called when more than one device claims it.
 AMBIGUOUS = " (mehrdeutig)"
 
+#: The devices that can have sent a message on Core's main port, and the ones
+#: that can have sent on REAPER's feedback port. They are disjoint, which is
+#: the whole point: pass the matching one as `only` and a shared host stops
+#: being ambiguous. See peer_name.
+COMMANDERS = ("mixer", "motion")
+ANSWERERS = ("reaper",)
 
-def peer_name(host: str, peers: Dict[str, str]) -> str:
+
+def peer_name(host: str, peers: Dict[str, str],
+              only: Optional[Iterable[str]] = None) -> str:
     """The device name a host stands for, or the host itself.
 
-    Only the host, never the port. Incoming messages carry an **ephemeral**
-    source port -- `SimpleUDPClient` builds its socket without `bind()`, so
-    the OS picks a fresh one per sender -- and matching on it would match
-    nothing. On the rig the three devices are three hosts and this is exact.
-    On a single box, where they share 127.0.0.1, it cannot tell them apart
-    and says so rather than guessing: a wrong label is worse than none.
+    Never the **source** port: incoming messages carry an ephemeral one --
+    `SimpleUDPClient` builds its socket without `bind()`, so the OS picks a
+    fresh one per sender -- and matching on it would match nothing.
+
+    But Core's **own receiving** port is not ephemeral, and it does carry an
+    identity: REAPER answers on the feedback port and never commands on the
+    main one, the two controllers command on the main port and never answer
+    on the feedback one. `only` is how a caller says which port this message
+    arrived at -- `COMMANDERS` or `ANSWERERS` -- and the candidates are
+    narrowed to those before the host is compared.
+
+    That narrowing is what makes a shared host readable. With all three in
+    one pool, Motion running on Core itself collided with REAPER's own
+    127.0.0.1 and every incoming message read "127.0.0.1 (mehrdeutig)" --
+    which is how the window came to show Motion's messages without ever
+    naming Motion. Narrowing is not guessing, though: the one tie no port can
+    break is both controllers on one box, and that stays ambiguous.
+
+    Omitting `only` keeps the old all-three behaviour, for a caller that does
+    not know the port.
 
     `peers` (`PEER_HOSTS` in a3-core.py) is built from the host part of
     whatever was passed to --mixer/--motion/--reaper, taken as written on
@@ -72,6 +94,10 @@ def peer_name(host: str, peers: Dict[str, str]) -> str:
     peer never matches here and the table quietly falls back to showing the
     raw address instead of the device name.
     """
+    if only is not None:
+        allowed = set(only)
+        peers = {name: at for name, at in peers.items() if name in allowed}
+
     matches = sorted(name for name, at in peers.items() if at == host)
 
     if len(matches) == 1:
