@@ -131,6 +131,32 @@ def as_json(snapshot: Dict[str, Any],
             "evicted": snapshot["evicted"], "full": previous is None}
 
 
+def unknown_as_json(unknown: Dict[str, Any]) -> Dict[str, Any]:
+    """The unknown table, ready for the browser.
+
+    Shaped like `as_json`'s rows so the page can draw both with one function,
+    with two fields fixed rather than computed: `rate` is None because there
+    is no earlier fetch to compare against, and `direction` is "in" because
+    Core only ever receives these -- it never sends an address it cannot
+    route.
+
+    `unknown` is carried so the page can tell a fetched row from a streamed
+    one and say out loud that it is a snapshot rather than live.
+    """
+    rows = []
+    for row in unknown["rows"]:
+        out = dict(row)
+        out["last_value"] = _jsonable(row["last_value"])
+        out["last_type"] = _display_type(row["last_type"])
+        out["age"] = unknown["at"] - row["last_seen"]
+        out["rate"] = None
+        out["direction"] = "in"
+        out["unknown"] = True
+        rows.append(out)
+
+    return {"at": unknown["at"], "rows": rows, "evicted": unknown["evicted"]}
+
+
 def parse_value(text: str) -> Any:
     """What was typed into the bench, as the type it says it is.
 
@@ -194,6 +220,14 @@ def _handler_class(traffic, send: Optional[Callable], page: Path):
 
             elif self.path == "/api/traffic":
                 payload = as_json(traffic.snapshot(), None)
+                self._send(200, json.dumps(payload).encode(),
+                           "application/json")
+
+            elif self.path == "/api/unknown":
+                # Deliberately not on the stream: this can be tens of
+                # thousands of rows. The page asks for it when its filter
+                # switch needs it, and says on screen that it is a snapshot.
+                payload = unknown_as_json(traffic.unknown_snapshot())
                 self._send(200, json.dumps(payload).encode(),
                            "application/json")
 

@@ -22,7 +22,7 @@ PACKAGE = (ROOT / "platform-config/debian-x86_64/a3-core"
 sys.path.insert(0, str(PACKAGE / "lib"))
 
 from a3_core_traffic import IN, OUT, Traffic   # noqa: E402
-from a3_core_web import as_json, start_window   # noqa: E402
+from a3_core_web import as_json, start_window, unknown_as_json   # noqa: E402
 
 
 class TheRateComesFromTwoSnapshots(unittest.TestCase):
@@ -427,6 +427,87 @@ class AWindowWithNothingToSendWith(unittest.TestCase):
                 urllib.request.urlopen(request, timeout=5)
             self.assertEqual(caught.exception.code, 400)
         finally:
+            stop_window()
+
+
+class TheStreamNoLongerCarriesTheUnknowns(unittest.TestCase):
+    def test_as_json_reports_the_size_and_drops_the_contents(self):
+        traffic = Traffic()
+        traffic.seen(IN, "/channel/0/gain", 0.5, "motion")
+        for i in range(2000):
+            traffic.unknown(f"/track/{i}/name", 0.0, "reaper")
+
+        payload = as_json(traffic.snapshot(), None)
+        self.assertNotIn("unhandled", payload)
+        self.assertEqual(payload["unknown_addresses"], 2000)
+        self.assertEqual(len(payload["rows"]), 1)
+        self.assertLess(len(json.dumps(payload)), 8 * 1024)
+
+    def test_the_eviction_counters_reach_the_page(self):
+        traffic = Traffic(unknown_cap=5)
+        for i in range(9):
+            traffic.unknown(f"/track/{i}", 0.0, "reaper")
+        payload = as_json(traffic.snapshot(), None)
+        self.assertEqual(payload["evicted"]["unknown"], 4)
+
+
+class TheUnknownTableIsFetchedOnRequest(unittest.TestCase):
+    def test_unknown_as_json_shapes_rows_like_the_others(self):
+        traffic = Traffic()
+        traffic.unknown("/track/3/pan", 0.25, "reaper")
+        payload = unknown_as_json(traffic.unknown_snapshot())
+        row = payload["rows"][0]
+        self.assertEqual(row["address"], "/track/3/pan")
+        self.assertEqual(row["direction"], "in")
+        self.assertIsNone(row["rate"])
+        self.assertIs(row["unknown"], True)
+        self.assertGreaterEqual(row["age"], 0.0)
+
+    def test_a_non_finite_value_survives_here_too(self):
+        """The same trap as /api/traffic: json.dumps writes bare NaN, which
+        Python accepts and a browser's JSON.parse does not."""
+        def reject_bare_constant(text):
+            raise ValueError(f"a browser would throw on {text}")
+
+        traffic = Traffic()
+        traffic.unknown("/track/3/pan", float("nan"), "reaper")
+        text = json.dumps(unknown_as_json(traffic.unknown_snapshot()))
+        json.loads(text, parse_constant=reject_bare_constant)
+
+    def test_the_route_answers_with_the_table(self):
+        traffic = Traffic()
+        traffic.unknown("/track/3/name", 0.0, "reaper")
+        self.assertTrue(start_window(traffic, "127.0.0.1:0"))
+        try:
+            from a3_core_web import window_address
+            host, port = window_address()
+            with urllib.request.urlopen(
+                    f"http://{host}:{port}/api/unknown", timeout=5) as r:
+                payload = json.loads(r.read())
+            self.assertEqual(payload["rows"][0]["address"], "/track/3/name")
+        finally:
+            from a3_core_web import stop_window
+            stop_window()
+
+    def test_the_route_is_not_on_the_stream(self):
+        """/api/traffic must stay small no matter how much is unknown."""
+        traffic = Traffic()
+        for i in range(5000):
+            traffic.unknown(f"/track/{i}/name", 0.0, "reaper")
+        self.assertTrue(start_window(traffic, "127.0.0.1:0"))
+        try:
+            from a3_core_web import window_address
+            host, port = window_address()
+            with urllib.request.urlopen(
+                    f"http://{host}:{port}/api/traffic", timeout=5) as r:
+                small = r.read()
+            with urllib.request.urlopen(
+                    f"http://{host}:{port}/api/unknown", timeout=5) as r:
+                big = r.read()
+            self.assertLess(len(small), 8 * 1024)
+            self.assertGreater(len(big), 100 * 1024)
+        finally:
+            from a3_core_web import stop_window
             stop_window()
 
 
