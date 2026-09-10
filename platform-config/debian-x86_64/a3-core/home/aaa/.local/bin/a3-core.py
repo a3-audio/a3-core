@@ -742,8 +742,8 @@ def reaper_feedback_handler(client_address: Tuple[str, int], address: str,
 
     # The tap used to sit here, before Core knew whether it could route the
     # message -- so every one of REAPER's ~19,000 reported addresses became a
-    # permanent row, the snapshot grew to 6.5 MiB, and the stream pushed it at
-    # 25 MiB/s until the maintainer's machine froze on 2026-09-10. It now
+    # permanent row, the snapshot grew to 6.4 MiB, and the stream pushed it at
+    # 25.6 MiB/s until the maintainer's machine froze on 2026-09-10. It now
     # happens twice, further down: traffic.seen() on the path that succeeds,
     # traffic.unknown() on each path that gives up.
     peer = peer_name(client_address[0], PEER_HOSTS)

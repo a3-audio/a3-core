@@ -273,8 +273,8 @@ class UnderstoodAndUnknownAreTwoTables(unittest.TestCase):
 
     REAPER dumps ~19,000 distinct addresses when its OSC surface connects, and
     Core can route about forty of them. Before this, every one of those became
-    a permanent row, the snapshot grew to 6.5 MiB, and a stream ticking four
-    times a second pushed it at 25 MiB/s until the maintainer's machine froze.
+    a permanent row, the snapshot grew to 6.4 MiB, and a stream ticking four
+    times a second pushed it at 25.6 MiB/s until the maintainer's machine froze.
 
     a3-core.py has counted these since the wire branch and shown them
     nowhere -- its own comment says the list should be visible. `unknown()`
@@ -362,6 +362,18 @@ class TheCapsEvictAndSaySo(unittest.TestCase):
             traffic.unknown(f"/track/{i}", 0.0, "reaper")
         self.assertEqual(traffic.unknown_snapshot()["evicted"], 0)
         self.assertEqual(traffic.snapshot()["evicted"]["unknown"], 0)
+
+    def test_unknown_messages_counts_messages_ever_seen_not_rows_still_held(
+            self):
+        """"N Nachrichten" on the page reads like a lifetime total. An
+        evicted row's messages already happened -- eviction dropping the row
+        must not un-happen them, so the total must not shrink when it does."""
+        traffic = Traffic(unknown_cap=2)
+        traffic.unknown("/track/a", 0.0, "reaper")
+        traffic.unknown("/track/b", 0.0, "reaper")
+        traffic.unknown("/track/c", 0.0, "reaper")   # evicts /track/a
+        self.assertEqual(traffic.unknown_snapshot()["evicted"], 1)
+        self.assertEqual(traffic.snapshot()["unknown_messages"], 3)
 
 
 class TheRealShapeOfTheIncident(unittest.TestCase):

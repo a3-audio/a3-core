@@ -103,6 +103,15 @@ class Traffic:
         self._unknown_cap = unknown_cap
         self._evicted_rows = 0
         self._evicted_unknown = 0
+        # Messages ever received on an address Core could not route -- not
+        # "messages currently sitting in _unknown", which is what summing
+        # each row's count would mean once eviction starts dropping rows. A
+        # row leaving the table on eviction does not un-happen the messages
+        # that made up its count, and "N Nachrichten" on the page reads like
+        # a lifetime total, not a residual one -- so this never decreases,
+        # only grows, kept beside `unknown()`'s own increment rather than
+        # recomputed by summing the table on every snapshot (see there).
+        self._unknown_messages_total = 0
 
     def seen(self, direction: str, address: str, value: Any,
              peer: str) -> None:
@@ -171,6 +180,12 @@ class Traffic:
             row["last_type"] = type(value).__name__
             row["last_seen"] = at
             row["peer"] = peer
+            # Kept beside the row's own count, not derived by summing the
+            # table in snapshot(): that sum costs 0.024 ms empty, 3.51 ms at
+            # this rig's 19,335 real unknown addresses, and 8.79 ms at the
+            # 50,000 cap -- paid on every snapshot, four times a second, per
+            # open tab, inside the very lock every OSC thread has to take.
+            self._unknown_messages_total += 1
 
             self._unknown.move_to_end(address)
             while len(self._unknown) > self._unknown_cap:
@@ -241,7 +256,11 @@ class Traffic:
                 history = [dict(entry) for entry in self._history
                           if entry["at"] > history_since]
             unknown_addresses = len(self._unknown)
-            unknown_messages = sum(r["count"] for r in self._unknown.values())
+            # A running total kept by unknown() itself, not summed here: see
+            # the comment on _unknown_messages_total in __init__ for the
+            # eviction semantics, and on the increment in unknown() for the
+            # cost this avoids paying under this lock four times a second.
+            unknown_messages = self._unknown_messages_total
             evicted = {"rows": self._evicted_rows,
                        "unknown": self._evicted_unknown}
 
