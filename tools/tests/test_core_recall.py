@@ -5,11 +5,14 @@ message format for that, Core replays: it sends every value exactly as it
 would have been sent when it changed, so the receivers that already exist take
 it without understanding anything new.
 
-Two halves, and they come from different places:
+Three parts, and they come from different places:
 
 - **The flags** are Core's own -- the three per channel and the filter mode --
   and are read out of Core's head, which the state file has just filled from
   disk.
+- **The position** is Core's own as well, because nobody else can be asked:
+  it goes to the IEM plugins on their own OSC port, so REAPER never reports it
+  back.
 - **The continuous values** are REAPER's. Core does not hold them; it relays
   them, and what it relays it notes on the way past. So the replay is what
   REAPER last said rather than a second opinion about it.
@@ -29,7 +32,7 @@ sys.path.insert(0, str(PACKAGE / "lib"))
 from a3_core_layout import load_layout   # noqa: E402
 from a3_core_recall import (FX_MODE_WORDS, LED_OF,   # noqa: E402
                             Relayed, flag_messages, led_message,
-                            recall_messages)
+                            position_messages, recall_messages)
 
 
 class FXMode(Enum):
@@ -42,6 +45,8 @@ class FakeChannel:
     toggle_fx: bool = False
     toggle_pfl: bool = False
     toggle_3d: bool = False
+    azimuth: float = None
+    elevation: float = None
 
 
 @dataclass
@@ -146,6 +151,70 @@ class WhatWasPassedOn(unittest.TestCase):
         self.assertEqual(len(list(relayed.messages())), 2)
 
 
+class WhereTheSoundIs(unittest.TestCase):
+    """The position is the one value only Core can answer.
+
+    It reaches the IEM plugins on their own OSC port, never through a REAPER
+    track, so REAPER never reports it back -- measured on 2026-09-10: Motion
+    sending 158,150 azimuth messages and not one word about them from REAPER.
+    The plugins do hold it (their receiver sets the host parameter, so the
+    project saves it), but nothing can be asked. Core passed it on, so Core
+    is the only one who knows.
+    """
+
+    def setUp(self):
+        self.layout = load_layout(PACKAGE / "share/a3-core/layout.json")
+
+    def test_a_position_replays_as_the_message_motion_sent(self):
+        channels = (FakeChannel(azimuth=-37.5, elevation=12.0),)
+        self.assertEqual(
+            list(position_messages(self.layout, channels)),
+            [("motion", "/channel/0/azimuth", -37.5),
+             ("motion", "/channel/0/elevation", 12.0)])
+
+    def test_a_position_never_seen_is_not_invented(self):
+        """None is not 0.0. Zero degrees is the front of the room -- a real
+        position -- so answering it for a channel Core has never seen a
+        position for would place the sound somewhere on purpose while
+        claiming to report. Saying nothing leaves Motion on its own value,
+        which is what it does today anyway."""
+        self.assertEqual(list(position_messages(self.layout,
+                                                (FakeChannel(),))), [])
+
+    def test_one_half_known_is_answered_by_that_half(self):
+        """Azimuth and elevation arrive as two separate messages and there is
+        no moment at which both are known but one is not."""
+        channels = (FakeChannel(azimuth=90.0),)
+        self.assertEqual(list(position_messages(self.layout, channels)),
+                         [("motion", "/channel/0/azimuth", 90.0)])
+
+    def test_zero_is_a_position_and_is_answered(self):
+        """The guard is `is None`, not falsiness. Front-centre and level is
+        where a channel most often sits."""
+        channels = (FakeChannel(azimuth=0.0, elevation=0.0),)
+        self.assertEqual(
+            list(position_messages(self.layout, channels)),
+            [("motion", "/channel/0/azimuth", 0.0),
+             ("motion", "/channel/0/elevation", 0.0)])
+
+    def test_each_channel_is_addressed_as_itself(self):
+        channels = (FakeChannel(), FakeChannel(azimuth=5.0),
+                    FakeChannel(), FakeChannel(elevation=-90.0))
+        self.assertEqual(list(position_messages(self.layout, channels)),
+                         [("motion", "/channel/1/azimuth", 5.0),
+                          ("motion", "/channel/3/elevation", -90.0)])
+
+    def test_the_position_goes_to_motion_and_not_to_the_mixer(self):
+        """The mixer has no sphere. Sending it there would be a message it
+        has no handler for, and the window would show Core talking to a
+        device that cannot listen."""
+        channels = (FakeChannel(azimuth=1.0),)
+        devices = {device
+                   for device, _, _ in position_messages(self.layout,
+                                                         channels)}
+        self.assertEqual(devices, {"motion"})
+
+
 class TheWholeAnswer(unittest.TestCase):
     def setUp(self):
         self.layout = load_layout(PACKAGE / "share/a3-core/layout.json")
@@ -160,6 +229,22 @@ class TheWholeAnswer(unittest.TestCase):
         self.assertEqual(messages[-1], ("mixer", "/channel/0/gain", 0.7))
         self.assertEqual(len(messages), 4 * 3 + 1 + 1)
 
+    def test_the_position_is_answered_between_the_flags_and_reaper(self):
+        """Both of Core's own certainties first, REAPER's relayed values
+        last: a caller reading the replay in order sees what Core knows for
+        itself before what it was told."""
+        channels, master = a_rig()
+        channels[1].azimuth = 45.0
+        relayed = Relayed()
+        relayed.note("mixer", "/channel/0/gain", 0.7)
+
+        messages = list(recall_messages(self.layout, channels, master,
+                                        relayed))
+        self.assertEqual(messages[4 * 3 + 1],
+                         ("motion", "/channel/1/azimuth", 45.0))
+        self.assertEqual(messages[-1], ("mixer", "/channel/0/gain", 0.7))
+        self.assertEqual(len(messages), 4 * 3 + 1 + 1 + 1)
+
     def test_a_cold_core_still_answers_with_its_own_flags(self):
         """After Core itself restarts, nothing has been relayed yet: REAPER
         reports on change and does not know Core went away. The flags come
@@ -170,6 +255,17 @@ class TheWholeAnswer(unittest.TestCase):
         messages = list(recall_messages(self.layout, channels, master,
                                         Relayed()))
         self.assertEqual(len(messages), 4 * 3 + 1)
+
+    def test_a_cold_core_answers_no_position_either(self):
+        """Core's own restart loses the position: it is held in memory and
+        nowhere else, deliberately. The plugins still have it and the project
+        still saves it -- Core just cannot say which it is, and does not
+        guess."""
+        channels, master = a_rig()
+        positions = [m for m in recall_messages(self.layout, channels, master,
+                                                Relayed())
+                     if m[0] == "motion"]
+        self.assertEqual(positions, [])
 
 
 if __name__ == "__main__":
