@@ -126,7 +126,9 @@ def as_json(snapshot: Dict[str, Any],
         history.append(out)
 
     return {"at": snapshot["at"], "rows": rows, "history": history,
-            "unhandled": snapshot["unhandled"], "full": previous is None}
+            "unknown_addresses": snapshot["unknown_addresses"],
+            "unknown_messages": snapshot["unknown_messages"],
+            "evicted": snapshot["evicted"], "full": previous is None}
 
 
 def parse_value(text: str) -> Any:
@@ -260,11 +262,17 @@ def _handler_class(traffic, send: Optional[Callable], page: Path):
             previous = None
             try:
                 while True:
-                    # Only history is asked for incrementally -- rows and
-                    # unhandled are small and the page wants them whole every
-                    # tick. Without this, a full ring streamed four times a
-                    # second is the flood this feature exists to remove, just
-                    # moved into the browser instead of the journal.
+                    # Only history is asked for incrementally -- rows are
+                    # the addresses Core understood, about forty of them,
+                    # and the page wants them whole every tick. The unknown
+                    # table is not part of this loop at all: snapshot() only
+                    # ever reports its size, never its rows, so it never
+                    # rides this stream regardless of history_since -- see
+                    # unknown_snapshot() for how a caller gets its contents.
+                    # Without the history cutoff, a full ring streamed four
+                    # times a second is the flood this feature exists to
+                    # remove, just moved into the browser instead of the
+                    # journal.
                     since = previous["at"] if previous is not None else None
                     snapshot = traffic.snapshot(history_since=since)
                     payload = as_json(snapshot, previous)

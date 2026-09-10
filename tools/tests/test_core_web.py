@@ -33,12 +33,16 @@ class TheRateComesFromTwoSnapshots(unittest.TestCase):
                  "rows": [{"direction": IN, "address": "/a", "count": 5,
                            "last_value": 1.0, "last_type": "float",
                            "last_seen": 100.0, "peer": "motion"}],
-                 "history": [], "unhandled": {}}
+                 "history": [], "unknown_addresses": 0,
+                 "unknown_messages": 0,
+                 "evicted": {"rows": 0, "unknown": 0}}
         second = {"at": 102.0,
                   "rows": [{"direction": IN, "address": "/a", "count": 15,
                             "last_value": 1.0, "last_type": "float",
                             "last_seen": 102.0, "peer": "motion"}],
-                  "history": [], "unhandled": {}}
+                  "history": [], "unknown_addresses": 0,
+                  "unknown_messages": 0,
+                  "evicted": {"rows": 0, "unknown": 0}}
 
         rows = as_json(second, first)["rows"]
         self.assertAlmostEqual(rows[0]["rate"], 5.0)
@@ -50,16 +54,22 @@ class TheRateComesFromTwoSnapshots(unittest.TestCase):
                     "rows": [{"direction": IN, "address": "/a", "count": 5,
                               "last_value": 1.0, "last_type": "float",
                               "last_seen": 100.0, "peer": "motion"}],
-                    "history": [], "unhandled": {}}
+                    "history": [], "unknown_addresses": 0,
+                    "unknown_messages": 0,
+                    "evicted": {"rows": 0, "unknown": 0}}
         self.assertIsNone(as_json(snapshot, None)["rows"][0]["rate"])
 
     def test_a_row_that_is_new_since_the_last_look_has_no_rate(self):
-        first = {"at": 100.0, "rows": [], "history": [], "unhandled": {}}
+        first = {"at": 100.0, "rows": [], "history": [],
+                 "unknown_addresses": 0, "unknown_messages": 0,
+                 "evicted": {"rows": 0, "unknown": 0}}
         second = {"at": 101.0,
                   "rows": [{"direction": IN, "address": "/b", "count": 3,
                             "last_value": 1.0, "last_type": "float",
                             "last_seen": 101.0, "peer": "motion"}],
-                  "history": [], "unhandled": {}}
+                  "history": [], "unknown_addresses": 0,
+                  "unknown_messages": 0,
+                  "evicted": {"rows": 0, "unknown": 0}}
         self.assertIsNone(as_json(second, first)["rows"][0]["rate"])
 
     def test_two_snapshots_at_the_same_instant_do_not_divide_by_zero(self):
@@ -67,7 +77,9 @@ class TheRateComesFromTwoSnapshots(unittest.TestCase):
                 "rows": [{"direction": IN, "address": "/a", "count": 5,
                           "last_value": 1.0, "last_type": "float",
                           "last_seen": 100.0, "peer": "motion"}],
-                "history": [], "unhandled": {}}
+                "history": [], "unknown_addresses": 0,
+                "unknown_messages": 0,
+                "evicted": {"rows": 0, "unknown": 0}}
         self.assertIsNone(as_json(same, dict(same))["rows"][0]["rate"])
 
     def test_the_two_directions_of_one_address_get_their_own_rates(self):
@@ -78,7 +90,9 @@ class TheRateComesFromTwoSnapshots(unittest.TestCase):
                           {"direction": OUT, "address": "/a", "count": 0,
                            "last_value": 1.0, "last_type": "float",
                            "last_seen": 100.0, "peer": "reaper"}],
-                 "history": [], "unhandled": {}}
+                 "history": [], "unknown_addresses": 0,
+                 "unknown_messages": 0,
+                 "evicted": {"rows": 0, "unknown": 0}}
         second = {"at": 101.0,
                   "rows": [{"direction": IN, "address": "/a", "count": 4,
                             "last_value": 1.0, "last_type": "float",
@@ -86,7 +100,9 @@ class TheRateComesFromTwoSnapshots(unittest.TestCase):
                            {"direction": OUT, "address": "/a", "count": 1,
                             "last_value": 1.0, "last_type": "float",
                             "last_seen": 101.0, "peer": "reaper"}],
-                  "history": [], "unhandled": {}}
+                  "history": [], "unknown_addresses": 0,
+                  "unknown_messages": 0,
+                  "evicted": {"rows": 0, "unknown": 0}}
         rows = {(r["direction"], r["address"]): r
                 for r in as_json(second, first)["rows"]}
         self.assertAlmostEqual(rows[(IN, "/a")]["rate"], 4.0)
@@ -101,12 +117,18 @@ class TheFullFlagSaysWhichKindOfHistoryThisIs(unittest.TestCase):
     replace-vs-append choice is supposed to be driven by."""
 
     def test_with_no_previous_snapshot_the_history_is_reported_full(self):
-        snapshot = {"at": 100.0, "rows": [], "history": [], "unhandled": {}}
+        snapshot = {"at": 100.0, "rows": [], "history": [],
+                    "unknown_addresses": 0, "unknown_messages": 0,
+                    "evicted": {"rows": 0, "unknown": 0}}
         self.assertTrue(as_json(snapshot, None)["full"])
 
     def test_with_a_previous_snapshot_the_history_is_reported_not_full(self):
-        previous = {"at": 99.0, "rows": [], "history": [], "unhandled": {}}
-        snapshot = {"at": 100.0, "rows": [], "history": [], "unhandled": {}}
+        previous = {"at": 99.0, "rows": [], "history": [],
+                    "unknown_addresses": 0, "unknown_messages": 0,
+                    "evicted": {"rows": 0, "unknown": 0}}
+        snapshot = {"at": 100.0, "rows": [], "history": [],
+                    "unknown_addresses": 0, "unknown_messages": 0,
+                    "evicted": {"rows": 0, "unknown": 0}}
         self.assertFalse(as_json(snapshot, previous)["full"])
 
 
@@ -116,7 +138,7 @@ class EverythingSurvivesJsonDumps(unittest.TestCase):
         traffic.seen(IN, "/channel/0/pfl", "1", "mixer")
         traffic.seen(IN, "/channel/0/pfl", 1.0, "motion")
         traffic.seen(OUT, "/track/4/mute", 0.0, "reaper")
-        traffic.unhandled("/track/3/name")
+        traffic.unknown("/track/3/name", 0.0, "reaper")
 
         text = json.dumps(as_json(traffic.snapshot(), None))
         self.assertIn("/channel/0/pfl", text)

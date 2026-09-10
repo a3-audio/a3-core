@@ -25,7 +25,7 @@ anything took minutes.
 
 import threading
 import time
-from collections import Counter, deque
+from collections import OrderedDict, deque
 from typing import Any, Dict, List, Optional
 
 #: A message Core received.
@@ -38,6 +38,17 @@ OUT = "out"
 #: which is the span in which "that was odd just now" is still worth looking
 #: up. At roughly 150 bytes an entry that is about 1.5 MB, constant.
 DEFAULT_HISTORY = 10000
+
+#: How many understood addresses are kept. Generous on purpose: A3's own
+#: vocabulary is about forty, so the cap is a guard against a future sender
+#: inventing addresses, not a working limit.
+DEFAULT_ROW_CAP = 5000
+
+#: How many unknown addresses are kept. The known real figure is 19,335 --
+#: what one REAPER project reports when its OSC surface connects -- so this
+#: holds a little over twice that. Eviction is least-recently-seen, and the
+#: count of what fell out is reported rather than hidden.
+DEFAULT_UNKNOWN_CAP = 50000
 
 #: What a host is called when more than one device claims it.
 AMBIGUOUS = " (mehrdeutig)"
@@ -73,11 +84,25 @@ def peer_name(host: str, peers: Dict[str, str]) -> str:
 class Traffic:
     """Every message Core has seen, by address and direction."""
 
-    def __init__(self, history: int = DEFAULT_HISTORY) -> None:
+    def __init__(self, history: int = DEFAULT_HISTORY,
+                 row_cap: int = DEFAULT_ROW_CAP,
+                 unknown_cap: int = DEFAULT_UNKNOWN_CAP) -> None:
         self._lock = threading.Lock()
-        self._rows: Dict[tuple, Dict[str, Any]] = {}
+        # OrderedDict rather than dict: eviction has to drop the
+        # least-recently-seen entry, which means re-ordering a key to the
+        # front on every touch, not just on insert. A plain dict keeps
+        # insertion order too and would hand back its oldest key just as
+        # cheaply with next(iter(d)) -- what it cannot do cheaply is move an
+        # existing key when it is touched again, short of a delete plus a
+        # reinsert. move_to_end + popitem(last=False) do the whole cycle in
+        # constant time, on a machine that is making sound.
+        self._rows: "OrderedDict[tuple, Dict[str, Any]]" = OrderedDict()
+        self._unknown: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
         self._history: deque = deque(maxlen=history)
-        self._unhandled: Counter = Counter()
+        self._row_cap = row_cap
+        self._unknown_cap = unknown_cap
+        self._evicted_rows = 0
+        self._evicted_unknown = 0
 
     def seen(self, direction: str, address: str, value: Any,
              peer: str) -> None:
@@ -111,14 +136,46 @@ class Traffic:
             row["last_seen"] = at
             row["peer"] = peer
 
+            self._rows.move_to_end(key)
+            while len(self._rows) > self._row_cap:
+                self._rows.popitem(last=False)
+                self._evicted_rows += 1
+
             self._history.append({"at": at, "direction": direction,
                                   "address": address, "value": value,
                                   "type": type_name, "peer": peer})
 
-    def unhandled(self, address: str) -> None:
-        """Note something that arrived and nothing knew how to pass on."""
+    def unknown(self, address: str, value: Any, peer: str) -> None:
+        """Note a message Core received and could not route.
+
+        Keeps a full row rather than a bare count, because the point of the
+        table is to answer "what is REAPER saying that we ignore" -- and that
+        question wants the value and the time as much as the name.
+
+        Deliberately NOT in `snapshot()`. One REAPER project reports 19,335
+        distinct addresses the moment its surface connects; carrying those in a
+        snapshot that a stream pushes four times a second is what froze the
+        maintainer's machine on 2026-09-10. They are fetched through
+        `unknown_snapshot()` when somebody asks.
+        """
         with self._lock:
-            self._unhandled[address] += 1
+            at = time.monotonic()
+            row = self._unknown.get(address)
+            if row is None:
+                row = {"address": address, "count": 0, "last_value": None,
+                       "last_type": "", "last_seen": at, "peer": peer}
+                self._unknown[address] = row
+
+            row["count"] += 1
+            row["last_value"] = value
+            row["last_type"] = type(value).__name__
+            row["last_seen"] = at
+            row["peer"] = peer
+
+            self._unknown.move_to_end(address)
+            while len(self._unknown) > self._unknown_cap:
+                self._unknown.popitem(last=False)
+                self._evicted_unknown += 1
 
     def snapshot(self,
                  history_since: Optional[float] = None) -> Dict[str, Any]:
@@ -126,18 +183,25 @@ class Traffic:
 
         The rows are copied rather than handed out: a reader walking a dict
         that the OSC threads are still writing into is the one way this could
-        take the rig down, and copies of a few hundred small dicts cost
-        nothing beside that.
+        take the rig down, and copying the understood addresses -- about
+        forty of them in this rig -- costs nothing beside that.
 
         `history_since` makes `history` incremental instead of complete. Rows
-        and `unhandled` stay whole every time regardless -- there are only a
-        few hundred addresses, so copying all of them is cheap, and a reader
-        needs the current count for each one, not a delta. History is
-        different: at a hundred messages a second the ring holds ten thousand
-        entries, and a stream ticking four times a second that resent all of
-        them every tick would cost more than the `print()` per message this
-        feature exists to replace. A caller that already has an earlier
-        snapshot's `at` passes it here and gets only what happened since.
+        stay whole every time regardless -- they are the addresses Core
+        understood, about forty of them in this rig, so copying all of them
+        is cheap, and a reader needs the current count for each one, not a
+        delta. The unknown table is not here at all: REAPER alone can put
+        19,335 addresses in it, and that is the table whose full copy on
+        every stream tick froze the maintainer's machine -- see `unknown()`.
+        It is fetched separately, through `unknown_snapshot()`, only when
+        somebody asks.
+
+        History is different: at a hundred messages a second the ring holds
+        ten thousand entries, and a stream ticking four times a second that
+        resent all of them every tick would cost more than the `print()` per
+        message this feature exists to replace. A caller that already has an
+        earlier snapshot's `at` passes it here and gets only what happened
+        since.
 
         The invariant `history_since` depends on: an entry belongs to this
         snapshot's copy if its own `at` is not greater than this snapshot's
@@ -176,7 +240,29 @@ class Traffic:
             else:
                 history = [dict(entry) for entry in self._history
                           if entry["at"] > history_since]
-            unhandled = dict(self._unhandled)
+            unknown_addresses = len(self._unknown)
+            unknown_messages = sum(r["count"] for r in self._unknown.values())
+            evicted = {"rows": self._evicted_rows,
+                       "unknown": self._evicted_unknown}
 
         return {"at": at, "rows": rows, "history": history,
-                "unhandled": unhandled}
+                "unknown_addresses": unknown_addresses,
+                "unknown_messages": unknown_messages, "evicted": evicted}
+
+    def unknown_snapshot(self) -> Dict[str, Any]:
+        """The whole unknown table, for a caller that asked for it.
+
+        Separate from `snapshot()` on purpose: this one can be tens of
+        thousands of rows, and nothing should put it on a four-times-a-second
+        stream. The rows share every field a reader needs with `snapshot()`'s
+        rows, but not `"direction"`: Core only ever *receives* what it
+        cannot route, so there is no second direction here to distinguish it
+        from, and the field is left out rather than hardcoded to a constant.
+        A caller that wants to draw both tables with one function adds it
+        back in.
+        """
+        with self._lock:
+            at = time.monotonic()
+            rows = [dict(row) for row in self._unknown.values()]
+            evicted = self._evicted_unknown
+        return {"at": at, "rows": rows, "evicted": evicted}

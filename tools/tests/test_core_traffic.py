@@ -7,6 +7,7 @@ dict update and a bounded ring -- because it runs on every message, about a
 hundred a second, and the interesting arithmetic belongs to whoever reads it.
 """
 
+import json
 import sys
 import threading
 import unittest
@@ -200,15 +201,15 @@ class HistorySinceMakesTheStreamACheapDelta(unittest.TestCase):
     """A stream ticking four times a second must not resend the whole ring
     every tick -- that is a bigger flood than the one this feature replaces.
     `history_since` is how a caller who already has an earlier `at` asks for
-    only what is new. Rows and unhandled stay whole regardless: there are
-    only a few hundred addresses, and the reader needs their current totals,
-    not a delta."""
+    only what is new. Rows stay whole regardless: there are only about forty
+    understood addresses, and the reader needs their current totals, not a
+    delta. The unknown table is not part of this cost at all -- it is not in
+    `snapshot()` in the first place, cutoff or not."""
 
-    def test_the_cutoff_splits_history_but_leaves_rows_and_unhandled_whole(
-            self):
+    def test_the_cutoff_splits_history_but_leaves_the_rows_whole(self):
         traffic = Traffic()
         traffic.seen(IN, "/a/0", 1, "motion")
-        traffic.unhandled("/track/3/name")
+        traffic.unknown("/track/3/name", 0.0, "reaper")
         cutoff = traffic.snapshot()["at"]
         traffic.seen(IN, "/a/0", 2, "motion")
         traffic.seen(IN, "/a/1", 3, "motion")
@@ -217,23 +218,11 @@ class HistorySinceMakesTheStreamACheapDelta(unittest.TestCase):
         self.assertEqual([e["address"] for e in since_cutoff["history"]],
                          ["/a/0", "/a/1"])
         self.assertEqual(since_cutoff["rows"][0]["count"], 2)
-        self.assertEqual(since_cutoff["unhandled"], {"/track/3/name": 1})
+        self.assertEqual(since_cutoff["unknown_addresses"], 1)
+        self.assertNotIn("unhandled", since_cutoff)
 
         whole = traffic.snapshot()
         self.assertEqual(len(whole["history"]), 3)
-
-
-class TheUnhandledAreVisible(unittest.TestCase):
-    """a3-core.py has counted these since the wire branch and shown them
-    nowhere. Its own comment says the list should be visible."""
-
-    def test_they_are_counted_by_address(self):
-        traffic = Traffic()
-        traffic.unhandled("/track/3/name")
-        traffic.unhandled("/track/3/name")
-        traffic.unhandled("/track/7/pan")
-        self.assertEqual(traffic.snapshot()["unhandled"],
-                         {"/track/3/name": 2, "/track/7/pan": 1})
 
 
 class ManyThreadsAtOnce(unittest.TestCase):
@@ -277,6 +266,124 @@ class ManyThreadsAtOnce(unittest.TestCase):
         finally:
             stop.set()
             writer.join()
+
+
+class UnderstoodAndUnknownAreTwoTables(unittest.TestCase):
+    """The split this whole change exists for.
+
+    REAPER dumps ~19,000 distinct addresses when its OSC surface connects, and
+    Core can route about forty of them. Before this, every one of those became
+    a permanent row, the snapshot grew to 6.5 MiB, and a stream ticking four
+    times a second pushed it at 25 MiB/s until the maintainer's machine froze.
+
+    a3-core.py has counted these since the wire branch and shown them
+    nowhere -- its own comment says the list should be visible. `unknown()`
+    and `unknown_snapshot()` are what make that possible: a table a caller
+    can actually read, kept apart from the one `snapshot()` streams.
+    """
+
+    def setUp(self):
+        self.traffic = Traffic()
+
+    def test_an_unknown_address_gets_no_row(self):
+        self.traffic.unknown("/track/3/name", 0.0, "reaper")
+        self.assertEqual(self.traffic.snapshot()["rows"], [])
+
+    def test_the_snapshot_reports_the_size_and_not_the_contents(self):
+        for i in range(5):
+            self.traffic.unknown(f"/track/{i}/name", float(i), "reaper")
+        self.traffic.unknown("/track/0/name", 1.0, "reaper")
+        snap = self.traffic.snapshot()
+        self.assertEqual(snap["unknown_addresses"], 5)
+        self.assertEqual(snap["unknown_messages"], 6)
+        self.assertNotIn("unhandled", snap)
+
+    def test_the_unknown_table_is_fetched_separately_and_looks_like_rows(self):
+        self.traffic.unknown("/track/3/pan", 0.25, "reaper")
+        row = self.traffic.unknown_snapshot()["rows"][0]
+        for key in ("address", "count", "last_value", "last_type",
+                    "last_seen", "peer"):
+            self.assertIn(key, row)
+        self.assertEqual(row["address"], "/track/3/pan")
+        self.assertEqual(row["last_value"], 0.25)
+        self.assertEqual(row["last_type"], "float")
+
+    def test_understood_and_unknown_do_not_mix(self):
+        self.traffic.seen(IN, "/channel/0/gain", 0.5, "motion")
+        self.traffic.unknown("/track/3/name", 0.0, "reaper")
+        self.assertEqual([r["address"] for r in self.traffic.snapshot()["rows"]],
+                         ["/channel/0/gain"])
+        self.assertEqual([r["address"]
+                          for r in self.traffic.unknown_snapshot()["rows"]],
+                         ["/track/3/name"])
+
+
+class TheCapsEvictAndSaySo(unittest.TestCase):
+    """A table that silently loses rows would be the kind of lie this branch
+    has already taken eleven findings for."""
+
+    def test_the_unknown_table_stops_at_its_cap(self):
+        traffic = Traffic(unknown_cap=10)
+        for i in range(25):
+            traffic.unknown(f"/track/{i}/name", 0.0, "reaper")
+        snap = traffic.unknown_snapshot()
+        self.assertEqual(len(snap["rows"]), 10)
+        self.assertEqual(snap["evicted"], 15)
+
+    def test_the_row_table_stops_at_its_cap(self):
+        traffic = Traffic(row_cap=10)
+        for i in range(25):
+            traffic.seen(IN, f"/channel/{i}/gain", 0.0, "motion")
+        snap = traffic.snapshot()
+        self.assertEqual(len(snap["rows"]), 10)
+        self.assertEqual(snap["evicted"]["rows"], 15)
+
+    def test_eviction_drops_the_least_recently_seen(self):
+        traffic = Traffic(unknown_cap=3)
+        for name in ("a", "b", "c"):
+            traffic.unknown(f"/track/{name}", 0.0, "reaper")
+        traffic.unknown("/track/a", 1.0, "reaper")     # a is touched again
+        traffic.unknown("/track/d", 0.0, "reaper")     # pushes one out
+        left = {r["address"] for r in traffic.unknown_snapshot()["rows"]}
+        self.assertEqual(left, {"/track/a", "/track/c", "/track/d"})
+
+    def test_a_repeat_does_not_count_against_the_cap(self):
+        traffic = Traffic(unknown_cap=3)
+        for _ in range(50):
+            traffic.unknown("/track/3/name", 0.0, "reaper")
+        snap = traffic.unknown_snapshot()
+        self.assertEqual(len(snap["rows"]), 1)
+        self.assertEqual(snap["rows"][0]["count"], 50)
+        self.assertEqual(snap["evicted"], 0)
+
+    def test_nothing_is_evicted_below_the_cap(self):
+        traffic = Traffic(unknown_cap=10)
+        for i in range(10):
+            traffic.unknown(f"/track/{i}", 0.0, "reaper")
+        self.assertEqual(traffic.unknown_snapshot()["evicted"], 0)
+        self.assertEqual(traffic.snapshot()["evicted"]["unknown"], 0)
+
+
+class TheRealShapeOfTheIncident(unittest.TestCase):
+    """The numbers from the box, as a test.
+
+    19,335 unknown addresses against 44 understood ones. The point is not the
+    cap -- 19,335 is below it -- but that the snapshot the stream carries stays
+    small anyway, because the unknown table is not in it.
+    """
+
+    def test_nineteen_thousand_unknowns_do_not_enter_the_snapshot(self):
+        traffic = Traffic()
+        for i in range(19335):
+            traffic.unknown(f"/track/{i // 8}/param/{i % 8}", 0.0, "reaper")
+        for i in range(44):
+            traffic.seen(IN, f"/channel/{i}/gain", 0.0, "motion")
+
+        snap = traffic.snapshot()
+        self.assertEqual(len(snap["rows"]), 44)
+        self.assertEqual(snap["unknown_addresses"], 19335)
+        self.assertEqual(len(json.dumps(snap)) < 64 * 1024, True)
+        self.assertEqual(len(traffic.unknown_snapshot()["rows"]), 19335)
 
 
 if __name__ == "__main__":
