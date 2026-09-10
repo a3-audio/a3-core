@@ -316,7 +316,7 @@ function draw(payload) {
 
   $("unknownsummary").textContent =
     payload.unknown_addresses + " Adressen, " + payload.unknown_messages +
-    " Nachrichten. Über den Schalter „unverstanden" oder „alle" zu sehen.";
+    ' Nachrichten. Über den Schalter „unverstanden“ oder „alle“ zu sehen.';
 
   // draw() fires four times a second off the stream and would otherwise
   // stomp on whatever fetchUnknown() just wrote here -- a failed fetch would
