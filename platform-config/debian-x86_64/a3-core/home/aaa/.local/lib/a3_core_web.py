@@ -225,8 +225,10 @@ def _handler_class(traffic, send: Optional[Callable], page: Path):
 
             elif self.path == "/api/unknown":
                 # Deliberately not on the stream: this can be tens of
-                # thousands of rows. The page asks for it when its filter
-                # switch needs it, and says on screen that it is a snapshot.
+                # thousands of rows. Fetched here on request, and only on
+                # request -- never automatically -- so a page can offer it
+                # without putting the load back on the wire for every open
+                # tab.
                 payload = unknown_as_json(traffic.unknown_snapshot())
                 self._send(200, json.dumps(payload).encode(),
                            "application/json")

@@ -45,6 +45,13 @@
 <div class="bench" style="margin-bottom:6px">
   <input id="filter" placeholder="filtern …" size="28">
   <label><input type="checkbox" id="onlyactive"> nur aktive</label>
+  <select id="known">
+    <option value="known" selected>verstanden</option>
+    <option value="unknown">unverstanden</option>
+    <option value="all">alle</option>
+  </select>
+  <button id="refetch" hidden>neu holen</button>
+  <span class="muted" id="fetchage"></span>
   <span class="muted" id="status">verbinde …</span>
 </div>
 <table>
@@ -61,8 +68,8 @@
     <table><tbody id="history"></tbody></table>
   </div>
   <div>
-    <h2>Nicht behandelt</h2>
-    <table><tbody id="unhandled"></tbody></table>
+    <h2>Nicht verstanden</h2>
+    <p class="muted" id="unknownsummary"></p>
   </div>
 </div>
 
@@ -110,6 +117,29 @@ let latest = null;
 // compromise.
 let historyBuffer = [];
 const HISTORY_CAP = 10000;
+
+// The unknown rows do NOT arrive on the stream -- see /api/unknown in
+// a3_core_web.py, which is deliberately not part of _stream(). They are
+// fetched only when the switch below asks for them, which is why they need
+// their own store and their own age: they are a snapshot from the moment of
+// the fetch, not live at 4 Hz like everything else on this page.
+let unknownRows = [];
+let unknownFetchedAt = null;     // Date.now() of the fetch, or null
+let unknownEvicted = 0;
+
+// draw() runs four times a second off the stream, so anything it writes
+// unconditionally wins against anything the fetch writes. The fetch owns the
+// #fetchage line while it is working or has failed; only when it is idle
+// does the age take over. Without that, a failed fetch is visible for one
+// tick and then overwritten by the next SSE message.
+let fetchState = "idle";        // "idle" | "loading" | "failed"
+let fetchError = "";            // set together with fetchState "failed"
+
+// What the table will draw at most. 19,000 DOM nodes are slow even with the
+// stream fixed, and the filter is the way to narrow them. The count that is
+// hidden is shown, because a table that silently stops at five hundred would
+// be lying about what it holds.
+const DRAW_CAP = 500;
 
 const $ = (id) => document.getElementById(id);
 
@@ -167,11 +197,33 @@ function drawPeers(rows) {
 function drawRows(rows) {
   const needle = $("filter").value.trim();
   const onlyActive = $("onlyactive").checked;
+  const mode = $("known").value;
 
-  const shown = rows
+  // The server's `age` on a fetched row is as-of the fetch, not as-of now --
+  // it doesn't know how long the tab will sit here afterwards. These rows
+  // outlive their fetch, so the age has to grow with the wait, the same
+  // reason drawHistory recomputes rather than trusting what it was sent.
+  // Streamed rows keep their server-computed age untouched: theirs really is
+  // a quarter-second old.
+  const sinceFetch = unknownFetchedAt === null
+    ? 0 : (Date.now() - unknownFetchedAt) / 1000;
+
+  // The two sources are merged here rather than on the server: the streamed
+  // rows are live, the fetched ones are a snapshot, and keeping them apart
+  // until the last moment is what lets the age column say which is which.
+  let pool = [];
+  if (mode !== "unknown") pool = pool.concat(rows);
+  if (mode !== "known") {
+    pool = pool.concat(unknownRows.map(
+      (row) => ({...row, age: row.age + sinceFetch})));
+  }
+
+  const matching = pool
     .filter((row) => !needle || row.address.includes(needle))
     .filter((row) => !onlyActive || row.age < STALE_AFTER)
     .sort((a, b) => b.count - a.count);
+
+  const shown = matching.slice(0, DRAW_CAP);
 
   $("rows").innerHTML = shown.map((row) => {
     // Raw, not escaped: used only for the picked-row comparison below, never
@@ -188,8 +240,20 @@ function drawRows(rows) {
       "</td>" +
       "<td>" + valueText(row) + "</td>" +
       '<td class="muted">' + safe(row.peer) + "</td>" +
-      '<td class="num muted">' + ageText(row.age) + "</td></tr>";
+      '<td class="num muted">' + ageText(row.age) +
+      (row.unknown ? ' <span class="type">Abruf</span>' : "") +
+      "</td></tr>";
   }).join("");
+
+  const hidden = matching.length - shown.length;
+  const notes = [];
+  if (hidden > 0) notes.push(hidden + " weitere nicht gezeigt");
+  // Only true of the table when it can actually hold unknown rows -- on
+  // "verstanden" the eviction happened to a table this view isn't showing.
+  if (mode !== "known" && unknownEvicted > 0) {
+    notes.push(unknownEvicted + " verdrängt");
+  }
+  $("status").textContent = notes.join(", ");
 
   for (const tr of $("rows").children) {
     tr.onclick = () => {
@@ -222,14 +286,6 @@ function drawHistory(history, now) {
   }).join("") || '<tr><td class="muted">nichts</td></tr>';
 }
 
-function drawUnhandled(unhandled) {
-  const entries = Object.entries(unhandled).sort((a, b) => b[1] - a[1]);
-  $("unhandled").innerHTML = entries.slice(0, 40).map(
-    ([address, count]) =>
-      "<tr><td>" + safe(address) + '</td><td class="num">' + count + "</td></tr>"
-  ).join("") || '<tr><td class="muted">nichts</td></tr>';
-}
-
 function rememberHistory(entries, full) {
   // Called once per payload that actually arrived from the server, never
   // from a redraw -- draw() runs again on every keystroke in the filter box
@@ -257,7 +313,28 @@ function draw(payload) {
   drawPeers(payload.rows);
   drawRows(payload.rows);
   drawHistory(historyBuffer, payload.at);
-  drawUnhandled(payload.unhandled);
+
+  $("unknownsummary").textContent =
+    payload.unknown_addresses + " Adressen, " + payload.unknown_messages +
+    " Nachrichten. Über den Schalter „unverstanden" oder „alle" zu sehen.";
+
+  // draw() fires four times a second off the stream and would otherwise
+  // stomp on whatever fetchUnknown() just wrote here -- a failed fetch would
+  // be visible for one tick and then erased by the next SSE message. So this
+  // line is the fetch's while it is working or has failed, and only reverts
+  // to reporting the age once the fetch is idle again.
+  if (fetchState === "loading") {
+    $("fetchage").textContent = "hole …";
+  } else if (fetchState === "failed") {
+    $("fetchage").textContent = "ging nicht: " + fetchError;
+  } else {
+    // Said out loud because two rows in one table can now be differently
+    // old: the streamed ones are a quarter-second old, the fetched ones as
+    // old as the fetch. A table that hid that would mislead about the one
+    // thing it is opened for.
+    $("fetchage").textContent = unknownFetchedAt === null ? ""
+      : "Abruf vor " + ageText((Date.now() - unknownFetchedAt) / 1000);
+  }
 }
 
 function listen() {
@@ -276,6 +353,42 @@ function listen() {
 
 $("filter").oninput = () => { if (latest) draw(latest); };
 $("onlyactive").onchange = () => { if (latest) draw(latest); };
+
+async function fetchUnknown() {
+  fetchState = "loading";
+  if (latest) draw(latest);
+  try {
+    const answer = await fetch("/api/unknown");
+    const payload = await answer.json();
+    unknownRows = payload.rows;
+    unknownEvicted = payload.evicted;
+    unknownFetchedAt = Date.now();
+    fetchState = "idle";
+  } catch (problem) {
+    unknownRows = [];
+    unknownFetchedAt = null;
+    fetchState = "failed";
+    fetchError = String(problem);
+  }
+  if (latest) draw(latest);
+}
+
+$("known").onchange = () => {
+  const mode = $("known").value;
+  const wantsUnknown = mode !== "known";
+  $("refetch").hidden = !wantsUnknown;
+  // Only fetched the first time the switch turns it on -- flipping between
+  // "unverstanden" and "alle" reuses what is already in unknownRows rather
+  // than hitting the wire again, since that is the whole point of keeping
+  // the fetch behind the switch.
+  if (wantsUnknown && unknownFetchedAt === null) {
+    fetchUnknown();
+  } else {
+    if (latest) draw(latest);
+  }
+};
+
+$("refetch").onclick = fetchUnknown;
 
 async function fire(to, address, raw) {
   const said = $("benchsaid");
