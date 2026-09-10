@@ -24,11 +24,23 @@ from pathlib import Path
 #: The fields of a channel this remembers, and nothing else. A track number is
 #: not the moment: it describes the rig and lives in layout.json.
 #:
-#: `elevation` and `width` are deliberately absent although ChannelInfo has
-#: them. Nothing in a3-core.py writes either, and send_elevation(), the one
-#: reader, is never called -- so remembering them would be keeping zeroes.
-#: See issues/a3-core-elevation-cache-ist-tot.md; if that cache comes back,
-#: this is the line that has to grow.
+#: `azimuth`, `elevation` and `width` are deliberately absent although
+#: ChannelInfo has them.
+#:
+#: The first two are written now -- they are where the sound is, and Core is
+#: the only one who can answer a recall with it (see
+#: a3_core_recall.position_messages). They are still not remembered across a
+#: restart, and that is a decision rather than an oversight: a trajectory
+#: changes the position continuously, so remembering it would mean writing
+#: this file every DEFAULT_DELAY seconds for the whole length of a set. The
+#: plugins keep the position and the REAPER project saves it; what a cold Core
+#: loses is only its ability to *say* so, and it says nothing rather than
+#: guessing.
+#:
+#: `width` is absent for the original reason: nothing writes it, and
+#: send_elevation(), the one reader of either, is never called.
+#: See issues/a3-core-elevation-cache-ist-tot.md and
+#: issues/a3-core-position-hat-keinen-rueckweg-und-keinen-halter.md.
 CHANNEL_FIELDS = ("toggle_fx", "toggle_pfl", "toggle_3d")
 
 #: How long a change waits for the next one before it is written. A hand

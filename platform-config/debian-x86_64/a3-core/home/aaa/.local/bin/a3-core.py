@@ -31,7 +31,7 @@ import numpy as np
 import time
 #import rtmidi
 import math
-from typing import List, Any, Tuple
+from typing import List, Any, Optional, Tuple
 from enum import Enum
 from dataclasses import dataclass
 from pythonosc import dispatcher  # type: ignore
@@ -203,9 +203,26 @@ class ChannelInfo:
     toggle_pfl: bool = False
     toggle_3d: bool = False
 
-    # we cache elevation and width because elevation is used to
-    # recalculate the width, which is narrowed towards the zenith.
-    elevation: float = 0.0
+    # Where the sound is, as Motion last said it. Held here because nobody
+    # else can be asked: Core writes the position straight to the IEM
+    # plugins' own OSC port, not through a REAPER track, so REAPER never
+    # reports it back and there is no feedback path to read it from. The
+    # plugins do hold it -- their receiver sets the host parameter, so the
+    # project saves it -- but they are written to, not read from.
+    #
+    # None is not 0.0. Zero degrees is the front of the room, a real
+    # position, so a default of 0.0 would be Core claiming to know where a
+    # channel sits before it has ever heard. A recall leaves an unknown
+    # position unsaid instead. See a3_core_recall.position_messages and
+    # issues/a3-core-position-hat-keinen-rueckweg-und-keinen-halter.md.
+    azimuth: Optional[float] = None
+    elevation: Optional[float] = None
+
+    # Still the dead half of the old elevation/width cache: width was meant
+    # to be narrowed towards the zenith, nothing assigns it, and
+    # send_elevation() -- which reads elevation and would now have to cope
+    # with None -- is still never called.
+    # See issues/a3-core-elevation-cache-ist-tot.md.
     width: float = 0.0
 
 # Built from the layout file rather than written out here.
@@ -220,9 +237,11 @@ class ChannelInfo:
 # describes the moment are two different kinds of thing, and only one of them
 # belongs in a file that ships.
 #
-# `elevation` and `width` look like they belong to that second kind and do
-# not: nothing assigns either, and send_elevation() -- the one reader -- is
-# never called. See issues/a3-core-elevation-cache-ist-tot.md.
+# `azimuth` and `elevation` belong to that second kind and are assigned in
+# osc_handler_channel, where the position is passed on to the IEM plugins.
+# `width` does not: nothing assigns it, and send_elevation() -- the one reader
+# of either -- is still never called.
+# See issues/a3-core-elevation-cache-ist-tot.md.
 channel_infos = tuple(
     ChannelInfo(
         enc_main_azimuth=_layout.channel(index).enc_main_azimuth,
@@ -544,6 +563,10 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
     if parameter == "azimuth":
         # clamp -180..180 und sende als float an alle IEM-Empfänger
         az = float(max(min(value, 180.0), -180.0))
+        # The clamped value, not the one that arrived: a recall has to replay
+        # what the plugins were actually told, or the first recall after an
+        # out-of-range message would move the sound.
+        channel_infos[channel_index].azimuth = az
         addr = f"/MultiEncoder/azimuth{channel_index}"
         for client in udp_clients_iem:
             client.send_message(addr, az)
@@ -551,6 +574,7 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
     elif parameter == "elevation":
         # clamp -90..90 und sende als float an alle IEM-Empfänger
         el = float(max(min(value, 90.0), -90.0))
+        channel_infos[channel_index].elevation = el
         addr = f"/MultiEncoder/elevation{channel_index}"
         for client in udp_clients_iem:
             client.send_message(addr, el)

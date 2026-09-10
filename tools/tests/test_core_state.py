@@ -124,18 +124,30 @@ class WhatTheFileMayNotKnow(unittest.TestCase):
 
 
 class TheFieldsThatAreNotHere(unittest.TestCase):
-    """ChannelInfo also carries `elevation` and `width`, and this does not
-    remember them.
+    """ChannelInfo also carries `azimuth`, `elevation` and `width`, and this
+    does not remember any of them.
 
-    Nothing in a3-core.py assigns either, and send_elevation() -- the one
-    reader -- is never called, so a remembered value would be a zero written
-    over a zero. Pinned rather than merely left out: the way this goes wrong
-    is somebody reviving the cache and not noticing it is not kept.
-    See issues/a3-core-elevation-cache-ist-tot.md."""
+    `azimuth` and `elevation` are written now -- the position, which only Core
+    can answer a recall with. Keeping them out is a decision: a trajectory
+    changes the position continuously, so remembering it would write this file
+    every DEFAULT_DELAY seconds for a whole set. The plugins hold the position
+    and the project saves it; a cold Core loses only its ability to say so.
+
+    `width` is out for the original reason -- nothing assigns it, and
+    send_elevation(), the one reader of either, is never called.
+
+    Pinned rather than merely left out: the way this goes wrong is somebody
+    adding the position here for the obvious-looking reason and not noticing
+    what it costs. See issues/a3-core-elevation-cache-ist-tot.md and
+    issues/a3-core-position-hat-keinen-rueckweg-und-keinen-halter.md."""
+
+    def test_the_position_is_not_remembered_across_a_restart(self):
+        from a3_core_state import CHANNEL_FIELDS
+        self.assertNotIn("azimuth", CHANNEL_FIELDS)
+        self.assertNotIn("elevation", CHANNEL_FIELDS)
 
     def test_the_dead_cache_is_not_remembered(self):
         from a3_core_state import CHANNEL_FIELDS
-        self.assertNotIn("elevation", CHANNEL_FIELDS)
         self.assertNotIn("width", CHANNEL_FIELDS)
 
 
