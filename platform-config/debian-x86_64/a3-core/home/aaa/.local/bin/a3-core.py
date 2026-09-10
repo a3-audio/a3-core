@@ -51,7 +51,8 @@ from a3_core_reverse import reverse_for   # noqa: E402
 from a3_core_state import StateFile, apply_state, state_of   # noqa: E402
 from a3_core_recall import (FX_MODE_WORDS, Relayed, led_message,   # noqa: E402
                             recall_messages)   # noqa: E402
-from a3_core_traffic import IN, OUT, Traffic, peer_name   # noqa: E402
+from a3_core_traffic import (ANSWERERS, COMMANDERS, IN,   # noqa: E402
+                             OUT, Traffic, peer_name)   # noqa: E402
 from a3_core_web import start_window, window_address   # noqa: E402
 
 LAYOUT_PATH = (Path(__file__).resolve().parent.parent
@@ -123,7 +124,9 @@ traffic = Traffic()
 
 #: Which host is which device, for naming an incoming message's sender.
 #: Rebuilt from the arguments below, since --mixer, --motion and --reaper can
-#: each be pointed somewhere else for a bench run.
+#: each be pointed somewhere else for a bench run. All three live in one map;
+#: which of them could have sent a given message is decided per tap, from the
+#: port it arrived at -- see peer_name's `only`.
 PEER_HOSTS = {"mixer": A3MIXER_HOST, "motion": A3MOTION_HOST,
               "reaper": REAPER_HOST}
 
@@ -392,7 +395,9 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
     value: float = float(raw)  # type: ignore
     assert type(value) == float
 
-    traffic.seen(IN, address, raw, peer_name(client_address[0], PEER_HOSTS))
+    traffic.seen(IN, address, raw,
+                 peer_name(client_address[0], PEER_HOSTS,
+                           only=COMMANDERS))
     if _print_osc:
         print(address + " : " + str(value))
 
@@ -578,7 +583,8 @@ def osc_handler_master(client_address: Tuple[str, int], address: str,
     assert type(value) == float
 
     traffic.seen(IN, address, osc_arguments[0],
-                peer_name(client_address[0], PEER_HOSTS))
+                 peer_name(client_address[0], PEER_HOSTS,
+                           only=COMMANDERS))
     if _print_osc:
         print(address + " : " + str(value))
 
@@ -631,7 +637,9 @@ def osc_handler_fx(client_address: Tuple[str, int], address: str,
 
     value = osc_arguments[0]
 
-    traffic.seen(IN, address, value, peer_name(client_address[0], PEER_HOSTS))
+    traffic.seen(IN, address, value,
+                 peer_name(client_address[0], PEER_HOSTS,
+                           only=COMMANDERS))
     if _print_osc:
         print(address + " : " + str(value))
 
@@ -700,7 +708,8 @@ def osc_handler_recall(client_address: Tuple[str, int], address: str,
     # -- if this is not tapped, a device returning after a drop is invisible
     # in the window, which is exactly the case the window exists to show.
     traffic.seen(IN, address, osc_arguments[0] if osc_arguments else None,
-                peer_name(client_address[0], PEER_HOSTS))
+                 peer_name(client_address[0], PEER_HOSTS,
+                           only=COMMANDERS))
 
     messages = list(recall_messages(_layout, channel_infos, master_info,
                                     _relayed))
@@ -746,7 +755,7 @@ def reaper_feedback_handler(client_address: Tuple[str, int], address: str,
     # 25.6 MiB/s until the maintainer's machine froze on 2026-09-10. It now
     # happens twice, further down: traffic.seen() on the path that succeeds,
     # traffic.unknown() on each path that gives up.
-    peer = peer_name(client_address[0], PEER_HOSTS)
+    peer = peer_name(client_address[0], PEER_HOSTS, only=ANSWERERS)
 
     parts = address.strip("/").split("/")
     if len(parts) < 2 or parts[0] != "track":
@@ -851,6 +860,11 @@ if __name__ == "__main__":
     # stable, but unpredictable and carrying no identity of its own. Two
     # senders on one host get two different ports that say "not the same
     # sender" and never say which one. See a3_core_traffic.peer_name.
+    #
+    # What *is* of use is which port the message arrived at, which is fixed
+    # and known here: everything mapped on this dispatcher came in on Core's
+    # main port, so only a controller can have sent it. Hence only=COMMANDERS
+    # at every tap below, and only=ANSWERERS on the feedback dispatcher's.
     dispatcher.map("/channel/*", osc_handler_channel,
                    needs_reply_address=True)
     dispatcher.map("/master/*", osc_handler_master, needs_reply_address=True)
