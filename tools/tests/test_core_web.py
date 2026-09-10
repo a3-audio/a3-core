@@ -443,12 +443,24 @@ class TheStreamNoLongerCarriesTheUnknowns(unittest.TestCase):
         self.assertEqual(len(payload["rows"]), 1)
         self.assertLess(len(json.dumps(payload)), 8 * 1024)
 
-    def test_the_eviction_counters_reach_the_page(self):
-        traffic = Traffic(unknown_cap=5)
+    def test_both_eviction_counters_are_in_the_streamed_payload(self):
+        """Named for what this actually checks: the payload `as_json` builds
+        for the stream, nothing past it. Neither cap losing rows silently is
+        the spec -- so both `evicted.rows` and `evicted.unknown` have to
+        survive into what the stream sends, not just one of them.
+
+        Whether the page then *shows* both is not verifiable here -- no test
+        in this suite touches a browser (see the module docstring); that is
+        the smoke test's job.
+        """
+        traffic = Traffic(unknown_cap=5, row_cap=3)
         for i in range(9):
             traffic.unknown(f"/track/{i}", 0.0, "reaper")
+        for i in range(7):
+            traffic.seen(IN, f"/channel/{i}/gain", 0.0, "motion")
         payload = as_json(traffic.snapshot(), None)
         self.assertEqual(payload["evicted"]["unknown"], 4)
+        self.assertEqual(payload["evicted"]["rows"], 4)
 
 
 class TheUnknownTableIsFetchedOnRequest(unittest.TestCase):

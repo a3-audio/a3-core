@@ -98,6 +98,15 @@ const DEAD_AFTER = 60;
 let picked = null;      // "direction address", or null for everything
 let latest = null;
 
+// #status has two things that want to say something through it: the
+// connection itself (dead or not) and the row notes (hidden/evicted
+// counts). Only one can own the element at a time -- see refreshStatus().
+// Whichever wins, the loser's information still exists in these two
+// variables, so the moment the winner changes, the right text reappears
+// instead of staying stuck on whatever last happened to be drawn there.
+let connectionDown = false;
+let lastRowNotes = "";
+
 // The stream sends only new history entries each tick after the first (see
 // _stream() in a3_core_web.py) -- resending the whole ring four times a
 // second would cost more than the flood this page replaces. This is where
@@ -194,7 +203,19 @@ function drawPeers(rows) {
   }).join("") || '<span class="muted">noch nichts gesehen</span>';
 }
 
-function drawRows(rows) {
+// The connection state and the row notes are decided in different places
+// (a stream event vs. a redraw) but only one of them may be on screen at
+// once -- see the comment on connectionDown/lastRowNotes above. This is the
+// single place that resolves the two into what #status actually shows, so
+// neither writer can silently stomp on the other's message.
+function refreshStatus() {
+  $("status").textContent = connectionDown
+    ? "Verbindung weg — versuche es weiter"
+    : lastRowNotes;
+}
+
+function drawRows(payload) {
+  const rows = payload.rows;
   const needle = $("filter").value.trim();
   const onlyActive = $("onlyactive").checked;
   const mode = $("known").value;
@@ -248,12 +269,22 @@ function drawRows(rows) {
   const hidden = matching.length - shown.length;
   const notes = [];
   if (hidden > 0) notes.push(hidden + " weitere nicht gezeigt");
-  // Only true of the table when it can actually hold unknown rows -- on
-  // "verstanden" the eviction happened to a table this view isn't showing.
-  if (mode !== "known" && unknownEvicted > 0) {
-    notes.push(unknownEvicted + " verdrängt");
+  // Named by which table lost the rows -- both caps can bite at once, and a
+  // bare "N verdrängt" wouldn't say which count it belongs to.
+  // "verstanden" is only shown when that table can actually appear in this
+  // view -- on "unverstanden" its eviction happened to a table this view
+  // isn't showing.
+  if (mode !== "unknown" && payload.evicted.rows > 0) {
+    notes.push(payload.evicted.rows + " verstanden verdrängt");
   }
-  $("status").textContent = notes.join(", ");
+  // Same reasoning in the other direction: only true of the table when it
+  // can actually hold unknown rows -- on "verstanden" the eviction happened
+  // to a table this view isn't showing.
+  if (mode !== "known" && unknownEvicted > 0) {
+    notes.push(unknownEvicted + " unverstanden verdrängt");
+  }
+  lastRowNotes = notes.join(", ");
+  refreshStatus();
 
   for (const tr of $("rows").children) {
     tr.onclick = () => {
@@ -311,7 +342,7 @@ function rememberHistory(entries, full) {
 function draw(payload) {
   latest = payload;
   drawPeers(payload.rows);
-  drawRows(payload.rows);
+  drawRows(payload);
   drawHistory(historyBuffer, payload.at);
 
   $("unknownsummary").textContent =
@@ -340,14 +371,22 @@ function draw(payload) {
 function listen() {
   const stream = new EventSource("/api/stream");
   stream.onmessage = (event) => {
-    $("status").textContent = "";
+    // The connection just proved itself alive by delivering a message --
+    // drawRows() (called from draw() below) is what actually repaints
+    // #status, via refreshStatus(), now that connectionDown reads false.
+    connectionDown = false;
     const payload = JSON.parse(event.data);
     rememberHistory(payload.history, payload.full);
     draw(payload);
   };
   stream.onerror = () => {
-    $("status").textContent = "Verbindung weg — versuche es weiter";
-    // EventSource reconnects on its own; saying so beats a dead page.
+    connectionDown = true;
+    // EventSource reconnects on its own; saying so beats a dead page. Called
+    // directly rather than through draw(): an error can arrive before the
+    // very first payload, while `latest` is still null and draw() has never
+    // run, and the connection state must win over a row-note redraw either
+    // way -- see refreshStatus().
+    refreshStatus();
   };
 }
 
