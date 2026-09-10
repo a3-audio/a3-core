@@ -26,7 +26,6 @@ import os
 import signal
 import sys
 import threading
-from collections import Counter
 from pathlib import Path
 import numpy as np
 import time
@@ -718,10 +717,6 @@ OSC_PORT_REAPER_FEEDBACK: int = 9002
 
 _curves = load_curves(json.loads(CURVES_PATH.read_text()))
 
-#: What arrived that nothing knows how to pass on. Counted rather than
-#: dropped in silence: the list of what is not handled should be visible.
-_unhandled = Counter()
-
 
 def reaper_feedback_handler(client_address: Tuple[str, int], address: str,
                             *osc_arguments: List[Any]) -> None:
@@ -745,43 +740,45 @@ def reaper_feedback_handler(client_address: Tuple[str, int], address: str,
     if echo_filter.is_echo(address, value):
         return
 
-    traffic.seen(IN, address, value, peer_name(client_address[0], PEER_HOSTS))
+    # The tap used to sit here, before Core knew whether it could route the
+    # message -- so every one of REAPER's ~19,000 reported addresses became a
+    # permanent row, the snapshot grew to 6.5 MiB, and the stream pushed it at
+    # 25 MiB/s until the maintainer's machine froze on 2026-09-10. It now
+    # happens twice, further down: traffic.seen() on the path that succeeds,
+    # traffic.unknown() on each path that gives up.
+    peer = peer_name(client_address[0], PEER_HOSTS)
 
     parts = address.strip("/").split("/")
     if len(parts) < 2 or parts[0] != "track":
-        _unhandled[address] += 1
-        traffic.unhandled(address)
+        traffic.unknown(address, value, peer)
         return
 
     try:
         track = int(parts[1])
     except ValueError:
-        _unhandled[address] += 1
-        traffic.unhandled(address)
+        traffic.unknown(address, value, peer)
         return
 
     role = _layout.track_role(track)
     if role is None:
-        _unhandled[address] += 1   # master, or a track A3 does not name
-        traffic.unhandled(address)
+        traffic.unknown(address, value, peer)   # master, or a track A3 does not name
         return
 
     channel_index, field = role
     entry = reverse_for(_layout, address, field)
     if entry is None:
-        _unhandled[address] += 1
-        traffic.unhandled(address)
+        traffic.unknown(address, value, peer)
         return
 
     try:
         a3_value = invert(_curves[entry.curve], value)
     except (CurveNotInvertible, KeyError):
-        _unhandled[address] += 1
-        traffic.unhandled(address)
+        traffic.unknown(address, value, peer)
         return
 
     out = _layout.address("channel_control", channel=channel_index,
                           control=entry.address)
+    traffic.seen(IN, address, value, peer)
     _relayed.note(entry.to, out, a3_value)
     client_for(entry.to).send_message(out, a3_value)
 
