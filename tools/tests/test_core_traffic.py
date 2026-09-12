@@ -472,6 +472,39 @@ class AnAddressDoesNotStayUnknownOnceItIsUnderstood(unittest.TestCase):
         traffic.seen(OUT, "/track/10/fx/1/fxparam/1/value", 0.5, "reaper")
         self.assertEqual(len(traffic.unknown_snapshot()["rows"]), 1)
 
+    def test_a_restored_unknown_row_yields_to_a_restored_incoming_row(self):
+        """The case that actually bites, and the one the branch above cannot
+        reach.
+
+        Both tables survive a restart; what Core can route does not. After
+        the reverse table grew, twenty-three addresses came back with a
+        restored row in *each* table -- and because the known row was already
+        there, no message ever took the creating branch again. They would
+        have read as unrecognised for the life of the file.
+        """
+        traffic = Traffic()
+        traffic.restore(
+            [{"direction": IN, "address": "/track/1/fx/1/fxparam/1/value",
+              "count": 4, "peer": "reaper", "last_seen": 0.0}],
+            [{"address": "/track/1/fx/1/fxparam/1/value",
+              "count": 9, "peer": "reaper", "last_seen": 0.0}])
+
+        self.assertEqual(traffic.unknown_snapshot()["rows"], [])
+        self.assertEqual(len(traffic.snapshot()["rows"]), 1)
+
+    def test_a_restored_outgoing_row_does_not_clear_it(self):
+        """Core sends the crossfade's gains and cannot read the crossfade back
+        out of one of them. Known outbound, unknown inbound -- both rows are
+        true and both belong on the page."""
+        traffic = Traffic()
+        traffic.restore(
+            [{"direction": OUT, "address": "/track/10/fx/1/fxparam/1/value",
+              "count": 4, "peer": "reaper", "last_seen": 0.0}],
+            [{"address": "/track/10/fx/1/fxparam/1/value",
+              "count": 9, "peer": "reaper", "last_seen": 0.0}])
+
+        self.assertEqual(len(traffic.unknown_snapshot()["rows"]), 1)
+
     def test_it_costs_nothing_on_the_hot_path(self):
         """Only the branch that *creates* a row looks at the unknown table.
         seen() runs about a hundred times a second and a repeat message must

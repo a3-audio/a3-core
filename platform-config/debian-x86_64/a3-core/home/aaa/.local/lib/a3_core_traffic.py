@@ -373,6 +373,21 @@ class Traffic:
             for row in unknown:
                 if row["address"] in self._unknown:
                     continue
+
+                # Saved as unrecognised, and routed since. Both tables
+                # survive a restart and what Core can route does not: the
+                # reverse table grew on 2026-09-12 and twenty-three addresses
+                # came back with a row in each. The creating branch in seen()
+                # cannot reach these -- the known row is already here, so no
+                # message ever creates one again -- and they would have read
+                # as unrecognised for the life of the file.
+                #
+                # Inbound only, and after the known rows are in, which the
+                # order of these two loops guarantees. An outgoing row says
+                # nothing about whether the same address is understood coming
+                # back.
+                if (IN, row["address"]) in self._rows:
+                    continue
                 self._unknown[row["address"]] = dict(row, last_value=None,
                                                      last_type="")
                 # The running total is a lifetime figure the page shows beside
