@@ -16,8 +16,10 @@ PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local"
 sys.path.insert(0, str(PACKAGE / "lib"))
 
 from a3_core_subscribers import (SHIPPED, SubscriberError,   # noqa: E402
+                                 everyone_but,
                                  parse_subscriber,
-                                 parse_subscribers)
+                                 parse_subscribers,
+                                 relay_on_arrival)
 
 
 class OneSubscriber(unittest.TestCase):
@@ -88,6 +90,110 @@ class SeveralSubscribers(unittest.TestCase):
 
     def test_nothing_given_is_nothing_added(self):
         self.assertEqual(parse_subscribers([]), [])
+
+
+class Named:
+    """Stands in for a WatchedClient, which is all `everyone_but` reads."""
+
+    def __init__(self, name):
+        self.name = name
+
+
+class WhoHearsAValueThatJustArrived(unittest.TestCase):
+    """The desk turns a knob; every *other* screen has to show it.
+
+    Not the desk itself: it is holding the knob. And never desk-to-screen
+    directly -- Core is the only place that knows who is listening, which is
+    the whole point of the subscriber list.
+    """
+
+    def setUp(self):
+        self.everyone = [Named("mixer"), Named("motion"), Named("light")]
+
+    def names(self, origin):
+        return [client.name for client in everyone_but(self.everyone, origin)]
+
+    def test_the_sender_is_left_out(self):
+        self.assertEqual(self.names("mixer"), ["motion", "light"])
+
+    def test_a_screen_that_sent_it_is_left_out_too(self):
+        """Symmetric on purpose: Motion's own strip is a mixer like any
+        other."""
+        self.assertEqual(self.names("motion"), ["mixer", "light"])
+
+    def test_with_no_known_sender_everybody_hears_it(self):
+        """REAPER's report and a recall have no subscriber behind them, and
+        an unnamed host is an unknown one -- not a reason to keep a screen
+        dark."""
+        for origin in (None, "", "reaper", "127.0.0.1 (mehrdeutig)"):
+            with self.subTest(origin=origin):
+                self.assertEqual(self.names(origin),
+                                 ["mixer", "motion", "light"])
+
+    def test_the_order_is_the_subscriber_order(self):
+        """Same reason SHIPPED is ordered: a replay reads the same twice."""
+        self.assertEqual(self.names("light"), ["mixer", "motion"])
+
+
+class WhatIsPassedOnWhenItArrives(unittest.TestCase):
+    """Why on arrival at all: REAPER does not report a change back to the
+    surface that caused it, and Core *is* that surface. So a knob on the desk
+    would otherwise reach REAPER and no screen at all -- measured at the rig
+    on 2026-09-12, see
+    issues/a3-core-was-am-pult-gedreht-wird-erreicht-motion-nicht.md.
+    """
+
+    def test_the_channel_strip_is_passed_on(self):
+        for parameter in ("gain", "volume", "fx-send", "3d"):
+            with self.subTest(parameter=parameter):
+                self.assertTrue(relay_on_arrival(f"/channel/0/{parameter}"))
+
+    def test_the_eq_bands_are_passed_on(self):
+        """Four segments rather than three, and the band is not the
+        parameter."""
+        for band in ("high", "mid", "low"):
+            with self.subTest(band=band):
+                self.assertTrue(relay_on_arrival(f"/channel/2/eq/{band}"))
+
+    def test_the_master_and_the_filter_are_passed_on(self):
+        for address in ("/master/volume", "/master/booth", "/master/phones_mix",
+                        "/master/phones_volume", "/master/return",
+                        "/fx/frequency", "/fx/resonance"):
+            with self.subTest(address=address):
+                self.assertTrue(relay_on_arrival(address))
+
+    def test_a_flag_is_not_passed_on_here(self):
+        """`pfl`, `fx` and the filter mode are announced by announce_flag()
+        and the mode branch -- to everybody, the sender included, because a
+        lamp is status and the desk's own lamp has to follow its own key.
+        Passing them on here as well would send each twice."""
+        for address in ("/channel/0/pfl", "/channel/3/fx", "/fx/mode"):
+            with self.subTest(address=address):
+                self.assertFalse(relay_on_arrival(address))
+
+    def test_the_position_is_not_passed_on(self):
+        """It is not a REAPER parameter -- it goes to the IEM encoders -- and
+        it arrives tens of thousands of times per channel. Motion asks for it
+        at start-up instead; see
+        smoke-test/smoke-test-motion-hoert-die-position.md."""
+        for address in ("/channel/0/azimuth", "/channel/1/elevation"):
+            with self.subTest(address=address):
+                self.assertFalse(relay_on_arrival(address))
+
+    def test_an_accent_still_reaches_the_other_screens(self):
+        """pot_1 and pot_2 carry Motion's *effective* value, accent included,
+        and they are passed on anyway -- because the sender is left out, so
+        nothing writes an accent peak into the base it came from. That was the
+        ratchet of 2026-09-12 morning, and it lived in the other direction:
+        REAPER's report, not arrival."""
+        self.assertTrue(relay_on_arrival("/channel/0/pot_1"))
+        self.assertTrue(relay_on_arrival("/channel/0/pot_2"))
+
+    def test_what_is_not_a_value_at_all(self):
+        for address in ("/beat", "/tap", "/state/recall", "/channel/0",
+                        "/channel", "/track/12/fx/1/fxparam/1/value", "/"):
+            with self.subTest(address=address):
+                self.assertFalse(relay_on_arrival(address))
 
 
 class TheTwoThatShip(unittest.TestCase):

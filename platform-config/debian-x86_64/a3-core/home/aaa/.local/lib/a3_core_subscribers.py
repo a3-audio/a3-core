@@ -101,3 +101,64 @@ def parse_subscribers(texts, reserved=()):
         found.append((name, host, port))
 
     return found
+
+
+#: The three A3-shaped families. Everything else that arrives -- `/beat`,
+#: `/state/recall`, REAPER's `/track/...` -- is a command or another vendor's
+#: language, not a value a screen shows.
+FAMILIES = ("channel", "master", "fx")
+
+#: Flags. These are passed on by `announce_flag()` and the filter-mode branch
+#: instead, and those tell **everybody including the sender** -- a lamp is
+#: status, so the desk's own lamp has to follow the desk's own key. Passing
+#: them on here as well would send each of them twice.
+ANNOUNCED_INSTEAD = ("pfl", "fx", "mode")
+
+#: The position. Not a REAPER parameter at all -- it goes straight to the IEM
+#: encoders -- and it arrives tens of thousands of times per channel while a
+#: clip plays. A screen that wants it asks for it at start-up.
+ASKED_FOR_INSTEAD = ("azimuth", "elevation")
+
+
+def relay_on_arrival(address):
+    """Whether a value that just arrived should go on to the other screens.
+
+    **Why on arrival and not on REAPER's report:** REAPER does not report a
+    change back to the surface that caused it, and Core *is* that surface. A
+    knob turned on the desk therefore reached REAPER and no screen at all --
+    measured at the rig on 2026-09-12. REAPER's report covers the other case,
+    a hand inside REAPER, and keeps its own exclusions.
+
+    **Why this is safe where the report was not:** what arrives here is what a
+    hand set -- the base value, before any accent envelope lies on top. The
+    ratchet of that morning came from passing on REAPER's value, which is base
+    *plus* modulation, and writing it back as a base. Nothing here passes
+    through REAPER.
+    """
+    parts = address.strip("/").split("/")
+    if len(parts) < 2 or parts[0] not in FAMILIES:
+        return False
+
+    if parts[0] == "channel":
+        if len(parts) < 3:
+            return False
+        parameter = parts[2]
+    else:
+        parameter = parts[1]
+
+    return (parameter not in ANNOUNCED_INSTEAD
+            and parameter not in ASKED_FOR_INSTEAD)
+
+
+def everyone_but(subscribers, origin):
+    """Every subscriber except the one named `origin`.
+
+    The sender is left out because it is holding the control: telling it what
+    it just said is the loop this whole reverse path keeps almost becoming.
+    An origin Core cannot name -- REAPER's report, a recall, an unknown host --
+    leaves nobody out, because an unnamed sender is not a reason to keep a
+    screen dark.
+
+    Reads only `.name`, so a WatchedClient and a stand-in behave alike.
+    """
+    return [client for client in subscribers if client.name != origin]
