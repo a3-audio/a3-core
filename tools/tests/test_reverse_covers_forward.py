@@ -26,7 +26,8 @@ ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local"
 sys.path.insert(0, str(PACKAGE / "lib"))
 
-from a3_core_reverse import CHANNEL_REVERSALS   # noqa: E402
+from a3_core_reverse import (CHANNEL_REVERSALS,   # noqa: E402
+                             reverse_for)
 
 #: Curves whose values are deliberately not relayed back, and why.
 NOT_REVERSED = {
@@ -146,3 +147,112 @@ class TheWayBackIsSpelledLikeTheWayOut(unittest.TestCase):
             self.layout.address("channel_control", channel=2,
                                 control="eq/high"),
             "/channel/2/eq/high")
+
+
+#: Controls the forward handler answers to that deliberately have no way back,
+#: and why. Checked against the handler itself, so an entry that outlives its
+#: reason shows up as a failure rather than as a note nobody reads.
+NOT_ANSWERED_FOR = {
+    # Core holds these itself and answers a recall from its own memory rather
+    # than from REAPER, because REAPER has nothing to report: the position
+    # goes straight to the IEM plugins' own OSC port, never through a track.
+    "azimuth": "written straight to the IEM plugins; Core remembers it",
+    "elevation": "the same",
+    # One input, two gains on two tracks. A single number cannot say which
+    # input it came from, and nothing holds either of them.
+    "3d": "not invertible from one gain, and nothing holds it",
+    "fx-send": "the same",
+    # Core's own state, not REAPER's, and they come back from REAPER as a mute
+    # rather than as the flag they set.
+    "pfl": "a toggle of Core's own; comes back as a mute",
+    "fx": "the same",
+    "4d": "the same",
+}
+
+
+class EveryControlIsAnsweredFor(unittest.TestCase):
+    """Coverage by control name, which is the level the gap was at.
+
+    The curve-based check above walks calls named slope_*. The two encoder
+    pots went out through a plain np.interp and so were invisible to it --
+    they had no way back for as long as this table existed and nothing said
+    so. A control either reports back or is written down here with a reason.
+    """
+
+    def setUp(self):
+        self.accepted = controls_the_forward_handler_accepts()
+        self.reversed_controls = {entry.address
+                                  for entry in CHANNEL_REVERSALS}
+
+    def test_each_control_reports_back_or_says_why_not(self):
+        for control in sorted(self.accepted):
+            self.assertTrue(
+                control in self.reversed_controls
+                or control in NOT_ANSWERED_FOR,
+                f"the forward handler answers to {control!r} but nothing "
+                f"reports it back and NOT_ANSWERED_FOR does not say why")
+
+    def test_nothing_is_excused_that_the_handler_does_not_have(self):
+        """An excuse outliving its control is a note that has become
+        fiction."""
+        for control in NOT_ANSWERED_FOR:
+            self.assertIn(
+                control, self.accepted,
+                f"{control!r} is excused but the forward handler no longer "
+                f"answers to it")
+
+    def test_no_control_is_both_answered_and_excused(self):
+        self.assertEqual(self.reversed_controls & set(NOT_ANSWERED_FOR),
+                         set())
+
+
+class ThePotsFindTheirWayHome(unittest.TestCase):
+    """The two entries added on 2026-09-12, end to end through reverse_for.
+
+    Worth spelling out rather than trusting the table: the pots are the first
+    entries whose `to` is not the mixer, and the first whose inverse is
+    arithmetic rather than a recorded curve.
+    """
+
+    def setUp(self):
+        from a3_core_layout import load_layout
+        self.layout = load_layout(PACKAGE / "share/a3-core/layout.json")
+
+    def _address(self, channel, slot, param):
+        track = getattr(self.layout.channel(channel), "track_stereo_enc")
+        return f"/track/{track}/fx/{slot}/fxparam/{param}/value"
+
+    def test_the_first_pot_is_recognised(self):
+        slot = self.layout.fx_slot("enc_pots")
+        entry = reverse_for(self.layout,
+                            self._address(0, slot,
+                                          self.layout.fx_param("enc_pot_1")),
+                            "track_stereo_enc")
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.address, "pot_1")
+        self.assertEqual(entry.curve, "linear_enc_pot")
+
+    def test_the_second_pot_is_a_different_entry(self):
+        slot = self.layout.fx_slot("enc_pots")
+        entry = reverse_for(self.layout,
+                            self._address(3, slot,
+                                          self.layout.fx_param("enc_pot_2")),
+                            "track_stereo_enc")
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.address, "pot_2")
+
+    def test_a_pot_goes_back_to_motion_and_not_to_the_mixer(self):
+        """The mixer has no encoder. Sending it there would be a message it
+        has no handler for."""
+        for entry in CHANNEL_REVERSALS:
+            if entry.address in ("pot_1", "pot_2"):
+                self.assertEqual(entry.to, "motion", entry.address)
+
+    def test_another_plugin_on_the_same_track_is_not_a_pot(self):
+        """The stereo encoder itself sits on the same track in a different
+        slot. Matching on the track alone would answer for it too."""
+        other = self.layout.fx_slot("stereo_enc")
+        self.assertNotEqual(other, self.layout.fx_slot("enc_pots"))
+        self.assertIsNone(
+            reverse_for(self.layout, self._address(0, other, 8),
+                        "track_stereo_enc"))

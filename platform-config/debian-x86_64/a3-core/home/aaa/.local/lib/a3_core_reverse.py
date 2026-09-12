@@ -18,7 +18,13 @@ That is a real refactor of the live message path and is not this change.
 
 - The stereo/multi crossfade (3d, fx-send). One input becomes two gains on two
   tracks; a single number cannot say which input it came from, and
-  a3_core_curves refuses it rather than inventing one.
+  a3_core_curves refuses it rather than inventing one. Neither has anything
+  holding it, so neither is answered for at all.
+
+- The position (azimuth, elevation). It never goes to a REAPER track at all --
+  Core writes it straight to the IEM plugins' own OSC port -- so there is
+  nothing for REAPER to report. Core remembers it instead; same place, same
+  reason.
 - The toggles (pfl, fx, 4d). They are Core's own state, not REAPER's, and
   they come back from REAPER as a mute rather than as the flag they set.
 
@@ -39,15 +45,17 @@ Reverse = namedtuple("Reverse", "field slot param curve address to")
 #: The slot is the layout's name rather than a number, so this reads as "the
 #: gain plugin" and follows a project where a plugin moves.
 #:
-#: `to` is which device the message goes back to, and it has to be said: these
-#: are the mixer's channel strip, and telling Motion about them would be
-#: telling it about controls it does not have.
+#: `to` is which device the message goes back to, and it is not one answer.
+#: Gain, the three EQ bands and volume are the mixer's channel strip, and
+#: telling Motion about them would be telling it about controls it does not
+#: have. The two encoder pots are the other way round: they are Motion's, and
+#: the mixer has no encoder.
 #:
-#: **Only the per-channel mixer controls are here.** The filter's frequency
-#: and resonance arrive on /fx/*, which is global rather than per channel --
-#: the first version of this table gave them a channel address, which would
-#: have sent four contradictory messages for one control. They need their own
-#: way back and do not have one yet.
+#: **Only per-channel controls are here.** The filter's frequency and
+#: resonance arrive on /fx/*, which is global rather than per channel -- the
+#: first version of this table gave them a channel address, which would have
+#: sent four contradictory messages for one control. They need their own way
+#: back and do not have one yet.
 CHANNEL_REVERSALS = (
     Reverse("track_input", "gain", 1, "slope_volume", "gain", "mixer"),
     Reverse("track_input", "eq", 1, "slope_eq", "eq/high", "mixer"),
@@ -55,6 +63,22 @@ CHANNEL_REVERSALS = (
     Reverse("track_input", "eq", 3, "slope_eq", "eq/low", "mixer"),
     Reverse("track_channelbus", None, None, "slope_volume", "volume",
             "mixer"),
+
+    # Motion's two encoder pots -- filter frequency and Q. They went out
+    # through no curve at all, a straight np.interp(v, [0, 1], [0.05, 0.9]),
+    # so what inverts them is arithmetic rather than a recorded table; see
+    # a3_core_curves.LINEAR_MAPS. Writing that down as an eleventh golden
+    # curve would have been inventing a measurement.
+    #
+    # These two are why the curve-based coverage test never noticed they had
+    # no way back: it walks calls named slope_*, and an np.interp send is not
+    # one. TheEveryControlIsAnsweredFor in
+    # tools/tests/test_reverse_covers_forward.py now checks by control name
+    # instead, which is the level the gap was at.
+    Reverse("track_stereo_enc", "enc_pots", 1, "linear_enc_pot", "pot_1",
+            "motion"),
+    Reverse("track_stereo_enc", "enc_pots", 2, "linear_enc_pot", "pot_2",
+            "motion"),
 )
 
 

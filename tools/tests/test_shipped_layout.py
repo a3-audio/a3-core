@@ -97,7 +97,7 @@ class TheRestOfTheMap(unittest.TestCase):
         # Core that does not start -- which is the right failure, but it
         # should be found here.
         for slot in ("gain", "eq", "eq_enc", "hipass", "lopass",
-                     "channel_volume", "stereo_enc", "enc"):
+                     "channel_volume", "stereo_enc", "enc", "enc_pots"):
             self.assertGreater(self.layout.fx_slot(slot), 0, slot)
 
     def test_every_gain_list_a3_core_asks_for_is_there(self):

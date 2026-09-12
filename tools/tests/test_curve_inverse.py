@@ -23,7 +23,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core"
                        / "home/aaa/.local/lib"))
 
-from a3_core_curves import CurveNotInvertible, invert, load_curves  # noqa: E402
+from a3_core_curves import (CurveNotInvertible, LINEAR_MAPS,  # noqa: E402
+                            LinearMap, invert, load_curves)
 
 CURVES = json.loads(
     (ROOT / "tools/curve-characterisation/curves-golden.json").read_text())
@@ -92,6 +93,61 @@ class TheOneThatCannot(unittest.TestCase):
         curves = load_curves(CURVES)
         with self.assertRaises(CurveNotInvertible):
             invert(curves["slope_crossfade_gain"], 0.25)
+
+
+class TheOnesThatAreNotCurvesAtAll(unittest.TestCase):
+    """The encoder pots do not go through a curve.
+
+    a3-core.py sends them with a straight np.interp(v, [0, 1], [0.05, 0.9]).
+    Recording that as an eleventh golden curve would be inventing a
+    measurement: the golden file holds what the running Python *did*, and
+    nothing recorded this because there was nothing to record. So it is
+    written down as the arithmetic it is, and inverted as arithmetic.
+    """
+
+    def setUp(self):
+        self.curves = load_curves(CURVES)
+
+    def test_the_pot_map_arrives_with_the_curves(self):
+        # a3-core.py looks everything up in one dict, so this has to be in it
+        # or the reverse table's entry would find nothing and give up.
+        self.assertIn("linear_enc_pot", self.curves)
+        self.assertIsInstance(self.curves["linear_enc_pot"], LinearMap)
+
+    def test_a_mapped_value_comes_back_where_it_started(self):
+        pot = self.curves["linear_enc_pot"]
+        for a3_value in (0.0, 0.25, 0.5, 0.75, 1.0):
+            sent = 0.05 + a3_value * (0.9 - 0.05)
+            self.assertAlmostEqual(invert(pot, sent), a3_value, places=6)
+
+    def test_the_ends_are_the_ends(self):
+        pot = self.curves["linear_enc_pot"]
+        self.assertAlmostEqual(invert(pot, 0.05), 0.0, places=6)
+        self.assertAlmostEqual(invert(pot, 0.9), 1.0, places=6)
+
+    def test_outside_the_range_it_clamps_like_a_curve_does(self):
+        """np.interp clamps on the way out, so the way back has to clamp too.
+
+        REAPER can hold 0.0 on this parameter -- somebody moved it there --
+        and A3 cannot produce it. The end of the range is the honest answer;
+        a negative A3 value would be an invention.
+        """
+        pot = self.curves["linear_enc_pot"]
+        self.assertAlmostEqual(invert(pot, 0.0), 0.0, places=6)
+        self.assertAlmostEqual(invert(pot, 1.0), 1.0, places=6)
+
+    def test_it_says_it_was_sure(self):
+        """No plateaus here: the map is strictly rising, so every answer is
+        exact. Pinned because a caller that asks is entitled to a straight
+        yes."""
+        pot = self.curves["linear_enc_pot"]
+        value, exact = invert(pot, 0.5, tell_me=True)
+        self.assertTrue(exact)
+        self.assertAlmostEqual(value, (0.5 - 0.05) / 0.85, places=6)
+
+    def test_the_table_says_what_the_source_does(self):
+        """The one number that has to agree with a3-core.py."""
+        self.assertEqual(LINEAR_MAPS["linear_enc_pot"], (0.0, 1.0, 0.05, 0.9))
 
 
 if __name__ == "__main__":

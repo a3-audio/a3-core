@@ -44,9 +44,63 @@ class Curve:
             self.rising = self.outputs[-1] >= self.outputs[0]
 
 
+#: The mappings that are not curves: a straight line from an A3 range to a
+#: REAPER range, as (a3 low, a3 high, reaper low, reaper high).
+#:
+#: The encoder pots are sent with np.interp(v, [0, 1], [0.05, 0.9]) and never
+#: touched a curve. Recording that as an eleventh golden curve would be
+#: inventing a measurement -- curves-golden.json holds what the running Python
+#: *did*, and nothing recorded this because there was nothing to record. It is
+#: written down as the arithmetic it is.
+#:
+#: These four numbers have to agree with a3-core.py's pot_1/pot_2 branches.
+#: Nothing checks that automatically: the coverage test walks calls named
+#: slope_*, and an np.interp send is not one.
+LINEAR_MAPS = {
+    "linear_enc_pot": (0.0, 1.0, 0.05, 0.9),
+}
+
+
+class LinearMap:
+    """A straight line between two ranges, read backwards.
+
+    Same job as a Curve and nothing in common underneath: a recorded table is
+    searched, this is arithmetic. It clamps at both ends for the same reason
+    a Curve does -- np.interp clamps on the way out, so REAPER can be holding
+    a value A3 cannot produce, and the end of the range is the honest answer.
+    """
+
+    def __init__(self, name, a3_low, a3_high, out_low, out_high):
+        self.name = name
+        self.a3_low, self.a3_high = a3_low, a3_high
+        self.out_low, self.out_high = out_low, out_high
+        self.single_valued = True
+
+    def inverted(self, output, tell_me=False):
+        span = self.out_high - self.out_low
+        fraction = (output - self.out_low) / span if span else 0.0
+        fraction = min(1.0, max(0.0, fraction))
+        value = self.a3_low + fraction * (self.a3_high - self.a3_low)
+
+        # Always exact: a straight line has no plateau, so there is never a
+        # range of inputs behind one output. Said out loud rather than left
+        # for a caller to assume.
+        return (value, True) if tell_me else value
+
+
 def load_curves(recorded):
-    """The golden file, as curves that can be inverted."""
-    return {name: Curve(name, points) for name, points in recorded.items()}
+    """The golden file, as curves that can be inverted -- plus the maps that
+    were never curves.
+
+    Both kinds arrive in one dict because a3-core.py looks everything up in
+    one dict, by the name its reverse-table entry carries. A reverse entry
+    naming something that is not here finds nothing and gives up quietly,
+    which is the failure this avoids.
+    """
+    curves = {name: Curve(name, points) for name, points in recorded.items()}
+    curves.update({name: LinearMap(name, *numbers)
+                   for name, numbers in LINEAR_MAPS.items()})
+    return curves
 
 
 def invert(curve, output, tell_me=False):
@@ -65,6 +119,13 @@ def invert(curve, output, tell_me=False):
     can know it was not sure; three of the eleven curves have plateaus and
     somebody will meet one.
     """
+    # Two kinds of thing can be inverted here and they share nothing below
+    # this line: a recorded table is searched, a straight line is arithmetic.
+    # Dispatched rather than given a common base class, because this one call
+    # is the only thing they would share.
+    if isinstance(curve, LinearMap):
+        return curve.inverted(output, tell_me)
+
     if not curve.single_valued:
         raise CurveNotInvertible(
             f"{curve.name} returns more than one number per input")

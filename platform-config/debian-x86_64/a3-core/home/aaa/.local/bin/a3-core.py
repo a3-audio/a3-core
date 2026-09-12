@@ -89,6 +89,11 @@ FX_INDEX_LOPASS: int = _layout.fx_slot("lopass")
 FX_INDEX_CHANNEL_VOLUME: int = _layout.fx_slot("channel_volume")
 FX_INDEX_STEREO_ENC: int = _layout.fx_slot("stereo_enc")
 FX_INDEX_ENC: int = _layout.fx_slot("enc")
+#: The plugin on the stereo-encoder track that carries the encoder's two
+#: pots. It was the literal 2 in both pot branches -- the one number in the
+#: forward path that the layout did not name, which is also why the reverse
+#: table could not name it either.
+FX_INDEX_ENC_POTS: int = _layout.fx_slot("enc_pots")
 
 CHANNEL_ENC_MAIN: int = 26
 CHANNEL_ENC_PHONES: int = 27
@@ -585,7 +590,8 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
         #osc_reaper.send_message(
         #    f"/track/{track_stereo_enc}/fx/2/fxparam/1/value", value)
         osc_reaper.send_message(
-            f"/track/{track_stereo_enc}/fx/2/fxparam/1/value", val)
+            f"/track/{track_stereo_enc}/fx/{FX_INDEX_ENC_POTS}"
+            f"/fxparam/{_layout.fx_param('enc_pot_1')}/value", val)
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
 
     elif parameter == "pot_2":
@@ -594,7 +600,8 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
         #osc_reaper.send_message(
         #    f"/track/{track_stereo_enc}/fx/2/fxparam/2/value", value)
         osc_reaper.send_message(
-            f"/track/{track_stereo_enc}/fx/2/fxparam/2/value", val)
+            f"/track/{track_stereo_enc}/fx/{FX_INDEX_ENC_POTS}"
+            f"/fxparam/{_layout.fx_param('enc_pot_2')}/value", val)
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
 
     remember_state()
