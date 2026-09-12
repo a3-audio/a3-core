@@ -272,10 +272,70 @@ MOTION_DIRECTIONS = {
 _MOTION_FIELD = re.compile(
     r"^\s*(?:juce::String|std::array\s*<\s*juce::String\s*,[^>]*>)\s+(\w+)\s*\{")
 
-#: A C++ string literal. Applied only inside a declaration, and only after
-#: `//` has been cut off the line -- the header explains itself at length and
-#: its prose quotes addresses.
+#: A C++ string literal. Applied only to text _without_cpp_comments() has been
+#: through: both C++ sources here explain themselves at length and their prose
+#: quotes addresses, `/vu/0` among them.
 _CPP_STRING = re.compile(r'"([^"]*)"')
+
+
+def _without_cpp_comments(text):
+    """The same text with every comment blanked out, line for line.
+
+    Blanked rather than removed so the line numbers stay the ones a reader
+    will find in the file -- the `source` column is the whole point of the
+    register being checkable.
+
+    It tracks string literals rather than just splitting on `//`, because a
+    `//` inside a literal is not a comment and a URL in a string would
+    otherwise swallow the rest of its line.
+    """
+    out = []
+    state = "code"
+    index = 0
+    while index < len(text):
+        char = text[index]
+        pair = text[index:index + 2]
+
+        if state == "code":
+            if pair == "//":
+                state = "line comment"
+                out.append("  ")
+                index += 2
+                continue
+            if pair == "/*":
+                state = "block comment"
+                out.append("  ")
+                index += 2
+                continue
+            if char == '"':
+                state = "string"
+            out.append(char)
+        elif state == "string":
+            out.append(char)
+            if char == "\\":
+                # The escaped character cannot end the literal.
+                out.append(text[index + 1:index + 2])
+                index += 2
+                continue
+            if char == '"':
+                state = "code"
+        elif state == "line comment":
+            if char == "\n":
+                state = "code"
+                out.append(char)
+            else:
+                out.append(" ")
+        else:                       # block comment
+            if pair == "*/":
+                state = "code"
+                out.append("  ")
+                index += 2
+                continue
+            out.append(char if char == "\n" else " ")
+
+        index += 1
+
+    return "".join(out)
 
 
 def from_motion(text, label="OscAddresses.hh"):
@@ -289,7 +349,8 @@ def from_motion(text, label="OscAddresses.hh"):
     found = []
     field = None
 
-    for number, line in enumerate(text.splitlines(), start=1):
+    for number, line in enumerate(
+            _without_cpp_comments(text).splitlines(), start=1):
         start = _MOTION_FIELD.match(line)
         if start is not None:
             field = start.group(1)
@@ -302,8 +363,7 @@ def from_motion(text, label="OscAddresses.hh"):
         if field is None:
             continue
 
-        code = line.split("//")[0]
-        for address in _CPP_STRING.findall(code):
+        for address in _CPP_STRING.findall(line):
             if _is_address(address):
                 found.append(entry(address, "motion",
                                    MOTION_DIRECTIONS[field],
@@ -315,15 +375,414 @@ def from_motion(text, label="OscAddresses.hh"):
     return found
 
 
-def build(paths):
-    """The whole register, read from the files a workspace has.
+# ------------------------------------------------------------- layout.json
 
-    `paths` names every source by key; a key that is absent is skipped, which
-    is what lets this run where a neighbouring repo is not checked out. The
-    test says so out loud rather than comparing against a short register.
+#: Who each of Core's own templates is for. Core builds all of them, so the
+#: device is the counterpart at the other end rather than the author -- which
+#: is the same thing the window's "Gegenstelle" column says, and the axis the
+#: page filters on.
+#:
+#: A key missing from here raises: a new template in layout.json is a new
+#: conversation with somebody, and which somebody is not a thing to default.
+LAYOUT_DEVICES = {
+    # The recall replays the position and the crossfade to Motion, using this
+    # template. See a3_core_recall.remembered_messages.
+    "channel_control": "motion",
+    "dualdelay_bpm": "dualdelay",
+    "fx_mode_led": "mixer",
+    "led_3d": "mixer",
+    "led_fx": "mixer",
+    "led_pfl": "mixer",
+    "fx_param": "reaper",
+    "track_mute": "reaper",
+    "track_volume": "reaper",
+}
+
+
+def from_layout(text, label="layout.json"):
+    """Core's own address templates, out of the layout it ships with.
+
+    The line is found by searching for the key rather than taken from a
+    parser: `json` reports no positions, and a register whose `source` column
+    said only "layout.json" would not be checkable by the reader it is for.
     """
-    raise NotImplementedError
+    addresses = json.loads(text).get("addresses", {})
+    lines = text.splitlines()
+    found = []
+
+    for name, template in sorted(addresses.items()):
+        if name not in LAYOUT_DEVICES:
+            raise ValueError(
+                f"{label}: no device is recorded for {name} -- add it to "
+                f"LAYOUT_DEVICES, which is where this has to be decided "
+                f"rather than guessed")
+        quoted = f'"{name}"'
+        number = next((index for index, line in enumerate(lines, start=1)
+                       if quoted in line), 0)
+        found.append(entry(template, LAYOUT_DEVICES[name], OUT,
+                           f"{label}:{number}"))
+
+    return found
+
+
+# -------------------------------------------------------------- a3-core.py
+
+#: Which device each of Core's OSC clients talks to. The name of the variable
+#: is the only thing that says so, which is why it is written down here.
+#:
+#: `client` is the loop variable over udp_clients_iem -- the IEM plug-ins have
+#: their own OSC receivers and Core writes straight to them, which is why the
+#: position never comes back (see a3_core_recall).
+CORE_CLIENTS = {
+    "osc_reaper": "reaper",
+    "osc_a3mixer": "mixer",
+    "osc_a3motion": "motion",
+    "osc_dualdelay": "dualdelay",
+    "client": "iem",
+}
+
+#: The handlers that are actually mapped, and what the word they compare
+#: against is an address for. `%s` is the word.
+#:
+#: **param_handler is deliberately absent.** It is mapped nowhere and calls
+#: three functions that do not exist, so nothing it compares against can ever
+#: arrive; listing it would put addresses in the register that no running code
+#: can receive, which is the opposite of what the register is for.
+CORE_HANDLED = {
+    ("osc_handler_channel", "parameter"): "/channel/{ch}/%s",
+    ("osc_handler_channel", "eq_parameter"): "/channel/{ch}/eq/%s",
+    ("osc_handler_master", "parameter"): "/master/%s",
+    ("osc_handler_fx", "parameter"): "/fx/%s",
+}
+
+#: A branch that is not an address of its own. `parameter == "eq"` only opens a
+#: second comparison on the word after it, so the three real addresses are
+#: /channel/n/eq/high, /mid and /low -- and nothing ever arrives on
+#: /channel/n/eq. Left in, it would read as an address nobody sends, which is
+#: what this register calls a dead wire.
+CORE_BRANCHES = ("/channel/{ch}/eq",)
+
+
+def _bindings(tree):
+    """Every name that is bound to a string, with the line it was bound on.
+
+    Needed twice over. The addresses Core listens on are mapped through their
+    constants -- `dispatcher.map(OSC_ADDRESS_RECALL, ...)` -- and a register
+    printing the constant's name instead of its value would not answer the one
+    question it is asked. And the two IEM addresses are built into a local
+    first (`addr = f"/MultiEncoder/azimuth{channel_index}"`) and sent on the
+    next line.
+
+    The line is kept because that local is assigned twice in one function,
+    once per address, and the two sends differ only in which assignment
+    precedes them -- see _resolve.
+    """
+    found = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            targets = [node.target]
+        elif isinstance(node, ast.Assign):
+            targets = [t for t in node.targets if isinstance(t, ast.Name)]
+        else:
+            continue
+        template = _template(node.value)
+        if template is None:
+            continue
+        for target in targets:
+            found.append((node.lineno, target.id, template))
+    return sorted(found)
+
+
+def _resolve(bindings, name, lineno):
+    """What `name` held at `lineno`: the nearest binding at or before it.
+
+    Nearest-preceding rather than last-wins, because `addr` is assigned the
+    azimuth address and then the elevation one in the same function, and
+    last-wins would report both sends as the elevation.
+    """
+    holds = [template for at, bound, template in bindings
+             if bound == name and at <= lineno]
+    return holds[-1] if holds else None
+
+
+def _receiver(func):
+    """The name of the object a method is called on, or None."""
+    if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
+        return func.value.id
+    return None
+
+
+def from_core(text, label="a3-core.py"):
+    """What Core listens for, and what it sends to whom.
+
+    Read out of the syntax tree rather than by importing: importing a3-core.py
+    opens sockets and starts a server, which is why every test in this repo
+    that needs something out of it walks the tree instead.
+    """
+    tree = ast.parse(text)
+    bindings = _bindings(tree)
+    found = []
+
+    for function in ast.walk(tree):
+        if not isinstance(function, ast.FunctionDef):
+            continue
+        for node in ast.walk(function):
+            if not isinstance(node, ast.Compare) or len(node.comparators) != 1:
+                continue
+            if not isinstance(node.ops[0], ast.Eq):
+                continue
+            if not isinstance(node.left, ast.Name):
+                continue
+            template = CORE_HANDLED.get((function.name, node.left.id))
+            word = node.comparators[0]
+            if template is None or not isinstance(word, ast.Constant):
+                continue
+            if not isinstance(word.value, str):
+                continue
+            address = template % word.value
+            if address in CORE_BRANCHES:
+                continue
+            found.append(entry(address, "core", IN, _at(label, word)))
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not node.args:
+            continue
+
+        address = _template(node.args[0])
+        if isinstance(node.args[0], ast.Name):
+            address = _resolve(bindings, node.args[0].id, node.lineno)
+        if address is None or not _is_address(address):
+            continue
+
+        receiver = _receiver(node.func)
+        attribute = getattr(node.func, "attr", None)
+
+        if attribute == "map":
+            found.append(entry(address, "core", IN, _at(label, node)))
+        elif attribute == "send_message":
+            if receiver not in CORE_CLIENTS:
+                raise ValueError(
+                    f"{_at(label, node)}: {receiver} sends {address} and "
+                    f"nothing says which device that is -- add it to "
+                    f"CORE_CLIENTS")
+            found.append(entry(address, CORE_CLIENTS[receiver], OUT,
+                               _at(label, node)))
+
+    return found
+
+
+# ------------------------------------------------------- a3-core.ReaperOSC
+
+#: A line of REAPER's pattern file: an action name, then its patterns. A
+#: pattern is a type letter and a path -- `n/track/volume` is the normalised
+#: value of the track volume, and the letter is not part of the address.
+_REAPER_LINE = re.compile(r"^([A-Z][A-Z0-9_+-]*)\s+(.*)$")
+
+
+def from_reaper(text, label="a3-core.ReaperOSC"):
+    """Everything REAPER understands, out of the pattern file Core ships.
+
+    Direction is BOTH throughout, and that is the file's own doing: one line
+    lists the patterns for a control, and REAPER accepts them as commands and
+    reports on them. The note carries the action name -- FX_WETDRY -- because
+    that is the word a reader is looking for, while the pattern is what goes
+    on the wire.
+    """
+    found = []
+
+    for number, line in enumerate(text.splitlines(), start=1):
+        if line.startswith("#"):
+            continue
+        match = _REAPER_LINE.match(line)
+        if match is None:
+            continue
+        action, patterns = match.groups()
+        for pattern in patterns.split():
+            if "/" not in pattern:
+                continue            # DEVICE_TRACK_COUNT 27 and its kind
+            address = pattern[pattern.index("/"):]
+            if _is_address(address):
+                found.append(entry(address, "reaper", BOTH,
+                                   f"{label}:{number}", note=action))
+
+    return found
+
+
+# --------------------------------------------------------- the beat-analyzer
+
+#: Which way each of the analyzer's addresses runs, from Core's side.
+#:
+#: `/beat` is the only one Core is a party to. The VU meters go straight to
+#: the mixer and to Motion, and `/tap` and `/clockmode` are what the analyzer
+#: itself listens for -- Core sends neither.
+ANALYZER_DIRECTIONS = {
+    "/beat": IN,
+    "/vu/": ASIDE,
+    "/tap": ASIDE,
+    "/clockmode": ASIDE,
+}
+
+
+def from_beat_analyzer(text, label="beat-analyzer"):
+    """The clock and the meters, out of the analyzer's C++.
+
+    The addresses are written out as literals in a handful of places, so this
+    is a scan for literals that look like an address. "Look like" is doing
+    work: a printf format string starts with a slash too, and what rules it
+    out is the space in it (see ADDRESS).
+    """
+    found = []
+
+    for number, line in enumerate(
+            _without_cpp_comments(text).splitlines(), start=1):
+        for address in _CPP_STRING.findall(line):
+            if not _is_address(address):
+                continue
+            if address not in ANALYZER_DIRECTIONS:
+                raise ValueError(
+                    f"{label}:{number}: no direction is recorded for "
+                    f"{address} -- add it to ANALYZER_DIRECTIONS, which is "
+                    f"where this has to be decided rather than guessed")
+            found.append(entry(address, "beat-analyzer",
+                               ANALYZER_DIRECTIONS[address],
+                               f"{label}:{number}"))
+
+    return found
+
+
+# ------------------------------------------------------------- the whole thing
+
+#: Which reader each source is read by.
+READERS = {
+    "layout": from_layout,
+    "core": from_core,
+    "reaper": from_reaper,
+    "mixer": from_mixer,
+    "motion": from_motion,
+    "beat-analyzer": from_beat_analyzer,
+}
+
+#: Where Core's own files sit inside this repo.
+PACKAGE = "platform-config/debian-x86_64/a3-core/home/aaa/.local"
+
+#: Where the finished register is written, and the only one of these files the
+#: installed Core ever reads.
+REGISTER = f"{PACKAGE}/share/a3-core/osc-register.json"
+
+#: What the file says about itself, so somebody who opens it knows not to edit
+#: it. The register is generated; a hand edit would be erased by the next run
+#: and would make the drift test fail without saying why.
+COMMENT = ("Generated by tools/osc_register.py from the sources listed in "
+           "each entry. Do not edit by hand: tools/tests/test_osc_register.py "
+           "regenerates this and compares.")
+
+
+def source_paths(root, workspace=None):
+    """Every file the register is read from, by source key.
+
+    `root` is the a3-core checkout; `workspace` is the folder the sibling repos
+    sit in, which defaults to root's parent. Values are lists because the
+    beat-analyzer writes its four addresses across several files.
+    """
+    workspace = Path(workspace) if workspace else Path(root).parent
+    root = Path(root)
+    analyzer = workspace / "beat-analyzer"
+
+    return {
+        "layout": [root / PACKAGE / "share/a3-core/layout.json"],
+        "core": [root / PACKAGE / "bin/a3-core.py"],
+        "reaper": [root / PACKAGE
+                   / "share/a3-core/config/REAPER/OSC/a3-core.ReaperOSC"],
+        "mixer": [workspace / "a3-mixer/software/scripts/a3-mixer.py"],
+        "motion": [workspace
+                   / "a3-motion-ui/src/a3-motion-engine/OscAddresses.hh"],
+        "beat-analyzer": sorted(analyzer.glob("src/**/*.cpp"))
+                         + sorted(analyzer.glob("include/**/*.h")),
+    }
+
+
+def missing(paths):
+    """The source keys this machine cannot read, if any.
+
+    A key whose list is empty counts as missing too: that is what an absent
+    beat-analyzer checkout looks like through a glob, and a register built
+    without it would be short by four addresses while looking complete.
+    """
+    absent = []
+    for key, files in sorted(paths.items()):
+        if not files or not all(Path(path).exists() for path in files):
+            absent.append(key)
+    return absent
+
+
+def merge(entries):
+    """One row per address, device and direction, in a stable order.
+
+    Two sources saying the same thing collapse -- the beat-analyzer writes
+    `/beat` in five places -- and the first source in sort order is the one
+    kept, so the file does not churn between runs.
+
+    Two sources saying *different* things do not collapse, and that is the
+    point: `/channel/{ch}/gain` stays three rows, one for the mixer that sends
+    it, one for Motion that also sends it, and one for Core that listens. The
+    device filter is only worth having if those are separate.
+    """
+    best = {}
+    for item in sorted(entries, key=lambda row: tuple(row[f] for f in FIELDS)):
+        key = (item["address"], item["device"], item["direction"])
+        best.setdefault(key, item)
+    return [best[key] for key in sorted(best)]
+
+
+def build(paths):
+    """The whole register, read from the files `paths` names.
+
+    Nothing here is dated or counted: the file is compared byte for byte
+    against a fresh build by the test, so a timestamp in it would make every
+    run look like drift.
+    """
+    entries = []
+    for key, reader in READERS.items():
+        for path in paths.get(key, ()):
+            entries.extend(reader(Path(path).read_text(), Path(path).name))
+
+    return {"_comment": COMMENT,
+            "devices": list(DEVICES),
+            "directions": list(DIRECTIONS),
+            "entries": merge(entries)}
+
+
+def as_text(register):
+    """The register as it is written: two-space JSON with a trailing newline.
+
+    One entry per line, because a register is read in a diff as often as in a
+    browser and `indent=2` would put every field on its own line -- a
+    five-field change per moved address.
+    """
+    lines = [json.dumps(item, sort_keys=True) for item in register["entries"]]
+    head = {key: value for key, value in register.items() if key != "entries"}
+    body = ",\n    ".join(lines)
+    return (json.dumps(head, indent=2)[:-2] + ",\n"
+            + '  "entries": [\n    ' + body + "\n  ]\n}\n")
+
+
+def main(argv):
+    root = Path(__file__).resolve().parents[1]
+    paths = source_paths(root)
+
+    absent = missing(paths)
+    if absent:
+        print(f"cannot build the register here: {', '.join(absent)} is not "
+              f"beside this checkout. A short register that looked complete "
+              f"would be worse than none, so nothing was written.")
+        return 1
+
+    register = build(paths)
+    target = root / REGISTER
+    target.write_text(as_text(register))
+    print(f"{len(register['entries'])} addresses -> {target}")
+    return 0
 
 
 if __name__ == "__main__":
-    sys.exit("not finished yet")
+    sys.exit(main(sys.argv[1:]))
