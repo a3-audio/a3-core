@@ -1,6 +1,24 @@
 <!DOCTYPE patchbay>
-<patchbay name="jack_patchbay-a3-core" version="1.0.4">
+<patchbay name="a3-patchbay" version="1.0.5">
  <output-sockets>
+  <socket client="zita\-n2j" exclusive="off" name="zita\-n2j 1" type="jack-audio">
+   <plug>out_1</plug>
+   <plug>out_2</plug>
+   <plug>out_3</plug>
+   <plug>out_4</plug>
+   <plug>out_5</plug>
+   <plug>out_6</plug>
+   <plug>out_7</plug>
+   <plug>out_8</plug>
+   <plug>out_9</plug>
+   <plug>out_10</plug>
+   <plug>out_11</plug>
+   <plug>out_12</plug>
+   <plug>out_13</plug>
+   <plug>out_14</plug>
+   <plug>out_15</plug>
+   <plug>out_16</plug>
+  </socket>
   <socket client="Music\ Player\ Daemon" exclusive="off" name="Music\ Player\ Daemon 1" type="jack-audio">
    <plug>left</plug>
    <plug>right</plug>
@@ -138,6 +156,24 @@
    <plug>in19</plug>
    <plug>in20</plug>
   </socket>
+  <socket client="REAPER" exclusive="off" name="reaper_zita" type="jack-audio">
+   <plug>in21</plug>
+   <plug>in22</plug>
+   <plug>in23</plug>
+   <plug>in24</plug>
+   <plug>in25</plug>
+   <plug>in26</plug>
+   <plug>in27</plug>
+   <plug>in28</plug>
+   <plug>in29</plug>
+   <plug>in30</plug>
+   <plug>in31</plug>
+   <plug>in32</plug>
+   <plug>in33</plug>
+   <plug>in34</plug>
+   <plug>in35</plug>
+   <plug>in36</plug>
+  </socket>
   <socket client="Supercollider" exclusive="off" name="sc" type="jack-audio">
    <plug>in_1</plug>
    <plug>in_2</plug>
@@ -152,16 +188,22 @@
    <plug>in_11</plug>
    <plug>in_12</plug>
   </socket>
+  <socket client="zita\-j2n" exclusive="off" name="zita-j2n" type="jack-audio">
+   <plug>in_1</plug>
+   <plug>in_2</plug>
+  </socket>
  </input-sockets>
  <slots/>
  <cables>
+  <cable input="reaper_zita" output="zita\-n2j 1" type="jack-audio"/>
+  <cable input="reaper_56" output="Music\ Player\ Daemon 1" type="jack-audio"/>
   <cable input="jackrec 1" output="reaper_rec" type="jack-audio"/>
   <cable input="beat-analyzer_bpm" output="reaper_rec" type="jack-audio"/>
+  <cable input="zita-j2n" output="reaper_rec" type="jack-audio"/>
   <cable input="reaper" output="system" type="jack-audio"/>
   <cable input="sc" output="reaper_vu" type="jack-audio"/>
   <cable input="beat-analyzer_vu" output="reaper_vu" type="jack-audio"/>
   <cable input="system" output="reaper" type="jack-audio"/>
-  <cable input="reaper_56" output="Music\ Player\ Daemon 1" type="jack-audio"/>
  </cables>
 </patchbay>
 

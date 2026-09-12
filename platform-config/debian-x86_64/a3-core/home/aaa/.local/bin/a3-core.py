@@ -110,8 +110,19 @@ CHANNEL_ENC_DELAY: int = 25
 # all of them -- not just the two on the rig -- can be pointed at a listener
 # on a bench: without that the only way to see what Core sends is to stand in
 # front of the rig, and a path nobody can watch is a path nobody can test.
-A3MIXER_HOST, A3MIXER_PORT = '192.168.43.55', 7771
-A3MOTION_HOST, A3MOTION_PORT = '192.168.43.54', 8700
+#
+# **The numbers come from origin/main and the structure from here**, which is
+# how this merge resolved. The addresses in this file were wrong for months:
+# the mixer answers on .61:7772, not on .55:7771 -- measured, ping 0.97 ms and
+# the LEDs following, see
+# issues/a3-core-mixer-adresse-nur-auf-der-kiste.md. The working address lived
+# only as a hand edit to the installed copy until 23d9fa6 put it in git, which
+# is what that issue asked for.
+#
+# Motion's .62 comes from the same commit and is *not* separately measured;
+# only the mixer's was.
+A3MIXER_HOST, A3MIXER_PORT = '192.168.43.61', 7772
+A3MOTION_HOST, A3MOTION_PORT = '192.168.43.62', 8700
 REAPER_HOST, REAPER_PORT = '127.0.0.1', 9001
 
 # What Core sends, remembered so the echo can be told from news.

@@ -1,0 +1,15 @@
+[Unit]               
+Description=zita-j2n
+PartOf=a3-main.service
+After=a3-jack.service
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/sleep 2
+ExecStart=/usr/bin/zita-j2n --chan 2 --24bit 192.168.43.96 65100
+CPUAffinity=1 2 3
+CPUSchedulingPolicy=rr
+CPUSchedulingPriority=64
+
+[Install]
+WantedBy=default.target
