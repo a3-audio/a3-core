@@ -167,12 +167,17 @@ NOT_ANSWERED_FOR = {
     # recall from that -- see a3_core_recall.REMEMBERED_CONTROLS.
     "3d": "not invertible from one gain; Core remembers it instead",
     # A REAPER send again since 2026-09-12, not the crossfade -- and REAPER
-    # does report it. Nothing asks for it back: the only device that sets it
-    # is the desk's analog pot, which has nothing to be told. When Motion
-    # gets an fx-send fader the question returns, and the answer will be a
-    # recall rather than a relay -- see
-    # issues/a3-core-dauernder-rueckweg-ist-eine-schleife.md.
-    "fx-send": "a REAPER send; the only device that sets it is an analog pot",
+    # does report it. Motion got a fader for it the same day, so "only an
+    # analog pot sets it" has run out as a reason and this is the one entry
+    # here that is a decision rather than an impossibility.
+    #
+    # It stays out because 0 is the right value for a send to come up on, and
+    # nothing is lost by a strip that starts with the effect out. Not because
+    # it could not be relayed: no action drives it, so it would be as safe as
+    # the gain. If a hand on the desk should move the fader on the screen,
+    # this is the line to delete.
+    "fx-send": "a decision, not an impossibility -- 0 is the right value to "
+               "come up on",
     # Core's own state, not REAPER's, and they come back from REAPER as a mute
     # rather than as the flag they set.
     # Relaying these continuously is a feedback loop: REAPER holds the base
@@ -224,6 +229,19 @@ class EveryControlIsAnsweredFor(unittest.TestCase):
                          set())
 
 
+#: What an action script may drive, and therefore what REAPER's copy of may
+#: carry something the device does not hold.
+#:
+#: These are the rows of the bar's 4x3 grid in a3-motion-ui
+#: (ActionComponent.cc: "3d", "freq", "q"). A value on one of them reaches
+#: REAPER as base plus whatever the running action is adding; a value on
+#: anything else reaches REAPER unchanged.
+#:
+#: `freq` and `q` are pot_1 and pot_2 on the wire; `3d` is not reversed at all
+#: -- one number becomes two gains and cannot be read back.
+MODULATED_BY_ACTIONS = ("pot_1", "pot_2", "3d")
+
+
 class ThePotsStayOut(unittest.TestCase):
     """The two encoder pots had reverse entries for a few hours and must not
     get them back by accident.
@@ -242,9 +260,27 @@ class ThePotsStayOut(unittest.TestCase):
                              "a continuous reverse path for the pots is a "
                              "feedback loop -- see the issue")
 
-    def test_nothing_reports_back_to_motion_continuously(self):
-        """The wider rule, pinned one level up: anything Motion sets is a
-        value Motion already holds, and REAPER's copy of it carries whatever
-        modulation is running on top."""
+    def test_nothing_an_action_can_drive_is_relayed_continuously(self):
+        """The rule the pots are one case of, and the right level to pin it.
+
+        This test used to read `assertEqual(entry.to, "mixer")` -- "nothing
+        reports back to Motion continuously" -- which was the pots' rule
+        stated one size too large. It outlawed the gain and the volume too,
+        and those carry no modulation at all: REAPER's copy of a gain *is*
+        the device's gain, so there is nothing for a relay to ratchet.
+
+        Stating it too widely cost something real. The strip in A3 Motion
+        came up with GAIN and VOL at zero on a rig that was making sound,
+        and this test would have passed the whole time.
+
+        What actually decides it is whether an action script can drive the
+        control. That, and only that, is what makes REAPER's copy a different
+        quantity from the device's.
+        """
         for entry in CHANNEL_REVERSALS:
-            self.assertEqual(entry.to, "mixer", entry.address)
+            with self.subTest(control=entry.address):
+                self.assertNotIn(
+                    entry.address, MODULATED_BY_ACTIONS,
+                    f"{entry.address} can be driven by an action, so REAPER "
+                    f"holds base+accent while the device holds base. "
+                    f"Relaying that continuously ratchets the value up.")

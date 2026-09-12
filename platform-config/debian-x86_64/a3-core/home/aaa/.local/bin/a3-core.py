@@ -50,7 +50,7 @@ from a3_core_tempo import (NO_CHANGE as NO_TEMPO,   # noqa: E402
 from a3_core_buttons import (NO_CHANGE, wanted_fx_mode,   # noqa: E402
                              wanted_toggle)   # noqa: E402
 from a3_core_echo import EchoFilter   # noqa: E402
-from a3_core_reverse import reverse_for   # noqa: E402
+from a3_core_reverse import reverse_for, reversed_messages   # noqa: E402
 from a3_core_state import StateFile, apply_state, state_of   # noqa: E402
 from a3_core_recall import (FX_MODE_WORDS, Relayed, led_message,   # noqa: E402
                             recall_messages)   # noqa: E402
@@ -910,11 +910,16 @@ def reaper_feedback_handler(client_address: Tuple[str, int], address: str,
         traffic.unknown(address, value, peer)
         return
 
-    out = _layout.address("channel_control", channel=channel_index,
-                          control=entry.address)
     traffic.seen(IN, address, value, peer)
-    _relayed.note(entry.to, out, a3_value)
-    client_for(entry.to).send_message(out, a3_value)
+
+    # One report, one message per device that has the knob -- both mixers
+    # since 2026-09-12. The fan-out is in a3_core_reverse where a test can
+    # reach it; nothing imports this file, and three of this week's faults
+    # were "suite green, program broken".
+    for device, out, relayed_value in reversed_messages(
+            _layout, entry, channel_index, a3_value):
+        _relayed.note(device, out, relayed_value)
+        client_for(device).send_message(out, relayed_value)
 
 
 if __name__ == "__main__":
