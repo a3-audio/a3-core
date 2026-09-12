@@ -41,12 +41,19 @@ than continuously the way a trajectory moves a position.
 #: eventually disagree with the other three and the disagreement would only
 #: show as a light that is wrong after a restart.
 #:
-#: **pfl is sent the other way round and that is correct.** Core sends "not
-#: pfl" and a3-mixer.py inverts it again in send_button_leds_data (`0 if
-#: led_on else 255`, for led_mode 0, which is pfl's). The two cancel: pfl on
-#: is a lit button. It looks exactly like a bug, which is why it says so here.
+#: **pfl used to be sent the other way round.** Core sent "not pfl" and
+#: a3-mixer.py inverted it again in send_button_leds_data (`0 if led_on else
+#: 255`, for led_mode 0, which is pfl's). The two cancelled and the desk was
+#: right, and the *wire* carried the opposite of what its name said -- which
+#: nobody had to care about while the desk was the only reader.
+#:
+#: It stopped being nobody's problem on 2026-09-12, when the lamps became
+#: something every device is told: a lamp is meant to show the status, so it
+#: has to *be* the status. Both inversions came out together (a3-mixer.py's
+#: two branches are now one), so the desk behaves exactly as before and
+#: `/channel/n/led/pfl` finally means "this lamp is lit".
 LED_OF = {
-    "pfl": ("led_pfl", lambda channel: float(not channel.toggle_pfl)),
+    "pfl": ("led_pfl", lambda channel: float(channel.toggle_pfl)),
     "fx": ("led_fx", lambda channel: float(channel.toggle_fx)),
     "3d": ("led_3d", lambda channel: float(channel.toggle_3d)),
 }
@@ -140,23 +147,22 @@ FX_MODE_NUMBERS = {
 
 
 def lamp_messages(layout, channels, master):
-    """What the lamps should do. **For the desk and nobody else.**
+    """What every lamp shows. Broadcast like everything else.
 
-    A lamp is not a fact, it is an instruction in the desk's own convention --
-    and pfl's is inverted here and inverted again in the desk's firmware,
-    which cancels and looks exactly like a bug (see LED_OF). The filter mode
-    goes out as a word on `/fx/led` for the same reason: it is what that
-    firmware reads.
+    **A lamp is status, so it goes to everybody.** It was the desk's private
+    wire for half a day on 2026-09-12, on the grounds that it was an
+    instruction in that firmware's convention rather than a fact. The
+    maintainer's answer settled it: *the lamps are meant to show the status,
+    so they are the UI's business too.*
 
-    So these travel the desk's private wire, the way REAPER's `/track/*` and
-    the plugins' `/MultiEncoder/*` travel theirs. Broadcasting them would put
-    an inverted pfl in front of every department added from now on, and the
-    first one to trust it would be wrong with nothing to show for it.
+    That made the inversion everyone's problem instead of nobody's, so it is
+    gone -- see LED_OF. `/channel/n/led/pfl` now says whether that lamp is
+    lit, which is what its name always claimed.
 
-    This is not the per-message recipient list that was deleted on
-    2026-09-12. That one asked *who should hear this value*. This asks what
-    kind of message it is -- and a lamp instruction in somebody's firmware
-    convention is not the A3 protocol.
+    Kept separate from flag_messages because they are still two different
+    things, said in two vocabularies: a lamp is a light, a flag is a setting.
+    The filter mode is the clearest case -- `/fx/led` carries the word the
+    desk's firmware reads, `/fx/mode` carries the number every screen sends.
     """
     for index, channel in enumerate(channels):
         for flag in LED_OF:
@@ -167,7 +173,7 @@ def lamp_messages(layout, channels, master):
 
 
 def flag_messages(layout, channels, master):
-    """The same flags as facts, on the addresses they arrive on. For everyone.
+    """The same flags as settings, on the addresses they arrive on.
 
     A plain 0 or 1 on `/channel/n/pfl`, and the filter mode as a number on
     `/fx/mode` -- the spelling A3 Motion already sends, and the one
@@ -235,9 +241,10 @@ def recall_messages(layout, channels, master, relayed):
     passed on -- and REAPER's relayed values last. A caller reading the replay
     in order sees what Core knows for itself before what it was told.
 
-    The lamps are **not** here. They are the desk's own wire and its own
-    convention; see lamp_messages.
+    The lamps are in here too, since they are status like everything else --
+    see lamp_messages.
     """
+    yield from lamp_messages(layout, channels, master)
     yield from flag_messages(layout, channels, master)
     yield from remembered_messages(layout, channels)
     yield from relayed.messages()

@@ -69,16 +69,28 @@ class TheLights(unittest.TestCase):
         self.assertEqual(led_message(self.layout, "fx", 2, channel),
                          ("/channel/2/led/fx", 1.0))
 
-    def test_pfl_is_sent_the_other_way_round_and_that_is_correct(self):
-        """Core sends `not pfl` and the mixer inverts again in
-        send_button_leds_data (`0 if led_on else 255`, for led_mode 0). The
-        two cancel: pfl on is a lit button. Written out here because it looks
-        exactly like a bug and is not one -- see
-        issues/a3-doc-led-adressen-falsch-herum.md."""
+    def test_a_lamp_says_whether_it_is_lit(self):
+        """It used to say the opposite for pfl, and the desk inverted it back.
+
+        The two cancelled, so the desk was right and the wire carried the
+        opposite of its own name. Nobody had to care while the desk was the
+        only reader; on 2026-09-12 the lamps became something every device is
+        told, and both inversions came out on the same day -- this one and
+        a3-mixer.py's `0 if led_on else 255`. What reaches the pixel is
+        unchanged.
+        """
         lit = FakeChannel(toggle_pfl=True)
         dark = FakeChannel(toggle_pfl=False)
-        self.assertEqual(led_message(self.layout, "pfl", 0, lit)[1], 0.0)
-        self.assertEqual(led_message(self.layout, "pfl", 0, dark)[1], 1.0)
+        self.assertEqual(led_message(self.layout, "pfl", 0, lit)[1], 1.0)
+        self.assertEqual(led_message(self.layout, "pfl", 0, dark)[1], 0.0)
+
+    def test_no_lamp_is_inverted_any_more(self):
+        """The rule, so the next lamp added cannot quietly get its own."""
+        for flag in LED_OF:
+            with self.subTest(flag=flag):
+                on = FakeChannel(toggle_pfl=True, toggle_fx=True,
+                                 toggle_3d=True)
+                self.assertEqual(led_message(self.layout, flag, 0, on)[1], 1.0)
 
     def test_the_lamps_of_a_rig_are_three_a_channel_and_the_filter(self):
         channels, master = a_rig()
@@ -100,21 +112,20 @@ class TheLights(unittest.TestCase):
         self.assertIn(("/fx/mode", 1.0),
                       list(flag_messages(self.layout, channels, master)))
 
-    def test_the_flag_is_not_inverted_the_way_its_lamp_is(self):
-        """pfl's lamp is inverted here and inverted again in the desk's
-        firmware; the two cancel. The flag is the fact, and a device reading
-        it must not have to know any of that -- which is exactly why the two
-        travel different wires."""
+    def test_the_lamp_and_the_flag_now_agree(self):
+        """Two vocabularies for one fact, and both are broadcast -- so if they
+        disagreed, two pictures of the same channel would be on screen at
+        once."""
         channels, master = a_rig()
         channels[0].toggle_pfl = True
         lamps = dict(lamp_messages(self.layout, channels, master))
         flags = dict(flag_messages(self.layout, channels, master))
         self.assertEqual(flags["/channel/0/pfl"], 1.0)
-        self.assertEqual(lamps["/channel/0/led/pfl"], 0.0)
+        self.assertEqual(lamps["/channel/0/led/pfl"], 1.0)
 
-    def test_no_lamp_is_ever_broadcast(self):
-        """A lamp in front of a department that has not read LED_OF is an
-        inverted pfl waiting to be trusted."""
+    def test_the_flag_carries_no_lamp_address(self):
+        """Still two vocabularies, even though both now go everywhere: a lamp
+        is a light and a flag is a setting."""
         channels, master = a_rig()
         for address, _ in flag_messages(self.layout, channels, master):
             self.assertNotIn("/led/", address)
@@ -302,7 +313,7 @@ class TheWholeAnswer(unittest.TestCase):
         messages = list(recall_messages(self.layout, channels, master,
                                         relayed))
         self.assertEqual(messages[-1], ("/channel/0/gain", 0.7))
-        self.assertEqual(len(messages), 4 * 3 + 1 + 1)
+        self.assertEqual(len(messages), 2 * (4 * 3 + 1) + 1)
 
     def test_the_position_is_answered_between_the_flags_and_reaper(self):
         """Both of Core's own certainties first, REAPER's relayed values
@@ -315,10 +326,10 @@ class TheWholeAnswer(unittest.TestCase):
 
         messages = list(recall_messages(self.layout, channels, master,
                                         relayed))
-        self.assertEqual(messages[4 * 3 + 1],
+        self.assertEqual(messages[2 * (4 * 3 + 1)],
                          ("/channel/1/azimuth", 45.0))
         self.assertEqual(messages[-1], ("/channel/0/gain", 0.7))
-        self.assertEqual(len(messages), 4 * 3 + 1 + 1 + 1)
+        self.assertEqual(len(messages), 2 * (4 * 3 + 1) + 1 + 1)
 
     def test_a_cold_core_still_answers_with_its_own_flags(self):
         """After Core itself restarts, nothing has been relayed yet: REAPER
@@ -329,7 +340,7 @@ class TheWholeAnswer(unittest.TestCase):
         channels, master = a_rig()
         messages = list(recall_messages(self.layout, channels, master,
                                         Relayed()))
-        self.assertEqual(len(messages), 4 * 3 + 1)
+        self.assertEqual(len(messages), 2 * (4 * 3 + 1))
 
     def test_a_cold_core_answers_no_position_either(self):
         """Core's own restart loses the position: it is held in memory and

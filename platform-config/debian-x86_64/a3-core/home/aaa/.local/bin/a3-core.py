@@ -53,8 +53,8 @@ from a3_core_echo import EchoFilter   # noqa: E402
 from a3_core_reverse import reverse_for, reversed_address   # noqa: E402
 from a3_core_state import StateFile, apply_state, state_of   # noqa: E402
 from a3_core_recall import (FX_MODE_NUMBERS, FX_MODE_WORDS,   # noqa: E402
-                            Relayed, STATE_OF, lamp_messages,
-                            led_message, recall_messages)   # noqa: E402
+                            Relayed, STATE_OF, led_message,
+                            recall_messages)   # noqa: E402
 from a3_core_subscribers import (SHIPPED, SubscriberError,   # noqa: E402
                                  parse_subscribers)
 from a3_core_traffic import (ANSWERERS, COMMANDERS, IN,   # noqa: E402
@@ -359,20 +359,19 @@ def broadcast(address, value):
 
 
 def announce_flag(flag, channel_index):
-    """Say a channel's flag twice: as a lamp, and as the fact.
+    """Say a channel's flag twice, and tell everybody both times.
 
-    The **lamp** goes to the desk in the desk's own convention -- pfl is
-    inverted here and inverted again in its firmware, which cancels and looks
-    exactly like a bug, see a3_core_recall.LED_OF. The **state** goes to
-    everybody on the address the flag arrived on, as a plain 0 or 1.
+    The **lamp** (`/channel/n/led/pfl`) is whether that light is on. The
+    **flag** (`/channel/n/pfl`) is the setting, on the address it arrived on.
+    Two vocabularies for one fact, and both are broadcast: a lamp is status,
+    which makes it the screens' business as much as the desk's.
 
-    Two messages for one fact is not a duplication to be tidied away. It is
-    what lets a screen, a light desk or anything added next read the flag
-    without first learning which of the three lamps is inverted.
+    Called only where a flag actually changed, and broadcast() drops a value
+    it has already passed on -- so nothing here moves a light unless the
+    status moved.
     """
-    osc_a3mixer.send_message(
-        *led_message(_layout, flag, channel_index,
-                     channel_infos[channel_index]))
+    broadcast(*led_message(_layout, flag, channel_index,
+                           channel_infos[channel_index]))
 
     control, read = STATE_OF["4d" if flag == "3d" else flag]
     broadcast(_layout.address("channel_control", channel=channel_index,
@@ -781,13 +780,11 @@ def osc_handler_fx(client_address: Tuple[str, int], address: str,
         # ever sent on this address -- meant LOW_PASS. See a3_core_buttons.
         wanted = wanted_fx_mode(value, master_info.fx_mode.name.lower())
         master_info.fx_mode = MasterInfo.FXMode[wanted.upper()]
-        # The word to the desk, the number to everybody -- /fx/mode is the
-        # address the mode arrives on, and a number is what A3 Motion already
-        # sends. The desk reads the word on /fx/led and listens for nothing
-        # else.
-        osc_a3mixer.send_message(
-            _layout.address("fx_mode_led"),
-            FX_MODE_WORDS[master_info.fx_mode.name])
+        # Twice, both to everybody: the word on /fx/led, which is what the
+        # desk's firmware reads, and the number on /fx/mode, which is the
+        # address the mode arrives on and the spelling every screen sends.
+        broadcast(_layout.address("fx_mode_led"),
+                  FX_MODE_WORDS[master_info.fx_mode.name])
         broadcast("/fx/mode", FX_MODE_NUMBERS[master_info.fx_mode.name])
         set_filters()
 
@@ -896,15 +893,8 @@ def osc_handler_recall(client_address: Tuple[str, int], address: str,
         for client in subscribers:
             client.send_message(out, value)
 
-    # And the lamps, on the desk's own wire. Not broadcast: a lamp is an
-    # instruction in the desk's convention rather than a fact, and pfl's is
-    # inverted. See a3_core_recall.lamp_messages.
-    lamps = list(lamp_messages(_layout, channel_infos, master_info))
-    for out, value in lamps:
-        osc_a3mixer.send_message(out, value)
-
-    print(f"{address}: replayed {len(messages)} messages to "
-          f"{len(subscribers)} subscribers, plus {len(lamps)} lamps")
+    print(f"{address}: replayed {len(messages)} messages "
+          f"to {len(subscribers)} subscribers")
 
 
 #: Where REAPER's feedback is heard. Its own port, not Core's: REAPER speaks
