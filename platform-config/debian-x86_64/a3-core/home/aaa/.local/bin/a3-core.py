@@ -55,7 +55,8 @@ from a3_core_recall import (FX_MODE_NUMBERS, FX_MODE_WORDS,   # noqa: E402
                             Relayed, STATE_OF, led_message,
                             recall_messages)   # noqa: E402
 from a3_core_subscribers import (SHIPPED, SubscriberError,   # noqa: E402
-                                 parse_subscribers)
+                                 everyone_but, parse_subscribers,
+                                 relay_on_arrival)
 from a3_core_traffic import (ANSWERERS, COMMANDERS, IN,   # noqa: E402
                              OUT, Traffic, peer_name)   # noqa: E402
 from a3_core_seen import SeenFile, state_path   # noqa: E402
@@ -367,6 +368,55 @@ def broadcast(address, value):
         client.send_message(address, value)
 
 
+def relay(address, raw, origin):
+    """Pass a value that just arrived on to every other subscriber.
+
+    The desk turns a knob; every other screen has to show it. The path is
+    always desk -> Core -> screen and never desk -> screen: Core is the only
+    place that knows who is listening, which is what the subscriber list is
+    for.
+
+    **Why this exists at all.** REAPER does not report a change back to the
+    surface that caused it, and Core is that surface -- so the reverse path
+    below never fires for anything Core itself wrote, and a knob on the desk
+    reached REAPER and no screen. Measured at the rig on 2026-09-12: the desk's
+    gain arrived, went out to REAPER, and Motion's strip did not move.
+
+    **Why it cannot ratchet.** What arrives here is what a hand set: the base
+    value, before any accent envelope lies on top. The ratchet that had to be
+    reverted that morning came from the other direction -- REAPER's value is
+    base *plus* modulation, and writing that back as a base climbs. Nothing
+    here passes through REAPER.
+
+    The sender is left out, and that is also why de-duplicating by address
+    alone is sound: whoever is left out is the one who said it, and it is
+    already holding the value.
+    """
+    if not relay_on_arrival(address):
+        return
+
+    # The number, never the argument as it arrived. The desk sends its values
+    # as text ("0.807429", measured at the rig), and for the buttons that type
+    # is the sender's signature -- text is the desk's momentary edge, a number
+    # is a screen's state, see a3_core_buttons. Passing the string on would
+    # make the desk's knob arrive at Motion looking like a desk key press.
+    #
+    # A value that is not a number at all is dropped here rather than guarded
+    # at each call site: /fx/mode carries a word, and it is excluded above, but
+    # one address that is not would otherwise be a TypeError in a handler.
+    try:
+        number = float(raw)
+    except (TypeError, ValueError):
+        return
+
+    if _relayed.holds(address, number):
+        return
+
+    _relayed.note(address, number)
+    for client in everyone_but(subscribers, origin):
+        client.send_message(address, number)
+
+
 def announce_flag(flag, channel_index):
     """Say a channel's flag twice, and tell everybody both times.
 
@@ -555,11 +605,16 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
     value: float = float(raw)  # type: ignore
     assert type(value) == float
 
-    traffic.seen(IN, address, raw,
-                 peer_name(client_address[0], PEER_HOSTS,
-                           only=COMMANDERS))
+    origin = peer_name(client_address[0], PEER_HOSTS, only=COMMANDERS)
+    traffic.seen(IN, address, raw, origin)
     if _print_osc:
         print(address + " : " + str(value))
+
+    # Before the routing below, not after: what the other screens have to show
+    # is the value, and that is true whether or not Core has a use for this
+    # particular parameter. A control Core does not route yet is still a
+    # control a screen may show.
+    relay(address, raw, origin)
 
     words: List[str] = address.split("/")
     channel: str = words[2]
@@ -704,11 +759,12 @@ def osc_handler_master(client_address: Tuple[str, int], address: str,
     value: float = float(osc_arguments[0])  # type: ignore
     assert type(value) == float
 
-    traffic.seen(IN, address, osc_arguments[0],
-                 peer_name(client_address[0], PEER_HOSTS,
-                           only=COMMANDERS))
+    origin = peer_name(client_address[0], PEER_HOSTS, only=COMMANDERS)
+    traffic.seen(IN, address, osc_arguments[0], origin)
     if _print_osc:
         print(address + " : " + str(value))
+
+    relay(address, osc_arguments[0], origin)
 
     words: List[str] = address.split("/")
     parameter: str = words[2]
@@ -759,11 +815,14 @@ def osc_handler_fx(client_address: Tuple[str, int], address: str,
 
     value = osc_arguments[0]
 
-    traffic.seen(IN, address, value,
-                 peer_name(client_address[0], PEER_HOSTS,
-                           only=COMMANDERS))
+    origin = peer_name(client_address[0], PEER_HOSTS, only=COMMANDERS)
+    traffic.seen(IN, address, value, origin)
     if _print_osc:
         print(address + " : " + str(value))
+
+    # `/fx/mode` is not passed on here -- the mode branch below announces it
+    # twice, to everybody, in both vocabularies. relay() knows that.
+    relay(address, value, origin)
 
     words: List[str] = address.split("/")
     parameter: str = words[2]
