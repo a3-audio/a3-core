@@ -132,6 +132,17 @@ class Traffic:
         self._unknown_cap = unknown_cap
         self._evicted_rows = 0
         self._evicted_unknown = 0
+        # How many rows either table has ever created, counting one per new
+        # address rather than per message. It only ever grows, eviction
+        # included.
+        #
+        # This is what a writer watches to know the *list* has changed, which
+        # is the one thing worth putting on disk (a3_core_seen). A count that
+        # ticked up on an address already in the file would be a write for
+        # nothing, and at a hundred messages a second that is every message.
+        # Incremented under this lock on the rare branch that creates a row,
+        # never on the path a repeat message takes.
+        self._created = 0
         # Messages ever received on an address Core could not route -- not
         # "messages currently sitting in _unknown", which is what summing
         # each row's count would mean once eviction starts dropping rows. A
@@ -167,6 +178,7 @@ class Traffic:
                        "count": 0, "last_value": None, "last_type": "",
                        "last_seen": at, "peer": peer}
                 self._rows[key] = row
+                self._created += 1
 
             row["count"] += 1
             row["last_value"] = value
@@ -203,6 +215,7 @@ class Traffic:
                 row = {"address": address, "count": 0, "last_value": None,
                        "last_type": "", "last_seen": at, "peer": peer}
                 self._unknown[address] = row
+                self._created += 1
 
             row["count"] += 1
             row["last_value"] = value
@@ -296,6 +309,63 @@ class Traffic:
         return {"at": at, "rows": rows, "history": history,
                 "unknown_addresses": unknown_addresses,
                 "unknown_messages": unknown_messages, "evicted": evicted}
+
+    def created(self) -> int:
+        """How many addresses either table has ever taken in.
+
+        Grows by one per address the first time it is seen and never
+        shrinks, so two readings that differ mean "the list is not what it
+        was" -- which is the question a3_core_seen asks before it writes a
+        file. Two readings that agree mean the list has not grown, even
+        though the counts inside it may have moved a great deal.
+        """
+        with self._lock:
+            return self._created
+
+    def restore(self, rows: Iterable[Dict[str, Any]],
+                unknown: Iterable[Dict[str, Any]]) -> int:
+        """Put a saved address list back, without overwriting what is live.
+
+        Called once at start-up, from a3_core_seen. A row that is already
+        here wins: restoring happens while the OSC servers are already
+        listening, and what is arriving now is never less true than what was
+        saved yesterday.
+
+        The values are deliberately not part of this -- a restored row has no
+        `last_value` and no `last_type`. `last_seen` arrives already converted
+        into this process's monotonic clock; see a3_core_seen for why that
+        conversion cannot be done here.
+        """
+        put = 0
+        with self._lock:
+            for row in rows:
+                key = (row["direction"], row["address"])
+                if key in self._rows:
+                    continue
+                self._rows[key] = dict(row, last_value=None, last_type="")
+                self._created += 1
+                put += 1
+            while len(self._rows) > self._row_cap:
+                self._rows.popitem(last=False)
+                self._evicted_rows += 1
+
+            for row in unknown:
+                if row["address"] in self._unknown:
+                    continue
+                self._unknown[row["address"]] = dict(row, last_value=None,
+                                                     last_type="")
+                # The running total is a lifetime figure the page shows beside
+                # the address count ("N Adressen, M Nachrichten"). Restoring
+                # the rows without it would put a table of 19,335 addresses
+                # beside a total of nought.
+                self._unknown_messages_total += row["count"]
+                self._created += 1
+                put += 1
+            while len(self._unknown) > self._unknown_cap:
+                self._unknown.popitem(last=False)
+                self._evicted_unknown += 1
+
+        return put
 
     def unknown_snapshot(self) -> Dict[str, Any]:
         """The whole unknown table, for a caller that asked for it.

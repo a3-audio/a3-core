@@ -56,6 +56,7 @@ from a3_core_recall import (FX_MODE_WORDS, Relayed, led_message,   # noqa: E402
                             recall_messages)   # noqa: E402
 from a3_core_traffic import (ANSWERERS, COMMANDERS, IN,   # noqa: E402
                              OUT, Traffic, peer_name)   # noqa: E402
+from a3_core_seen import SeenFile, state_path   # noqa: E402
 from a3_core_web import start_window, window_address   # noqa: E402
 
 LAYOUT_PATH = (Path(__file__).resolve().parent.parent
@@ -129,6 +130,16 @@ echo_filter = EchoFilter()
 #: module scope, because the handlers are module-level functions and there is
 #: no object here to hang it on.
 traffic = Traffic()
+
+#: The address list across a restart. Not the history -- that is two minutes of
+#: what just happened, and none of it happened in this process.
+#:
+#: Its own file rather than a section of state.json: that one is what the
+#: evening did to the rig and is read back into the channels at start-up, while
+#: this is a record of what has been talked about and changes nothing. A
+#: nineteen-thousand-row table sharing a file with the four toggles would mean
+#: rewriting the toggles every time REAPER says a new word.
+_seen_file = SeenFile(state_path(), traffic)
 
 #: Which host is which device, for naming an incoming message's sender.
 #: Rebuilt from the arguments below, since --mixer, --motion and --reaper can
@@ -1021,6 +1032,11 @@ if __name__ == "__main__":
     # filter and immediately stopping Core forgets the switch.
     def stop(signum, frame):
         _state_file.flush()
+        # The last write of the address list, so a clean stop keeps the counts
+        # as they actually stood rather than as they stood when the list last
+        # grew. Between writes the list is right and the counts lag, which is
+        # the price of not writing a megabyte every time a knob moves.
+        _seen_file.write()
         raise SystemExit(0)
 
     signal.signal(signal.SIGTERM, stop)
@@ -1044,6 +1060,16 @@ if __name__ == "__main__":
             return
         {"mixer": osc_a3mixer, "motion": osc_a3motion,
          "reaper": osc_reaper}[to].send_message(address, value)
+
+    # What was talked about last time. Read before the window opens so the
+    # first page load already has it, and after the OSC servers are built so
+    # anything that has already arrived wins -- see Traffic.restore.
+    #
+    # Neither call can raise: a broken file restores nothing, and a directory
+    # that cannot be written is a line in the journal. The rule the whole
+    # window lives under -- Core makes the sound.
+    print(f"{_seen_file.restore()} addresses remembered from {state_path()}")
+    _seen_file.follow()
 
     # The window, if it will come. Its failure is not Core's: a busy port
     # gets a line in the journal and the rig still makes sound.
