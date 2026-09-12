@@ -26,28 +26,21 @@ ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local"
 sys.path.insert(0, str(PACKAGE / "lib"))
 
-from a3_core_reverse import (CHANNEL_REVERSALS,   # noqa: E402
+from a3_core_reverse import (CHANNEL, CHANNEL_REVERSALS,   # noqa: E402
                              reverse_for)
 
 #: Curves whose values are deliberately not relayed back, and why.
 NOT_REVERSED = {
-    # Sent together with the hipass from one A3 control: /fx/frequency drives
-    # both filters at once. Reversing either would be reversing half a
-    # control, and the hipass already answers for it.
-    "slope_fx_freq_hipass": "arrives on /fx/*, which is global rather than "
-                            "per channel, and has no way back yet",
-    "slope_fx_freq_lopass": "the same control, the other filter",
-    "slope_fx_res": "the same control's resonance",
+    # /fx/frequency drives both filters at once, from one A3 value. The
+    # hipass is read on the way back and this one is not: reading both would
+    # answer one control twice, with two numbers that agree only as well as
+    # the two curves do.
+    "slope_fx_freq_lopass": "the same control as slope_fx_freq_hipass, which "
+                            "is the one that is read",
     # The channel fx-send, which currently carries the 3D crossfade -- see
     # issues/a3-core-fx-send-fuehrt-noch-die-3d-funktion.md. One input becomes
     # two gains on two tracks and a single number cannot say which input it
     # came from.
-    # Not the fx send, whatever this excuse used to say -- that branch does
-    # its own arithmetic and never called this. The only caller left is
-    # /master/return, and a master control has no channel to report back on,
-    # the same reason the three filter curves above are here.
-    "slope_constant_power": "the aux return's, and /master/* is not per "
-                            "channel",
 }
 
 
@@ -124,6 +117,26 @@ def controls_the_forward_handler_accepts():
                        for band in compared_against("eq_parameter")}
 
 
+def controls_a_handler_accepts(handler_name, variable):
+    """Every constant a handler compares `variable` against.
+
+    The generic form of controls_the_forward_handler_accepts above, for the
+    two handlers that are not per channel. Same reasoning: an address that no
+    branch names is one a device can send and Core will drop.
+    """
+    tree = ast.parse((PACKAGE / "bin/a3-core.py").read_text())
+    handler = next(node for node in ast.walk(tree)
+                   if isinstance(node, ast.FunctionDef)
+                   and node.name == handler_name)
+
+    return {node.comparators[0].value
+            for node in ast.walk(handler)
+            if (isinstance(node, ast.Compare)
+                and isinstance(node.left, ast.Name)
+                and node.left.id == variable
+                and isinstance(node.comparators[0], ast.Constant))}
+
+
 class TheWayBackIsSpelledLikeTheWayOut(unittest.TestCase):
     """A returned value has to arrive on the address it was set on.
 
@@ -139,12 +152,35 @@ class TheWayBackIsSpelledLikeTheWayOut(unittest.TestCase):
         self.layout = load_layout(PACKAGE / "share/a3-core/layout.json")
         self.accepted = controls_the_forward_handler_accepts()
 
-    def test_every_reversal_names_a_control_the_forward_path_knows(self):
+    def test_every_channel_reversal_names_a_control_the_forward_path_knows(self):
         for entry in CHANNEL_REVERSALS:
+            if entry.scope != CHANNEL:
+                continue
             self.assertIn(
                 entry.address, self.accepted,
                 f"{entry.address} is reported back but the forward handler "
                 f"answers to {sorted(self.accepted)}")
+
+    def test_every_global_reversal_names_an_address_a_handler_answers_to(self):
+        """The master and the filter do not go through osc_handler_channel,
+        so their addresses are whole rather than suffixes -- and the check
+        has to look at the handler that does answer them. /master/phones_mix
+        spelled /master/phones-mix would be a control nobody hears, and
+        neither side would be wrong on its own."""
+        answered = {f"/master/{name}"
+                    for name in controls_a_handler_accepts("osc_handler_master",
+                                                           "parameter")}
+        answered |= {f"/fx/{name}"
+                     for name in controls_a_handler_accepts("osc_handler_fx",
+                                                            "parameter")}
+
+        for entry in CHANNEL_REVERSALS:
+            if entry.scope == CHANNEL:
+                continue
+            self.assertIn(
+                entry.address, answered,
+                f"{entry.address} is reported back but no handler answers "
+                f"to it; the handlers take {sorted(answered)}")
 
     def test_the_address_is_built_by_the_layout(self):
         self.assertEqual(
@@ -166,18 +202,6 @@ NOT_ANSWERED_FOR = {
     # input it came from. Since 2026-09-12 Core holds 3d itself and answers a
     # recall from that -- see a3_core_recall.REMEMBERED_CONTROLS.
     "3d": "not invertible from one gain; Core remembers it instead",
-    # A REAPER send again since 2026-09-12, not the crossfade -- and REAPER
-    # does report it. Motion got a fader for it the same day, so "only an
-    # analog pot sets it" has run out as a reason and this is the one entry
-    # here that is a decision rather than an impossibility.
-    #
-    # It stays out because 0 is the right value for a send to come up on, and
-    # nothing is lost by a strip that starts with the effect out. Not because
-    # it could not be relayed: no action drives it, so it would be as safe as
-    # the gain. If a hand on the desk should move the fader on the screen,
-    # this is the line to delete.
-    "fx-send": "a decision, not an impossibility -- 0 is the right value to "
-               "come up on",
     # Core's own state, not REAPER's, and they come back from REAPER as a mute
     # rather than as the flag they set.
     # Relaying these continuously is a feedback loop: REAPER holds the base

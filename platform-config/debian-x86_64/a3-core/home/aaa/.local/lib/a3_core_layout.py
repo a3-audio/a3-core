@@ -151,6 +151,20 @@ class Layout:
                     return (index, field)
         return None
 
+    def master_role(self, track):
+        """Which of the master's tracks this is, or None.
+
+        The master half of track_role, and separate from it on purpose: a
+        caller has to know which it got, because a channel's answer carries a
+        channel number and the master's does not. Merging them into one
+        function would mean every caller unpacking a tuple whose second half
+        is sometimes meaningless.
+        """
+        for field in MASTER_FIELDS:
+            if getattr(self._master, field) == track:
+                return field
+        return None
+
     def channel_for_track(self, track):
         """Just the channel, for callers that do not care which track it is."""
         found = self.track_role(track)

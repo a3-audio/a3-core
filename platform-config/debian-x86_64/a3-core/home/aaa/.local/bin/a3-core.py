@@ -50,10 +50,13 @@ from a3_core_tempo import (NO_CHANGE as NO_TEMPO,   # noqa: E402
 from a3_core_buttons import (NO_CHANGE, wanted_fx_mode,   # noqa: E402
                              wanted_toggle)   # noqa: E402
 from a3_core_echo import EchoFilter   # noqa: E402
-from a3_core_reverse import reverse_for, reversed_messages   # noqa: E402
+from a3_core_reverse import reverse_for, reversed_address   # noqa: E402
 from a3_core_state import StateFile, apply_state, state_of   # noqa: E402
-from a3_core_recall import (FX_MODE_WORDS, Relayed, led_message,   # noqa: E402
-                            recall_messages)   # noqa: E402
+from a3_core_recall import (FX_MODE_NUMBERS, FX_MODE_WORDS,   # noqa: E402
+                            Relayed, STATE_OF, lamp_messages,
+                            led_message, recall_messages)   # noqa: E402
+from a3_core_subscribers import (SHIPPED, SubscriberError,   # noqa: E402
+                                 parse_subscribers)
 from a3_core_traffic import (ANSWERERS, COMMANDERS, IN,   # noqa: E402
                              OUT, Traffic, peer_name)   # noqa: E402
 from a3_core_seen import SeenFile, state_path   # noqa: E402
@@ -321,13 +324,60 @@ apply_state(_state_file.load(), channel_infos, master_info)
 _relayed = Relayed()
 
 
-def client_for(device):
-    """The client a device name stands for.
+#: Everything that speaks the A3 protocol, in the order it is told.
+#:
+#: The two that ship are here from the start; --subscriber adds more at
+#: start-up. Rebuilt rather than held per client, because --mixer and --motion
+#: rebind those at module scope after this module has been read.
+#:
+#: **The engine is not in here.** REAPER, the IEM encoders and the DualDelay
+#: each speak their own vendor's language and are addressed by the one handler
+#: that has something to say to them. Broadcasting /channel/0/gain at REAPER
+#: would be noise on a port that matters.
+subscribers = [osc_a3mixer, osc_a3motion]
 
-    Looked up rather than held, because --mixer and --motion rebind these at
-    module scope after this module has been read.
+
+def broadcast(address, value):
+    """Tell every subscriber, and remember that it was told.
+
+    The one door for A3-shaped messages. There is no argument for *who*:
+    working that out per message is what this replaced, and what that cost is
+    written down in a3_core_subscribers -- a list that said "mixer" for three
+    days after A3 Motion grew the controls it named.
+
+    A value that is already what was last passed on is dropped. REAPER reports
+    one A3 control on several parameters -- a gain plug-in across eight of
+    them, the shared filter on all four channels' tracks -- so without this
+    one knob would become eight identical messages to everybody.
     """
-    return osc_a3mixer if device == "mixer" else osc_a3motion
+    if _relayed.holds(address, value):
+        return
+
+    _relayed.note(address, value)
+    for client in subscribers:
+        client.send_message(address, value)
+
+
+def announce_flag(flag, channel_index):
+    """Say a channel's flag twice: as a lamp, and as the fact.
+
+    The **lamp** goes to the desk in the desk's own convention -- pfl is
+    inverted here and inverted again in its firmware, which cancels and looks
+    exactly like a bug, see a3_core_recall.LED_OF. The **state** goes to
+    everybody on the address the flag arrived on, as a plain 0 or 1.
+
+    Two messages for one fact is not a duplication to be tidied away. It is
+    what lets a screen, a light desk or anything added next read the flag
+    without first learning which of the three lamps is inverted.
+    """
+    osc_a3mixer.send_message(
+        *led_message(_layout, flag, channel_index,
+                     channel_infos[channel_index]))
+
+    control, read = STATE_OF["4d" if flag == "3d" else flag]
+    broadcast(_layout.address("channel_control", channel=channel_index,
+                              control=control),
+              read(channel_infos[channel_index]))
 
 
 def remember_state():
@@ -581,17 +631,13 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
             muted = not channel_infos[channel_index].toggle_pfl
             osc_reaper.send_message(
                 f"/track/{track_pfl}/mute", float(muted))
-            osc_a3mixer.send_message(
-                *led_message(_layout, "pfl", channel_index,
-                             channel_infos[channel_index]))
+            announce_flag("pfl", channel_index)
 
     elif parameter == "fx":
         wanted = wanted_toggle(raw, channel_infos[channel_index].toggle_fx)
         if wanted is not NO_CHANGE:
             channel_infos[channel_index].toggle_fx = wanted
-            osc_a3mixer.send_message(
-                *led_message(_layout, "fx", channel_index,
-                             channel_infos[channel_index]))
+            announce_flag("fx", channel_index)
             set_filters()
 
     elif parameter == "4d":
@@ -599,9 +645,7 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
         if wanted is not NO_CHANGE:
             channel_infos[channel_index].toggle_3d = wanted
             is_enabled = channel_infos[channel_index].toggle_3d
-            osc_a3mixer.send_message(
-                *led_message(_layout, "3d", channel_index,
-                             channel_infos[channel_index]))
+            announce_flag("3d", channel_index)
             track_stereo_enc = channel_infos[channel_index].track_stereo_enc
             track_multi_enc = channel_infos[channel_index].track_multi_enc
             osc_val = 0.5 if is_enabled else 0.0
@@ -737,9 +781,14 @@ def osc_handler_fx(client_address: Tuple[str, int], address: str,
         # ever sent on this address -- meant LOW_PASS. See a3_core_buttons.
         wanted = wanted_fx_mode(value, master_info.fx_mode.name.lower())
         master_info.fx_mode = MasterInfo.FXMode[wanted.upper()]
+        # The word to the desk, the number to everybody -- /fx/mode is the
+        # address the mode arrives on, and a number is what A3 Motion already
+        # sends. The desk reads the word on /fx/led and listens for nothing
+        # else.
         osc_a3mixer.send_message(
             _layout.address("fx_mode_led"),
             FX_MODE_WORDS[master_info.fx_mode.name])
+        broadcast("/fx/mode", FX_MODE_NUMBERS[master_info.fx_mode.name])
         set_filters()
 
     elif parameter == "frequency":
@@ -824,10 +873,10 @@ def osc_handler_recall(client_address: Tuple[str, int], address: str,
                        *osc_arguments: List[Any]) -> None:
     """Say the whole state again, as the messages it would have arrived as.
 
-    Sent to the device each value belongs to rather than back to whoever
-    asked. A mixer being told the lights it already shows is a repaint; a
-    mixer *not* being told because Motion happened to be the one that asked
-    would be a rig where two devices disagree and neither can find out.
+    Sent to every subscriber rather than back to whoever asked. A device being
+    told what it already shows is a repaint; a device *not* being told because
+    somebody else happened to ask would be a rig where two of them disagree
+    and neither can find out.
     """
     # The one address whose whole purpose is "did the other end come back?"
     # -- if this is not tapped, a device returning after a drop is invisible
@@ -838,9 +887,24 @@ def osc_handler_recall(client_address: Tuple[str, int], address: str,
 
     messages = list(recall_messages(_layout, channel_infos, master_info,
                                     _relayed))
-    for device, out, value in messages:
-        client_for(device).send_message(out, value)
-    print(f"{address}: replayed {len(messages)} messages")
+
+    # Not through broadcast(): that drops a value already passed on, which is
+    # right for a relay and exactly wrong here. A recall is somebody saying "I
+    # have just come up and know nothing" -- the whole point is to say it all
+    # again, including what has not changed.
+    for out, value in messages:
+        for client in subscribers:
+            client.send_message(out, value)
+
+    # And the lamps, on the desk's own wire. Not broadcast: a lamp is an
+    # instruction in the desk's convention rather than a fact, and pfl's is
+    # inverted. See a3_core_recall.lamp_messages.
+    lamps = list(lamp_messages(_layout, channel_infos, master_info))
+    for out, value in lamps:
+        osc_a3mixer.send_message(out, value)
+
+    print(f"{address}: replayed {len(messages)} messages to "
+          f"{len(subscribers)} subscribers, plus {len(lamps)} lamps")
 
 
 #: Where REAPER's feedback is heard. Its own port, not Core's: REAPER speaks
@@ -893,12 +957,21 @@ def reaper_feedback_handler(client_address: Tuple[str, int], address: str,
         traffic.unknown(address, value, peer)
         return
 
+    # A channel's track first, then the master's. Two questions rather than
+    # one because the answers are different shapes: a channel's carries a
+    # number the address is built with, the master's does not -- a master
+    # track has no channel, and inventing one to throw away would be the kind
+    # of tidiness that puts a value on the wrong knob.
     role = _layout.track_role(track)
-    if role is None:
-        traffic.unknown(address, value, peer)   # master, or a track A3 does not name
+    if role is not None:
+        channel_index, field = role
+    else:
+        channel_index, field = None, _layout.master_role(track)
+
+    if field is None:
+        traffic.unknown(address, value, peer)   # a track A3 does not name
         return
 
-    channel_index, field = role
     entry = reverse_for(_layout, address, field)
     if entry is None:
         traffic.unknown(address, value, peer)
@@ -911,15 +984,7 @@ def reaper_feedback_handler(client_address: Tuple[str, int], address: str,
         return
 
     traffic.seen(IN, address, value, peer)
-
-    # One report, one message per device that has the knob -- both mixers
-    # since 2026-09-12. The fan-out is in a3_core_reverse where a test can
-    # reach it; nothing imports this file, and three of this week's faults
-    # were "suite green, program broken".
-    for device, out, relayed_value in reversed_messages(
-            _layout, entry, channel_index, a3_value):
-        _relayed.note(device, out, relayed_value)
-        client_for(device).send_message(out, relayed_value)
+    broadcast(reversed_address(_layout, entry, channel_index), a3_value)
 
 
 if __name__ == "__main__":
@@ -941,6 +1006,15 @@ if __name__ == "__main__":
                              "tempo. The port has to be opened inside the "
                              "plug-in; with it shut these messages go "
                              "nowhere.")
+    parser.add_argument("--subscriber", action="append", default=[],
+                        metavar="NAME=HOST:PORT",
+                        help="Another department that should hear the A3 "
+                             "state -- a light or video desk, say. Repeat "
+                             "for several. Every A3-shaped message goes to "
+                             "every subscriber, always; there is no "
+                             "per-message choice of recipient and that is "
+                             "deliberate (see lib/a3_core_subscribers.py). "
+                             "The name is what the window shows.")
     parser.add_argument("--reaper", default=f"{REAPER_HOST}:{REAPER_PORT}",
                         help="host:port of REAPER's OSC input. Point it "
                              "somewhere else to exercise this without "
@@ -985,6 +1059,28 @@ if __name__ == "__main__":
             osc_dualdelay = client
         else:
             osc_reaper = client
+
+    # Everything A3-shaped goes to every one of these, in this order. The two
+    # that ship first, so a rig with no extra departments replays exactly as
+    # it did before.
+    subscribers = [osc_a3mixer, osc_a3motion]
+
+    try:
+        extra = parse_subscribers(args.subscriber,
+                                  reserved=SHIPPED + ("reaper", "iem",
+                                                      "dualdelay"))
+    except SubscriberError as problem:
+        # Refused rather than skipped, and before a single message moves. A
+        # subscriber that cannot be understood is a department that hears
+        # nothing all evening, and over UDP nothing says so -- which is the
+        # exact failure this whole mechanism was built after.
+        sys.exit(f"a3-core: {problem}")
+
+    for name, host, port in extra:
+        subscribers.append(
+            WatchedClient(SimpleUDPClient(host, port), name))
+        PEER_HOSTS[name] = host
+        print(f"subscriber {name} at {host}:{port}")
 
     dispatcher = dispatcher.Dispatcher()
 

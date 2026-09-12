@@ -102,26 +102,95 @@ def remembered_messages(layout, channels):
             value = getattr(channel, field, None)
             if value is None:
                 continue
-            yield ("motion",
-                   layout.address("channel_control", channel=index,
+            yield (layout.address("channel_control", channel=index,
                                   control=address),
                    value)
 
 
-def flag_messages(layout, channels, master):
-    """Every lamp Core is responsible for, channel by channel, then the
-    filter mode."""
+#: Each flag's address on the wire, and the field it is held in.
+#:
+#: The lamp and the state are two different messages about one fact, and both
+#: are sent. The **lamp** (`/channel/n/led/pfl`) is an instruction in the
+#: desk's own convention -- pfl is inverted twice between here and the LED, see
+#: LED_OF -- and only the desk understands it. The **state**
+#: (`/channel/n/pfl`) is the flag itself, on the address it arrived on, in the
+#: spelling every device already sends. A screen, a light desk or anything
+#: added later reads that one and needs to know nothing about lamps.
+#:
+#: `3d` is the odd name: the toggle moved to `4d` when `3d` became the
+#: continuous crossfade, and the field kept its old name because renaming a
+#: field in the state file would have dropped every saved flag.
+STATE_OF = {
+    "pfl": ("pfl", lambda channel: float(channel.toggle_pfl)),
+    "fx": ("fx", lambda channel: float(channel.toggle_fx)),
+    "4d": ("4d", lambda channel: float(channel.toggle_3d)),
+}
+
+#: How the filter mode reads as a number: 1 is high pass.
+#:
+#: Sent as well as the word, and for the same reason as the flags above: the
+#: word goes to the desk on `/fx/led`, the number goes to everyone on
+#: `/fx/mode` -- which is the address the mode arrives on, and the spelling
+#: A3 Motion already sends. See a3_core_buttons.wanted_fx_mode, which accepts
+#: both on the way in.
+FX_MODE_NUMBERS = {
+    "HIGH_PASS": 1.0,
+    "LOW_PASS": 0.0,
+}
+
+
+def lamp_messages(layout, channels, master):
+    """What the lamps should do. **For the desk and nobody else.**
+
+    A lamp is not a fact, it is an instruction in the desk's own convention --
+    and pfl's is inverted here and inverted again in the desk's firmware,
+    which cancels and looks exactly like a bug (see LED_OF). The filter mode
+    goes out as a word on `/fx/led` for the same reason: it is what that
+    firmware reads.
+
+    So these travel the desk's private wire, the way REAPER's `/track/*` and
+    the plugins' `/MultiEncoder/*` travel theirs. Broadcasting them would put
+    an inverted pfl in front of every department added from now on, and the
+    first one to trust it would be wrong with nothing to show for it.
+
+    This is not the per-message recipient list that was deleted on
+    2026-09-12. That one asked *who should hear this value*. This asks what
+    kind of message it is -- and a lamp instruction in somebody's firmware
+    convention is not the A3 protocol.
+    """
     for index, channel in enumerate(channels):
         for flag in LED_OF:
-            address, value = led_message(layout, flag, index, channel)
-            yield "mixer", address, value
+            yield led_message(layout, flag, index, channel)
 
-    yield ("mixer", layout.address("fx_mode_led"),
+    yield (layout.address("fx_mode_led"),
            FX_MODE_WORDS[master.fx_mode.name])
 
 
+def flag_messages(layout, channels, master):
+    """The same flags as facts, on the addresses they arrive on. For everyone.
+
+    A plain 0 or 1 on `/channel/n/pfl`, and the filter mode as a number on
+    `/fx/mode` -- the spelling A3 Motion already sends, and the one
+    a3_core_buttons already accepts on the way in. Nothing here needs to be
+    learned: a device that can *set* the flag can read it.
+    """
+    for index, channel in enumerate(channels):
+        for control, read in STATE_OF.values():
+            yield (layout.address("channel_control", channel=index,
+                                  control=control),
+                   read(channel))
+
+    yield "/fx/mode", FX_MODE_NUMBERS[master.fx_mode.name]
+
+
 class Relayed:
-    """The last value Core passed on, per device and address.
+    """The last value Core passed on, per address.
+
+    Keyed by address alone since 2026-09-12. It used to be keyed by (device,
+    address), from when a value went to one device -- which meant the same
+    number was held twice once it went to two, and replayed twice. Every
+    A3-shaped message now goes to every subscriber, so who heard it is no
+    longer a property of the value.
 
     In memory and nowhere else. A file would be a copy of REAPER's state read
     back at a moment when REAPER may have moved on; this cannot be older than
@@ -131,26 +200,43 @@ class Relayed:
     def __init__(self):
         self._values = {}
 
-    def note(self, device, address, value):
-        self._values[(device, address)] = value
+    def holds(self, address, value):
+        """Whether this is already what was last passed on.
+
+        Asked before sending, because REAPER reports one A3 control on several
+        parameters -- a gain plug-in holds its value across eight of them, and
+        the shared filter is written to all four channels' tracks. Without
+        this, one knob would become eight identical messages to every
+        subscriber.
+        """
+        return address in self._values and self._values[address] == value
+
+    def note(self, address, value):
+        self._values[address] = value
 
     def messages(self):
         """In the order the controls were first touched, so the same evening
         replays the same way twice."""
-        for (device, address), value in self._values.items():
-            yield device, address, value
+        return iter(self._values.items())
 
     def __len__(self):
         return len(self._values)
 
 
 def recall_messages(layout, channels, master, relayed):
-    """The whole answer: the lamps, then the positions, then what REAPER said.
+    """The whole answer: the flags, then the positions, then what REAPER said.
 
-    Core's own two certainties first -- the lamps come from its state file and
+    As `(address, value)` pairs and nothing about who gets them -- everything
+    A3-shaped goes to every subscriber. See a3_core_subscribers for why that
+    stopped being a per-message decision.
+
+    Core's own two certainties first -- the flags come from its state file and
     are complete even on a cold start, the remembered values from what it last
-    passed on -- and REAPER's relayed values last. A caller reading the replay in
-    order sees what Core knows for itself before what it was told.
+    passed on -- and REAPER's relayed values last. A caller reading the replay
+    in order sees what Core knows for itself before what it was told.
+
+    The lamps are **not** here. They are the desk's own wire and its own
+    convention; see lamp_messages.
     """
     yield from flag_messages(layout, channels, master)
     yield from remembered_messages(layout, channels)

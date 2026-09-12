@@ -78,7 +78,9 @@
     "lopass": 4,
     "channel_volume": 1,
     "enc_pots": 2, "stereo_enc": 4,
-    "enc": 1
+    "enc": 1,
+    "phones_gain": 2,
+    "aux_gain": 3
   },
   "gain_params": {
     "channelbus": [

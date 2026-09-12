@@ -69,6 +69,16 @@ class Curve:
 #: built, this should go rather than sit here looking used.
 LINEAR_MAPS = {
     "linear_enc_pot": (0.0, 1.0, 0.05, 0.9),
+
+    # The one value that goes out unbent: /master/phones_mix reaches REAPER as
+    # a track volume, written straight through. Named rather than special-
+    # cased in the reverse path, so "this control has no curve" is a fact in
+    # the table instead of an `if` somewhere else.
+    #
+    # It clamps like every other map here, and that is what deals with
+    # REAPER's -2.75 -- its sentinel for -inf on a track volume. Clamped, an
+    # infinitely quiet fader reads as 0, which is what it means.
+    "identity": (0.0, 1.0, 0.0, 1.0),
 }
 
 
