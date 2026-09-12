@@ -10,6 +10,7 @@ test is for.
 
 import json
 import sys
+import tempfile
 import unittest
 import urllib.request
 from pathlib import Path
@@ -521,6 +522,83 @@ class TheUnknownTableIsFetchedOnRequest(unittest.TestCase):
         finally:
             from a3_core_web import stop_window
             stop_window()
+
+
+class TheRegisterRoute(unittest.TestCase):
+    """The catalogue, served beside the log it is not.
+
+    The arithmetic that holds one against the other is tested in
+    test_core_register.py; this is the plumbing: one route, fetched on
+    request, never on the stream.
+    """
+
+    def setUp(self):
+        self.folder = tempfile.TemporaryDirectory()
+        self.register = Path(self.folder.name) / "osc-register.json"
+        self.register.write_text(json.dumps({
+            "devices": ["core", "mixer"],
+            "directions": ["in"],
+            "entries": [
+                {"address": "/channel/{ch}/gain", "device": "mixer",
+                 "direction": "in", "source": "a3-mixer.py:62", "note": ""},
+                {"address": "/channel/{ch}/4d", "device": "core",
+                 "direction": "in", "source": "a3-core.py:577", "note": ""}]}))
+
+    def tearDown(self):
+        from a3_core_web import stop_window
+        stop_window()
+        self.folder.cleanup()
+
+    def _fetch(self, traffic):
+        self.assertTrue(start_window(traffic, "127.0.0.1:0",
+                                     register_path=self.register))
+        from a3_core_web import window_address
+        host, port = window_address()
+        with urllib.request.urlopen(
+                f"http://{host}:{port}/api/register", timeout=5) as answer:
+            return json.loads(answer.read())
+
+    def test_the_route_answers_with_the_catalogue(self):
+        payload = self._fetch(Traffic())
+        self.assertEqual(len(payload["entries"]), 2)
+        self.assertEqual(payload["devices"], ["core", "mixer"])
+
+    def test_an_address_that_arrived_is_marked_alive(self):
+        traffic = Traffic()
+        traffic.seen(IN, "/channel/0/gain", 0.5, "mixer")
+        payload = self._fetch(traffic)
+        alive = next(e for e in payload["entries"]
+                     if e["address"].endswith("gain"))
+        dead = next(e for e in payload["entries"] if e["address"].endswith("4d"))
+        self.assertTrue(alive["seen"])
+        self.assertFalse(dead["seen"])
+        self.assertEqual(payload["unseen"], 1)
+
+    def test_what_core_could_not_route_counts_as_arrived(self):
+        """REAPER's feedback is what fills the unknown table, and REAPER's own
+        patterns are most of the register. A catalogue that ignored it would
+        call every one of them dead."""
+        traffic = Traffic()
+        traffic.unknown("/channel/3/gain", 0.5, "reaper")
+        payload = self._fetch(traffic)
+        alive = next(e for e in payload["entries"]
+                     if e["address"].endswith("gain"))
+        self.assertTrue(alive["seen"])
+
+    def test_the_history_does_not_ride_along(self):
+        """The ring is ten thousand entries and none of them are the
+        catalogue's business. This route must not carry it."""
+        traffic = Traffic()
+        for _ in range(2000):
+            traffic.seen(IN, "/channel/0/gain", 0.5, "mixer")
+        payload = self._fetch(traffic)
+        self.assertNotIn("history", payload)
+
+    def test_a_register_that_cannot_be_read_is_said_rather_than_thrown(self):
+        self.register.unlink()
+        payload = self._fetch(Traffic())
+        self.assertEqual(payload["entries"], [])
+        self.assertTrue(payload["problem"])
 
 
 if __name__ == "__main__":

@@ -8,9 +8,12 @@ not a row saying zero, but an absence: `seen()` creates a row and increments
 it in the same step, so an address nobody has sent has no row at all. The
 table would read `/channel/0/azimuth` at 301,385 with `/channel/0/gain`
 missing entirely rather than sitting at 0. An absence is harder to notice
-than a zero would have been; showing "expected but never seen" would need a
-list of expected addresses (`layout.json`, `OscAddresses.hh`) that this
-feature does not have.
+than a zero would have been, which is why the list of expected addresses this
+module said it did not have now exists: `a3_core_register` holds the
+catalogue, generated from `layout.json`, `OscAddresses.hh` and four more
+sources, and says which of its addresses have never arrived. Nothing of that
+is in here -- this is still only a counter -- but "expected but never seen" is
+answerable now, one fetch away.
 
 It is deliberately dull. `seen()` runs about a hundred times a second, so it
 does a dict update and appends to a bounded ring, and that is all. No

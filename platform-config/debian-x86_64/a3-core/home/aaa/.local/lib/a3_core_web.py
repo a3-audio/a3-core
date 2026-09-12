@@ -1,9 +1,12 @@
 """A window onto what Core is passing about.
 
-Serves one page, a JSON snapshot, and a stream of snapshots at a fixed rate.
-It knows nothing about Core: it is handed a Traffic to read and, optionally,
-something to send with. That is what makes it testable without opening an OSC
-port.
+Serves one page, a stream of snapshots at a fixed rate, and three things
+fetched only when somebody asks: a single snapshot, the table of addresses Core
+could not route, and the register -- the catalogue of what the system can
+speak, which is a different question from what it has said (see
+a3_core_register). It knows nothing about Core: it is handed a Traffic to read
+and, optionally, something to send with. That is what makes it testable
+without opening an OSC port.
 
 **The rule this file lives under: it must never stop Core coming up.** Core
 makes the sound; this is a convenience. A busy port, a nonsense --web-bind, a
@@ -24,6 +27,9 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
 
 from pythonosc.osc_message_builder import BuildError  # type: ignore
+
+from a3_core_register import (DEFAULT_REGISTER, counts_of,
+                              load as load_register, with_counts)
 
 #: How often the stream pushes. Not per message: at a hundred messages a
 #: second, an event each would move the flood from the journal into the
@@ -187,7 +193,27 @@ def parse_value(text: str) -> Any:
         return said
 
 
-def _handler_class(traffic, send: Optional[Callable], page: Path):
+def register_as_json(register_path: Path, traffic) -> Dict[str, Any]:
+    """The catalogue, with what each of its addresses has actually carried.
+
+    Two tables are put in: the addresses Core understood, and the ones it could
+    not route. The second matters because REAPER's feedback is what fills it
+    and REAPER's own patterns are most of the register -- without it every one
+    of those 428 rows would read as a dead wire.
+
+    The history is asked for with a cutoff of *now* so it comes back empty.
+    The ring is ten thousand entries and none of them are the catalogue's
+    business; copying it here would be a megabyte and a half per fetch for
+    something this function throws away.
+    """
+    snapshot = traffic.snapshot(history_since=time.monotonic())
+    unknown = traffic.unknown_snapshot()
+    counts = counts_of(snapshot["rows"] + unknown["rows"])
+    return with_counts(load_register(register_path), counts)
+
+
+def _handler_class(traffic, send: Optional[Callable], page: Path,
+                   register_path: Path):
 
     class Window(BaseHTTPRequestHandler):
         # Otherwise every request writes a line to stderr, which is the flood
@@ -230,6 +256,21 @@ def _handler_class(traffic, send: Optional[Callable], page: Path):
                 # without putting the load back on the wire for every open
                 # tab.
                 payload = unknown_as_json(traffic.unknown_snapshot())
+                self._send(200, json.dumps(payload).encode(),
+                           "application/json")
+
+            elif self.path == "/api/register":
+                # The catalogue, not the log -- what the system *can* speak.
+                # Fetched on request like /api/unknown and for the same
+                # reason: it is five hundred rows that change only when
+                # somebody edits the sources, so putting it on a four-times-a-
+                # second stream would be pure waste.
+                #
+                # A register that cannot be read answers 200 with `problem`
+                # set rather than 500. The page has to be able to tell "no
+                # register is installed" from "the window is broken", and a
+                # 500 collapses the two into one "ging nicht".
+                payload = register_as_json(register_path, traffic)
                 self._send(200, json.dumps(payload).encode(),
                            "application/json")
 
@@ -357,7 +398,8 @@ def _address_from(bind: str) -> Tuple[str, int]:
 
 
 def start_window(traffic, bind: str, send: Optional[Callable] = None,
-                  page_path: Optional[Path] = None) -> bool:
+                  page_path: Optional[Path] = None,
+                  register_path: Optional[Path] = None) -> bool:
     """Start serving, on a daemon thread. True if it is listening.
 
     Returns False rather than raising when the port is taken or the address
@@ -367,11 +409,12 @@ def start_window(traffic, bind: str, send: Optional[Callable] = None,
     global _server, _thread
 
     page = page_path or DEFAULT_PAGE
+    register = register_path or DEFAULT_REGISTER
 
     try:
         host, port = _address_from(bind)
         _server = ThreadingHTTPServer(
-            (host, port), _handler_class(traffic, send, page))
+            (host, port), _handler_class(traffic, send, page, register))
     except (OSError, ValueError, OverflowError) as problem:
         # OverflowError is what socket.bind() actually raises for a port
         # outside 0-65535 -- _address_from() already rejects that range, so
