@@ -42,8 +42,12 @@ NOT_REVERSED = {
     # issues/a3-core-fx-send-fuehrt-noch-die-3d-funktion.md. One input becomes
     # two gains on two tracks and a single number cannot say which input it
     # came from.
-    "slope_constant_power": "the fx send, which currently carries 3d, and is "
-                            "not invertible from one number",
+    # Not the fx send, whatever this excuse used to say -- that branch does
+    # its own arithmetic and never called this. The only caller left is
+    # /master/return, and a master control has no channel to report back on,
+    # the same reason the three filter curves above are here.
+    "slope_constant_power": "the aux return's, and /master/* is not per "
+                            "channel",
 }
 
 
@@ -163,7 +167,11 @@ NOT_ANSWERED_FOR = {
     # recall from that -- see a3_core_recall.REMEMBERED_CONTROLS. fx-send has
     # no holder, so it is still simply absent.
     "3d": "not invertible from one gain; Core remembers it instead",
-    "fx-send": "not invertible from one gain, and nothing holds it",
+    # The same crossfade, arriving by the A3 Mixer's road. It writes the same
+    # memory as 3d does, so a recall does answer for it -- on /channel/n/3d,
+    # because that is the one control that still exists on both devices. The
+    # mixer's pot is analog and has nothing to be told.
+    "fx-send": "the same crossfade as 3d; answered on 3d's address",
     # Core's own state, not REAPER's, and they come back from REAPER as a mute
     # rather than as the flag they set.
     "pfl": "a toggle of Core's own; comes back as a mute",

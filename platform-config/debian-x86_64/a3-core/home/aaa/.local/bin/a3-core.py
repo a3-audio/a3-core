@@ -44,6 +44,7 @@ from pythonosc import osc_server
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 from a3_core_layout import load_layout   # noqa: E402
 from a3_core_curves import CurveNotInvertible, invert, load_curves  # noqa: E402
+from a3_core_crossfade import crossfade_gains   # noqa: E402
 from a3_core_buttons import (NO_CHANGE, wanted_fx_mode,   # noqa: E402
                              wanted_toggle)   # noqa: E402
 from a3_core_echo import EchoFilter   # noqa: E402
@@ -306,6 +307,35 @@ def remember_state():
     _state_file.remember(state_of(channel_infos, master_info))
 
 
+def send_crossfade(channel_index, value):
+    """Put a channel where the control says, between its two encoders.
+
+    Called from both roads -- `/channel/n/fx-send`, the A3 Mixer's pot, and
+    `/channel/n/3d`, A3 Motion's. They mean the same thing and have to stay
+    that way until the mixer's knob is given its own job back; see
+    issues/a3-core-fx-send-fuehrt-noch-die-3d-funktion.md.
+
+    One function rather than the two identical blocks this was, because both
+    roads now also have to write the value into Core's own memory. Nothing
+    fails if one of them forgets: Core simply answers the next recall with a
+    value from before somebody turned that pot, and the room hears the sound
+    snap back. The arithmetic itself is in a3_core_crossfade, where a test
+    can reach it.
+    """
+    channel_infos[channel_index].three_d = float(value)
+
+    stereo_gain, multi_gain = crossfade_gains(value)
+    track_stereo_enc = channel_infos[channel_index].track_stereo_enc
+    track_multi_enc = channel_infos[channel_index].track_multi_enc
+
+    osc_reaper.send_message(
+        f"/track/{track_stereo_enc}/fx/1/fxparam/1/value", stereo_gain)
+    osc_reaper.send_message(
+        f"/track/{track_stereo_enc}/fx/1/fxparam/15/value", stereo_gain)
+    osc_reaper.send_message(
+        f"/track/{track_multi_enc}/fx/1/fxparam/1/value", multi_gain)
+
+
 def slope_constant_power(value):
     resolution = np.arange(start=0, stop=1, step=0.1)
     slope = [0, 0.4, 0.6, 0.70, 0.75, 0.77, 0.80, 0.85, 0.9, 1]
@@ -457,48 +487,17 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
     # issues/a3-core-fx-send-fuehrt-noch-die-3d-funktion.md for what has to be
     # true before this block goes and the send below comes back.
     if parameter == "fx-send":
-        x = value
-        track_stereo_enc = channel_infos[channel_index].track_stereo_enc
-        track_multi_enc = channel_infos[channel_index].track_multi_enc
-        # Multi runs 0.5 -> 0 and stereo 0 -> 0.5. The old gain branch had it
-        # the other way round and was wrong; do not turn it back.
-        multi_gain = 0.5 * (1 - max(0, (x - 0.5) * 2))
-        stereo_gain = 0.5 * min(1, x * 2)
-        osc_reaper.send_message(
-            f"/track/{track_stereo_enc}/fx/1/fxparam/1/value",
-            stereo_gain
-        )
-        osc_reaper.send_message(
-            f"/track/{track_stereo_enc}/fx/1/fxparam/15/value",
-            stereo_gain
-        )
-        osc_reaper.send_message(
-            f"/track/{track_multi_enc}/fx/1/fxparam/1/value",
-            multi_gain
-        )
+        # The A3 Mixer's pot, which carries the 3D crossfade and not the fx
+        # send its name promises. Same function as `3d` below, and it writes
+        # the same memory -- turning this pot and then asking for a recall
+        # must not answer with what the other road last said.
+        send_crossfade(channel_index, value)
 
     # What 3d is for: A3 Motion's per-channel pot, crossfading the channel
     # between its stereo and its multi encoder. The same curves as fx-send
     # above, which is the road this arrived by until now.
     if parameter == "3d":
-        x = value
-        channel_infos[channel_index].three_d = float(x)
-        track_stereo_enc = channel_infos[channel_index].track_stereo_enc
-        track_multi_enc = channel_infos[channel_index].track_multi_enc
-        multi_gain = 0.5 * (1 - max(0, (x - 0.5) * 2))
-        stereo_gain = 0.5 * min(1, x * 2)
-        osc_reaper.send_message(
-            f"/track/{track_stereo_enc}/fx/1/fxparam/1/value",
-            stereo_gain
-        )
-        osc_reaper.send_message(
-            f"/track/{track_stereo_enc}/fx/1/fxparam/15/value",
-            stereo_gain
-        )
-        osc_reaper.send_message(
-            f"/track/{track_multi_enc}/fx/1/fxparam/1/value",
-            multi_gain
-        )
+        send_crossfade(channel_index, value)
 
     elif parameter == "gain":
         val = slope_volume(value)
