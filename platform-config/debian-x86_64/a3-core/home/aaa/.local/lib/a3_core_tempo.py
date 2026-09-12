@@ -51,12 +51,25 @@ NO_CHANGE = _NoChange()
 #: chatter: in the analyzer's SYNTH mode the tempo is exactly constant and
 #: nothing is sent after the first message at all.
 #:
-#: **Not tuned for the detection mode.** With BTrack running, the estimate
-#: wanders by around a BPM and most of that will get through this. Whether
-#: that wants a wider band, or waiting for the tempo to settle, is a question
-#: for someone who has listened to it -- guessing a number here would look
-#: like a decision and be a shrug.
+#: A deadband alone is **not** enough, and that was measured rather than
+#: reasoned: on 2026-09-12 the analyzer's tempo did not wobble around a value
+#: but ramped -- 107.7 down to 102.7 over four seconds, about a BPM per beat
+#: -- and every single beat cleared this band. Thirty-four rewrites of the
+#: delay line in a few seconds, which is the wobble the band exists to stop.
+#: Hence DEFAULT_STEADY_BEATS below.
 DEFAULT_DEADBAND = 0.1
+
+#: How many beats a tempo has to hold still before it counts.
+#:
+#: One bar. Counted in beats rather than seconds on purpose: at half the
+#: tempo the wait is twice as long in seconds and exactly as long musically,
+#: which is the unit a tempo deserves to be judged in.
+#:
+#: While the tempo is on the move, nothing is sent at all and the delay keeps
+#: the last tempo that meant something. That is the right failure: an echo
+#: slightly behind the room is a mistake anyone can hear past, an echo whose
+#: pitch slides is not.
+DEFAULT_STEADY_BEATS = 4
 
 #: What can be a tempo at all. Wider than the analyzer's own BPM_MIN/BPM_MAX
 #: (60..140 in its .env) because a Pioneer deck or a tap can be outside that
@@ -70,21 +83,30 @@ BPM_MAX = 400.0
 class TempoFollower:
     """What to pass on, given what keeps arriving.
 
-    Holds one number: the tempo last handed out. The deadband is measured
-    against *that* rather than against the previous reading, so a slow drift
-    cannot creep past it a hundredth at a time.
+    Two numbers: the tempo last handed out, and the tempo currently being
+    held still. A reading has to do both things before it is sent on -- hold
+    still for a bar, and differ from what the far end already has.
+
+    The deadband is measured against what was **sent** rather than against
+    the previous reading, so a slow drift cannot creep past it a hundredth at
+    a time.
     """
 
-    def __init__(self, deadband=DEFAULT_DEADBAND):
+    def __init__(self, deadband=DEFAULT_DEADBAND,
+                 steady_beats=DEFAULT_STEADY_BEATS):
         self._deadband = deadband
+        self._steady_beats = steady_beats
         self._sent = None
+        self._candidate = None
+        self._run = 0
 
     def wanted(self, bpm):
         """The tempo to send on, or NO_CHANGE.
 
-        A value that is not a tempo is refused and, importantly, does not
-        become what the deadband measures against: one stray message must not
-        make the next honest one look like a change, nor hide it.
+        A value that is not a tempo is refused, and refusing it changes
+        nothing: it does not become what the deadband measures against, and
+        it does not break a run of steady beats. One dropout in the middle of
+        a settled tempo is not a tempo change.
         """
         try:
             bpm = float(bpm)
@@ -94,7 +116,19 @@ class TempoFollower:
         if not isfinite(bpm) or not (BPM_MIN <= bpm <= BPM_MAX):
             return NO_CHANGE
 
-        if self._sent is not None and abs(bpm - self._sent) < self._deadband:
+        if (self._candidate is None
+                or abs(bpm - self._candidate) >= self._deadband):
+            # A different tempo: the run starts again, at this one.
+            self._candidate = bpm
+            self._run = 1
+            return NO_CHANGE
+
+        self._run += 1
+        if self._run < self._steady_beats:
+            return NO_CHANGE
+
+        if (self._sent is not None
+                and abs(bpm - self._sent) < self._deadband):
             return NO_CHANGE
 
         self._sent = bpm
