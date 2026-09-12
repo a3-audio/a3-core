@@ -512,19 +512,6 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
 
     # POTENTIOMETER
 
-    # fx-send drives the stereo/multi crossfade, which is not what its name
-    # says, and that is on purpose for now.
-    #
-    # The 3D function used to be reached through the mixer's FX-send knob --
-    # that was the only continuous control there was for it. A3 Motion's
-    # per-channel pot does it now, on /channel/n/3d, and that is new. Until
-    # the mixer stops sending fx-send for this, both roads have to arrive:
-    # taking this one away would take the 3D function off the mixer before
-    # anyone had agreed to that.
-    #
-    # So the channel FX send itself does nothing at the moment. See
-    # issues/a3-core-fx-send-fuehrt-noch-die-3d-funktion.md for what has to be
-    # true before this block goes and the send below comes back.
     if parameter == "fx-send":
         # The A3 Mixer's pot, and since 2026-09-12 it means what its name
         # says again: how much of this channel reaches the FX bus, where the
