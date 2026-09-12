@@ -122,11 +122,9 @@ class SeenFile:
             return 0
 
         now_wall, now_mono = time.time(), time.monotonic()
-        elapsed = now_wall - saved.get("at", now_wall)
 
         def when(stamp):
-            behind = max(0.0, elapsed + (saved.get("at", now_wall) - stamp))
-            return now_mono - behind
+            return now_mono - max(0.0, now_wall - stamp)
 
         rows = [{"direction": item[0], "address": item[1], "count": item[2],
                  "peer": item[3], "last_seen": when(item[4])}
