@@ -45,6 +45,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 from a3_core_layout import load_layout   # noqa: E402
 from a3_core_curves import CurveNotInvertible, invert, load_curves  # noqa: E402
 from a3_core_crossfade import crossfade_gains   # noqa: E402
+from a3_core_tempo import (NO_CHANGE as NO_TEMPO,   # noqa: E402
+                           TempoFollower)
 from a3_core_buttons import (NO_CHANGE, wanted_fx_mode,   # noqa: E402
                              wanted_toggle)   # noqa: E402
 from a3_core_echo import EchoFilter   # noqa: E402
@@ -170,6 +172,28 @@ osc_reaper = WatchedClient(SimpleUDPClient(REAPER_HOST, REAPER_PORT),
 udp_clients_iem = tuple(
     WatchedClient(SimpleUDPClient('127.0.0.1', 1337 + index), "iem")
     for index in range(3))
+
+#: The delay on the FX bus, which follows the beat-analyzer's tempo.
+#:
+#: Its own OSC port rather than a REAPER parameter, and that was measured
+#: rather than chosen: DualDelay's `sync` switch does follow REAPER's project
+#: tempo, but only sometimes -- setting the tempo while the transport was
+#: stopped did nothing, starting the transport picked it up once, and the
+#: next tempo change was ignored playing or not. A rig whose delay is right
+#: only when REAPER happens to be rolling is not a rig anyone should have to
+#: think about. Spoken to directly, the plug-in takes the value every time.
+#:
+#: **It only listens if somebody opened its receiver.** That is a setting
+#: inside the plug-in (its status display, lower left, "Listen to port" ->
+#: OPEN) and lives in the REAPER project, not here. With the port shut these
+#: messages go nowhere and nothing says so -- see the smoke test.
+DUALDELAY_HOST, DUALDELAY_PORT = '127.0.0.1', 1340
+osc_dualdelay = WatchedClient(
+    SimpleUDPClient(DUALDELAY_HOST, DUALDELAY_PORT), "dualdelay")
+
+#: What the delay was last told. See a3_core_tempo for why this is not simply
+#: passed through on every beat.
+_tempo = TempoFollower()
 
 @dataclass
 class MasterInfo:
@@ -732,6 +756,47 @@ def osc_handler_tap(address: str,
 #: Where a device asks Core to say the state again. One address rather than
 #: one per value: the answer is the ordinary messages, so nothing new has to
 #: be understood at the other end.
+#: The beat-analyzer's clock. It sends this to every host in its .env, and
+#: Core has been one of them all along -- it simply had nowhere to put it.
+OSC_ADDRESS_BEAT: str = "/beat"
+
+
+def osc_handler_beat(client_address: Tuple[str, int], address: str,
+                     *osc_arguments: List[Any]) -> None:
+    """The beat-analyzer's tempo, on its way to the delay.
+
+    Three arguments: beat within the bar, bar, and the tempo. Only the third
+    is used here -- Core does not play anything, so where in the bar the
+    clock stands is nobody's business at this end. Motion and the mixer get
+    the same message directly from the analyzer and do their own counting.
+
+    Passed on only when it has moved; a delay line rewritten on every beat is
+    a delay line whose pitch wobbles. See a3_core_tempo.
+
+    The peer will read "motion" in the window, and that is the known
+    ambiguity: the analyzer runs on this box and so does Motion, and
+    peer_name has only the host to go on. The address says who it was.
+    """
+    traffic.seen(IN, address,
+                 osc_arguments[2] if len(osc_arguments) > 2 else None,
+                 peer_name(client_address[0], PEER_HOSTS,
+                           only=COMMANDERS))
+
+    if len(osc_arguments) < 3:
+        return
+
+    wanted = _tempo.wanted(osc_arguments[2])
+    if wanted is NO_TEMPO:
+        return
+
+    # Both delay lines on the same tempo. They keep their own multipliers --
+    # that is what makes the two sides a ping-pong rather than one echo --
+    # and the multiplier is set in the plug-in, not from here.
+    for side in ("L", "R"):
+        osc_dualdelay.send_message(
+            _layout.address("dualdelay_bpm", side=side), wanted)
+
+
 OSC_ADDRESS_RECALL: str = "/state/recall"
 
 
@@ -844,6 +909,13 @@ if __name__ == "__main__":
                         help="host:port of A3 Mixer")
     parser.add_argument("--motion", default=f"{A3MOTION_HOST}:{A3MOTION_PORT}",
                         help="host:port of A3 Motion")
+    parser.add_argument("--dualdelay",
+                        default=f"{DUALDELAY_HOST}:{DUALDELAY_PORT}",
+                        help="host:port of the IEM DualDelay's own OSC "
+                             "receiver, which follows the beat-analyzer's "
+                             "tempo. The port has to be opened inside the "
+                             "plug-in; with it shut these messages go "
+                             "nowhere.")
     parser.add_argument("--reaper", default=f"{REAPER_HOST}:{REAPER_PORT}",
                         help="host:port of REAPER's OSC input. Point it "
                              "somewhere else to exercise this without "
@@ -876,13 +948,16 @@ if __name__ == "__main__":
     # declaration was tried first and is a syntax error there, since the names
     # are already bound above.)
     for name, spec in (("mixer", args.mixer), ("motion", args.motion),
-                       ("reaper", args.reaper)):
+                       ("reaper", args.reaper),
+                       ("dualdelay", args.dualdelay)):
         host, _, port = spec.rpartition(":")
         client = WatchedClient(SimpleUDPClient(host, int(port)), name)
         if name == "mixer":
             osc_a3mixer = client
         elif name == "motion":
             osc_a3motion = client
+        elif name == "dualdelay":
+            osc_dualdelay = client
         else:
             osc_reaper = client
 
@@ -910,6 +985,8 @@ if __name__ == "__main__":
     dispatcher.map("/master/*", osc_handler_master, needs_reply_address=True)
     dispatcher.map("/fx/*", osc_handler_fx, needs_reply_address=True)
     dispatcher.map(OSC_ADDRESS_RECALL, osc_handler_recall,
+                   needs_reply_address=True)
+    dispatcher.map(OSC_ADDRESS_BEAT, osc_handler_beat,
                    needs_reply_address=True)
     #dispatcher.map("/tap", osc_handler_tap)
 
