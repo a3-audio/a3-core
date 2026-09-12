@@ -46,3 +46,12 @@ this one-shot service is triggert by `apt install a3-core`
 - https://tal-software.com/products/tal-filter
 - https://github.com/rafjagger/beat-analyzer
 - https://plugins.iem.at
+
+## Where this fits
+
+A³ is seven repositories and one system. **The structure, the workflow and the
+versioning are described once, in the umbrella:**
+[a3-audio/a3-system](https://github.com/a3-audio/a3-system#repositories-and-versioning).
+
+The short of it: work happens on `main`, a version is an annotated tag, and
+the same tag name is set in every repository at once — `v03.0` is the first.
