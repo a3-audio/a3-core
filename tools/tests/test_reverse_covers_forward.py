@@ -174,6 +174,13 @@ NOT_ANSWERED_FOR = {
     "fx-send": "the same crossfade as 3d; answered on 3d's address",
     # Core's own state, not REAPER's, and they come back from REAPER as a mute
     # rather than as the flag they set.
+    # Relaying these continuously is a feedback loop: REAPER holds the base
+    # value with the accent envelope on top, Motion holds the base, and
+    # writing the one into the other makes every accent's peak the new base.
+    # Built on 2026-09-12, live for a few hours, taken out the same day. See
+    # issues/a3-core-dauernder-rueckweg-ist-eine-schleife.md.
+    "pot_1": "REAPER holds it with the accent on top; relaying that ratchets",
+    "pot_2": "the same",
     "pfl": "a toggle of Core's own; comes back as a mute",
     "fx": "the same",
     "4d": "the same",
@@ -216,53 +223,27 @@ class EveryControlIsAnsweredFor(unittest.TestCase):
                          set())
 
 
-class ThePotsFindTheirWayHome(unittest.TestCase):
-    """The two entries added on 2026-09-12, end to end through reverse_for.
+class ThePotsStayOut(unittest.TestCase):
+    """The two encoder pots had reverse entries for a few hours and must not
+    get them back by accident.
 
-    Worth spelling out rather than trusting the table: the pots are the first
-    entries whose `to` is not the mixer, and the first whose inverse is
-    arithmetic rather than a recorded curve.
+    Not an opinion about whether Motion should learn its filter back -- it
+    should. It is about *how*: relaying REAPER's value continuously mixes two
+    different quantities, because REAPER holds the base with the accent
+    envelope on top and Motion holds the base. An answer on request is a
+    different mechanism and does not go here.
+    See issues/a3-core-dauernder-rueckweg-ist-eine-schleife.md.
     """
 
-    def setUp(self):
-        from a3_core_layout import load_layout
-        self.layout = load_layout(PACKAGE / "share/a3-core/layout.json")
-
-    def _address(self, channel, slot, param):
-        track = getattr(self.layout.channel(channel), "track_stereo_enc")
-        return f"/track/{track}/fx/{slot}/fxparam/{param}/value"
-
-    def test_the_first_pot_is_recognised(self):
-        slot = self.layout.fx_slot("enc_pots")
-        entry = reverse_for(self.layout,
-                            self._address(0, slot,
-                                          self.layout.fx_param("enc_pot_1")),
-                            "track_stereo_enc")
-        self.assertIsNotNone(entry)
-        self.assertEqual(entry.address, "pot_1")
-        self.assertEqual(entry.curve, "linear_enc_pot")
-
-    def test_the_second_pot_is_a_different_entry(self):
-        slot = self.layout.fx_slot("enc_pots")
-        entry = reverse_for(self.layout,
-                            self._address(3, slot,
-                                          self.layout.fx_param("enc_pot_2")),
-                            "track_stereo_enc")
-        self.assertIsNotNone(entry)
-        self.assertEqual(entry.address, "pot_2")
-
-    def test_a_pot_goes_back_to_motion_and_not_to_the_mixer(self):
-        """The mixer has no encoder. Sending it there would be a message it
-        has no handler for."""
+    def test_no_reversal_relays_a_pot(self):
         for entry in CHANNEL_REVERSALS:
-            if entry.address in ("pot_1", "pot_2"):
-                self.assertEqual(entry.to, "motion", entry.address)
+            self.assertNotIn(entry.address, ("pot_1", "pot_2"),
+                             "a continuous reverse path for the pots is a "
+                             "feedback loop -- see the issue")
 
-    def test_another_plugin_on_the_same_track_is_not_a_pot(self):
-        """The stereo encoder itself sits on the same track in a different
-        slot. Matching on the track alone would answer for it too."""
-        other = self.layout.fx_slot("stereo_enc")
-        self.assertNotEqual(other, self.layout.fx_slot("enc_pots"))
-        self.assertIsNone(
-            reverse_for(self.layout, self._address(0, other, 8),
-                        "track_stereo_enc"))
+    def test_nothing_reports_back_to_motion_continuously(self):
+        """The wider rule, pinned one level up: anything Motion sets is a
+        value Motion already holds, and REAPER's copy of it carries whatever
+        modulation is running on top."""
+        for entry in CHANNEL_REVERSALS:
+            self.assertEqual(entry.to, "mixer", entry.address)

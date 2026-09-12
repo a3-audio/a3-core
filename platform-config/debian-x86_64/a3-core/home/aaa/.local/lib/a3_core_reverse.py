@@ -47,11 +47,11 @@ Reverse = namedtuple("Reverse", "field slot param curve address to")
 #: The slot is the layout's name rather than a number, so this reads as "the
 #: gain plugin" and follows a project where a plugin moves.
 #:
-#: `to` is which device the message goes back to, and it is not one answer.
-#: Gain, the three EQ bands and volume are the mixer's channel strip, and
-#: telling Motion about them would be telling it about controls it does not
-#: have. The two encoder pots are the other way round: they are Motion's, and
-#: the mixer has no encoder.
+#: `to` is which device the message goes back to. Every entry says "mixer"
+#: today -- these are the mixer's channel strip, and telling Motion about
+#: them would be telling it about controls it does not have. The field is not
+#: a constant, though: a control of Motion's would say so, and two of them
+#: briefly did.
 #:
 #: **Only per-channel controls are here.** The filter's frequency and
 #: resonance arrive on /fx/*, which is global rather than per channel -- the
@@ -66,21 +66,13 @@ CHANNEL_REVERSALS = (
     Reverse("track_channelbus", None, None, "slope_volume", "volume",
             "mixer"),
 
-    # Motion's two encoder pots -- filter frequency and Q. They went out
-    # through no curve at all, a straight np.interp(v, [0, 1], [0.05, 0.9]),
-    # so what inverts them is arithmetic rather than a recorded table; see
-    # a3_core_curves.LINEAR_MAPS. Writing that down as an eleventh golden
-    # curve would have been inventing a measurement.
-    #
-    # These two are why the curve-based coverage test never noticed they had
-    # no way back: it walks calls named slope_*, and an np.interp send is not
-    # one. TheEveryControlIsAnsweredFor in
-    # tools/tests/test_reverse_covers_forward.py now checks by control name
-    # instead, which is the level the gap was at.
-    Reverse("track_stereo_enc", "enc_pots", 1, "linear_enc_pot", "pot_1",
-            "motion"),
-    Reverse("track_stereo_enc", "enc_pots", 2, "linear_enc_pot", "pot_2",
-            "motion"),
+    # Motion's two encoder pots were here for a few hours on 2026-09-12 and
+    # had to come out: relaying them continuously is a feedback loop. REAPER
+    # holds what is *sounding* -- the base value with the accent envelope on
+    # top -- while Motion holds the base. Writing the one into the other made
+    # every accent's peak the new base, so an action raised the value and it
+    # never came down. See
+    # issues/a3-core-dauernder-rueckweg-ist-eine-schleife.md.
 )
 
 

@@ -56,6 +56,17 @@ class Curve:
 #: These four numbers have to agree with a3-core.py's pot_1/pot_2 branches.
 #: Nothing checks that automatically: the coverage test walks calls named
 #: slope_*, and an np.interp send is not one.
+#:
+#: **Nothing inverts them at the moment.** This was built on 2026-09-12 for a
+#: reverse path that relayed the pots back to Motion continuously, and that
+#: turned out to be a feedback loop -- REAPER holds the base value with the
+#: accent envelope on top, Motion holds the base, and writing the one into
+#: the other ratchets. The entries came out the same day; see
+#: issues/a3-core-dauernder-rueckweg-ist-eine-schleife.md.
+#:
+#: Kept rather than deleted because the arithmetic is right and tested, and
+#: because answering a recall *on request* needs exactly it. If that is never
+#: built, this should go rather than sit here looking used.
 LINEAR_MAPS = {
     "linear_enc_pot": (0.0, 1.0, 0.05, 0.9),
 }
