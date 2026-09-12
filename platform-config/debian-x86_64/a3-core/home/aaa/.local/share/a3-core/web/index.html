@@ -27,6 +27,10 @@
   .muted { color: #6b7280; }
   .in { color: #7ee081; }
   .out { color: #7eb6e0; }
+  /* An address that exists and has never arrived. Amber rather than red: it
+     is a question, not a fault -- most of REAPER's vocabulary is simply not
+     used by this rig. */
+  .nowire { color: #e0a07e; }
   .type { color: #6b7280; font-size: 11px; }
   input, select, button { background: #1c2027; color: #d8dee9;
        border: 1px solid #2b303b; border-radius: 3px; padding: 4px 7px;
@@ -44,22 +48,36 @@
 <h2>Adressen</h2>
 <div class="bench" style="margin-bottom:6px">
   <input id="filter" placeholder="filtern …" size="28">
-  <label><input type="checkbox" id="onlyactive"> nur aktive</label>
+  <label id="onlyactivelabel"><input type="checkbox" id="onlyactive">
+    nur aktive</label>
+  <label id="onlydeadlabel" hidden><input type="checkbox" id="onlydead">
+    nur tote Drähte</label>
   <select id="known">
     <option value="known" selected>verstanden</option>
     <option value="unknown">unverstanden</option>
     <option value="all">alle</option>
+    <option value="register">Register</option>
+  </select>
+  <select id="device">
+    <option value="">alle Geräte</option>
   </select>
   <button id="refetch" hidden>neu holen</button>
   <span class="muted" id="fetchage"></span>
   <span class="muted" id="status">verbinde …</span>
 </div>
-<table>
+<table id="traffictable">
   <thead><tr>
     <th></th><th>Adresse</th><th class="num">Anzahl</th><th class="num">/s</th>
     <th>letzter Wert</th><th>Gegenstelle</th><th class="num">zuletzt</th>
   </tr></thead>
   <tbody id="rows"></tbody>
+</table>
+<table id="registertable" hidden>
+  <thead><tr>
+    <th></th><th>Adresse</th><th>Gerät</th><th class="num">Anzahl</th>
+    <th>Quelle</th><th>Notiz</th>
+  </tr></thead>
+  <tbody id="registerrows"></tbody>
 </table>
 
 <div class="cols">
@@ -136,11 +154,31 @@ let unknownRows = [];
 let unknownFetchedAt = null;     // Date.now() of the fetch, or null
 let unknownEvicted = 0;
 
+// The register does NOT arrive on the stream either, and for a second reason
+// on top of the unknown table's: it does not change while Core runs. It is
+// generated from the sources by tools/osc_register.py, shipped as a file, and
+// five hundred rows of it would be five hundred rows resent four times a
+// second to say exactly what they said last time.
+//
+// It is a different question from everything above it. The rows above are what
+// flew; these are what the system can speak at all. `seen` is the one place
+// they meet: an address in here that has never arrived is a dead wire, and
+// that comparison is made in a3_core_register.py on Core's side, not here --
+// there is no JavaScript engine on this machine to test arithmetic with.
+let registerRows = [];
+let registerFetchedAt = null;    // Date.now() of the fetch, or null
+let registerProblem = "";
+let registerSeen = 0;
+
 // draw() runs four times a second off the stream, so anything it writes
-// unconditionally wins against anything the fetch writes. The fetch owns the
+// unconditionally wins against anything a fetch writes. The fetch owns the
 // #fetchage line while it is working or has failed; only when it is idle
 // does the age take over. Without that, a failed fetch is visible for one
 // tick and then overwritten by the next SSE message.
+//
+// Shared by both fetches -- the unknown table and the register. Only one of
+// the two tables is on screen at a time, so the line belongs to whichever
+// fetch ran last, which is the one the reader is waiting for.
 let fetchState = "idle";        // "idle" | "loading" | "failed"
 let fetchError = "";            // set together with fetchState "failed"
 
@@ -214,10 +252,40 @@ function refreshStatus() {
     : lastRowNotes;
 }
 
+// The device options are the union of both axes: the peers the traffic has
+// actually seen, and the devices the register names. Some names live on only
+// one side -- "core" is a device in the register (the addresses Core itself
+// listens for) and never a peer, and a raw IP is a peer and never a register
+// device. One select for both is still right: the question "show me only
+// Motion" is the same question in either table.
+//
+// Rebuilt only when the set of names changes, not on every tick: replacing the
+// options four times a second would close the dropdown under the hand that
+// opened it. The chosen value is put back afterwards, and falls back to "all"
+// only if the device it named has gone.
+let deviceOptions = "";
+
+function refreshDevices(rows) {
+  const names = new Set();
+  for (const row of rows) names.add(row.peer);
+  for (const row of registerRows) names.add(row.device);
+  const wanted = [...names].sort();
+  const key = wanted.join("|");
+  if (key === deviceOptions) return;
+  deviceOptions = key;
+
+  const chosen = $("device").value;
+  $("device").innerHTML = '<option value="">alle Geräte</option>' +
+    wanted.map((name) => '<option value="' + safe(name) + '">' +
+                         safe(name) + "</option>").join("");
+  $("device").value = wanted.indexOf(chosen) >= 0 ? chosen : "";
+}
+
 function drawRows(payload) {
   const rows = payload.rows;
   const needle = $("filter").value.trim();
   const onlyActive = $("onlyactive").checked;
+  const device = $("device").value;
   const mode = $("known").value;
 
   // The server's `age` on a fetched row is as-of the fetch, not as-of now --
@@ -239,9 +307,14 @@ function drawRows(payload) {
       (row) => ({...row, age: row.age + sinceFetch})));
   }
 
+  // Every one of these is browser work on rows that arrived anyway. None of
+  // them narrows what the stream sends, and none of them may: the load is on
+  // the wire, and a filter that "lets the stream send everything because it
+  // hides it anyway" is how this page froze a machine on 2026-09-10.
   const matching = pool
     .filter((row) => !needle || row.address.includes(needle))
     .filter((row) => !onlyActive || row.age < STALE_AFTER)
+    .filter((row) => !device || row.peer === device)
     .sort((a, b) => b.count - a.count);
 
   const shown = matching.slice(0, DRAW_CAP);
@@ -295,6 +368,59 @@ function drawRows(payload) {
   }
 }
 
+// Which way a register entry runs, from Core's side. Four marks and not two,
+// because the sources honestly say four different things: Core hears it, Core
+// says it, both (REAPER's pattern file does not distinguish), or Core is not a
+// party to it at all -- the beat-analyzer's /vu/* goes straight to the mixer.
+// See the DIRECTIONS comment in tools/osc_register.py.
+const DIRECTION_MARK = {
+  "in": '<span class="in">↓</span>',
+  "out": '<span class="out">↑</span>',
+  "both": '<span class="muted">↕</span>',
+  "aside": '<span class="muted">·</span>'
+};
+
+function drawRegister() {
+  const needle = $("filter").value.trim();
+  const device = $("device").value;
+  const onlyDead = $("onlydead").checked;
+
+  // Sorted by address rather than by count: this is a catalogue, and a
+  // catalogue is read by looking something up. The traffic table above is the
+  // one sorted by how busy a row is.
+  const matching = registerRows
+    .filter((row) => !needle || row.address.indexOf(needle) >= 0 ||
+                     row.source.indexOf(needle) >= 0)
+    .filter((row) => !device || row.device === device)
+    .filter((row) => !onlyDead || !row.seen)
+    .sort((a, b) => a.address < b.address ? -1
+                  : a.address > b.address ? 1 : 0);
+
+  const shown = matching.slice(0, DRAW_CAP);
+
+  $("registerrows").innerHTML = shown.map((row) => {
+    return "<tr>" +
+      "<td>" + (DIRECTION_MARK[row.direction] || "") + "</td>" +
+      "<td>" + safe(row.address) + "</td>" +
+      '<td class="muted">' + safe(row.device) + "</td>" +
+      '<td class="num' + (row.seen ? "" : " nowire") + '">' +
+      (row.seen ? row.count : "nie") + "</td>" +
+      '<td class="muted">' + safe(row.source) + "</td>" +
+      '<td class="muted">' + safe(row.note) + "</td></tr>";
+  }).join("") || '<tr><td class="muted">nichts</td></tr>';
+
+  const notes = [];
+  if (registerProblem) {
+    notes.push("Register nicht gelesen: " + registerProblem);
+  } else if (registerFetchedAt !== null) {
+    notes.push(registerSeen + " von " + registerRows.length + " gesehen");
+  }
+  const hidden = matching.length - shown.length;
+  if (hidden > 0) notes.push(hidden + " weitere nicht gezeigt");
+  lastRowNotes = notes.join(", ");
+  refreshStatus();
+}
+
 function drawHistory(history, now) {
   // Only the tail, and only what is picked. The buffer holds up to
   // HISTORY_CAP; pouring all of it into the DOM would be the same flood in
@@ -342,7 +468,24 @@ function rememberHistory(entries, full) {
 function draw(payload) {
   latest = payload;
   drawPeers(payload.rows);
-  drawRows(payload);
+  refreshDevices(payload.rows);
+
+  // The two tables are never both on screen. What flew and what can be spoken
+  // are different questions, and one table holding both would answer neither
+  // -- a register row has no rate and no last value, a traffic row has no
+  // source line. The switch chooses; the device filter applies to whichever is
+  // showing.
+  const showRegister = $("known").value === "register";
+  $("traffictable").hidden = showRegister;
+  $("registertable").hidden = !showRegister;
+  $("onlyactivelabel").hidden = showRegister;
+  $("onlydeadlabel").hidden = !showRegister;
+
+  if (showRegister) {
+    drawRegister();
+  } else {
+    drawRows(payload);
+  }
   drawHistory(historyBuffer, payload.at);
 
   $("unknownsummary").textContent =
@@ -363,8 +506,13 @@ function draw(payload) {
     // old: the streamed ones are a quarter-second old, the fetched ones as
     // old as the fetch. A table that hid that would mislead about the one
     // thing it is opened for.
-    $("fetchage").textContent = unknownFetchedAt === null ? ""
-      : "Abruf vor " + ageText((Date.now() - unknownFetchedAt) / 1000);
+    //
+    // Whichever fetch the visible table belongs to. The register's age says
+    // how old its `seen` flags are, which is the same question for it: an
+    // address can have arrived in the minute since it was fetched.
+    const at = showRegister ? registerFetchedAt : unknownFetchedAt;
+    $("fetchage").textContent = at === null ? ""
+      : "Abruf vor " + ageText((Date.now() - at) / 1000);
   }
 }
 
@@ -392,6 +540,10 @@ function listen() {
 
 $("filter").oninput = () => { if (latest) draw(latest); };
 $("onlyactive").onchange = () => { if (latest) draw(latest); };
+// A filter is the browser's business: it redraws what already arrived and
+// changes nothing on the wire.
+$("onlydead").onchange = () => { if (latest) draw(latest); };
+$("device").onchange = () => { if (latest) draw(latest); };
 
 async function fetchUnknown() {
   fetchState = "loading";
@@ -412,22 +564,62 @@ async function fetchUnknown() {
   if (latest) draw(latest);
 }
 
+async function fetchRegister() {
+  fetchState = "loading";
+  if (latest) draw(latest);
+  try {
+    const answer = await fetch("/api/register");
+    const payload = await answer.json();
+    // A register Core could not read answers 200 with `problem` set rather
+    // than an error, so that this page can tell "none is installed" from "the
+    // window is broken" -- see the route in a3_core_web.py.
+    registerRows = payload.entries;
+    registerProblem = payload.problem;
+    registerSeen = payload.seen;
+    registerFetchedAt = Date.now();
+    fetchState = "idle";
+    // The register names devices the traffic has not shown, so the filter's
+    // options have to be rebuilt now rather than waiting for a row to arrive
+    // from one of them.
+    deviceOptions = "";
+  } catch (problem) {
+    registerRows = [];
+    registerFetchedAt = null;
+    registerProblem = "";
+    fetchState = "failed";
+    fetchError = String(problem);
+  }
+  if (latest) draw(latest);
+}
+
 $("known").onchange = () => {
   const mode = $("known").value;
-  const wantsUnknown = mode !== "known";
-  $("refetch").hidden = !wantsUnknown;
+  const wantsUnknown = mode === "unknown" || mode === "all";
+  const wantsRegister = mode === "register";
+  $("refetch").hidden = !(wantsUnknown || wantsRegister);
   // Only fetched the first time the switch turns it on -- flipping between
   // "unverstanden" and "alle" reuses what is already in unknownRows rather
   // than hitting the wire again, since that is the whole point of keeping
-  // the fetch behind the switch.
+  // the fetch behind the switch. The register is the same, and more so: it
+  // cannot change while Core runs.
   if (wantsUnknown && unknownFetchedAt === null) {
     fetchUnknown();
+  } else if (wantsRegister && registerFetchedAt === null) {
+    fetchRegister();
   } else {
     if (latest) draw(latest);
   }
 };
 
-$("refetch").onclick = fetchUnknown;
+// Whichever table is showing. Both are snapshots and both go stale; the button
+// says the same thing about either.
+$("refetch").onclick = () => {
+  if ($("known").value === "register") {
+    fetchRegister();
+  } else {
+    fetchUnknown();
+  }
+};
 
 async function fire(to, address, raw) {
   const said = $("benchsaid");
