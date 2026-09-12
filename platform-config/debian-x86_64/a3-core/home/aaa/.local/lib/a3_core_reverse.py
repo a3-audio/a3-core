@@ -16,12 +16,15 @@ That is a real refactor of the live message path and is not this change.
 
 **What is deliberately not reversed:**
 
-- The stereo/multi crossfade (3d, fx-send). One input becomes two gains on two
+- The stereo/multi crossfade (`3d`). One input becomes two gains on two
   tracks; a single number cannot say which input it came from, and
-  a3_core_curves refuses it rather than inventing one. `3d` is answered for
+  a3_core_curves refuses it rather than inventing one. It is answered for
   anyway, from the other end: Core holds what it was sent and replays that,
   the way it replays the position -- see a3_core_recall.REMEMBERED_CONTROLS.
-  `fx-send` has no holder and is still simply absent.
+
+- The FX send (`fx-send`). A REAPER send since 2026-09-12, and REAPER does
+  report it -- but nothing asks for it back, because the only device that
+  sets it is the desk's analog pot.
 
 - The position (azimuth, elevation). It never goes to a REAPER track at all --
   Core writes it straight to the IEM plugins' own OSC port -- so there is

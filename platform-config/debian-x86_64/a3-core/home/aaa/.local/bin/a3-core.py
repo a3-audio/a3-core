@@ -342,20 +342,24 @@ def remember_state():
     _state_file.remember(state_of(channel_infos, master_info))
 
 
-def send_crossfade(channel_index, value):
+def apply_3d_crossfade(channel_index, value):
     """Put a channel where the control says, between its two encoders.
 
-    Called from both roads -- `/channel/n/fx-send`, the A3 Mixer's pot, and
-    `/channel/n/3d`, A3 Motion's. They mean the same thing and have to stay
-    that way until the mixer's knob is given its own job back; see
+    One road since 2026-09-12: `/channel/n/3d`, A3 Motion's pot. The mixer's
+    `fx-send` used to arrive here too -- it was the only continuous control
+    the desk had for this -- and now means what its name says again. The
+    decision and its price (the desk has no 3D control any more) are in
     issues/a3-core-fx-send-fuehrt-noch-die-3d-funktion.md.
 
-    One function rather than the two identical blocks this was, because both
-    roads now also have to write the value into Core's own memory. Nothing
-    fails if one of them forgets: Core simply answers the next recall with a
-    value from before somebody turned that pot, and the room hears the sound
-    snap back. The arithmetic itself is in a3_core_crossfade, where a test
-    can reach it.
+    Still a function rather than an inline block: it does two things, sends
+    the gains and writes Core's own memory, and the second one is the kind
+    that gets forgotten when it is copied. Forgetting it does not fail --
+    Core simply answers the next recall with a value from before somebody
+    turned the pot, and the room hears the sound snap back. The arithmetic
+    is in a3_core_crossfade, where a test can reach it.
+
+    Not named `send_*`: in this file `send` now means the way onto the FX
+    bus, and this has nothing to do with it.
     """
     channel_infos[channel_index].three_d = float(value)
 
@@ -522,17 +526,35 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
     # issues/a3-core-fx-send-fuehrt-noch-die-3d-funktion.md for what has to be
     # true before this block goes and the send below comes back.
     if parameter == "fx-send":
-        # The A3 Mixer's pot, which carries the 3D crossfade and not the fx
-        # send its name promises. Same function as `3d` below, and it writes
-        # the same memory -- turning this pot and then asking for a recall
-        # must not answer with what the other road last said.
-        send_crossfade(channel_index, value)
+        # The A3 Mixer's pot, and since 2026-09-12 it means what its name
+        # says again: how much of this channel reaches the FX bus, where the
+        # delay that follows the beat sits.
+        #
+        # It drove the 3D crossfade for years because it was the only
+        # continuous control the desk had for it. Motion's own pot took that
+        # over on /channel/n/3d, and the desk's knob got its own job back --
+        # decided by the maintainer, price named (the desk has no 3D control
+        # any more): see
+        # issues/a3-core-fx-send-fuehrt-noch-die-3d-funktion.md.
+        #
+        # Send 3 of the channelbus reaches enc_fx. The number is in the
+        # layout rather than here, because a send that moves in the REAPER
+        # project has to be findable by reading one file. Measured, not
+        # assumed: moving the fader on 2026-09-12 produced exactly
+        # /track/9/send/3/volume at Core, normalised 0..1 -- which is what
+        # slope_constant_power already delivers.
+        val = slope_constant_power(value)
+        track_channelbus = channel_infos[channel_index].track_channelbus
+        osc_reaper.send_message(
+            _layout.address("track_send", track=track_channelbus,
+                            send=_layout.send("fx")),
+            val)
 
     # What 3d is for: A3 Motion's per-channel pot, crossfading the channel
     # between its stereo and its multi encoder. The same curves as fx-send
     # above, which is the road this arrived by until now.
     if parameter == "3d":
-        send_crossfade(channel_index, value)
+        apply_3d_crossfade(channel_index, value)
 
     elif parameter == "gain":
         val = slope_volume(value)

@@ -1,18 +1,20 @@
 """Where a channel sits between its stereo and its multi encoder.
 
-One A3 value in, two REAPER gains out. It arrives on two addresses and means
-the same thing on both: `/channel/n/fx-send`, which is the A3 Mixer's pot and
-how this was reached before Motion existed, and `/channel/n/3d`, which is A3
-Motion's per-channel pot. Both roads have to stay open until the mixer's knob
-is given back its own job -- see
+One A3 value in, two REAPER gains out. It arrives on `/channel/n/3d`, A3
+Motion's per-channel pot.
+
+It used to arrive on `/channel/n/fx-send` as well -- the mixer's pot was the
+only continuous control the desk had for this before Motion existed. Since
+2026-09-12 that pot is the FX send again and this has one road. The decision
+and its price (the desk has no 3D control any more) are in
 issues/a3-core-fx-send-fuehrt-noch-die-3d-funktion.md.
 
-It lives here, and not twice in a3-core.py, because both roads now have to do
-a second thing besides sending: write the value into Core's own memory, so a
-recall can answer with it. Two copies of one decision is two places for the
-second one to be forgotten, and forgetting it here does not fail -- it just
-means Core answers a recall with a value from before somebody turned the pot,
-and the room hears the sound snap back.
+It lives here, and not inline in a3-core.py, because the caller does a second
+thing besides sending: it writes the value into Core's own memory, so a recall
+can answer with it. Forgetting that does not fail -- Core simply answers the
+next recall with a value from before somebody turned the pot, and the room
+hears the sound snap back. That is the kind of omission a separate, tested
+function is for.
 
 No numpy and no sockets, so it is importable and testable anywhere. Same door
 as a3_core_layout and a3_core_buttons.

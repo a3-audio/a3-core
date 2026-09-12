@@ -70,7 +70,7 @@
     "track_ph_mix": 8,
     "aux_return": 25
   },
-  "fx_slots": {
+  "sends": {"fx": 3}, "fx_slots": {
     "gain": 1,
     "eq": 2,
     "eq_enc": 3,
@@ -123,7 +123,7 @@
     "led_3d": "/channel/{channel}/led/3d",
     "led_fx": "/channel/{channel}/led/fx",
     "led_pfl": "/channel/{channel}/led/pfl",
-    "track_mute": "/track/{track}/mute",
+    "track_mute": "/track/{track}/mute", "track_send": "/track/{track}/send/{send}/volume",
     "track_volume": "/track/{track}/volume"
   },
   "fx_params": {

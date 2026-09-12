@@ -100,6 +100,15 @@ class TheRestOfTheMap(unittest.TestCase):
                      "channel_volume", "stereo_enc", "enc", "enc_pots"):
             self.assertGreater(self.layout.fx_slot(slot), 0, slot)
 
+    def test_the_fx_send_is_named_and_is_the_one_that_was_measured(self):
+        """Send 3 of a channelbus reaches enc_fx, where the delay sits.
+
+        Derived from the receiver order in the project (1-pfl, ph-mix,
+        enc_fx, enc_main) and then confirmed on 2026-09-12 by moving the
+        fader and watching /track/9/send/3/volume arrive at Core.
+        """
+        self.assertEqual(self.layout.send("fx"), 3)
+
     def test_every_gain_list_a3_core_asks_for_is_there(self):
         for name in ("channelbus", "masterbus", "boothbus", "aux_return"):
             params = self.layout.gain_params(name)

@@ -395,6 +395,7 @@ LAYOUT_DEVICES = {
     "led_pfl": "mixer",
     "fx_param": "reaper",
     "track_mute": "reaper",
+    "track_send": "reaper",
     "track_volume": "reaper",
 }
 
