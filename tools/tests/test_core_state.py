@@ -41,7 +41,6 @@ class FakeChannel:
     WhatIsKeptAndWhatIsNot below."""
     toggle_fx: bool = False
     toggle_pfl: bool = False
-    toggle_3d: bool = False
     three_d: float = None
 
 
@@ -59,7 +58,7 @@ class WhatComesBack(unittest.TestCase):
         channels, master = a_rig()
         channels[0].toggle_fx = True
         channels[2].toggle_pfl = True
-        channels[3].toggle_3d = True
+        channels[3].toggle_fx = True
         master.fx_mode = FXMode.HIGH_PASS
 
         fresh_channels, fresh_master = a_rig()
@@ -104,14 +103,14 @@ class WhatTheFileMayNotKnow(unittest.TestCase):
 
     def test_a_file_from_a_device_with_more_channels_is_truncated(self):
         channels, master = a_rig(channels=2)
-        apply_state({"channels": [{"toggle_3d": True}] * 8}, channels, master)
-        self.assertTrue(all(c.toggle_3d for c in channels))
+        apply_state({"channels": [{"toggle_fx": True}] * 8}, channels, master)
+        self.assertTrue(all(c.toggle_fx for c in channels))
 
     def test_a_file_from_a_device_with_fewer_channels_leaves_the_rest(self):
         channels, master = a_rig(channels=4)
-        apply_state({"channels": [{"toggle_3d": True}]}, channels, master)
-        self.assertTrue(channels[0].toggle_3d)
-        self.assertFalse(channels[3].toggle_3d)
+        apply_state({"channels": [{"toggle_fx": True}]}, channels, master)
+        self.assertTrue(channels[0].toggle_fx)
+        self.assertFalse(channels[3].toggle_fx)
 
     def test_an_empty_state_changes_nothing(self):
         channels, master = a_rig()

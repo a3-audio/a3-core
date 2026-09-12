@@ -29,7 +29,6 @@ import threading
 from pathlib import Path
 import numpy as np
 import time
-#import rtmidi
 import math
 from typing import List, Any, Optional, Tuple
 from enum import Enum
@@ -245,7 +244,6 @@ class ChannelInfo:
 
     toggle_fx: bool = False
     toggle_pfl: bool = False
-    toggle_3d: bool = False
 
     # Where the sound is, as Motion last said it. Held here because nobody
     # else can be asked: Core writes the position straight to the IEM
@@ -285,8 +283,8 @@ class ChannelInfo:
 # them said so. They are data now, beside the REAPER project they must agree
 # with -- see .local/share/a3-core/layout.json.
 #
-# What stays in the dataclass is what changes while the thing runs: toggle_3d,
-# toggle_fx and toggle_pfl. A number that describes the rig and a flag that
+# What stays in the dataclass is what changes while the thing runs: toggle_fx
+# and toggle_pfl. A number that describes the rig and a flag that
 # describes the moment are two different kinds of thing, and only one of them
 # belongs in a file that ships.
 #
@@ -373,7 +371,7 @@ def announce_flag(flag, channel_index):
     broadcast(*led_message(_layout, flag, channel_index,
                            channel_infos[channel_index]))
 
-    control, read = STATE_OF["4d" if flag == "3d" else flag]
+    control, read = STATE_OF[flag]
     broadcast(_layout.address("channel_control", channel=channel_index,
                               control=control),
               read(channel_infos[channel_index]))
@@ -639,25 +637,11 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
             announce_flag("fx", channel_index)
             set_filters()
 
-    elif parameter == "4d":
-        wanted = wanted_toggle(raw, channel_infos[channel_index].toggle_3d)
-        if wanted is not NO_CHANGE:
-            channel_infos[channel_index].toggle_3d = wanted
-            is_enabled = channel_infos[channel_index].toggle_3d
-            announce_flag("3d", channel_index)
-            track_stereo_enc = channel_infos[channel_index].track_stereo_enc
-            track_multi_enc = channel_infos[channel_index].track_multi_enc
-            osc_val = 0.5 if is_enabled else 0.0
-            osc_val_inverse = 0.5 if not is_enabled else 0.0
-            for gain_vst_plugins_on_channelbus in _layout.gain_params("channelbus"):
-                osc_reaper.send_message(
-                    f"/track/{track_stereo_enc}/fx/1/fxparam/{gain_vst_plugins_on_channelbus}/value",
-                    osc_val
-                )
-            osc_reaper.send_message(
-                f"/track/{track_multi_enc}/fx/1/fxparam/1/value",
-                osc_val_inverse
-            )
+    # `4d` was here: the 3D switch, as a toggle, blending a channel hard over
+    # to its multi encoder and back. It is gone with the switch -- the key
+    # left the A3 Mixer in hardware v3.2, no device has sent the address
+    # since, and 3D per channel is the continuous blend on `/channel/n/3d`
+    # above. Removed 2026-09-12 on the maintainer's call ("4d kann auch weg").
 
     # A3MOTION
 
@@ -804,20 +788,6 @@ def osc_handler_fx(client_address: Tuple[str, int], address: str,
             osc_reaper.send_message(f"/track/{track_input}/fx/{FX_INDEX_LOPASS}/fxparam/6/value", val)
 
     remember_state()
-
-def osc_handler_tap(address: str,
-                   *osc_arguments: List[Any]) -> None:
-
-    value = osc_arguments[0]
-
-    # print(address + " : " + str(value))
-
-    words: List[str] = address.split("/")
-    parameter: str = words[1]
-
-    if parameter == "tap" and value == "1":
-        note = [0x90, 60, 0] # Clock tap
-        midiout.send_message(note)
 
 #: Where a device asks Core to say the state again. One address rather than
 #: one per value: the answer is the ordinary messages, so nothing new has to
@@ -1099,7 +1069,6 @@ if __name__ == "__main__":
                    needs_reply_address=True)
     dispatcher.map(OSC_ADDRESS_BEAT, osc_handler_beat,
                    needs_reply_address=True)
-    #dispatcher.map("/tap", osc_handler_tap)
 
     # Motion-Controller
     # dispatcher.map("/CoordinateConverter/*", iemToCtrlMotion_handler)

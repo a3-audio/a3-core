@@ -442,3 +442,47 @@ class TheRealShapeOfTheIncident(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AnAddressDoesNotStayUnknownOnceItIsUnderstood(unittest.TestCase):
+    """The unknown table is restored across a restart, and what Core can route
+    changes between restarts -- the reverse table grew on 2026-09-12 and
+    twenty-three addresses moved from unrecognised to routed. Their old rows
+    stayed, so the window showed them in both tables at once, and somebody
+    hunting a dead wire would have found `/track/1/fx/1/fxparam/1/value`
+    listed as not understood while Core was routing it perfectly.
+
+    An instrument that reads wrong about itself is worse than no instrument.
+    """
+
+    def test_a_row_seen_incoming_clears_its_unknown_row(self):
+        traffic = Traffic()
+        traffic.unknown("/track/1/fx/1/fxparam/1/value", 0.5, "reaper")
+        self.assertEqual(len(traffic.unknown_snapshot()["rows"]), 1)
+
+        traffic.seen(IN, "/track/1/fx/1/fxparam/1/value", 0.5, "reaper")
+        self.assertEqual(traffic.unknown_snapshot()["rows"], [])
+
+    def test_an_outgoing_row_does_not(self):
+        """Core sends `/track/n/fx/1/fxparam/1/value` and cannot read the
+        crossfade back out of it. Known outbound, unknown inbound -- and that
+        pair is the truth, not a leftover."""
+        traffic = Traffic()
+        traffic.unknown("/track/10/fx/1/fxparam/1/value", 0.5, "reaper")
+        traffic.seen(OUT, "/track/10/fx/1/fxparam/1/value", 0.5, "reaper")
+        self.assertEqual(len(traffic.unknown_snapshot()["rows"]), 1)
+
+    def test_it_costs_nothing_on_the_hot_path(self):
+        """Only the branch that *creates* a row looks at the unknown table.
+        seen() runs about a hundred times a second and a repeat message must
+        not pay for a lookup it can never need."""
+        traffic = Traffic()
+        traffic.seen(IN, "/channel/0/gain", 0.5, "mixer")
+        traffic.unknown("/channel/0/gain", 0.5, "reaper")
+
+        # The row already exists, so this takes the repeat path and leaves
+        # the unknown row alone. Saying so out loud because it looks like a
+        # gap: it is the price of keeping the check off the hot path, and
+        # an address cannot go from routed back to unrecognised anyway.
+        traffic.seen(IN, "/channel/0/gain", 0.6, "mixer")
+        self.assertEqual(len(traffic.unknown_snapshot()["rows"]), 1)

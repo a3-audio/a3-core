@@ -45,7 +45,6 @@ class FXMode(Enum):
 class FakeChannel:
     toggle_fx: bool = False
     toggle_pfl: bool = False
-    toggle_3d: bool = False
     azimuth: float = None
     elevation: float = None
     three_d: float = None
@@ -88,21 +87,20 @@ class TheLights(unittest.TestCase):
         """The rule, so the next lamp added cannot quietly get its own."""
         for flag in LED_OF:
             with self.subTest(flag=flag):
-                on = FakeChannel(toggle_pfl=True, toggle_fx=True,
-                                 toggle_3d=True)
+                on = FakeChannel(toggle_pfl=True, toggle_fx=True)
                 self.assertEqual(led_message(self.layout, flag, 0, on)[1], 1.0)
 
-    def test_the_lamps_of_a_rig_are_three_a_channel_and_the_filter(self):
+    def test_the_lamps_of_a_rig_are_two_a_channel_and_the_filter(self):
         channels, master = a_rig()
         self.assertEqual(
             len(list(lamp_messages(self.layout, channels, master))),
-            4 * 3 + 1)
+            4 * 2 + 1)
 
-    def test_the_flags_of_a_rig_are_three_a_channel_and_the_mode(self):
+    def test_the_flags_of_a_rig_are_two_a_channel_and_the_mode(self):
         channels, master = a_rig()
         self.assertEqual(
             len(list(flag_messages(self.layout, channels, master))),
-            4 * 3 + 1)
+            4 * 2 + 1)
 
     def test_the_lamp_says_the_mode_as_a_word_and_the_flag_as_a_number(self):
         channels, master = a_rig()
@@ -130,13 +128,24 @@ class TheLights(unittest.TestCase):
         for address, _ in flag_messages(self.layout, channels, master):
             self.assertNotIn("/led/", address)
 
-    def test_the_flag_is_said_on_4d_because_3d_is_the_crossfade(self):
+    def test_4d_is_gone_and_3d_was_never_a_flag(self):
+        """`4d` was the 3D switch as an on/off. It went on 2026-09-12 with the
+        key that sent it -- gone from the A3 Mixer in hardware v3.2, never
+        sent by anything since. `3d` is the continuous blend and is answered
+        from Core's memory, not from a flag."""
         channels, master = a_rig()
         addresses = [address
                      for address, _ in flag_messages(self.layout, channels,
                                                      master)]
-        self.assertIn("/channel/0/4d", addresses)
+        self.assertNotIn("/channel/0/4d", addresses)
         self.assertNotIn("/channel/0/3d", addresses)
+
+    def test_two_flags_a_channel_and_both_are_keys_somebody_can_press(self):
+        channels, master = a_rig()
+        suffixes = {address.rsplit("/", 1)[-1]
+                    for address, _ in flag_messages(self.layout, channels,
+                                                    master)}
+        self.assertEqual(suffixes, {"pfl", "fx", "mode"})
 
 
 class WhatTheSourceSays(unittest.TestCase):
@@ -313,7 +322,7 @@ class TheWholeAnswer(unittest.TestCase):
         messages = list(recall_messages(self.layout, channels, master,
                                         relayed))
         self.assertEqual(messages[-1], ("/channel/0/gain", 0.7))
-        self.assertEqual(len(messages), 2 * (4 * 3 + 1) + 1)
+        self.assertEqual(len(messages), 2 * (4 * 2 + 1) + 1)
 
     def test_the_position_is_answered_between_the_flags_and_reaper(self):
         """Both of Core's own certainties first, REAPER's relayed values
@@ -326,10 +335,10 @@ class TheWholeAnswer(unittest.TestCase):
 
         messages = list(recall_messages(self.layout, channels, master,
                                         relayed))
-        self.assertEqual(messages[2 * (4 * 3 + 1)],
+        self.assertEqual(messages[2 * (4 * 2 + 1)],
                          ("/channel/1/azimuth", 45.0))
         self.assertEqual(messages[-1], ("/channel/0/gain", 0.7))
-        self.assertEqual(len(messages), 2 * (4 * 3 + 1) + 1 + 1)
+        self.assertEqual(len(messages), 2 * (4 * 2 + 1) + 1 + 1)
 
     def test_a_cold_core_still_answers_with_its_own_flags(self):
         """After Core itself restarts, nothing has been relayed yet: REAPER
@@ -340,7 +349,7 @@ class TheWholeAnswer(unittest.TestCase):
         channels, master = a_rig()
         messages = list(recall_messages(self.layout, channels, master,
                                         Relayed()))
-        self.assertEqual(len(messages), 2 * (4 * 3 + 1))
+        self.assertEqual(len(messages), 2 * (4 * 2 + 1))
 
     def test_a_cold_core_answers_no_position_either(self):
         """Core's own restart loses the position: it is held in memory and

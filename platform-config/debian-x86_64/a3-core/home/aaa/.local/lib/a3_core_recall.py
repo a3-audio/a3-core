@@ -55,7 +55,6 @@ than continuously the way a trajectory moves a position.
 LED_OF = {
     "pfl": ("led_pfl", lambda channel: float(channel.toggle_pfl)),
     "fx": ("led_fx", lambda channel: float(channel.toggle_fx)),
-    "3d": ("led_3d", lambda channel: float(channel.toggle_3d)),
 }
 
 #: How each filter mode is spelled on the wire. Written out rather than taken
@@ -124,13 +123,13 @@ def remembered_messages(layout, channels):
 #: spelling every device already sends. A screen, a light desk or anything
 #: added later reads that one and needs to know nothing about lamps.
 #:
-#: `3d` is the odd name: the toggle moved to `4d` when `3d` became the
-#: continuous crossfade, and the field kept its old name because renaming a
-#: field in the state file would have dropped every saved flag.
+#: There were three. `4d` -- the 3D switch, as an on/off -- went on
+#: 2026-09-12 with the key that sent it: gone from the A3 Mixer in hardware
+#: v3.2, never sent by anything since, and replaced by the continuous blend on
+#: `/channel/n/3d`. Two flags left, and both are keys somebody can still press.
 STATE_OF = {
     "pfl": ("pfl", lambda channel: float(channel.toggle_pfl)),
     "fx": ("fx", lambda channel: float(channel.toggle_fx)),
-    "4d": ("4d", lambda channel: float(channel.toggle_3d)),
 }
 
 #: How the filter mode reads as a number: 1 is high pass.

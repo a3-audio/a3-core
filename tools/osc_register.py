@@ -390,7 +390,6 @@ LAYOUT_DEVICES = {
     "channel_control": "motion",
     "dualdelay_bpm": "dualdelay",
     "fx_mode_led": "mixer",
-    "led_3d": "mixer",
     "led_fx": "mixer",
     "led_pfl": "mixer",
     "fx_param": "reaper",

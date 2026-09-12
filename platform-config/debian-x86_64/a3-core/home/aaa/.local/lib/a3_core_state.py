@@ -56,7 +56,7 @@ from pathlib import Path
 #: send_elevation(), the one reader of either, is never called.
 #: See issues/a3-core-elevation-cache-ist-tot.md and
 #: issues/a3-core-position-hat-keinen-rueckweg-und-keinen-halter.md.
-CHANNEL_FIELDS = ("toggle_fx", "toggle_pfl", "toggle_3d", "three_d")
+CHANNEL_FIELDS = ("toggle_fx", "toggle_pfl", "three_d")
 
 #: How long a change waits for the next one before it is written. A hand
 #: sweeping a knob is one intention, and a file write in the path of every OSC

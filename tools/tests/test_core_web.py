@@ -541,7 +541,7 @@ class TheRegisterRoute(unittest.TestCase):
             "entries": [
                 {"address": "/channel/{ch}/gain", "device": "mixer",
                  "direction": "in", "source": "a3-mixer.py:62", "note": ""},
-                {"address": "/channel/{ch}/4d", "device": "core",
+                {"address": "/channel/{ch}/encbtn", "device": "mixer",
                  "direction": "in", "source": "a3-core.py:577", "note": ""}]}))
 
     def tearDown(self):
@@ -569,7 +569,7 @@ class TheRegisterRoute(unittest.TestCase):
         payload = self._fetch(traffic)
         alive = next(e for e in payload["entries"]
                      if e["address"].endswith("gain"))
-        dead = next(e for e in payload["entries"] if e["address"].endswith("4d"))
+        dead = next(e for e in payload["entries"] if e["address"].endswith("encbtn"))
         self.assertTrue(alive["seen"])
         self.assertFalse(dead["seen"])
         self.assertEqual(payload["unseen"], 1)

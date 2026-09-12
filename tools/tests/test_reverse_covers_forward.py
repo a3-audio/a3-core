@@ -213,7 +213,6 @@ NOT_ANSWERED_FOR = {
     "pot_2": "the same",
     "pfl": "a toggle of Core's own; comes back as a mute",
     "fx": "the same",
-    "4d": "the same",
 }
 
 

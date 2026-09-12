@@ -180,6 +180,27 @@ class Traffic:
                 self._rows[key] = row
                 self._created += 1
 
+                # An address Core could not route before and can now. The
+                # unknown table survives a restart (a3_core_seen) while what
+                # Core can route changes between restarts -- the reverse
+                # table grew on 2026-09-12 and twenty-three addresses moved
+                # across, leaving their old rows behind. The window then
+                # listed them in both tables, and somebody hunting a dead
+                # wire would have found a routed address called
+                # unrecognised.
+                #
+                # Only on the branch that creates a row, and only inbound.
+                # seen() runs about a hundred times a second and a repeat
+                # message must not pay for a lookup it can never need; and
+                # `unknown()` is called from the feedback path alone, so an
+                # *outgoing* row says nothing about whether the same address
+                # is understood coming back. Core sends
+                # /track/n/fx/1/fxparam/1/value and cannot read the crossfade
+                # back out of it -- known outbound, unknown inbound, and that
+                # pair is the truth rather than a leftover.
+                if direction == IN and address in self._unknown:
+                    del self._unknown[address]
+
             row["count"] += 1
             row["last_value"] = value
             row["last_type"] = type_name
