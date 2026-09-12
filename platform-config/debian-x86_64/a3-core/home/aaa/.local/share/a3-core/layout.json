@@ -70,15 +70,17 @@
     "track_ph_mix": 8,
     "aux_return": 25
   },
-  "fx_slots": {
+  "sends": {"fx": 3}, "fx_slots": {
     "gain": 1,
     "eq": 2,
     "eq_enc": 3,
     "hipass": 3,
     "lopass": 4,
     "channel_volume": 1,
-    "stereo_enc": 4,
-    "enc": 1
+    "enc_pots": 2, "stereo_enc": 4,
+    "enc": 1,
+    "phones_gain": 2,
+    "aux_gain": 3
   },
   "gain_params": {
     "channelbus": [
@@ -117,12 +119,12 @@
     ]
   },
   "addresses": {
+    "channel_control": "/channel/{channel}/{control}", "dualdelay_bpm": "/DualDelay/delayBPM{side}",
     "fx_mode_led": "/fx/led",
     "fx_param": "/track/{track}/fx/{slot}/fxparam/{param}/value",
-    "led_3d": "/channel/{channel}/led/3d",
     "led_fx": "/channel/{channel}/led/fx",
     "led_pfl": "/channel/{channel}/led/pfl",
-    "track_mute": "/track/{track}/mute",
+    "track_mute": "/track/{track}/mute", "track_send": "/track/{track}/send/{send}/volume",
     "track_volume": "/track/{track}/volume"
   },
   "fx_params": {

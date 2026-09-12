@@ -88,13 +88,14 @@ class Master(Channel):
 
 class Layout:
     def __init__(self, channels, master, fx_slots, fx_params, gain_params,
-                 addresses):
+                 addresses, sends):
         self._channels = channels
         self._master = master
         self._fx_slots = fx_slots
         self._fx_params = fx_params
         self._gain_params = gain_params
         self._addresses = addresses
+        self._sends = sends
 
     @property
     def master(self):
@@ -110,6 +111,26 @@ class Layout:
         if name not in self._fx_slots:
             raise LayoutError(f"no fx slot named {name}")
         return int(self._fx_slots[name])
+
+    def send(self, name):
+        """Which of a track's sends carries a given thing.
+
+        A send is not an FX slot -- it leaves the track rather than sitting on
+        it -- so it gets its own door rather than being squeezed into
+        fx_slots. Named for the same reason everything else here is: the
+        number was a bare 3 in the source, and a send that moves in the REAPER
+        project has to be findable by reading this file instead of grepping
+        f-strings.
+
+        The number is the position among the *sending* track's sends, which
+        REAPER derives from the order its receivers appear in the project.
+        For the channelbuses that is 1-pfl, ph-mix, enc_fx, enc_main, so the
+        FX bus is 3 -- confirmed on 2026-09-12 by moving the fader and
+        watching /track/9/send/3/volume arrive at Core.
+        """
+        if name not in self._sends:
+            raise LayoutError(f"no send named {name}")
+        return int(self._sends[name])
 
     def track_role(self, track):
         """Which channel a REAPER track belongs to, and as what.
@@ -128,6 +149,20 @@ class Layout:
             for field in TRACK_FIELDS:
                 if getattr(channel, field) == track:
                     return (index, field)
+        return None
+
+    def master_role(self, track):
+        """Which of the master's tracks this is, or None.
+
+        The master half of track_role, and separate from it on purpose: a
+        caller has to know which it got, because a channel's answer carries a
+        channel number and the master's does not. Merging them into one
+        function would mean every caller unpacking a tuple whose second half
+        is sometimes meaningless.
+        """
+        for field in MASTER_FIELDS:
+            if getattr(self._master, field) == track:
+                return field
         return None
 
     def channel_for_track(self, track):
@@ -218,4 +253,5 @@ def load_layout(path):
                   dict(parsed.get("fx_slots", {})),
                   dict(parsed.get("fx_params", {})),
                   dict(parsed.get("gain_params", {})),
-                  dict(parsed.get("addresses", {})))
+                  dict(parsed.get("addresses", {})),
+                  dict(parsed.get("sends", {})))

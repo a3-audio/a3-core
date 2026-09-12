@@ -250,3 +250,44 @@ class TheMapRunsBothWays(unittest.TestCase):
         # enc_main_azimuth=8 is a different numbering and must not be answered
         # as a track -- 8 is the master's ph_mix, which is somebody else's.
         self.assertIsNone(self.layout.channel_for_track(8))
+
+
+SENDS = json.dumps({
+    "channels": [{"track_input": 12, "track_multi_enc": 11,
+                  "track_stereo_enc": 10, "track_channelbus": 9,
+                  "track_pfl": 4, "enc_main_azimuth": 8,
+                  "enc_main_elevation": 9, "enc_phones_solo": 12}],
+    "master": {"track_masterbus": 1, "track_booth": 2, "track_phones": 3,
+               "track_ph_mix": 8, "aux_return": 25},
+    "sends": {"fx": 3},
+    "addresses": {"track_send": "/track/{track}/send/{send}/volume"},
+})
+
+
+class TheSends(unittest.TestCase):
+    """A send is not an FX slot, and giving it its own door says so.
+
+    The number was about to be a bare 3 in a3-core.py -- the same shape of
+    mistake as the bare 2 the encoder pots sat on until 2026-09-12, where the
+    layout knew everything about the track and nothing about which plugin on
+    it. A send that moves in the REAPER project has to be findable by reading
+    the layout, not by grepping f-strings.
+    """
+
+    def test_a_send_is_named_rather_than_numbered(self):
+        self.assertEqual(load_layout(written(SENDS)).send("fx"), 3)
+
+    def test_a_send_nobody_has_is_refused(self):
+        """Loudly, like fx_slot. A send resolving to None would address
+        /track/9/send/None/volume, and REAPER would ignore that in silence."""
+        with self.assertRaises(LayoutError):
+            load_layout(written(SENDS)).send("reverb")
+
+    def test_a_layout_without_sends_refuses_every_name(self):
+        with self.assertRaises(LayoutError):
+            load_layout(written(MINIMAL)).send("fx")
+
+    def test_the_address_is_built_by_the_layout(self):
+        self.assertEqual(
+            load_layout(written(SENDS)).address("track_send", track=9, send=3),
+            "/track/9/send/3/volume")
