@@ -159,9 +159,11 @@ NOT_ANSWERED_FOR = {
     "azimuth": "written straight to the IEM plugins; Core remembers it",
     "elevation": "the same",
     # One input, two gains on two tracks. A single number cannot say which
-    # input it came from, and nothing holds either of them.
-    "3d": "not invertible from one gain, and nothing holds it",
-    "fx-send": "the same",
+    # input it came from. Since 2026-09-12 Core holds 3d itself and answers a
+    # recall from that -- see a3_core_recall.REMEMBERED_CONTROLS. fx-send has
+    # no holder, so it is still simply absent.
+    "3d": "not invertible from one gain; Core remembers it instead",
+    "fx-send": "not invertible from one gain, and nothing holds it",
     # Core's own state, not REAPER's, and they come back from REAPER as a mute
     # rather than as the flag they set.
     "pfl": "a toggle of Core's own; comes back as a mute",

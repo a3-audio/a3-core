@@ -2,8 +2,9 @@
 
 What REAPER holds, REAPER reports -- see test_reverse_covers_forward. What is
 left is the handful of things that live only in Core's head: the three toggles
-a channel carries and the filter mode. Those survive a restart only if
-something writes them down.
+a channel carries, the filter mode, and the 3D crossfade, which REAPER holds
+the consequence of but cannot be asked the cause of. Those survive a restart
+only if something writes them down.
 
 The module is deliberately ignorant of a3-core.py's dataclasses: it is handed
 the objects and reads the fields it knows by name. Importing a3-core.py opens
@@ -36,11 +37,12 @@ class FXMode(Enum):
 class FakeChannel:
     """Only the fields the state module claims. The real ChannelInfo carries
     a dozen track numbers besides, and none of them are the moment -- plus
-    `elevation` and `width`, which nothing writes; see
-    TheFieldsThatAreNotHere below."""
+    `azimuth`, `elevation` and `width`, which are not kept; see
+    WhatIsKeptAndWhatIsNot below."""
     toggle_fx: bool = False
     toggle_pfl: bool = False
     toggle_3d: bool = False
+    three_d: float = None
 
 
 @dataclass
@@ -123,15 +125,20 @@ class WhatTheFileMayNotKnow(unittest.TestCase):
         self.assertEqual(master.fx_mode, FXMode.LOW_PASS)
 
 
-class TheFieldsThatAreNotHere(unittest.TestCase):
-    """ChannelInfo also carries `azimuth`, `elevation` and `width`, and this
-    does not remember any of them.
+class WhatIsKeptAndWhatIsNot(unittest.TestCase):
+    """Which of ChannelInfo's continuous values survive a restart, and why
+    they are not all the same answer.
 
     `azimuth` and `elevation` are written now -- the position, which only Core
     can answer a recall with. Keeping them out is a decision: a trajectory
     changes the position continuously, so remembering it would write this file
     every DEFAULT_DELAY seconds for a whole set. The plugins hold the position
     and the project saves it; a cold Core loses only its ability to say so.
+
+    `three_d` is kept, and the difference is the rate: a knob changes when a
+    hand turns it. Nothing else holds it either -- it reaches REAPER as two
+    gains and cannot be read back -- so a cold Core that forgot it would have
+    nothing to answer with at all.
 
     `width` is out for the original reason -- nothing assigns it, and
     send_elevation(), the one reader of either, is never called.
@@ -145,6 +152,18 @@ class TheFieldsThatAreNotHere(unittest.TestCase):
         from a3_core_state import CHANNEL_FIELDS
         self.assertNotIn("azimuth", CHANNEL_FIELDS)
         self.assertNotIn("elevation", CHANNEL_FIELDS)
+
+    def test_the_crossfade_is_remembered_and_that_is_not_a_contradiction(self):
+        """3d is kept although the position is not, and the difference is
+        how often it changes.
+
+        A trajectory moves the position continuously -- keeping it would
+        mean writing this file every DEFAULT_DELAY seconds for a whole set.
+        3d is a knob: it changes when a hand turns it, which is the same
+        rate as the three toggles that have always been kept here.
+        """
+        from a3_core_state import CHANNEL_FIELDS
+        self.assertIn("three_d", CHANNEL_FIELDS)
 
     def test_the_dead_cache_is_not_remembered(self):
         from a3_core_state import CHANNEL_FIELDS

@@ -11,12 +11,14 @@ The state comes from three different places and it matters which:
 
 - **The flags** are Core's own. The three a channel carries and the filter
   mode exist nowhere else, and a3_core_state has just read them off disk.
-- **The position** is Core's own too, but for a different reason: it reaches
-  the IEM plugins on their own OSC port rather than through a REAPER track,
-  so REAPER never reports it back and there is nobody to ask. The plugins do
-  hold it -- their receiver sets the host parameter, so the project saves it
-  -- but they are written to, not read from. Core passed it on, so Core is
-  the only one who can say what it was.
+- **The position and the crossfade** are Core's own too, but for a different
+  reason -- in fact for two. The position reaches the IEM plugins on their
+  own OSC port rather than through a REAPER track, so REAPER never reports it
+  back: the plugins hold it, but they are written to, not read from. The
+  crossfade does reach REAPER, as two gains on two tracks, and a single
+  number cannot say which input produced them. Nobody was told, or nobody can
+  be asked; either way Core passed it on and Core is the only one who knows.
+  See REMEMBERED_CONTROLS.
 - **The continuous values** are REAPER's. Core does not hold them -- it
   relays them -- so what it replays is what REAPER last said rather than a
   second opinion that could disagree with it.
@@ -25,9 +27,11 @@ The state comes from three different places and it matters which:
 went away, so straight after Core's own restart nothing has been relayed and
 the answer is the flags alone. That is on purpose: an answer a caller can act
 on beats silence, which is indistinguishable from a Core that is not running.
-The position behaves the same way and for the same reason: it is held in
+The **position** behaves the same way and for the same reason: it is held in
 memory only, so Core's own restart loses it, and an unknown position is left
-unsaid rather than guessed at.
+unsaid rather than guessed at. The **crossfade** does survive a restart --
+a3_core_state keeps it, because a knob changes when a hand turns it rather
+than continuously the way a trajectory moves a position.
 """
 
 #: Which flag lights which lamp, and what the lamp is told.
@@ -62,32 +66,45 @@ def led_message(layout, flag, index, channel):
     return layout.address(name, channel=index), read(channel)
 
 
-#: The two position values a channel carries, in the order Motion sends them.
-#: The name is the `control` part of the address it arrived on, which is also
-#: the field it was stored in -- one word, used for both, so a rename cannot
-#: make the replay disagree with the original.
-POSITION_FIELDS = ("azimuth", "elevation")
+#: What Core holds because nobody else can be asked, as (address, field).
+#:
+#: Address and field are the same word except where they cannot be: `3d` is
+#: not a name Python will take. Keeping them together in one table means a
+#: rename cannot make the replay disagree with the message it replays.
+#:
+#: The two reasons are different and both end here. The **position** never
+#: reaches a REAPER track at all -- Core writes it straight to the IEM
+#: plugins' own OSC port -- so there is nothing for REAPER to report. The
+#: **crossfade** does reach REAPER, as two gains on two tracks, and a single
+#: number cannot say which input produced them; a3_core_curves refuses to
+#: guess. Nobody was told, or nobody can be asked: either way Core is the
+#: only one who knows.
+REMEMBERED_CONTROLS = (
+    ("azimuth", "azimuth"),
+    ("elevation", "elevation"),
+    ("3d", "three_d"),
+)
 
 
-def position_messages(layout, channels):
-    """Where each channel's sound is, as the messages Motion sent to put it
-    there.
+def remembered_messages(layout, channels):
+    """What Core holds for each channel, as the messages that set it.
 
     A value Core has never seen is left out rather than sent as 0.0. Zero
     degrees is the front of the room -- a real position -- so answering it
     would place the sound somewhere while claiming to report where it
     already is. Left out, Motion keeps its own value, which is what happens
     today anyway. Hence `is None` and not a falsiness test: front-centre and
-    level is where a channel most often sits.
+    level is where a channel most often sits, and 0.0 is a real crossfade
+    setting too.
     """
     for index, channel in enumerate(channels):
-        for field in POSITION_FIELDS:
+        for address, field in REMEMBERED_CONTROLS:
             value = getattr(channel, field, None)
             if value is None:
                 continue
             yield ("motion",
                    layout.address("channel_control", channel=index,
-                                  control=field),
+                                  control=address),
                    value)
 
 
@@ -131,10 +148,10 @@ def recall_messages(layout, channels, master, relayed):
     """The whole answer: the lamps, then the positions, then what REAPER said.
 
     Core's own two certainties first -- the lamps come from its state file and
-    are complete even on a cold start, the positions from what it last passed
-    on -- and REAPER's relayed values last. A caller reading the replay in
+    are complete even on a cold start, the remembered values from what it last
+    passed on -- and REAPER's relayed values last. A caller reading the replay in
     order sees what Core knows for itself before what it was told.
     """
     yield from flag_messages(layout, channels, master)
-    yield from position_messages(layout, channels)
+    yield from remembered_messages(layout, channels)
     yield from relayed.messages()

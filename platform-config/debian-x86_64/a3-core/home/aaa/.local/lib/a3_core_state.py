@@ -7,9 +7,13 @@ change back of its own accord (see a3_core_reverse). A copy in Core would only
 be a second answer to the same question, and it would drift the moment anybody
 touched REAPER directly.
 
-What is left is what has no REAPER parameter behind it: the three toggles a
-channel carries and the filter mode. Those exist in Core's head and nowhere
-else, so a restart loses them unless they are written down.
+What is left is what REAPER cannot answer for: the three toggles a channel
+carries, the filter mode, and the 3D crossfade. The toggles and the mode have
+no REAPER parameter behind them at all. The crossfade has two -- a gain on
+each of two tracks -- and that is the problem: a single number cannot say
+which input produced them, so REAPER holds the consequence and not the cause.
+All four exist in Core's head and nowhere else, and a restart loses them
+unless they are written down.
 
 The module knows nothing about a3-core.py's dataclasses. It is handed them and
 reads the fields it knows by name, which is what lets it be tested without
@@ -24,12 +28,23 @@ from pathlib import Path
 #: The fields of a channel this remembers, and nothing else. A track number is
 #: not the moment: it describes the rig and lives in layout.json.
 #:
+#: `three_d` is here although it is a continuous value rather than a flag,
+#: and the reason is the same one that keeps the position out: how often it
+#: changes. A knob changes when a hand turns it, which is the rate the three
+#: toggles change at; a trajectory moves the position continuously. What is
+#: kept here is what changes at the rate of a decision.
+#:
+#: It is also Core's own in the same sense the toggles are. It reaches REAPER
+#: as two gains on two tracks, and a single number cannot say which input
+#: produced them -- so REAPER cannot report it back and there is no second
+#: answer for this to drift against. See a3_core_recall.REMEMBERED_CONTROLS.
+#:
 #: `azimuth`, `elevation` and `width` are deliberately absent although
 #: ChannelInfo has them.
 #:
 #: The first two are written now -- they are where the sound is, and Core is
 #: the only one who can answer a recall with it (see
-#: a3_core_recall.position_messages). They are still not remembered across a
+#: a3_core_recall.remembered_messages). They are still not remembered across a
 #: restart, and that is a decision rather than an oversight: a trajectory
 #: changes the position continuously, so remembering it would mean writing
 #: this file every DEFAULT_DELAY seconds for the whole length of a set. The
@@ -41,7 +56,7 @@ from pathlib import Path
 #: send_elevation(), the one reader of either, is never called.
 #: See issues/a3-core-elevation-cache-ist-tot.md and
 #: issues/a3-core-position-hat-keinen-rueckweg-und-keinen-halter.md.
-CHANNEL_FIELDS = ("toggle_fx", "toggle_pfl", "toggle_3d")
+CHANNEL_FIELDS = ("toggle_fx", "toggle_pfl", "toggle_3d", "three_d")
 
 #: How long a change waits for the next one before it is written. A hand
 #: sweeping a knob is one intention, and a file write in the path of every OSC

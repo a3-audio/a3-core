@@ -223,6 +223,15 @@ class ChannelInfo:
     azimuth: Optional[float] = None
     elevation: Optional[float] = None
 
+    # How far this channel is spread into the 3D field, as Motion last sent
+    # it. Held for a different reason than the position: this one *does*
+    # reach REAPER, but as two gains on two tracks, and a single number
+    # cannot say which input produced them -- so REAPER cannot report it
+    # back. Unlike the position it survives a restart, because a knob changes
+    # at the rate of a decision rather than continuously. See
+    # a3_core_recall.REMEMBERED_CONTROLS and a3_core_state.CHANNEL_FIELDS.
+    three_d: Optional[float] = None
+
     # Still the dead half of the old elevation/width cache: width was meant
     # to be narrowed towards the zenith, nothing assigns it, and
     # send_elevation() -- which reads elevation and would now have to cope
@@ -473,6 +482,7 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
     # above, which is the road this arrived by until now.
     if parameter == "3d":
         x = value
+        channel_infos[channel_index].three_d = float(x)
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
         track_multi_enc = channel_infos[channel_index].track_multi_enc
         multi_gain = 0.5 * (1 - max(0, (x - 0.5) * 2))

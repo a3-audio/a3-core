@@ -32,7 +32,7 @@ sys.path.insert(0, str(PACKAGE / "lib"))
 from a3_core_layout import load_layout   # noqa: E402
 from a3_core_recall import (FX_MODE_WORDS, LED_OF,   # noqa: E402
                             Relayed, flag_messages, led_message,
-                            position_messages, recall_messages)
+                            recall_messages, remembered_messages)
 
 
 class FXMode(Enum):
@@ -47,6 +47,7 @@ class FakeChannel:
     toggle_3d: bool = False
     azimuth: float = None
     elevation: float = None
+    three_d: float = None
 
 
 @dataclass
@@ -152,7 +153,7 @@ class WhatWasPassedOn(unittest.TestCase):
 
 
 class WhereTheSoundIs(unittest.TestCase):
-    """The position is the one value only Core can answer.
+    """The values only Core can answer for.
 
     It reaches the IEM plugins on their own OSC port, never through a REAPER
     track, so REAPER never reports it back -- measured on 2026-09-10: Motion
@@ -168,7 +169,7 @@ class WhereTheSoundIs(unittest.TestCase):
     def test_a_position_replays_as_the_message_motion_sent(self):
         channels = (FakeChannel(azimuth=-37.5, elevation=12.0),)
         self.assertEqual(
-            list(position_messages(self.layout, channels)),
+            list(remembered_messages(self.layout, channels)),
             [("motion", "/channel/0/azimuth", -37.5),
              ("motion", "/channel/0/elevation", 12.0)])
 
@@ -178,14 +179,14 @@ class WhereTheSoundIs(unittest.TestCase):
         position for would place the sound somewhere on purpose while
         claiming to report. Saying nothing leaves Motion on its own value,
         which is what it does today anyway."""
-        self.assertEqual(list(position_messages(self.layout,
+        self.assertEqual(list(remembered_messages(self.layout,
                                                 (FakeChannel(),))), [])
 
     def test_one_half_known_is_answered_by_that_half(self):
         """Azimuth and elevation arrive as two separate messages and there is
         no moment at which both are known but one is not."""
         channels = (FakeChannel(azimuth=90.0),)
-        self.assertEqual(list(position_messages(self.layout, channels)),
+        self.assertEqual(list(remembered_messages(self.layout, channels)),
                          [("motion", "/channel/0/azimuth", 90.0)])
 
     def test_zero_is_a_position_and_is_answered(self):
@@ -193,16 +194,38 @@ class WhereTheSoundIs(unittest.TestCase):
         where a channel most often sits."""
         channels = (FakeChannel(azimuth=0.0, elevation=0.0),)
         self.assertEqual(
-            list(position_messages(self.layout, channels)),
+            list(remembered_messages(self.layout, channels)),
             [("motion", "/channel/0/azimuth", 0.0),
              ("motion", "/channel/0/elevation", 0.0)])
 
     def test_each_channel_is_addressed_as_itself(self):
         channels = (FakeChannel(), FakeChannel(azimuth=5.0),
                     FakeChannel(), FakeChannel(elevation=-90.0))
-        self.assertEqual(list(position_messages(self.layout, channels)),
+        self.assertEqual(list(remembered_messages(self.layout, channels)),
                          [("motion", "/channel/1/azimuth", 5.0),
                           ("motion", "/channel/3/elevation", -90.0)])
+
+    def test_the_crossfade_is_remembered_too_and_for_its_own_reason(self):
+        """3d is not a position, and it is here for a different reason.
+
+        It does reach REAPER -- but as two gains on two tracks, and a single
+        number cannot say which input produced them. So it is not that
+        nobody was told; it is that nobody can be asked. Same answer either
+        way: Core holds what it was sent.
+        """
+        channels = (FakeChannel(three_d=0.62),)
+        self.assertEqual(list(remembered_messages(self.layout, channels)),
+                         [("motion", "/channel/0/3d", 0.62)])
+
+    def test_a_crossfade_never_seen_is_not_invented_either(self):
+        self.assertEqual(
+            list(remembered_messages(self.layout, (FakeChannel(),))), [])
+
+    def test_all_three_come_in_the_order_they_are_sent_in(self):
+        channels = (FakeChannel(azimuth=10.0, elevation=20.0, three_d=0.3),)
+        self.assertEqual(
+            [m[1] for m in remembered_messages(self.layout, channels)],
+            ["/channel/0/azimuth", "/channel/0/elevation", "/channel/0/3d"])
 
     def test_the_position_goes_to_motion_and_not_to_the_mixer(self):
         """The mixer has no sphere. Sending it there would be a message it
@@ -210,7 +233,7 @@ class WhereTheSoundIs(unittest.TestCase):
         device that cannot listen."""
         channels = (FakeChannel(azimuth=1.0),)
         devices = {device
-                   for device, _, _ in position_messages(self.layout,
+                   for device, _, _ in remembered_messages(self.layout,
                                                          channels)}
         self.assertEqual(devices, {"motion"})
 
