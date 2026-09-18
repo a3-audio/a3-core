@@ -60,6 +60,9 @@ from a3_core_subscribers import (SHIPPED, SubscriberError,   # noqa: E402
 from a3_core_traffic import (ANSWERERS, COMMANDERS, IN,   # noqa: E402
                              OUT, Traffic, peer_name)   # noqa: E402
 from a3_core_seen import SeenFile, state_path   # noqa: E402
+from a3_core_snapshot import Snapshot   # noqa: E402
+from a3_core_startup import (filter_bypass_messages,   # noqa: E402
+                             remembered_reaper_messages)
 from a3_core_web import start_window, window_address   # noqa: E402
 
 LAYOUT_PATH = (Path(__file__).resolve().parent.parent
@@ -329,6 +332,12 @@ _state_file = StateFile(STATE_PATH)
 apply_state(_state_file.load(), channel_infos, master_info)
 
 
+#: Wann REAPER sein Projekt speichern soll. Cores eigener Stand liegt zwei
+#: Sekunden nach jeder Änderung auf der Platte; was ein Stromausfall kostet,
+#: ist das Projekt -- Gains, EQ, Positionen. Siehe a3_core_snapshot.
+_snapshot = Snapshot()
+
+
 #: What Core has passed on, so it can say it again. In memory only -- see
 #: a3_core_recall for why this is not a file.
 _relayed = Relayed()
@@ -547,21 +556,16 @@ def slope_crossfade_gain(control_value):
     return gain1, gain2
 
 def set_filters() -> None:
-    for channel_index in range(4):
-        for fx_index, bypass_active in (
-                (FX_INDEX_LOPASS,
-                 (not channel_infos[channel_index].toggle_fx or
-                  master_info.fx_mode == MasterInfo.FXMode.HIGH_PASS)),
-                (FX_INDEX_HIPASS,
-                 (not channel_infos[channel_index].toggle_fx or
-                  master_info.fx_mode == MasterInfo.FXMode.LOW_PASS))):
+    """Tell REAPER which filter runs on which channel.
 
-            message = ("/track/"
-                       f"{channel_infos[channel_index].track_input}"
-                       f"/fx/{fx_index}/bypass")
-
-            # osc_reaper expects 1 for "plugin active" and 0 for bypass
-            osc_reaper.send_message(message, float(not bypass_active))
+    The rule itself is a3_core_startup.filter_bypass_messages, because a start
+    has to say the same thing (see speak_remembered_state) and two copies of
+    it would eventually disagree about what "fx on" sounds like.
+    """
+    for address, value in filter_bypass_messages(
+            channel_infos, master_info.fx_mode.name.lower(),
+            FX_INDEX_HIPASS, FX_INDEX_LOPASS):
+        osc_reaper.send_message(address, value)
 
 def send_elevation(channel_index):
     elevation = channel_infos[channel_index].elevation
@@ -572,6 +576,10 @@ def send_elevation(channel_index):
 
 def param_handler(address: str,
                   *osc_arguments: List[Any]) -> None:
+    # Something a hand moved is something REAPER now holds and has not
+    # written down. The snapshot thread decides when that is worth a save.
+    _snapshot.changed()
+
 
     words: List[str] = address.split("/")
     section: str = words[3]
@@ -903,6 +911,35 @@ def osc_handler_beat(client_address: Tuple[str, int], address: str,
             _layout.address("dualdelay_bpm", side=side), wanted)
 
 
+def speak_remembered_state() -> None:
+    """Say at startup what Core remembers, to REAPER and to every screen.
+
+    Core keeps the toggles, the filter mode and the crossfade across a restart
+    (a3_core_state) but only ever passed them on when one *changed*. REAPER
+    therefore came up on whatever its project holds: on 2026-09-18 the filter
+    was audibly in while Core, and with it the desk's lamp, said it was out.
+
+    Sent rather than broadcast for REAPER's half -- broadcast() drops a value
+    it has already passed on, and at startup it has passed on nothing, but the
+    engine is not a subscriber either way. The screens get the same list a
+    recall answers with, for the same reason a recall exists: a device that
+    has just come up knows nothing, and at startup every device has.
+    """
+    for address, value in remembered_reaper_messages(
+            channel_infos, master_info.fx_mode.name.lower(),
+            FX_INDEX_HIPASS, FX_INDEX_LOPASS):
+        osc_reaper.send_message(address, value)
+
+    messages = list(recall_messages(_layout, channel_infos, master_info,
+                                    _relayed))
+    for out, value in messages:
+        for client in subscribers:
+            client.send_message(out, value)
+
+    print(f"startup: spoke the remembered state, {len(messages)} messages "
+          f"to {len(subscribers)} subscribers")
+
+
 OSC_ADDRESS_RECALL: str = "/state/recall"
 
 
@@ -1164,6 +1201,26 @@ if __name__ == "__main__":
                      daemon=True).start()
     print(f"listening for REAPER feedback on "
           f"{args.ip}:{args.feedback_port}")
+
+    # Zwischendurch sichern. The project is what a power cut costs: Core's own
+    # state file is written two seconds after a change, REAPER's project only
+    # when somebody saves it. Checked often, saved rarely -- see
+    # a3_core_snapshot for the two rules.
+    def save_project_when_due():
+        while True:
+            time.sleep(_snapshot.CHECK_SECONDS)
+            if not _snapshot.due(time.monotonic()):
+                continue
+            osc_reaper.send_message(_snapshot.SAVE_ACTION, 1.0)
+            _snapshot.saved(time.monotonic())
+            print("snapshot: asked REAPER to save the project")
+
+    threading.Thread(target=save_project_when_due, daemon=True).start()
+
+    # What was remembered, said out loud once everything can hear it: REAPER
+    # keeps its project's idea of the filters otherwise, and a screen that has
+    # just come up shows nothing until somebody touches a control.
+    speak_remembered_state()
 
     # A stop is a stop, but the last change may still be inside the state
     # file's delay. systemd stops this with SIGTERM and a hand with SIGINT,
