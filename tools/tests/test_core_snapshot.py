@@ -64,6 +64,14 @@ class TheEngineActuallyUsesIt(unittest.TestCase):
         self.assertIn("Snapshot", source)
         self.assertIn("SAVE_ACTION", source)
 
+    def test_it_is_off_until_somebody_asks_for_it(self):
+        # REAPER is started from a template here and has no project file, so
+        # "File: Save project" opens a Save-As dialog over the panel instead
+        # of saving. Found on 2026-09-18, before the thread had ever fired.
+        source = (PACKAGE / "bin/a3-core.py").read_text()
+        self.assertIn('"--save-project", action="store_true"', source)
+        self.assertIn("if args.save_project:", source)
+
 
 if __name__ == "__main__":
     unittest.main()

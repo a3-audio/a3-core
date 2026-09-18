@@ -1100,6 +1100,13 @@ if __name__ == "__main__":
                              "worth setting.")
     parser.add_argument("--no-web", action="store_true",
                         help="Do not open the window at all.")
+    parser.add_argument("--save-project", action="store_true",
+                        help="ask REAPER to save its project every few "
+                             "minutes when something has moved. Off by "
+                             "default: with REAPER started from a template "
+                             "there is no project file, and saving opens a "
+                             "dialog over the panel.")
+
     args = parser.parse_args()
 
     _print_osc = args.print_osc
@@ -1206,16 +1213,30 @@ if __name__ == "__main__":
     # state file is written two seconds after a change, REAPER's project only
     # when somebody saves it. Checked often, saved rarely -- see
     # a3_core_snapshot for the two rules.
-    def save_project_when_due():
-        while True:
-            time.sleep(_snapshot.CHECK_SECONDS)
-            if not _snapshot.due(time.monotonic()):
-                continue
-            osc_reaper.send_message(_snapshot.SAVE_ACTION, 1.0)
-            _snapshot.saved(time.monotonic())
-            print("snapshot: asked REAPER to save the project")
+    # **Nicht scharf.** REAPER läuft hier aus einer Vorlage
+    # (`reaper -template .../a3-reaper.RPP`, siehe a3-reaper.service) und hat
+    # deshalb kein Projekt*file*: „File: Save project" öffnet dann einen
+    # Save-As-Dialog über dem Panel statt still zu speichern. Geprüft am
+    # 2026-09-18 -- REAPERs Fenster heißt „[unsaved project]".
+    #
+    # Die Regel (a3_core_snapshot) steht und ist geprüft; was fehlt, ist ein
+    # Weg, der nicht fragt. Zwei Möglichkeiten, und beide sind eine
+    # Entscheidung des Maintainers: REAPERs eigenes periodisches Speichern
+    # einschalten, oder Core seine relayten Werte selbst schreiben und beim
+    # Start an REAPER zurückspielen lassen.
+    if args.save_project:
+        def save_project_when_due():
+            while True:
+                time.sleep(_snapshot.CHECK_SECONDS)
+                if not _snapshot.due(time.monotonic()):
+                    continue
+                osc_reaper.send_message(_snapshot.SAVE_ACTION, 1.0)
+                _snapshot.saved(time.monotonic())
+                print("snapshot: asked REAPER to save the project")
 
-    threading.Thread(target=save_project_when_due, daemon=True).start()
+        threading.Thread(target=save_project_when_due, daemon=True).start()
+        print("snapshot: REAPER will be asked to save every "
+              f"{int(_snapshot.DEFAULT_INTERVAL)} s when something has moved")
 
     # What was remembered, said out loud once everything can hear it: REAPER
     # keeps its project's idea of the filters otherwise, and a screen that has
