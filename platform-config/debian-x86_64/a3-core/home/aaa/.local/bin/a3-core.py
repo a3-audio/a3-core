@@ -63,6 +63,7 @@ from a3_core_seen import SeenFile, state_path   # noqa: E402
 from a3_core_snapshot import Snapshot   # noqa: E402
 from a3_core_startup import (filter_bypass_messages,   # noqa: E402
                              remembered_reaper_messages)
+from a3_core_evening import evening_state, replayable   # noqa: E402
 from a3_core_web import start_window, window_address   # noqa: E402
 
 LAYOUT_PATH = (Path(__file__).resolve().parent.parent
@@ -74,6 +75,12 @@ LAYOUT_PATH = (Path(__file__).resolve().parent.parent
 STATE_PATH = (Path(os.environ.get("XDG_STATE_HOME",
                                   Path.home() / ".local/state"))
               / "a3-core/state.json")
+
+#: Der Abend, wie Core ihn gesehen hat: jeder kontinuierliche Wert, den es
+#: weitergegeben hat. Eigene Datei neben state.json, weil es eine andere Sache
+#: ist -- state.json ist, was nur Core weiß, das hier ist REAPERs letzte
+#: Aussage. Siehe a3_core_evening.
+EVENING_PATH = STATE_PATH.with_name("evening.json")
 
 #: The curves as they were recorded, which is what makes them invertible.
 CURVES_PATH = (Path(__file__).resolve().parent.parent
@@ -338,6 +345,11 @@ apply_state(_state_file.load(), channel_infos, master_info)
 _snapshot = Snapshot()
 
 
+#: Was zuletzt durchgelaufen ist, auf der Platte. Entprellt wie state.json:
+#: ein Fader-Schwung sind hunderte Nachrichten und eine Absicht.
+_evening_file = StateFile(EVENING_PATH)
+
+
 #: What Core has passed on, so it can say it again. In memory only -- see
 #: a3_core_recall for why this is not a file.
 _relayed = Relayed()
@@ -373,6 +385,9 @@ def broadcast(address, value):
         return
 
     _relayed.note(address, value)
+    # Mitgeschrieben, damit ein Stromausfall den Abend nicht kostet: REAPER
+    # schreibt seine Werte erst beim Beenden weg. Siehe a3_core_evening.
+    _evening_file.remember(evening_state(_relayed))
     for client in subscribers:
         client.send_message(address, value)
 
@@ -940,6 +955,27 @@ def speak_remembered_state() -> None:
           f"to {len(subscribers)} subscribers")
 
 
+def replay_evening(send_to_self) -> int:
+    """Play the values back that Core last passed on, through its own door.
+
+    Sent to Core's own port rather than handed to a handler: that is the path
+    a value from the desk takes, and the one place that knows how each control
+    reaches REAPER. A replay that called the handlers directly would be a
+    second route into the same machinery, and the two would drift.
+
+    REAPER comes up from a template (`reaper -template ...`), so its values
+    are the template's until somebody sets them. This is what makes a cold
+    start sound like last night instead of like the template.
+    """
+    replayed = 0
+    for address, value in replayable(_evening_file.load()):
+        send_to_self(address, value)
+        replayed += 1
+
+    print(f"startup: replayed {replayed} values from {EVENING_PATH}")
+    return replayed
+
+
 OSC_ADDRESS_RECALL: str = "/state/recall"
 
 
@@ -1249,6 +1285,7 @@ if __name__ == "__main__":
     # filter and immediately stopping Core forgets the switch.
     def stop(signum, frame):
         _state_file.flush()
+        _evening_file.flush()
         # The last write of the address list, so a clean stop keeps the counts
         # as they actually stood rather than as they stood when the list last
         # grew. Between writes the list is right and the counts lag, which is
@@ -1301,4 +1338,12 @@ if __name__ == "__main__":
 
     server = osc_server.ThreadingOSCUDPServer((args.ip, args.port), dispatcher)
     print("Serving on {}".format(server.server_address))
+
+    # After the port is bound and before anything is read: the datagrams wait
+    # in the socket until serve_forever picks them up, so the replay arrives
+    # as ordinary traffic rather than as a special case inside the server.
+    replay_evening(lambda address, value:
+                   SimpleUDPClient("127.0.0.1", args.port)
+                   .send_message(address, value))
+
     server.serve_forever()
