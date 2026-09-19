@@ -29,8 +29,9 @@ analog_pots_per_channel_to_osc_param = {
     "1": "gain",
 }
 
-button_per_channel_to_osc_param = {
-    "0": "pfl",
+CHANNEL_BUTTONS = {
+    "0": TAP,
+    "2": "pfl",
 }
 
 master_pots_to_osc_message = {
@@ -38,6 +39,10 @@ master_pots_to_osc_message = {
 }
 
 def serial_handler():
+    if mode == "B":
+        function = channel_button(index)
+        if function is not None:
+            osc_core.send_message("/channel/" + track + "/" + function, value)
     if mode == "TAP":
         osc_core.send_message("/tap", value)
 
@@ -66,6 +71,28 @@ class TheMixersTables(unittest.TestCase):
 
     def test_a_button_becomes_a_channel_address(self):
         self.assertIn("/channel/{ch}/pfl", self.by_address)
+
+    # The strip's keys moved to a3_mixer_panel.py on 2026-09-19, and the table
+    # was renamed with them. Nothing said so: the register simply stopped
+    # finding pfl and fx, and recorded what the handler literally writes --
+    # "/channel/{ch}/{function}", an address nobody speaks. A reader that
+    # follows a dict by name is coupled to that name.
+    # The handler looks the name up into a local and pastes that on. Written
+    # as a subscript this tool already dropped it, for the reason in
+    # _template: the names it can yield are in the register already, so a row
+    # for the expression itself would be an address nobody speaks. A bare
+    # name is the same thing and was not being dropped -- the register grew
+    # "/channel/{ch}/{function}" on 2026-09-19.
+    def test_a_looked_up_name_is_not_an_address_of_its_own(self):
+        self.assertNotIn("/channel/{ch}/{function}", self.by_address)
+
+    def test_the_key_that_taps_is_not_a_channel_address(self):
+        # CHANNEL_BUTTONS names a sentinel for it, not a string, because the
+        # tap is not a channel parameter at all -- it goes to the beat clock.
+        # An address built out of the sentinel's *name* would be fiction.
+        for address in self.by_address:
+            self.assertNotIn("TAP", address)
+            self.assertNotIn("{function}", address)
 
     def test_a_master_pot_keeps_its_written_address(self):
         self.assertIn("/master/volume", self.by_address)

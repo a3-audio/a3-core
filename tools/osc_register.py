@@ -102,6 +102,20 @@ def entry(address, device, direction, source, note=""):
             "source": source, "note": note}
 
 
+#: Names that hold the *result* of a table lookup, not a part of an address.
+#:
+#: Same case as the subscript in _template below, and the same reason to drop
+#: it: whatever the table can yield is in the register already, so a row for
+#: the expression itself is an address nobody speaks. It needs saying
+#: separately because a lookup does not have to be written as a subscript --
+#: a3-mixer.py put one in a local on 2026-09-19 and the register promptly grew
+#: "/channel/{ch}/{function}".
+#:
+#: Coupling to a variable's name is exactly what went wrong that day, so this
+#: is pinned by a test rather than left to be noticed.
+_LOOKUP_NAMES = ("function",)
+
+
 def _placeholder(name):
     return "{" + PLACEHOLDERS.get(name, name) + "}"
 
@@ -144,12 +158,14 @@ def _template(node):
         return left + right
 
     if isinstance(node, ast.Name):
+        if node.id in _LOOKUP_NAMES:
+            return None
         return _placeholder(node.id)
 
-    # A subscript (`button_per_channel_to_osc_param[index]`) is a lookup into
-    # a table this tool reads separately, so the names it can yield are
-    # already in the register. Rendering it as a placeholder here would add a
-    # row for an address that does not exist.
+    # A subscript (`CHANNEL_BUTTONS[index]`) is a lookup into a table this
+    # tool reads separately, so the names it can yield are already in the
+    # register. Rendering it as a placeholder here would add a row for an
+    # address that does not exist.
     return None
 
 
@@ -170,8 +186,16 @@ def _names_in(node):
 #: The mixer's per-channel tables, and what the strip calls the control. Both
 #: hold a bare word that is pasted onto `/channel/<n>/`; the dict name says
 #: whether it came from a pot or a button, which is the only difference.
+#:
+#: `CHANNEL_BUTTONS` lives in a3_mixer_panel.py, not in a3-mixer.py: the keys
+#: moved out on 2026-09-19 so that a test could reach them at all. That rename
+#: is also the warning attached to this list -- a reader that follows a dict by
+#: *name* is coupled to the name, and nothing failed when it changed. The
+#: register simply stopped finding pfl and fx and recorded what the handler
+#: literally writes, `/channel/{ch}/{function}`, an address nobody speaks.
+#: `test_the_key_that_taps_is_not_a_channel_address` is what notices now.
 _MIXER_CHANNEL_TABLES = ("analog_pots_per_channel_to_osc_param",
-                         "button_per_channel_to_osc_param")
+                         "CHANNEL_BUTTONS")
 
 #: The mixer's master table, which holds whole addresses already.
 _MIXER_MASTER_TABLE = "master_pots_to_osc_message"
@@ -693,7 +717,8 @@ def source_paths(root, workspace=None):
         "core": [root / PACKAGE / "bin/a3-core.py"],
         "reaper": [root / PACKAGE
                    / "share/a3-core/config/REAPER/OSC/a3-core.ReaperOSC"],
-        "mixer": [workspace / "a3-mixer/software/scripts/a3-mixer.py"],
+        "mixer": [workspace / "a3-mixer/software/scripts/a3-mixer.py",
+                  workspace / "a3-mixer/software/scripts/a3_mixer_panel.py"],
         "motion": [workspace
                    / "a3-motion-ui/src/a3-motion-engine/OscAddresses.hh"],
         "beat-analyzer": sorted(analyzer.glob("src/**/*.cpp"))
