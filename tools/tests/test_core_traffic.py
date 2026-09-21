@@ -18,7 +18,7 @@ sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core"
                        / "home/aaa/.local/lib"))
 
 from a3_core_traffic import (ANSWERERS, COMMANDERS, IN,   # noqa: E402
-                            OUT, Traffic, peer_name)   # noqa: E402
+                            OUT, Traffic, osc_bytes, peer_name)   # noqa: E402
 
 
 RIG = {"mixer": "192.168.43.55",
@@ -119,6 +119,50 @@ class CountingByAddressAndDirection(unittest.TestCase):
         """
         self.traffic.seen(IN, "/channel/0/azimuth", 1.0, "motion")
         self.assertNotIn((IN, "/channel/0/gain"), self.rows())
+
+
+class CountingTheBytes(unittest.TestCase):
+    """How big a message is on the wire, for the window's data rates.
+
+    OSC pads every field to four bytes and ends every string with a null:
+    the address, the type tag and each argument. python-osc sends a Python
+    float as a 32-bit float. These are worked out by hand from the OSC 1.0
+    spec, not from the code under test.
+    """
+
+    def test_a_short_address_and_a_float(self):
+        # "/a\0" -> 4, ",f\0" -> 4, float32 -> 4
+        self.assertEqual(osc_bytes("/a", 0.5), 12)
+
+    def test_an_address_is_padded_to_a_multiple_of_four(self):
+        # "/abcd\0" is 6 -> 8, ",i\0" -> 4, int32 -> 4
+        self.assertEqual(osc_bytes("/abcd", 3), 16)
+
+    def test_an_address_of_exactly_four_characters_still_needs_its_null(self):
+        # "/abc" plus the null is 5 -> 8
+        self.assertEqual(osc_bytes("/abc", 1.0), 16)
+
+    def test_a_string_argument_is_padded_like_the_address(self):
+        # the Mixer's momentary edge: "1\0" -> 4
+        self.assertEqual(osc_bytes("/x", "1"), 12)
+        # "hello\0" is 6 -> 8
+        self.assertEqual(osc_bytes("/x", "hello"), 16)
+
+    def test_a_message_without_arguments_is_address_and_tag(self):
+        # ",\0" -> 4
+        self.assertEqual(osc_bytes("/a", None), 8)
+
+    def test_a_bool_is_a_type_tag_and_no_data(self):
+        # T and F carry no argument bytes -- and bool is an int in Python,
+        # so it has to be asked first
+        self.assertEqual(osc_bytes("/a", True), 8)
+
+    def test_seen_adds_the_bytes_up_per_row(self):
+        traffic = Traffic()
+        traffic.seen(IN, "/a", 0.5, "motion")
+        traffic.seen(IN, "/a", 0.7, "motion")
+        row = traffic.snapshot()["rows"][0]
+        self.assertEqual(row["bytes"], 24)
 
 
 class KeepingTheType(unittest.TestCase):

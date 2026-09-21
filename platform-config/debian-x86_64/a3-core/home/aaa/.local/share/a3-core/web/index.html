@@ -224,21 +224,62 @@ function valueText(row) {
     ' <span class="type">' + safe(row.last_type) + "</span>";
 }
 
-function drawPeers(rows) {
+// The data rate is the OSC payload: what the rig puts on the switch, without
+// UDP and IP headers, worked out from each message's address and first value
+// (a3_core_traffic.osc_bytes). Said on the page because a reader comparing it
+// with a switch's port counter would otherwise find it low and wonder.
+const RATE_NOTE = "OSC-Nutzlast ohne UDP/IP-Header, geschätzt aus Adresse " +
+                  "und erstem Wert";
+
+function rateText(line) {
+  return line.rate.toFixed(1) + "/s · " + line.kbit.toFixed(1) + " kbit/s";
+}
+
+// Both directions of one peer, or of the whole rig, in one short line. A
+// direction nothing flew in is left out rather than shown as zero, so a peer
+// Core only ever answers reads as one arrow and not as two.
+function directionsText(byDirection) {
+  return ["in", "out"]
+    .filter((d) => byDirection[d] !== undefined)
+    .map((d) => DIRECTION_MARK[d] + " " + rateText(byDirection[d]))
+    .join("  ");
+}
+
+function drawPeers(payload) {
   const seen = new Map();
-  for (const row of rows) {
+  for (const row of payload.rows) {
     const age = seen.get(row.peer);
     if (age === undefined || row.age < age) seen.set(row.peer, row.age);
   }
+  // null on the first tick of a connection: there is no earlier snapshot to
+  // make a rate from yet, and a zero would say that nothing is arriving.
+  const rates = new Map();
+  for (const line of payload.totals || []) {
+    if (!rates.has(line.peer)) rates.set(line.peer, {});
+    rates.get(line.peer)[line.direction] = line;
+  }
   const names = [...seen.keys()].sort();
-  $("peers").innerHTML = names.map((name) => {
+  const chips = names.map((name) => {
     const age = seen.get(name);
     const state = age < STALE_AFTER ? "live"
                 : age < DEAD_AFTER ? "stale" : "dead";
+    const rate = rates.has(name) ? directionsText(rates.get(name)) : "";
     return '<div class="peer ' + state + '"><span class="dot"></span>' +
            '<span>' + safe(name) + '</span>' +
-           '<span class="muted">' + ageText(age) + "</span></div>";
-  }).join("") || '<span class="muted">noch nichts gesehen</span>';
+           '<span class="muted">' + ageText(age) + "</span>" +
+           (rate ? '<span class="muted" title="' + RATE_NOTE + '">' + rate +
+                   "</span>" : "") + "</div>";
+  });
+  if (payload.overall) {
+    const overall = {};
+    for (const d of ["in", "out"])
+      if (payload.overall[d].rate > 0) overall[d] = payload.overall[d];
+    chips.push('<div class="peer" title="' + RATE_NOTE + '">' +
+               "<span>gesamt</span><span class=\"muted\">" +
+               (directionsText(overall) || "nichts") + "</span></div>");
+  }
+  $("peers").innerHTML = chips.join("") ||
+                         '<span class="muted">noch nichts gesehen</span>';
 }
 
 // The connection state and the row notes are decided in different places
@@ -467,7 +508,7 @@ function rememberHistory(entries, full) {
 
 function draw(payload) {
   latest = payload;
-  drawPeers(payload.rows);
+  drawPeers(payload);
   refreshDevices(payload.rows);
 
   // The two tables are never both on screen. What flew and what can be spoken
