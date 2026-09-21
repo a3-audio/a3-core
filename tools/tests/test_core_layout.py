@@ -316,13 +316,18 @@ class TheEncoderGainsAreNamedLikeEveryOtherGain(unittest.TestCase):
     `steady` heißen; umbenannt ist es noch nicht, weil es layout.json,
     a3_core_layout.py, a3-core.py und die OSC-Doku zugleich berührt.
 
-    **Offen und hier ausdrücklich nicht entschieden:** `1-stereo-enc` trägt im
-    laufenden Projekt *vier* Airwindows-Instanzen, geschrieben werden zwei.
-    Ein Teil davon ist kein Gain — Isolator 3 und Phasendreher liegen in
-    derselben Kette. Sind die übrigen zwei aber doch Verstärkungen, dämpft die
-    Blende nur die halbe Seite und erreicht nie Stille. Das ist ein Blick in
-    den Container, kein Code — und wenn er gemacht ist, ist die Behebung eine
-    Zeile *in dieser Liste* statt im Quelltext. Siehe
+    **Die Längen sind eine Entscheidung, keine Momentaufnahme.**
+    `1-stereo-enc` trägt vier Airwindows-Instanzen, gefahren werden zwei
+    (`fxparam/1` und `/15`). Vom Maintainer am 2026-09-21 entschieden: *„die
+    airwindow container haben immer funktioniert. bitte nicht ändern,
+    vermutlich sind es die isolator3 plugins."* Die übrigen zwei sind die
+    Isolator 3, mit denen das gefilterte Band herausgezogen wird — keine
+    Verstärkungen.
+
+    Deshalb prüft das hier auf **genau** `[1, 15]` und `[1]` und nicht bloß
+    darauf, dass eine Liste existiert: die Art, wie das kaputtgeht, ist
+    jemand, der die Liste „vervollständigt" und damit die Blende über den
+    Filter legt. Siehe
     issues/a3-core-crossfade-schreibt-zwei-von-vier-verstaerkungen.md.
     """
 

@@ -519,15 +519,18 @@ def apply_3d_crossfade(channel_index, value):
     # gain_params. Beim naechsten Umbau des REAPER-Projekts waeren sie
     # stillschweigend falsch geworden, und zwar an einer Stelle, die man hoert.
     #
-    # **Offen, und diese Umstellung entscheidet es nicht:** `1-stereo-enc`
-    # traegt im laufenden Projekt *vier* Airwindows-Instanzen, geschrieben
-    # werden zwei. Ein Teil davon ist kein Gain -- der Isolator 3 und der
-    # Phasendreher, mit denen das gefilterte Band herausgezogen wird, liegen
-    # in derselben Kette. Sind die uebrigen zwei aber doch Verstaerkungen,
-    # daempft die Blende nur die halbe Seite und erreicht nie Stille. Das ist
-    # ein Blick in den Container -- und wenn er gemacht ist, ist die Behebung
-    # eine Zeile in layout.json statt im Quelltext. Siehe
-    # issues/a3-core-crossfade-schreibt-zwei-von-vier-verstaerkungen.md.
+    # **Zwei von vier Instanzen zu schreiben ist richtig, nicht unfertig.**
+    # `1-stereo-enc` traegt vier Airwindows-Instanzen; geschrieben werden
+    # zwei. Vom Maintainer am 2026-09-21 entschieden: *"die airwindow
+    # container haben immer funktioniert. bitte nicht aendern, vermutlich
+    # sind es die isolator3 plugins."* Die uebrigen beiden sind die
+    # Isolator 3, mit denen das gefilterte Band herausgezogen wird -- keine
+    # Verstaerkungen, also nichts, was die Blende fahren darf.
+    #
+    # Hier steht das, weil die Liste zum Verlaengern einlaedt und das Gegenteil
+    # von einer Verbesserung waere: eine Blende, die den Filter mitzieht. Wer
+    # `gain_params` fuer diese zwei Wege anfasst, aendert etwas, das laeuft.
+    # Siehe issues/a3-core-crossfade-schreibt-zwei-von-vier-verstaerkungen.md.
     for gain_vst_plugins_on_stereo_enc in _layout.gain_params("stereo_enc"):
         osc_reaper.send_message(
             f"/track/{track_stereo_enc}/fx/{FX_INDEX_ENC}"
