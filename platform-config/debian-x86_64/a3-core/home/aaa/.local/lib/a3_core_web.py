@@ -24,10 +24,11 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from pythonosc.osc_message_builder import BuildError  # type: ignore
 
+from a3_core_traffic import IN, OUT
 from a3_core_register import (DEFAULT_REGISTER, counts_of,
                               load as load_register, with_counts)
 
@@ -104,12 +105,16 @@ def as_json(snapshot: Dict[str, Any],
     picture" from "everything since last time" and appending the former
     duplicates every entry it already had.
     """
-    before: Dict[Tuple[str, str], int] = {}
+    before: Dict[Tuple[str, str], Tuple[int, int]] = {}
     span = 0.0
     if previous is not None:
         span = snapshot["at"] - previous["at"]
-        before = {(row["direction"], row["address"]): row["count"]
+        before = {(row["direction"], row["address"]):
+                  (row["count"], row.get("bytes", 0))
                   for row in previous["rows"]}
+
+    # Per peer and direction: messages and bytes that arrived in `span`.
+    sums: Dict[Tuple[str, str], List[float]] = {}
 
     rows = []
     for row in snapshot["rows"]:
@@ -119,9 +124,17 @@ def as_json(snapshot: Dict[str, Any],
         out["age"] = snapshot["at"] - row["last_seen"]
 
         was = before.get((row["direction"], row["address"]))
-        out["rate"] = ((row["count"] - was) / span
+        out["rate"] = ((row["count"] - was[0]) / span
                         if was is not None and span > 0 else None)
         rows.append(out)
+
+        # A negative difference is a row evicted and made again in between;
+        # its rate is shown as the row always showed it, but it must not pull
+        # a peer's total below what actually arrived.
+        if out["rate"] is not None and out["rate"] >= 0:
+            added = sums.setdefault((row["peer"], row["direction"]), [0.0, 0.0])
+            added[0] += out["rate"]
+            added[1] += max(0, row.get("bytes", 0) - was[1]) / span
 
     history = []
     for entry in snapshot["history"]:
@@ -131,10 +144,36 @@ def as_json(snapshot: Dict[str, Any],
         out["age"] = snapshot["at"] - entry["at"]
         history.append(out)
 
+    totals, overall = _data_rates(sums) if previous is not None else (None,
+                                                                       None)
+
     return {"at": snapshot["at"], "rows": rows, "history": history,
             "unknown_addresses": snapshot["unknown_addresses"],
             "unknown_messages": snapshot["unknown_messages"],
-            "evicted": snapshot["evicted"], "full": previous is None}
+            "evicted": snapshot["evicted"], "full": previous is None,
+            "totals": totals, "overall": overall}
+
+
+def _data_rates(sums: Dict[Tuple[str, str], List[float]]
+                ) -> Tuple[List[Dict[str, Any]], Dict[str, Dict[str, float]]]:
+    """Messages per second and kbit/s, per peer and direction and overall.
+
+    kbit is the OSC payload (see a3_core_traffic.osc_bytes): what the rig
+    puts on the switch, without UDP and IP headers. None on the first look,
+    like a row's rate -- zero would say that nothing is arriving.
+    """
+    def line(rate: float, per_second: float) -> Dict[str, float]:
+        return {"rate": rate, "kbit": per_second * 8 / 1000}
+
+    totals = [dict(line(*values), peer=peer, direction=direction)
+              for (peer, direction), values in sorted(
+                  sums.items(), key=lambda item: (item[0][1], item[0][0]))]
+    overall = {}
+    for direction in (IN, OUT):
+        both = [values for (_, d), values in sums.items() if d == direction]
+        overall[direction] = line(sum(v[0] for v in both),
+                                  sum(v[1] for v in both))
+    return totals, overall
 
 
 def unknown_as_json(unknown: Dict[str, Any]) -> Dict[str, Any]:

@@ -25,6 +25,8 @@
   .stale .dot { background: #e0c97e; }
   .dead .dot { background: #4b5162; }
   .muted { color: #6b7280; }
+  th[data-sort] { cursor: pointer; user-select: none; }
+  th[data-sort]:hover { color: #c9d1d9; }
   .in { color: #7ee081; }
   .out { color: #7eb6e0; }
   /* An address that exists and has never arrived. Amber rather than red: it
@@ -224,21 +226,70 @@ function valueText(row) {
     ' <span class="type">' + safe(row.last_type) + "</span>";
 }
 
-function drawPeers(rows) {
+// The data rate is the OSC payload: what the rig puts on the switch, without
+// UDP and IP headers, worked out from each message's address and first value
+// (a3_core_traffic.osc_bytes). Said on the page because a reader comparing it
+// with a switch's port counter would otherwise find it low and wonder.
+const RATE_NOTE = "OSC-Nutzlast ohne UDP/IP-Header, geschätzt aus Adresse " +
+                  "und erstem Wert";
+
+// In and out as kbit/s, and nothing else on the strip -- asked for on
+// 2026-09-22: two directions times two numbers read as four values nobody
+// could tell apart at a glance. Both directions always, a silent one as 0.0,
+// so every peer reads the same way and the strip does not jump when a
+// direction starts or stops. The messages per second go into the tooltip.
+const NO_TRAFFIC = {rate: 0, kbit: 0};
+
+function directionsText(byDirection) {
+  return ["in", "out"]
+    .map((d) => DIRECTION_MARK[d] + " " +
+                (byDirection[d] || NO_TRAFFIC).kbit.toFixed(1))
+    .join(" ") + " kbit/s";
+}
+
+function directionsTitle(byDirection) {
+  const count = (d) => (byDirection[d] || NO_TRAFFIC).rate.toFixed(1);
+  return RATE_NOTE + " — Nachrichten/s: rein " + count("in") +
+         ", raus " + count("out");
+}
+
+function drawPeers(payload) {
   const seen = new Map();
-  for (const row of rows) {
+  for (const row of payload.rows) {
     const age = seen.get(row.peer);
     if (age === undefined || row.age < age) seen.set(row.peer, row.age);
   }
+  // null on the first tick of a connection: there is no earlier snapshot to
+  // make a rate from yet, and a zero would say that nothing is arriving.
+  const rates = new Map();
+  for (const line of payload.totals || []) {
+    if (!rates.has(line.peer)) rates.set(line.peer, {});
+    rates.get(line.peer)[line.direction] = line;
+  }
   const names = [...seen.keys()].sort();
-  $("peers").innerHTML = names.map((name) => {
+  const chips = names.map((name) => {
     const age = seen.get(name);
     const state = age < STALE_AFTER ? "live"
                 : age < DEAD_AFTER ? "stale" : "dead";
+    // Only once there is a rate at all: on the first tick nothing is known,
+    // and 0.0 there would say that nothing is arriving.
+    const byDirection = rates.get(name) || {};
+    const rate = payload.totals
+      ? '<span class="muted" title="' + safe(directionsTitle(byDirection)) +
+        '">' + directionsText(byDirection) + "</span>" : "";
     return '<div class="peer ' + state + '"><span class="dot"></span>' +
            '<span>' + safe(name) + '</span>' +
-           '<span class="muted">' + ageText(age) + "</span></div>";
-  }).join("") || '<span class="muted">noch nichts gesehen</span>';
+           '<span class="muted">' + ageText(age) + "</span>" + rate +
+           "</div>";
+  });
+  if (payload.overall) {
+    chips.push('<div class="peer" title="' +
+               safe(directionsTitle(payload.overall)) + '">' +
+               "<span>gesamt</span><span class=\"muted\">" +
+               directionsText(payload.overall) + "</span></div>");
+  }
+  $("peers").innerHTML = chips.join("") ||
+                         '<span class="muted">noch nichts gesehen</span>';
 }
 
 // The connection state and the row notes are decided in different places
@@ -281,6 +332,118 @@ function refreshDevices(rows) {
   $("device").value = wanted.indexOf(chosen) >= 0 ? chosen : "";
 }
 
+// -- Sorting -----------------------------------------------------------------
+//
+// Both tables sort by any column: a click on a heading sorts by it, a second
+// click turns the order round. What each table is sorted by lives in the
+// address bar (#traffic=-rate&register=address, "-" for descending), so a
+// sorted view survives a reload and can be handed to somebody as a link.
+//
+// Each heading's column, in heading order -- the tables' <th>s are read
+// against these, so a column added to a table needs its name here.
+const SORT_COLUMNS = {
+  traffictable: ["direction", "address", "count", "rate", "value", "peer",
+                 "age"],
+  registertable: ["direction", "address", "device", "count", "source",
+                  "note"],
+};
+const HASH_NAME = {traffictable: "traffic", registertable: "register"};
+
+// The first click shows what one usually looks for in a column: the busiest
+// rows for the counts and rates, the newest for "zuletzt" (age ascending),
+// A first for words.
+const FIRST_DESCENDING = new Set(["count", "rate"]);
+
+const sortState = {
+  traffictable: {key: "count", descending: true},
+  registertable: {key: "address", descending: false},
+};
+
+function sortValue(table, row, key) {
+  if (key === "value") return row.last_value;
+  // A register row nothing ever arrived on has no count, not a count of 0:
+  // "nie" on screen, and last in the order like any other unknown.
+  if (table === "registertable" && key === "count")
+    return row.seen ? row.count : null;
+  return row[key];
+}
+
+function compareBy(table) {
+  const {key, descending} = sortState[table];
+  return (a, b) => {
+    const x = sortValue(table, a, key);
+    const y = sortValue(table, b, key);
+    // "Not known yet" sorts last whichever way round: a row seen for the
+    // first time has no rate, and it must not push the measured ones off
+    // the top the moment the order is turned.
+    const xMissing = x === null || x === undefined;
+    const yMissing = y === null || y === undefined;
+    if (xMissing !== yMissing) return xMissing ? 1 : -1;
+    let order = 0;
+    if (!xMissing) {
+      order = typeof x === "number" && typeof y === "number"
+        ? x - y : String(x).localeCompare(String(y));
+      if (descending) order = -order;
+    }
+    // A fixed tie-break, or equal rows would swap places four times a second.
+    return order || a.address.localeCompare(b.address) ||
+           String(a.direction).localeCompare(String(b.direction));
+  };
+}
+
+function readSortFromHash() {
+  const wanted = new URLSearchParams(location.hash.slice(1));
+  for (const table of Object.keys(SORT_COLUMNS)) {
+    const value = wanted.get(HASH_NAME[table]);
+    if (!value) continue;
+    const descending = value.startsWith("-");
+    const key = descending ? value.slice(1) : value;
+    if (SORT_COLUMNS[table].includes(key))
+      sortState[table] = {key, descending};
+  }
+}
+
+function writeSortToHash() {
+  const parts = Object.keys(SORT_COLUMNS).map((table) =>
+    HASH_NAME[table] + "=" + (sortState[table].descending ? "-" : "") +
+    sortState[table].key);
+  // replaceState, not location.hash: sorting is not a step "back" should undo.
+  history.replaceState(null, "", "#" + parts.join("&"));
+}
+
+function markSortedHeadings() {
+  for (const table of Object.keys(SORT_COLUMNS)) {
+    for (const th of document.querySelectorAll("#" + table + " th[data-sort]")) {
+      const active = th.dataset.sort === sortState[table].key;
+      th.textContent = th.dataset.label +
+        (active ? (sortState[table].descending ? " ▼" : " ▲") : "");
+    }
+  }
+}
+
+function wireSorting() {
+  readSortFromHash();
+  for (const table of Object.keys(SORT_COLUMNS)) {
+    const headings = document.querySelectorAll("#" + table + " thead th");
+    headings.forEach((th, index) => {
+      const key = SORT_COLUMNS[table][index];
+      if (!key) return;
+      th.dataset.sort = key;
+      th.dataset.label = th.textContent;
+      th.onclick = () => {
+        const state = sortState[table];
+        sortState[table] = state.key === key
+          ? {key, descending: !state.descending}
+          : {key, descending: FIRST_DESCENDING.has(key)};
+        writeSortToHash();
+        markSortedHeadings();
+        if (latest) draw(latest);
+      };
+    });
+  }
+  markSortedHeadings();
+}
+
 function drawRows(payload) {
   const rows = payload.rows;
   const needle = $("filter").value.trim();
@@ -315,7 +478,7 @@ function drawRows(payload) {
     .filter((row) => !needle || row.address.includes(needle))
     .filter((row) => !onlyActive || row.age < STALE_AFTER)
     .filter((row) => !device || row.peer === device)
-    .sort((a, b) => b.count - a.count);
+    .sort(compareBy("traffictable"));
 
   const shown = matching.slice(0, DRAW_CAP);
 
@@ -385,16 +548,15 @@ function drawRegister() {
   const device = $("device").value;
   const onlyDead = $("onlydead").checked;
 
-  // Sorted by address rather than by count: this is a catalogue, and a
-  // catalogue is read by looking something up. The traffic table above is the
-  // one sorted by how busy a row is.
+  // Sorted by address until a heading says otherwise: this is a catalogue,
+  // and a catalogue is read by looking something up. The traffic table starts
+  // out sorted by how busy a row is.
   const matching = registerRows
     .filter((row) => !needle || row.address.indexOf(needle) >= 0 ||
                      row.source.indexOf(needle) >= 0)
     .filter((row) => !device || row.device === device)
     .filter((row) => !onlyDead || !row.seen)
-    .sort((a, b) => a.address < b.address ? -1
-                  : a.address > b.address ? 1 : 0);
+    .sort(compareBy("registertable"));
 
   const shown = matching.slice(0, DRAW_CAP);
 
@@ -467,7 +629,7 @@ function rememberHistory(entries, full) {
 
 function draw(payload) {
   latest = payload;
-  drawPeers(payload.rows);
+  drawPeers(payload);
   refreshDevices(payload.rows);
 
   // The two tables are never both on screen. What flew and what can be spoken
@@ -644,5 +806,6 @@ $("fire").onclick = () =>
 // The most-typed one-liner of the whole project, as a button.
 $("recall").onclick = () => fire("self", "/state/recall", "1");
 
+wireSorting();
 listen();
 </script>

@@ -110,6 +110,74 @@ class TheRateComesFromTwoSnapshots(unittest.TestCase):
         self.assertAlmostEqual(rows[(OUT, "/a")]["rate"], 1.0)
 
 
+def a_snapshot(at, rows):
+    return {"at": at, "rows": rows, "history": [], "unknown_addresses": 0,
+            "unknown_messages": 0, "evicted": {"rows": 0, "unknown": 0}}
+
+
+def a_row(direction, address, peer, count, nbytes):
+    return {"direction": direction, "address": address, "count": count,
+            "bytes": nbytes, "last_value": 1.0, "last_type": "float",
+            "last_seen": 0.0, "peer": peer}
+
+
+class TheTotalsArePerPeerAndDirection(unittest.TestCase):
+    """Who puts how much on the wire, without reading every row.
+
+    Made from the same two snapshots as the per-row rates, so the totals and
+    the rows can never disagree about what happened in between.
+    """
+
+    def setUp(self):
+        self.first = a_snapshot(100.0, [
+            a_row(IN, "/a", "motion", 5, 60),
+            a_row(IN, "/d", "motion", 2, 24),
+            a_row(OUT, "/c", "reaper", 10, 200)])
+        self.second = a_snapshot(102.0, [
+            a_row(IN, "/a", "motion", 15, 180),
+            a_row(IN, "/d", "motion", 6, 72),
+            a_row(OUT, "/c", "reaper", 30, 600)])
+
+    def totals(self):
+        return {(t["peer"], t["direction"]): t
+                for t in as_json(self.second, self.first)["totals"]}
+
+    def test_the_rows_of_one_peer_and_direction_add_up(self):
+        motion = self.totals()[("motion", IN)]
+        self.assertAlmostEqual(motion["rate"], 7.0)            # (10 + 4) / 2 s
+        self.assertAlmostEqual(motion["kbit"], 0.672)          # 168 B/2 s * 8 / 1000
+
+    def test_each_peer_and_direction_is_its_own_line(self):
+        totals = self.totals()
+        self.assertEqual(set(totals), {("motion", IN), ("reaper", OUT)})
+        self.assertAlmostEqual(totals[("reaper", OUT)]["rate"], 10.0)
+        self.assertAlmostEqual(totals[("reaper", OUT)]["kbit"], 1.6)
+
+    def test_there_is_an_overall_sum_per_direction(self):
+        overall = as_json(self.second, self.first)["overall"]
+        self.assertAlmostEqual(overall[IN]["rate"], 7.0)
+        self.assertAlmostEqual(overall[OUT]["kbit"], 1.6)
+
+    def test_without_a_previous_snapshot_there_are_no_totals_yet(self):
+        """Not zero -- zero would say nothing is arriving."""
+        out = as_json(self.second, None)
+        self.assertIsNone(out["totals"])
+        self.assertIsNone(out["overall"])
+
+    def test_a_row_new_since_the_last_look_is_left_out(self):
+        self.second["rows"].append(a_row(IN, "/new", "mixer", 50, 600))
+        self.assertNotIn(("mixer", IN), self.totals())
+
+    def test_a_row_without_a_byte_count_counts_its_messages(self):
+        """A snapshot from before bytes were counted, or a restored row."""
+        for snapshot in (self.first, self.second):
+            for row in snapshot["rows"]:
+                del row["bytes"]
+        motion = self.totals()[("motion", IN)]
+        self.assertAlmostEqual(motion["rate"], 7.0)
+        self.assertAlmostEqual(motion["kbit"], 0.0)
+
+
 class TheFullFlagSaysWhichKindOfHistoryThisIs(unittest.TestCase):
     """`_stream()` gives `as_json` no `previous` exactly when it asked
     `Traffic.snapshot()` for the whole ring rather than a cutoff -- the

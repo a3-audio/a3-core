@@ -64,6 +64,38 @@ COMMANDERS = ("mixer", "motion")
 ANSWERERS = ("reaper",)
 
 
+def _padded(length: int) -> int:
+    """OSC aligns every field to four bytes."""
+    return (length + 3) & ~3
+
+
+def osc_bytes(address: str, value: Any) -> int:
+    """How many bytes one message takes as an OSC packet.
+
+    Worked out rather than measured: seen() is handed the address and the
+    first argument, not the datagram, and this is cheap enough to run on
+    every message. It is the OSC payload only -- UDP and IP headers are not
+    in it -- and a message with several arguments is counted as though it
+    had only the first. Every message in this rig carries one, so the
+    estimate is exact where it matters and low where it is not.
+
+    Encoded the way python-osc sends it: a Python float as a 32-bit float,
+    True/False as a type tag with no data.
+    """
+    size = _padded(len(address.encode("utf-8")) + 1)
+    # The type tag: "," alone, or "," and one letter -- four bytes either way
+    # once the null and the padding are added.
+    size += 4
+    if value is None or isinstance(value, bool):
+        return size
+    if isinstance(value, str):
+        return size + _padded(len(value.encode("utf-8")) + 1)
+    if isinstance(value, (bytes, bytearray)):
+        return size + 4 + _padded(len(value))
+    # int32, float32 and anything else a single word carries.
+    return size + 4
+
+
 def peer_name(host: str, peers: Dict[str, str],
               only: Optional[Iterable[str]] = None) -> str:
     """The device name a host stands for, or the host itself.
@@ -175,8 +207,8 @@ class Traffic:
             row = self._rows.get(key)
             if row is None:
                 row = {"direction": direction, "address": address,
-                       "count": 0, "last_value": None, "last_type": "",
-                       "last_seen": at, "peer": peer}
+                       "count": 0, "bytes": 0, "last_value": None,
+                       "last_type": "", "last_seen": at, "peer": peer}
                 self._rows[key] = row
                 self._created += 1
 
@@ -202,6 +234,7 @@ class Traffic:
                     del self._unknown[address]
 
             row["count"] += 1
+            row["bytes"] += osc_bytes(address, value)
             row["last_value"] = value
             row["last_type"] = type_name
             row["last_seen"] = at
@@ -363,7 +396,11 @@ class Traffic:
                 key = (row["direction"], row["address"])
                 if key in self._rows:
                     continue
-                self._rows[key] = dict(row, last_value=None, last_type="")
+                # No byte count survives a restart: the window makes rates
+                # from differences, so where the count starts does not matter,
+                # only that there is one for seen() to add to.
+                self._rows[key] = dict(row, last_value=None, last_type="",
+                                       bytes=0)
                 self._created += 1
                 put += 1
             while len(self._rows) > self._row_cap:
