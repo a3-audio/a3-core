@@ -291,13 +291,6 @@ class ChannelInfo:
     # a3_core_recall.REMEMBERED_CONTROLS and a3_core_state.CHANNEL_FIELDS.
     three_d: Optional[float] = None
 
-    # Still the dead half of the old elevation/width cache: width was meant
-    # to be narrowed towards the zenith, nothing assigns it, and
-    # send_elevation() -- which reads elevation and would now have to cope
-    # with None -- is still never called.
-    # See issues/a3-core-elevation-cache-ist-tot.md.
-    width: float = 0.0
-
 # Built from the layout file rather than written out here.
 #
 # The track numbers are the map between an A3 channel and the REAPER project:
@@ -312,9 +305,12 @@ class ChannelInfo:
 #
 # `azimuth` and `elevation` belong to that second kind and are assigned in
 # osc_handler_channel, where the position is passed on to the IEM plugins.
-# `width` does not: nothing assigns it, and send_elevation() -- the one reader
-# of either -- is still never called.
-# See issues/a3-core-elevation-cache-ist-tot.md.
+#
+# `width` used to sit beside them and is gone: it was meant to be narrowed
+# towards the zenith, nothing ever assigned it, and its one reader --
+# send_elevation(), which fed the stereo encoder from the cached elevation --
+# was called from nowhere. Both went on 2026-09-21. The elevation itself
+# stayed, because the position recall made it live in the meantime.
 channel_infos = tuple(
     ChannelInfo(
         enc_main_azimuth=_layout.channel(index).enc_main_azimuth,
@@ -581,39 +577,6 @@ def set_filters() -> None:
             channel_infos, master_info.fx_mode.name.lower(),
             FX_INDEX_HIPASS, FX_INDEX_LOPASS):
         osc_reaper.send_message(address, value)
-
-def send_elevation(channel_index):
-    elevation = channel_infos[channel_index].elevation
-    normalized_value = np.interp(elevation, [-180, 180], [0, 1])
-    track_stereo_enc = channel_infos[channel_index].track_stereo_enc
-    osc_reaper.send_message(
-        f"/track/{track_stereo_enc}/fx/{FX_INDEX_STEREO_ENC}/fxparam/8/value", normalized_value)
-
-def param_handler(address: str,
-                  *osc_arguments: List[Any]) -> None:
-    # Something a hand moved is something REAPER now holds and has not
-    # written down. The snapshot thread decides when that is worth a save.
-    _snapshot.changed()
-
-
-    words: List[str] = address.split("/")
-    section: str = words[3]
-    parameter: str = words[4]
-
-    #  mypy 0.920 reports a false positive, retest!
-    value: float = float(osc_arguments[0])  # type: ignore
-    assert type(value) == float
-    print(section + "." + parameter + " : " + str(value))
-
-    for channel_index in range(4):
-        if section == str(channel_index):
-            param_handler_channel(channel_index, parameter, value)
-
-    if section == "master":
-        param_handler_master(parameter, value)
-
-    elif section.startswith("fx"):
-        param_handler_fx(section, parameter, value)
 
 def osc_handler_channel(client_address: Tuple[str, int], address: str,
                         *osc_arguments: List[Any]) -> None:
