@@ -104,6 +104,7 @@ FX_INDEX_EQ_ENC: int = _layout.fx_slot("eq_enc")
 FX_INDEX_HIPASS: int = _layout.fx_slot("hipass")
 FX_INDEX_LOPASS: int = _layout.fx_slot("lopass")
 FX_INDEX_CHANNEL_VOLUME: int = _layout.fx_slot("channel_volume")
+FX_INDEX_ENC: int = _layout.fx_slot("enc")
 FX_INDEX_STEREO_ENC: int = _layout.fx_slot("stereo_enc")
 FX_INDEX_ENC: int = _layout.fx_slot("enc")
 #: The plugin on the stereo-encoder track that carries the encoder's two
@@ -495,12 +496,29 @@ def apply_3d_crossfade(channel_index, value):
     track_stereo_enc = channel_infos[channel_index].track_stereo_enc
     track_multi_enc = channel_infos[channel_index].track_multi_enc
 
-    osc_reaper.send_message(
-        f"/track/{track_stereo_enc}/fx/1/fxparam/1/value", stereo_gain)
-    osc_reaper.send_message(
-        f"/track/{track_stereo_enc}/fx/1/fxparam/15/value", stereo_gain)
-    osc_reaper.send_message(
-        f"/track/{track_multi_enc}/fx/1/fxparam/1/value", multi_gain)
+    # Aus dem Layout, nicht als Zahlen hier.
+    #
+    # Dies waren die einzigen fest verdrahteten Verstaerkungsparameter im
+    # ganzen Programm -- jeder andere Bus liest seine Liste laengst aus
+    # gain_params. Beim naechsten Umbau des REAPER-Projekts waeren sie
+    # stillschweigend falsch geworden, und zwar an einer Stelle, die man hoert.
+    #
+    # **Offen, und diese Umstellung entscheidet es nicht:** `1-stereo-enc`
+    # traegt im laufenden Projekt *vier* Airwindows-Instanzen, geschrieben
+    # werden zwei. Sind die anderen beiden auch Verstaerkungen, daempft die
+    # Ueberblendung nur die halbe Seite und erreicht nie Stille. Das ist ein
+    # Blick in den Container -- und wenn er gemacht ist, ist die Behebung eine
+    # Zeile in layout.json statt im Quelltext. Siehe
+    # issues/a3-core-crossfade-schreibt-zwei-von-vier-verstaerkungen.md.
+    for gain_vst_plugins_on_stereo_enc in _layout.gain_params("stereo_enc"):
+        osc_reaper.send_message(
+            f"/track/{track_stereo_enc}/fx/{FX_INDEX_ENC}"
+            f"/fxparam/{gain_vst_plugins_on_stereo_enc}/value", stereo_gain)
+
+    for gain_vst_plugins_on_multi_enc in _layout.gain_params("multi_enc"):
+        osc_reaper.send_message(
+            f"/track/{track_multi_enc}/fx/{FX_INDEX_ENC}"
+            f"/fxparam/{gain_vst_plugins_on_multi_enc}/value", multi_gain)
 
 
 def slope_constant_power(value):
