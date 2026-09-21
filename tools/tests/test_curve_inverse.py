@@ -87,12 +87,17 @@ class TheLossyPart(unittest.TestCase):
 
 class TheOneThatCannot(unittest.TestCase):
     def test_a_curve_returning_two_numbers_is_refused(self):
-        # slope_crossfade_gain gives a stereo and a multi gain from one input.
-        # One number cannot say which input it came from, and pretending
-        # otherwise would be the confident kind of wrong.
+        # crossfade_gains gives a stereo and a multi gain from one input. One
+        # number cannot say which input it came from, and pretending otherwise
+        # would be the confident kind of wrong.
+        #
+        # This named slope_crossfade_gain until 2026-09-21, which was the old
+        # constant-power version of the same idea -- pinned in the golden file
+        # while nothing called it any more, and not the same arithmetic as the
+        # piecewise-linear fade that runs today.
         curves = load_curves(CURVES)
         with self.assertRaises(CurveNotInvertible):
-            invert(curves["slope_crossfade_gain"], 0.25)
+            invert(curves["crossfade_gains"], 0.25)
 
 
 class TheOnesThatAreNotCurvesAtAll(unittest.TestCase):

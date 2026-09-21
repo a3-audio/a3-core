@@ -509,12 +509,6 @@ def slope_constant_power(value):
     val = np.interp(value, resolution, slope)
     return val
 
-def slope_3d(value):
-    resolution = np.arange(start=0, stop=1, step=0.1)
-    slope = [0, 0.3, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 1]
-    val = np.interp(value, resolution, slope)
-    return val
-
 def slope_volume(value):
     val = np.interp(value, [0, 1], [0, 0.5])
     return val
@@ -524,10 +518,6 @@ def slope_eq(value):
     slope = [0.0, 0.1, 0.2, 0.3, 0.5, 0.52, 0.54, 0.56, 0.58, 0.6]
     val = np.interp(value, resolution, slope)
     #val = np.interp(value, [0, 1], [0, 0.6])
-    return val
-
-def slope_fx_gain(value):
-    val = np.interp(value, [0, 1], [0, 0.6])
     return val
 
 def slope_fx_freq_hipass(value):
@@ -541,30 +531,6 @@ def slope_fx_freq_lopass(value):
 def slope_fx_res(value):
     val = np.interp(value, [0, 1], [0, 1])
     return val
-
-def slope_crossover_1b(value):
-    db = 20 * np.log10(np.clip(value, 1e-10, 1))
-    val = (db + 120) / 120 * 0.5 
-    return np.clip(val, 0, 0.5)
-
-def slope_crossover_1a(value):
-    db = 20 * np.log10(np.clip(value, 1e-10, 1))
-    val_tmp = (db + 120) / 120 * 0.5
-    val = 0.5 - val_tmp
-    return np.clip(val, 0, 0.5)
-
-def slope_crossfade_gain(control_value):
-    overlap = 4.5
-    min_db = -40
-    max_db = 0
-    
-    angle = control_value * np.pi / 2
-    db1 = (np.cos(angle) ** (2 / overlap)) * max_db + (1 - np.cos(angle) ** (2 / overlap)) * min_db
-    db2 = (np.sin(angle) ** (2 / overlap)) * max_db + (1 - np.sin(angle) ** (2 / overlap)) * min_db
-    gain1 = (db1 - min_db) / (max_db - min_db) * 0.5
-    gain2 = (db2 - min_db) / (max_db - min_db) * 0.5
-    
-    return gain1, gain2
 
 def set_filters() -> None:
     """Tell REAPER which filter runs on which channel.
