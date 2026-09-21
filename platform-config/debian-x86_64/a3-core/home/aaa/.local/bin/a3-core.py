@@ -578,6 +578,19 @@ def set_filters() -> None:
             FX_INDEX_HIPASS, FX_INDEX_LOPASS):
         osc_reaper.send_message(address, value)
 
+def unrouted_handler(client_address: Tuple[str, int], address: str,
+                     *osc_arguments: List[Any]) -> None:
+    """Was am Hauptport ankommt und auf kein map() passt.
+
+    Nur aufschreiben, nichts tun. Eine Adresse, die niemand bedient, ist
+    entweder ein vergessener Draht oder ein Geraet, das etwas anderes erwartet
+    als Core spricht -- beides will man sehen koennen, und beides sah bis zum
+    2026-09-21 genau wie Stille aus.
+    """
+    peer = peer_name(client_address[0], PEER_HOSTS, only=COMMANDERS)
+    traffic.unknown(address, osc_arguments[0] if osc_arguments else None, peer)
+
+
 def osc_handler_channel(client_address: Tuple[str, int], address: str,
                         *osc_arguments: List[Any]) -> None:
 
@@ -735,6 +748,16 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
             f"/track/{track_stereo_enc}/fx/{FX_INDEX_ENC_POTS}"
             f"/fxparam/{_layout.fx_param('enc_pot_2')}/value", val)
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
+
+    else:
+        # Bis hierher gekommen und auf keinen Zweig gepasst.
+        #
+        # Schlimmer als gar nicht anzukommen: /channel/* **ist** gemappt, also
+        # lief dieser Handler und hat oben traffic.seen() gerufen -- die
+        # Adresse stand danach in der verstandenen Tabelle, ohne dass irgendwer
+        # sie bedient. Sie sah aus wie verstanden und war es nicht. Das Pult
+        # sendet so seit jeher /channel/n/enc und /channel/n/encbtn.
+        traffic.unknown(address, value, origin)
 
     remember_state()
 
@@ -1182,6 +1205,19 @@ if __name__ == "__main__":
                    needs_reply_address=True)
     dispatcher.map(OSC_ADDRESS_BEAT, osc_handler_beat,
                    needs_reply_address=True)
+
+    # Und ein Auffang fuer alles Uebrige.
+    #
+    # Ohne ihn verschluckt python-osc jede Adresse, die auf kein map() passt,
+    # stillschweigend -- sie fliegt, sie landet nur neben dem Ziel, und weder
+    # die verstandene noch die unverstandene Tabelle noch der Verlauf sagen
+    # ein Wort darueber. Das Pult sendet seit jeher /channel/n/enc und
+    # /channel/n/encbtn, die niemand bedient, und im Register standen sie als
+    # tote Draehte, waehrend sie in Wahrheit ankamen.
+    #
+    # Ein Auffang statt einer Liste: was hier landen kann, weiss man gerade
+    # nicht -- das ist der Punkt.
+    dispatcher.set_default_handler(unrouted_handler, needs_reply_address=True)
 
     # Motion-Controller
     # dispatcher.map("/CoordinateConverter/*", iemToCtrlMotion_handler)

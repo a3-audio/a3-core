@@ -88,6 +88,31 @@ class EveryHandlerIsReachable(unittest.TestCase):
             self.assertIn(name, defined, name)
 
 
+class NothingArrivesUnseen(unittest.TestCase):
+    """Und was auf kein map() passt, muss trotzdem aufgeschrieben werden.
+
+    python-osc verschluckt eine Adresse ohne passendes Muster stillschweigend.
+    Der Feedback-Dispatcher hatte seit jeher einen Auffang, der Hauptport
+    nicht -- also war alles, was ein Bediengeraet an einer unbedienten Adresse
+    sendet, von Stille nicht zu unterscheiden.
+    """
+
+    def test_the_main_dispatcher_has_a_catch_all(self):
+        tree = _tree()
+        defaults = [node for node in ast.walk(tree)
+                    if isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "set_default_handler"]
+
+        targets = {node.func.value.id for node in defaults
+                   if isinstance(node.func.value, ast.Name)}
+
+        self.assertIn("dispatcher", targets,
+                      "der Hauptport hat keinen Auffang -- was auf kein map() "
+                      "passt, verschwindet dann spurlos")
+        self.assertIn("feedback_dispatcher", targets)
+
+
 class TheHandlersCallWhatExists(unittest.TestCase):
     """Und was sie rufen, muss es geben.
 
