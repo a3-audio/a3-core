@@ -291,13 +291,6 @@ class ChannelInfo:
     # a3_core_recall.REMEMBERED_CONTROLS and a3_core_state.CHANNEL_FIELDS.
     three_d: Optional[float] = None
 
-    # Still the dead half of the old elevation/width cache: width was meant
-    # to be narrowed towards the zenith, nothing assigns it, and
-    # send_elevation() -- which reads elevation and would now have to cope
-    # with None -- is still never called.
-    # See issues/a3-core-elevation-cache-ist-tot.md.
-    width: float = 0.0
-
 # Built from the layout file rather than written out here.
 #
 # The track numbers are the map between an A3 channel and the REAPER project:
@@ -312,9 +305,12 @@ class ChannelInfo:
 #
 # `azimuth` and `elevation` belong to that second kind and are assigned in
 # osc_handler_channel, where the position is passed on to the IEM plugins.
-# `width` does not: nothing assigns it, and send_elevation() -- the one reader
-# of either -- is still never called.
-# See issues/a3-core-elevation-cache-ist-tot.md.
+#
+# `width` used to sit beside them and is gone: it was meant to be narrowed
+# towards the zenith, nothing ever assigned it, and its one reader --
+# send_elevation(), which fed the stereo encoder from the cached elevation --
+# was called from nowhere. Both went on 2026-09-21. The elevation itself
+# stayed, because the position recall made it live in the meantime.
 channel_infos = tuple(
     ChannelInfo(
         enc_main_azimuth=_layout.channel(index).enc_main_azimuth,
@@ -513,12 +509,6 @@ def slope_constant_power(value):
     val = np.interp(value, resolution, slope)
     return val
 
-def slope_3d(value):
-    resolution = np.arange(start=0, stop=1, step=0.1)
-    slope = [0, 0.3, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 1]
-    val = np.interp(value, resolution, slope)
-    return val
-
 def slope_volume(value):
     val = np.interp(value, [0, 1], [0, 0.5])
     return val
@@ -528,10 +518,6 @@ def slope_eq(value):
     slope = [0.0, 0.1, 0.2, 0.3, 0.5, 0.52, 0.54, 0.56, 0.58, 0.6]
     val = np.interp(value, resolution, slope)
     #val = np.interp(value, [0, 1], [0, 0.6])
-    return val
-
-def slope_fx_gain(value):
-    val = np.interp(value, [0, 1], [0, 0.6])
     return val
 
 def slope_fx_freq_hipass(value):
@@ -546,30 +532,6 @@ def slope_fx_res(value):
     val = np.interp(value, [0, 1], [0, 1])
     return val
 
-def slope_crossover_1b(value):
-    db = 20 * np.log10(np.clip(value, 1e-10, 1))
-    val = (db + 120) / 120 * 0.5 
-    return np.clip(val, 0, 0.5)
-
-def slope_crossover_1a(value):
-    db = 20 * np.log10(np.clip(value, 1e-10, 1))
-    val_tmp = (db + 120) / 120 * 0.5
-    val = 0.5 - val_tmp
-    return np.clip(val, 0, 0.5)
-
-def slope_crossfade_gain(control_value):
-    overlap = 4.5
-    min_db = -40
-    max_db = 0
-    
-    angle = control_value * np.pi / 2
-    db1 = (np.cos(angle) ** (2 / overlap)) * max_db + (1 - np.cos(angle) ** (2 / overlap)) * min_db
-    db2 = (np.sin(angle) ** (2 / overlap)) * max_db + (1 - np.sin(angle) ** (2 / overlap)) * min_db
-    gain1 = (db1 - min_db) / (max_db - min_db) * 0.5
-    gain2 = (db2 - min_db) / (max_db - min_db) * 0.5
-    
-    return gain1, gain2
-
 def set_filters() -> None:
     """Tell REAPER which filter runs on which channel.
 
@@ -582,38 +544,18 @@ def set_filters() -> None:
             FX_INDEX_HIPASS, FX_INDEX_LOPASS):
         osc_reaper.send_message(address, value)
 
-def send_elevation(channel_index):
-    elevation = channel_infos[channel_index].elevation
-    normalized_value = np.interp(elevation, [-180, 180], [0, 1])
-    track_stereo_enc = channel_infos[channel_index].track_stereo_enc
-    osc_reaper.send_message(
-        f"/track/{track_stereo_enc}/fx/{FX_INDEX_STEREO_ENC}/fxparam/8/value", normalized_value)
+def unrouted_handler(client_address: Tuple[str, int], address: str,
+                     *osc_arguments: List[Any]) -> None:
+    """Was am Hauptport ankommt und auf kein map() passt.
 
-def param_handler(address: str,
-                  *osc_arguments: List[Any]) -> None:
-    # Something a hand moved is something REAPER now holds and has not
-    # written down. The snapshot thread decides when that is worth a save.
-    _snapshot.changed()
+    Nur aufschreiben, nichts tun. Eine Adresse, die niemand bedient, ist
+    entweder ein vergessener Draht oder ein Geraet, das etwas anderes erwartet
+    als Core spricht -- beides will man sehen koennen, und beides sah bis zum
+    2026-09-21 genau wie Stille aus.
+    """
+    peer = peer_name(client_address[0], PEER_HOSTS, only=COMMANDERS)
+    traffic.unknown(address, osc_arguments[0] if osc_arguments else None, peer)
 
-
-    words: List[str] = address.split("/")
-    section: str = words[3]
-    parameter: str = words[4]
-
-    #  mypy 0.920 reports a false positive, retest!
-    value: float = float(osc_arguments[0])  # type: ignore
-    assert type(value) == float
-    print(section + "." + parameter + " : " + str(value))
-
-    for channel_index in range(4):
-        if section == str(channel_index):
-            param_handler_channel(channel_index, parameter, value)
-
-    if section == "master":
-        param_handler_master(parameter, value)
-
-    elif section.startswith("fx"):
-        param_handler_fx(section, parameter, value)
 
 def osc_handler_channel(client_address: Tuple[str, int], address: str,
                         *osc_arguments: List[Any]) -> None:
@@ -772,6 +714,16 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
             f"/track/{track_stereo_enc}/fx/{FX_INDEX_ENC_POTS}"
             f"/fxparam/{_layout.fx_param('enc_pot_2')}/value", val)
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
+
+    else:
+        # Bis hierher gekommen und auf keinen Zweig gepasst.
+        #
+        # Schlimmer als gar nicht anzukommen: /channel/* **ist** gemappt, also
+        # lief dieser Handler und hat oben traffic.seen() gerufen -- die
+        # Adresse stand danach in der verstandenen Tabelle, ohne dass irgendwer
+        # sie bedient. Sie sah aus wie verstanden und war es nicht. Das Pult
+        # sendet so seit jeher /channel/n/enc und /channel/n/encbtn.
+        traffic.unknown(address, value, origin)
 
     remember_state()
 
@@ -1219,6 +1171,19 @@ if __name__ == "__main__":
                    needs_reply_address=True)
     dispatcher.map(OSC_ADDRESS_BEAT, osc_handler_beat,
                    needs_reply_address=True)
+
+    # Und ein Auffang fuer alles Uebrige.
+    #
+    # Ohne ihn verschluckt python-osc jede Adresse, die auf kein map() passt,
+    # stillschweigend -- sie fliegt, sie landet nur neben dem Ziel, und weder
+    # die verstandene noch die unverstandene Tabelle noch der Verlauf sagen
+    # ein Wort darueber. Das Pult sendet seit jeher /channel/n/enc und
+    # /channel/n/encbtn, die niemand bedient, und im Register standen sie als
+    # tote Draehte, waehrend sie in Wahrheit ankamen.
+    #
+    # Ein Auffang statt einer Liste: was hier landen kann, weiss man gerade
+    # nicht -- das ist der Punkt.
+    dispatcher.set_default_handler(unrouted_handler, needs_reply_address=True)
 
     # Motion-Controller
     # dispatcher.map("/CoordinateConverter/*", iemToCtrlMotion_handler)

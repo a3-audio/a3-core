@@ -40,6 +40,9 @@ GOLDEN = HERE / "curves-golden.json"
 SOURCE = (HERE / "../../platform-config/debian-x86_64/a3-core"
           "/home/aaa/.local/bin/a3-core.py").resolve()
 
+LIB = (HERE / "../../platform-config/debian-x86_64/a3-core"
+       "/home/aaa/.local/lib").resolve()
+
 SAMPLES = 101  # 0.00 to 1.00 in hundredths
 TOLERANCE = 1e-9
 
@@ -63,7 +66,27 @@ def load_curves(source):
     namespace = {"np": numpy_subset}
     exec(compile(ast.fix_missing_locations(module), "<curves>", "exec"), namespace)
 
-    return {name: fn for name, fn in namespace.items() if name.startswith("slope_")}
+    curves = {name: fn for name, fn in namespace.items()
+              if name.startswith("slope_")}
+
+    # Und die Blende, die keine slope_* ist und trotzdem eine Kurve.
+    #
+    # `crossfade_gains` sitzt in a3_core_crossfade, weil sie zwei Werte
+    # zurueckgibt und ein Test sie erreichen muss. Sie war deshalb hier nicht
+    # dabei -- waehrend `slope_crossfade_gain` in a3-core.py festgenagelt war,
+    # das niemand mehr ruft. Die Referenz beschrieb damit eine Kurve, die es
+    # nicht mehr gibt, und beschrieb die laufende nicht.
+    #
+    # Und es sind nicht dieselben: die alte war konstante Leistung (cos/sin mit
+    # overlap 4.5), die laufende ist eine stueckweise lineare Blende.
+    #
+    # Importiert statt aus dem Baum gehoben: das Modul ist reine Arithmetik und
+    # oeffnet nichts.
+    sys.path.insert(0, str(LIB))
+    from a3_core_crossfade import crossfade_gains
+    curves["crossfade_gains"] = crossfade_gains
+
+    return curves
 
 
 def measure(curves):
