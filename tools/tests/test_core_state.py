@@ -210,11 +210,24 @@ class TheFileItself(unittest.TestCase):
 
     def test_a_burst_of_changes_is_one_write(self):
         """A hand sweeping the filter knob is one intention. Writing per
-        change would put a file write in the path of every OSC message."""
+        change would put a file write in the path of every OSC message.
+
+        Die beiden Behauptungen unten sagen das vollständig und ohne Uhr:
+        **ein** Schreibvorgang für zwanzig Änderungen, und er trägt den
+        **letzten** Wert -- ein eiliger erster Schreibvorgang wäre damit
+        ebenso ausgeschlossen wie zwanzig.
+
+        Dazwischen stand bis zum 2026-09-21 ein dritter Satz:
+        `assertFalse(self.path.exists(), "wrote before the delay was up")`.
+        Der behauptete, dass in *diesem Augenblick* die fünfzig Millisekunden
+        noch nicht um seien -- eine Wette auf die Wanduhr, die auf einer Kiste
+        verlorengeht, die nebenher baut. Genau so ist er am 2026-09-21 in
+        einem Lauf von 411 Tests umgefallen und in fünf Läufen danach nicht.
+        Er hat nichts geprüft, was die anderen beiden nicht prüfen, und die
+        Zeitspanne war das Einzige, was er behauptet hat."""
         state = StateFile(self.path, delay=0.05)
         for value in range(20):
             state.remember({"fx_mode": value})
-        self.assertFalse(self.path.exists(), "wrote before the delay was up")
 
         deadline = time.monotonic() + 2.0
         while not self.path.exists() and time.monotonic() < deadline:
