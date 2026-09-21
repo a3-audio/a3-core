@@ -104,12 +104,12 @@ FX_INDEX_EQ_ENC: int = _layout.fx_slot("eq_enc")
 FX_INDEX_HIPASS: int = _layout.fx_slot("hipass")
 FX_INDEX_LOPASS: int = _layout.fx_slot("lopass")
 FX_INDEX_CHANNEL_VOLUME: int = _layout.fx_slot("channel_volume")
-FX_INDEX_STEREO_ENC: int = _layout.fx_slot("stereo_enc")
 FX_INDEX_ENC: int = _layout.fx_slot("enc")
-#: The plugin on the stereo-encoder track that carries the encoder's two
-#: pots. It was the literal 2 in both pot branches -- the one number in the
-#: forward path that the layout did not name, which is also why the reverse
-#: table could not name it either.
+#: The plugin on the steady track (`1-stereo-enc`, an overhauled name -- see
+#: apply_3d_crossfade) that carries the encoder's two pots. It was the literal
+#: 2 in both pot branches -- the one number in the forward path that the
+#: layout did not name, which is also why the reverse table could not name it
+#: either.
 FX_INDEX_ENC_POTS: int = _layout.fx_slot("enc_pots")
 
 CHANNEL_ENC_MAIN: int = 26
@@ -471,7 +471,24 @@ def remember_state():
 
 
 def apply_3d_crossfade(channel_index, value):
-    """Put a channel where the control says, between its two encoders.
+    """Wie viel dieses Kanals sich bewegt, zwischen seinen zwei Spuren.
+
+    **Was hier wirklich ueberblendet wird** -- vom Maintainer am 2026-09-21,
+    und aus diesem Programm nicht zu lesen: zwei REAPER-Spuren mit je einem
+    Airwindows Isolator 3 blenden gegeneinander, die Spur `3d` und die Spur
+    `stereo`. Wird `3d` eingeblendet, wird gleichzeitig das *phaseninvertierte*
+    Signal hinter dem Filter auf `stereo` gemischt. So wird ein gefiltertes
+    Band aus dem stehenden Weg herausgezogen und nur dieses Band gedreht --
+    der Rest bleibt stehen. Das ist keine Wahl zwischen zwei Encodern: beide
+    Wege gehen in denselben MultiEncoder, `3d` je Kanal auf dessen Kanaele
+    1-4, der stehende Weg auf 5-n ueber alle Lautsprecher gleichzeitig.
+
+    Der Name `stereo_enc` ist damit ueberholt. Der IEM StereoEncoder liegt
+    nicht mehr auf der Spur -- sie bleibt im Signalweg und traegt weiterhin
+    den Filter, den pot_1/pot_2 (freq, Q) fahren --, und der Weg muesste
+    `steady` heissen. Umbenennen beruehrt layout.json, a3_core_layout.py,
+    dieses Modul und die OSC-Doku und ist deshalb nicht Teil dieser
+    Aenderung; siehe das Issue unten.
 
     One road since 2026-09-12: `/channel/n/3d`, A3 Motion's pot. The mixer's
     `fx-send` used to arrive here too -- it was the only continuous control
@@ -495,12 +512,31 @@ def apply_3d_crossfade(channel_index, value):
     track_stereo_enc = channel_infos[channel_index].track_stereo_enc
     track_multi_enc = channel_infos[channel_index].track_multi_enc
 
-    osc_reaper.send_message(
-        f"/track/{track_stereo_enc}/fx/1/fxparam/1/value", stereo_gain)
-    osc_reaper.send_message(
-        f"/track/{track_stereo_enc}/fx/1/fxparam/15/value", stereo_gain)
-    osc_reaper.send_message(
-        f"/track/{track_multi_enc}/fx/1/fxparam/1/value", multi_gain)
+    # Aus dem Layout, nicht als Zahlen hier.
+    #
+    # Dies waren die einzigen fest verdrahteten Verstaerkungsparameter im
+    # ganzen Programm -- jeder andere Bus liest seine Liste laengst aus
+    # gain_params. Beim naechsten Umbau des REAPER-Projekts waeren sie
+    # stillschweigend falsch geworden, und zwar an einer Stelle, die man hoert.
+    #
+    # **Offen, und diese Umstellung entscheidet es nicht:** `1-stereo-enc`
+    # traegt im laufenden Projekt *vier* Airwindows-Instanzen, geschrieben
+    # werden zwei. Ein Teil davon ist kein Gain -- der Isolator 3 und der
+    # Phasendreher, mit denen das gefilterte Band herausgezogen wird, liegen
+    # in derselben Kette. Sind die uebrigen zwei aber doch Verstaerkungen,
+    # daempft die Blende nur die halbe Seite und erreicht nie Stille. Das ist
+    # ein Blick in den Container -- und wenn er gemacht ist, ist die Behebung
+    # eine Zeile in layout.json statt im Quelltext. Siehe
+    # issues/a3-core-crossfade-schreibt-zwei-von-vier-verstaerkungen.md.
+    for gain_vst_plugins_on_stereo_enc in _layout.gain_params("stereo_enc"):
+        osc_reaper.send_message(
+            f"/track/{track_stereo_enc}/fx/{FX_INDEX_ENC}"
+            f"/fxparam/{gain_vst_plugins_on_stereo_enc}/value", stereo_gain)
+
+    for gain_vst_plugins_on_multi_enc in _layout.gain_params("multi_enc"):
+        osc_reaper.send_message(
+            f"/track/{track_multi_enc}/fx/{FX_INDEX_ENC}"
+            f"/fxparam/{gain_vst_plugins_on_multi_enc}/value", multi_gain)
 
 
 def slope_constant_power(value):
@@ -615,9 +651,10 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
                             send=_layout.send("fx")),
             val)
 
-    # What 3d is for: A3 Motion's per-channel pot, crossfading the channel
-    # between its stereo and its multi encoder. The same curves as fx-send
-    # above, which is the road this arrived by until now.
+    # What 3d is for: A3 Motion's per-channel pot, deciding how much of the
+    # channel moves -- the balance between its moving and its steady track,
+    # both of which go to the MultiEncoder. The same curves as fx-send above,
+    # which is the road this arrived by until now.
     if parameter == "3d":
         apply_3d_crossfade(channel_index, value)
 

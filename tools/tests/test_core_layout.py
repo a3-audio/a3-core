@@ -26,6 +26,13 @@ def written(text):
     return Path(handle.name)
 
 
+#: Das Layout, das ausgeliefert wird -- fuer die Faelle, in denen die Frage
+#: lautet "steht es dort wirklich drin" und nicht "haelt der Leser sich an
+#: seine Regeln".
+SHIPPED = (Path(__file__).resolve().parents[2]
+           / "platform-config/debian-x86_64/a3-core/home/aaa/.local"
+           / "share/a3-core/layout.json")
+
 MINIMAL = json.dumps({
     "channels": [
         {"track_input": 12, "track_multi_enc": 11, "track_stereo_enc": 10,
@@ -291,3 +298,39 @@ class TheSends(unittest.TestCase):
         self.assertEqual(
             load_layout(written(SENDS)).address("track_send", track=9, send=3),
             "/track/9/send/3/volume")
+
+
+class TheEncoderGainsAreNamedLikeEveryOtherGain(unittest.TestCase):
+    """Die Überblendung schrieb ihre Parameter als feste Zahlen.
+
+    `apply_3d_crossfade()` schickte `fx/1/fxparam/1` und `fxparam/15` an den
+    Stereo-Encoder und `fxparam/1` an den Multi-Encoder — die einzigen fest
+    verdrahteten Verstärkungsparameter im ganzen Programm, während jeder
+    andere Bus seine Liste aus `gain_params` liest. Beim nächsten Umbau des
+    REAPER-Projekts wären sie stillschweigend falsch geworden, und zwar an
+    einer Stelle, die man hört.
+
+    Die Namen sind überholt: der IEM StereoEncoder liegt nicht mehr auf
+    `1-stereo-enc`, und beide Wege gehen in denselben MultiEncoder — der
+    bewegte auf dessen Kanäle 1–4, der stehende auf 5–n. `stereo_enc` müsste
+    `steady` heißen; umbenannt ist es noch nicht, weil es layout.json,
+    a3_core_layout.py, a3-core.py und die OSC-Doku zugleich berührt.
+
+    **Offen und hier ausdrücklich nicht entschieden:** `1-stereo-enc` trägt im
+    laufenden Projekt *vier* Airwindows-Instanzen, geschrieben werden zwei.
+    Ein Teil davon ist kein Gain — Isolator 3 und Phasendreher liegen in
+    derselben Kette. Sind die übrigen zwei aber doch Verstärkungen, dämpft die
+    Blende nur die halbe Seite und erreicht nie Stille. Das ist ein Blick in
+    den Container, kein Code — und wenn er gemacht ist, ist die Behebung eine
+    Zeile *in dieser Liste* statt im Quelltext. Siehe
+    issues/a3-core-crossfade-schreibt-zwei-von-vier-verstaerkungen.md.
+    """
+
+    def test_both_encoders_have_a_gain_list(self):
+        layout = load_layout(SHIPPED)
+        self.assertEqual([1, 15], layout.gain_params("stereo_enc"))
+        self.assertEqual([1], layout.gain_params("multi_enc"))
+
+    def test_the_slot_they_sit_in_is_named_too(self):
+        # fx/1 stand als Zahl im f-String, obwohl es den Namen längst gab.
+        self.assertEqual(1, load_layout(SHIPPED).fx_slot("enc"))

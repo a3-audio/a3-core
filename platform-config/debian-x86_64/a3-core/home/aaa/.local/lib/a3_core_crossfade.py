@@ -1,7 +1,11 @@
-"""Where a channel sits between its stereo and its multi encoder.
+"""How much of a channel moves: the balance between its two tracks.
 
-One A3 value in, two REAPER gains out. It arrives on `/channel/n/3d`, A3
-Motion's per-channel pot.
+One A3 value in, two REAPER gains out. Both go to the *same* MultiEncoder --
+the moving track on its channels 1-4, the steady one on 5-n over every
+speaker at once. See apply_3d_crossfade() in a3-core.py for what the two
+tracks do to each other; the name `stereo` there is historical.
+
+It arrives on `/channel/n/3d`, A3 Motion's per-channel pot.
 
 It used to arrive on `/channel/n/fx-send` as well -- the mixer's pot was the
 only continuous control the desk had for this before Motion existed. Since
