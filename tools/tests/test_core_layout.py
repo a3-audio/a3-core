@@ -310,11 +310,18 @@ class TheEncoderGainsAreNamedLikeEveryOtherGain(unittest.TestCase):
     REAPER-Projekts wären sie stillschweigend falsch geworden, und zwar an
     einer Stelle, die man hört.
 
+    Die Namen sind überholt: der IEM StereoEncoder liegt nicht mehr auf
+    `1-stereo-enc`, und beide Wege gehen in denselben MultiEncoder — der
+    bewegte auf dessen Kanäle 1–4, der stehende auf 5–n. `stereo_enc` müsste
+    `steady` heißen; umbenannt ist es noch nicht, weil es layout.json,
+    a3_core_layout.py, a3-core.py und die OSC-Doku zugleich berührt.
+
     **Offen und hier ausdrücklich nicht entschieden:** `1-stereo-enc` trägt im
     laufenden Projekt *vier* Airwindows-Instanzen, geschrieben werden zwei.
-    Sind die anderen beiden auch Verstärkungen, dämpft die Überblendung nur
-    die halbe Seite und erreicht nie Stille. Das ist ein Blick in den
-    Container, kein Code — und wenn er gemacht ist, ist die Behebung eine
+    Ein Teil davon ist kein Gain — Isolator 3 und Phasendreher liegen in
+    derselben Kette. Sind die übrigen zwei aber doch Verstärkungen, dämpft die
+    Blende nur die halbe Seite und erreicht nie Stille. Das ist ein Blick in
+    den Container, kein Code — und wenn er gemacht ist, ist die Behebung eine
     Zeile *in dieser Liste* statt im Quelltext. Siehe
     issues/a3-core-crossfade-schreibt-zwei-von-vier-verstaerkungen.md.
     """
