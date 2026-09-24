@@ -100,20 +100,34 @@ echo "done: /home/aaa/.local/clap/AirwindowsConsolidated.clap"
 #### Install Beat Analyzer
 
 echo "Installing Beat Analyzer..."
-# Clone once, update afterwards. A plain clone fails when the directory is
-# already there, and with `set -e` above that takes the whole unit down -- so
-# every re-install left a3-user-install.service in `failed` and the session
-# reading as degraded, for no better reason than the checkout already existing.
-if [ -d /home/aaa/beat-analyzer/.git ]; then
-    cd /home/aaa/beat-analyzer && git pull --ff-only --recurse-submodules
+# The workspace checkout, not a clone of our own.
+#
+# This used to clone https://github.com/rafjagger/beat-analyzer into
+# /home/aaa and build that. beat-analyzer.service has pointed at the
+# workspace copy for as long as anyone can remember, so the installer was
+# building something nothing ran -- two checkouts, one of them with the
+# tuned build/.env in it and neither aware of the other.
+#
+# The workspace is where it comes from: a3-system carries beat-analyzer as a
+# submodule, so a machine set up by cloning that umbrella has it already.
+ANALYZER=/home/aaa/a3-system/beat-analyzer
+
+if [ ! -d "$ANALYZER/.git" ]; then
+    # Not an error. The workspace is set up by hand, and an install that
+    # happens first should say so rather than invent a second checkout.
+    echo "SKIP: no beat-analyzer at $ANALYZER."
+    echo "      Set up the a3-system workspace first (it carries beat-analyzer"
+    echo "      as a submodule), then re-run a3-user-install.service."
 else
-    cd /home/aaa && git clone --recurse-submodules https://github.com/rafjagger/beat-analyzer.git
+    cd "$ANALYZER" && ./build.sh
+
+    # -n, because build/.env is configuration somebody edited: ports, the
+    # clock mode, the JACK names. Copying the example over it on every update
+    # is the same fault this package's conffiles list exists to prevent.
+    #
+    # It matters more than it looks: with no .env at all the analyzer falls
+    # back to a single target on 127.0.0.1 and reaches nothing off the
+    # machine, without saying so.
+    mkdir -p "$ANALYZER/build"
+    cp -n "$ANALYZER/.env.example" "$ANALYZER/build/.env" || true
 fi
-
-cd /home/aaa/beat-analyzer && ./build.sh
-
-# -n, because build/.env is configuration somebody edited: ports, the clock
-# mode, the JACK names. Copying the example over it on every update is the
-# same fault this package's conffiles list exists to prevent. The `|| true`
-# keeps a refused overwrite from failing the unit.
-cp -n .env.example build/.env || true
