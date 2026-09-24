@@ -188,9 +188,9 @@ bindsym $mod+b exec /usr/bin/firefox
 
 # Start i3bar to display a workspace bar (plus the system information i3status
 # finds out, if available)
-bar {
-        status_command i3status
-}
+#bar {
+#        status_command i3status
+#}
 
 # Display brightness
 bindsym XF86MonBrightnessUp exec /usr/bin/brightnessctl set +2%
@@ -211,11 +211,25 @@ bindsym $mod+Shift+s exec --no-startup-id maim --select | xclip -selection clipb
 exec /usr/bin/xset s 0 0 &
 exec /usr/bin/xset s off &
 exec /usr/bin/xset s noblank &
+exec /usr/bin/xset -dpms &
+
+# Workaround: initial KMS modeset on HDMI-2 sometimes fails to reach the
+# panel (black screen despite X/i3 running fine). Forcing the output off
+# and back on shortly after startup retriggers a working modeset.
+exec --no-startup-id sh -c 'sleep 2 && xrandr --output HDMI-2 --off && sleep 1 && xrandr --output HDMI-2 --mode 1024x768 --pos 0x0 --rotate right'
 exec /usr/bin/xrandr --dpi 120 &
 #exec /usr/bin/qasmixer -t &
 #exec /home/aaa/a3-core.lokal/alsa-scarlett-gui &
-for_window [class="QjackCtl"] move container to workspace 2
-for_window [class="REAPER"] move container to workspace 1
-for_window [title="Scarlett 18i20 USB"] move container to workspace 3
-for_window [title="VST3: VCV Rack"] move container to workspace 2
-for_window [title="VST3: VCV Rack"] floating disable
+
+for_window [class="A3 Motion UI"] move container to workspace 1
+for_window [class="REAPER"] move container to workspace 2
+for_window [class="QjackCtl"] move container to workspace 3
+for_window [title="Scarlett 18i20 USB"] move container to workspace 4
+
+#exec --no-startup-id xrandr -o right
+#exec --no-startup-id xinput set-prop "wch.cn USB2IIC_CTP_CONTROL" --type=float "Coordinate Transformation Matrix" 0 1 0 -1 0 1 0 0 1
+#exec --no-startup-id xinput set-prop "ILITEK       ILITEK-TOUCH" --type=float "Coordinate Transformation Matrix" 0 1 0 -1 0 1 0 0 1
+
+# Hide the mouse cursor instantly on touch (--hide-on-touch), and after a
+# short idle period otherwise; real mouse movement keeps it visible.
+exec --no-startup-id unclutter --timeout 1 --hide-on-touch --exclude-root

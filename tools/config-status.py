@@ -40,6 +40,10 @@ NEVER = (
     "reaper-defpresets.ini", "reaper-extstate.ini", "reaper-midihw",
     "reaper-themeconfig.ini", "reaper-mouse.ini", "reaper.ini",
     "__pycache__", ".pyc",
+    # QjackCtl stores window geometry and per-device levels in the same file
+    # as its settings, and rewrites it on exit. Carrying it either way means
+    # committing where somebody left a window.
+    "QjackCtl.conf",
 )
 
 
@@ -83,25 +87,27 @@ def main():
         rest = [a for a in sys.argv[1:] if a != "--export"]
         only = rest[0] if rest else None
 
-    seen, differing = {}, []
+    # Every mapping is reported on its own. Collapsing them to the "best"
+    # state hides the interesting case: a file symlinked into the checkout
+    # through ~/.config while the copy dpkg installed under
+    # ~/.local/share/a3-core sits months out of date. That is not a clean
+    # file, and the first version of this script called it one.
+    rows, differing = [], []
     for repo, live, rel in pairs():
         state = classify(repo, live)
-        # A file reachable by both mappings counts once, best state wins.
-        rank = {"linked": 0, "same": 1, "not on this machine": 2,
-                "linked elsewhere": 3, "DIFFERS": 4}
-        if rel not in seen or rank[state] < rank[seen[rel][0]]:
-            seen[rel] = (state, repo, live)
-
-    for rel, (state, repo, live) in sorted(seen.items()):
+        rows.append((rel, state, repo, live))
         if state == "DIFFERS":
             differing.append((rel, repo, live))
-        if state not in ("same", "linked"):
-            print(f"  {state:<20} {rel}")
 
-    linked = sum(1 for s, _, _ in seen.values() if s == "linked")
-    same = sum(1 for s, _, _ in seen.values() if s == "same")
-    print(f"\n  {len(seen)} shipped files: {linked} linked, {same} identical, "
-          f"{len(differing)} differing")
+    for rel, state, _, live in sorted(rows):
+        if state not in ("same", "linked"):
+            where = live.replace(HOME, "~")
+            print(f"  {state:<20} {rel}\n  {'':<20}   at {where}")
+
+    linked = sum(1 for _, s, _, _ in rows if s == "linked")
+    same = sum(1 for _, s, _, _ in rows if s == "same")
+    print(f"\n  {len(rows)} install locations: {linked} linked, "
+          f"{same} identical, {len(differing)} differing")
 
     if not export:
         if differing:
