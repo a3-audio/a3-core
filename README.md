@@ -1,10 +1,20 @@
-# Prerequisites
+# A³ Core
+
+The 3D sound server: the machine that carries the audio. A Debian x86_64
+installation running JACK, REAPER and SuperCollider, remote-controlled over
+OSC by [A³ Mixer](https://github.com/a3-audio/a3-mixer) and
+[A³ Motion](https://github.com/a3-audio/a3-motion).
+
+This repository *is* the deployment: the `.deb` package tree under
+`platform-config/`, not application source.
+
+## Prerequisites
 - Blank debian installation
   - user: aaa
   - without desktop environment
   - with ssh server
 
-# Install
+## Install
 - login to your debian
   - `su root`
   - `apt install sudo wget`
@@ -12,11 +22,11 @@
 - logout and back in
   - `wget -qO- "https://raw.githubusercontent.com/a3-audio/a3-core/main/platform-config/debian-x86_64/a3-core_install.sh" | sudo bash`
 
-# Config
+## Config
 - enable realtime priorities `sudo dpkg-reconfigure jackd2`
 - configure network `sudo dpkg-reconfigure a3-core`
 
-# apt install a3-core - postinst
+## apt install a3-core - postinst
 - configure network interface in /etc/systemd/network/a3-core.network
 - setup user aaa
 - enable system services
@@ -34,14 +44,14 @@
 - install iem-plugin-suite
 - trigger a3-user-install.service >> 
 
-# a3-user-install.service
+## a3-user-install.service
 this one-shot service is triggert by `apt install a3-core`
 - install reaper & config
 - install Airwindows plugin suite
 - install TAL Software - talfilter 2
 - install beat-analyzer & build
 
-# Links:
+## Links:
 - https://airwindows.com/vsts
 - https://tal-software.com/products/tal-filter
 - https://github.com/rafjagger/beat-analyzer
