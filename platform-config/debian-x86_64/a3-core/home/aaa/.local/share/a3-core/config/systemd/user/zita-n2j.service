@@ -1,5 +1,5 @@
 [Unit]                                                        
-Description=zita-j2n
+Description=zita-n2j
 PartOf=a3-main.service
 After=a3-jack.service
 
