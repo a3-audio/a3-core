@@ -1,10 +1,19 @@
 [Unit]                                                                                     
 Description=a3-core (python osc server)
 PartOf=a3-main.service
-# It talks to REAPER, which talks to jack. Starting before them is not fatal
-# -- OSC goes into the void until they are up -- but it is an ordering that
-# was never stated, and the only one of the five that had none.
-After=a3-jack.service a3-reaper.service
+# Before REAPER, and that is the whole point rather than a detail.
+#
+# Core does not hold the channel strip -- it relays what REAPER reports, and
+# REAPER reports on change. It announces its state once, when it starts. If
+# Core is not listening at that moment it never hears it, and from then on
+# only learns a value when a hand moves it. A device asking /state/recall then
+# gets an answer with no volume, no gain and no EQ in it, and comes up with
+# its faders at whatever it booted with. See a3-motion-ui issue #17.
+#
+# jack still has to be up first: REAPER needs it, and Core reaching the void
+# for a moment costs nothing -- the previous ordering said as much.
+After=a3-jack.service
+Before=a3-reaper.service
 
 
 [Service]
