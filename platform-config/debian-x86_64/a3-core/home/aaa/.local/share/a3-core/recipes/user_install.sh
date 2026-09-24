@@ -63,5 +63,20 @@ echo "done: /home/aaa/.local/clap/AirwindowsConsolidated.clap"
 #### Install Beat Analyzer
 
 echo "Installing Beat Analyzer..."
-cd /home/aaa && git clone --recurse-submodules https://github.com/rafjagger/beat-analyzer.git
-cd /home/aaa/beat-analyzer && ./build.sh && cp .env.example build/.env
+# Clone once, update afterwards. A plain clone fails when the directory is
+# already there, and with `set -e` above that takes the whole unit down -- so
+# every re-install left a3-user-install.service in `failed` and the session
+# reading as degraded, for no better reason than the checkout already existing.
+if [ -d /home/aaa/beat-analyzer/.git ]; then
+    cd /home/aaa/beat-analyzer && git pull --ff-only --recurse-submodules
+else
+    cd /home/aaa && git clone --recurse-submodules https://github.com/rafjagger/beat-analyzer.git
+fi
+
+cd /home/aaa/beat-analyzer && ./build.sh
+
+# -n, because build/.env is configuration somebody edited: ports, the clock
+# mode, the JACK names. Copying the example over it on every update is the
+# same fault this package's conffiles list exists to prevent. The `|| true`
+# keeps a refused overwrite from failing the unit.
+cp -n .env.example build/.env || true
