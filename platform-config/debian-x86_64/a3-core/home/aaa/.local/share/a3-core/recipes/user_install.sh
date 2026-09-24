@@ -21,12 +21,11 @@ rm -rf reaper_linux_x86_64
 rm "$REAPER_FILE"
 mkdir -p /home/aaa/.local/bin
 ln -sf /home/aaa/.local/opt/REAPER/reaper /home/aaa/.local/bin/reaper
-if [ -f /home/aaa/.config/REAPER/reaper_config.zip ]; then
-  unzip -o /home/aaa/.config/REAPER/reaper_config.zip -d /home/aaa/.config/REAPER/
-  rm /home/aaa/.config/REAPER/reaper_config.zip
-else
-  echo "SKIP: reaper_config.zip not found"
-fi
+# The REAPER configuration is no longer an archive. It is plain files in the
+# package, and postinst installs them with `cp -rn` -- which does not clobber,
+# where `unzip -o` did. That overwrote a live project with a six month old one
+# on 2026-09-24, along with the plugin scan cache, which took the whole IEM
+# suite out of REAPER until the search path was repaired.
 
 #### Install TAL Filter
 
