@@ -13,10 +13,19 @@ the repository and nothing says so. That is what this exists to show.
 Symlinked files are reported as `linked`: the machine reads the repository
 directly, so they cannot drift.
 
+`--install` is the other direction, and the package cannot do it: postinst
+copies with `cp -rn`, which never overwrites, so a file that already exists on
+the machine keeps whatever it has. That is right for configuration somebody
+tuned and wrong for a fix -- the corrected Description in zita-n2j.service sat
+in the package for weeks and could never arrive. So: repo -> machine, one file
+at a time, with the diff shown and the old one kept.
+
 Usage:
   config-status.py                 list what differs
   config-status.py --export        copy the machine's version into the repo
   config-status.py --export PATH   only that one repo-relative path
+  config-status.py --install       copy the repo's version onto the machine
+  config-status.py --install PATH  only that one repo-relative path
 """
 
 import filecmp
@@ -82,9 +91,16 @@ def classify(repo, live):
 
 def main():
     export = "--export" in sys.argv
+    install = "--install" in sys.argv
+
+    if export and install:
+        print("  --export and --install are opposite directions; pick one")
+        return 2
+
     only = None
-    if export:
-        rest = [a for a in sys.argv[1:] if a != "--export"]
+    if export or install:
+        flag = "--export" if export else "--install"
+        rest = [a for a in sys.argv[1:] if a != flag]
         only = rest[0] if rest else None
 
     # Every mapping is reported on its own. Collapsing them to the "best"
@@ -109,16 +125,36 @@ def main():
     print(f"\n  {len(rows)} install locations: {linked} linked, "
           f"{same} identical, {len(differing)} differing")
 
-    if not export:
+    if not (export or install):
         if differing:
-            print("  run with --export to take the machine's version")
+            print("  --export takes the machine's version, "
+                  "--install puts the repo's onto the machine")
         return 0
 
     for rel, repo, live in differing:
         if only and rel != only:
             continue
-        shutil.copy2(live, repo)
-        print(f"  exported  {rel}")
+
+        if export:
+            shutil.copy2(live, repo)
+            print(f"  exported  {rel}")
+            continue
+
+        # Installing overwrites something a person may have tuned, so the old
+        # one is kept beside it rather than trusted to a backup somebody has
+        # not made.
+        if os.path.islink(live):
+            print(f"  skipped   {rel} -- it is a symlink into the checkout")
+            continue
+
+        keep = live + ".before-install"
+        shutil.copy2(live, keep)
+        shutil.copy2(repo, live)
+        print(f"  installed {rel}")
+        print(f"            previous kept at {keep.replace(HOME, '~')}")
+
+    if install:
+        print("\n  systemd units changed? `systemctl --user daemon-reload`")
     return 0
 
 
