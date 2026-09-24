@@ -33,11 +33,15 @@ echo "Installing TAL Filter vst..."
 wget https://tal-software.com/downloads/plugins/TAL-Filter-2_64_linux.zip
 unzip -o TAL-Filter-2_64_linux.zip
 rm TAL-Filter-2_64_linux.zip
-rm -rf /home/aaa/.local/vst/TAL-Filter-2.vst3
-mkdir -p /home/aaa/.local/vst
-mv -f TAL-Filter-2/TAL-Filter-2.vst3 /home/aaa/.local/vst/TAL-Filter-2.vst3
+# ~/.vst3, because that is where REAPER looks without being told. The old
+# ~/.local/vst is a search path for nothing; it worked only because the
+# reaper.ini we used to ship named it, and shipping that file is what
+# overwrote a working configuration on 2026-09-24.
+rm -rf /home/aaa/.vst3/TAL-Filter-2.vst3
+mkdir -p /home/aaa/.vst3
+mv -f TAL-Filter-2/TAL-Filter-2.vst3 /home/aaa/.vst3/TAL-Filter-2.vst3
 rm -rf TAL-Filter-2
-echo "done: /home/aaa/.local/vst/TAL-Filter-2.vst3"
+echo "done: /home/aaa/.vst3/TAL-Filter-2.vst3"
 
 #### Install Airwindows
 
@@ -53,11 +57,12 @@ echo "Downloading $AIRWINDOWS_URL"
 wget "$AIRWINDOWS_URL"
 unzip -o "$AIRWINDOWS_FILE"
 rm "$AIRWINDOWS_FILE"
-rm -rf /home/aaa/.local/clap/Airwindows\ Consolidated.clap
-mkdir -p /home/aaa/.local/clap
-mv -f awcons-products/Airwindows\ Consolidated.clap /home/aaa/.local/clap/airwindows.clap
+# ~/.clap, for the same reason as ~/.vst3 above.
+rm -rf /home/aaa/.clap/airwindows.clap
+mkdir -p /home/aaa/.clap
+mv -f awcons-products/Airwindows\ Consolidated.clap /home/aaa/.clap/airwindows.clap
 rm -rf awcons-products
-echo "done: /home/aaa/.local/clap/AirwindowsConsolidated.clap"
+echo "done: /home/aaa/.clap/airwindows.clap"
 
 #### Install Beat Analyzer
 
