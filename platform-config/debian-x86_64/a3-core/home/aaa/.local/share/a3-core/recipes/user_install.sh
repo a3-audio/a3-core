@@ -27,6 +27,44 @@ ln -sf /home/aaa/.local/opt/REAPER/reaper /home/aaa/.local/bin/reaper
 # on 2026-09-24, along with the plugin scan cache, which took the whole IEM
 # suite out of REAPER until the search path was repaired.
 
+#### Point REAPER at the plugin directories
+
+# reaper.ini is the machine's -- audio device, window positions, everything
+# set up once at the rig -- so the package does not ship it. Two keys in it
+# are ours, though: REAPER does not search ~/.local/vst or ~/.local/clap
+# unless told, and that is where the plugins below go.
+#
+# Set only those two. Shipping the whole file is what replaced a working
+# configuration on 2026-09-24 and left REAPER hunting for the IEM suite down
+# a path that existed on no machine.
+#
+# Deleting the keys and trusting REAPER's own defaults was tried and does not
+# work: with vstpath removed, the IEM plugins in /usr/lib/vst3 went missing
+# too, so the defaults are narrower than they look. Name the directories.
+
+REAPER_INI=/home/aaa/.config/REAPER/reaper.ini
+VSTPATH='/home/aaa/.local/vst/;/usr/lib/vst3/'
+CLAPPATH='/home/aaa/.local/clap;/usr/lib/clap'
+
+mkdir -p "$(dirname "$REAPER_INI")"
+if [ ! -f "$REAPER_INI" ]; then
+    # First install: REAPER has not written one yet. A stub is enough; REAPER
+    # keeps these keys and adds its own on first exit.
+    printf '[REAPER]\nvstpath=%s\nclap_path_linux-x86_64=%s\n' \
+        "$VSTPATH" "$CLAPPATH" > "$REAPER_INI"
+    echo "done: wrote plugin paths into a new $REAPER_INI"
+else
+    for pair in "vstpath=$VSTPATH" "clap_path_linux-x86_64=$CLAPPATH"; do
+        key=${pair%%=*}
+        if grep -q "^$key=" "$REAPER_INI"; then
+            sed -i "s|^$key=.*|$pair|" "$REAPER_INI"
+        else
+            sed -i "0,/^\[REAPER\]/s|^\[REAPER\]|[REAPER]\n$pair|" "$REAPER_INI"
+        fi
+    done
+    echo "done: plugin paths set in $REAPER_INI"
+fi
+
 #### Install TAL Filter
 
 echo "Installing TAL Filter vst..."
