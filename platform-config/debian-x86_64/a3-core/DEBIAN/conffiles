@@ -2,7 +2,6 @@
 /etc/lightdm/lightdm.conf.d/99-a3-core.conf
 /etc/rtirq.conf
 /etc/security/limits.d/audio.conf
-/etc/systemd/set_irq_prio.service
 /etc/systemd/system/set_irq_prio.service
 /etc/systemd/system/vnc-display.service
 /etc/systemd/system/x11vnc.service
