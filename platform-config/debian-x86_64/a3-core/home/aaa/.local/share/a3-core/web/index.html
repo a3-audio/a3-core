@@ -103,6 +103,7 @@
   <input id="value" placeholder='1  oder  "1"' size="14">
   <button id="fire">senden</button>
   <button id="recall">/state/recall</button>
+  <button id="refreshreaper" title="REAPER sends its whole state again (action 41743)">ask REAPER for everything</button>
   <span id="benchsaid" class="muted"></span>
 </div>
 
@@ -784,12 +785,16 @@ $("refetch").onclick = () => {
 };
 
 async function fire(to, address, raw) {
+  await post("/api/send", {to: to, address: address, value: raw});
+}
+
+async function post(path, asked) {
   const said = $("benchsaid");
   try {
-    const answer = await fetch("/api/send", {
+    const answer = await fetch(path, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({to: to, address: address, value: raw})
+      body: JSON.stringify(asked)
     });
     const body = await answer.json();
     said.textContent = answer.ok
@@ -805,6 +810,9 @@ $("fire").onclick = () =>
 
 // The most-typed one-liner of the whole project, as a button.
 $("recall").onclick = () => fire("self", "/state/recall", "1");
+
+// Core already asks once at start-up; this is for any time after.
+$("refreshreaper").onclick = () => post("/api/refresh-reaper", {});
 
 wireSorting();
 listen();

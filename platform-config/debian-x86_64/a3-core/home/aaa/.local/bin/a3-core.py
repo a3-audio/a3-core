@@ -61,6 +61,7 @@ from a3_core_traffic import (ANSWERERS, COMMANDERS, IN,   # noqa: E402
                              OUT, Traffic, peer_name)   # noqa: E402
 from a3_core_seen import SeenFile, state_path   # noqa: E402
 from a3_core_snapshot import Snapshot   # noqa: E402
+from a3_core_reaper import REFRESH_ACTION   # noqa: E402
 from a3_core_startup import (filter_bypass_messages,   # noqa: E402
                              remembered_reaper_messages)
 from a3_core_evening import evening_state, replayable   # noqa: E402
@@ -1357,5 +1358,10 @@ if __name__ == "__main__":
     replay_evening(lambda address, value:
                    SimpleUDPClient("127.0.0.1", args.port)
                    .send_message(address, value))
+
+    # Ask REAPER to say everything it knows, now that both ports are bound.
+    # Whatever started first, Core learns the room from this -- the chain no
+    # longer has to start Core before REAPER.
+    osc_reaper.send_message(REFRESH_ACTION, 1.0)
 
     server.serve_forever()

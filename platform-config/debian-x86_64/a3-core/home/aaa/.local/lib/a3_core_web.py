@@ -29,6 +29,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from pythonosc.osc_message_builder import BuildError  # type: ignore
 
 from a3_core_traffic import IN, OUT
+from a3_core_reaper import REFRESH_ACTION
 from a3_core_register import (DEFAULT_REGISTER, counts_of,
                               load as load_register, with_counts)
 
@@ -320,7 +321,7 @@ def _handler_class(traffic, send: Optional[Callable], page: Path,
                 self._send(404, b"no such thing here", "text/plain")
 
         def do_POST(self):
-            if self.path != "/api/send":
+            if self.path not in ("/api/send", "/api/refresh-reaper"):
                 self._send(404, b"no such thing here", "text/plain")
                 return
 
@@ -330,6 +331,10 @@ def _handler_class(traffic, send: Optional[Callable], page: Path,
 
             if send is None:
                 refuse("dieses Fenster kann nur zusehen")
+                return
+
+            if self.path == "/api/refresh-reaper":
+                self._refresh_reaper(refuse)
                 return
 
             try:
@@ -367,6 +372,16 @@ def _handler_class(traffic, send: Optional[Callable], page: Path,
             # the same way it would have broken the stream.
             self._send(200, json.dumps({"address": address,
                                         "value": _jsonable(value)}).encode(),
+                       "application/json")
+
+        def _refresh_reaper(self, refuse):
+            try:
+                send("reaper", REFRESH_ACTION, 1.0)
+            except (OSError, BuildError) as problem:
+                refuse(str(problem))
+                return
+            self._send(200, json.dumps({"address": REFRESH_ACTION,
+                                        "value": 1.0}).encode(),
                        "application/json")
 
         def _stream(self):
