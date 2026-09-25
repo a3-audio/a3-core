@@ -36,3 +36,12 @@ Description: Draw to a dummy screen instead of a monitor?
  draws to a virtual 1920x1080 screen, and a monitor that is plugged in stays
  black. Answer no on a machine with a screen, such as one that also runs
  A3 Motion with its touch panel.
+
+Template: a3-core/bridge-with
+Type: string
+Default:
+Description: Second network socket to bridge with the first (empty: no bridge)
+ The router has one free port, so the mixer can hang on this Core's second
+ socket. Name that socket here (for example enp5s0) and both become one
+ network segment, br0, which carries this Core's address. Leave it empty to
+ use one socket only. Takes effect at the next boot.
