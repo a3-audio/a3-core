@@ -61,7 +61,8 @@ from a3_core_traffic import (ANSWERERS, COMMANDERS, IN,   # noqa: E402
                              OUT, Traffic, peer_name)   # noqa: E402
 from a3_core_seen import SeenFile, state_path   # noqa: E402
 from a3_core_snapshot import Snapshot   # noqa: E402
-from a3_core_reaper import REFRESH_ACTION, when_reaper_listens   # noqa: E402
+from a3_core_reaper import (Arrivals, REFRESH_ACTION,   # noqa: E402
+                            wait_until_quiet, when_reaper_listens)
 from a3_core_startup import (filter_bypass_messages,   # noqa: E402
                              remembered_reaper_messages)
 from a3_core_evening import evening_state, replayable   # noqa: E402
@@ -342,8 +343,11 @@ _snapshot = Snapshot()
 #: ein Fader-Schwung sind hunderte Nachrichten und eine Absicht.
 _evening_file = StateFile(EVENING_PATH)
 
-#: Set by the first packet from REAPER; the start-up replay waits for it.
+#: Set once REAPER reports a track the layout names; the start-up replay
+#: waits for it.
 reaper_heard = threading.Event()
+#: Every packet REAPER sends, counted; the replay waits for them to thin out.
+reaper_arrivals = Arrivals()
 
 
 #: What Core has passed on, so it can say it again. In memory only -- see
@@ -364,6 +368,20 @@ _relayed = Relayed()
 subscribers = [osc_a3mixer, osc_a3motion]
 
 
+def note_passed_on(address, value):
+    """Remember a value Core passed on, and write it down for the evening.
+
+    One door for both paths that pass values on -- REAPER's reports through
+    broadcast() and the desk's and Motion's through relay(). relay() used to
+    note without writing, so the file only moved when REAPER happened to
+    report something afterwards (#56).
+    """
+    _relayed.note(address, value)
+    # Mitgeschrieben, damit ein Stromausfall den Abend nicht kostet: REAPER
+    # schreibt seine Werte erst beim Beenden weg. Siehe a3_core_evening.
+    _evening_file.remember(evening_state(_relayed))
+
+
 def broadcast(address, value):
     """Tell every subscriber, and remember that it was told.
 
@@ -380,10 +398,7 @@ def broadcast(address, value):
     if _relayed.holds(address, value):
         return
 
-    _relayed.note(address, value)
-    # Mitgeschrieben, damit ein Stromausfall den Abend nicht kostet: REAPER
-    # schreibt seine Werte erst beim Beenden weg. Siehe a3_core_evening.
-    _evening_file.remember(evening_state(_relayed))
+    note_passed_on(address, value)
     for client in subscribers:
         client.send_message(address, value)
 
@@ -432,7 +447,7 @@ def relay(address, raw, origin):
     if _relayed.holds(address, number):
         return
 
-    _relayed.note(address, number)
+    note_passed_on(address, number)
     for client in everyone_but(subscribers, origin):
         client.send_message(address, number)
 
@@ -1019,8 +1034,7 @@ def reaper_feedback_handler(client_address: Tuple[str, int], address: str,
     of what arrives -- REAPER reports names, strings, sends, pans and the
     decibel spelling of every volume -- and none of it is A3's.
     """
-    # Any packet at all: REAPER is listening, so the start-up replay can go.
-    reaper_heard.set()
+    reaper_arrivals.tick()
 
     if not osc_arguments:
         return
@@ -1034,6 +1048,11 @@ def reaper_feedback_handler(client_address: Tuple[str, int], address: str,
     # mixer just said, after a trip through a curve and back -- and on the
     # curves with plateaus it would come back changed.
     if echo_filter.is_echo(address, value):
+        return
+
+    # REAPER's old value, reported in the moment Core set a new one (#56).
+    # Passed on it would move Motion back and be written down as tonight's.
+    if echo_filter.is_stale(address, value):
         return
 
     # The tap used to sit here, before Core knew whether it could route the
@@ -1069,6 +1088,11 @@ def reaper_feedback_handler(client_address: Tuple[str, int], address: str,
     if field is None:
         traffic.unknown(address, value, peer)   # a track A3 does not name
         return
+
+    # A track A3 names: the project is loaded, not just the surface up, so the
+    # start-up replay can go. REAPER's surface talks before its template has
+    # loaded, and a replay sent then was undone by the load (#56).
+    reaper_heard.set()
 
     entry = reverse_for(_layout, address, field)
     if entry is None:
@@ -1363,19 +1387,24 @@ if __name__ == "__main__":
     server = osc_server.BlockingOSCUDPServer((args.ip, args.port), dispatcher)
     print("Serving on {}".format(server.server_address))
 
-    # Ask REAPER to say everything it knows, until it does, and only then
-    # play the evening back. Whatever started first, Core learns the room from
-    # the answer, and the replay reaches a REAPER that is listening (#56).
-    # The replay goes through Core's own port as ordinary traffic, so the
-    # devices hear it too, after whatever the template said.
+    # Ask REAPER to say everything it knows until it does, let it finish
+    # saying it, and only then play the evening back (#56). In that order and
+    # no other: a value replayed while REAPER is still reporting comes back
+    # with its old value and is written down as tonight's, and so is one
+    # replayed before REAPER's template has loaded. Nothing is asked after
+    # the replay for the same reason. It goes through Core's own port as
+    # ordinary traffic, so the devices hear it too.
+    def replay_once_reaper_is_quiet():
+        wait_until_quiet(reaper_arrivals, lambda: replay_evening(
+            evening,
+            lambda address, value:
+            SimpleUDPClient("127.0.0.1", args.port)
+            .send_message(address, value)))
+
     threading.Thread(
         target=when_reaper_listens, daemon=True, name="a3-replay",
         args=(reaper_heard,
               lambda: osc_reaper.send_message(REFRESH_ACTION, 1.0),
-              lambda: replay_evening(
-                  evening,
-                  lambda address, value:
-                  SimpleUDPClient("127.0.0.1", args.port)
-                  .send_message(address, value)))).start()
+              replay_once_reaper_is_quiet)).start()
 
     server.serve_forever()

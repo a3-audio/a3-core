@@ -83,6 +83,19 @@ class WhatIsPlayedBack(unittest.TestCase):
 
 
 class TheEngineActuallyDoesIt(unittest.TestCase):
+    def test_every_value_passed_on_is_written_down(self):
+        """relay() -- the desk's and Motion's values, and the replay itself --
+        noted what it passed on but never wrote evening.json; only REAPER's
+        reports did, as a side effect. With REAPER quiet a knob turned at the
+        desk never reached the file, and after a replay the file kept what
+        REAPER's template had said (device test, 2026-09-26)."""
+        source = (PACKAGE / "bin/a3-core.py").read_text()
+        self.assertEqual(1, source.count("_evening_file.remember("))
+        for name in ("def broadcast(", "def relay("):
+            body = source.split(name, 1)[1].split("\ndef ", 1)[0]
+            self.assertIn("note_passed_on(", body, name)
+            self.assertNotIn("_relayed.note(", body, name)
+
     def test_a3_core_writes_and_replays(self):
         source = (PACKAGE / "bin/a3-core.py").read_text()
         self.assertIn("evening_state(", source)
