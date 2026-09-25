@@ -185,7 +185,10 @@ class ABrokenFileIsNotAReasonToFall(unittest.TestCase):
     def test_the_shipped_register_loads(self):
         payload = load(PACKAGE / "share/a3-core/osc-register.json")
         self.assertEqual(payload["problem"], "")
-        self.assertGreater(len(payload["entries"]), 400)
+        # A floor against a truncated file, not a count. It was 400 while the
+        # pattern file was REAPER's whole Default; since REAPER is told only
+        # what Core uses the register holds 115 (2026-09-26).
+        self.assertGreater(len(payload["entries"]), 100)
 
 
 if __name__ == "__main__":
