@@ -15,4 +15,4 @@
 
 # © Copyright 2021 Raphael Eismann, Patric Schmitz
 
-/usr/bin/vncviewer QualityLevel 2 192.168.43.50
+/usr/bin/vncviewer QualityLevel 2 192.168.8.10

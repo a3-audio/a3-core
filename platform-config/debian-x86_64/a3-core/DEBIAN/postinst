@@ -10,6 +10,22 @@ APPUSER="aaa"
 UID=$(id -u $APPUSER)
 USER_HOME=$(getent passwd "$APPUSER" | cut -d: -f6 || echo "/home/$APPUSER")
 
+# Take an interface out of ifupdown's hands, so systemd-networkd is the only
+# thing that configures it. With both, /etc/network/interfaces' DHCP stanza and
+# a3.network's static address claimed the same interface, and the address the
+# machine came up with depended on which one was first (a3-core issue #54).
+# Comments the lines out rather than deleting them, so the change can be read
+# and undone. Idempotent: a commented line no longer matches.
+disable_ifupdown_for() {
+  iface="$1"
+  file="$2"
+  [ -f "$file" ] || return 0
+  sed -i \
+    -e "s/^\([[:space:]]*\(allow-hotplug\|auto\)[[:space:]]\+${iface}[[:space:]]*\)$/# a3-core: networkd owns ${iface} -- \1/" \
+    -e "s/^\([[:space:]]*iface[[:space:]]\+${iface}[[:space:]].*\)$/# a3-core: networkd owns ${iface} -- \1/" \
+    "$file"
+}
+
 # Ask whether to configure network
 db_input medium a3-core/configure-network || true
 db_go || true
@@ -23,9 +39,9 @@ if [ "x$CONFIGURE" = "xtrue" ]; then
 
   if [ "x$INSTALL_DEFAULT" = "xtrue" ]; then
     INTERFACE="eno1"
-    ADDR="192.168.43.58/24"
-    GATEWAY="192.168.43.1"
-    DNS="192.168.43.1"
+    ADDR="192.168.8.10/24"
+    GATEWAY="192.168.8.1"
+    DNS="192.168.8.1"
   else
     # Ask for details (will use template defaults if noninteractive)
     db_input medium a3-core/interface || true
@@ -57,6 +73,8 @@ EOF
   chmod 644 "$tmpfile"
   chown root:root "$tmpfile"
   mv -f "$tmpfile" /etc/systemd/network/a3.network
+
+  disable_ifupdown_for "$INTERFACE" /etc/network/interfaces
 
   # Enable systemd-networkd unit but do NOT start it
   if command -v systemctl >/dev/null 2>&1; then
