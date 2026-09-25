@@ -62,11 +62,13 @@ class OnePortOneLoop(unittest.TestCase):
         loop.start()
         try:
             threads_before = threading.active_count()
-            peak = threads_before
+            peak, at_peak = threads_before, None
             client = SimpleUDPClient("127.0.0.1", port)
             for n in range(200):
                 client.send_message("/n", n)
-                peak = max(peak, threading.active_count())
+                if threading.active_count() > peak:
+                    peak = threading.active_count()
+                    at_peak = [t.name for t in threading.enumerate()]
             deadline = time.monotonic() + 5.0
             while len(received) < 200 and time.monotonic() < deadline:
                 time.sleep(0.01)
@@ -74,8 +76,13 @@ class OnePortOneLoop(unittest.TestCase):
             server.shutdown()
             server.server_close()
 
-        self.assertEqual(list(range(200)), received)
-        self.assertEqual(threads_before, peak)
+        # Separate messages: this failed once in 22 suite runs on 2026-09-26
+        # without saying which half, and never again.
+        self.assertEqual(200, len(received),
+                         f"lost {200 - len(received)} of 200 packets")
+        self.assertEqual(list(range(200)), received, "out of order")
+        self.assertEqual(threads_before, peak,
+                         f"a thread appeared during the burst: {at_peak}")
 
 
 if __name__ == "__main__":
