@@ -25,9 +25,16 @@ This repository *is* the deployment: the `.deb` package tree under
 ## Config
 - enable realtime priorities `sudo dpkg-reconfigure jackd2`
 - configure network `sudo dpkg-reconfigure a3-core`
+- headless or not: the same `sudo dpkg-reconfigure a3-core` asks whether this
+  Core draws to a dummy screen (no monitor, used over VNC). Default **no**.
+  Answer yes only on a machine without a monitor: with the dummy screen on, a
+  plugged-in monitor stays black while everything runs behind it. The config
+  ships as `~/.local/share/a3-core/x11/10-headless.conf` and is copied to
+  `/etc/X11/xorg.conf.d/` on yes; X reads it on its next start.
 
 ## apt install a3-core - postinst
-- configure network interface in /etc/systemd/network/a3-core.network
+- configure network interface in /etc/systemd/network/a3.network
+- ask whether to use the headless dummy screen (see Config)
 - setup user aaa
 - enable system services
   - systemd-networkd

@@ -27,3 +27,12 @@ Template: a3-core/dns
 Type: string
 Default: 192.168.8.1
 Description: DNS server address
+
+Template: a3-core/headless-display
+Type: boolean
+Default: false
+Description: Draw to a dummy screen instead of a monitor?
+ Only for a Core that runs without a monitor and is used over VNC. X then
+ draws to a virtual 1920x1080 screen, and a monitor that is plugged in stays
+ black. Answer no on a machine with a screen, such as one that also runs
+ A3 Motion with its touch panel.

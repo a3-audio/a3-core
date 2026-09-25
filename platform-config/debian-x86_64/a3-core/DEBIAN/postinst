@@ -26,6 +26,26 @@ disable_ifupdown_for() {
     "$file"
 }
 
+# Put X on the dummy screen, or take it off again. The config used to ship as
+# an active conffile, which on a machine with a screen is a black monitor with
+# everything running behind it -- and dpkg re-installs a conffile that is new
+# to the package even where somebody had moved it aside (a3-core issue #53).
+# "No" takes the shipped config out of X by renaming it, which mends a machine
+# the old package left it on; a config somebody wrote themselves is left alone.
+apply_headless_choice() {
+  choice="$1"
+  shipped="$2"
+  target="$3"
+  if [ "x$choice" = "xtrue" ]; then
+    mkdir -p "$(dirname "$target")"
+    cp "$shipped" "$target"
+    return 0
+  fi
+  if [ -f "$target" ] && cmp -s "$shipped" "$target"; then
+    mv -f "$target" "$target.off"
+  fi
+}
+
 # Ask whether to configure network
 db_input medium a3-core/configure-network || true
 db_go || true
@@ -83,6 +103,15 @@ EOF
   fi
 fi
 
+# Ask whether this Core runs without a monitor. High, not medium: Debian shows
+# high and above by default, and the wrong default here is a black screen.
+db_input high a3-core/headless-display || true
+db_go || true
+db_get a3-core/headless-display
+apply_headless_choice "$RET" \
+  "${USER_HOME}/.local/share/a3-core/x11/10-headless.conf" \
+  /etc/X11/xorg.conf.d/10-headless.conf
+
 # Continue with original postinst tasks (venv, pip, chown, enable services, etc.)
 # --- existing operations start ---
 # (preserve previous behavior; adjust below if your original postinst differs)
@@ -131,6 +160,6 @@ update-grub || true
 
 echo "Installation complete."
 echo "use 'systemctl --user status a3-user-install.service' to check status"
-echo "use 'dpkg-reconfigure a3-core' to confirure network"
+echo "use 'dpkg-reconfigure a3-core' to configure network and the headless screen"
 echo "use 'dpkg-reconfigure jackd2' to enable rt-priority"
 echo "Please Reboot or manage a3-core manually with 'systemctl --user start a3-main.service'"
