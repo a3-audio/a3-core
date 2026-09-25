@@ -73,5 +73,48 @@ class OnceOnly(unittest.TestCase):
         self.assertTrue(self.filter.is_echo("/track/9/volume", 0.75))
 
 
+
+class Clock:
+    def __init__(self):
+        self.now = 100.0
+
+    def __call__(self):
+        return self.now
+
+
+class WhatDisagreesAtOnce(unittest.TestCase):
+    """REAPER sometimes reports an address's *old* value in the same moment
+    Core sets it -- measured on 2026-09-26 for the master volume during the
+    evening replay (sent 0.326, reported 0.345 within the same tenth of a
+    second, while a refresh later showed REAPER holding 0.326). Taken as news,
+    the old value went to Motion and into evening.json (#56)."""
+
+    def setUp(self):
+        self.clock = Clock()
+        self.filter = EchoFilter(clock=self.clock)
+        self.filter.sent("/track/1/fx/1/fxparam/1/value", 0.326)
+
+    def test_a_different_value_right_after_sending_is_stale(self):
+        self.clock.now += 0.05
+        self.assertTrue(self.filter.is_stale("/track/1/fx/1/fxparam/1/value", 0.345))
+
+    def test_after_the_window_a_different_value_is_news_again(self):
+        """A real move in REAPER must not be swallowed for long."""
+        self.clock.now += 0.6
+        self.assertFalse(self.filter.is_stale("/track/1/fx/1/fxparam/1/value", 0.345))
+
+    def test_the_echo_itself_is_not_stale(self):
+        self.clock.now += 0.05
+        self.assertFalse(self.filter.is_stale("/track/1/fx/1/fxparam/1/value", 0.326))
+
+    def test_an_address_nothing_was_sent_to_is_never_stale(self):
+        self.assertFalse(self.filter.is_stale("/track/2/fx/1/fxparam/1/value", 0.1))
+
+    def test_a_stale_report_leaves_the_echo_expected(self):
+        self.clock.now += 0.05
+        self.filter.is_stale("/track/1/fx/1/fxparam/1/value", 0.345)
+        self.assertTrue(self.filter.is_echo("/track/1/fx/1/fxparam/1/value", 0.326))
+
+
 if __name__ == "__main__":
     unittest.main()
