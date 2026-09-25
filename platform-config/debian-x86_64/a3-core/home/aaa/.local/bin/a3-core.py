@@ -1239,7 +1239,10 @@ if __name__ == "__main__":
     feedback_dispatcher = osc_dispatcher.Dispatcher()
     feedback_dispatcher.set_default_handler(reaper_feedback_handler,
                                             needs_reply_address=True)
-    feedback_server = osc_server.ThreadingOSCUDPServer(
+    # One loop reads the port, one packet after another. It was a thread per
+    # packet, and a reconnect's burst was twenty-five thousand threads at once
+    # (issue #51) -- see the command server below for what that did.
+    feedback_server = osc_server.BlockingOSCUDPServer(
         (args.ip, args.feedback_port), feedback_dispatcher)
     threading.Thread(target=feedback_server.serve_forever,
                      daemon=True).start()
@@ -1337,7 +1340,15 @@ if __name__ == "__main__":
             host, port = window_address()
             print(f"window on http://{host}:{port}")
 
-    server = osc_server.ThreadingOSCUDPServer((args.ip, args.port), dispatcher)
+    # One loop, one packet after another, in the order they arrived. It was a
+    # thread per packet: on the rig on 2026-09-25 the handler threads finished
+    # a little more slowly than packets came in, piled up to 36,806 in two
+    # hours, starved this loop, and the kernel dropped 1.46 million packets
+    # here -- the mixer and Motion stopped reaching REAPER. No handler blocks
+    # (the one sleep is the project-save thread's), so nothing is lost by
+    # reading serially, and two fader values can no longer overtake each
+    # other. tools/tests/test_core_servers_do_not_spawn.py holds it.
+    server = osc_server.BlockingOSCUDPServer((args.ip, args.port), dispatcher)
     print("Serving on {}".format(server.server_address))
 
     # After the port is bound and before anything is read: the datagrams wait
