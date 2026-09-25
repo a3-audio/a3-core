@@ -22,6 +22,14 @@ This repository *is* the deployment: the `.deb` package tree under
 - logout and back in
   - `wget -qO- "https://raw.githubusercontent.com/a3-audio/a3-core/main/platform-config/debian-x86_64/a3-core_install.sh" | sudo bash`
 
+## Version
+
+The package version is set by the workflow, not by hand: the last `v*` tag plus the
+commits since it (`v03.0` with 63 commits on top is `03.0+63`), written into
+`DEBIAN/control` before the build. The `1.0.0` in the checked-in `control` is only what a
+package built by hand gets, and apt treats it as older than anything published.
+`python3 tools/package_version.py` prints the version the next build will carry.
+
 ## Config
 - enable realtime priorities `sudo dpkg-reconfigure jackd2`
 - configure network `sudo dpkg-reconfigure a3-core`

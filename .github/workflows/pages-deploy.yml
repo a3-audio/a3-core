@@ -14,6 +14,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # The whole history: the package version is read off the tags, and a
+          # shallow clone has none.
+          fetch-depth: 0
 
       - name: Install tools
         run: |
@@ -25,6 +29,16 @@ jobs:
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+
+      # The last tag plus the commits since it (v03.0 + 63 commits = 03.0+63).
+      # DEBIAN/control said 1.0.0 for every package ever published, and apt
+      # compares versions, not contents: no rig saw an update. See
+      # tools/package_version.py.
+      - name: Stamp the version
+        run: |
+          VERSION=$(python3 tools/package_version.py)
+          sed -i "s/^Version: .*/Version: ${VERSION}/" platform-config/debian-x86_64/a3-core/DEBIAN/control
+          grep '^Version:' platform-config/debian-x86_64/a3-core/DEBIAN/control
 
       - name: Build .deb
         run: |
