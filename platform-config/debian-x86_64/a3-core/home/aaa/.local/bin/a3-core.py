@@ -122,18 +122,14 @@ CHANNEL_ENC_DELAY: int = 25
 # on a bench: without that the only way to see what Core sends is to stand in
 # front of the rig, and a path nobody can watch is a path nobody can test.
 #
-# **The numbers come from origin/main and the structure from here**, which is
-# how this merge resolved. The addresses in this file were wrong for months:
-# the mixer answers on .61:7772, not on .55:7771 -- measured, ping 0.97 ms and
-# the LEDs following, see
-# issues/a3-core-mixer-adresse-nur-auf-der-kiste.md. The working address lived
-# only as a hand edit to the installed copy until 23d9fa6 put it in git, which
-# is what that issue asked for.
-#
-# Motion's .62 comes from the same commit and is *not* separately measured;
-# only the mixer's was.
-A3MIXER_HOST, A3MIXER_PORT = '192.168.43.61', 7772
-A3MOTION_HOST, A3MOTION_PORT = '192.168.43.62', 8700
+# **The numbers are the ones a3-doc's ports page states**, measured on the
+# rig: the mixer on 192.168.8.11:7772, and Motion on the Core machine itself,
+# listening on 7771. They used to be 192.168.43.61 and .62 from before the rig
+# moved subnet, and the working values lived only in a hand-made service
+# override on the one machine -- a fresh install sent to nobody. See issue #54;
+# tools/tests/test_package_network_matches_ports_page.py holds them to the page.
+A3MIXER_HOST, A3MIXER_PORT = '192.168.8.11', 7772
+A3MOTION_HOST, A3MOTION_PORT = '127.0.0.1', 7771
 REAPER_HOST, REAPER_PORT = '127.0.0.1', 9001
 
 # What Core sends, remembered so the echo can be told from news.

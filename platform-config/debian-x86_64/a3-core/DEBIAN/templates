@@ -15,15 +15,15 @@ Description: Network interface to match (e.g. eno1)
 
 Template: a3-core/address
 Type: string
-Default: 192.168.43.58/24
-Description: Static IP address (CIDR), e.g. 192.168.43.58/24
+Default: 192.168.8.10/24
+Description: Static IP address (CIDR), e.g. 192.168.8.10/24
 
 Template: a3-core/gateway
 Type: string
-Default: 192.168.43.1
+Default: 192.168.8.1
 Description: Gateway address
 
 Template: a3-core/dns
 Type: string
-Default: 192.168.43.1
+Default: 192.168.8.1
 Description: DNS server address
