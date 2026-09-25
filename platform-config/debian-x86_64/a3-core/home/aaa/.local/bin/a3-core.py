@@ -61,7 +61,7 @@ from a3_core_traffic import (ANSWERERS, COMMANDERS, IN,   # noqa: E402
                              OUT, Traffic, peer_name)   # noqa: E402
 from a3_core_seen import SeenFile, state_path   # noqa: E402
 from a3_core_snapshot import Snapshot   # noqa: E402
-from a3_core_reaper import REFRESH_ACTION   # noqa: E402
+from a3_core_reaper import REFRESH_ACTION, when_reaper_listens   # noqa: E402
 from a3_core_startup import (filter_bypass_messages,   # noqa: E402
                              remembered_reaper_messages)
 from a3_core_evening import evening_state, replayable   # noqa: E402
@@ -341,6 +341,9 @@ _snapshot = Snapshot()
 #: Was zuletzt durchgelaufen ist, auf der Platte. Entprellt wie state.json:
 #: ein Fader-Schwung sind hunderte Nachrichten und eine Absicht.
 _evening_file = StateFile(EVENING_PATH)
+
+#: Set by the first packet from REAPER; the start-up replay waits for it.
+reaper_heard = threading.Event()
 
 
 #: What Core has passed on, so it can say it again. In memory only -- see
@@ -944,7 +947,7 @@ def speak_remembered_state() -> None:
           f"to {len(subscribers)} subscribers")
 
 
-def replay_evening(send_to_self) -> int:
+def replay_evening(evening, send_to_self) -> int:
     """Play the values back that Core last passed on, through its own door.
 
     Sent to Core's own port rather than handed to a handler: that is the path
@@ -957,7 +960,7 @@ def replay_evening(send_to_self) -> int:
     start sound like last night instead of like the template.
     """
     replayed = 0
-    for address, value in replayable(_evening_file.load()):
+    for address, value in evening:
         send_to_self(address, value)
         replayed += 1
 
@@ -1016,6 +1019,9 @@ def reaper_feedback_handler(client_address: Tuple[str, int], address: str,
     of what arrives -- REAPER reports names, strings, sends, pans and the
     decibel spelling of every volume -- and none of it is A3's.
     """
+    # Any packet at all: REAPER is listening, so the start-up replay can go.
+    reaper_heard.set()
+
     if not osc_arguments:
         return
 
@@ -1237,6 +1243,11 @@ if __name__ == "__main__":
     # In a thread of its own so a burst does not hold up the commands coming
     # in on the main port: REAPER sends twenty-five thousand messages when the
     # surface reconnects, and a set does not wait for that.
+    # Read now, before the feedback port opens: every value REAPER reports is
+    # also written to evening.json, and a REAPER that announces its template
+    # first would otherwise overwrite what the replay below is for.
+    evening = list(replayable(_evening_file.load()))
+
     feedback_dispatcher = osc_dispatcher.Dispatcher()
     feedback_dispatcher.set_default_handler(reaper_feedback_handler,
                                             needs_reply_address=True)
@@ -1352,16 +1363,19 @@ if __name__ == "__main__":
     server = osc_server.BlockingOSCUDPServer((args.ip, args.port), dispatcher)
     print("Serving on {}".format(server.server_address))
 
-    # After the port is bound and before anything is read: the datagrams wait
-    # in the socket until serve_forever picks them up, so the replay arrives
-    # as ordinary traffic rather than as a special case inside the server.
-    replay_evening(lambda address, value:
-                   SimpleUDPClient("127.0.0.1", args.port)
-                   .send_message(address, value))
-
-    # Ask REAPER to say everything it knows, now that both ports are bound.
-    # Whatever started first, Core learns the room from this -- the chain no
-    # longer has to start Core before REAPER.
-    osc_reaper.send_message(REFRESH_ACTION, 1.0)
+    # Ask REAPER to say everything it knows, until it does, and only then
+    # play the evening back. Whatever started first, Core learns the room from
+    # the answer, and the replay reaches a REAPER that is listening (#56).
+    # The replay goes through Core's own port as ordinary traffic, so the
+    # devices hear it too, after whatever the template said.
+    threading.Thread(
+        target=when_reaper_listens, daemon=True, name="a3-replay",
+        args=(reaper_heard,
+              lambda: osc_reaper.send_message(REFRESH_ACTION, 1.0),
+              lambda: replay_evening(
+                  evening,
+                  lambda address, value:
+                  SimpleUDPClient("127.0.0.1", args.port)
+                  .send_message(address, value)))).start()
 
     server.serve_forever()

@@ -86,7 +86,7 @@ class TheEngineActuallyDoesIt(unittest.TestCase):
     def test_a3_core_writes_and_replays(self):
         source = (PACKAGE / "bin/a3-core.py").read_text()
         self.assertIn("evening_state(", source)
-        self.assertIn("replay_evening(lambda", source)
+        self.assertIn("replay_evening(\n", source)
 
 
 if __name__ == "__main__":
