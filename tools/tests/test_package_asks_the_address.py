@@ -25,7 +25,16 @@ STUBS = """
 db_fset () { echo "fset $1 $2 $3"; }
 db_input () { echo "input $1 $2"; }
 db_go () { echo "go"; }
+db_reset () { echo "reset $1"; }
+db_get () { RET=""; }
 """
+
+
+def stored(values):
+    """A db_get that answers from `values`, as debconf would from its store."""
+    cases = "".join(f'    a3-core/{q}) RET="{v}" ;;\n' for q, v in values.items())
+    return ("db_get () {\n  case \"$1\" in\n" + cases
+            + '    *) RET="" ;;\n  esac\n}\n')
 
 
 class TheAddressIsAskedEveryTime(unittest.TestCase):
@@ -57,6 +66,53 @@ class TheAddressIsAskedEveryTime(unittest.TestCase):
 
     def test_the_postinst_uses_it(self):
         self.assertRegex(POSTINST.read_text(), r"\n\s+ask_address_questions\n")
+
+
+class ARetiredAnswerIsNotOffered(unittest.TestCase):
+    """The rig moved from 192.168.43.x to 192.168.8.x. debconf pre-fills a
+    question with the stored answer, not the template's default, so a machine
+    that was set up on the old network was offered the old address first --
+    and a hurried Enter put it back (2026-09-25). An answer on the retired
+    network is forgotten before the questions are asked, so the template's
+    default -- the documented network -- is what is offered."""
+
+    def calls(self, values):
+        text = POSTINST.read_text()
+        forget = re.search(r"^forget_retired_network\(\) \{.*?^\}$",
+                           text, re.MULTILINE | re.DOTALL)
+        ask = re.search(r"^ask_address_questions\(\) \{.*?^\}$",
+                        text, re.MULTILINE | re.DOTALL)
+        self.assertIsNotNone(forget, "postinst defines no forget_retired_network()")
+        script = (STUBS + stored(values) + forget.group(0) + "\n"
+                  + ask.group(0) + "\nask_address_questions")
+        return subprocess.run(["sh", "-c", script], check=True,
+                              capture_output=True, text=True).stdout.splitlines()
+
+    def test_an_old_address_is_reset_before_it_is_shown(self):
+        calls = self.calls({"address": "192.168.43.57/24",
+                            "gateway": "192.168.43.1", "dns": "192.168.43.1"})
+        for question in ("address", "gateway", "dns"):
+            reset = f"reset a3-core/{question}"
+            self.assertIn(reset, calls)
+            self.assertLess(calls.index(reset),
+                            calls.index(f"input high a3-core/{question}"))
+
+    def test_an_answer_on_the_current_network_stays(self):
+        calls = self.calls({"address": "192.168.8.10/24",
+                            "gateway": "192.168.8.1", "dns": "192.168.8.1"})
+        self.assertFalse([c for c in calls if c.startswith("reset")])
+
+    def test_each_answer_is_judged_on_its_own(self):
+        calls = self.calls({"address": "192.168.8.10/24",
+                            "gateway": "192.168.43.1", "dns": "192.168.8.1"})
+        self.assertEqual(["reset a3-core/gateway"],
+                         [c for c in calls if c.startswith("reset")])
+
+    def test_a_network_that_only_looks_alike_stays(self):
+        """192.168.4.x and 10.192.168.43.x are not the retired network."""
+        calls = self.calls({"address": "192.168.4.30/24",
+                            "gateway": "10.192.168.43", "dns": ""})
+        self.assertFalse([c for c in calls if c.startswith("reset")])
 
 
 class NetworkSetupIsOffered(unittest.TestCase):

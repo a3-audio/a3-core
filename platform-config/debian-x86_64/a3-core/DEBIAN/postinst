@@ -51,7 +51,23 @@ apply_headless_choice() {
 # not show by default, and an answered question is never asked again: the
 # answer from before the rig moved subnet went out silently with every install
 # (2026-09-25). An unattended install still takes the stored value.
+# The rig moved from 192.168.43.x to 192.168.8.x (see a3-doc's ports page).
+# debconf pre-fills a question with the stored answer, not the template's
+# default, so a machine set up on the old network was offered the old address
+# first -- and a hurried Enter put it back (2026-09-25). An answer still on the
+# retired network is reset to the template's default before it is shown. Each
+# of the three on its own, and only an exact 192.168.43. prefix.
+forget_retired_network() {
+  for question in address gateway dns; do
+    db_get "a3-core/$question" || true
+    case "$RET" in
+      192.168.43.*) db_reset "a3-core/$question" || true ;;
+    esac
+  done
+}
+
 ask_address_questions() {
+  forget_retired_network
   for question in address gateway dns; do
     db_fset "a3-core/$question" seen false || true
     db_input high "a3-core/$question" || true
