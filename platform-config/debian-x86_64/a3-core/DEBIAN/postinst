@@ -76,6 +76,91 @@ ask_address_questions() {
   db_go || true
 }
 
+# The other wired socket on this machine, to offer as the bridge's second
+# port: physical, not Wi-Fi, not the one already configured. Empty if there is
+# none. A bridge onto lo or onto br0 itself would cut the box off.
+other_wired_interface() {
+  primary="$1"
+  sysnet="${2:-/sys/class/net}"
+  for path in "$sysnet"/*; do
+    name=$(basename "$path")
+    [ "$name" = "$primary" ] && continue
+    [ -e "$path/device" ] || continue
+    [ -e "$path/wireless" ] && continue
+    [ -e "$path/phy80211" ] && continue
+    echo "$name"
+    return 0
+  done
+}
+
+# Write the network for systemd-networkd into $dir: one socket in a3.network,
+# or -- with a second socket -- the bridge prepared on 2026-09-09. The router
+# has one free port, so the mixer hangs on the Core's second socket and the
+# bridge makes both one segment. STP is on: once a switch is added, two cables
+# into it are a loop, and a loop on a show network is a broadcast storm; the
+# price is about thirty seconds after boot. Each variant removes the other's
+# files, so answering "no bridge" is also the way back. Nothing is switched
+# here: networkd reads the files at the next boot.
+write_network_config() {
+  dir="$1"; iface="$2"; with="$3"; addr="$4"; gateway="$5"; dns="$6"
+  mkdir -p "$dir"
+
+  put_unit () {
+    tmp="$(mktemp "$1.XXXXXX")"
+    printf '%s\n' "$2" > "$tmp"
+    chmod 644 "$tmp"
+    chown root:root "$tmp" 2>/dev/null || true
+    mv -f "$tmp" "$1"
+  }
+
+  if [ -n "$with" ]; then
+    put_unit "$dir/10-a3-bridge.netdev" "[NetDev]
+Name=br0
+Kind=bridge
+
+[Bridge]
+STP=yes"
+    put_unit "$dir/20-a3-bridge-ports.network" "[Match]
+Name=${iface} ${with}
+
+[Network]
+Bridge=br0"
+    put_unit "$dir/30-a3-bridge-address.network" "[Match]
+Name=br0
+
+[Network]
+Address=${addr}
+Gateway=${gateway}
+DNS=${dns}
+ConfigureWithoutCarrier=yes"
+    rm -f "$dir/a3.network"
+  else
+    put_unit "$dir/a3.network" "[Match]
+Name=${iface}
+
+[Network]
+Address=${addr}
+Gateway=${gateway}
+DNS=${dns}"
+    rm -f "$dir/10-a3-bridge.netdev" "$dir/20-a3-bridge-ports.network" \
+          "$dir/30-a3-bridge-address.network"
+  fi
+}
+
+# Which socket to bridge with the configured one; empty is no bridge. Asked on
+# every install like the address. Pre-filled with the other wired socket only
+# the first time it is ever asked -- after that the stored answer stands, an
+# empty one included, so a Core set to "no bridge" is not talked back into one.
+ask_bridge_question() {
+  db_fget a3-core/bridge-with seen || true
+  if [ "x$RET" != "xtrue" ]; then
+    db_set a3-core/bridge-with "$(other_wired_interface "$1")" || true
+  fi
+  db_fset a3-core/bridge-with seen false || true
+  db_input high a3-core/bridge-with || true
+  db_go || true
+}
+
 # Ask whether to configure network. High: at medium a fresh machine never saw
 # it, took the default (no) and got no network at all.
 db_input high a3-core/configure-network || true
@@ -100,27 +185,19 @@ if [ "x$CONFIGURE" = "xtrue" ]; then
     db_get a3-core/address; ADDR="$RET"
     db_get a3-core/gateway; GATEWAY="$RET"
     db_get a3-core/dns; DNS="$RET"
+
+    ask_bridge_question "$INTERFACE"
   fi
 
-  # Ensure target dir exists
-  mkdir -p /etc/systemd/network
+  db_get a3-core/bridge-with; BRIDGE_WITH="$RET"
 
-  # Atomic write of the network file
-  tmpfile="$(mktemp /etc/systemd/network/a3.network.XXXXXX 2>/dev/null || mktemp /tmp/a3.network.XXXXXX)"
-  cat > "$tmpfile" <<EOF
-[Match]
-Name=${INTERFACE}
-
-[Network]
-Address=${ADDR}
-Gateway=${GATEWAY}
-DNS=${DNS}
-EOF
-  chmod 644 "$tmpfile"
-  chown root:root "$tmpfile"
-  mv -f "$tmpfile" /etc/systemd/network/a3.network
+  write_network_config /etc/systemd/network "$INTERFACE" "$BRIDGE_WITH" \
+    "$ADDR" "$GATEWAY" "$DNS"
 
   disable_ifupdown_for "$INTERFACE" /etc/network/interfaces
+  if [ -n "$BRIDGE_WITH" ]; then
+    disable_ifupdown_for "$BRIDGE_WITH" /etc/network/interfaces
+  fi
 
   # Enable systemd-networkd unit but do NOT start it
   if command -v systemctl >/dev/null 2>&1; then

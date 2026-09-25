@@ -43,6 +43,10 @@ package built by hand gets, and apt treats it as older than anything published.
 ## apt install a3-core - postinst
 - configure network interface in /etc/systemd/network/a3.network
 - ask whether to use the headless dummy screen (see Config)
+- ask whether to bridge a second network socket (`a3-core/bridge-with`, pre-filled with the
+  other wired socket the first time): with it, both sockets become `br0` (STP on) and the
+  Core's address moves onto the bridge -- router in one socket, mixer in the other. Empty
+  means one socket, as before. Takes effect at the next boot
 - setup user aaa
 - enable system services
   - systemd-networkd
