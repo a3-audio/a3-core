@@ -6,6 +6,11 @@ the machine from the network never arrived -- nothing complained, the JACK
 ports were there and silent. Found on the rig 2026-09-29, where the unit in
 ~/.config had been edited to 0.0.0.0 by hand while the package still shipped
 localhost for every fresh install.
+
+The same night it listened and sounded terrible: `--buff 6` held six
+milliseconds, and a sender at 256 samples and 44.1 kHz sends one packet every
+5.8 ms, so any network jitter emptied the buffer -- 235 underruns in two
+minutes. At 20 ms there were none.
 """
 
 import re
@@ -32,6 +37,14 @@ class N2jListensOnTheNetwork(unittest.TestCase):
         self.assertEqual(address, "0.0.0.0",
                          "a loopback address hears nothing from the network")
         self.assertTrue(re.fullmatch(r"\d+", port), port)
+
+    def test_it_buffers_more_than_one_packet_of_jitter(self):
+        args = exec_start(UNIT)
+        buffer_ms = int(args[args.index("--buff") + 1])
+        self.assertGreaterEqual(
+            buffer_ms, 20,
+            "a 256-sample sender at 44.1 kHz sends every 5.8 ms; less than "
+            "20 ms of buffer underran on the rig")
 
 
 if __name__ == "__main__":
