@@ -55,7 +55,7 @@ class Machine:
 
     def changes(self, installed=None):
         found = mirror_check.local_changes(self.pairs(), installed or {})
-        return sorted(str(Path(live).relative_to(self.root)) for _, live in found)
+        return sorted(str(Path(live).relative_to(self.root)) for _, live, _ in found)
 
     def close(self):
         self._tmp.cleanup()
@@ -160,3 +160,48 @@ class MirrorCheck(unittest.TestCase):
                     "reaper-configzip-info", "reaper-vstshells64.ini"):
             self.m.put(f"home/aaa/.config/REAPER/{own}", "r")
         self.assertEqual(mirror_check.new_beside(self.m.pairs(), self.m.root), [])
+
+    # ── Which side is newer (2026-09-29) ─────────────────────────────────
+    # ~/.config/systemd/user/a3-core.service still carried CPUAffinity=0,
+    # which the package had dropped three days earlier; --take would have put
+    # it back. A machine file that is an older version of the package file is
+    # behind, not changed here -- and the repository's history can tell.
+
+    def test_a_machine_file_that_is_an_older_package_version_is_behind(self):
+        self.m.ship("home/aaa/.config/systemd/user/a3-core.service", "new")
+        self.m.put("home/aaa/.config/systemd/user/a3-core.service", "old")
+        earlier = lambda package_file: {mirror_check.meaning_hash(b"old")}
+        found = mirror_check.local_changes(self.m.pairs(), {}, earlier)
+        self.assertEqual([kind for _, _, kind in found], [mirror_check.BEHIND])
+
+    def test_a_machine_file_no_version_of_the_package_had_is_changed_here(self):
+        self.m.ship("etc/rtirq.conf", "shipped")
+        self.m.put("etc/rtirq.conf", "edited")
+        earlier = lambda package_file: {mirror_check.meaning_hash(b"older")}
+        found = mirror_check.local_changes(self.m.pairs(), {}, earlier)
+        self.assertEqual([kind for _, _, kind in found], [mirror_check.CHANGED_HERE])
+
+    def test_take_leaves_a_file_that_is_behind_alone(self):
+        shipped = self.m.ship("etc/rtirq.conf", "new")
+        self.m.put("etc/rtirq.conf", "old")
+        earlier = lambda package_file: {mirror_check.meaning_hash(b"old")}
+        mirror_check.take(mirror_check.local_changes(self.m.pairs(), {}, earlier))
+        self.assertEqual(shipped.read_text(), "new")
+
+    def test_an_old_version_with_other_comments_is_still_behind(self):
+        # The real case: the machine's unit carried an older comment block
+        # and blank lines no committed version had byte for byte.
+        self.m.ship("home/aaa/.config/systemd/user/a3-core.service",
+                    "[Service]\n# new words\nExecStart=core\n")
+        self.m.put("home/aaa/.config/systemd/user/a3-core.service",
+                   "[Service]\n# old words\n\nExecStart=core\nCPUAffinity=0\n")
+        committed = b"[Service]\n# older words\nExecStart=core\nCPUAffinity=0\n"
+        earlier = lambda package_file: {mirror_check.meaning_hash(committed)}
+        found = mirror_check.local_changes(self.m.pairs(), {}, earlier)
+        self.assertEqual([kind for _, _, kind in found], [mirror_check.BEHIND])
+
+    def test_a_changed_setting_is_a_change_in_meaning(self):
+        self.assertNotEqual(mirror_check.meaning_hash(b"CPUAffinity=0\n"),
+                            mirror_check.meaning_hash(b"CPUAffinity=1\n"))
+        self.assertEqual(mirror_check.meaning_hash(b"# a\nX=1\n\n"),
+                         mirror_check.meaning_hash(b"X=1\n# b\n"))

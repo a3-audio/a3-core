@@ -14,6 +14,10 @@ differs from what dpkg installed, and that is what was lost on 2026-09-29.
 Files beside shipped ones that the package does not have are named as a
 warning only: not everything in ~/.config/systemd/user belongs to Core.
 
+A differing file that is an older version of the package's own -- its git
+history says so -- is named as behind instead: the package is right, the
+machine has not caught up. It does not stop a push, and --take leaves it.
+
 Usage:
   mirror_check.py          list what is changed here and not in the package
   mirror_check.py --take   copy the machine's version of those into the package
@@ -23,10 +27,18 @@ import filecmp
 import hashlib
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
+
+#: What a differing machine file is. Changed here: nothing in the package's
+#: history ever said this -- it has to go into the package. Behind: it is an
+#: older version of the package file -- the package is right and the machine
+#: has not caught up (an install never replaces a file that is there).
+CHANGED_HERE = "changed here, not in the package"
+BEHIND = "machine behind the package"
 PACKAGE = REPO / "platform-config" / "debian-x86_64" / "a3-core"
 DPKG_SUMS = Path("/var/lib/dpkg/info/a3-core.md5sums")
 
@@ -101,8 +113,39 @@ def file_md5(path):
     return hashlib.md5(Path(path).read_bytes()).hexdigest()
 
 
-def local_changes(pairs, installed):
-    """The pairs whose machine file is changed here and not in the package."""
+def meaning_hash(content):
+    """A file's content without its comment lines and blank lines.
+
+    What a unit or a config *says*: the machine's copy of a3-core.service was
+    an old version whose comments and blank lines no commit had byte for byte
+    -- compared exactly, it looked like an edit made here."""
+    lines = [line.strip() for line in content.splitlines()]
+    kept = [line for line in lines if line and not line.startswith(b"#")]
+    return hashlib.sha1(b"\n".join(kept)).hexdigest()
+
+
+def earlier_versions(package_file):
+    """Every version of a package file its history has held, by meaning."""
+    rel = Path(package_file).resolve().relative_to(REPO)
+    commits = subprocess.run(
+        ["git", "-C", str(REPO), "log", "--format=%H", "--", str(rel)],
+        capture_output=True, text=True).stdout.split()
+    versions = set()
+    for commit in commits:
+        shown = subprocess.run(
+            ["git", "-C", str(REPO), "show", f"{commit}:{rel}"],
+            capture_output=True)
+        if shown.returncode == 0:
+            versions.add(meaning_hash(shown.stdout))
+    return versions
+
+
+def local_changes(pairs, installed, earlier=lambda package_file: set()):
+    """(package file, machine file, kind) for every machine file that differs.
+
+    Kind is CHANGED_HERE or BEHIND. A file exactly as dpkg installed it is
+    neither: the repository is merely newer, and the next install brings it.
+    """
     changes = []
     for package_file, live in pairs:
         live = Path(live)
@@ -112,7 +155,9 @@ def local_changes(pairs, installed):
             continue
         if installed.get(str(live)) == file_md5(live):
             continue
-        changes.append((Path(package_file), live))
+        kind = BEHIND if meaning_hash(live.read_bytes()) in earlier(package_file) \
+            else CHANGED_HERE
+        changes.append((Path(package_file), live, kind))
     return changes
 
 
@@ -135,8 +180,11 @@ def new_beside(pairs, machine_root="/"):
 
 
 def take(changes):
-    for package_file, live in changes:
-        shutil.copy2(live, package_file)
+    """The machine's version into the package -- for what changed here only.
+    A file that is behind would carry an old version back in."""
+    for package_file, live, kind in changes:
+        if kind == CHANGED_HERE:
+            shutil.copy2(live, package_file)
 
 
 def shown(path):
@@ -147,22 +195,29 @@ def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     pairs = shipped_pairs()
     sums = installed_sums(DPKG_SUMS.read_text()) if DPKG_SUMS.exists() else {}
-    changes = local_changes(pairs, sums)
+    changes = local_changes(pairs, sums, earlier_versions)
+    changed = [c for c in changes if c[2] == CHANGED_HERE]
+    behind = [c for c in changes if c[2] == BEHIND]
 
     if "--take" in argv:
         take(changes)
-        for package_file, live in changes:
+        for _, live, _ in changed:
             print(f"  taken   {shown(live)}")
-        print(f"\n  {len(changes)} file(s) copied into the package -- review and commit them.")
+        for _, live, _ in behind:
+            print(f"  left    {shown(live)}   (behind the package -- not taken)")
+        print(f"\n  {len(changed)} file(s) copied into the package -- review and commit them.")
         return 0
 
-    for _, live in changes:
-        print(f"  changed here, not in the package   {shown(live)}")
+    for _, live, kind in changes:
+        print(f"  {kind:<34} {shown(live)}")
     for path in new_beside(pairs):
-        print(f"  (not in the package, beside it)    {shown(path)}")
+        print(f"  {'(not in the package, beside it)':<34} {shown(path)}")
 
-    if changes:
-        print(f"\n  {len(changes)} file(s) differ. `tools/mirror_check.py --take` copies "
+    if behind:
+        print(f"\n  {len(behind)} file(s) are an older version of the package's: "
+              "`tools/config-status.py --install <path>` brings the machine up.")
+    if changed:
+        print(f"\n  {len(changed)} file(s) differ. `tools/mirror_check.py --take` copies "
               "them into the package; then commit.")
         return 1
     print("  the package mirrors this machine")
