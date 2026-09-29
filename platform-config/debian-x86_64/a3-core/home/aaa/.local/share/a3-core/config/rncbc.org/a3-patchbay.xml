@@ -89,6 +89,10 @@
    <plug>vu_11</plug>
    <plug>vu_12</plug>
   </socket>
+  <socket client="screencast" exclusive="off" name="screencast" type="jack-audio">
+   <plug>input_1</plug>
+   <plug>input_2</plug>
+  </socket>
   <socket client="beat\-analyzer" exclusive="off" name="beat_analyzer_bpm" type="jack-audio">
    <plug>bpm_1</plug>
   </socket>
@@ -146,11 +150,12 @@
  <slots/>
  <cables>
   <cable input="reaper_deck_4" output="MPD" type="jack-audio"/>
+  <cable input="beat_analyzer_vu" output="reaper_vu" type="jack-audio"/>
   <cable input="zita_rec" output="reaper_rec" type="jack-audio"/>
   <cable input="beat_analyzer_bpm" output="reaper_rec" type="jack-audio"/>
-  <cable input="reaper-analog" output="system_in" type="jack-audio"/>
-  <cable input="beat_analyzer_vu" output="reaper_vu" type="jack-audio"/>
+  <cable input="screencast" output="reaper_rec" type="jack-audio"/>
   <cable input="system_out" output="reaper_main" type="jack-audio"/>
+  <cable input="reaper-analog" output="system_in" type="jack-audio"/>
   <cable input="reaper-stemplayer" output="zita_stemplayer" type="jack-audio"/>
  </cables>
 </patchbay>
