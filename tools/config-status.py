@@ -40,20 +40,9 @@ REPO_ROOT = os.path.join(
 PKG_HOME = os.path.normpath(os.path.join(REPO_ROOT, "home", "aaa"))
 CONFIG_SRC = os.path.join(PKG_HOME, ".local", "share", "a3-core", "config")
 
-#: Files the application owns -- scan caches, window positions, recent lists.
-#: Never carried either way; shipping them is how a February plugin scan
-#: reached a September machine and took the IEM plugins out of REAPER.
-NEVER = (
-    "reaper-vstplugins64.ini", "reaper-clap-", "reaper-fxtags.ini",
-    "reaper-wndpos.ini", "reaper-recentfx.ini", "reaper-jsfx.ini",
-    "reaper-defpresets.ini", "reaper-extstate.ini", "reaper-midihw",
-    "reaper-themeconfig.ini", "reaper-mouse.ini", "reaper.ini",
-    "__pycache__", ".pyc",
-    # QjackCtl stores window geometry and per-device levels in the same file
-    # as its settings, and rewrites it on exit. Carrying it either way means
-    # committing where somebody left a window.
-    "QjackCtl.conf",
-)
+# What is never carried either way lives in one place, beside the check
+# push.sh runs (mirror_check.NEVER).
+from mirror_check import NEVER  # noqa: E402
 
 
 def skipped(path):
