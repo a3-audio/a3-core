@@ -23,6 +23,20 @@
    <plug>out7</plug>
    <plug>out8</plug>
   </socket>
+  <socket client="StemDeck" exclusive="off" name="StemDeck 1" type="jack-audio">
+   <plug>deck1_L</plug>
+   <plug>deck1_R</plug>
+   <plug>deck2_L</plug>
+   <plug>deck2_R</plug>
+   <plug>deck3_L</plug>
+   <plug>deck3_R</plug>
+   <plug>deck4_L</plug>
+   <plug>deck4_R</plug>
+   <plug>aux_L</plug>
+   <plug>aux_R</plug>
+   <plug>phones_L</plug>
+   <plug>phones_R</plug>
+  </socket>
   <socket client="REAPER" exclusive="off" name="reaper_main" type="jack-audio">
    <plug>out1</plug>
    <plug>out2</plug>
@@ -145,6 +159,8 @@
    <plug>in18</plug>
    <plug>in19</plug>
    <plug>in20</plug>
+   <plug>in21</plug>
+   <plug>in22</plug>
   </socket>
  </input-sockets>
  <slots/>
@@ -157,6 +173,7 @@
   <cable input="system_out" output="reaper_main" type="jack-audio"/>
   <cable input="reaper-analog" output="system_in" type="jack-audio"/>
   <cable input="reaper-stemplayer" output="zita_stemplayer" type="jack-audio"/>
+  <cable input="reaper-stemplayer" output="StemDeck 1" type="jack-audio"/>
  </cables>
 </patchbay>
 

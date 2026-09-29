@@ -47,9 +47,11 @@ class PatchbayWiresZita(unittest.TestCase):
                         "nothing from the network reaches REAPER")
 
     def test_every_wired_n2j_channel_has_a_reaper_input(self):
+        # At least: since 2026-09-30 StemDeck on the Core itself feeds the same
+        # REAPER socket with its twelve outputs, beside zita's ten.
         (out, into), = [c for c in self.cables_from("zita-n2j")]
-        self.assertEqual(len(self.sockets[into].findall("plug")),
-                         len(self.sockets[out].findall("plug")))
+        self.assertGreaterEqual(len(self.sockets[into].findall("plug")),
+                                len(self.sockets[out].findall("plug")))
 
     def test_reaper_records_out_through_zita_j2n(self):
         sources = [out for out, _ in self.cables_into("zita-j2n")]
