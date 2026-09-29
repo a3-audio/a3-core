@@ -189,6 +189,61 @@ class TheWayBackIsSpelledLikeTheWayOut(unittest.TestCase):
             "/channel/2/eq/high")
 
 
+def master_branches():
+    """`osc_handler_master`'s branches, as {parameter: [statements]}."""
+    tree = ast.parse((PACKAGE / "bin/a3-core.py").read_text())
+    handler = next(node for node in ast.walk(tree)
+                   if isinstance(node, ast.FunctionDef)
+                   and node.name == "osc_handler_master")
+    branches = {}
+    for node in ast.walk(handler):
+        if (isinstance(node, ast.If)
+                and isinstance(node.test, ast.Compare)
+                and isinstance(node.test.left, ast.Name)
+                and node.test.left.id == "parameter"
+                and isinstance(node.test.comparators[0], ast.Constant)):
+            branches[node.test.comparators[0].value] = node.body
+    return branches
+
+
+def calls_in(statements):
+    return [node for statement in statements for node in ast.walk(statement)
+            if isinstance(node, ast.Call)]
+
+
+class TheMasterBendsBothWaysAlike(unittest.TestCase):
+    """A master control goes out through one curve and comes back through the
+    reverse table's. Two curves that differ are a knob that jumps the moment
+    REAPER reports it -- and neither side is wrong on its own."""
+
+    def setUp(self):
+        self.branches = master_branches()
+
+    def test_each_master_reversal_names_the_curve_its_branch_sends_with(self):
+        for entry in CHANNEL_REVERSALS:
+            if not entry.address.startswith("/master/"):
+                continue
+            if entry.curve == "identity":
+                continue
+            parameter = entry.address[len("/master/"):]
+            with self.subTest(address=entry.address):
+                sent_with = {call.func.id for call in calls_in(
+                                 self.branches[parameter])
+                             if isinstance(call.func, ast.Name)
+                             and call.func.id.startswith("slope_")}
+                self.assertEqual(sent_with, {entry.curve})
+
+    def test_the_return_takes_its_slot_from_the_layout(self):
+        # It said fx/3 at the call site, and slot 3 of enc_fx had become the
+        # DualDelay: the return pot was writing delay parameters. A slot the
+        # layout names moves with the project; a literal does not.
+        asked = [call.args[0].value for call in calls_in(self.branches["return"])
+                 if isinstance(call.func, ast.Attribute)
+                 and call.func.attr == "fx_slot"
+                 and isinstance(call.args[0], ast.Constant)]
+        self.assertEqual(asked, ["aux_gain"])
+
+
 #: Controls the forward handler answers to that deliberately have no way back,
 #: and why. Checked against the handler itself, so an entry that outlives its
 #: reason shows up as a failure rather than as a note nobody reads.

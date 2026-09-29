@@ -43,8 +43,29 @@ MASTER_NAME = {
     "track_booth": "dec_booth",
     "track_phones": "dec_phones",
     "track_ph_mix": "ph-mix",
-    "aux_return": "enc_fx",
+    "aux_return": "Return",
 }
+
+#: The project the layout ships beside. Installed as the template REAPER starts
+#: from (a3-reaper.service passes it with -template).
+SHIPPED_PROJECT = (PACKAGE / "share/a3-core/config/REAPER/ProjectTemplates"
+                   / "a3-reaper.RPP")
+
+
+def track_names_in_project(path):
+    """REAPER's track names, one-based, read straight out of an .RPP file.
+
+    A track's own NAME sits one level inside its <TRACK block, at four spaces;
+    anything deeper belongs to an envelope or a plug-in.
+    """
+    names = {}
+    track = 0
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith("  <TRACK"):
+            track += 1
+        elif track and line.startswith("    NAME "):
+            names[track] = line[len("    NAME "):].strip().strip('"')
+    return names
 
 
 class LayoutAgainstReaper(unittest.TestCase):
@@ -75,8 +96,11 @@ class LayoutAgainstReaper(unittest.TestCase):
                              f"which REAPER calls {self.names[track]!r}")
 
     def test_the_tracks_a3_does_not_name_are_known_and_deliberate(self):
-        # Two tracks in the project belong to nothing A3 addresses. Named here
-        # so a *third* one appearing is a question rather than a shrug.
+        # Three tracks in the project belong to no layout field. Named here
+        # so a *fourth* one appearing is a question rather than a shrug.
+        # enc_fx joined enc_main and enc_phones on 2026-09-29, when the FX
+        # return moved to its own track: it is still reached, as send "fx" of
+        # every channelbus, but no longer by a track number.
         claimed = {getattr(self.layout.channel(i), f)
                    for i in range(self.layout.channel_count)
                    for f in CHANNEL_SUFFIX}
@@ -84,7 +108,19 @@ class LayoutAgainstReaper(unittest.TestCase):
 
         unclaimed = {t: n for t, n in self.names.items() if t not in claimed}
         self.assertEqual(sorted(unclaimed.values()),
-                         ["enc_main", "enc_phones"], unclaimed)
+                         ["enc_fx", "enc_main", "enc_phones"], unclaimed)
+
+    def test_the_recorded_names_are_the_shipped_projects(self):
+        # The recording is only as good as the project it was taken from. A
+        # track inserted in the template shifts every number after it -- the
+        # Return track did that on 2026-09-29 -- and a recording left behind
+        # would keep this whole file green against a project that is gone.
+        shipped = track_names_in_project(SHIPPED_PROJECT)
+        for track, name in self.names.items():
+            with self.subTest(track=track):
+                self.assertEqual(shipped.get(track), name,
+                                 f"track {track} is {name!r} in the recording "
+                                 f"and {shipped.get(track)!r} in the template")
 
 
 if __name__ == "__main__":

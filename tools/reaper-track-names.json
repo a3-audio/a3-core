@@ -15,7 +15,11 @@
     "",
     "Re-record when the REAPER project changes -- that is the point: a",
     "track that moved in the project and not in the layout is exactly",
-    "what this catches."
+    "what this catches.",
+    "",
+    "Track 28 (Return) was added on 2026-09-29 from the shipped template",
+    "rather than re-recorded; test_layout_against_reaper now holds this",
+    "recording against that template, name for name."
   ],
   "track_names": {
     "1": "dec_master",
@@ -44,6 +48,7 @@
     "24": "4-input",
     "25": "enc_fx",
     "26": "enc_main",
-    "27": "enc_phones"
+    "27": "enc_phones",
+    "28": "Return"
   }
 }

@@ -835,10 +835,16 @@ def osc_handler_master(client_address: Tuple[str, int], address: str,
         osc_reaper.send_message(f"/track/{track_phones}/fx/2/fxparam/1/value", val)
 
     elif parameter == "return":
-        val = slope_constant_power(value)
+        # The FX-return pot on the desk. Since 2026-09-29 the return has its
+        # own track ("Return") with one Airwindows PurestGain on it, bent like
+        # every other PurestGain volume here: full travel is 0 dB, never the
+        # plug-in's +40 dB top. The call site said fx/3 until then, which on
+        # enc_fx had become the DualDelay.
+        val = slope_volume(value)
         aux_return = master_info.aux_return
+        slot = _layout.fx_slot("aux_gain")
         for gain_vst_plugins_on_return in _layout.gain_params("aux_return"):
-            osc_reaper.send_message(f"/track/{aux_return}/fx/3/fxparam/{gain_vst_plugins_on_return}/value", val)
+            osc_reaper.send_message(f"/track/{aux_return}/fx/{slot}/fxparam/{gain_vst_plugins_on_return}/value", val)
 
 def osc_handler_fx(client_address: Tuple[str, int], address: str,
                    *osc_arguments: List[Any]) -> None:

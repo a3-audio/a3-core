@@ -147,8 +147,9 @@ REVERSALS = (
             "slope_volume", "/master/booth", GLOBAL),
     Reverse(FXPARAM, "track_phones", "phones_gain", 1,
             "slope_volume", "/master/phones_volume", GLOBAL),
+    # The FX return: track "Return", one PurestGain, since 2026-09-29.
     Reverse(FXPARAM, "aux_return", "aux_gain", GAINS,
-            "slope_constant_power", "/master/return", GLOBAL),
+            "slope_volume", "/master/return", GLOBAL),
 
     # The headphone mix is the one value that goes out unbent, as a plain
     # track volume. `identity` is a3_core_curves' name for that, so this reads
