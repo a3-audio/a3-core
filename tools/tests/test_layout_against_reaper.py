@@ -50,6 +50,16 @@ MASTER_NAME = {
 #: from (a3-reaper.service passes it with -template).
 SHIPPED_PROJECT = (PACKAGE / "share/a3-core/config/REAPER/ProjectTemplates"
                    / "a3-reaper.RPP")
+SHIPPED_OSC_PATTERN = PACKAGE / "share/a3-core/config/REAPER/OSC/a3-core.ReaperOSC"
+
+
+def osc_track_bank_size(path):
+    """DEVICE_TRACK_COUNT: REAPER answers /track/N only for N up to this."""
+    for line in path.read_text(encoding="utf-8").splitlines():
+        match = re.match(r"DEVICE_TRACK_COUNT\s+(\d+)", line)
+        if match:
+            return int(match.group(1))
+    return 0
 
 
 def track_names_in_project(path):
@@ -125,3 +135,15 @@ class LayoutAgainstReaper(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OscReachesEveryTrack(unittest.TestCase):
+    """REAPER drops /track/N silently when N is beyond its OSC track bank.
+
+    The bank was 27 while the project had 27 tracks; the Return track made
+    it 28 and the FX-return pot drove nothing, with Core sending faithfully.
+    """
+
+    def test_the_osc_track_bank_covers_every_track_in_the_shipped_project(self):
+        tracks = len(track_names_in_project(SHIPPED_PROJECT))
+        self.assertGreaterEqual(osc_track_bank_size(SHIPPED_OSC_PATTERN), tracks)

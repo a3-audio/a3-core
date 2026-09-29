@@ -27,7 +27,7 @@
 # DEVICE_REGION_COUNT is how many regions for which this device would like to 
 # receive information 
 
-DEVICE_TRACK_COUNT 27
+DEVICE_TRACK_COUNT 40
 DEVICE_SEND_COUNT 16
 DEVICE_RECEIVE_COUNT 16
 DEVICE_FX_COUNT 16
