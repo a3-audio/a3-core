@@ -68,7 +68,7 @@
   "track_booth": 2,
   "track_phones": 3,
   "track_ph_mix": 8,
-  "aux_return": 25
+  "aux_return": 28
  },
  "sends": {
   "fx": 3
@@ -84,7 +84,7 @@
   "stereo_enc": 4,
   "enc": 1,
   "phones_gain": 2,
-  "aux_gain": 3
+  "aux_gain": 1
  },
  "gain_params": {
   "channelbus": [
@@ -119,14 +119,7 @@
    99
   ],
   "aux_return": [
-   1,
-   15,
-   29,
-   43,
-   57,
-   71,
-   85,
-   99
+   1
   ]
  },
  "addresses": {

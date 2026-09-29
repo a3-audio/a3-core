@@ -121,8 +121,17 @@ class TheMasterSection(ReverseCase):
         self.assertEqual(entry.address, "/master/phones_volume")
 
     def test_the_aux_return(self):
-        entry = self.found("/track/25/fx/3/fxparam/29/value", "aux_return")
+        """Since 2026-09-29 the FX return is its own track, 28 "Return", with
+        one Airwindows PurestGain as its first plug-in."""
+        entry = self.found("/track/28/fx/1/fxparam/1/value", "aux_return")
         self.assertEqual(entry.address, "/master/return")
+        self.assertEqual(entry.curve, "slope_volume")
+
+    def test_the_old_aux_return_address_is_not_answered(self):
+        # /track/25/fx/3 is enc_fx's DualDelay. It was the return's address
+        # until 2026-09-29, and what arrives there now is a delay setting.
+        self.assertIsNone(self.found("/track/25/fx/3/fxparam/29/value",
+                                     "aux_return"))
 
     def test_the_phones_mix_is_a_track_volume(self):
         """The one value that goes out unbent. `identity` says so in the table
