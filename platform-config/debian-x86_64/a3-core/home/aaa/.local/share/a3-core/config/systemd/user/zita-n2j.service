@@ -2,6 +2,7 @@
 Description=zita-n2j
 PartOf=a3-main.service
 After=a3-jack.service
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -11,6 +12,9 @@ ExecStart=/usr/bin/zita-n2j --chan 1-10 --buff 20 --info 0.0.0.0 65100
 CPUAffinity=1 2 3
 CPUSchedulingPolicy=rr
 CPUSchedulingPriority=64
+# Faellt zita aus (Status 0 trotzdem), kommt es nach 2 s wieder, ohne Obergrenze.
+Restart=always
+RestartSec=2
 
 [Install]
 WantedBy=default.target
