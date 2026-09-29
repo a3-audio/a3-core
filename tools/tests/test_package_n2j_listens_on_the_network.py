@@ -66,3 +66,16 @@ class N2jTakesWhatThePatchbayWires(unittest.TestCase):
                if s.get("client").replace("\\", "") == "zita-n2j"]
         self.assertEqual(len(n2j), 1)
         self.assertEqual(last - first + 1, len(n2j[0].findall("plug")))
+
+
+class ZitaComesBackByItself(unittest.TestCase):
+    """zita ends on some changes to the running audio graph, and a unit that
+    does not restart leaves the network audio silent until somebody notices.
+    StemDeck's own units restart after 2 s (stemdeck 15e5dce); the Core's
+    two do the same since 2026-09-29."""
+
+    def test_both_units_restart_themselves(self):
+        for name in ("zita-n2j.service", "zita-j2n.service"):
+            unit = (UNIT.parent / name).read_text()
+            self.assertRegex(unit, r"(?m)^Restart=always$", name)
+            self.assertRegex(unit, r"(?m)^RestartSec=2$", name)
