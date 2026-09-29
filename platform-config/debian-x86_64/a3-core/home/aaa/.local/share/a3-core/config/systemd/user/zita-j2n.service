@@ -2,6 +2,7 @@
 Description=zita-j2n
 PartOf=a3-main.service
 After=a3-jack.service
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -10,6 +11,9 @@ ExecStart=/usr/bin/zita-j2n --chan 2 --24bit 192.168.43.96 55100
 CPUAffinity=1 2 3
 CPUSchedulingPolicy=rr
 CPUSchedulingPriority=64
+# Faellt zita aus (Status 0 trotzdem), kommt es nach 2 s wieder, ohne Obergrenze.
+Restart=always
+RestartSec=2
 
 [Install]
 WantedBy=default.target
