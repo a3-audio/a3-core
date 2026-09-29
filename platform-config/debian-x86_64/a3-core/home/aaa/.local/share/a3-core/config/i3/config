@@ -225,6 +225,13 @@ for_window [class="A3 Motion UI"] move container to workspace 1
 for_window [class="REAPER"] move container to workspace 2
 for_window [class="QjackCtl"] move container to workspace 3
 for_window [title="Scarlett 18i20 USB"] move container to workspace 4
+# StemDeck, always running (stemdeck.service), full screen on its own
+# workspace; i3's full screen holds per workspace, so Motion on 1 is untouched.
+# Its start takes the screen for a moment (JUCE builds the window three times
+# and the first takes the focus); the service puts back the workspace that
+# was showing (stemdeck/tools/rig-keep-the-screen.sh).
+assign [class="StemDeck"] 4
+for_window [class="StemDeck"] fullscreen enable
 
 #exec --no-startup-id xrandr -o right
 #exec --no-startup-id xinput set-prop "wch.cn USB2IIC_CTP_CONTROL" --type=float "Coordinate Transformation Matrix" 0 1 0 -1 0 1 0 0 1
