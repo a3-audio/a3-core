@@ -1,35 +1,9 @@
 <!DOCTYPE patchbay>
-<patchbay name="jack_patchbay-a3-core" version="1.0.4">
+<patchbay name="a3-patchbay" version="1.0.6">
  <output-sockets>
-  <socket client="Music\ Player\ Daemon" exclusive="off" name="Music\ Player\ Daemon 1" type="jack-audio">
+  <socket client="Music\ Player\ Daemon" exclusive="off" name="MPD" type="jack-audio">
    <plug>left</plug>
    <plug>right</plug>
-  </socket>
-  <socket client="REAPER" exclusive="off" name="reaper_rec" type="jack-audio">
-   <plug>out7</plug>
-   <plug>out8</plug>
-  </socket>
-  <socket client="system" exclusive="off" name="system" type="jack-audio">
-   <plug>capture_1</plug>
-   <plug>capture_2</plug>
-   <plug>capture_3</plug>
-   <plug>capture_4</plug>
-   <plug>capture_5</plug>
-   <plug>capture_6</plug>
-   <plug>capture_7</plug>
-   <plug>capture_8</plug>
-   <plug>capture_9</plug>
-   <plug>capture_10</plug>
-   <plug>capture_11</plug>
-   <plug>capture_12</plug>
-   <plug>capture_13</plug>
-   <plug>capture_14</plug>
-   <plug>capture_15</plug>
-   <plug>capture_16</plug>
-   <plug>capture_17</plug>
-   <plug>capture_18</plug>
-   <plug>capture_19</plug>
-   <plug>capture_20</plug>
   </socket>
   <socket client="REAPER" exclusive="off" name="reaper_vu" type="jack-audio">
    <plug>out21</plug>
@@ -45,7 +19,11 @@
    <plug>out31</plug>
    <plug>out32</plug>
   </socket>
-  <socket client="REAPER" exclusive="off" name="reaper" type="jack-audio">
+  <socket client="REAPER" exclusive="off" name="reaper_rec" type="jack-audio">
+   <plug>out7</plug>
+   <plug>out8</plug>
+  </socket>
+  <socket client="REAPER" exclusive="off" name="reaper_main" type="jack-audio">
    <plug>out1</plug>
    <plug>out2</plug>
    <plug>out3</plug>
@@ -67,13 +45,37 @@
    <plug>out19</plug>
    <plug>out20</plug>
   </socket>
+  <socket client="system" exclusive="off" name="system_in" type="jack-audio">
+   <plug>capture_1</plug>
+   <plug>capture_2</plug>
+   <plug>capture_3</plug>
+   <plug>capture_4</plug>
+   <plug>capture_5</plug>
+   <plug>capture_6</plug>
+   <plug>capture_7</plug>
+   <plug>capture_8</plug>
+   <plug>capture_9</plug>
+   <plug>capture_10</plug>
+  </socket>
+  <socket client="zita\-n2j" exclusive="off" name="zita_stemplayer" type="jack-audio">
+   <plug>out_1</plug>
+   <plug>out_2</plug>
+   <plug>out_3</plug>
+   <plug>out_4</plug>
+   <plug>out_5</plug>
+   <plug>out_6</plug>
+   <plug>out_7</plug>
+   <plug>out_8</plug>
+   <plug>out_9</plug>
+   <plug>out_10</plug>
+  </socket>
  </output-sockets>
  <input-sockets>
-  <socket client="REAPER" exclusive="off" name="reaper_56" type="jack-audio">
-   <plug>in5</plug>
-   <plug>in6</plug>
+  <socket client="REAPER" exclusive="off" name="reaper_deck_4" type="jack-audio">
+   <plug>in7</plug>
+   <plug>in8</plug>
   </socket>
-  <socket client="beat\-analyzer" exclusive="off" name="beat-analyzer_vu" type="jack-audio">
+  <socket client="beat\-analyzer" exclusive="off" name="beat_analyzer_vu" type="jack-audio">
    <plug>vu_1</plug>
    <plug>vu_2</plug>
    <plug>vu_3</plug>
@@ -87,14 +89,14 @@
    <plug>vu_11</plug>
    <plug>vu_12</plug>
   </socket>
-  <socket client="beat\-analyzer" exclusive="off" name="beat-analyzer_bpm" type="jack-audio">
+  <socket client="beat\-analyzer" exclusive="off" name="beat_analyzer_bpm" type="jack-audio">
    <plug>bpm_1</plug>
   </socket>
-  <socket client="jackrec" exclusive="off" name="jackrec 1" type="jack-audio">
-   <plug>input1</plug>
-   <plug>input2</plug>
+  <socket client="zita\-j2n" exclusive="off" name="zita_rec" type="jack-audio">
+   <plug>in_1</plug>
+   <plug>in_2</plug>
   </socket>
-  <socket client="system" exclusive="off" name="system" type="jack-audio">
+  <socket client="system" exclusive="off" name="system_out" type="jack-audio">
    <plug>playback_1</plug>
    <plug>playback_2</plug>
    <plug>playback_3</plug>
@@ -116,7 +118,7 @@
    <plug>playback_19</plug>
    <plug>playback_20</plug>
   </socket>
-  <socket client="REAPER" exclusive="off" name="reaper" type="jack-audio">
+  <socket client="REAPER" exclusive="off" name="reaper-analog" type="jack-audio">
    <plug>in1</plug>
    <plug>in2</plug>
    <plug>in3</plug>
@@ -127,6 +129,8 @@
    <plug>in8</plug>
    <plug>in9</plug>
    <plug>in10</plug>
+  </socket>
+  <socket client="REAPER" exclusive="off" name="reaper-stemplayer" type="jack-audio">
    <plug>in11</plug>
    <plug>in12</plug>
    <plug>in13</plug>
@@ -138,30 +142,16 @@
    <plug>in19</plug>
    <plug>in20</plug>
   </socket>
-  <socket client="Supercollider" exclusive="off" name="sc" type="jack-audio">
-   <plug>in_1</plug>
-   <plug>in_2</plug>
-   <plug>in_3</plug>
-   <plug>in_4</plug>
-   <plug>in_5</plug>
-   <plug>in_6</plug>
-   <plug>in_7</plug>
-   <plug>in_8</plug>
-   <plug>in_9</plug>
-   <plug>in_10</plug>
-   <plug>in_11</plug>
-   <plug>in_12</plug>
-  </socket>
  </input-sockets>
  <slots/>
  <cables>
-  <cable input="jackrec 1" output="reaper_rec" type="jack-audio"/>
-  <cable input="beat-analyzer_bpm" output="reaper_rec" type="jack-audio"/>
-  <cable input="reaper" output="system" type="jack-audio"/>
-  <cable input="sc" output="reaper_vu" type="jack-audio"/>
-  <cable input="beat-analyzer_vu" output="reaper_vu" type="jack-audio"/>
-  <cable input="system" output="reaper" type="jack-audio"/>
-  <cable input="reaper_56" output="Music\ Player\ Daemon 1" type="jack-audio"/>
+  <cable input="reaper_deck_4" output="MPD" type="jack-audio"/>
+  <cable input="zita_rec" output="reaper_rec" type="jack-audio"/>
+  <cable input="beat_analyzer_bpm" output="reaper_rec" type="jack-audio"/>
+  <cable input="reaper-analog" output="system_in" type="jack-audio"/>
+  <cable input="beat_analyzer_vu" output="reaper_vu" type="jack-audio"/>
+  <cable input="system_out" output="reaper_main" type="jack-audio"/>
+  <cable input="reaper-stemplayer" output="zita_stemplayer" type="jack-audio"/>
  </cables>
 </patchbay>
 
