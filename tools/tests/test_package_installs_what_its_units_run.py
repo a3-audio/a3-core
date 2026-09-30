@@ -13,9 +13,8 @@ a3-reaper and qjackctl wait on since they stopped sleeping, comes from
 would never have come up.
 
 **What counts as started.** Everything reachable from default.target.wants
-through `Wants=`. A unit that is shipped but that nothing starts --
-a3-supercollider, today -- is not a promise, so a program it names is not
-one either. Enable it and this starts asking about sclang.
+through `Wants=`. A unit that is shipped but that nothing starts is not a
+promise, so a program it names is not one either.
 
 **What it cannot check.** Which package really ships a program. That is
 dpkg's answer, and it differs between releases, so it is written down in
@@ -113,9 +112,6 @@ class WhatIsStarted(unittest.TestCase):
                      "a3-core.service", "zita-j2n.service",
                      "zita-n2j.service"):
             self.assertIn(unit, started)
-
-    def test_a_unit_nothing_starts_is_not_counted(self):
-        self.assertNotIn("a3-supercollider.service", started_units())
 
 
 class EveryProgramIsInstalled(unittest.TestCase):

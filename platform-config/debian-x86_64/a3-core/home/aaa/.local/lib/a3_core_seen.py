@@ -36,7 +36,7 @@ plus 13 ms inside Traffic's lock to copy the unknown table at 19,335 rows.
 Those milliseconds are the reason for the debounce and the reason rows are
 written as lists rather than objects -- as objects the same tables are 2.07
 and 5.34 MB and half again as slow. They are OSC-routing latency, not audio:
-the sound is made by JACK and SuperCollider in other processes.
+the sound is made by JACK and REAPER in other processes.
 
 **A broken file is not a reason to fall.** Same rule as
 `a3_core_state.StateFile`: missing, half-written, from another version or not
