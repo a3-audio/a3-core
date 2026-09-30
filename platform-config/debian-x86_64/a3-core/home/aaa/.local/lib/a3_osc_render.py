@@ -21,7 +21,8 @@ END = "# <<< a3-osc"
 
 #: Analyzer keys that are facts of the truth. Found outside the block they are
 #: a second truth, and they are commented out, not deleted.
-ANALYZER_KEY = re.compile(r"^(OSC_HOST_\w+|OSC_VU_\w+|OSC_PORT_A3MOTION)=")
+ANALYZER_KEY = re.compile(
+    r"^(OSC_HOST_\w+|OSC_VU_\w+|OSC_PORT_A3MOTION|OSC_ADDRESS_\w+|PIONEER_PORT_\w+)=")
 
 
 def analyzer_prefix(route):
@@ -68,6 +69,14 @@ def analyzer_block(truth):
         host, port = truth.endpoint(program, role)
         targets.append((analyzer_prefix(route) + program, f"{host}:{port}"))
     targets.append(("OSC_PORT_A3MOTION", truth.port("beat-analyzer", "clock")))
+    # Its words and the Pro DJ Link ports: beat-analyzer's Config::OscWords.
+    targets += [("OSC_ADDRESS_BEAT", truth.pattern("beat")),
+                ("OSC_ADDRESS_TAP", truth.pattern("tap")),
+                ("OSC_ADDRESS_CLOCKMODE", truth.pattern("clockmode")),
+                ("OSC_ADDRESS_VU", truth.pattern("vu")),
+                ("PIONEER_PORT_ANNOUNCE", truth.port("prolink", "announce")),
+                ("PIONEER_PORT_BEAT", truth.port("prolink", "beat")),
+                ("PIONEER_PORT_STATUS", truth.port("prolink", "status"))]
     return f"{BEGIN}\n{lines(targets)}{END}\n"
 
 

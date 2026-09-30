@@ -135,8 +135,20 @@ class TheAnalyzerTargetsAreRendered(unittest.TestCase):
         targets = pairs(a3_osc_render.analyzer_block(TRUTH))
         routed = [route for route in TRUTH.routes()
                   if route.get("from") == "beat-analyzer"]
-        self.assertEqual(len([k for k in targets if k.startswith("OSC_")]) - 1,
-                         len(routed))
+        sent_to = [k for k in targets if k.startswith(("OSC_HOST_", "OSC_VU_"))]
+        self.assertEqual(len(sent_to), len(routed))
+
+    def test_the_analyzer_speaks_the_truths_words(self):
+        """Its addresses and the Pro DJ Link ports, too (beat-analyzer's
+        Config::OscWords reads them from the block)."""
+        targets = pairs(a3_osc_render.analyzer_block(TRUTH))
+        self.assertEqual(targets["OSC_ADDRESS_BEAT"], TRUTH.pattern("beat"))
+        self.assertEqual(targets["OSC_ADDRESS_TAP"], TRUTH.pattern("tap"))
+        self.assertEqual(targets["OSC_ADDRESS_CLOCKMODE"], TRUTH.pattern("clockmode"))
+        self.assertEqual(targets["OSC_ADDRESS_VU"], TRUTH.pattern("vu"))
+        self.assertEqual(int(targets["PIONEER_PORT_ANNOUNCE"]), TRUTH.port("prolink", "announce"))
+        self.assertEqual(int(targets["PIONEER_PORT_BEAT"]), TRUTH.port("prolink", "beat"))
+        self.assertEqual(int(targets["PIONEER_PORT_STATUS"]), TRUTH.port("prolink", "status"))
 
     def test_the_analyzer_listens_where_the_truth_says(self):
         targets = pairs(a3_osc_render.analyzer_block(TRUTH))
