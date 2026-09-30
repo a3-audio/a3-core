@@ -12,6 +12,7 @@ this list changes with it.
 
 import re
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -19,7 +20,9 @@ from pathlib import Path
 PACKAGE = Path(__file__).resolve().parents[2] / "platform-config" / "debian-x86_64" / "a3-core"
 POSTINST = PACKAGE / "DEBIAN" / "postinst"
 TEMPLATES = PACKAGE / "DEBIAN" / "templates"
-CORE = PACKAGE / "home" / "aaa" / ".local" / "bin" / "a3-core.py"
+TRUTH = PACKAGE / "usr" / "share" / "a3" / "a3-osc.json"
+sys.path.insert(0, str(PACKAGE / "home" / "aaa" / ".local" / "lib"))
+import a3_osc   # noqa: E402
 VNC = PACKAGE / "home" / "aaa" / ".local" / "share" / "a3-core" / "recipes" / "a3vnc.sh"
 
 # https://a3-audio.github.io/a3-doc/ressources/ports.html
@@ -45,20 +48,11 @@ def postinst_standard(name):
     return match.group(1) if match else None
 
 
-def core_default(option):
-    """The default of an a3-core.py command line option, evaluated from the
-    module's own constants rather than by importing it (importing starts
-    servers)."""
-    source = CORE.read_text()
-    hosts = dict(re.findall(
-        r"^(A3\w+_HOST), \w+_PORT = '([^']*)', \d+", source, re.MULTILINE))
-    ports = dict(re.findall(
-        r"^A3\w+_HOST, (A3\w+_PORT) = '[^']*', (\d+)", source, re.MULTILINE))
-    match = re.search(
-        rf'add_argument\("--{option}", default=f"\{{(\w+)\}}:\{{(\w+)\}}"', source)
-    if not match:
-        return None
-    return f"{hosts.get(match.group(1))}:{ports.get(match.group(2))}"
+def core_sends_to(program):
+    """Where Core sends a program's OSC. Since 2026-09-30 Core reads it from the
+    one truth, so that is what is checked against the page."""
+    host, port = a3_osc.load(TRUTH).endpoint(program, "osc")
+    return f"{host}:{port}"
 
 
 class TheInstallerOffersTheDocumentedNetwork(unittest.TestCase):
@@ -75,10 +69,10 @@ class TheInstallerOffersTheDocumentedNetwork(unittest.TestCase):
 
 class CoreSendsWhereThePortsPageSays(unittest.TestCase):
     def test_the_mixer(self):
-        self.assertEqual(MIXER, core_default("mixer"))
+        self.assertEqual(MIXER, core_sends_to("mixer"))
 
     def test_motion(self):
-        self.assertEqual(MOTION, core_default("motion"))
+        self.assertEqual(MOTION, core_sends_to("motion"))
 
 
 class VncLooksForTheCoreWhereItIs(unittest.TestCase):

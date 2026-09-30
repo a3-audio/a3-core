@@ -42,6 +42,7 @@ from pythonosc import osc_server
 # promise a working directory.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 from a3_core_layout import load_layout   # noqa: E402
+import a3_osc   # noqa: E402
 from a3_core_curves import CurveNotInvertible, invert, load_curves  # noqa: E402
 from a3_core_crossfade import crossfade_gains   # noqa: E402
 from a3_core_tempo import (NO_CHANGE as NO_TEMPO,   # noqa: E402
@@ -95,7 +96,12 @@ CURVES_PATH = (Path(__file__).resolve().parent.parent
 _layout = load_layout(LAYOUT_PATH)
 from pythonosc.udp_client import SimpleUDPClient  # type: ignore
 
-OSC_PORT_CORE: int = 9000
+#: The one truth for hosts, ports and addresses (/usr/share/a3/a3-osc.json).
+#: Read once, at the top: a Core that cannot read it does not come up, which
+#: is the right failure -- coming up with a guess is a second truth.
+_truth = a3_osc.load()
+
+OSC_PORT_CORE: int = _truth.port("core", "osc")
 
 # Which FX slot on a track holds which plugin. Out of the layout rather than
 # written here: a slot that moves in the REAPER project is a number to change
@@ -130,9 +136,9 @@ CHANNEL_ENC_DELAY: int = 25
 # moved subnet, and the working values lived only in a hand-made service
 # override on the one machine -- a fresh install sent to nobody. See issue #54;
 # tools/tests/test_package_network_matches_ports_page.py holds them to the page.
-A3MIXER_HOST, A3MIXER_PORT = '192.168.8.11', 7772
-A3MOTION_HOST, A3MOTION_PORT = '127.0.0.1', 7771
-REAPER_HOST, REAPER_PORT = '127.0.0.1', 9001
+A3MIXER_HOST, A3MIXER_PORT = _truth.endpoint("mixer", "osc")
+A3MOTION_HOST, A3MOTION_PORT = _truth.endpoint("motion", "osc")
+REAPER_HOST, REAPER_PORT = _truth.endpoint("reaper", "osc")
 
 # What Core sends, remembered so the echo can be told from news.
 #
@@ -203,8 +209,8 @@ osc_reaper = WatchedClient(SimpleUDPClient(REAPER_HOST, REAPER_PORT),
                            "reaper")
 
 udp_clients_iem = tuple(
-    WatchedClient(SimpleUDPClient('127.0.0.1', 1337 + index), "iem")
-    for index in range(3))
+    WatchedClient(SimpleUDPClient(*_truth.endpoint("iem", role)), "iem")
+    for role in ("multiencoder-1", "multiencoder-2", "multiencoder-3"))
 
 #: The delay on the FX bus, which follows the beat-analyzer's tempo.
 #:
@@ -220,7 +226,7 @@ udp_clients_iem = tuple(
 #: inside the plug-in (its status display, lower left, "Listen to port" ->
 #: OPEN) and lives in the REAPER project, not here. With the port shut these
 #: messages go nowhere and nothing says so -- see the smoke test.
-DUALDELAY_HOST, DUALDELAY_PORT = '127.0.0.1', 1340
+DUALDELAY_HOST, DUALDELAY_PORT = _truth.endpoint("dualdelay", "osc")
 osc_dualdelay = WatchedClient(
     SimpleUDPClient(DUALDELAY_HOST, DUALDELAY_PORT), "dualdelay")
 
@@ -1027,7 +1033,7 @@ def osc_handler_recall(client_address: Tuple[str, int], address: str,
 #: /track/* and /fx/*, and /fx/* is what the mixer uses for its filter -- one
 #: port for both would have Core reading REAPER's reports as commands and
 #: answering them, which is a loop on a rig that makes sound.
-OSC_PORT_REAPER_FEEDBACK: int = 9002
+OSC_PORT_REAPER_FEEDBACK: int = _truth.port("core", "reaper-feedback")
 
 _curves = load_curves(json.loads(CURVES_PATH.read_text()))
 
@@ -1117,7 +1123,8 @@ def reaper_feedback_handler(client_address: Tuple[str, int], address: str,
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ip", default="0.0.0.0", help="The ip to listen on")
+    parser.add_argument("--ip", default=_truth.host("any"),
+                        help="The ip to listen on")
     parser.add_argument("--port", type=int,
                         default=OSC_PORT_CORE, help="The port to listen on")
     parser.add_argument("--feedback-port", type=int,
@@ -1153,7 +1160,9 @@ if __name__ == "__main__":
                              "was 301,385 journal lines an hour on one "
                              "address alone, which is what made the journal "
                              "unsearchable.")
-    parser.add_argument("--web-bind", default="127.0.0.1:9080",
+    parser.add_argument("--web-bind",
+                        default=f"{_truth.host('local')}:"
+                                f"{_truth.port('core', 'web')}",
                         help="host:port for the window. Localhost by "
                              "default: the window can send OSC into a "
                              "running rig, and a control surface with no "
@@ -1355,7 +1364,7 @@ if __name__ == "__main__":
     # wrapping it here too would count the one message twice.
     def send_from_bench(to, address, value):
         if to == "self":
-            SimpleUDPClient("127.0.0.1", args.port).send_message(
+            SimpleUDPClient(_truth.host("local"), args.port).send_message(
                 address, value)
             return
         {"mixer": osc_a3mixer, "motion": osc_a3motion,
@@ -1404,7 +1413,7 @@ if __name__ == "__main__":
         wait_until_quiet(reaper_arrivals, lambda: replay_evening(
             evening,
             lambda address, value:
-            SimpleUDPClient("127.0.0.1", args.port)
+            SimpleUDPClient(_truth.host("local"), args.port)
             .send_message(address, value)))
 
     threading.Thread(
