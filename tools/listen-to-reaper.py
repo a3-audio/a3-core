@@ -35,6 +35,7 @@ PACKAGE = (Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PACKAGE / "lib"))
 
 from a3_core_layout import load_layout                      # noqa: E402
+import a3_osc                                               # noqa: E402
 from pythonosc import dispatcher as osc_dispatcher          # noqa: E402
 from pythonosc import osc_server                            # noqa: E402
 
@@ -63,8 +64,12 @@ def describe(layout, address):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--ip", default="0.0.0.0")
-    parser.add_argument("--port", type=int, default=9002)
+    # Where Core hears REAPER -- this listens in Core's place, so Core must
+    # not be running. The port is the one truth's.
+    truth = a3_osc.load(PACKAGE.parents[2] / "usr/share/a3/a3-osc.json")
+    parser.add_argument("--ip", default=truth.host("any"))
+    parser.add_argument("--port", type=int,
+                        default=truth.port("core", "reaper-feedback"))
     parser.add_argument("--layout", default=str(PACKAGE / "share/a3-core/layout.json"))
     parser.add_argument("--quiet", action="store_true",
                         help="count instead of printing every message; a "
