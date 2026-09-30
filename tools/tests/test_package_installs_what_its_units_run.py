@@ -55,6 +55,7 @@ PROVIDED_BY = {
     "/usr/bin/qjackctl": "qjackctl",
     "/usr/bin/zita-j2n": "zita-njbridge",
     "/usr/bin/zita-n2j": "zita-njbridge",
+    "/usr/bin/python3": "python3",
 }
 
 _EXEC_LINE = re.compile(r"^Exec\w*=[-@:+!]*(\S+)", re.MULTILINE)
