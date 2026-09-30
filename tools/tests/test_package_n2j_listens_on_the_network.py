@@ -14,10 +14,15 @@ minutes. At 20 ms there were none.
 """
 
 import re
+import sys
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+TRUTH = ROOT / "platform-config/debian-x86_64/a3-core/usr/share/a3/a3-osc.json"
+sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local/lib"))
+import a3_osc          # noqa: E402
+import a3_osc_render   # noqa: E402
 UNIT = (ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local"
         / "share/a3-core/config/systemd/user/zita-n2j.service")
 PATCHBAY = (ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local"
@@ -33,9 +38,11 @@ def exec_start(unit):
 
 class N2jListensOnTheNetwork(unittest.TestCase):
     def test_it_binds_every_interface(self):
-        args = exec_start(UNIT)
-        # The last two arguments are the address and the port.
-        address, port = args[-2], args[-1]
+        # Since 2026-09-30 the unit takes address and port from the file
+        # a3-osc-render writes from the one truth.
+        rendered = dict(line.split("=", 1) for line in
+                        a3_osc_render.zita_env(a3_osc.load(TRUTH)).splitlines())
+        address, port = rendered["A3_ZITA_N2J_HOST"], rendered["A3_ZITA_N2J_PORT"]
         self.assertEqual(address, "0.0.0.0",
                          "a loopback address hears nothing from the network")
         self.assertTrue(re.fullmatch(r"\d+", port), port)

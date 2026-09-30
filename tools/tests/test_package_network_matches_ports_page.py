@@ -22,7 +22,8 @@ POSTINST = PACKAGE / "DEBIAN" / "postinst"
 TEMPLATES = PACKAGE / "DEBIAN" / "templates"
 TRUTH = PACKAGE / "usr" / "share" / "a3" / "a3-osc.json"
 sys.path.insert(0, str(PACKAGE / "home" / "aaa" / ".local" / "lib"))
-import a3_osc   # noqa: E402
+import a3_osc          # noqa: E402
+import a3_osc_render   # noqa: E402
 VNC = PACKAGE / "home" / "aaa" / ".local" / "share" / "a3-core" / "recipes" / "a3vnc.sh"
 
 # https://a3-audio.github.io/a3-doc/ressources/ports.html
@@ -43,9 +44,13 @@ def template_default(name):
 
 
 def postinst_standard(name):
-    """The value the postinst's "standard network" branch assigns to NAME."""
-    match = re.search(rf'^\s*{name}="([^"]*)"', POSTINST.read_text(), re.MULTILINE)
-    return match.group(1) if match else None
+    """The value the postinst's "standard network" branch assigns to NAME --
+    since 2026-09-30 rendered from the one truth by a3-osc-render."""
+    for line in a3_osc_render.network_defaults(a3_osc.load(TRUTH)).splitlines():
+        key, value = line.split("=", 1)
+        if key == name:
+            return value
+    return None
 
 
 def core_sends_to(program):
