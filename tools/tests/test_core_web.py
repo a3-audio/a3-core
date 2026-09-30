@@ -287,6 +287,19 @@ class TheServerAnswers(unittest.TestCase):
         self.assertEqual(caught.exception.code, 404)
 
 
+class TheWindowBindsWhereTheTruthSays(unittest.TestCase):
+    """Decided 2026-09-30: the window is reachable on every interface, as the
+    rig's override had it since 2026-09-10 -- and the file says so now, so
+    the override has nothing left to add."""
+
+    def test_the_default_is_the_truths_listener(self):
+        import a3_osc
+        from a3_core_web import default_bind
+        truth = a3_osc.load(ROOT / "platform-config/debian-x86_64/a3-core"
+                            / "usr/share/a3/a3-osc.json")
+        self.assertEqual(default_bind(truth), "0.0.0.0:9080")
+
+
 class ABusyPortDoesNotTakeCoreDown(unittest.TestCase):
     def test_a_port_already_in_use_returns_false_rather_than_raising(self):
         """The rule this file exists under: the window never stops Core."""

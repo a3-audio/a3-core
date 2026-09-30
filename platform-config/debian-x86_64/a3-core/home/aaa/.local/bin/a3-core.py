@@ -67,7 +67,7 @@ from a3_core_reaper import (Arrivals, REFRESH_ACTION,   # noqa: E402
 from a3_core_startup import (filter_bypass_messages,   # noqa: E402
                              remembered_reaper_messages)
 from a3_core_evening import evening_state, replayable   # noqa: E402
-from a3_core_web import start_window, window_address   # noqa: E402
+from a3_core_web import default_bind, start_window, window_address   # noqa: E402
 from a3_core_devices import Devices, truth_hash   # noqa: E402
 
 LAYOUT_PATH = (Path(__file__).resolve().parent.parent
@@ -465,7 +465,7 @@ def relay(address, raw, origin):
 def announce_flag(flag, channel_index):
     """Say a channel's flag twice, and tell everybody both times.
 
-    The **lamp** (`/channel/n/led/pfl`) is whether that light is on. The
+    The **lamp** (`/channel/n/pfl/led`) is whether that light is on. The
     **flag** (`/channel/n/pfl`) is the setting, on the address it arrived on.
     Two vocabularies for one fact, and both are broadcast: a lamp is status,
     which makes it the screens' business as much as the desk's.
@@ -1206,14 +1206,12 @@ if __name__ == "__main__":
                              "was 301,385 journal lines an hour on one "
                              "address alone, which is what made the journal "
                              "unsearchable.")
-    parser.add_argument("--web-bind",
-                        default=f"{_truth.host('local')}:"
-                                f"{_truth.port('core', 'web')}",
-                        help="host:port for the window. Localhost by "
-                             "default: the window can send OSC into a "
-                             "running rig, and a control surface with no "
-                             "login on the show network is not a default "
-                             "worth setting.")
+    parser.add_argument("--web-bind", default=default_bind(_truth),
+                        help="host:port for the window. By default where "
+                             "a3-osc.json's core.web listener says -- every "
+                             "interface since 2026-09-30. The window can send "
+                             "OSC into a running rig: 127.0.0.1:PORT keeps it "
+                             "to this machine.")
     parser.add_argument("--no-web", action="store_true",
                         help="Do not open the window at all.")
     parser.add_argument("--save-project", action="store_true",

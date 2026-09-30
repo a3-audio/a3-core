@@ -62,10 +62,6 @@ ALLOWED = {
         "defaults for an .env without the a3-osc block",
     # The guard names the literals it lets stand.
     "a3-core/tools/second_truth.py": "the guard's own allow-list",
-    # Dead: nothing starts it since the fader moved into a3-core.py. Its
-    # deletion is the maintainer's call (asked 2026-09-30).
-    "a3-core/platform-config/debian-x86_64/a3-core/home/aaa/.local/bin/a3_core_reaper_fader.py":
-        "dead, deletion asked",
 }
 
 #: (path, literal) -> why this one literal may stand where it stands.

@@ -460,6 +460,15 @@ def _address_from(bind: str) -> Tuple[str, int]:
     return host, number
 
 
+def default_bind(truth) -> str:
+    """Where the window listens unless --web-bind says otherwise: the one
+    truth's `core.web` listener. Every interface since 2026-09-30, as the
+    rig had it -- the window can send OSC into a running rig, so this is a
+    decision the file records, not a default the code picks."""
+    listener = truth.listener("core", "web")
+    return f"{truth.host(listener['host'])}:{listener['port']}"
+
+
 def start_window(traffic, bind: str, send: Optional[Callable] = None,
                   page_path: Optional[Path] = None,
                   register_path: Optional[Path] = None,
