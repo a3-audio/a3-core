@@ -33,6 +33,9 @@
      is a question, not a fault -- most of REAPER's vocabulary is simply not
      used by this rig. */
   .nowire { color: #e0a07e; }
+  /* A device speaking another a3-osc.json than Core: a fault, and a quiet
+     one -- OSC would never say so itself. */
+  .differs { color: #e07e7e; font-weight: 600; }
   .type { color: #6b7280; font-size: 11px; }
   input, select, button { background: #1c2027; color: #d8dee9;
        border: 1px solid #2b303b; border-radius: 3px; padding: 4px 7px;
@@ -46,6 +49,7 @@
 </style>
 
 <div class="peers" id="peers"></div>
+<div class="peers" id="truths"></div>
 
 <h2>Adressen</h2>
 <div class="bench" style="margin-bottom:6px">
@@ -814,6 +818,29 @@ $("recall").onclick = () => fire("self", "/state/recall", "1");
 // Core already asks once at start-up; this is for any time after.
 $("refreshreaper").onclick = () => post("/api/refresh-reaper", {});
 
+// Which a3-osc.json each device speaks (/device/hello), against Core's own.
+// Asked for rather than streamed: a device says it once at start-up, and a
+// line that changes that rarely has no business on the four-a-second stream.
+async function fetchDevices() {
+  try {
+    const payload = await (await fetch("/api/devices")).json();
+    const line = $("truths");
+    line.textContent = "";
+    for (const row of payload.rows) {
+      const said = document.createElement("span");
+      said.textContent = row.matches
+        ? row.device + ": a3-osc.json is Core's"
+        : row.device + ": a3-osc.json DIFFERS from Core's (" + row.hash.slice(0, 12) + ")";
+      said.className = row.matches ? "muted" : "differs";
+      line.appendChild(said);
+    }
+  } catch (problem) {
+    // The status line already says when Core cannot be reached.
+  }
+}
+
 wireSorting();
 listen();
+fetchDevices();
+setInterval(fetchDevices, 5000);
 </script>

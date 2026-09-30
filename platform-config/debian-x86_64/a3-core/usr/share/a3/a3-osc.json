@@ -128,6 +128,7 @@
   "master.phones-mix":        {"pattern": "/master/phones-mix", "args": "f", "from": ["mixer", "motion"], "to": ["core"], "relayed_to": ["mixer", "motion"], "meaning": "cue <-> main in the headphones"},
   "master.phones-volume":     {"pattern": "/master/phones-volume", "args": "f", "from": ["mixer", "motion"], "to": ["core"], "relayed_to": ["mixer", "motion"], "meaning": "the headphone level"},
   "master.fx-return":         {"pattern": "/master/fx-return", "args": "f", "from": ["mixer", "motion"], "to": ["core"], "relayed_to": ["mixer", "motion"], "meaning": "the FX return, the fifth stereo input (was /master/return)"},
+  "device.hello":             {"pattern": "/device/hello", "args": "ss", "from": ["mixer"], "to": ["core"], "meaning": "a device names itself and the sha256 of its copy of this file; Core's window shows whether it is Core's own"},
   "state.recall":             {"pattern": "/state/recall", "args": "", "from": ["motion"], "to": ["core"], "meaning": "say the state again; the answer is the ordinary messages"},
   "beat":                     {"pattern": "/beat", "args": "iif", "from": ["beat-analyzer", "motion"], "to": ["core", "motion", "mixer", "radla", "beat-analyzer"], "meaning": "beat in bar, bar, tempo -- the clock (Motion sends it only in clock mode 0)"},
   "tap":                      {"pattern": "/tap", "args": "i", "from": ["mixer", "motion"], "to": ["beat-analyzer"], "meaning": "a tap on the beat"},

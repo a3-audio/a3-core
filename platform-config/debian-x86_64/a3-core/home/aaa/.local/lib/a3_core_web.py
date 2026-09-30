@@ -253,7 +253,7 @@ def register_as_json(register_path: Path, traffic) -> Dict[str, Any]:
 
 
 def _handler_class(traffic, send: Optional[Callable], page: Path,
-                   register_path: Path):
+                   register_path: Path, devices=None):
 
     class Window(BaseHTTPRequestHandler):
         # Otherwise every request writes a line to stderr, which is the flood
@@ -311,6 +311,15 @@ def _handler_class(traffic, send: Optional[Callable], page: Path,
                 # register is installed" from "the window is broken", and a
                 # 500 collapses the two into one "ging nicht".
                 payload = register_as_json(register_path, traffic)
+                self._send(200, json.dumps(payload).encode(),
+                           "application/json")
+
+            elif self.path == "/api/devices":
+                # Which truth each device speaks (a3_core_devices): Core's
+                # own hash and what every device said about its copy.
+                payload = {"own": devices.own_hash if devices else None,
+                           "rows": devices.snapshot(time.monotonic())
+                           if devices else []}
                 self._send(200, json.dumps(payload).encode(),
                            "application/json")
 
@@ -453,7 +462,8 @@ def _address_from(bind: str) -> Tuple[str, int]:
 
 def start_window(traffic, bind: str, send: Optional[Callable] = None,
                   page_path: Optional[Path] = None,
-                  register_path: Optional[Path] = None) -> bool:
+                  register_path: Optional[Path] = None,
+                  devices=None) -> bool:
     """Start serving, on a daemon thread. True if it is listening.
 
     Returns False rather than raising when the port is taken or the address
@@ -468,7 +478,8 @@ def start_window(traffic, bind: str, send: Optional[Callable] = None,
     try:
         host, port = _address_from(bind)
         _server = ThreadingHTTPServer(
-            (host, port), _handler_class(traffic, send, page, register))
+            (host, port), _handler_class(traffic, send, page, register,
+                                         devices))
     except (OSError, ValueError, OverflowError) as problem:
         # OverflowError is what socket.bind() actually raises for a port
         # outside 0-65535 -- _address_from() already rejects that range, so

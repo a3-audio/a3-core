@@ -68,6 +68,7 @@ from a3_core_startup import (filter_bypass_messages,   # noqa: E402
                              remembered_reaper_messages)
 from a3_core_evening import evening_state, replayable   # noqa: E402
 from a3_core_web import start_window, window_address   # noqa: E402
+from a3_core_devices import Devices, truth_hash   # noqa: E402
 
 LAYOUT_PATH = (Path(__file__).resolve().parent.parent
                / "share/a3-core/layout.json")
@@ -100,6 +101,9 @@ from pythonosc.udp_client import SimpleUDPClient  # type: ignore
 #: Read once, at the top: a Core that cannot read it does not come up, which
 #: is the right failure -- coming up with a guess is a second truth.
 _truth = a3_osc.load()
+
+# Which truth each device speaks, beside Core's own -- see a3_core_devices.
+_devices = Devices(truth_hash(a3_osc.truth_path()))
 
 OSC_PORT_CORE: int = _truth.port("core", "osc")
 
@@ -1021,6 +1025,25 @@ def replay_evening(evening, send_to_self) -> int:
 OSC_ADDRESS_RECALL: str = _truth.address("state.recall")
 
 
+def osc_handler_device_hello(client_address: Tuple[str, int], address: str,
+                             *osc_arguments: List[Any]) -> None:
+    """A device names itself and the sha256 of its copy of a3-osc.json.
+
+    Kept for the window (/api/devices), and said once in the journal when it
+    is news: a copy that is not Core's own is a second truth, and OSC would
+    never say so -- the device would speak old words to nobody."""
+    traffic.seen(IN, address, osc_arguments[0] if osc_arguments else None,
+                 peer_name(client_address[0], PEER_HOSTS))
+    if len(osc_arguments) < 2:
+        return
+
+    device, their_hash = str(osc_arguments[0]), str(osc_arguments[1])
+    if _devices.heard(device, their_hash, time.monotonic()):
+        verdict = ("is Core's" if their_hash == _devices.own_hash
+                   else "DIFFERS from Core's")
+        print(f"{device}: its a3-osc.json {verdict} ({their_hash[:12]})")
+
+
 def osc_handler_recall(client_address: Tuple[str, int], address: str,
                        *osc_arguments: List[Any]) -> None:
     """Say the whole state again, as the messages it would have arrived as.
@@ -1278,6 +1301,8 @@ if __name__ == "__main__":
                    needs_reply_address=True)
     dispatcher.map(OSC_ADDRESS_BEAT, osc_handler_beat,
                    needs_reply_address=True)
+    dispatcher.map(_truth.address("device.hello"), osc_handler_device_hello,
+                   needs_reply_address=True)
 
     # Und ein Auffang fuer alles Uebrige.
     #
@@ -1408,7 +1433,8 @@ if __name__ == "__main__":
     # The window, if it will come. Its failure is not Core's: a busy port
     # gets a line in the journal and the rig still makes sound.
     if not args.no_web:
-        if start_window(traffic, args.web_bind, send=send_from_bench):
+        if start_window(traffic, args.web_bind, send=send_from_bench,
+                        devices=_devices):
             # window_address(), not args.web_bind: --web-bind accepts port 0
             # to let the OS choose one, and printing the requested bind would
             # then log "http://127.0.0.1:0" while the real port stays

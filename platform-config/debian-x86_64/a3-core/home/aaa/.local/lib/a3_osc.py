@@ -121,8 +121,12 @@ class Truth:
         return {name: dict(block) for name, block in self._data["external"].items()}
 
 
+def truth_path(path=None):
+    """The file load() reads: `path`, else $A3_OSC_TRUTH, else the installed
+    one. Core hashes this same file for /device/hello."""
+    return Path(path or os.environ.get("A3_OSC_TRUTH") or DEFAULT_PATH)
+
+
 def load(path=None):
     """Read the truth: `path`, else $A3_OSC_TRUTH, else the installed file."""
-    if path is None:
-        path = os.environ.get("A3_OSC_TRUTH", DEFAULT_PATH)
-    return Truth(json.loads(Path(path).read_text()))
+    return Truth(json.loads(truth_path(path).read_text()))
