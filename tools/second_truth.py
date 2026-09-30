@@ -21,7 +21,7 @@ from pathlib import Path
 #: The repos, by the name of their checkout beside a3-core.
 REPOS = ("a3-core", "a3-motion-ui", "a3-mixer", "beat-analyzer", "stemdeck")
 
-CODE = {".py", ".cpp", ".cc", ".h", ".hh"}
+CODE = {".py", ".cpp", ".cc", ".h", ".hh", ".service"}
 
 #: Never looked at: tests say the words on purpose, builds and vendored code
 #: are not ours to hold.
@@ -102,8 +102,19 @@ def _cpp_literals(path):
         yield code.count("\n", 0, match.start()) + 1, int(match.group(1))
 
 
+def _unit_literals(path):
+    """The words of a systemd unit's Exec lines: that is where a unit names
+    an address -- StemDeck's zita-j2n named Core's old one for days."""
+    for number, line in enumerate(path.read_text(errors="replace").splitlines(), 1):
+        if not line.startswith("Exec"):
+            continue
+        for word in line.split("=", 1)[1].split():
+            yield number, int(word) if word.isdigit() else word
+
+
 def literals(path):
-    reader = _python_literals if path.suffix == ".py" else _cpp_literals
+    reader = {".py": _python_literals,
+              ".service": _unit_literals}.get(path.suffix, _cpp_literals)
     try:
         yield from reader(path)
     except (SyntaxError, UnicodeDecodeError):
@@ -112,7 +123,7 @@ def literals(path):
 
 def code_files(repo):
     for path in sorted(repo.rglob("*")):
-        if path.suffix in CODE and path.is_file() \
+        if path.suffix in CODE and path.is_file() and not path.is_symlink() \
                 and not SKIPPED_DIRS & set(path.relative_to(repo).parts):
             yield path
 

@@ -44,6 +44,27 @@ class TheGuardSees(unittest.TestCase):
     def test_a_port_in_python(self):
         self.assertTrue(self.found_in("desk.py", "PORT = 9000\n"))
 
+    def test_an_address_in_a_unit_file(self):
+        # StemDeck's zita-j2n unit sent to Core's old address for days; the
+        # guard only read code then.
+        self.assertTrue(self.found_in(".config/systemd/user/zita-j2n.service",
+                                      "[Service]\nExecStart=/usr/bin/zita-j2n --chan 10 192.168.43.129 65100\n"))
+
+    def test_not_a_units_other_numbers(self):
+        self.assertEqual(self.found_in("x.service",
+                                       "[Service]\nCPUAffinity=1 2 3\nExecStart=/usr/bin/zita-n2j --chan 1-2 --buff 20\n"), [])
+
+    def test_not_through_a_symlink(self):
+        # The package's default.target.wants/ links point at the machine's
+        # live ~/.config -- that is the rig, not the repository.
+        with tempfile.TemporaryDirectory() as tmp:
+            outside = Path(tmp) / "live.service"
+            outside.write_text("[Service]\nExecStart=/usr/bin/zita-j2n 192.168.43.129 65100\n")
+            repo = Path(tmp) / "a3-core"
+            repo.mkdir()
+            (repo / "zita-j2n.service").symlink_to(outside)
+            self.assertEqual(second_truth.findings({"a3-core": repo}, PORTS), [])
+
     def test_not_in_a_comment(self):
         self.assertEqual(self.found_in("net.cpp", '// sends "/channel/1/volume" to 9000\n'), [])
 
