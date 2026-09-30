@@ -24,7 +24,6 @@ if os.environ.get('DISPLAY','') == '':
 layout = [
         [sg.Text("A³ Core Interface")],
         [sg.Button("start reaper"), sg.Button("stop reaper")],
-        [sg.Button("start supercollider"), sg.Button("stop supercollider")],
         [sg.Button("start mixbus"), sg.Button("stop mixbus")],
         #[sg.Text("cables")],
         #[sg.Button("connect a3 patch")],
@@ -47,11 +46,6 @@ while True:
         os.system("systemctl --user start a3_reaper")
     if event == "stop reaper": 
         os.system("systemctl --user stop a3_reaper")
-
-    if event == "start supercollider": 
-        os.system("systemctl --user start a3_vu_meter")
-    if event == "stop supercollider": 
-        os.system("systemctl --user stop a3_vu_meter")
 
     if event == "start mixbus": 
         os.system("systemctl --user start a3_mixbus")
