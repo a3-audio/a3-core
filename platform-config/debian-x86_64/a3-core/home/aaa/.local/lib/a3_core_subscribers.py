@@ -103,24 +103,7 @@ def parse_subscribers(texts, reserved=()):
     return found
 
 
-#: The three A3-shaped families. Everything else that arrives -- `/beat`,
-#: `/state/recall`, REAPER's `/track/...` -- is a command or another vendor's
-#: language, not a value a screen shows.
-FAMILIES = ("channel", "master", "fx")
-
-#: Flags. These are passed on by `announce_flag()` and the filter-mode branch
-#: instead, and those tell **everybody including the sender** -- a lamp is
-#: status, so the desk's own lamp has to follow the desk's own key. Passing
-#: them on here as well would send each of them twice.
-ANNOUNCED_INSTEAD = ("pfl", "fx", "mode")
-
-#: The position. Not a REAPER parameter at all -- it goes straight to the IEM
-#: encoders -- and it arrives tens of thousands of times per channel while a
-#: clip plays. A screen that wants it asks for it at start-up.
-ASKED_FOR_INSTEAD = ("azimuth", "elevation")
-
-
-def relay_on_arrival(address):
+def relay_on_arrival(truth, address):
     """Whether a value that just arrived should go on to the other screens.
 
     **Why on arrival and not on REAPER's report:** REAPER does not report a
@@ -134,20 +117,20 @@ def relay_on_arrival(address):
     ratchet of that morning came from passing on REAPER's value, which is base
     *plus* modulation, and writing it back as a base. Nothing here passes
     through REAPER.
+
+    **Which addresses:** the truth's (a3-osc.json) -- those marked
+    `relayed_to`. The flags and the filter mode are not: announce_flag() and
+    the mode branch say them to everybody, the sender included, because a lamp
+    is status. The position is not either: it goes to the IEM encoders tens of
+    thousands of times per channel, and a screen asks for it at start-up. An
+    address the truth does not have -- an old name, `/beat`, REAPER's
+    `/track/...` -- is not a value a screen shows.
     """
-    parts = address.strip("/").split("/")
-    if len(parts) < 2 or parts[0] not in FAMILIES:
+    found = truth.match(address)
+    if found is None:
         return False
-
-    if parts[0] == "channel":
-        if len(parts) < 3:
-            return False
-        parameter = parts[2]
-    else:
-        parameter = parts[1]
-
-    return (parameter not in ANNOUNCED_INSTEAD
-            and parameter not in ASKED_FOR_INSTEAD)
+    key, _ = found
+    return "relayed_to" in truth.addresses()[key]
 
 
 def everyone_but(subscribers, origin):

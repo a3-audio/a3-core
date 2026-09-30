@@ -19,7 +19,11 @@
   "differed between those twenty-seven was never the address -- it was the",
   "VST parameter number, written out at the call site as 1, 6, 7, 8 or 15.",
   "Those are fx_params, named for what they carry rather than where they",
-  "sit."
+  "sit.",
+  "",
+  "Since 2026-09-30 the A3 addresses -- channels, lamps, the filter -- are",
+  "the one truth's (/usr/share/a3/a3-osc.json). What stays here is REAPER's",
+  "and the IEM plug-ins' vocabulary, tied to this project's tracks."
  ],
  "channels": [
   {
@@ -123,12 +127,8 @@
   ]
  },
  "addresses": {
-  "channel_control": "/channel/{channel}/{control}",
   "dualdelay_bpm": "/DualDelay/delayBPM{side}",
-  "fx_mode_led": "/fx/led",
   "fx_param": "/track/{track}/fx/{slot}/fxparam/{param}/value",
-  "led_fx": "/channel/{channel}/led/fx",
-  "led_pfl": "/channel/{channel}/led/pfl",
   "track_mute": "/track/{track}/mute",
   "track_send": "/track/{track}/send/{send}/volume",
   "track_volume": "/track/{track}/volume"

@@ -433,7 +433,7 @@ def relay(address, raw, origin):
     alone is sound: whoever is left out is the one who said it, and it is
     already holding the value.
     """
-    if not relay_on_arrival(address):
+    if not relay_on_arrival(_truth, address):
         return
 
     # The number, never the argument as it arrived. The desk sends its values
@@ -470,12 +470,11 @@ def announce_flag(flag, channel_index):
     it has already passed on -- so nothing here moves a light unless the
     status moved.
     """
-    broadcast(*led_message(_layout, flag, channel_index,
+    broadcast(*led_message(_truth, flag, channel_index,
                            channel_infos[channel_index]))
 
     control, read = STATE_OF[flag]
-    broadcast(_layout.address("channel_control", channel=channel_index,
-                              control=control),
+    broadcast(_truth.address(control, ch=channel_index + 1),
               read(channel_infos[channel_index]))
 
 
@@ -617,8 +616,27 @@ def unrouted_handler(client_address: Tuple[str, int], address: str,
     traffic.unknown(address, osc_arguments[0] if osc_arguments else None, peer)
 
 
+def known_address(client_address: Tuple[str, int], address: str,
+                  osc_arguments) -> Optional[Tuple[str, dict]]:
+    """The address taken apart against the one truth, or None.
+
+    None is an address the truth does not have -- an old name from before
+    2026-09-30, a channel out of range, a typo -- and it is written down as
+    unknown, where the window shows it, rather than half-served.
+    """
+    found = _truth.match(address)
+    if found is None:
+        unrouted_handler(client_address, address, *osc_arguments)
+    return found
+
+
 def osc_handler_channel(client_address: Tuple[str, int], address: str,
                         *osc_arguments: List[Any]) -> None:
+
+    found = known_address(client_address, address, osc_arguments)
+    if found is None:
+        return
+    key, fields = found
 
     # The buttons below read the argument as it arrived rather than as a
     # float, because its type is what tells the mixer's momentary edge from
@@ -641,11 +659,9 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
     # control a screen may show.
     relay(address, raw, origin)
 
-    words: List[str] = address.split("/")
-    channel: str = words[2]
-    parameter: str = words[3]
-
-    channel_index = int(channel)
+    # The wire counts channels from 1, Core's list from 0.
+    channel_index = fields["ch"] - 1
+    parameter: str = key[len("channel."):]
     track_input = channel_infos[channel_index].track_input
 
     # POTENTIOMETER
@@ -686,22 +702,20 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
         val = slope_volume(value)
         osc_reaper.send_message(f"/track/{track_input}/fx/{FX_INDEX_GAIN}/fxparam/1/value", val)
 
-    elif parameter == "eq":
-        eq_parameter : str = words[4]
-        if eq_parameter == "high":
-            val = slope_eq(value)
-            osc_reaper.send_message(
-                f"/track/{track_input}/fx/{FX_INDEX_EQ}/fxparam/1/value", val) # Smooth-EQ (airwindows)
+    elif parameter == "eq.high":
+        val = slope_eq(value)
+        osc_reaper.send_message(
+            f"/track/{track_input}/fx/{FX_INDEX_EQ}/fxparam/1/value", val) # Smooth-EQ (airwindows)
 
-        elif eq_parameter == "mid":
-            val = slope_eq(value)
-            osc_reaper.send_message(
-                f"/track/{track_input}/fx/{FX_INDEX_EQ}/fxparam/2/value", val) # Smooth-EQ (airwindows)
+    elif parameter == "eq.mid":
+        val = slope_eq(value)
+        osc_reaper.send_message(
+            f"/track/{track_input}/fx/{FX_INDEX_EQ}/fxparam/2/value", val) # Smooth-EQ (airwindows)
 
-        elif eq_parameter == "low":
-            val = slope_eq(value)
-            osc_reaper.send_message(
-                f"/track/{track_input}/fx/{FX_INDEX_EQ}/fxparam/3/value", val) # Smooth-EQ (airwindows)
+    elif parameter == "eq.low":
+        val = slope_eq(value)
+        osc_reaper.send_message(
+            f"/track/{track_input}/fx/{FX_INDEX_EQ}/fxparam/3/value", val) # Smooth-EQ (airwindows)
     
     elif parameter == "volume":
         val = slope_volume(value)
@@ -722,7 +736,7 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
                 f"/track/{track_pfl}/mute", float(muted))
             announce_flag("pfl", channel_index)
 
-    elif parameter == "fx":
+    elif parameter == "filter":
         wanted = wanted_toggle(raw, channel_infos[channel_index].toggle_fx)
         if wanted is not NO_CHANGE:
             channel_infos[channel_index].toggle_fx = wanted
@@ -756,7 +770,7 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
         for client in udp_clients_iem:
             client.send_message(addr, el)
 
-    elif parameter == "pot_1":
+    elif parameter == "filter.frequency":
         val = np.interp(value, [0, 1], [0.05, 0.9])
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
         #osc_reaper.send_message(
@@ -766,7 +780,7 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
             f"/fxparam/{_layout.fx_param('enc_pot_1')}/value", val)
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
 
-    elif parameter == "pot_2":
+    elif parameter == "filter.q":
         val = np.interp(value, [0, 1], [0.05, 0.9])
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
         #osc_reaper.send_message(
@@ -791,6 +805,11 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
 def osc_handler_master(client_address: Tuple[str, int], address: str,
                        *osc_arguments: List[Any]) -> None:
 
+    found = known_address(client_address, address, osc_arguments)
+    if found is None:
+        return
+    key, _ = found
+
     #  mypy 0.920 reports a false positive, retest!
     value: float = float(osc_arguments[0])  # type: ignore
     assert type(value) == float
@@ -802,8 +821,7 @@ def osc_handler_master(client_address: Tuple[str, int], address: str,
 
     relay(address, osc_arguments[0], origin)
 
-    words: List[str] = address.split("/")
-    parameter: str = words[2]
+    parameter: str = key[len("master."):]
 
     if parameter == "volume":
         val = slope_volume(value)
@@ -817,7 +835,7 @@ def osc_handler_master(client_address: Tuple[str, int], address: str,
         for gain_vst_plugins_on_boothbus in _layout.gain_params("boothbus"):
             osc_reaper.send_message(f"/track/{boothbus}/fx/1/fxparam/{gain_vst_plugins_on_boothbus}/value", val)
 
-    if parameter == "phones_mix":
+    if parameter == "phones-mix":
         track_ph_mix = master_info.track_ph_mix
         val = value * 0.5    
         #val = slope_crossover_1a(value)
@@ -835,12 +853,12 @@ def osc_handler_master(client_address: Tuple[str, int], address: str,
         #    for pfl_param in [1, 15]:
         #        osc_reaper.send_message(f"/track/{track_pfl}/fx/1/fxparam/{pfl_param}/value", inv_val)
 
-    if parameter == "phones_volume":
+    if parameter == "phones-volume":
         val = slope_volume(value)
         track_phones = master_info.track_phones
         osc_reaper.send_message(f"/track/{track_phones}/fx/2/fxparam/1/value", val)
 
-    elif parameter == "return":
+    elif parameter == "fx-return":
         # The FX-return pot on the desk. Since 2026-09-29 the return has its
         # own track ("Return") with one Airwindows PurestGain on it, bent like
         # every other PurestGain volume here: full travel is 0 dB, never the
@@ -852,8 +870,13 @@ def osc_handler_master(client_address: Tuple[str, int], address: str,
         for gain_vst_plugins_on_return in _layout.gain_params("aux_return"):
             osc_reaper.send_message(f"/track/{aux_return}/fx/{slot}/fxparam/{gain_vst_plugins_on_return}/value", val)
 
-def osc_handler_fx(client_address: Tuple[str, int], address: str,
-                   *osc_arguments: List[Any]) -> None:
+def osc_handler_filter(client_address: Tuple[str, int], address: str,
+                       *osc_arguments: List[Any]) -> None:
+
+    found = known_address(client_address, address, osc_arguments)
+    if found is None:
+        return
+    key, _ = found
 
     value = osc_arguments[0]
 
@@ -866,8 +889,7 @@ def osc_handler_fx(client_address: Tuple[str, int], address: str,
     # twice, to everybody, in both vocabularies. relay() knows that.
     relay(address, value, origin)
 
-    words: List[str] = address.split("/")
-    parameter: str = words[2]
+    parameter: str = key[len("filter."):]
 
     if parameter == "mode":
         # The mixer names the mode ("high_pass"), A3 Motion sends the number
@@ -879,9 +901,10 @@ def osc_handler_fx(client_address: Tuple[str, int], address: str,
         # Twice, both to everybody: the word on /fx/led, which is what the
         # desk's firmware reads, and the number on /fx/mode, which is the
         # address the mode arrives on and the spelling every screen sends.
-        broadcast(_layout.address("fx_mode_led"),
+        broadcast(_truth.address("filter.led"),
                   FX_MODE_WORDS[master_info.fx_mode.name])
-        broadcast("/fx/mode", FX_MODE_NUMBERS[master_info.fx_mode.name])
+        broadcast(_truth.address("filter.mode"),
+                  FX_MODE_NUMBERS[master_info.fx_mode.name])
         set_filters()
 
     elif parameter == "frequency":
@@ -906,7 +929,7 @@ def osc_handler_fx(client_address: Tuple[str, int], address: str,
 #: be understood at the other end.
 #: The beat-analyzer's clock. It sends this to every host in its .env, and
 #: Core has been one of them all along -- it simply had nowhere to put it.
-OSC_ADDRESS_BEAT: str = "/beat"
+OSC_ADDRESS_BEAT: str = _truth.address("beat")
 
 
 def osc_handler_beat(client_address: Tuple[str, int], address: str,
@@ -964,7 +987,7 @@ def speak_remembered_state() -> None:
             FX_INDEX_HIPASS, FX_INDEX_LOPASS):
         osc_reaper.send_message(address, value)
 
-    messages = list(recall_messages(_layout, channel_infos, master_info,
+    messages = list(recall_messages(_truth, channel_infos, master_info,
                                     _relayed))
     for out, value in messages:
         for client in subscribers:
@@ -995,7 +1018,7 @@ def replay_evening(evening, send_to_self) -> int:
     return replayed
 
 
-OSC_ADDRESS_RECALL: str = "/state/recall"
+OSC_ADDRESS_RECALL: str = _truth.address("state.recall")
 
 
 def osc_handler_recall(client_address: Tuple[str, int], address: str,
@@ -1014,7 +1037,7 @@ def osc_handler_recall(client_address: Tuple[str, int], address: str,
                  peer_name(client_address[0], PEER_HOSTS,
                            only=COMMANDERS))
 
-    messages = list(recall_messages(_layout, channel_infos, master_info,
+    messages = list(recall_messages(_truth, channel_infos, master_info,
                                     _relayed))
 
     # Not through broadcast(): that drops a value already passed on, which is
@@ -1118,7 +1141,7 @@ def reaper_feedback_handler(client_address: Tuple[str, int], address: str,
         return
 
     traffic.seen(IN, address, value, peer)
-    broadcast(reversed_address(_layout, entry, channel_index), a3_value)
+    broadcast(reversed_address(_truth, entry, channel_index), a3_value)
 
 
 if __name__ == "__main__":
@@ -1245,10 +1268,12 @@ if __name__ == "__main__":
     # and known here: everything mapped on this dispatcher came in on Core's
     # main port, so only a controller can have sent it. Hence only=COMMANDERS
     # at every tap below, and only=ANSWERERS on the feedback dispatcher's.
-    dispatcher.map("/channel/*", osc_handler_channel,
-                   needs_reply_address=True)
-    dispatcher.map("/master/*", osc_handler_master, needs_reply_address=True)
-    dispatcher.map("/fx/*", osc_handler_fx, needs_reply_address=True)
+    # One family per first word of the truth's names; each handler takes the
+    # address apart against the truth and writes down what it does not know.
+    for family, handler in (("channel", osc_handler_channel),
+                            ("master", osc_handler_master),
+                            ("filter", osc_handler_filter)):
+        dispatcher.map(f"/{family}/*", handler, needs_reply_address=True)
     dispatcher.map(OSC_ADDRESS_RECALL, osc_handler_recall,
                    needs_reply_address=True)
     dispatcher.map(OSC_ADDRESS_BEAT, osc_handler_beat,

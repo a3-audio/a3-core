@@ -97,7 +97,7 @@ GAIN_PARAMS_OF = {
 #:
 #: `slot` means an fx slot for FXPARAM, a send name for SEND, and nothing for
 #: VOLUME. `param` means a parameter number, or GAINS, or nothing.
-Reverse = namedtuple("Reverse", "kind field slot param curve address scope")
+Reverse = namedtuple("Reverse", "kind field slot param curve key scope")
 
 #: Every value REAPER reports that A3 has a name for.
 #:
@@ -109,21 +109,21 @@ Reverse = namedtuple("Reverse", "kind field slot param curve address scope")
 REVERSALS = (
     # The channel strip.
     Reverse(FXPARAM, "track_input", "gain", 1,
-            "slope_volume", "gain", CHANNEL),
+            "slope_volume", "channel.gain", CHANNEL),
     Reverse(FXPARAM, "track_input", "eq", 1,
-            "slope_eq", "eq/high", CHANNEL),
+            "slope_eq", "channel.eq.high", CHANNEL),
     Reverse(FXPARAM, "track_input", "eq", 2,
-            "slope_eq", "eq/mid", CHANNEL),
+            "slope_eq", "channel.eq.mid", CHANNEL),
     Reverse(FXPARAM, "track_input", "eq", 3,
-            "slope_eq", "eq/low", CHANNEL),
+            "slope_eq", "channel.eq.low", CHANNEL),
     Reverse(FXPARAM, "track_channelbus", "gain", GAINS,
-            "slope_volume", "volume", CHANNEL),
+            "slope_volume", "channel.volume", CHANNEL),
 
     # The FX send, which is a send and not a parameter -- it leaves the track
     # rather than sitting on it. No action script drives it, so relaying it is
     # as safe as relaying the gain.
     Reverse(SEND, "track_channelbus", "fx", None,
-            "slope_constant_power", "fx-send", CHANNEL),
+            "slope_constant_power", "channel.fx-send", CHANNEL),
 
     # The one filter all four channels share. Written to every channel's input
     # track and read back from whichever reports first; the answer is the same
@@ -133,29 +133,29 @@ REVERSALS = (
     # through different curves, so either would do, and reading both would be
     # answering one control twice.
     Reverse(FXPARAM, "track_input", "hipass", "filter_frequency",
-            "slope_fx_freq_hipass", "/fx/frequency", GLOBAL),
+            "slope_fx_freq_hipass", "filter.frequency", GLOBAL),
     Reverse(FXPARAM, "track_input", "hipass", "filter_resonance",
-            "slope_fx_res", "/fx/resonance", GLOBAL),
+            "slope_fx_res", "filter.resonance", GLOBAL),
 
     # The master section. None of it belongs to a channel, which is why the
     # first version of this table had nowhere to put it -- and why the master
     # page of A3 Motion's mixer came up at its own defaults for as long as it
     # existed.
     Reverse(FXPARAM, "track_masterbus", "gain", GAINS,
-            "slope_volume", "/master/volume", GLOBAL),
+            "slope_volume", "master.volume", GLOBAL),
     Reverse(FXPARAM, "track_booth", "gain", GAINS,
-            "slope_volume", "/master/booth", GLOBAL),
+            "slope_volume", "master.booth", GLOBAL),
     Reverse(FXPARAM, "track_phones", "phones_gain", 1,
-            "slope_volume", "/master/phones_volume", GLOBAL),
+            "slope_volume", "master.phones-volume", GLOBAL),
     # The FX return: track "Return", one PurestGain, since 2026-09-29.
     Reverse(FXPARAM, "aux_return", "aux_gain", GAINS,
-            "slope_volume", "/master/return", GLOBAL),
+            "slope_volume", "master.fx-return", GLOBAL),
 
     # The headphone mix is the one value that goes out unbent, as a plain
     # track volume. `identity` is a3_core_curves' name for that, so this reads
     # as a control with no curve rather than as a hole in the table.
     Reverse(VOLUME, "track_ph_mix", None, None,
-            "identity", "/master/phones_mix", GLOBAL),
+            "identity", "master.phones-mix", GLOBAL),
 )
 
 #: Kept under its old name so the coverage test and older readers still find
@@ -241,7 +241,7 @@ def reverse_for(layout, address, role_field):
     return None
 
 
-def reversed_address(layout, entry, channel_index):
+def reversed_address(truth, entry, channel_index):
     """The A3 address this value comes back on.
 
     A channel's controls are hung under the channel whose track reported them;
@@ -250,6 +250,5 @@ def reversed_address(layout, entry, channel_index):
     channel, and demanding one would mean inventing a number to throw away.
     """
     if entry.scope == CHANNEL:
-        return layout.address("channel_control", channel=channel_index,
-                              control=entry.address)
-    return entry.address
+        return truth.address(entry.key, ch=channel_index + 1)
+    return truth.address(entry.key)
