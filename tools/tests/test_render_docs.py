@@ -31,6 +31,13 @@ class TheTables(unittest.TestCase):
         self.assertIn("mixer, motion", row)
         self.assertIn("core", row)
 
+    def test_a_pipe_in_a_cell_does_not_split_the_row(self):
+        # "f|s" and "/DualDelay/delayBPML|R" are cells, not column breaks.
+        for table in (render_docs.addresses_table(TRUTH), render_docs.ports_table(TRUTH)):
+            for line in table.splitlines():
+                cells = [c for c in __import__("re").split(r"(?<!\\)\|", line)][1:-1]
+                self.assertEqual(len(cells), 5, line)
+
     def test_the_meters_count_from_one(self):
         table = render_docs.vu_table(TRUTH)
         self.assertIn("| `/vu/1` | in1_pre |", table)

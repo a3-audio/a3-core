@@ -23,7 +23,9 @@ PAGES = ("src/ressources/osc.md", "src/ressources/ports.md")
 
 
 def _row(cells):
-    return "| " + " | ".join(cells) + " |"
+    # A "|" inside a cell ("f|s", "delayBPML|R") would be read as a column
+    # break and shift the rest of the row.
+    return "| " + " | ".join(str(c).replace("|", "\\|") for c in cells) + " |"
 
 
 def addresses_table(truth):
