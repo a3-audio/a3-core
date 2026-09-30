@@ -116,11 +116,14 @@ bindsym $mod+a focus parent
 
 # Define names for default workspaces for which we configure key bindings later on.
 # We use variables to avoid repeating the names in multiple places.
-set $ws1 "1"
-set $ws2 "2"
-set $ws3 "3"
-set $ws4 "4"
-set $ws5 "5"
+# The rig's workspaces, named for what lives on them (2026-09-30): i3bar
+# shows the names, the two UIs' switch reads them from i3, and
+# "workspace number N" still finds them.
+set $ws1 "1:MOTION"
+set $ws2 "2:STEMDECK"
+set $ws3 "3:REAPER"
+set $ws4 "4:QJACKCTL"
+set $ws5 "5:SCARLETT"
 set $ws6 "6"
 set $ws7 "7"
 set $ws8 "8"
@@ -221,17 +224,17 @@ exec /usr/bin/xrandr --dpi 120 &
 #exec /usr/bin/qasmixer -t &
 #exec /home/aaa/a3-core.lokal/alsa-scarlett-gui &
 
-for_window [class="A3 Motion UI"] move container to workspace 1
-for_window [class="REAPER"] move container to workspace 2
-for_window [class="QjackCtl"] move container to workspace 3
-for_window [title="Scarlett 18i20 USB"] move container to workspace 4
-# StemDeck, always running (stemdeck.service), alone on workspace 4 and
+for_window [class="A3 Motion UI"] move container to workspace number $ws1
+for_window [class="REAPER"] move container to workspace number $ws3
+for_window [class="QjackCtl"] move container to workspace number $ws4
+for_window [title="Scarlett 18i20 USB"] move container to workspace number $ws5
+# StemDeck, always running (stemdeck.service), alone on workspace 2 and
 # filling it: tiled without a border rather than i3's full screen, which every
 # dialog it opens ended (2026-09-30). Its start takes the screen for a moment
 # (JUCE builds the window three times and the first takes the focus); the
 # service puts back the workspace that was showing
 # (stemdeck/tools/rig-keep-the-screen.sh).
-assign [class="StemDeck"] 4
+assign [class="StemDeck"] number $ws2
 for_window [class="StemDeck" title="^StemDeck$"] border none
 # Its dialogs -- Settings, Audio, Create stems, the folder choosers, message
 # boxes: every StemDeck window but the main one -- float over it.
@@ -244,3 +247,19 @@ for_window [class="StemDeck" title="^(?!StemDeck$)"] floating enable
 # Hide the mouse cursor instantly on touch (--hide-on-touch), and after a
 # short idle period otherwise; real mouse movement keeps it visible.
 exec --no-startup-id unclutter --timeout 1 --hide-on-touch --exclude-root
+
+# The way back from the tool workspaces: i3bar at the top, with a button per
+# workspace. Hidden on 1 and 2 -- A3 Motion and StemDeck fill their 768x1024
+# and switch between each other themselves -- and shown from 3 on by
+# a3-bar-per-workspace.service, as i3 has no bar per workspace.
+bar {
+    id a3
+    position top
+    mode invisible
+    hidden_state hide
+    modifier none
+    strip_workspace_numbers yes
+    tray_output none
+    font pango:DejaVu Sans Bold 13
+    status_command i3status
+}
