@@ -42,6 +42,7 @@ from pythonosc import osc_server
 # promise a working directory.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 from a3_core_layout import load_layout   # noqa: E402
+import a3_osc   # noqa: E402
 from a3_core_curves import CurveNotInvertible, invert, load_curves  # noqa: E402
 from a3_core_crossfade import crossfade_gains   # noqa: E402
 from a3_core_tempo import (NO_CHANGE as NO_TEMPO,   # noqa: E402
@@ -66,7 +67,8 @@ from a3_core_reaper import (Arrivals, REFRESH_ACTION,   # noqa: E402
 from a3_core_startup import (filter_bypass_messages,   # noqa: E402
                              remembered_reaper_messages)
 from a3_core_evening import evening_state, replayable   # noqa: E402
-from a3_core_web import start_window, window_address   # noqa: E402
+from a3_core_web import default_bind, start_window, window_address   # noqa: E402
+from a3_core_devices import Devices, truth_hash   # noqa: E402
 
 LAYOUT_PATH = (Path(__file__).resolve().parent.parent
                / "share/a3-core/layout.json")
@@ -95,7 +97,15 @@ CURVES_PATH = (Path(__file__).resolve().parent.parent
 _layout = load_layout(LAYOUT_PATH)
 from pythonosc.udp_client import SimpleUDPClient  # type: ignore
 
-OSC_PORT_CORE: int = 9000
+#: The one truth for hosts, ports and addresses (/usr/share/a3/a3-osc.json).
+#: Read once, at the top: a Core that cannot read it does not come up, which
+#: is the right failure -- coming up with a guess is a second truth.
+_truth = a3_osc.load()
+
+# Which truth each device speaks, beside Core's own -- see a3_core_devices.
+_devices = Devices(truth_hash(a3_osc.truth_path()))
+
+OSC_PORT_CORE: int = _truth.port("core", "osc")
 
 # Which FX slot on a track holds which plugin. Out of the layout rather than
 # written here: a slot that moves in the REAPER project is a number to change
@@ -130,9 +140,9 @@ CHANNEL_ENC_DELAY: int = 25
 # moved subnet, and the working values lived only in a hand-made service
 # override on the one machine -- a fresh install sent to nobody. See issue #54;
 # tools/tests/test_package_network_matches_ports_page.py holds them to the page.
-A3MIXER_HOST, A3MIXER_PORT = '192.168.8.11', 7772
-A3MOTION_HOST, A3MOTION_PORT = '127.0.0.1', 7771
-REAPER_HOST, REAPER_PORT = '127.0.0.1', 9001
+A3MIXER_HOST, A3MIXER_PORT = _truth.endpoint("mixer", "osc")
+A3MOTION_HOST, A3MOTION_PORT = _truth.endpoint("motion", "osc")
+REAPER_HOST, REAPER_PORT = _truth.endpoint("reaper", "osc")
 
 # What Core sends, remembered so the echo can be told from news.
 #
@@ -203,8 +213,8 @@ osc_reaper = WatchedClient(SimpleUDPClient(REAPER_HOST, REAPER_PORT),
                            "reaper")
 
 udp_clients_iem = tuple(
-    WatchedClient(SimpleUDPClient('127.0.0.1', 1337 + index), "iem")
-    for index in range(3))
+    WatchedClient(SimpleUDPClient(*_truth.endpoint("iem", role)), "iem")
+    for role in ("multiencoder-1", "multiencoder-2", "multiencoder-3"))
 
 #: The delay on the FX bus, which follows the beat-analyzer's tempo.
 #:
@@ -220,7 +230,7 @@ udp_clients_iem = tuple(
 #: inside the plug-in (its status display, lower left, "Listen to port" ->
 #: OPEN) and lives in the REAPER project, not here. With the port shut these
 #: messages go nowhere and nothing says so -- see the smoke test.
-DUALDELAY_HOST, DUALDELAY_PORT = '127.0.0.1', 1340
+DUALDELAY_HOST, DUALDELAY_PORT = _truth.endpoint("dualdelay", "osc")
 osc_dualdelay = WatchedClient(
     SimpleUDPClient(DUALDELAY_HOST, DUALDELAY_PORT), "dualdelay")
 
@@ -427,7 +437,7 @@ def relay(address, raw, origin):
     alone is sound: whoever is left out is the one who said it, and it is
     already holding the value.
     """
-    if not relay_on_arrival(address):
+    if not relay_on_arrival(_truth, address):
         return
 
     # The number, never the argument as it arrived. The desk sends its values
@@ -455,7 +465,7 @@ def relay(address, raw, origin):
 def announce_flag(flag, channel_index):
     """Say a channel's flag twice, and tell everybody both times.
 
-    The **lamp** (`/channel/n/led/pfl`) is whether that light is on. The
+    The **lamp** (`/channel/n/pfl/led`) is whether that light is on. The
     **flag** (`/channel/n/pfl`) is the setting, on the address it arrived on.
     Two vocabularies for one fact, and both are broadcast: a lamp is status,
     which makes it the screens' business as much as the desk's.
@@ -464,12 +474,11 @@ def announce_flag(flag, channel_index):
     it has already passed on -- so nothing here moves a light unless the
     status moved.
     """
-    broadcast(*led_message(_layout, flag, channel_index,
+    broadcast(*led_message(_truth, flag, channel_index,
                            channel_infos[channel_index]))
 
     control, read = STATE_OF[flag]
-    broadcast(_layout.address("channel_control", channel=channel_index,
-                              control=control),
+    broadcast(_truth.address(control, ch=channel_index + 1),
               read(channel_infos[channel_index]))
 
 
@@ -611,8 +620,27 @@ def unrouted_handler(client_address: Tuple[str, int], address: str,
     traffic.unknown(address, osc_arguments[0] if osc_arguments else None, peer)
 
 
+def known_address(client_address: Tuple[str, int], address: str,
+                  osc_arguments) -> Optional[Tuple[str, dict]]:
+    """The address taken apart against the one truth, or None.
+
+    None is an address the truth does not have -- an old name from before
+    2026-09-30, a channel out of range, a typo -- and it is written down as
+    unknown, where the window shows it, rather than half-served.
+    """
+    found = _truth.match(address)
+    if found is None:
+        unrouted_handler(client_address, address, *osc_arguments)
+    return found
+
+
 def osc_handler_channel(client_address: Tuple[str, int], address: str,
                         *osc_arguments: List[Any]) -> None:
+
+    found = known_address(client_address, address, osc_arguments)
+    if found is None:
+        return
+    key, fields = found
 
     # The buttons below read the argument as it arrived rather than as a
     # float, because its type is what tells the mixer's momentary edge from
@@ -635,11 +663,9 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
     # control a screen may show.
     relay(address, raw, origin)
 
-    words: List[str] = address.split("/")
-    channel: str = words[2]
-    parameter: str = words[3]
-
-    channel_index = int(channel)
+    # The wire counts channels from 1, Core's list from 0.
+    channel_index = fields["ch"] - 1
+    parameter: str = key[len("channel."):]
     track_input = channel_infos[channel_index].track_input
 
     # POTENTIOMETER
@@ -680,22 +706,20 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
         val = slope_volume(value)
         osc_reaper.send_message(f"/track/{track_input}/fx/{FX_INDEX_GAIN}/fxparam/1/value", val)
 
-    elif parameter == "eq":
-        eq_parameter : str = words[4]
-        if eq_parameter == "high":
-            val = slope_eq(value)
-            osc_reaper.send_message(
-                f"/track/{track_input}/fx/{FX_INDEX_EQ}/fxparam/1/value", val) # Smooth-EQ (airwindows)
+    elif parameter == "eq.high":
+        val = slope_eq(value)
+        osc_reaper.send_message(
+            f"/track/{track_input}/fx/{FX_INDEX_EQ}/fxparam/1/value", val) # Smooth-EQ (airwindows)
 
-        elif eq_parameter == "mid":
-            val = slope_eq(value)
-            osc_reaper.send_message(
-                f"/track/{track_input}/fx/{FX_INDEX_EQ}/fxparam/2/value", val) # Smooth-EQ (airwindows)
+    elif parameter == "eq.mid":
+        val = slope_eq(value)
+        osc_reaper.send_message(
+            f"/track/{track_input}/fx/{FX_INDEX_EQ}/fxparam/2/value", val) # Smooth-EQ (airwindows)
 
-        elif eq_parameter == "low":
-            val = slope_eq(value)
-            osc_reaper.send_message(
-                f"/track/{track_input}/fx/{FX_INDEX_EQ}/fxparam/3/value", val) # Smooth-EQ (airwindows)
+    elif parameter == "eq.low":
+        val = slope_eq(value)
+        osc_reaper.send_message(
+            f"/track/{track_input}/fx/{FX_INDEX_EQ}/fxparam/3/value", val) # Smooth-EQ (airwindows)
     
     elif parameter == "volume":
         val = slope_volume(value)
@@ -716,7 +740,7 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
                 f"/track/{track_pfl}/mute", float(muted))
             announce_flag("pfl", channel_index)
 
-    elif parameter == "fx":
+    elif parameter == "filter":
         wanted = wanted_toggle(raw, channel_infos[channel_index].toggle_fx)
         if wanted is not NO_CHANGE:
             channel_infos[channel_index].toggle_fx = wanted
@@ -750,7 +774,7 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
         for client in udp_clients_iem:
             client.send_message(addr, el)
 
-    elif parameter == "pot_1":
+    elif parameter == "filter.frequency":
         val = np.interp(value, [0, 1], [0.05, 0.9])
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
         #osc_reaper.send_message(
@@ -760,7 +784,7 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
             f"/fxparam/{_layout.fx_param('enc_pot_1')}/value", val)
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
 
-    elif parameter == "pot_2":
+    elif parameter == "filter.q":
         val = np.interp(value, [0, 1], [0.05, 0.9])
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
         #osc_reaper.send_message(
@@ -785,6 +809,11 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
 def osc_handler_master(client_address: Tuple[str, int], address: str,
                        *osc_arguments: List[Any]) -> None:
 
+    found = known_address(client_address, address, osc_arguments)
+    if found is None:
+        return
+    key, _ = found
+
     #  mypy 0.920 reports a false positive, retest!
     value: float = float(osc_arguments[0])  # type: ignore
     assert type(value) == float
@@ -796,8 +825,7 @@ def osc_handler_master(client_address: Tuple[str, int], address: str,
 
     relay(address, osc_arguments[0], origin)
 
-    words: List[str] = address.split("/")
-    parameter: str = words[2]
+    parameter: str = key[len("master."):]
 
     if parameter == "volume":
         val = slope_volume(value)
@@ -811,7 +839,7 @@ def osc_handler_master(client_address: Tuple[str, int], address: str,
         for gain_vst_plugins_on_boothbus in _layout.gain_params("boothbus"):
             osc_reaper.send_message(f"/track/{boothbus}/fx/1/fxparam/{gain_vst_plugins_on_boothbus}/value", val)
 
-    if parameter == "phones_mix":
+    if parameter == "phones-mix":
         track_ph_mix = master_info.track_ph_mix
         val = value * 0.5    
         #val = slope_crossover_1a(value)
@@ -829,12 +857,12 @@ def osc_handler_master(client_address: Tuple[str, int], address: str,
         #    for pfl_param in [1, 15]:
         #        osc_reaper.send_message(f"/track/{track_pfl}/fx/1/fxparam/{pfl_param}/value", inv_val)
 
-    if parameter == "phones_volume":
+    if parameter == "phones-volume":
         val = slope_volume(value)
         track_phones = master_info.track_phones
         osc_reaper.send_message(f"/track/{track_phones}/fx/2/fxparam/1/value", val)
 
-    elif parameter == "return":
+    elif parameter == "fx-return":
         # The FX-return pot on the desk. Since 2026-09-29 the return has its
         # own track ("Return") with one Airwindows PurestGain on it, bent like
         # every other PurestGain volume here: full travel is 0 dB, never the
@@ -846,8 +874,13 @@ def osc_handler_master(client_address: Tuple[str, int], address: str,
         for gain_vst_plugins_on_return in _layout.gain_params("aux_return"):
             osc_reaper.send_message(f"/track/{aux_return}/fx/{slot}/fxparam/{gain_vst_plugins_on_return}/value", val)
 
-def osc_handler_fx(client_address: Tuple[str, int], address: str,
-                   *osc_arguments: List[Any]) -> None:
+def osc_handler_filter(client_address: Tuple[str, int], address: str,
+                       *osc_arguments: List[Any]) -> None:
+
+    found = known_address(client_address, address, osc_arguments)
+    if found is None:
+        return
+    key, _ = found
 
     value = osc_arguments[0]
 
@@ -860,8 +893,7 @@ def osc_handler_fx(client_address: Tuple[str, int], address: str,
     # twice, to everybody, in both vocabularies. relay() knows that.
     relay(address, value, origin)
 
-    words: List[str] = address.split("/")
-    parameter: str = words[2]
+    parameter: str = key[len("filter."):]
 
     if parameter == "mode":
         # The mixer names the mode ("high_pass"), A3 Motion sends the number
@@ -873,9 +905,10 @@ def osc_handler_fx(client_address: Tuple[str, int], address: str,
         # Twice, both to everybody: the word on /fx/led, which is what the
         # desk's firmware reads, and the number on /fx/mode, which is the
         # address the mode arrives on and the spelling every screen sends.
-        broadcast(_layout.address("fx_mode_led"),
+        broadcast(_truth.address("filter.led"),
                   FX_MODE_WORDS[master_info.fx_mode.name])
-        broadcast("/fx/mode", FX_MODE_NUMBERS[master_info.fx_mode.name])
+        broadcast(_truth.address("filter.mode"),
+                  FX_MODE_NUMBERS[master_info.fx_mode.name])
         set_filters()
 
     elif parameter == "frequency":
@@ -900,7 +933,7 @@ def osc_handler_fx(client_address: Tuple[str, int], address: str,
 #: be understood at the other end.
 #: The beat-analyzer's clock. It sends this to every host in its .env, and
 #: Core has been one of them all along -- it simply had nowhere to put it.
-OSC_ADDRESS_BEAT: str = "/beat"
+OSC_ADDRESS_BEAT: str = _truth.address("beat")
 
 
 def osc_handler_beat(client_address: Tuple[str, int], address: str,
@@ -958,7 +991,7 @@ def speak_remembered_state() -> None:
             FX_INDEX_HIPASS, FX_INDEX_LOPASS):
         osc_reaper.send_message(address, value)
 
-    messages = list(recall_messages(_layout, channel_infos, master_info,
+    messages = list(recall_messages(_truth, channel_infos, master_info,
                                     _relayed))
     for out, value in messages:
         for client in subscribers:
@@ -989,7 +1022,26 @@ def replay_evening(evening, send_to_self) -> int:
     return replayed
 
 
-OSC_ADDRESS_RECALL: str = "/state/recall"
+OSC_ADDRESS_RECALL: str = _truth.address("state.recall")
+
+
+def osc_handler_device_hello(client_address: Tuple[str, int], address: str,
+                             *osc_arguments: List[Any]) -> None:
+    """A device names itself and the sha256 of its copy of a3-osc.json.
+
+    Kept for the window (/api/devices), and said once in the journal when it
+    is news: a copy that is not Core's own is a second truth, and OSC would
+    never say so -- the device would speak old words to nobody."""
+    traffic.seen(IN, address, osc_arguments[0] if osc_arguments else None,
+                 peer_name(client_address[0], PEER_HOSTS))
+    if len(osc_arguments) < 2:
+        return
+
+    device, their_hash = str(osc_arguments[0]), str(osc_arguments[1])
+    if _devices.heard(device, their_hash, time.monotonic()):
+        verdict = ("is Core's" if their_hash == _devices.own_hash
+                   else "DIFFERS from Core's")
+        print(f"{device}: its a3-osc.json {verdict} ({their_hash[:12]})")
 
 
 def osc_handler_recall(client_address: Tuple[str, int], address: str,
@@ -1008,7 +1060,7 @@ def osc_handler_recall(client_address: Tuple[str, int], address: str,
                  peer_name(client_address[0], PEER_HOSTS,
                            only=COMMANDERS))
 
-    messages = list(recall_messages(_layout, channel_infos, master_info,
+    messages = list(recall_messages(_truth, channel_infos, master_info,
                                     _relayed))
 
     # Not through broadcast(): that drops a value already passed on, which is
@@ -1027,7 +1079,7 @@ def osc_handler_recall(client_address: Tuple[str, int], address: str,
 #: /track/* and /fx/*, and /fx/* is what the mixer uses for its filter -- one
 #: port for both would have Core reading REAPER's reports as commands and
 #: answering them, which is a loop on a rig that makes sound.
-OSC_PORT_REAPER_FEEDBACK: int = 9002
+OSC_PORT_REAPER_FEEDBACK: int = _truth.port("core", "reaper-feedback")
 
 _curves = load_curves(json.loads(CURVES_PATH.read_text()))
 
@@ -1112,12 +1164,13 @@ def reaper_feedback_handler(client_address: Tuple[str, int], address: str,
         return
 
     traffic.seen(IN, address, value, peer)
-    broadcast(reversed_address(_layout, entry, channel_index), a3_value)
+    broadcast(reversed_address(_truth, entry, channel_index), a3_value)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ip", default="0.0.0.0", help="The ip to listen on")
+    parser.add_argument("--ip", default=_truth.host("any"),
+                        help="The ip to listen on")
     parser.add_argument("--port", type=int,
                         default=OSC_PORT_CORE, help="The port to listen on")
     parser.add_argument("--feedback-port", type=int,
@@ -1153,12 +1206,12 @@ if __name__ == "__main__":
                              "was 301,385 journal lines an hour on one "
                              "address alone, which is what made the journal "
                              "unsearchable.")
-    parser.add_argument("--web-bind", default="127.0.0.1:9080",
-                        help="host:port for the window. Localhost by "
-                             "default: the window can send OSC into a "
-                             "running rig, and a control surface with no "
-                             "login on the show network is not a default "
-                             "worth setting.")
+    parser.add_argument("--web-bind", default=default_bind(_truth),
+                        help="host:port for the window. By default where "
+                             "a3-osc.json's core.web listener says -- every "
+                             "interface since 2026-09-30. The window can send "
+                             "OSC into a running rig: 127.0.0.1:PORT keeps it "
+                             "to this machine.")
     parser.add_argument("--no-web", action="store_true",
                         help="Do not open the window at all.")
     parser.add_argument("--save-project", action="store_true",
@@ -1236,13 +1289,17 @@ if __name__ == "__main__":
     # and known here: everything mapped on this dispatcher came in on Core's
     # main port, so only a controller can have sent it. Hence only=COMMANDERS
     # at every tap below, and only=ANSWERERS on the feedback dispatcher's.
-    dispatcher.map("/channel/*", osc_handler_channel,
-                   needs_reply_address=True)
-    dispatcher.map("/master/*", osc_handler_master, needs_reply_address=True)
-    dispatcher.map("/fx/*", osc_handler_fx, needs_reply_address=True)
+    # One family per first word of the truth's names; each handler takes the
+    # address apart against the truth and writes down what it does not know.
+    for family, handler in (("channel", osc_handler_channel),
+                            ("master", osc_handler_master),
+                            ("filter", osc_handler_filter)):
+        dispatcher.map(f"/{family}/*", handler, needs_reply_address=True)
     dispatcher.map(OSC_ADDRESS_RECALL, osc_handler_recall,
                    needs_reply_address=True)
     dispatcher.map(OSC_ADDRESS_BEAT, osc_handler_beat,
+                   needs_reply_address=True)
+    dispatcher.map(_truth.address("device.hello"), osc_handler_device_hello,
                    needs_reply_address=True)
 
     # Und ein Auffang fuer alles Uebrige.
@@ -1276,7 +1333,7 @@ if __name__ == "__main__":
     # Read now, before the feedback port opens: every value REAPER reports is
     # also written to evening.json, and a REAPER that announces its template
     # first would otherwise overwrite what the replay below is for.
-    evening = list(replayable(_evening_file.load()))
+    evening = list(replayable(_truth, _evening_file.load()))
 
     feedback_dispatcher = osc_dispatcher.Dispatcher()
     feedback_dispatcher.set_default_handler(reaper_feedback_handler,
@@ -1355,7 +1412,7 @@ if __name__ == "__main__":
     # wrapping it here too would count the one message twice.
     def send_from_bench(to, address, value):
         if to == "self":
-            SimpleUDPClient("127.0.0.1", args.port).send_message(
+            SimpleUDPClient(_truth.host("local"), args.port).send_message(
                 address, value)
             return
         {"mixer": osc_a3mixer, "motion": osc_a3motion,
@@ -1374,7 +1431,8 @@ if __name__ == "__main__":
     # The window, if it will come. Its failure is not Core's: a busy port
     # gets a line in the journal and the rig still makes sound.
     if not args.no_web:
-        if start_window(traffic, args.web_bind, send=send_from_bench):
+        if start_window(traffic, args.web_bind, send=send_from_bench,
+                        devices=_devices):
             # window_address(), not args.web_bind: --web-bind accepts port 0
             # to let the OS choose one, and printing the requested bind would
             # then log "http://127.0.0.1:0" while the real port stays
@@ -1404,7 +1462,7 @@ if __name__ == "__main__":
         wait_until_quiet(reaper_arrivals, lambda: replay_evening(
             evening,
             lambda address, value:
-            SimpleUDPClient("127.0.0.1", args.port)
+            SimpleUDPClient(_truth.host("local"), args.port)
             .send_message(address, value)))
 
     threading.Thread(

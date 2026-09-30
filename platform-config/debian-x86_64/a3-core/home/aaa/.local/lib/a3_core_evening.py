@@ -24,18 +24,15 @@ wieder REAPER-Nachrichten macht.
   Einstellung, sondern Verkehr.
 """
 
-#: Adressen, die Core setzen kann. Alles andere ist Verkehr.
-REPLAYABLE_PREFIXES = ("/channel/", "/master/", "/fx/")
-
-#: Was innerhalb dieser Präfixe trotzdem nicht zurückgespielt wird, als
-#: letztes Segment der Adresse. Die Gründe stehen oben.
-NOT_REPLAYED = frozenset((
-    "led",          # eine Lampe ist Status
-    "pfl", "fx",    # Schalter: a3_core_state
-    "3d",           # Crossfade: a3_core_state
-    "mode",         # /fx/mode: a3_core_state
-    "azimuth", "elevation",   # Positionen: siehe oben
-))
+#: Was Core zwar weitergibt, aber nicht zurückspielt: der Crossfade steht in
+#: a3_core_state. Alles andere, was Core weitergibt (`relayed_to` in der einen
+#: Wahrheit), ist ein Wert, den REAPER hält -- genau das, was zurückkommt.
+#: Lampen, Schalter, der Filtermodus und die Positionen gibt Core nicht weiter,
+#: sondern sagt sie an oder hört sie nur; VU, Beat und /state/recall sind
+#: Verkehr. Die Regel steht damit in der Wahrheit und nicht in einer Liste von
+#: Präfixen, die beim Umbenennen von /fx nach /filter (2026-09-30) den Filter
+#: still verloren und den Kanalschalter als Wert zurückgespielt hätte.
+NOT_REPLAYED = frozenset(("channel.3d",))
 
 
 def evening_state(relayed):
@@ -43,7 +40,7 @@ def evening_state(relayed):
     return {"values": dict(relayed.messages())}
 
 
-def replayable(state):
+def replayable(truth, state):
     """Die Werte aus `state`, die beim Start zurückgespielt werden dürfen.
 
     Jede Form, in der eine Datei ankommen kann, ist eine Form, in der sie
@@ -55,12 +52,15 @@ def replayable(state):
     if not isinstance(values, dict):
         return
 
+    addresses = truth.addresses()
     for address, value in values.items():
         if not isinstance(address, str):
             continue
-        if not address.startswith(REPLAYABLE_PREFIXES):
+        found = truth.match(address)
+        if found is None:
             continue
-        if any(segment in NOT_REPLAYED for segment in address.split("/")[2:]):
+        key = found[0]
+        if not addresses[key].get("relayed_to") or key in NOT_REPLAYED:
             continue
 
         yield address, value

@@ -26,9 +26,11 @@ sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core"
                        / "home/aaa/.local/lib"))
 
 from a3_core_traffic import IN, Traffic   # noqa: E402
+import a3_osc   # noqa: E402
 
 ROUNDS = 200000
-ADDRESS = "/channel/0/azimuth"
+ADDRESS = a3_osc.load(ROOT / "platform-config/debian-x86_64/a3-core"
+                      / "usr/share/a3/a3-osc.json").address("channel.azimuth", ch=1)
 
 
 def time_it(label, work):

@@ -185,10 +185,14 @@ class ABrokenFileIsNotAReasonToFall(unittest.TestCase):
     def test_the_shipped_register_loads(self):
         payload = load(PACKAGE / "share/a3-core/osc-register.json")
         self.assertEqual(payload["problem"], "")
-        # A floor against a truncated file, not a count. It was 400 while the
-        # pattern file was REAPER's whole Default; since REAPER is told only
-        # what Core uses the register holds 115 (2026-09-26).
-        self.assertGreater(len(payload["entries"]), 100)
+        # A floor against a truncated file, not a count: at least one row for
+        # every address of ours. The register is a view of a3-osc.json since
+        # 2026-09-30, one row per shape and device -- 70 that day, where the
+        # register lifted out of the sources held 115 with REAPER's templates
+        # counted once per place they were written.
+        import a3_osc
+        truth = a3_osc.load(PACKAGE.parents[2] / "usr/share/a3/a3-osc.json")
+        self.assertGreaterEqual(len(payload["entries"]), len(truth.addresses()))
 
 
 if __name__ == "__main__":

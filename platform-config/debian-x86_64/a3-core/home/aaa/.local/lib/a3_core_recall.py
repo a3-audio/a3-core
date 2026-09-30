@@ -53,8 +53,8 @@ than continuously the way a trajectory moves a position.
 #: two branches are now one), so the desk behaves exactly as before and
 #: `/channel/n/led/pfl` finally means "this lamp is lit".
 LED_OF = {
-    "pfl": ("led_pfl", lambda channel: float(channel.toggle_pfl)),
-    "fx": ("led_fx", lambda channel: float(channel.toggle_fx)),
+    "pfl": ("channel.pfl.led", lambda channel: float(channel.toggle_pfl)),
+    "fx": ("channel.filter.led", lambda channel: float(channel.toggle_fx)),
 }
 
 #: How each filter mode is spelled on the wire. Written out rather than taken
@@ -66,10 +66,10 @@ FX_MODE_WORDS = {
 }
 
 
-def led_message(layout, flag, index, channel):
+def led_message(truth, flag, index, channel):
     """The one message that says what a channel's `flag` lamp should do."""
     name, read = LED_OF[flag]
-    return layout.address(name, channel=index), read(channel)
+    return truth.address(name, ch=index + 1), read(channel)
 
 
 #: What Core holds because nobody else can be asked, as (address, field).
@@ -86,13 +86,13 @@ def led_message(layout, flag, index, channel):
 #: guess. Nobody was told, or nobody can be asked: either way Core is the
 #: only one who knows.
 REMEMBERED_CONTROLS = (
-    ("azimuth", "azimuth"),
-    ("elevation", "elevation"),
-    ("3d", "three_d"),
+    ("channel.azimuth", "azimuth"),
+    ("channel.elevation", "elevation"),
+    ("channel.3d", "three_d"),
 )
 
 
-def remembered_messages(layout, channels):
+def remembered_messages(truth, channels):
     """What Core holds for each channel, as the messages that set it.
 
     A value Core has never seen is left out rather than sent as 0.0. Zero
@@ -108,9 +108,7 @@ def remembered_messages(layout, channels):
             value = getattr(channel, field, None)
             if value is None:
                 continue
-            yield (layout.address("channel_control", channel=index,
-                                  control=address),
-                   value)
+            yield truth.address(address, ch=index + 1), value
 
 
 #: Each flag's address on the wire, and the field it is held in.
@@ -128,8 +126,8 @@ def remembered_messages(layout, channels):
 #: v3.2, never sent by anything since, and replaced by the continuous blend on
 #: `/channel/n/3d`. Two flags left, and both are keys somebody can still press.
 STATE_OF = {
-    "pfl": ("pfl", lambda channel: float(channel.toggle_pfl)),
-    "fx": ("fx", lambda channel: float(channel.toggle_fx)),
+    "pfl": ("channel.pfl", lambda channel: float(channel.toggle_pfl)),
+    "fx": ("channel.filter", lambda channel: float(channel.toggle_fx)),
 }
 
 #: How the filter mode reads as a number: 1 is high pass.
@@ -145,7 +143,7 @@ FX_MODE_NUMBERS = {
 }
 
 
-def lamp_messages(layout, channels, master):
+def lamp_messages(truth, channels, master):
     """What every lamp shows. Broadcast like everything else.
 
     **A lamp is status, so it goes to everybody.** It was the desk's private
@@ -161,31 +159,29 @@ def lamp_messages(layout, channels, master):
     Kept separate from flag_messages because they are still two different
     things, said in two vocabularies: a lamp is a light, a flag is a setting.
     The filter mode is the clearest case -- `/fx/led` carries the word the
-    desk's firmware reads, `/fx/mode` carries the number every screen sends.
+    desk's firmware reads, `/filter/mode` carries the number every screen sends.
     """
     for index, channel in enumerate(channels):
         for flag in LED_OF:
-            yield led_message(layout, flag, index, channel)
+            yield led_message(truth, flag, index, channel)
 
-    yield (layout.address("fx_mode_led"),
+    yield (truth.address("filter.led"),
            FX_MODE_WORDS[master.fx_mode.name])
 
 
-def flag_messages(layout, channels, master):
+def flag_messages(truth, channels, master):
     """The same flags as settings, on the addresses they arrive on.
 
     A plain 0 or 1 on `/channel/n/pfl`, and the filter mode as a number on
-    `/fx/mode` -- the spelling A3 Motion already sends, and the one
+    `/filter/mode` -- the spelling A3 Motion sends, and the one
     a3_core_buttons already accepts on the way in. Nothing here needs to be
     learned: a device that can *set* the flag can read it.
     """
     for index, channel in enumerate(channels):
         for control, read in STATE_OF.values():
-            yield (layout.address("channel_control", channel=index,
-                                  control=control),
-                   read(channel))
+            yield truth.address(control, ch=index + 1), read(channel)
 
-    yield "/fx/mode", FX_MODE_NUMBERS[master.fx_mode.name]
+    yield truth.address("filter.mode"), FX_MODE_NUMBERS[master.fx_mode.name]
 
 
 class Relayed:
@@ -228,7 +224,7 @@ class Relayed:
         return len(self._values)
 
 
-def recall_messages(layout, channels, master, relayed):
+def recall_messages(truth, channels, master, relayed):
     """The whole answer: the flags, then the positions, then what REAPER said.
 
     As `(address, value)` pairs and nothing about who gets them -- everything
@@ -243,7 +239,7 @@ def recall_messages(layout, channels, master, relayed):
     The lamps are in here too, since they are status like everything else --
     see lamp_messages.
     """
-    yield from lamp_messages(layout, channels, master)
-    yield from flag_messages(layout, channels, master)
-    yield from remembered_messages(layout, channels)
+    yield from lamp_messages(truth, channels, master)
+    yield from flag_messages(truth, channels, master)
+    yield from remembered_messages(truth, channels)
     yield from relayed.messages()

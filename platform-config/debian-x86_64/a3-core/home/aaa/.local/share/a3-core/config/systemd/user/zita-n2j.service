@@ -7,7 +7,9 @@ StartLimitIntervalSec=0
 [Service]
 Type=simple
 ExecStartPre=/usr/bin/sleep 2
-ExecStart=/usr/bin/zita-n2j --chan 1-10 --buff 20 --info 0.0.0.0 65100
+# Addresses and ports come from a3-osc.json, rendered by a3-osc-render.
+EnvironmentFile=%h/.config/a3/osc.env
+ExecStart=/usr/bin/zita-n2j --chan 1-10 --buff 20 --info ${A3_ZITA_N2J_HOST} ${A3_ZITA_N2J_PORT}
 
 CPUAffinity=1 2 3
 CPUSchedulingPolicy=rr

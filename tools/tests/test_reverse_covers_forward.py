@@ -94,8 +94,7 @@ def controls_the_forward_handler_accepts():
     """Every `/channel/n/...` the forward handler answers to.
 
     Read out of `osc_handler_channel`'s if/elif chain: the names it compares
-    `parameter` against, and under `eq` the names it compares `eq_parameter`
-    against. A control the handler does not name is one the mixer can send
+    `parameter` against, as the truth's keys. A control the handler does not name is one the mixer can send
     and Core will drop.
     """
     tree = ast.parse((PACKAGE / "bin/a3-core.py").read_text())
@@ -111,10 +110,9 @@ def controls_the_forward_handler_accepts():
                     and isinstance(node.comparators[0], ast.Constant)):
                 yield node.comparators[0].value
 
-    controls = set(compared_against("parameter"))
-    controls.discard("eq")
-    return controls | {f"eq/{band}"
-                       for band in compared_against("eq_parameter")}
+    # Since 2026-09-30 the handler compares the part of the truth's name
+    # after "channel." -- "eq.high", "filter.q" -- so the full name is that.
+    return {f"channel.{parameter}" for parameter in compared_against("parameter")}
 
 
 def controls_a_handler_accepts(handler_name, variable):
@@ -148,8 +146,6 @@ class TheWayBackIsSpelledLikeTheWayOut(unittest.TestCase):
     """
 
     def setUp(self):
-        from a3_core_layout import load_layout
-        self.layout = load_layout(PACKAGE / "share/a3-core/layout.json")
         self.accepted = controls_the_forward_handler_accepts()
 
     def test_every_channel_reversal_names_a_control_the_forward_path_knows(self):
@@ -157,8 +153,8 @@ class TheWayBackIsSpelledLikeTheWayOut(unittest.TestCase):
             if entry.scope != CHANNEL:
                 continue
             self.assertIn(
-                entry.address, self.accepted,
-                f"{entry.address} is reported back but the forward handler "
+                entry.key, self.accepted,
+                f"{entry.key} is reported back but the forward handler "
                 f"answers to {sorted(self.accepted)}")
 
     def test_every_global_reversal_names_an_address_a_handler_answers_to(self):
@@ -167,26 +163,21 @@ class TheWayBackIsSpelledLikeTheWayOut(unittest.TestCase):
         has to look at the handler that does answer them. /master/phones_mix
         spelled /master/phones-mix would be a control nobody hears, and
         neither side would be wrong on its own."""
-        answered = {f"/master/{name}"
+        answered = {f"master.{name}"
                     for name in controls_a_handler_accepts("osc_handler_master",
                                                            "parameter")}
-        answered |= {f"/fx/{name}"
-                     for name in controls_a_handler_accepts("osc_handler_fx",
+        answered |= {f"filter.{name}"
+                     for name in controls_a_handler_accepts("osc_handler_filter",
                                                             "parameter")}
 
         for entry in CHANNEL_REVERSALS:
             if entry.scope == CHANNEL:
                 continue
             self.assertIn(
-                entry.address, answered,
-                f"{entry.address} is reported back but no handler answers "
+                entry.key, answered,
+                f"{entry.key} is reported back but no handler answers "
                 f"to it; the handlers take {sorted(answered)}")
 
-    def test_the_address_is_built_by_the_layout(self):
-        self.assertEqual(
-            self.layout.address("channel_control", channel=2,
-                                control="eq/high"),
-            "/channel/2/eq/high")
 
 
 def master_branches():
@@ -221,12 +212,12 @@ class TheMasterBendsBothWaysAlike(unittest.TestCase):
 
     def test_each_master_reversal_names_the_curve_its_branch_sends_with(self):
         for entry in CHANNEL_REVERSALS:
-            if not entry.address.startswith("/master/"):
+            if not entry.key.startswith("master."):
                 continue
             if entry.curve == "identity":
                 continue
-            parameter = entry.address[len("/master/"):]
-            with self.subTest(address=entry.address):
+            parameter = entry.key[len("master."):]
+            with self.subTest(key=entry.key):
                 sent_with = {call.func.id for call in calls_in(
                                  self.branches[parameter])
                              if isinstance(call.func, ast.Name)
@@ -237,7 +228,7 @@ class TheMasterBendsBothWaysAlike(unittest.TestCase):
         # It said fx/3 at the call site, and slot 3 of enc_fx had become the
         # DualDelay: the return pot was writing delay parameters. A slot the
         # layout names moves with the project; a literal does not.
-        asked = [call.args[0].value for call in calls_in(self.branches["return"])
+        asked = [call.args[0].value for call in calls_in(self.branches["fx-return"])
                  if isinstance(call.func, ast.Attribute)
                  and call.func.attr == "fx_slot"
                  and isinstance(call.args[0], ast.Constant)]
@@ -251,12 +242,12 @@ NOT_ANSWERED_FOR = {
     # Core holds these itself and answers a recall from its own memory rather
     # than from REAPER, because REAPER has nothing to report: the position
     # goes straight to the IEM plugins' own OSC port, never through a track.
-    "azimuth": "written straight to the IEM plugins; Core remembers it",
-    "elevation": "the same",
+    "channel.azimuth": "written straight to the IEM plugins; Core remembers it",
+    "channel.elevation": "the same",
     # One input, two gains on two tracks. A single number cannot say which
     # input it came from. Since 2026-09-12 Core holds 3d itself and answers a
     # recall from that -- see a3_core_recall.REMEMBERED_CONTROLS.
-    "3d": "not invertible from one gain; Core remembers it instead",
+    "channel.3d": "not invertible from one gain; Core remembers it instead",
     # Core's own state, not REAPER's, and they come back from REAPER as a mute
     # rather than as the flag they set.
     # Relaying these continuously is a feedback loop: REAPER holds the base
@@ -264,10 +255,11 @@ NOT_ANSWERED_FOR = {
     # writing the one into the other makes every accent's peak the new base.
     # Built on 2026-09-12, live for a few hours, taken out the same day. See
     # issues/a3-core-dauernder-rueckweg-ist-eine-schleife.md.
-    "pot_1": "REAPER holds it with the accent on top; relaying that ratchets",
-    "pot_2": "the same",
-    "pfl": "a toggle of Core's own; comes back as a mute",
-    "fx": "the same",
+    "channel.filter.frequency": "REAPER holds it with the accent on top; "
+                                "relaying that ratchets",
+    "channel.filter.q": "the same",
+    "channel.pfl": "a toggle of Core's own; comes back as a mute",
+    "channel.filter": "the same",
 }
 
 
@@ -282,7 +274,7 @@ class EveryControlIsAnsweredFor(unittest.TestCase):
 
     def setUp(self):
         self.accepted = controls_the_forward_handler_accepts()
-        self.reversed_controls = {entry.address
+        self.reversed_controls = {entry.key
                                   for entry in CHANNEL_REVERSALS}
 
     def test_each_control_reports_back_or_says_why_not(self):
@@ -315,9 +307,11 @@ class EveryControlIsAnsweredFor(unittest.TestCase):
 #: REAPER as base plus whatever the running action is adding; a value on
 #: anything else reaches REAPER unchanged.
 #:
-#: `freq` and `q` are pot_1 and pot_2 on the wire; `3d` is not reversed at all
+#: `freq` and `q` are the channel's filter frequency and Q on the wire (pot_1 and
+#: pot_2 until 2026-09-30); `3d` is not reversed at all
 #: -- one number becomes two gains and cannot be read back.
-MODULATED_BY_ACTIONS = ("pot_1", "pot_2", "3d")
+MODULATED_BY_ACTIONS = ("channel.filter.frequency", "channel.filter.q",
+                        "channel.3d")
 
 
 class ThePotsStayOut(unittest.TestCase):
@@ -334,7 +328,8 @@ class ThePotsStayOut(unittest.TestCase):
 
     def test_no_reversal_relays_a_pot(self):
         for entry in CHANNEL_REVERSALS:
-            self.assertNotIn(entry.address, ("pot_1", "pot_2"),
+            self.assertNotIn(entry.key, ("channel.filter.frequency",
+                                         "channel.filter.q"),
                              "a continuous reverse path for the pots is a "
                              "feedback loop -- see the issue")
 
@@ -356,9 +351,9 @@ class ThePotsStayOut(unittest.TestCase):
         quantity from the device's.
         """
         for entry in CHANNEL_REVERSALS:
-            with self.subTest(control=entry.address):
+            with self.subTest(control=entry.key):
                 self.assertNotIn(
-                    entry.address, MODULATED_BY_ACTIONS,
-                    f"{entry.address} can be driven by an action, so REAPER "
+                    entry.key, MODULATED_BY_ACTIONS,
+                    f"{entry.key} can be driven by an action, so REAPER "
                     f"holds base+accent while the device holds base. "
                     f"Relaying that continuously ratchets the value up.")

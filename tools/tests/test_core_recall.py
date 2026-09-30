@@ -28,8 +28,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local"
 sys.path.insert(0, str(PACKAGE / "lib"))
+TRUTH = ROOT / "platform-config/debian-x86_64/a3-core/usr/share/a3/a3-osc.json"
 
-from a3_core_layout import load_layout   # noqa: E402
+import a3_osc   # noqa: E402
 from a3_core_recall import (FX_MODE_WORDS, LED_OF,   # noqa: E402
                             Relayed, flag_messages, lamp_messages,
                             led_message, recall_messages,
@@ -61,12 +62,12 @@ def a_rig(channels=4):
 
 class TheLights(unittest.TestCase):
     def setUp(self):
-        self.layout = load_layout(PACKAGE / "share/a3-core/layout.json")
+        self.truth = a3_osc.load(TRUTH)
 
-    def test_a_light_is_addressed_the_way_the_layout_says(self):
+    def test_a_light_is_addressed_the_way_the_truth_says(self):
         channel = FakeChannel(toggle_fx=True)
-        self.assertEqual(led_message(self.layout, "fx", 2, channel),
-                         ("/channel/2/led/fx", 1.0))
+        self.assertEqual(led_message(self.truth, "fx", 2, channel),
+                         ("/channel/3/filter/led", 1.0))
 
     def test_a_lamp_says_whether_it_is_lit(self):
         """It used to say the opposite for pfl, and the desk inverted it back.
@@ -80,35 +81,35 @@ class TheLights(unittest.TestCase):
         """
         lit = FakeChannel(toggle_pfl=True)
         dark = FakeChannel(toggle_pfl=False)
-        self.assertEqual(led_message(self.layout, "pfl", 0, lit)[1], 1.0)
-        self.assertEqual(led_message(self.layout, "pfl", 0, dark)[1], 0.0)
+        self.assertEqual(led_message(self.truth, "pfl", 0, lit)[1], 1.0)
+        self.assertEqual(led_message(self.truth, "pfl", 0, dark)[1], 0.0)
 
     def test_no_lamp_is_inverted_any_more(self):
         """The rule, so the next lamp added cannot quietly get its own."""
         for flag in LED_OF:
             with self.subTest(flag=flag):
                 on = FakeChannel(toggle_pfl=True, toggle_fx=True)
-                self.assertEqual(led_message(self.layout, flag, 0, on)[1], 1.0)
+                self.assertEqual(led_message(self.truth, flag, 0, on)[1], 1.0)
 
     def test_the_lamps_of_a_rig_are_two_a_channel_and_the_filter(self):
         channels, master = a_rig()
         self.assertEqual(
-            len(list(lamp_messages(self.layout, channels, master))),
+            len(list(lamp_messages(self.truth, channels, master))),
             4 * 2 + 1)
 
     def test_the_flags_of_a_rig_are_two_a_channel_and_the_mode(self):
         channels, master = a_rig()
         self.assertEqual(
-            len(list(flag_messages(self.layout, channels, master))),
+            len(list(flag_messages(self.truth, channels, master))),
             4 * 2 + 1)
 
     def test_the_lamp_says_the_mode_as_a_word_and_the_flag_as_a_number(self):
         channels, master = a_rig()
         master.fx_mode = FXMode.HIGH_PASS
-        self.assertIn(("/fx/led", "high_pass"),
-                      list(lamp_messages(self.layout, channels, master)))
-        self.assertIn(("/fx/mode", 1.0),
-                      list(flag_messages(self.layout, channels, master)))
+        self.assertIn(("/filter/led", "high_pass"),
+                      list(lamp_messages(self.truth, channels, master)))
+        self.assertIn(("/filter/mode", 1.0),
+                      list(flag_messages(self.truth, channels, master)))
 
     def test_the_lamp_and_the_flag_now_agree(self):
         """Two vocabularies for one fact, and both are broadcast -- so if they
@@ -116,17 +117,17 @@ class TheLights(unittest.TestCase):
         once."""
         channels, master = a_rig()
         channels[0].toggle_pfl = True
-        lamps = dict(lamp_messages(self.layout, channels, master))
-        flags = dict(flag_messages(self.layout, channels, master))
-        self.assertEqual(flags["/channel/0/pfl"], 1.0)
-        self.assertEqual(lamps["/channel/0/led/pfl"], 1.0)
+        lamps = dict(lamp_messages(self.truth, channels, master))
+        flags = dict(flag_messages(self.truth, channels, master))
+        self.assertEqual(flags["/channel/1/pfl"], 1.0)
+        self.assertEqual(lamps["/channel/1/pfl/led"], 1.0)
 
     def test_the_flag_carries_no_lamp_address(self):
         """Still two vocabularies, even though both now go everywhere: a lamp
         is a light and a flag is a setting."""
         channels, master = a_rig()
-        for address, _ in flag_messages(self.layout, channels, master):
-            self.assertNotIn("/led/", address)
+        for address, _ in flag_messages(self.truth, channels, master):
+            self.assertFalse(address.endswith("/led"), address)
 
     def test_4d_is_gone_and_3d_was_never_a_flag(self):
         """`4d` was the 3D switch as an on/off. It went on 2026-09-12 with the
@@ -135,17 +136,17 @@ class TheLights(unittest.TestCase):
         from Core's memory, not from a flag."""
         channels, master = a_rig()
         addresses = [address
-                     for address, _ in flag_messages(self.layout, channels,
+                     for address, _ in flag_messages(self.truth, channels,
                                                      master)]
-        self.assertNotIn("/channel/0/4d", addresses)
-        self.assertNotIn("/channel/0/3d", addresses)
+        self.assertNotIn("/channel/1/4d", addresses)
+        self.assertNotIn("/channel/1/3d", addresses)
 
     def test_two_flags_a_channel_and_both_are_keys_somebody_can_press(self):
         channels, master = a_rig()
         suffixes = {address.rsplit("/", 1)[-1]
-                    for address, _ in flag_messages(self.layout, channels,
+                    for address, _ in flag_messages(self.truth, channels,
                                                     master)}
-        self.assertEqual(suffixes, {"pfl", "fx", "mode"})
+        self.assertEqual(suffixes, {"pfl", "filter", "mode"})
 
 
 class WhatTheSourceSays(unittest.TestCase):
@@ -170,13 +171,13 @@ class WhatTheSourceSays(unittest.TestCase):
                  for target in statement.targets}
         self.assertEqual(modes, set(FX_MODE_WORDS))
 
-    def test_every_light_the_layout_has_is_replayed(self):
-        """The layout names four LED addresses. Three are per channel and
-        belong to a flag; the fourth is the filter mode, which flag_messages
-        sends on its own."""
-        layout = load_layout(PACKAGE / "share/a3-core/layout.json")
-        named = {name for name in layout._addresses if "led" in name}
-        replayed = {name for name, _ in LED_OF.values()} | {"fx_mode_led"}
+    def test_every_light_the_truth_has_is_replayed(self):
+        """The truth names three lamps. Two are per channel and belong to a
+        flag; the third is the filter mode's, which lamp_messages sends on its
+        own."""
+        truth = a3_osc.load(TRUTH)
+        named = {key for key in truth.addresses() if key.endswith(".led")}
+        replayed = {key for key, _ in LED_OF.values()} | {"filter.led"}
         self.assertEqual(named, replayed)
 
 
@@ -233,14 +234,14 @@ class WhereTheSoundIs(unittest.TestCase):
     """
 
     def setUp(self):
-        self.layout = load_layout(PACKAGE / "share/a3-core/layout.json")
+        self.truth = a3_osc.load(TRUTH)
 
     def test_a_position_replays_as_the_message_motion_sent(self):
         channels = (FakeChannel(azimuth=-37.5, elevation=12.0),)
         self.assertEqual(
-            list(remembered_messages(self.layout, channels)),
-            [("/channel/0/azimuth", -37.5),
-             ("/channel/0/elevation", 12.0)])
+            list(remembered_messages(self.truth, channels)),
+            [("/channel/1/azimuth", -37.5),
+             ("/channel/1/elevation", 12.0)])
 
     def test_a_position_never_seen_is_not_invented(self):
         """None is not 0.0. Zero degrees is the front of the room -- a real
@@ -248,31 +249,31 @@ class WhereTheSoundIs(unittest.TestCase):
         position for would place the sound somewhere on purpose while
         claiming to report. Saying nothing leaves Motion on its own value,
         which is what it does today anyway."""
-        self.assertEqual(list(remembered_messages(self.layout,
+        self.assertEqual(list(remembered_messages(self.truth,
                                                 (FakeChannel(),))), [])
 
     def test_one_half_known_is_answered_by_that_half(self):
         """Azimuth and elevation arrive as two separate messages and there is
         no moment at which both are known but one is not."""
         channels = (FakeChannel(azimuth=90.0),)
-        self.assertEqual(list(remembered_messages(self.layout, channels)),
-                         [("/channel/0/azimuth", 90.0)])
+        self.assertEqual(list(remembered_messages(self.truth, channels)),
+                         [("/channel/1/azimuth", 90.0)])
 
     def test_zero_is_a_position_and_is_answered(self):
         """The guard is `is None`, not falsiness. Front-centre and level is
         where a channel most often sits."""
         channels = (FakeChannel(azimuth=0.0, elevation=0.0),)
         self.assertEqual(
-            list(remembered_messages(self.layout, channels)),
-            [("/channel/0/azimuth", 0.0),
-             ("/channel/0/elevation", 0.0)])
+            list(remembered_messages(self.truth, channels)),
+            [("/channel/1/azimuth", 0.0),
+             ("/channel/1/elevation", 0.0)])
 
     def test_each_channel_is_addressed_as_itself(self):
         channels = (FakeChannel(), FakeChannel(azimuth=5.0),
                     FakeChannel(), FakeChannel(elevation=-90.0))
-        self.assertEqual(list(remembered_messages(self.layout, channels)),
-                         [("/channel/1/azimuth", 5.0),
-                          ("/channel/3/elevation", -90.0)])
+        self.assertEqual(list(remembered_messages(self.truth, channels)),
+                         [("/channel/2/azimuth", 5.0),
+                          ("/channel/4/elevation", -90.0)])
 
     def test_the_crossfade_is_remembered_too_and_for_its_own_reason(self):
         """3d is not a position, and it is here for a different reason.
@@ -283,19 +284,19 @@ class WhereTheSoundIs(unittest.TestCase):
         way: Core holds what it was sent.
         """
         channels = (FakeChannel(three_d=0.62),)
-        self.assertEqual(list(remembered_messages(self.layout, channels)),
-                         [("/channel/0/3d", 0.62)])
+        self.assertEqual(list(remembered_messages(self.truth, channels)),
+                         [("/channel/1/3d", 0.62)])
 
     def test_a_crossfade_never_seen_is_not_invented_either(self):
         self.assertEqual(
-            list(remembered_messages(self.layout, (FakeChannel(),))), [])
+            list(remembered_messages(self.truth, (FakeChannel(),))), [])
 
     def test_all_three_come_in_the_order_they_are_sent_in(self):
         channels = (FakeChannel(azimuth=10.0, elevation=20.0, three_d=0.3),)
         self.assertEqual(
-            [address for address, _ in remembered_messages(self.layout,
+            [address for address, _ in remembered_messages(self.truth,
                                                            channels)],
-            ["/channel/0/azimuth", "/channel/0/elevation", "/channel/0/3d"])
+            ["/channel/1/azimuth", "/channel/1/elevation", "/channel/1/3d"])
 
     def test_the_position_goes_out_like_everything_else(self):
         """It used to be addressed to Motion alone, on the grounds that the
@@ -306,20 +307,20 @@ class WhereTheSoundIs(unittest.TestCase):
         not on the list costs an evening."""
         channels = (FakeChannel(azimuth=1.0),)
         self.assertEqual(
-            list(remembered_messages(self.layout, channels)),
-            [("/channel/0/azimuth", 1.0)])
+            list(remembered_messages(self.truth, channels)),
+            [("/channel/1/azimuth", 1.0)])
 
 
 class TheWholeAnswer(unittest.TestCase):
     def setUp(self):
-        self.layout = load_layout(PACKAGE / "share/a3-core/layout.json")
+        self.truth = a3_osc.load(TRUTH)
 
     def test_a_recall_is_the_flags_and_then_what_reaper_said(self):
         channels, master = a_rig()
         relayed = Relayed()
         relayed.note("/channel/0/gain", 0.7)
 
-        messages = list(recall_messages(self.layout, channels, master,
+        messages = list(recall_messages(self.truth, channels, master,
                                         relayed))
         self.assertEqual(messages[-1], ("/channel/0/gain", 0.7))
         self.assertEqual(len(messages), 2 * (4 * 2 + 1) + 1)
@@ -333,10 +334,10 @@ class TheWholeAnswer(unittest.TestCase):
         relayed = Relayed()
         relayed.note("/channel/0/gain", 0.7)
 
-        messages = list(recall_messages(self.layout, channels, master,
+        messages = list(recall_messages(self.truth, channels, master,
                                         relayed))
         self.assertEqual(messages[2 * (4 * 2 + 1)],
-                         ("/channel/1/azimuth", 45.0))
+                         ("/channel/2/azimuth", 45.0))
         self.assertEqual(messages[-1], ("/channel/0/gain", 0.7))
         self.assertEqual(len(messages), 2 * (4 * 2 + 1) + 1 + 1)
 
@@ -347,7 +348,7 @@ class TheWholeAnswer(unittest.TestCase):
         short is better than silence, which a caller cannot tell from a Core
         that is not there."""
         channels, master = a_rig()
-        messages = list(recall_messages(self.layout, channels, master,
+        messages = list(recall_messages(self.truth, channels, master,
                                         Relayed()))
         self.assertEqual(len(messages), 2 * (4 * 2 + 1))
 
@@ -357,7 +358,7 @@ class TheWholeAnswer(unittest.TestCase):
         still saves it -- Core just cannot say which it is, and does not
         guess."""
         channels, master = a_rig()
-        positions = [m for m in recall_messages(self.layout, channels, master,
+        positions = [m for m in recall_messages(self.truth, channels, master,
                                                 Relayed())
                      if m[0] == "motion"]
         self.assertEqual(positions, [])

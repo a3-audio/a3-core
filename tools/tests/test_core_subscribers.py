@@ -14,7 +14,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local"
 sys.path.insert(0, str(PACKAGE / "lib"))
+TRUTH = ROOT / "platform-config/debian-x86_64/a3-core/usr/share/a3/a3-osc.json"
 
+import a3_osc   # noqa: E402
 from a3_core_subscribers import (SHIPPED, SubscriberError,   # noqa: E402
                                  everyone_but,
                                  parse_subscriber,
@@ -141,59 +143,73 @@ class WhatIsPassedOnWhenItArrives(unittest.TestCase):
     would otherwise reach REAPER and no screen at all -- measured at the rig
     on 2026-09-12, see
     issues/a3-core-was-am-pult-gedreht-wird-erreicht-motion-nicht.md.
+
+    Since 2026-09-30 the rule is the truth's: an address marked `relayed_to`
+    is passed on. The names are the cleaned-up ones, channels from 1.
     """
+
+    def setUp(self):
+        self.truth = a3_osc.load(TRUTH)
+
+    def relayed(self, address):
+        return relay_on_arrival(self.truth, address)
 
     def test_the_channel_strip_is_passed_on(self):
         for parameter in ("gain", "volume", "fx-send", "3d"):
             with self.subTest(parameter=parameter):
-                self.assertTrue(relay_on_arrival(f"/channel/0/{parameter}"))
+                self.assertTrue(self.relayed(f"/channel/1/{parameter}"))
 
     def test_the_eq_bands_are_passed_on(self):
-        """Four segments rather than three, and the band is not the
-        parameter."""
         for band in ("high", "mid", "low"):
             with self.subTest(band=band):
-                self.assertTrue(relay_on_arrival(f"/channel/2/eq/{band}"))
+                self.assertTrue(self.relayed(f"/channel/3/eq/{band}"))
 
     def test_the_master_and_the_filter_are_passed_on(self):
-        for address in ("/master/volume", "/master/booth", "/master/phones_mix",
-                        "/master/phones_volume", "/master/return",
-                        "/fx/frequency", "/fx/resonance"):
+        for address in ("/master/volume", "/master/booth", "/master/phones-mix",
+                        "/master/phones-volume", "/master/fx-return",
+                        "/filter/frequency", "/filter/resonance"):
             with self.subTest(address=address):
-                self.assertTrue(relay_on_arrival(address))
+                self.assertTrue(self.relayed(address))
 
     def test_a_flag_is_not_passed_on_here(self):
-        """`pfl`, `fx` and the filter mode are announced by announce_flag()
-        and the mode branch -- to everybody, the sender included, because a
-        lamp is status and the desk's own lamp has to follow its own key.
-        Passing them on here as well would send each twice."""
-        for address in ("/channel/0/pfl", "/channel/3/fx", "/fx/mode"):
+        """`pfl`, the channel's filter key and the filter mode are announced
+        by announce_flag() and the mode branch -- to everybody, the sender
+        included, because a lamp is status and the desk's own lamp has to
+        follow its own key. Passing them on here as well would send each
+        twice."""
+        for address in ("/channel/1/pfl", "/channel/4/filter", "/filter/mode"):
             with self.subTest(address=address):
-                self.assertFalse(relay_on_arrival(address))
+                self.assertFalse(self.relayed(address))
 
     def test_the_position_is_not_passed_on(self):
         """It is not a REAPER parameter -- it goes to the IEM encoders -- and
         it arrives tens of thousands of times per channel. Motion asks for it
         at start-up instead; see
         smoke-test/smoke-test-motion-hoert-die-position.md."""
-        for address in ("/channel/0/azimuth", "/channel/1/elevation"):
+        for address in ("/channel/1/azimuth", "/channel/2/elevation"):
             with self.subTest(address=address):
-                self.assertFalse(relay_on_arrival(address))
+                self.assertFalse(self.relayed(address))
 
     def test_an_accent_still_reaches_the_other_screens(self):
-        """pot_1 and pot_2 carry Motion's *effective* value, accent included,
-        and they are passed on anyway -- because the sender is left out, so
-        nothing writes an accent peak into the base it came from. That was the
-        ratchet of 2026-09-12 morning, and it lived in the other direction:
-        REAPER's report, not arrival."""
-        self.assertTrue(relay_on_arrival("/channel/0/pot_1"))
-        self.assertTrue(relay_on_arrival("/channel/0/pot_2"))
+        """The channel's filter frequency and Q (pot_1 and pot_2 until
+        2026-09-30) carry Motion's *effective* value, accent included, and are
+        passed on anyway -- the sender is left out, so nothing writes an accent
+        peak into the base it came from."""
+        self.assertTrue(self.relayed("/channel/1/filter/frequency"))
+        self.assertTrue(self.relayed("/channel/1/filter/q"))
 
     def test_what_is_not_a_value_at_all(self):
-        for address in ("/beat", "/tap", "/state/recall", "/channel/0",
+        for address in ("/beat", "/tap", "/state/recall", "/channel/1",
                         "/channel", "/track/12/fx/1/fxparam/1/value", "/"):
             with self.subTest(address=address):
-                self.assertFalse(relay_on_arrival(address))
+                self.assertFalse(self.relayed(address))
+
+    def test_the_old_names_are_not_passed_on(self):
+        """A device still on the old vocabulary is not quietly served."""
+        for address in ("/channel/0/volume", "/fx/frequency", "/master/return",
+                        "/master/phones_mix", "/channel/1/pot_1"):
+            with self.subTest(address=address):
+                self.assertFalse(self.relayed(address))
 
 
 class TheTwoThatShip(unittest.TestCase):

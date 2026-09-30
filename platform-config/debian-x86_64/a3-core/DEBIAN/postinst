@@ -174,10 +174,8 @@ if [ "x$CONFIGURE" = "xtrue" ]; then
   INSTALL_DEFAULT="$RET"
 
   if [ "x$INSTALL_DEFAULT" = "xtrue" ]; then
-    INTERFACE="eno1"
-    ADDR="192.168.8.10/24"
-    GATEWAY="192.168.8.1"
-    DNS="192.168.8.1"
+    # INTERFACE, ADDR, GATEWAY, DNS and BRIDGE_WITH, from a3-osc.json.
+    eval "$("${USER_HOME}/.local/bin/a3-osc-render" network)"
   else
     ask_address_questions
 
@@ -187,9 +185,8 @@ if [ "x$CONFIGURE" = "xtrue" ]; then
     db_get a3-core/dns; DNS="$RET"
 
     ask_bridge_question "$INTERFACE"
+    db_get a3-core/bridge-with; BRIDGE_WITH="$RET"
   fi
-
-  db_get a3-core/bridge-with; BRIDGE_WITH="$RET"
 
   write_network_config /etc/systemd/network "$INTERFACE" "$BRIDGE_WITH" \
     "$ADDR" "$GATEWAY" "$DNS"
@@ -227,6 +224,11 @@ cp -rn /home/aaa/.local/share/a3-core/config/* /home/aaa/.config/
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.local" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.config" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.ssh" || true
+
+# zita's arguments and the beat-analyzer's targets, from a3-osc.json. A failure
+# is said out loud: the zita units would start without their addresses.
+sudo -u "$APPUSER" -H "${USER_HOME}/.local/bin/a3-osc-render" user \
+  || echo "a3-core: a3-osc-render user failed -- zita and the analyzer lack their addresses" >&2
 
 find "$USER_HOME/.config" -type d -exec chmod 0755 {} \;
 find "$USER_HOME/.config" -type f -exec chmod 0664 {} \;

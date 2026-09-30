@@ -19,8 +19,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local"
 sys.path.insert(0, str(PACKAGE / "lib"))
+TRUTH = ROOT / "platform-config/debian-x86_64/a3-core/usr/share/a3/a3-osc.json"
 
 from a3_core_layout import load_layout                      # noqa: E402
+import a3_osc                                               # noqa: E402
 from a3_core_reverse import (CHANNEL, FXPARAM, GAINS,        # noqa: E402
                              GAIN_PARAMS_OF, GLOBAL, REVERSALS,
                              SEND, VOLUME, reverse_for,
@@ -30,6 +32,7 @@ from a3_core_reverse import (CHANNEL, FXPARAM, GAINS,        # noqa: E402
 class ReverseCase(unittest.TestCase):
     def setUp(self):
         self.layout = load_layout(PACKAGE / "share/a3-core/layout.json")
+        self.truth = a3_osc.load(TRUTH)
 
     def found(self, address, role_field):
         return reverse_for(self.layout, address, role_field)
@@ -40,15 +43,16 @@ class TheChannelStrip(ReverseCase):
 
     def test_the_gain(self):
         entry = self.found("/track/12/fx/1/fxparam/1/value", "track_input")
-        self.assertEqual(entry.address, "gain")
+        self.assertEqual(entry.key, "channel.gain")
         self.assertEqual(entry.scope, CHANNEL)
 
     def test_the_three_bands_are_told_apart(self):
-        for param, control in ((1, "eq/high"), (2, "eq/mid"), (3, "eq/low")):
+        for param, control in ((1, "channel.eq.high"), (2, "channel.eq.mid"),
+                               (3, "channel.eq.low")):
             with self.subTest(param=param):
                 entry = self.found(f"/track/12/fx/2/fxparam/{param}/value",
                                    "track_input")
-                self.assertEqual(entry.address, control)
+                self.assertEqual(entry.key, control)
 
     def test_the_volume_answers_on_any_of_its_gain_parameters(self):
         """One plug-in holds the value across several parameters; any of them
@@ -57,14 +61,14 @@ class TheChannelStrip(ReverseCase):
             with self.subTest(param=param):
                 entry = self.found(f"/track/9/fx/1/fxparam/{param}/value",
                                    "track_channelbus")
-                self.assertEqual(entry.address, "volume")
+                self.assertEqual(entry.key, "channel.volume")
 
     def test_the_fx_send_is_a_send_and_not_a_parameter(self):
         """It leaves the track rather than sitting on it, so REAPER reports it
         on a shape of its own. Send 3 of the channelbus is the FX bus --
         measured on 2026-09-12 by moving the fader."""
         entry = self.found("/track/9/send/3/volume", "track_channelbus")
-        self.assertEqual(entry.address, "fx-send")
+        self.assertEqual(entry.key, "channel.fx-send")
         self.assertEqual(entry.scope, CHANNEL)
 
     def test_another_send_of_the_same_track_is_not_it(self):
@@ -78,12 +82,12 @@ class TheSharedFilter(ReverseCase):
 
     def test_the_frequency_comes_back_global(self):
         entry = self.found("/track/12/fx/3/fxparam/7/value", "track_input")
-        self.assertEqual(entry.address, "/fx/frequency")
+        self.assertEqual(entry.key, "filter.frequency")
         self.assertEqual(entry.scope, GLOBAL)
 
     def test_the_resonance_too(self):
         entry = self.found("/track/12/fx/3/fxparam/6/value", "track_input")
-        self.assertEqual(entry.address, "/fx/resonance")
+        self.assertEqual(entry.key, "filter.resonance")
         self.assertEqual(entry.scope, GLOBAL)
 
     def test_the_lopass_is_deliberately_not_read(self):
@@ -98,7 +102,7 @@ class TheSharedFilter(ReverseCase):
             with self.subTest(track=track):
                 entry = self.found(f"/track/{track}/fx/3/fxparam/7/value",
                                    "track_input")
-                self.assertEqual(entry.address, "/fx/frequency")
+                self.assertEqual(entry.key, "filter.frequency")
 
 
 class TheMasterSection(ReverseCase):
@@ -109,22 +113,22 @@ class TheMasterSection(ReverseCase):
     def test_the_master_volume(self):
         entry = self.found("/track/1/fx/1/fxparam/15/value",
                            "track_masterbus")
-        self.assertEqual(entry.address, "/master/volume")
+        self.assertEqual(entry.key, "master.volume")
         self.assertEqual(entry.scope, GLOBAL)
 
     def test_the_booth(self):
         entry = self.found("/track/2/fx/1/fxparam/1/value", "track_booth")
-        self.assertEqual(entry.address, "/master/booth")
+        self.assertEqual(entry.key, "master.booth")
 
     def test_the_phones_volume(self):
         entry = self.found("/track/3/fx/2/fxparam/1/value", "track_phones")
-        self.assertEqual(entry.address, "/master/phones_volume")
+        self.assertEqual(entry.key, "master.phones-volume")
 
     def test_the_aux_return(self):
         """Since 2026-09-29 the FX return is its own track, 28 "Return", with
         one Airwindows PurestGain as its first plug-in."""
         entry = self.found("/track/28/fx/1/fxparam/1/value", "aux_return")
-        self.assertEqual(entry.address, "/master/return")
+        self.assertEqual(entry.key, "master.fx-return")
         self.assertEqual(entry.curve, "slope_volume")
 
     def test_the_old_aux_return_address_is_not_answered(self):
@@ -137,7 +141,7 @@ class TheMasterSection(ReverseCase):
         """The one value that goes out unbent. `identity` says so in the table
         rather than in an `if` somewhere else."""
         entry = self.found("/track/8/volume", "track_ph_mix")
-        self.assertEqual(entry.address, "/master/phones_mix")
+        self.assertEqual(entry.key, "master.phones-mix")
         self.assertEqual(entry.curve, "identity")
 
 
@@ -176,33 +180,34 @@ class WhatIsNotAnswered(ReverseCase):
         """An action script drives them, so REAPER holds base plus accent
         while the device holds base. Relaying that ratchets -- built
         2026-09-12, live for a few hours, taken out the same day."""
-        self.assertNotIn("pot_1", [entry.address for entry in REVERSALS])
-        self.assertNotIn("pot_2", [entry.address for entry in REVERSALS])
-        self.assertNotIn("3d", [entry.address for entry in REVERSALS])
+        keys = [entry.key for entry in REVERSALS]
+        self.assertNotIn("channel.filter.frequency", keys)
+        self.assertNotIn("channel.filter.q", keys)
+        self.assertNotIn("channel.3d", keys)
 
 
 class TheAddressItComesBackOn(ReverseCase):
-    def entry_named(self, address):
-        return next(e for e in REVERSALS if e.address == address)
+    def entry_named(self, key):
+        return next(e for e in REVERSALS if e.key == key)
 
     def test_a_channel_control_is_hung_under_its_channel(self):
+        """Channel index 2 is the third channel, /channel/3 on the wire."""
         self.assertEqual(
-            reversed_address(self.layout, self.entry_named("gain"), 2),
-            "/channel/2/gain")
+            reversed_address(self.truth, self.entry_named("channel.gain"), 2),
+            "/channel/3/gain")
 
     def test_a_global_control_carries_its_whole_address(self):
         self.assertEqual(
-            reversed_address(self.layout,
-                             self.entry_named("/master/volume"), 0),
+            reversed_address(self.truth, self.entry_named("master.volume"), 0),
             "/master/volume")
 
     def test_a_global_control_needs_no_channel_at_all(self):
         """A master track has no channel, and demanding one would mean
         inventing a number only to throw it away."""
         self.assertEqual(
-            reversed_address(self.layout,
-                             self.entry_named("/fx/frequency"), None),
-            "/fx/frequency")
+            reversed_address(self.truth,
+                             self.entry_named("filter.frequency"), None),
+            "/filter/frequency")
 
 
 class TheTableItself(unittest.TestCase):
@@ -217,17 +222,28 @@ class TheTableItself(unittest.TestCase):
 
     def test_every_scope_is_one_of_the_two(self):
         for entry in REVERSALS:
-            with self.subTest(address=entry.address):
+            with self.subTest(key=entry.key):
                 self.assertIn(entry.scope, (CHANNEL, GLOBAL))
 
-    def test_a_global_entry_carries_a_whole_address_and_a_channel_one_a_suffix(self):
-        """Mixing the two up is silent: a suffix used whole becomes an address
-        with no leading slash, which JUCE and pythonosc both refuse, and a
-        whole address hung under a channel becomes /channel/2//master/volume."""
+    def test_every_entry_is_an_address_of_the_truth_core_accepts(self):
+        """Since 2026-09-30 an entry names its address in the truth; a key the
+        truth does not have, or one Core does not receive, would be a value
+        reported back onto nothing."""
+        truth = a3_osc.load(TRUTH)
         for entry in REVERSALS:
-            with self.subTest(address=entry.address):
-                self.assertEqual(entry.scope == GLOBAL,
-                                 entry.address.startswith("/"))
+            with self.subTest(key=entry.key):
+                self.assertIn(entry.key, truth.addresses())
+                self.assertIn("core", truth.addresses()[entry.key]["to"])
+
+    def test_a_channel_entry_is_a_channel_address(self):
+        """Mixing the two scopes up is silent: a channel entry answered without
+        a channel has no ch to fill, a global one hung under a channel does not
+        exist."""
+        truth = a3_osc.load(TRUTH)
+        for entry in REVERSALS:
+            with self.subTest(key=entry.key):
+                self.assertEqual(entry.scope == CHANNEL,
+                                 "ch" in truth.addresses()[entry.key])
 
     def test_every_slot_name_is_one_the_layout_knows(self):
         for entry in REVERSALS:
@@ -246,7 +262,7 @@ class TheTableItself(unittest.TestCase):
     def test_every_gains_entry_has_a_list_to_look_in(self):
         for entry in REVERSALS:
             if entry.param == GAINS:
-                with self.subTest(address=entry.address):
+                with self.subTest(key=entry.key):
                     self.assertIn(entry.field, GAIN_PARAMS_OF)
                     self.layout.gain_params(GAIN_PARAMS_OF[entry.field])
 
@@ -263,7 +279,7 @@ class TheTableItself(unittest.TestCase):
         known.add("aux_return")
 
         for entry in REVERSALS:
-            with self.subTest(address=entry.address):
+            with self.subTest(key=entry.key):
                 self.assertIn(entry.field, known)
 
 
