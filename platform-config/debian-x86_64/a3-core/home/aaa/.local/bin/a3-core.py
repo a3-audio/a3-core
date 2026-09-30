@@ -1335,7 +1335,7 @@ if __name__ == "__main__":
     # Read now, before the feedback port opens: every value REAPER reports is
     # also written to evening.json, and a REAPER that announces its template
     # first would otherwise overwrite what the replay below is for.
-    evening = list(replayable(_evening_file.load()))
+    evening = list(replayable(_truth, _evening_file.load()))
 
     feedback_dispatcher = osc_dispatcher.Dispatcher()
     feedback_dispatcher.set_default_handler(reaper_feedback_handler,
