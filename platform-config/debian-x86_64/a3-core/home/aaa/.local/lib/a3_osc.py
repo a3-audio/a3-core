@@ -12,6 +12,7 @@ not written there does not exist; a silent fallback would be a second truth.
 
 import json
 import os
+import re
 from pathlib import Path
 
 #: Where the package puts the file. A3_OSC_TRUTH overrides it, for tests and
@@ -85,6 +86,29 @@ class Truth:
                 if not low <= value <= high:
                     raise TruthError(f"{key}: {field}={value} outside {low}..{high}")
         return entry["pattern"].format(**fields)
+
+    def match(self, address):
+        """address() backwards: ("channel.volume", {"ch": 1}) for
+        "/channel/1/volume", or None for an address the truth does not have
+        (an old name, a channel out of range)."""
+        for key, (regex, entry) in self._matchers().items():
+            found = regex.fullmatch(address)
+            if not found:
+                continue
+            fields = {name: int(value) for name, value in found.groupdict().items()}
+            if all(entry[name][0] <= value <= entry[name][1]
+                   for name, value in fields.items()):
+                return key, fields
+        return None
+
+    def _matchers(self):
+        if not hasattr(self, "_compiled"):
+            self._compiled = {}
+            for key, entry in self._data["addresses"].items():
+                pattern = re.escape(entry["pattern"])
+                pattern = re.sub(r"\\\{(\w+)\\\}", r"(?P<\1>\\d+)", pattern)
+                self._compiled[key] = (re.compile(pattern), entry)
+        return self._compiled
 
     def index_range(self, key, field):
         low, high = self._entry(key)[field]

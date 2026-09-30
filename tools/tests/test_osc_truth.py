@@ -148,5 +148,38 @@ class TheVocabulary(unittest.TestCase):
                 self.assertIn(who, programs, key)
 
 
+class TakingAnAddressApart(unittest.TestCase):
+    """Core decides by an address's name, not by pieces of a string: match()
+    is address() backwards."""
+
+    def test_a_channel_address(self):
+        self.assertEqual(truth().match("/channel/1/volume"),
+                         ("channel.volume", {"ch": 1}))
+        self.assertEqual(truth().match("/channel/4/filter/frequency"),
+                         ("channel.filter.frequency", {"ch": 4}))
+
+    def test_an_address_without_fields(self):
+        self.assertEqual(truth().match("/master/fx-return"), ("master.fx-return", {}))
+
+    def test_a_vu_meter(self):
+        self.assertEqual(truth().match("/vu/40"), ("vu", {"n": 40}))
+
+    def test_outside_the_range_is_no_match(self):
+        self.assertIsNone(truth().match("/channel/0/volume"))
+        self.assertIsNone(truth().match("/channel/5/volume"))
+        self.assertIsNone(truth().match("/vu/41"))
+
+    def test_an_old_or_unknown_address_is_no_match(self):
+        for address in ("/fx/frequency", "/master/return", "/channel/1/pot_1",
+                        "/nothing"):
+            self.assertIsNone(truth().match(address), address)
+
+    def test_match_and_address_agree_everywhere(self):
+        t = truth()
+        for key, entry in t.addresses().items():
+            fields = {name: entry[name][0] for name in ("ch", "n") if name in entry}
+            self.assertEqual(t.match(t.address(key, **fields)), (key, fields), key)
+
+
 if __name__ == "__main__":
     unittest.main()
