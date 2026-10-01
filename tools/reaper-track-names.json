@@ -22,7 +22,10 @@
     "recording against that template, name for name.",
     "",
     "Tracks 1-29 retaken from the maintainer's template of 2026-10-01 17:36:",
-    "stem-pfl (8) is new, everything from ph-mix on moved by one; Return is 29."
+    "stem-pfl (8) is new, everything from ph-mix on moved by one; Return is 29.",
+    "",
+    "Tracks 1-30 retaken from the maintainer's template of 2026-10-01 19:46:",
+    "Return moved to 26, ENCODER (27) is a new folder track, enc_* follow on 28-30."
   ],
   "track_names": {
     "1": "dec_master",
@@ -50,9 +53,10 @@
     "23": "4-stereo-enc",
     "24": "4-multi-enc",
     "25": "4-input",
-    "26": "enc_fx",
-    "27": "enc_main",
-    "28": "enc_phones",
-    "29": "Return"
+    "26": "Return",
+    "27": "ENCODER",
+    "28": "enc_fx",
+    "29": "enc_main",
+    "30": "enc_phones"
   }
 }
