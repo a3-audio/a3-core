@@ -51,7 +51,7 @@ class ShippedLayout(unittest.TestCase):
     def test_no_two_channels_share_a_track(self):
         # Two channels on one track is a wiring mistake that sounds like one
         # channel being deaf, which is hard to trace back to a number.
-        for field in ("track_input", "track_channelbus", "track_pfl",
+        for field in ("track_input", "track_channelbus",
                       "track_multi_enc", "track_stereo_enc"):
             used = [getattr(self.layout.channel(i), field)
                     for i in range(self.layout.channel_count)]
@@ -63,8 +63,7 @@ class ShippedLayout(unittest.TestCase):
         for index in range(self.layout.channel_count):
             channel = self.layout.channel(index)
             tracks = [channel.track_input, channel.track_channelbus,
-                      channel.track_pfl, channel.track_multi_enc,
-                      channel.track_stereo_enc]
+                      channel.track_multi_enc, channel.track_stereo_enc]
             self.assertEqual(len(set(tracks)), len(tracks),
                              f"channel {index}: {tracks}")
 
@@ -101,13 +100,14 @@ class TheRestOfTheMap(unittest.TestCase):
             self.assertGreater(self.layout.fx_slot(slot), 0, slot)
 
     def test_the_fx_send_is_named_and_is_the_one_that_was_measured(self):
-        """Send 3 of a channelbus reaches enc_fx, where the delay sits.
+        """Send 1 of a channelbus reaches enc_fx, where the delay sits.
 
-        Derived from the receiver order in the project (1-pfl, ph-mix,
-        enc_fx, enc_main) and then confirmed on 2026-09-12 by moving the
-        fader and watching /track/9/send/3/volume arrive at Core.
+        Measured on 2026-10-01 with the template that moved the cue into the
+        sends: sends 1-5 of track 1 set to five levels, the maintainer read
+        1 enc_fx, 2 enc_main, 3 dec_phones pre, 4 dec_phones post, 5 VU.
+        (Before: send 3, measured 2026-09-12 on the template with PFL tracks.)
         """
-        self.assertEqual(self.layout.send("fx"), 3)
+        self.assertEqual(self.layout.send("fx"), 1)
 
     def test_every_gain_list_a3_core_asks_for_is_there(self):
         for name in ("channelbus", "masterbus", "boothbus", "aux_return"):

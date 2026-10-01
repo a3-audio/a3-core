@@ -35,16 +35,13 @@ CHANNEL_SUFFIX = {
     "track_multi_enc": "multi-enc",
     "track_stereo_enc": "stereo-enc",
     "track_channelbus": "channelbus",
-    "track_pfl": "pfl",
 }
 
 MASTER_NAME = {
     "track_masterbus": "dec_master",
     "track_booth": "dec_booth",
     "track_phones": "dec_phones",
-    "track_ph_mix": "ph-mix",
-    "track_stem_pfl": "stem-pfl",
-    "aux_return": "Return",
+    "aux_return": "aux return",
 }
 
 #: The project the layout ships beside. Installed as the template REAPER starts
@@ -118,9 +115,9 @@ class LayoutAgainstReaper(unittest.TestCase):
         claimed |= {getattr(self.layout.master, f) for f in MASTER_FIELDS}
 
         unclaimed = {t: n for t, n in self.names.items() if t not in claimed}
-        # ENCODER: a folder track over the encoders (template of 2026-10-01).
+        # ENCODER, DECODER: folder tracks (template of 2026-10-01).
         self.assertEqual(sorted(unclaimed.values()),
-                         ["ENCODER", "enc_fx", "enc_main", "enc_phones"], unclaimed)
+                         ["DECODER", "ENCODER", "enc_fx", "enc_main", "enc_phones"], unclaimed)
 
     def test_the_recorded_names_are_the_shipped_projects(self):
         # The recording is only as good as the project it was taken from. A

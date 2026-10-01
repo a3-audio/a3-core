@@ -151,11 +151,9 @@ REVERSALS = (
     Reverse(FXPARAM, "aux_return", "aux_gain", GAINS,
             "slope_volume", "master.fx-return", GLOBAL),
 
-    # The headphone mix is the one value that goes out unbent, as a plain
-    # track volume. `identity` is a3_core_curves' name for that, so this reads
-    # as a control with no curve rather than as a hole in the table.
-    Reverse(VOLUME, "track_ph_mix", None, None,
-            "identity", "master.phones-mix", GLOBAL),
+    # The headphone mix used to be read back here as ph-mix's track volume.
+    # That track is gone (template of 2026-10-01); the crossfade lives in the
+    # channel buses' sends now, and its reverse follows with the cue logic.
 )
 
 #: Kept under its old name so the coverage test and older readers still find
