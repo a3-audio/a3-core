@@ -37,7 +37,8 @@ class Stems:
         self.channel_pair[index] = after
         if before and before != after:
             self.return_muted[before - 1] = False      # released: unmuted
-            self._move_cursor_to_a_free_pair()         # pair is now free
+            if self.return_cursor == 0:
+                self._move_cursor_to_a_free_pair()     # was none free, now a pair is
         if self.return_cursor == after and after:
             self._move_cursor_to_a_free_pair()
 

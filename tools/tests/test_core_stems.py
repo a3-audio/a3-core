@@ -91,6 +91,14 @@ class TheReturn(unittest.TestCase):
         s.turn_channel(0, +1)          # pair 1 joins channel 1
         self.assertEqual(s.return_cursor, 2)
 
+    def test_cursor_stays_put_when_another_pair_is_released(self):
+        s = Stems()
+        s.turn_return(+1)              # cursor moves to first free: pair 2
+        s.turn_return(+1)              # cursor moves forward: pair 3
+        s.turn_channel(0, +1)          # channel 1 takes pair 1
+        s.turn_channel(0, -1)          # and releases it
+        self.assertEqual(s.return_cursor, 3)  # cursor unchanged
+
 
 class NoFreePair(unittest.TestCase):
     def test_no_free_pair_turn_and_push_do_nothing(self):
