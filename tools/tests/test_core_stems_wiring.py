@@ -16,22 +16,22 @@ CORE = (PACKAGE / "home/aaa/.local/bin/a3-core.py").read_text()
 
 
 class TheStateFile(unittest.TestCase):
-    """Only the return cursor is Core's own; the switches are StemDeck's
-    (spec stemdeck-remote)."""
+    """Only the selections are Core's own; the switches are StemDeck's
+    (specs stemdeck-remote, desk-stem-selector)."""
 
-    def test_the_cursor_is_written_down(self):
+    def test_the_selections_are_written_down(self):
         s = Stems()
-        s.return_cursor = 5
-        self.assertEqual(state_of([], _Master(), s)["stems"], {"return_cursor": 5})
+        s.selected = [1, 0, 0, 0, 2]
+        self.assertEqual(state_of([], _Master(), s)["stems"], {"selected": [1, 0, 0, 0, 2]})
 
-    def test_a_state_without_stems_is_a_fresh_mirror(self):
-        self.assertEqual(apply_stems({}).masks, [0] * 8)
+    def test_a_state_without_stems_selects_nothing(self):
+        self.assertEqual(apply_stems({}).selected, [0] * 5)
         self.assertEqual(apply_stems({"stems": "garbage"}).masks, [0] * 8)
 
-    def test_the_cursor_survives_the_round_trip(self):
+    def test_the_selections_survive_the_round_trip(self):
         s = Stems()
-        s.return_cursor = 3
-        self.assertEqual(apply_stems(state_of([], _Master(), s)).return_cursor, 3)
+        s.selected = [0, 3, 0, 0, 0]
+        self.assertEqual(apply_stems(state_of([], _Master(), s)).selected, [0, 3, 0, 0, 0])
 
 
 class _Master:
@@ -84,12 +84,6 @@ class StemDeckIsWired(unittest.TestCase):
 
     def test_every_hello_checks_for_silence(self):
         self.assertIn("notice_stemdeck_silence(", _source_of("osc_handler_device_hello"))
-
-    def test_a_channel_turn_waits_for_stemdeck(self):
-        source = _source_of("osc_handler_channel")
-        branch = source.split('elif parameter == "stem.turn":', 1)[1].split("elif ", 1)[0]
-        self.assertIn("send_to_stemdeck", branch)
-        self.assertNotIn("speak_stems", branch)
 
     def test_a_report_is_announced(self):
         self.assertIn("speak_stems(", _source_of("osc_handler_stemdeck"))
@@ -196,6 +190,38 @@ class TheReturnSaysWhatItCannotServe(unittest.TestCase):
                    and _is_named(call.func.value, "traffic")
                    and call.func.attr == "unknown"]
         self.assertEqual(1, len(unknown))
+
+
+class TheSelectorIsWired(unittest.TestCase):
+    """Spec desk-stem-selector: turn selects, push loads, cue through C."""
+
+    def test_a_turn_only_selects(self):
+        branch = _branch_of("osc_handler_channel", 'elif parameter == "stem.turn":')
+        self.assertIn("_stems.turn(", branch)
+        self.assertNotIn("send_to_stemdeck", branch)
+
+    def test_a_push_loads(self):
+        branch = _branch_of("osc_handler_channel", 'elif parameter == "stem.push":')
+        self.assertIn("_stems.push(", branch)
+        self.assertIn("apply_stem_cue()", branch)
+
+    def test_a_push_without_stemdeck_sends_nothing(self):
+        branch = _branch_of("osc_handler_channel", 'elif parameter == "stem.push":')
+        self.assertIn("_stemdeck_client is not None", branch)
+
+    def test_the_cue_sets_stemdecks_c(self):
+        branch = _branch_of("osc_handler_channel", 'elif parameter == "cue":')
+        self.assertIn("apply_stem_cue()", branch)
+
+    def test_the_cue_send_knows_where_stems_are(self):
+        self.assertIn("channel_mask", _source_of("send_cue_levels"))
+
+    def test_a_report_resets_the_cue(self):
+        self.assertIn("apply_stem_cue()", _source_of("osc_handler_stemdeck"))
+
+
+def _branch_of(function_name, head):
+    return _source_of(function_name).split(head, 1)[1].split("\n    elif ", 1)[0]
 
 
 if __name__ == "__main__":

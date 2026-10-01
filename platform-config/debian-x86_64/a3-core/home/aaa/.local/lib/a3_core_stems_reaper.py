@@ -5,7 +5,7 @@ Send volume, not send mute: REAPER's OSC has no send mute
 (Default.ReaperOSC, 2026-10-01).
 """
 
-from a3_core_stems import CHANNELS, PAIRS
+from a3_core_stems import CHANNELS, PAIRS, RETURN
 
 STEMS_PER_DECK = 4
 
@@ -28,10 +28,14 @@ def analog_messages(stems, layout, unity):
 
 
 def announcements(stems, truth):
-    out = [(truth.address("channel.stem", ch=c + 1), stems.channel_mask(c))
-           for c in range(CHANNELS)]
+    """Per channel what plays there and where its selection stands, then
+    the return's selection and what plays on it."""
+    out = []
+    for c in range(CHANNELS):
+        out.append((truth.address("channel.stem", ch=c + 1), stems.channel_mask(c)))
+        out.append((truth.address("channel.stem.selected", ch=c + 1), stems.selected[c]))
     plays = [int(stems.plays_on_return(p)) for p in range(1, PAIRS + 1)]
-    out.append((truth.address("aux-return.stem"), [stems.return_cursor] + plays))
+    out.append((truth.address("aux-return.stem"), [stems.selected[RETURN]] + plays))
     return out
 
 

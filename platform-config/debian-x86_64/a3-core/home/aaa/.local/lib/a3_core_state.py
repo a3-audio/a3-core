@@ -92,7 +92,7 @@ def state_of(channels, master, stems=None):
 
 
 def apply_stems(state):
-    """The remembered return cursor in a fresh mirror -- never raises."""
+    """The remembered selections in a fresh mirror -- never raises."""
     return Stems.from_data((state or {}).get("stems"))
 
 

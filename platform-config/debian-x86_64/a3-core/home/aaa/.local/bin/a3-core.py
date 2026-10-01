@@ -54,6 +54,7 @@ from a3_core_reverse import reverse_for, reversed_address   # noqa: E402
 from a3_core_state import (StateFile, apply_state,   # noqa: E402
                            apply_stems, state_of)
 from a3_core_cue import send_levels   # noqa: E402
+from a3_core_stems import RETURN   # noqa: E402
 from a3_core_stems_reaper import (analog_messages,   # noqa: E402
                                   announcements as stem_announcements,
                                   changed_messages, command_messages, pair_of)
@@ -485,6 +486,7 @@ def send_cue_levels():
     the return's mix and cue sends. Eleven messages; sent whole, since one
     knob moves most of them."""
     levels = send_levels([channel.toggle_cue for channel in channel_infos],
+                         [bool(_stems.channel_mask(i)) for i in range(len(channel_infos))],
                          master_info.phones_mix, CUE_UNITY)
     for channel, deck in zip(channel_infos, levels["decks"]):
         for side, send in (("pre", "cue_pre"), ("post", "cue_post")):
@@ -498,6 +500,14 @@ def send_cue_levels():
         osc_reaper.send_message(
             _layout.address("track_send", track=master_info.aux_return,
                             send=_layout.send(send)), levels["return"][side])
+
+
+def apply_stem_cue():
+    """The cues as StemDeck's C switches and the headphones' sends: a cued
+    channel with a stem cues it in StemDeck, its own cue send stays shut
+    (spec desk-stem-selector)."""
+    send_to_stemdeck(_stems.cue_commands([c.toggle_cue for c in channel_infos]))
+    send_cue_levels()
 
 
 def announce_flag(flag, channel_index):
@@ -566,6 +576,7 @@ def notice_stemdeck_silence(now):
     _stemdeck_client = None
     _stems.forget()
     speak_stems()
+    send_cue_levels()
 
 
 def remember_state():
@@ -828,7 +839,7 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
         if wanted is not NO_CHANGE:
             channel_infos[channel_index].toggle_cue = wanted
             announce_flag("cue", channel_index)
-            send_cue_levels()
+            apply_stem_cue()
 
     elif parameter == "filter":
         wanted = wanted_toggle(raw, channel_infos[channel_index].toggle_fx)
@@ -885,10 +896,16 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
 
     elif parameter == "stem.turn":
-        # The desk changes when StemDeck reports, not here (spec
-        # stemdeck-remote); without StemDeck a turn does nothing.
+        # The selection only (spec desk-stem-selector): Core's own, shown at
+        # once, with or without StemDeck.
+        _stems.turn(channel_index, int(value))
+        speak_stems()
+
+    elif parameter == "stem.push":
+        # Loads the selection; the desk shows it when StemDeck reports.
         if _stemdeck_client is not None:
-            send_to_stemdeck(_stems.turn_channel(channel_index, int(value)))
+            send_to_stemdeck(_stems.push(channel_index))
+            apply_stem_cue()
 
     else:
         # Bis hierher gekommen und auf keinen Zweig gepasst.
@@ -971,10 +988,10 @@ def osc_handler_aux_return(client_address: Tuple[str, int], address: str,
     origin = peer_name(client_address[0], PEER_HOSTS, only=COMMANDERS)
     traffic.seen(IN, address, value, origin)
     if key == "aux-return.stem.turn":
-        _stems.turn_return(int(float(osc_arguments[0])))
+        _stems.turn(RETURN, int(float(osc_arguments[0])))
     elif key == "aux-return.stem.push":
         if _stemdeck_client is not None:
-            send_to_stemdeck(_stems.push_return())
+            send_to_stemdeck(_stems.push(RETURN))
     else:
         # Mapped, so seen() above has put it in the understood table; say
         # that nobody serves it, as osc_handler_channel's `else` does.
@@ -999,6 +1016,7 @@ def osc_handler_stemdeck(client_address: Tuple[str, int], address: str,
         traffic.unknown(address, value, origin)
         return
     speak_stems()
+    apply_stem_cue()
 
 
 def osc_handler_filter(client_address: Tuple[str, int], address: str,

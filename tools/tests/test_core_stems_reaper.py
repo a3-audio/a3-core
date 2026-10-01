@@ -47,6 +47,16 @@ class WhatTheDeskHears(unittest.TestCase):
         msgs = dict(announcements(s, TRUTH))
         self.assertEqual(msgs["/aux-return/stem"][1:], [0, 0, 1, 0, 0, 0, 0, 0])
 
+    def test_each_channel_says_its_selection(self):
+        s = Stems()
+        s.selected[2] = 6
+        self.assertEqual(dict(announcements(s, TRUTH))["/channel/3/stem/selected"], 6)
+
+    def test_the_return_says_its_selection_first(self):
+        s = Stems()
+        s.selected[4] = 2
+        self.assertEqual(dict(announcements(s, TRUTH))["/aux-return/stem"][0], 2)
+
 
 class WhatStemDeckHears(unittest.TestCase):
     def test_pair_six_is_deck_two_stem_two(self):

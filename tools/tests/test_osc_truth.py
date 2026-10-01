@@ -279,3 +279,19 @@ class TheStemDeckSpeaks(unittest.TestCase):
     def test_the_stem_cue_words_are_gone(self):
         self.assertNotIn("stem.cue", self.truth.addresses())
         self.assertNotIn("stem.cue.led", self.truth.addresses())
+
+
+class TheStemSelector(unittest.TestCase):
+    """Spec desk-stem-selector (2026-10-02): turn selects, push loads."""
+
+    def setUp(self):
+        self.truth = a3_osc.load(TRUTH)
+
+    def test_a_push_loads(self):
+        self.assertEqual(self.truth.address("channel.stem.push", ch=3), "/channel/3/stem/push")
+        self.assertEqual(self.truth.addresses()["channel.stem.push"]["to"], ["core"])
+
+    def test_core_announces_the_selection(self):
+        self.assertEqual(self.truth.address("channel.stem.selected", ch=1),
+                         "/channel/1/stem/selected")
+        self.assertEqual(self.truth.addresses()["channel.stem.selected"]["from"], ["core"])
