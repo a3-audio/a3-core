@@ -17,10 +17,14 @@ import math
 
 
 def send_levels(cues, stem_cue, mix, unity):
-    """{"decks": [{"pre": .., "post": ..}, ...], "stem": ..} for the decks'
-    cue flags, the stem cue and the knob (0 cue .. 1 mix)."""
+    """{"decks": [{"pre": .., "post": ..}, ...], "stem": .., "return": {..}}
+    for the decks' cue flags, the stem cue and the knob (0 cue .. 1 mix).
+
+    The return is on the mix side like a deck's post-fader send; the C field
+    on the aux-return display (the stem cue) also puts it on the cue side."""
     x = min(1.0, max(0.0, float(mix)))
     cue_side = unity * math.cos(x * math.pi / 2)
     mix_side = unity * math.sin(x * math.pi / 2)
     return {"decks": [{"pre": cue_side if on else 0.0, "post": mix_side} for on in cues],
-            "stem": cue_side if stem_cue else 0.0}
+            "stem": cue_side if stem_cue else 0.0,
+            "return": {"pre": cue_side if stem_cue else 0.0, "post": mix_side}}

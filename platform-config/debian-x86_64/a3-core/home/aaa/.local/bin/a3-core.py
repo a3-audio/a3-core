@@ -481,8 +481,9 @@ CUE_UNITY = 1.0
 
 def send_cue_levels():
     """The headphones' sends, all of them: every channel bus's cue (pre-fader)
-    and mix (post-fader) send to enc_phones, and the stems track's cue send.
-    Nine messages; sent whole, since one knob moves eight of them."""
+    and mix (post-fader) send to enc_phones, the stems track's cue send, and
+    the return's mix and cue sends. Eleven messages; sent whole, since one
+    knob moves most of them."""
     levels = send_levels([channel.toggle_cue for channel in channel_infos],
                          master_info.stem_cue, master_info.phones_mix, CUE_UNITY)
     for channel, deck in zip(channel_infos, levels["decks"]):
@@ -493,6 +494,10 @@ def send_cue_levels():
     osc_reaper.send_message(
         _layout.address("track_send", track=master_info.track_stems,
                         send=_layout.send("stems_cue")), levels["stem"])
+    for side, send in (("pre", "return_cue"), ("post", "return_mix")):
+        osc_reaper.send_message(
+            _layout.address("track_send", track=master_info.aux_return,
+                            send=_layout.send(send)), levels["return"][side])
 
 
 def stem_cue_messages():

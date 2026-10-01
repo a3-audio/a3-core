@@ -57,6 +57,18 @@ class TheCues(unittest.TestCase):
         self.assertAlmostEqual(on["stem"], math.cos(0.25 * math.pi / 2))
         self.assertEqual(levels(stem=False, mix=0.0)["stem"], 0.0)
 
+    def test_the_return_is_on_the_mix_side(self):
+        # Template of 2026-10-01 23:11: the return reaches enc_phones twice,
+        # post-fader (mix) and pre-fader (cue), like a channel bus.
+        for mix in (0.0, 0.3, 1.0):
+            self.assertAlmostEqual(levels(mix=mix)["return"]["post"],
+                                   math.sin(mix * math.pi / 2))
+
+    def test_the_c_field_cues_the_return_with_the_stems(self):
+        on = levels(stem=True, mix=0.25)
+        self.assertAlmostEqual(on["return"]["pre"], math.cos(0.25 * math.pi / 2))
+        self.assertEqual(levels(stem=False, mix=0.0)["return"]["pre"], 0.0)
+
     def test_the_knob_is_held_to_its_range(self):
         self.assertAlmostEqual(levels(cues=(True,) * 4, mix=-1)["decks"][0]["pre"], UNITY)
         self.assertAlmostEqual(levels(cues=(True,) * 4, mix=2)["decks"][0]["post"], UNITY)
