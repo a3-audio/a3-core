@@ -178,13 +178,14 @@ class TakingAnAddressApart(unittest.TestCase):
     def test_match_and_address_agree_everywhere(self):
         t = truth()
         for key, entry in t.addresses().items():
-            fields = {name: entry[name][0] for name in ("ch", "n") if name in entry}
+            fields = {name: entry[name][0] for name in ("ch", "n", "deck", "stem", "bus")
+                      if name in entry}
             self.assertEqual(t.match(t.address(key, **fields)), (key, fields), key)
 
 
 class TheStemMeters(unittest.TestCase):
-    """StemDeck's 8 stereo stems, metered by the beat-analyzer (issue
-    a3-system#71): /vu/41-48, one meter per pair."""
+    """StemDeck's 8 stereo stems, one meter each: /vu/41-48, sent by StemDeck
+    itself since spec stemdeck-remote (first by the beat-analyzer, #71)."""
 
     def setUp(self):
         self.t = truth()
@@ -213,12 +214,6 @@ class TheCueWords(unittest.TestCase):
         self.assertEqual(self.t.address("channel.cue", ch=2), "/channel/2/cue")
         self.assertEqual(self.t.address("channel.cue.led", ch=2), "/channel/2/cue/led")
 
-    def test_the_stems_cue(self):
-        a = self.t.addresses()
-        self.assertEqual(self.t.address("stem.cue"), "/stem/cue")
-        self.assertEqual(self.t.address("stem.cue.led"), "/stem/cue/led")
-        self.assertEqual(a["stem.cue"]["to"], ["core"])
-        self.assertEqual(a["stem.cue.led"]["from"], ["core"])
 
     def test_pfl_is_gone(self):
         self.assertNotIn("channel.pfl", self.t.addresses())
@@ -256,3 +251,31 @@ class TheStemWords(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheStemDeckSpeaks(unittest.TestCase):
+    """Spec stemdeck-remote (2026-10-01): the desk switches StemDeck's buses."""
+
+    def setUp(self):
+        self.truth = a3_osc.load(TRUTH)
+
+    def test_core_sets_a_switch(self):
+        self.assertEqual(self.truth.address("stemdeck.bus", deck=2, stem=4, bus=6),
+                         "/stemdeck/2/4/bus/6")
+
+    def test_stemdeck_reports_a_mask(self):
+        self.assertEqual(self.truth.address("stemdeck.buses", deck=1, stem=1),
+                         "/stemdeck/1/1/buses")
+
+    def test_core_asks_for_everything(self):
+        self.assertEqual(self.truth.address("stemdeck.recall"), "/stemdeck/recall")
+
+    def test_stemdeck_listens_on_its_own_port(self):
+        self.assertEqual(self.truth.endpoint("stemdeck", "osc")[1], 7780)
+
+    def test_stemdeck_says_hello(self):
+        self.assertIn("stemdeck", self.truth.addresses()["device.hello"]["from"])
+
+    def test_the_stem_cue_words_are_gone(self):
+        self.assertNotIn("stem.cue", self.truth.addresses())
+        self.assertNotIn("stem.cue.led", self.truth.addresses())
