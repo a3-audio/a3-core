@@ -16,20 +16,22 @@ CORE = (PACKAGE / "home/aaa/.local/bin/a3-core.py").read_text()
 
 
 class TheStateFile(unittest.TestCase):
-    def test_stems_are_written_down(self):
-        s = Stems()
-        s.turn_channel(0, +1)
-        self.assertEqual(state_of([], _Master(), s)["stems"], s.as_data())
+    """Only the return cursor is Core's own; the switches are StemDeck's
+    (spec stemdeck-remote)."""
 
-    def test_a_state_without_stems_is_all_none(self):
-        self.assertEqual(apply_stems({}).channel_pair, [0, 0, 0, 0])
-        self.assertEqual(apply_stems({"stems": "garbage"}).channel_pair, [0, 0, 0, 0])
-
-    def test_stems_survive_the_round_trip(self):
+    def test_the_cursor_is_written_down(self):
         s = Stems()
-        s.turn_channel(2, +3)
-        again = apply_stems(state_of([], _Master(), s))
-        self.assertEqual(again.channel_pair, s.channel_pair)
+        s.return_cursor = 5
+        self.assertEqual(state_of([], _Master(), s)["stems"], {"return_cursor": 5})
+
+    def test_a_state_without_stems_is_a_fresh_mirror(self):
+        self.assertEqual(apply_stems({}).masks, [0] * 8)
+        self.assertEqual(apply_stems({"stems": "garbage"}).masks, [0] * 8)
+
+    def test_the_cursor_survives_the_round_trip(self):
+        s = Stems()
+        s.return_cursor = 3
+        self.assertEqual(apply_stems(state_of([], _Master(), s)).return_cursor, 3)
 
 
 class _Master:
@@ -41,15 +43,65 @@ class _Master:
 class CueGoesThroughTheSends(unittest.TestCase):
     """Since 2026-10-01 the cue is the channel buses' sends to enc_phones."""
 
-    def test_the_stem_family_is_mapped(self):
-        self.assertIn('("stem", osc_handler_stem)', CORE)
-
     def test_the_channel_cue_has_its_branch(self):
         self.assertIn('elif parameter == "cue":', CORE)
         self.assertNotIn('parameter == "pfl"', CORE)
 
-    def test_cue_knob_and_stem_cue_send_the_levels(self):
-        self.assertGreaterEqual(CORE.count("send_cue_levels("), 4)   # def, cue, stem, knob
+    def test_the_stems_cue_send_is_not_gated_by_core(self):
+        source = _source_of("send_cue_levels")
+        self.assertNotIn("any_cued", source)
+        self.assertNotIn("stem_cue", source)
+
+
+class StemDeckIsWired(unittest.TestCase):
+    def test_the_stemdeck_family_is_mapped(self):
+        self.assertIn('("stemdeck", osc_handler_stemdeck)', CORE)
+
+    def test_the_stem_cue_toggle_is_gone(self):
+        self.assertNotIn("def toggle_stem_cue", CORE)
+        self.assertNotIn("osc_handler_stem)", CORE)
+        self.assertNotIn("stem.cue", CORE)
+
+    def test_a_returning_stemdeck_is_asked_for_everything(self):
+        self.assertIn("stemdeck_said_hello(", _source_of("osc_handler_device_hello"))
+        self.assertIn('"stemdeck.recall"', _source_of("stemdeck_said_hello"))
+
+    def test_silence_unmutes_analog_and_shows_a(self):
+        calls = _calls_in("notice_stemdeck_silence")
+        names = {c.func.attr if isinstance(c.func, ast.Attribute) else getattr(c.func, "id", "")
+                 for c in calls}
+        self.assertTrue({"forget", "speak_stems"} <= names, names)
+
+    def test_the_hello_and_the_silence_ask_the_watch(self):
+        # The sequences themselves are tested in test_core_presence.
+        self.assertIn("_stemdeck_watch.hello(", _source_of("stemdeck_said_hello"))
+        self.assertIn("_stemdeck_watch.silence(", _source_of("notice_stemdeck_silence"))
+
+    def test_a_stemdeck_hello_is_heard_before_the_silence_check(self):
+        source = _source_of("osc_handler_device_hello")
+        self.assertLess(source.index("stemdeck_said_hello("),
+                        source.index("notice_stemdeck_silence("))
+
+    def test_every_hello_checks_for_silence(self):
+        self.assertIn("notice_stemdeck_silence(", _source_of("osc_handler_device_hello"))
+
+    def test_a_channel_turn_waits_for_stemdeck(self):
+        source = _source_of("osc_handler_channel")
+        branch = source.split('elif parameter == "stem.turn":', 1)[1].split("elif ", 1)[0]
+        self.assertIn("send_to_stemdeck", branch)
+        self.assertNotIn("speak_stems", branch)
+
+    def test_a_report_is_announced(self):
+        self.assertIn("speak_stems(", _source_of("osc_handler_stemdeck"))
+
+    def test_the_analog_sends_go_to_reaper(self):
+        self.assertIn("analog_messages(", _source_of("speak_stems"))
+
+
+def _source_of(function_name):
+    node = next(n for n in ast.walk(ast.parse(CORE))
+                if isinstance(n, ast.FunctionDef) and n.name == function_name)
+    return ast.get_source_segment(CORE, node)
 
 
 class CoreListens(unittest.TestCase):

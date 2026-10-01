@@ -274,10 +274,19 @@ class CueSinceTheRename(unittest.TestCase):
         apply_state({"channels": [{"toggle_pfl": True}]}, channels, FakeMaster())
         self.assertTrue(channels[0].toggle_cue)
 
-    def test_the_stem_cue_and_the_knob_are_kept(self):
+    def test_the_knob_is_kept(self):
         master = FakeMaster()
-        master.stem_cue, master.phones_mix = True, 0.3
+        master.phones_mix = 0.3
         state = state_of([FakeChannel()], master)
         back = FakeMaster()
         apply_state(state, [FakeChannel()], back)
-        self.assertEqual((back.stem_cue, back.phones_mix), (True, 0.3))
+        self.assertEqual(back.phones_mix, 0.3)
+
+    def test_the_stem_cue_is_no_longer_written(self):
+        # Spec stemdeck-remote: StemDeck's CUE switches are its own.
+        self.assertNotIn("stem_cue", state_of([FakeChannel()], FakeMaster()))
+
+    def test_an_old_stem_cue_is_ignored(self):
+        back = FakeMaster()
+        apply_state({"stem_cue": True}, [FakeChannel()], back)
+        self.assertFalse(back.stem_cue)

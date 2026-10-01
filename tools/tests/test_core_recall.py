@@ -95,13 +95,13 @@ class TheLights(unittest.TestCase):
         channels, master = a_rig()
         self.assertEqual(
             len(list(lamp_messages(self.truth, channels, master))),
-            4 * 2 + 2)
+            4 * 2 + 1)
 
     def test_the_flags_of_a_rig_are_two_a_channel_and_the_mode(self):
         channels, master = a_rig()
         self.assertEqual(
             len(list(flag_messages(self.truth, channels, master))),
-            4 * 2 + 2)
+            4 * 2 + 1)
 
     def test_the_lamp_says_the_mode_as_a_word_and_the_flag_as_a_number(self):
         channels, master = a_rig()
@@ -172,12 +172,13 @@ class WhatTheSourceSays(unittest.TestCase):
         self.assertEqual(modes, set(FX_MODE_WORDS))
 
     def test_every_light_the_truth_has_is_replayed(self):
-        """The truth names four lamps. Two are per channel and belong to a
-        flag; the filter mode's and the stem cue's (2026-10-01) are the
-        master's, which lamp_messages sends on their own."""
+        """The truth names three lamps. Two are per channel and belong to a
+        flag; the filter mode's is the master's, which lamp_messages sends
+        on its own. (The stem cue's lamp went with the C field, spec
+        stemdeck-remote.)"""
         truth = a3_osc.load(TRUTH)
         named = {key for key in truth.addresses() if key.endswith(".led")}
-        replayed = {key for key, _ in LED_OF.values()} | {"filter.led", "stem.cue.led"}
+        replayed = {key for key, _ in LED_OF.values()} | {"filter.led"}
         self.assertEqual(named, replayed)
 
 
@@ -323,7 +324,7 @@ class TheWholeAnswer(unittest.TestCase):
         messages = list(recall_messages(self.truth, channels, master,
                                         relayed))
         self.assertEqual(messages[-1], ("/channel/0/gain", 0.7))
-        self.assertEqual(len(messages), 2 * (4 * 2 + 2) + 1)
+        self.assertEqual(len(messages), 2 * (4 * 2 + 1) + 1)
 
     def test_the_position_is_answered_between_the_flags_and_reaper(self):
         """Both of Core's own certainties first, REAPER's relayed values
@@ -336,10 +337,10 @@ class TheWholeAnswer(unittest.TestCase):
 
         messages = list(recall_messages(self.truth, channels, master,
                                         relayed))
-        self.assertEqual(messages[2 * (4 * 2 + 2)],
+        self.assertEqual(messages[2 * (4 * 2 + 1)],
                          ("/channel/2/azimuth", 45.0))
         self.assertEqual(messages[-1], ("/channel/0/gain", 0.7))
-        self.assertEqual(len(messages), 2 * (4 * 2 + 2) + 1 + 1)
+        self.assertEqual(len(messages), 2 * (4 * 2 + 1) + 1 + 1)
 
     def test_a_cold_core_still_answers_with_its_own_flags(self):
         """After Core itself restarts, nothing has been relayed yet: REAPER
@@ -350,7 +351,7 @@ class TheWholeAnswer(unittest.TestCase):
         channels, master = a_rig()
         messages = list(recall_messages(self.truth, channels, master,
                                         Relayed()))
-        self.assertEqual(len(messages), 2 * (4 * 2 + 2))
+        self.assertEqual(len(messages), 2 * (4 * 2 + 1))
 
     def test_a_cold_core_answers_no_position_either(self):
         """Core's own restart loses the position: it is held in memory and

@@ -29,7 +29,7 @@
   {
    "enc_main_azimuth": 8,
    "enc_main_elevation": 9,
-   "enc_phones_solo": 12,
+   "enc_phones_solo": 12, "analog_send": 1,
    "track_input": 4,
    "track_multi_enc": 3,
    "track_stereo_enc": 2,
@@ -38,7 +38,7 @@
   {
    "enc_main_azimuth": 13,
    "enc_main_elevation": 14,
-   "enc_phones_solo": 17,
+   "enc_phones_solo": 17, "analog_send": 2,
    "track_input": 8,
    "track_multi_enc": 7,
    "track_stereo_enc": 6,
@@ -47,7 +47,7 @@
   {
    "enc_main_azimuth": 18,
    "enc_main_elevation": 19,
-   "enc_phones_solo": 22,
+   "enc_phones_solo": 22, "analog_send": 3,
    "track_input": 12,
    "track_multi_enc": 11,
    "track_stereo_enc": 10,
@@ -56,7 +56,7 @@
   {
    "enc_main_azimuth": 23,
    "enc_main_elevation": 24,
-   "enc_phones_solo": 27,
+   "enc_phones_solo": 27, "analog_send": 4,
    "track_input": 16,
    "track_multi_enc": 15,
    "track_stereo_enc": 14,
@@ -68,7 +68,8 @@
   "track_booth": 24,
   "track_phones": 25,
   "aux_return": 17,
-  "track_stems": 28
+  "track_stems": 28,
+  "track_analog": 27
  },
  "sends": {
   "aux": 1,

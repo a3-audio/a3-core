@@ -1,111 +1,140 @@
-"""Stems on the desk: which StemDeck pair plays on which channel.
+"""The mirror of StemDeck's bus switches, and the desk's rules on it.
 
-Eight stereo pairs (StemDeck's 16 outputs), four desk channels. A channel
-holds one pair or none (0); turning its encoder steps through none and the
-pairs no other channel holds. The aux return lists the pairs on no channel,
-and its push mutes or unmutes the one it shows. A pair on a channel is
-always muted on the return; releasing it there unmutes it again (decided
-2026-10-01). Pure: no OSC, no REAPER -- a3-core.py turns the state into
-messages through a3_core_stems_reaper.
+StemDeck owns the switches (spec stemdeck-remote, 2026-10-01); Core keeps
+what it last reported, one mask per stem pair (bit b-1 = bus b: 1-4 the desk
+channels, 5 AUX, 6 CUE). A turn or push becomes switch commands; Core applies
+them to the mirror at once, so the next click steps from the right place, and
+StemDeck's report overwrites whatever Core expected. Pure: no OSC.
 """
 
 PAIRS = 8
 CHANNELS = 4
+AUX = 5
+CUE = 6
+ALL_BUSES = (1 << CUE) - 1
+
+
+def _bit(bus):
+    return 1 << (bus - 1)
+
+
+def _is_int(value):
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
 class Stems:
-    #: The aux-return display's C field: a cursor position after the free
-    #: stems, where a push is the stem cue (2026-10-01).
-    CUE = 9
-
-    def __init__(self, pairs=PAIRS, channels=CHANNELS):
-        self.pairs = pairs
-        self.channel_pair = [0] * channels
+    def __init__(self):
+        self.masks = [0] * PAIRS
         self.return_cursor = 0
-        self.return_muted = [False] * pairs
-        self._move_cursor_to_a_free_pair()
+        self._keep_cursor_on_a_free_pair()
 
-    # -- channels ---------------------------------------------------------
+    # -- what StemDeck says -------------------------------------------------
 
-    def _positions_for(self, index):
-        """none, then the pairs not held by another channel, in order."""
-        held = {p for i, p in enumerate(self.channel_pair) if i != index and p}
-        return [0] + [p for p in range(1, self.pairs + 1) if p not in held]
+    def report(self, pair, mask):
+        """Take StemDeck's word for one stem. False for a damaged one."""
+        if not (_is_int(pair) and _is_int(mask) and 1 <= pair <= PAIRS
+                and 0 <= mask <= ALL_BUSES):
+            return False
+        self.masks[pair - 1] = mask
+        self._keep_cursor_on_a_free_pair()
+        return True
 
-    def turn_channel(self, index, steps):
-        positions = self._positions_for(index)
-        here = positions.index(self.channel_pair[index]) \
-            if self.channel_pair[index] in positions else 0
-        before = self.channel_pair[index]
-        after = positions[(here + steps) % len(positions)]
-        self.channel_pair[index] = after
-        if before and before != after:
-            self.return_muted[before - 1] = False      # released: unmuted
-            if self.return_cursor == 0:
-                self._move_cursor_to_a_free_pair()     # was none free, now a pair is
-        if self.return_cursor == after and after:
-            self._move_cursor_to_a_free_pair()
+    def forget(self):
+        """StemDeck is gone: nothing is on any bus."""
+        self.masks = [0] * PAIRS
+        self._keep_cursor_on_a_free_pair()
 
-    # -- the return -------------------------------------------------------
+    # -- what the desk shows ------------------------------------------------
+
+    def _on(self, pair, bus):
+        return bool(self.masks[pair - 1] & _bit(bus))
+
+    def channel_mask(self, index):
+        return sum(1 << (p - 1) for p in range(1, PAIRS + 1) if self._on(p, index + 1))
+
+    def plays_on_return(self, pair):
+        return self._on(pair, AUX)
+
+    def _on_a_channel(self, pair, except_index=None):
+        return any(self._on(pair, c + 1) for c in range(CHANNELS) if c != except_index)
 
     def free_pairs(self):
-        held = set(self.channel_pair)
-        return [p for p in range(1, self.pairs + 1) if p not in held]
+        return [p for p in range(1, PAIRS + 1) if not self._on_a_channel(p)]
 
-    def _move_cursor_to_a_free_pair(self):
+    # -- a channel's encoder ------------------------------------------------
+
+    def turn_channel(self, index, steps):
+        """Step channel `index` through A and the stems on no other channel;
+        the commands that make StemDeck play exactly the new one there."""
+        bus = index + 1
+        held = [p for p in range(1, PAIRS + 1) if self._on(p, bus)]
+        positions = [0] + [p for p in range(1, PAIRS + 1)
+                           if not self._on_a_channel(p, except_index=index)]
+        here = positions.index(held[0]) if held and held[0] in positions else 0
+        after = positions[(here + steps) % len(positions)]
+        commands = []
+        if after:
+            commands += [(after, bus, True), (after, AUX, False)]
+        for pair in held:
+            if pair == after:
+                continue
+            commands.append((pair, bus, False))
+            self._apply(pair, bus, False)
+            if not self._on_a_channel(pair):
+                commands.append((pair, AUX, True))
+        for pair, b, on in commands:
+            self._apply(pair, b, on)
+        self._keep_cursor_on_a_free_pair()
+        return commands
+
+    # -- the aux return's encoder -------------------------------------------
+
+    def turn_return(self, steps):
         free = self.free_pairs()
         if not free:
             self.return_cursor = 0
             return
-        later = [p for p in free if p > self.return_cursor]
-        self.return_cursor = later[0] if later else free[0]
-
-    def turn_return(self, steps):
-        """Through the free stems, then the C field, and round again."""
-        positions = self.free_pairs() + [self.CUE]
-        here = positions.index(self.return_cursor) if self.return_cursor in positions else -1
-        self.return_cursor = positions[(here + steps) % len(positions)]
+        here = free.index(self.return_cursor) if self.return_cursor in free else -1
+        self.return_cursor = free[(here + steps) % len(free)]
 
     def push_return(self):
-        """Toggle the cursor stem's AUX; on the C field, say "cue" instead
-        (Core toggles the stem cue, which is not this module's)."""
-        if self.return_cursor == self.CUE:
-            return "cue"
-        if self.return_cursor in self.free_pairs():
-            i = self.return_cursor - 1
-            self.return_muted[i] = not self.return_muted[i]
-        return None
+        """The command that toggles AUX of the stem under the cursor."""
+        if self.return_cursor not in self.free_pairs():
+            return []
+        pair = self.return_cursor
+        command = (pair, AUX, not self.plays_on_return(pair))
+        self._apply(*command)
+        return [command]
 
-    def muted_on_return(self, pair):
-        """Whether `pair` is silent on the aux return."""
-        return pair in self.channel_pair or self.return_muted[pair - 1]
+    # -- inside -----------------------------------------------------------------
 
-    # -- on disk ------------------------------------------------------------
+    def _apply(self, pair, bus, on):
+        if on:
+            self.masks[pair - 1] |= _bit(bus)
+        else:
+            self.masks[pair - 1] &= ~_bit(bus)
+
+    def _keep_cursor_on_a_free_pair(self):
+        free = self.free_pairs()
+        if self.return_cursor in free:
+            return
+        later = [p for p in free if p > self.return_cursor]
+        self.return_cursor = later[0] if later else (free[0] if free else 0)
+
+    # -- on disk ------------------------------------------------------------------
 
     def as_data(self):
-        return {"channel_pair": list(self.channel_pair),
-                "return_cursor": self.return_cursor,
-                "return_muted": list(self.return_muted)}
+        return {"return_cursor": self.return_cursor}
 
     @classmethod
-    def from_data(cls, data, pairs=PAIRS, channels=CHANNELS):
-        """A remembered state, or all none -- never raises."""
-        s = cls(pairs, channels)
+    def from_data(cls, data):
+        """The remembered cursor, or a fresh one -- never raises. The switches
+        are StemDeck's and come back with its report."""
+        s = cls()
         try:
-            chan = [int(p) for p in data["channel_pair"]]
-            taken = [p for p in chan if p]
-            if (len(chan) == channels and all(0 <= p <= pairs for p in chan)
-                    and len(taken) == len(set(taken))):
-                s.channel_pair = chan
-            muted = [bool(m) for m in data.get("return_muted", [])]
-            if len(muted) == pairs:
-                s.return_muted = [m and (i + 1) not in s.channel_pair
-                                  for i, m in enumerate(muted)]
-            cursor = int(data.get("return_cursor", 0))
-            if cursor in s.free_pairs() or cursor == cls.CUE:
-                s.return_cursor = cursor
-            else:
-                s._move_cursor_to_a_free_pair()
-        except (TypeError, KeyError, ValueError, AttributeError, OverflowError):
-            return cls(pairs, channels)
+            cursor = int(data["return_cursor"])
+        except (TypeError, KeyError, ValueError, OverflowError):
+            return s
+        if 0 <= cursor <= PAIRS:
+            s.return_cursor = cursor
         return s

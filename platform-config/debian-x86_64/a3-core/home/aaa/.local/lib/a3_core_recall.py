@@ -167,8 +167,6 @@ def lamp_messages(truth, channels, master):
 
     yield (truth.address("filter.led"),
            FX_MODE_WORDS[master.fx_mode.name])
-    # The stem cue's lamp, the aux-return display's C field (2026-10-01).
-    yield truth.address("stem.cue.led"), float(getattr(master, "stem_cue", False))
 
 
 def flag_messages(truth, channels, master):
@@ -184,7 +182,6 @@ def flag_messages(truth, channels, master):
             yield truth.address(control, ch=index + 1), read(channel)
 
     yield truth.address("filter.mode"), FX_MODE_NUMBERS[master.fx_mode.name]
-    yield truth.address("stem.cue"), float(getattr(master, "stem_cue", False))
 
 
 class Relayed:

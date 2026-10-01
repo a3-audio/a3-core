@@ -42,6 +42,7 @@ CHANNEL_FIELDS = (
     "enc_main_azimuth",
     "enc_main_elevation",
     "enc_phones_solo",
+    "analog_send",
 )
 
 
@@ -75,6 +76,7 @@ MASTER_FIELDS = (
     "track_phones",
     "aux_return",
     "track_stems",
+    "track_analog",
 )
 
 
@@ -84,27 +86,9 @@ class Master(Channel):
     _fields = MASTER_FIELDS
 
 
-class StemLayout:
-    """The optional `stems` block: StemDeck's pairs and the channels'
-    analog inputs in the REAPER project (spec stem-routing-on-the-desk).
-    Absent, Core keeps the assignment and sends nothing to REAPER."""
-
-    def __init__(self, values):
-        try:
-            self.send_unity = float(values["send_unity"])
-            self.analog = [int(t) for t in values["analog"]]
-            self.pairs = [(int(p["track"]), [int(s) for s in p["sends"]])
-                          for p in values["pairs"]]
-        except (KeyError, TypeError, ValueError) as problem:
-            raise LayoutError(f"stems block: {problem}") from problem
-        if len(self.analog) != 4 or len(self.pairs) != 8 \
-                or any(len(sends) != 5 for _, sends in self.pairs):
-            raise LayoutError("stems block: 4 analog tracks, 8 pairs of 5 sends")
-
-
 class Layout:
     def __init__(self, channels, master, fx_slots, fx_params, gain_params,
-                 addresses, sends, stems=None):
+                 addresses, sends):
         self._channels = channels
         self._master = master
         self._fx_slots = fx_slots
@@ -112,7 +96,6 @@ class Layout:
         self._gain_params = gain_params
         self._addresses = addresses
         self._sends = sends
-        self.stems = stems
 
     @property
     def master(self):
@@ -271,5 +254,4 @@ def load_layout(path):
                   dict(parsed.get("fx_params", {})),
                   dict(parsed.get("gain_params", {})),
                   dict(parsed.get("addresses", {})),
-                  dict(parsed.get("sends", {})),
-                  stems=StemLayout(parsed["stems"]) if "stems" in parsed else None)
+                  dict(parsed.get("sends", {})))

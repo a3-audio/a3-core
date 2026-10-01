@@ -54,9 +54,10 @@ from a3_core_reverse import reverse_for, reversed_address   # noqa: E402
 from a3_core_state import (StateFile, apply_state,   # noqa: E402
                            apply_stems, state_of)
 from a3_core_cue import send_levels   # noqa: E402
-from a3_core_stems_reaper import (announcements as stem_announcements,   # noqa: E402
-                                  changed_messages,
-                                  reaper_messages as stem_reaper_messages)
+from a3_core_stems_reaper import (analog_messages,   # noqa: E402
+                                  announcements as stem_announcements,
+                                  changed_messages, command_messages, pair_of)
+from a3_core_presence import STEMDECK_SILENCE, StemDeckWatch   # noqa: E402
 from a3_core_recall import (FX_MODE_NUMBERS, FX_MODE_WORDS,   # noqa: E402
                             Relayed, STATE_OF, led_message,
                             recall_messages)   # noqa: E402
@@ -253,9 +254,8 @@ class MasterInfo:
     aux_return: int
     track_stems: int
 
-    # The headphones' moment (2026-10-01): the stem cue and where the
-    # phones-mix knob stands, both kept across a restart (a3_core_state).
-    stem_cue: bool = False
+    # The headphones' moment (2026-10-01): where the phones-mix knob
+    # stands, kept across a restart (a3_core_state).
     phones_mix: float = 0.0
 
     class FXMode(Enum):
@@ -485,7 +485,7 @@ def send_cue_levels():
     the return's mix and cue sends. Eleven messages; sent whole, since one
     knob moves most of them."""
     levels = send_levels([channel.toggle_cue for channel in channel_infos],
-                         master_info.stem_cue, master_info.phones_mix, CUE_UNITY)
+                         master_info.phones_mix, CUE_UNITY)
     for channel, deck in zip(channel_infos, levels["decks"]):
         for side, send in (("pre", "cue_pre"), ("post", "cue_post")):
             osc_reaper.send_message(
@@ -498,24 +498,6 @@ def send_cue_levels():
         osc_reaper.send_message(
             _layout.address("track_send", track=master_info.aux_return,
                             send=_layout.send(send)), levels["return"][side])
-
-
-def stem_cue_messages():
-    """The stem cue's flag and lamp, for the subscribers."""
-    on = float(master_info.stem_cue)
-    return [(_truth.address("stem.cue"), on), (_truth.address("stem.cue.led"), on)]
-
-
-def toggle_stem_cue(raw=None):
-    """Flip the stem cue (or set it from a key's value), tell everybody, send
-    the levels."""
-    wanted = wanted_toggle(raw, master_info.stem_cue) if raw is not None         else (not master_info.stem_cue)
-    if wanted is NO_CHANGE:
-        return
-    master_info.stem_cue = wanted
-    for address, value in stem_cue_messages():
-        broadcast(address, value)
-    send_cue_levels()
 
 
 def announce_flag(flag, channel_index):
@@ -543,26 +525,47 @@ _stems_sent_to_reaper = {}
 
 
 def speak_stems(full=False):
-    """Stems on the desk to REAPER and to the subscribers.
+    """The stem mirror to REAPER (the analog sends) and to the subscribers.
 
-    REAPER only when the layout has a stems block; the announcements always,
-    so the desk shows its state before the routing exists. `full` sends
-    every announcement (start-up, recall) instead of only the changed ones.
-    REAPER gets the differences only; `full` forgets what it was told and
-    sends the lot, because REAPER may have restarted since."""
-    if _layout.stems is not None:
-        if full:
-            _stems_sent_to_reaper.clear()
-        for address, value in changed_messages(
-                stem_reaper_messages(_stems, _layout.stems, _layout.address),
-                _stems_sent_to_reaper):
-            osc_reaper.send_message(address, value)
+    `full` sends every announcement (start-up, recall) instead of only the
+    changed ones, and forgets what REAPER was told, because REAPER may have
+    restarted since."""
+    if full:
+        _stems_sent_to_reaper.clear()
+    for address, value in changed_messages(
+            analog_messages(_stems, _layout, CUE_UNITY), _stems_sent_to_reaper):
+        osc_reaper.send_message(address, value)
     for address, value in stem_announcements(_stems, _truth):
         if full:
             for client in subscribers:
                 client.send_message(address, value)
         else:
             broadcast(address, value)
+
+
+#: Where StemDeck listens: learnt from its hello, None while it is silent.
+_stemdeck_client = None
+_stemdeck_watch = StemDeckWatch(STEMDECK_SILENCE)
+
+
+def send_to_stemdeck(commands):
+    """Switch commands to StemDeck; the desk changes when StemDeck reports."""
+    if _stemdeck_client is None:
+        return
+    for address, value in command_messages(commands, _truth):
+        _stemdeck_client.send_message(address, value)
+
+
+def notice_stemdeck_silence(now):
+    """A minute without StemDeck's hello: nothing is on its buses any more,
+    so the desk shows A and the channels' analog inputs play again."""
+    global _stemdeck_client
+    if not _stemdeck_watch.silence(now):
+        return
+    print("stemdeck: silent for a minute, channels back to analog")
+    _stemdeck_client = None
+    _stems.forget()
+    speak_stems()
 
 
 def remember_state():
@@ -882,8 +885,10 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
 
     elif parameter == "stem.turn":
-        _stems.turn_channel(channel_index, int(value))
-        speak_stems()
+        # The desk changes when StemDeck reports, not here (spec
+        # stemdeck-remote); without StemDeck a turn does nothing.
+        if _stemdeck_client is not None:
+            send_to_stemdeck(_stems.turn_channel(channel_index, int(value)))
 
     else:
         # Bis hierher gekommen und auf keinen Zweig gepasst.
@@ -968,8 +973,8 @@ def osc_handler_aux_return(client_address: Tuple[str, int], address: str,
     if key == "aux-return.stem.turn":
         _stems.turn_return(int(float(osc_arguments[0])))
     elif key == "aux-return.stem.push":
-        if _stems.push_return() == "cue":     # the C field: the stem cue
-            toggle_stem_cue()
+        if _stemdeck_client is not None:
+            send_to_stemdeck(_stems.push_return())
     else:
         # Mapped, so seen() above has put it in the understood table; say
         # that nobody serves it, as osc_handler_channel's `else` does.
@@ -979,21 +984,21 @@ def osc_handler_aux_return(client_address: Tuple[str, int], address: str,
     remember_state()
 
 
-def osc_handler_stem(client_address: Tuple[str, int], address: str,
-                     *osc_arguments: List[Any]) -> None:
-    """The stem cue from a key: /stem/cue, toggled like a channel's cue."""
+def osc_handler_stemdeck(client_address: Tuple[str, int], address: str,
+                         *osc_arguments: List[Any]) -> None:
+    """StemDeck's report of one stem's bus switches (spec stemdeck-remote)."""
     found = known_address(client_address, address, osc_arguments)
     if found is None:
         return
-    key, _ = found
+    key, fields = found
     value = osc_arguments[0] if osc_arguments else None
-    origin = peer_name(client_address[0], PEER_HOSTS, only=COMMANDERS)
+    origin = peer_name(client_address[0], PEER_HOSTS)
     traffic.seen(IN, address, value, origin)
-    if key != "stem.cue":
+    if key != "stemdeck.buses" or not _stems.report(
+            pair_of(fields["deck"], fields["stem"]), value):
         traffic.unknown(address, value, origin)
         return
-    toggle_stem_cue(value)
-    remember_state()
+    speak_stems()
 
 
 def osc_handler_filter(client_address: Tuple[str, int], address: str,
@@ -1163,10 +1168,26 @@ def osc_handler_device_hello(client_address: Tuple[str, int], address: str,
         return
 
     device, their_hash = str(osc_arguments[0]), str(osc_arguments[1])
-    if _devices.heard(device, their_hash, time.monotonic()):
+    now = time.monotonic()
+    if device == "stemdeck":
+        stemdeck_said_hello(client_address[0], now)
+    notice_stemdeck_silence(now)
+    if _devices.heard(device, their_hash, now):
         verdict = ("is Core's" if their_hash == _devices.own_hash
                    else "DIFFERS from Core's")
         print(f"{device}: its a3-osc.json {verdict} ({their_hash[:12]})")
+
+
+def stemdeck_said_hello(host, now):
+    """StemDeck is there. When that is news (a3_core_presence.StemDeckWatch),
+    learn where it listens and ask it for every stem's switches -- it may have
+    restarted with others."""
+    global _stemdeck_client
+    if not _stemdeck_watch.hello(host, now):
+        return
+    _stemdeck_client = WatchedClient(
+        SimpleUDPClient(host, _truth.endpoint("stemdeck", "osc")[1]), "stemdeck")
+    _stemdeck_client.send_message(_truth.address("stemdeck.recall"), 1)
 
 
 def osc_handler_recall(client_address: Tuple[str, int], address: str,
@@ -1423,7 +1444,7 @@ if __name__ == "__main__":
                             ("master", osc_handler_master),
                             ("filter", osc_handler_filter),
                             ("aux-return", osc_handler_aux_return),
-                            ("stem", osc_handler_stem)):
+                            ("stemdeck", osc_handler_stemdeck)):
         dispatcher.map(f"/{family}/*", handler, needs_reply_address=True)
     dispatcher.map(OSC_ADDRESS_RECALL, osc_handler_recall,
                    needs_reply_address=True)
