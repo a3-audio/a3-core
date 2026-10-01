@@ -85,12 +85,6 @@ class StemDeckIsWired(unittest.TestCase):
     def test_every_hello_checks_for_silence(self):
         self.assertIn("notice_stemdeck_silence(", _source_of("osc_handler_device_hello"))
 
-    def test_a_channel_turn_waits_for_stemdeck(self):
-        source = _source_of("osc_handler_channel")
-        branch = source.split('elif parameter == "stem.turn":', 1)[1].split("elif ", 1)[0]
-        self.assertIn("send_to_stemdeck", branch)
-        self.assertNotIn("speak_stems", branch)
-
     def test_a_report_is_announced(self):
         self.assertIn("speak_stems(", _source_of("osc_handler_stemdeck"))
 
@@ -196,6 +190,38 @@ class TheReturnSaysWhatItCannotServe(unittest.TestCase):
                    and _is_named(call.func.value, "traffic")
                    and call.func.attr == "unknown"]
         self.assertEqual(1, len(unknown))
+
+
+class TheSelectorIsWired(unittest.TestCase):
+    """Spec desk-stem-selector: turn selects, push loads, cue through C."""
+
+    def test_a_turn_only_selects(self):
+        branch = _branch_of("osc_handler_channel", 'elif parameter == "stem.turn":')
+        self.assertIn("_stems.turn(", branch)
+        self.assertNotIn("send_to_stemdeck", branch)
+
+    def test_a_push_loads(self):
+        branch = _branch_of("osc_handler_channel", 'elif parameter == "stem.push":')
+        self.assertIn("_stems.push(", branch)
+        self.assertIn("apply_stem_cue()", branch)
+
+    def test_a_push_without_stemdeck_sends_nothing(self):
+        branch = _branch_of("osc_handler_channel", 'elif parameter == "stem.push":')
+        self.assertIn("_stemdeck_client is not None", branch)
+
+    def test_the_cue_sets_stemdecks_c(self):
+        branch = _branch_of("osc_handler_channel", 'elif parameter == "cue":')
+        self.assertIn("apply_stem_cue()", branch)
+
+    def test_the_cue_send_knows_where_stems_are(self):
+        self.assertIn("channel_mask", _source_of("send_cue_levels"))
+
+    def test_a_report_resets_the_cue(self):
+        self.assertIn("apply_stem_cue()", _source_of("osc_handler_stemdeck"))
+
+
+def _branch_of(function_name, head):
+    return _source_of(function_name).split(head, 1)[1].split("\n    elif ", 1)[0]
 
 
 if __name__ == "__main__":
