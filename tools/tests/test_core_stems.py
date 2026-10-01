@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local/lib"))
 
-from a3_core_stems import AUX, RETURN, Stems  # noqa: E402
+from a3_core_stems import AUX, CUE, RETURN, Stems  # noqa: E402
 
 
 def bit(bus):
@@ -114,6 +114,31 @@ class SelectionsFollow(unittest.TestCase):
         s.selected[1] = 8
         s.report(8, bit(1))                # StemDeck's screen puts pair 8 on channel 1
         self.assertEqual(s.selected[1], 0)  # nothing after 8: back to A
+
+
+class TheCue(unittest.TestCase):
+    """A channel's cue plays its stem through StemDeck's C (spec
+    desk-stem-selector); Core overrides C clicks on StemDeck's screen."""
+
+    def test_a_cued_channel_cues_its_stem(self):
+        s = stems_with(p3=bit(1))
+        self.assertEqual(s.cue_commands([True, False, False, False]), [(3, CUE, True)])
+
+    def test_a_channel_on_a_cues_nothing_in_stemdeck(self):
+        s = stems_with(p3=bit(CUE))                       # clicked on StemDeck's screen
+        self.assertEqual(s.cue_commands([True, False, False, False]), [(3, CUE, False)])
+
+    def test_the_cue_moves_with_the_push(self):
+        s = stems_with(p3=bit(1))
+        s.cue_commands([True, False, False, False])
+        s.selected[0] = 5
+        s.push(0)
+        self.assertEqual(sorted(s.cue_commands([True, False, False, False])),
+                         [(3, CUE, False), (5, CUE, True)])
+
+    def test_nothing_changed_nothing_sent(self):
+        s = stems_with(p3=bit(1) | bit(CUE))
+        self.assertEqual(s.cue_commands([True, False, False, False]), [])
 
 
 class StateOnDisk(unittest.TestCase):

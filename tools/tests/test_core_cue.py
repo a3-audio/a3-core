@@ -19,10 +19,10 @@ from a3_core_cue import send_levels   # noqa: E402
 UNITY = 1.0
 
 
-def levels(cues=(False,) * 4, stem=False, mix=0.0):
+def levels(cues=(False,) * 4, stem=False, mix=0.0, stem_on=(False,) * 4):
     # `stem` is gone from send_levels (StemDeck's CUE bus is always on the
     # cue side); kept here so the tests still say what they vary.
-    return send_levels(list(cues), mix, UNITY)
+    return send_levels(list(cues), list(stem_on), mix, UNITY)
 
 
 class TheKnob(unittest.TestCase):
@@ -80,6 +80,15 @@ class TheCues(unittest.TestCase):
     def test_the_knob_is_held_to_its_range(self):
         self.assertAlmostEqual(levels(cues=(True,) * 4, mix=-1)["decks"][0]["pre"], UNITY)
         self.assertAlmostEqual(levels(cues=(True,) * 4, mix=2)["decks"][0]["post"], UNITY)
+
+
+
+class AStemIsCuedInStemDeck(unittest.TestCase):
+    def test_a_stem_on_the_channel_shuts_its_cue_send(self):
+        # Its cue is StemDeck's C (spec desk-stem-selector): not twice.
+        out = levels(cues=(True, True, False, False), stem_on=(True, False, False, False), mix=0.0)
+        self.assertEqual(out["decks"][0]["pre"], 0.0)
+        self.assertAlmostEqual(out["decks"][1]["pre"], UNITY)
 
 
 if __name__ == "__main__":
