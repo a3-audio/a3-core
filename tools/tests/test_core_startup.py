@@ -21,7 +21,6 @@ PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local"
 sys.path.insert(0, str(PACKAGE / "lib"))
 
 from a3_core_startup import (filter_bypass_messages,   # noqa: E402
-                             pfl_mute_messages,
                              remembered_reaper_messages)
 
 HIPASS = 3
@@ -31,13 +30,12 @@ LOPASS = 4
 @dataclass
 class Channel:
     track_input: int
-    track_pfl: int
     toggle_fx: bool = False
     toggle_pfl: bool = False
 
 
 def channels(*toggles):
-    return [Channel(track_input=10 + i, track_pfl=20 + i, toggle_fx=fx,
+    return [Channel(track_input=10 + i, toggle_fx=fx,
                     toggle_pfl=pfl)
             for i, (fx, pfl) in enumerate(toggles)]
 
@@ -68,23 +66,21 @@ class TheFilterPlugins(unittest.TestCase):
         self.assertEqual(len(messages), 6)
 
 
-class ThePflMutes(unittest.TestCase):
-    def test_pfl_off_is_a_muted_track(self):
-        messages = dict(pfl_mute_messages(channels((False, False))))
-        self.assertEqual(messages["/track/20/mute"], 1.0)
-
-    def test_pfl_on_unmutes_it(self):
-        messages = dict(pfl_mute_messages(channels((False, True))))
-        self.assertEqual(messages["/track/20/mute"], 0.0)
+class NoPflTracks(unittest.TestCase):
+    def test_a_start_mutes_no_track(self):
+        """The PFL tracks are gone (template of 2026-10-01): the cue lives in
+        the channel buses' sends, so a start has no track to mute."""
+        said = list(remembered_reaper_messages(channels((False, True)),
+                                               "low_pass", HIPASS, LOPASS))
+        self.assertFalse([a for a, _ in said if a.endswith("/mute")])
 
 
 class WhatAStartSays(unittest.TestCase):
-    def test_it_is_the_filters_and_the_mutes_together(self):
+    def test_it_is_the_filters(self):
         both = list(remembered_reaper_messages(channels((True, True)),
                                                "low_pass", HIPASS, LOPASS))
         addresses = [address for address, _ in both]
         self.assertIn("/track/10/fx/4/bypass", addresses)
-        self.assertIn("/track/20/mute", addresses)
 
     def test_nothing_is_said_twice(self):
         both = list(remembered_reaper_messages(

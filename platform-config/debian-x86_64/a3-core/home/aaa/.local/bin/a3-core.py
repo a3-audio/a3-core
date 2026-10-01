@@ -249,7 +249,6 @@ class MasterInfo:
     track_masterbus: int
     track_booth: int
     track_phones: int
-    track_ph_mix: int
     aux_return: int
 
     class FXMode(Enum):
@@ -261,7 +260,6 @@ master_info = MasterInfo(
     track_masterbus=_layout.master.track_masterbus,
     track_booth=_layout.master.track_booth,
     track_phones=_layout.master.track_phones,
-    track_ph_mix=_layout.master.track_ph_mix,
     aux_return=_layout.master.aux_return,
 )
 
@@ -272,7 +270,6 @@ class ChannelInfo:
     enc_phones_solo: int
     track_input: int
     track_channelbus: int
-    track_pfl: int
     track_multi_enc: int
     track_stereo_enc: int
 
@@ -330,7 +327,6 @@ channel_infos = tuple(
         enc_phones_solo=_layout.channel(index).enc_phones_solo,
         track_input=_layout.channel(index).track_input,
         track_channelbus=_layout.channel(index).track_channelbus,
-        track_pfl=_layout.channel(index).track_pfl,
         track_multi_enc=_layout.channel(index).track_multi_enc,
         track_stereo_enc=_layout.channel(index).track_stereo_enc,
     )
@@ -774,10 +770,10 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
         wanted = wanted_toggle(raw, channel_infos[channel_index].toggle_pfl)
         if wanted is not NO_CHANGE:
             channel_infos[channel_index].toggle_pfl = wanted
-            track_pfl = channel_infos[channel_index].track_pfl
-            muted = not channel_infos[channel_index].toggle_pfl
-            osc_reaper.send_message(
-                f"/track/{track_pfl}/mute", float(muted))
+            # The PFL tracks are gone (template of 2026-10-01): the cue is the
+            # channel bus's pre-fader send to dec_phones now, and Core's cue
+            # logic for it follows. Until then the key keeps its state and
+            # its lamp, and REAPER is not told.
             announce_flag("pfl", channel_index)
 
     elif parameter == "filter":
@@ -884,22 +880,11 @@ def osc_handler_master(client_address: Tuple[str, int], address: str,
             osc_reaper.send_message(f"/track/{boothbus}/fx/1/fxparam/{gain_vst_plugins_on_boothbus}/value", val)
 
     if parameter == "phones-mix":
-        track_ph_mix = master_info.track_ph_mix
-        val = value * 0.5    
-        #val = slope_crossover_1a(value)
-        inv_val = 1 - value
-        osc_reaper.send_message(f"/track/{track_ph_mix}/volume", value)
-        for channel_index in range(4):
-            track_pfl = channel_infos[channel_index].track_pfl
-            osc_reaper.send_message(f"/track/{track_pfl}/volume", inv_val)
-        
-
-        #for mix_param in [1, 15, 29, 43, 57, 71, 85, 99]:
-        #    osc_reaper.send_message(f"/track/{track_ph_mix}/fx/1/fxparam/{mix_param}/value", val)
-        #for channel_index in range(4):
-        #    track_pfl = channel_infos[channel_index].track_pfl
-        #    for pfl_param in [1, 15]:
-        #        osc_reaper.send_message(f"/track/{track_pfl}/fx/1/fxparam/{pfl_param}/value", inv_val)
+        # The crossfade moved into the channel buses' sends to dec_phones
+        # (pre-fader cue against post-fader mix, template of 2026-10-01);
+        # ph-mix and the PFL tracks are gone. Core's cue logic for it follows;
+        # until then the knob is relayed to the devices and REAPER is not told.
+        pass
 
     if parameter == "phones-volume":
         val = slope_volume(value)

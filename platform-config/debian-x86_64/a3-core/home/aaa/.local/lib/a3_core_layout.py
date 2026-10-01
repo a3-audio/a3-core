@@ -29,7 +29,6 @@ TRACK_FIELDS = (
     "track_multi_enc",
     "track_stereo_enc",
     "track_channelbus",
-    "track_pfl",
 )
 
 #: Every track number a channel has to name. A record short of one of these is
@@ -40,7 +39,6 @@ CHANNEL_FIELDS = (
     "track_multi_enc",
     "track_stereo_enc",
     "track_channelbus",
-    "track_pfl",
     "enc_main_azimuth",
     "enc_main_elevation",
     "enc_phones_solo",
@@ -75,8 +73,6 @@ MASTER_FIELDS = (
     "track_masterbus",
     "track_booth",
     "track_phones",
-    "track_ph_mix",
-    "track_stem_pfl",
     "aux_return",
 )
 

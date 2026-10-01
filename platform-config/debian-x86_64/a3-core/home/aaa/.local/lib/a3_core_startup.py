@@ -33,14 +33,7 @@ def filter_bypass_messages(channels, mode_name, hipass_slot, lopass_slot):
                    float(not bypassed))
 
 
-def pfl_mute_messages(channels):
-    """Ob der Vorhör-Track eines Kanals stumm ist. PFL an heißt: nicht stumm."""
-    for channel in channels:
-        yield f"/track/{channel.track_pfl}/mute", float(not channel.toggle_pfl)
-
-
 def remembered_reaper_messages(channels, mode_name, hipass_slot, lopass_slot):
     """Alles, was REAPER hören muss, um Cores Gedächtnis zu entsprechen."""
     yield from filter_bypass_messages(channels, mode_name, hipass_slot,
                                       lopass_slot)
-    yield from pfl_mute_messages(channels)

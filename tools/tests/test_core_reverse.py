@@ -65,14 +65,16 @@ class TheChannelStrip(ReverseCase):
 
     def test_the_aux_send_is_a_send_and_not_a_parameter(self):
         """It leaves the track rather than sitting on it, so REAPER reports it
-        on a shape of its own. Send 3 of the channelbus is the FX bus --
-        measured on 2026-09-12 by moving the fader."""
-        entry = self.found("/track/9/send/3/volume", "track_channelbus")
+        on a shape of its own. Send 1 of the channelbus is the aux bus --
+        measured on 2026-10-01: sends 1-5 of track 1 set to five levels, the
+        maintainer read enc_fx on send 1 (2 enc_main, 3 dec_phones pre,
+        4 dec_phones post, 5 VU)."""
+        entry = self.found("/track/1/send/1/volume", "track_channelbus")
         self.assertEqual(entry.key, "channel.aux-send")
         self.assertEqual(entry.scope, CHANNEL)
 
     def test_another_send_of_the_same_track_is_not_it(self):
-        self.assertIsNone(self.found("/track/9/send/1/volume",
+        self.assertIsNone(self.found("/track/1/send/3/volume",
                                      "track_channelbus"))
 
 
@@ -137,12 +139,11 @@ class TheMasterSection(ReverseCase):
         self.assertIsNone(self.found("/track/25/fx/3/fxparam/29/value",
                                      "aux_return"))
 
-    def test_the_phones_mix_is_a_track_volume(self):
-        """The one value that goes out unbent. `identity` says so in the table
-        rather than in an `if` somewhere else."""
-        entry = self.found("/track/8/volume", "track_ph_mix")
-        self.assertEqual(entry.key, "master.phones-mix")
-        self.assertEqual(entry.curve, "identity")
+    def test_the_phones_mix_is_not_read_back_from_a_track(self):
+        """Since the template of 2026-10-01 there is no ph-mix track: the
+        crossfade lives in the channel buses' sends to dec_phones, and Core's
+        cue logic for it follows. Until then nothing reports it."""
+        self.assertFalse(any(e.key == "master.phones-mix" for e in REVERSALS))
 
 
 class WhatIsNotAnswered(ReverseCase):
