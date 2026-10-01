@@ -123,5 +123,20 @@ class NetworkSetupIsOffered(unittest.TestCase):
                          r"db_input (high|critical) a3-core/configure-network")
 
 
+    def test_the_answer_is_no_unless_said_otherwise_each_time(self):
+        """debconf offers the stored answer, not the template's default, and
+        skips a question it has seen: one "yes" made every later install walk
+        through the whole network setup again (maintainer, 2026-10-01: "every
+        time typing in the network things is annoying"). So the question is
+        reset to its default (no) and marked unseen before it is put."""
+        text = POSTINST.read_text()
+        reset = text.find("db_reset a3-core/configure-network")
+        unseen = text.find("db_fset a3-core/configure-network seen false")
+        asked = text.find("db_input high a3-core/configure-network")
+        self.assertTrue(0 <= reset < asked and 0 <= unseen < asked, (reset, unseen, asked))
+        self.assertIn("Template: a3-core/configure-network\nType: boolean\nDefault: false",
+                      (POSTINST.parent / "templates").read_text())
+
+
 if __name__ == "__main__":
     unittest.main()

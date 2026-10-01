@@ -162,7 +162,12 @@ ask_bridge_question() {
 }
 
 # Ask whether to configure network. High: at medium a fresh machine never saw
-# it, took the default (no) and got no network at all.
+# it, took the default (no) and got no network at all. Asked every time, with
+# no as the answer offered: debconf would offer the stored answer and skip a
+# seen question, and one "yes" walked every later install through the whole
+# network setup again (2026-10-01). Enter leaves the network as it is.
+db_reset a3-core/configure-network || true
+db_fset a3-core/configure-network seen false || true
 db_input high a3-core/configure-network || true
 db_go || true
 db_get a3-core/configure-network
