@@ -51,7 +51,11 @@ from a3_core_buttons import (NO_CHANGE, wanted_fx_mode,   # noqa: E402
                              wanted_toggle)   # noqa: E402
 from a3_core_echo import EchoFilter   # noqa: E402
 from a3_core_reverse import reverse_for, reversed_address   # noqa: E402
-from a3_core_state import StateFile, apply_state, state_of   # noqa: E402
+from a3_core_state import (StateFile, apply_state,   # noqa: E402
+                           apply_stems, state_of)
+from a3_core_stems_reaper import (announcements as stem_announcements,   # noqa: E402
+                                  changed_messages,
+                                  reaper_messages as stem_reaper_messages)
 from a3_core_recall import (FX_MODE_NUMBERS, FX_MODE_WORDS,   # noqa: E402
                             Relayed, STATE_OF, led_message,
                             recall_messages)   # noqa: E402
@@ -342,6 +346,10 @@ channel_infos = tuple(
 _state_file = StateFile(STATE_PATH)
 apply_state(_state_file.load(), channel_infos, master_info)
 
+#: Which StemDeck pair is on which channel, and what the FX return shows.
+#: Core's own like the toggles: no REAPER parameter holds it.
+_stems = apply_stems(_state_file.load())
+
 
 #: Wann REAPER sein Projekt speichern soll. Cores eigener Stand liegt zwei
 #: Sekunden nach jeder Änderung auf der Platte; was ein Stromausfall kostet,
@@ -482,6 +490,33 @@ def announce_flag(flag, channel_index):
               read(channel_infos[channel_index]))
 
 
+#: What stems last told REAPER, so a click sends only what it changed.
+_stems_sent_to_reaper = {}
+
+
+def speak_stems(full=False):
+    """Stems on the desk to REAPER and to the subscribers.
+
+    REAPER only when the layout has a stems block; the announcements always,
+    so the desk shows its state before the routing exists. `full` sends
+    every announcement (start-up, recall) instead of only the changed ones.
+    REAPER gets the differences only; `full` forgets what it was told and
+    sends the lot, because REAPER may have restarted since."""
+    if _layout.stems is not None:
+        if full:
+            _stems_sent_to_reaper.clear()
+        for address, value in changed_messages(
+                stem_reaper_messages(_stems, _layout.stems, _layout.address),
+                _stems_sent_to_reaper):
+            osc_reaper.send_message(address, value)
+    for address, value in stem_announcements(_stems, _truth):
+        if full:
+            for client in subscribers:
+                client.send_message(address, value)
+        else:
+            broadcast(address, value)
+
+
 def remember_state():
     """Note the state after handling a message.
 
@@ -491,7 +526,7 @@ def remember_state():
     offer a state that has not changed -- StateFile compares before it starts
     its clock.
     """
-    _state_file.remember(state_of(channel_infos, master_info))
+    _state_file.remember(state_of(channel_infos, master_info, _stems))
 
 
 def apply_3d_crossfade(channel_index, value):
@@ -799,6 +834,10 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
             f"/fxparam/{_layout.fx_param('enc_pot_2')}/value", val)
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
 
+    elif parameter == "stem.turn":
+        _stems.turn_channel(channel_index, int(value))
+        speak_stems()
+
     else:
         # Bis hierher gekommen und auf keinen Zweig gepasst.
         #
@@ -878,6 +917,30 @@ def osc_handler_master(client_address: Tuple[str, int], address: str,
         slot = _layout.fx_slot("aux_gain")
         for gain_vst_plugins_on_return in _layout.gain_params("aux_return"):
             osc_reaper.send_message(f"/track/{aux_return}/fx/{slot}/fxparam/{gain_vst_plugins_on_return}/value", val)
+
+def osc_handler_fx_return(client_address: Tuple[str, int], address: str,
+                          *osc_arguments: List[Any]) -> None:
+    """The FX return's encoder: turn selects a free pair, push mutes it."""
+    found = known_address(client_address, address, osc_arguments)
+    if found is None:
+        return
+    key, _ = found
+
+    value = osc_arguments[0] if osc_arguments else None
+    origin = peer_name(client_address[0], PEER_HOSTS, only=COMMANDERS)
+    traffic.seen(IN, address, value, origin)
+    if key == "fx-return.stem.turn":
+        _stems.turn_return(int(float(osc_arguments[0])))
+    elif key == "fx-return.stem.push":
+        _stems.push_return()
+    else:
+        # Mapped, so seen() above has put it in the understood table; say
+        # that nobody serves it, as osc_handler_channel's `else` does.
+        traffic.unknown(address, value, origin)
+        return
+    speak_stems()
+    remember_state()
+
 
 def osc_handler_filter(client_address: Tuple[str, int], address: str,
                        *osc_arguments: List[Any]) -> None:
@@ -1002,6 +1065,8 @@ def speak_remembered_state() -> None:
         for client in subscribers:
             client.send_message(out, value)
 
+    speak_stems(full=True)
+
     print(f"startup: spoke the remembered state, {len(messages)} messages "
           f"to {len(subscribers)} subscribers")
 
@@ -1075,6 +1140,8 @@ def osc_handler_recall(client_address: Tuple[str, int], address: str,
     for out, value in messages:
         for client in subscribers:
             client.send_message(out, value)
+
+    speak_stems(full=True)
 
     print(f"{address}: replayed {len(messages)} messages "
           f"to {len(subscribers)} subscribers")
@@ -1298,7 +1365,8 @@ if __name__ == "__main__":
     # address apart against the truth and writes down what it does not know.
     for family, handler in (("channel", osc_handler_channel),
                             ("master", osc_handler_master),
-                            ("filter", osc_handler_filter)):
+                            ("filter", osc_handler_filter),
+                            ("fx-return", osc_handler_fx_return)):
         dispatcher.map(f"/{family}/*", handler, needs_reply_address=True)
     dispatcher.map(OSC_ADDRESS_RECALL, osc_handler_recall,
                    needs_reply_address=True)
@@ -1463,12 +1531,20 @@ if __name__ == "__main__":
     # replayed before REAPER's template has loaded. Nothing is asked after
     # the replay for the same reason. It goes through Core's own port as
     # ordinary traffic, so the devices hear it too.
+    #
+    # Then a recall, through the same door. The stems Core said at start-up
+    # went to a REAPER that was not listening yet, and were marked as told
+    # all the same -- only changes would have followed. The recall makes the
+    # server thread send the full set again; asking for it rather than
+    # calling speak_stems() here keeps the stems on that one thread.
     def replay_once_reaper_is_quiet():
+        def send_to_self(address, value):
+            SimpleUDPClient(_truth.host("local"), args.port).send_message(
+                address, value)
+
         wait_until_quiet(reaper_arrivals, lambda: replay_evening(
-            evening,
-            lambda address, value:
-            SimpleUDPClient(_truth.host("local"), args.port)
-            .send_message(address, value)))
+            evening, send_to_self))
+        send_to_self(OSC_ADDRESS_RECALL, 1)
 
     threading.Thread(
         target=when_reaper_listens, daemon=True, name="a3-replay",

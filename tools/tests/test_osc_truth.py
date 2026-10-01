@@ -181,5 +181,31 @@ class TakingAnAddressApart(unittest.TestCase):
             self.assertEqual(t.match(t.address(key, **fields)), (key, fields), key)
 
 
+class TheStemWords(unittest.TestCase):
+    """Stems on the desk (spec stem-routing-on-the-desk, 2026-10-01)."""
+
+    def setUp(self):
+        self.t = truth()
+
+    def test_the_desk_turns_and_pushes(self):
+        self.assertEqual(self.t.address("channel.stem.turn", ch=2), "/channel/2/stem/turn")
+        self.assertEqual(self.t.address("fx-return.stem.turn"), "/fx-return/stem/turn")
+        self.assertEqual(self.t.address("fx-return.stem.push"), "/fx-return/stem/push")
+
+    def test_core_says_what_is_where(self):
+        self.assertEqual(self.t.address("channel.stem", ch=4), "/channel/4/stem")
+        self.assertEqual(self.t.address("fx-return.stem"), "/fx-return/stem")
+
+    def test_who_speaks_and_who_hears(self):
+        a = self.t.addresses()
+        for key in ("channel.stem.turn", "fx-return.stem.turn", "fx-return.stem.push"):
+            self.assertEqual((a[key]["from"], a[key]["to"]), (["mixer"], ["core"]), key)
+        for key in ("channel.stem", "fx-return.stem"):
+            self.assertEqual((a[key]["from"], a[key]["to"]), (["core"], ["mixer", "motion"]), key)
+
+    def test_a_turn_is_matched_back(self):
+        self.assertEqual(self.t.match("/channel/3/stem/turn"), ("channel.stem.turn", {"ch": 3}))
+
+
 if __name__ == "__main__":
     unittest.main()

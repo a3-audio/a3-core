@@ -35,6 +35,9 @@ class TheGuardSees(unittest.TestCase):
     def test_an_address_in_python(self):
         self.assertTrue(self.found_in("desk.py", 'send("/channel/1/volume", 0.5)\n'))
 
+    def test_an_fx_return_address(self):
+        self.assertTrue(self.found_in("desk.py", 'send("/fx-return/stem/push", 1)\n'))
+
     def test_an_ip_in_cpp(self):
         self.assertTrue(self.found_in("net.cpp", 'auto core = "192.168.8.10";\n'))
 

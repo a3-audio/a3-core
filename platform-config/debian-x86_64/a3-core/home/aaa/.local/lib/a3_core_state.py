@@ -25,6 +25,8 @@ import os
 import threading
 from pathlib import Path
 
+from a3_core_stems import Stems
+
 #: The fields of a channel this remembers, and nothing else. A track number is
 #: not the moment: it describes the rig and lives in layout.json.
 #:
@@ -64,14 +66,22 @@ CHANNEL_FIELDS = ("toggle_fx", "toggle_pfl", "three_d")
 DEFAULT_DELAY = 2.0
 
 
-def state_of(channels, master):
+def state_of(channels, master, stems=None):
     """Everything worth remembering, as data that json can write."""
-    return {
+    state = {
         "channels": [{field: getattr(channel, field)
                       for field in CHANNEL_FIELDS}
                      for channel in channels],
         "fx_mode": master.fx_mode.value,
     }
+    if stems is not None:
+        state["stems"] = stems.as_data()
+    return state
+
+
+def apply_stems(state):
+    """The remembered stem assignment, or all none -- never raises."""
+    return Stems.from_data((state or {}).get("stems"))
 
 
 def apply_state(state, channels, master):
