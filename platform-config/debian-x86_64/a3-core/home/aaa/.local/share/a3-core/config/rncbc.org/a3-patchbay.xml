@@ -1,50 +1,6 @@
 <!DOCTYPE patchbay>
 <patchbay name="a3-patchbay" version="1.0.6">
  <output-sockets>
-  <socket client="Music\ Player\ Daemon" exclusive="off" name="MPD" type="jack-audio">
-   <plug>left</plug>
-   <plug>right</plug>
-  </socket>
-  <socket client="REAPER" exclusive="off" name="reaper_vu" type="jack-audio">
-   <plug>out21</plug>
-   <plug>out22</plug>
-   <plug>out23</plug>
-   <plug>out24</plug>
-   <plug>out25</plug>
-   <plug>out26</plug>
-   <plug>out27</plug>
-   <plug>out28</plug>
-   <plug>out29</plug>
-   <plug>out30</plug>
-   <plug>out31</plug>
-   <plug>out32</plug>
-  </socket>
-  <socket client="REAPER" exclusive="off" name="reaper_rec" type="jack-audio">
-   <plug>out7</plug>
-   <plug>out8</plug>
-  </socket>
-  <socket client="REAPER" exclusive="off" name="reaper_main" type="jack-audio">
-   <plug>out1</plug>
-   <plug>out2</plug>
-   <plug>out3</plug>
-   <plug>out4</plug>
-   <plug>out5</plug>
-   <plug>out6</plug>
-   <plug>out7</plug>
-   <plug>out8</plug>
-   <plug>out9</plug>
-   <plug>out10</plug>
-   <plug>out11</plug>
-   <plug>out12</plug>
-   <plug>out13</plug>
-   <plug>out14</plug>
-   <plug>out15</plug>
-   <plug>out16</plug>
-   <plug>out17</plug>
-   <plug>out18</plug>
-   <plug>out19</plug>
-   <plug>out20</plug>
-  </socket>
   <socket client="system" exclusive="off" name="system_in" type="jack-audio">
    <plug>capture_1</plug>
    <plug>capture_2</plug>
@@ -56,8 +12,10 @@
    <plug>capture_8</plug>
    <plug>capture_9</plug>
    <plug>capture_10</plug>
+   <plug>capture_11</plug>
+   <plug>capture_12</plug>
   </socket>
-  <socket client="StemDeck" exclusive="off" name="StemDeck" type="jack-audio">
+  <socket client="StemDeck" exclusive="off" name="local_stemdeck" type="jack-audio">
    <plug>deck1_L</plug>
    <plug>deck1_R</plug>
    <plug>deck2_L</plug>
@@ -83,60 +41,57 @@
    <plug>out_9</plug>
    <plug>out_10</plug>
   </socket>
+  <socket client="REAPER" exclusive="off" name="reaper_main" type="jack-audio">
+   <plug>out1</plug>
+   <plug>out2</plug>
+   <plug>out3</plug>
+   <plug>out4</plug>
+   <plug>out5</plug>
+   <plug>out6</plug>
+   <plug>out7</plug>
+   <plug>out8</plug>
+   <plug>out9</plug>
+   <plug>out10</plug>
+  </socket>
+  <socket client="REAPER" exclusive="off" name="reaper_booth" type="jack-audio">
+   <plug>out11</plug>
+   <plug>out12</plug>
+   <plug>out13</plug>
+   <plug>out14</plug>
+   <plug>out15</plug>
+   <plug>out16</plug>
+   <plug>out17</plug>
+   <plug>out18</plug>
+   <plug>out19</plug>
+   <plug>out20</plug>
+  </socket>
+  <socket client="REAPER" exclusive="off" name="reaper_phones" type="jack-audio">
+   <plug>out21</plug>
+   <plug>out22</plug>
+  </socket>
+  <socket client="REAPER" exclusive="off" name="reaper_rec" type="jack-audio">
+   <plug>out23</plug>
+   <plug>out24</plug>
+  </socket>
+  <socket client="REAPER" exclusive="off" name="reaper_aux" type="jack-audio">
+   <plug>out25</plug>
+   <plug>out26</plug>
+  </socket>
+  <socket client="REAPER" exclusive="off" name="reaper_vu_decks_pre" type="jack-audio">
+   <plug>out31</plug>
+   <plug>out32</plug>
+   <plug>out33</plug>
+   <plug>out34</plug>
+  </socket>
+  <socket client="REAPER" exclusive="off" name="reaper_vu_decks_post" type="jack-audio">
+   <plug>out35</plug>
+   <plug>out36</plug>
+   <plug>out37</plug>
+   <plug>out38</plug>
+  </socket>
  </output-sockets>
  <input-sockets>
-  <socket client="REAPER" exclusive="off" name="reaper_deck_4" type="jack-audio">
-   <plug>in7</plug>
-   <plug>in8</plug>
-  </socket>
-  <socket client="beat\-analyzer" exclusive="off" name="beat_analyzer_vu" type="jack-audio">
-   <plug>vu_1</plug>
-   <plug>vu_2</plug>
-   <plug>vu_3</plug>
-   <plug>vu_4</plug>
-   <plug>vu_5</plug>
-   <plug>vu_6</plug>
-   <plug>vu_7</plug>
-   <plug>vu_8</plug>
-   <plug>vu_9</plug>
-   <plug>vu_10</plug>
-   <plug>vu_11</plug>
-   <plug>vu_12</plug>
-  </socket>
-  <socket client="beat\-analyzer" exclusive="off" name="beat_analyzer_bpm" type="jack-audio">
-   <plug>bpm_1</plug>
-  </socket>
-  <socket client="zita\-j2n" exclusive="off" name="zita_rec" type="jack-audio">
-   <plug>in_1</plug>
-   <plug>in_2</plug>
-  </socket>
-  <socket client="StemDeck" exclusive="off" name="StemDeck" type="jack-audio">
-   <plug>rec_L</plug>
-   <plug>rec_R</plug>
-  </socket>
-  <socket client="system" exclusive="off" name="system_out" type="jack-audio">
-   <plug>playback_1</plug>
-   <plug>playback_2</plug>
-   <plug>playback_3</plug>
-   <plug>playback_4</plug>
-   <plug>playback_5</plug>
-   <plug>playback_6</plug>
-   <plug>playback_7</plug>
-   <plug>playback_8</plug>
-   <plug>playback_9</plug>
-   <plug>playback_10</plug>
-   <plug>playback_11</plug>
-   <plug>playback_12</plug>
-   <plug>playback_13</plug>
-   <plug>playback_14</plug>
-   <plug>playback_15</plug>
-   <plug>playback_16</plug>
-   <plug>playback_17</plug>
-   <plug>playback_18</plug>
-   <plug>playback_19</plug>
-   <plug>playback_20</plug>
-  </socket>
-  <socket client="REAPER" exclusive="off" name="reaper-analog" type="jack-audio">
+  <socket client="REAPER" exclusive="off" name="reaper_analog" type="jack-audio">
    <plug>in1</plug>
    <plug>in2</plug>
    <plug>in3</plug>
@@ -147,10 +102,10 @@
    <plug>in8</plug>
    <plug>in9</plug>
    <plug>in10</plug>
-  </socket>
-  <socket client="REAPER" exclusive="off" name="reaper-stemdeck" type="jack-audio">
    <plug>in11</plug>
    <plug>in12</plug>
+  </socket>
+  <socket client="REAPER" exclusive="off" name="reaper_stems" type="jack-audio">
    <plug>in13</plug>
    <plug>in14</plug>
    <plug>in15</plug>
@@ -161,19 +116,115 @@
    <plug>in20</plug>
    <plug>in21</plug>
    <plug>in22</plug>
+   <plug>in23</plug>
+   <plug>in24</plug>
+  </socket>
+  <socket client="REAPER" exclusive="off" name="reaper_aux" type="jack-audio">
+   <plug>in9</plug>
+   <plug>in10</plug>
+  </socket>
+  <socket client="system" exclusive="off" name="alsa-scarlett_main" type="jack-audio">
+   <plug>playback_1</plug>
+   <plug>playback_2</plug>
+   <plug>playback_3</plug>
+   <plug>playback_4</plug>
+   <plug>playback_5</plug>
+   <plug>playback_6</plug>
+   <plug>playback_7</plug>
+   <plug>playback_8</plug>
+  </socket>
+  <socket client="system" exclusive="off" name="alsa-scarlett_booth" type="jack-audio">
+   <plug>playback_11</plug>
+   <plug>playback_12</plug>
+   <plug>playback_13</plug>
+   <plug>playback_14</plug>
+   <plug>playback_15</plug>
+   <plug>playback_16</plug>
+   <plug>playback_17</plug>
+   <plug>playback_18</plug>
+  </socket>
+  <socket client="system" exclusive="off" name="alsa-scarlett_phones" type="jack-audio">
+   <plug>playback_9</plug>
+   <plug>playback_10</plug>
+  </socket>
+  <socket client="StemDeck" exclusive="off" name="local_stemdeck" type="jack-audio">
+   <plug>rec_L</plug>
+   <plug>rec_R</plug>
+  </socket>
+  <socket client="zita\-j2n" exclusive="off" name="zita_stemdeck" type="jack-audio">
+   <plug>in_1</plug>
+   <plug>in_2</plug>
+  </socket>
+  <socket client="beat\-analyzer" exclusive="off" name="beat-analyzer_bpm" type="jack-audio">
+   <plug>bpm_1</plug>
+  </socket>
+  <socket client="beat\-analyzer" exclusive="off" name="beat_analyzer_vu_main" type="jack-audio">
+   <plug>vu_main_sub</plug>
+   <plug>vu_main_top1</plug>
+   <plug>vu_main_top2</plug>
+   <plug>vu_main_top3</plug>
+   <plug>vu_main_top4</plug>
+   <plug>vu_main_top5</plug>
+   <plug>vu_main_top6</plug>
+   <plug>vu_main_top7</plug>
+   <plug>vu_main_top8</plug>
+   <plug>vu_main_top9</plug>
+  </socket>
+  <socket client="beat\-analyzer" exclusive="off" name="beat_analyzer_vu_booth" type="jack-audio">
+   <plug>vu_booth_sub</plug>
+   <plug>vu_booth_top1</plug>
+   <plug>vu_booth_top2</plug>
+   <plug>vu_booth_top3</plug>
+   <plug>vu_booth_top4</plug>
+   <plug>vu_booth_top5</plug>
+   <plug>vu_booth_top6</plug>
+   <plug>vu_booth_top7</plug>
+   <plug>vu_booth_top8</plug>
+   <plug>vu_booth_top9</plug>
+  </socket>
+  <socket client="beat\-analyzer" exclusive="off" name="beat-analyzer_vu_phones" type="jack-audio">
+   <plug>vu_phones_L</plug>
+   <plug>vu_phones_R</plug>
+  </socket>
+  <socket client="beat\-analyzer" exclusive="off" name="beat-analyzer_vu_rec" type="jack-audio">
+   <plug>vu_rec_L</plug>
+   <plug>vu_rec_R</plug>
+  </socket>
+  <socket client="beat\-analyzer" exclusive="off" name="beat\-analyzer_aux" type="jack-audio">
+   <plug>vu_aux_L</plug>
+   <plug>vu_aux_R</plug>
+  </socket>
+  <socket client="beat\-analyzer" exclusive="off" name="beat-analyzer_decks_pre" type="jack-audio">
+   <plug>vu_in1_pre</plug>
+   <plug>vu_in2_pre</plug>
+   <plug>vu_in3_pre</plug>
+   <plug>vu_in4_pre</plug>
+  </socket>
+  <socket client="beat\-analyzer" exclusive="off" name="beat-analyzer_decks_post" type="jack-audio">
+   <plug>vu_in1_post</plug>
+   <plug>vu_in2_post</plug>
+   <plug>vu_in3_post</plug>
+   <plug>vu_in4_post</plug>
   </socket>
  </input-sockets>
  <slots/>
  <cables>
-  <cable input="reaper_deck_4" output="MPD" type="jack-audio"/>
-  <cable input="beat_analyzer_vu" output="reaper_vu" type="jack-audio"/>
-  <cable input="zita_rec" output="reaper_rec" type="jack-audio"/>
-  <cable input="beat_analyzer_bpm" output="reaper_rec" type="jack-audio"/>
-  <cable input="StemDeck" output="reaper_rec" type="jack-audio"/>
-  <cable input="system_out" output="reaper_main" type="jack-audio"/>
-  <cable input="reaper-analog" output="system_in" type="jack-audio"/>
-  <cable input="reaper-stemdeck" output="zita_stemdeck" type="jack-audio"/>
-  <cable input="reaper-stemdeck" output="StemDeck" type="jack-audio"/>
+  <cable input="beat-analyzer_decks_pre" output="reaper_vu_decks_pre" type="jack-audio"/>
+  <cable input="zita_stemdeck" output="reaper_rec" type="jack-audio"/>
+  <cable input="local_stemdeck" output="reaper_rec" type="jack-audio"/>
+  <cable input="beat-analyzer_bpm" output="reaper_rec" type="jack-audio"/>
+  <cable input="beat-analyzer_vu_rec" output="reaper_rec" type="jack-audio"/>
+  <cable input="alsa-scarlett_main" output="reaper_main" type="jack-audio"/>
+  <cable input="beat_analyzer_vu_main" output="reaper_main" type="jack-audio"/>
+  <cable input="reaper_analog" output="system_in" type="jack-audio"/>
+  <cable input="reaper_stems" output="zita_stemdeck" type="jack-audio"/>
+  <cable input="reaper_stems" output="local_stemdeck" type="jack-audio"/>
+  <cable input="alsa-scarlett_booth" output="reaper_booth" type="jack-audio"/>
+  <cable input="beat_analyzer_vu_booth" output="reaper_booth" type="jack-audio"/>
+  <cable input="alsa-scarlett_phones" output="reaper_phones" type="jack-audio"/>
+  <cable input="beat-analyzer_vu_phones" output="reaper_phones" type="jack-audio"/>
+  <cable input="beat\-analyzer_aux" output="reaper_aux" type="jack-audio"/>
+  <cable input="beat-analyzer_decks_post" output="reaper_vu_decks_post" type="jack-audio"/>
  </cables>
 </patchbay>
 
