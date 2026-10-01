@@ -36,13 +36,13 @@ SHIPPED = (Path(__file__).resolve().parents[2]
 MINIMAL = json.dumps({
     "channels": [
         {"track_input": 12, "track_multi_enc": 11, "track_stereo_enc": 10,
-         "track_channelbus": 9, "track_pfl": 4, "enc_main_azimuth": 8,
+         "track_channelbus": 9, "enc_main_azimuth": 8,
          "enc_main_elevation": 9, "enc_phones_solo": 12}
     ],
     # Master is required: defaulting those would drive tracks 0 and 0, on the
     # master bus of all places.
     "master": {"track_masterbus": 1, "track_booth": 2, "track_phones": 3,
-               "track_ph_mix": 8, "track_stem_pfl": 30, "aux_return": 25},
+               "aux_return": 25},
     "addresses": {
         "reaper_track_volume": "/track/{track}/volume",
         "led_pfl": "/channel/{channel}/led/pfl",
@@ -54,7 +54,7 @@ class TrackMap(unittest.TestCase):
     def test_a_channel_carries_its_reaper_tracks(self):
         layout = load_layout(written(MINIMAL))
         self.assertEqual(layout.channel(0).track_input, 12)
-        self.assertEqual(layout.channel(0).track_pfl, 4)
+        self.assertEqual(layout.channel(0).track_channelbus, 9)
 
     def test_a_channel_that_is_not_there_is_an_error_not_a_zero(self):
         # A missing track number would read as track 0 and quietly drive
@@ -110,11 +110,11 @@ if __name__ == "__main__":
 FULL = json.dumps({
     "channels": [
         {"track_input": 12, "track_multi_enc": 11, "track_stereo_enc": 10,
-         "track_channelbus": 9, "track_pfl": 4, "enc_main_azimuth": 8,
+         "track_channelbus": 9, "enc_main_azimuth": 8,
          "enc_main_elevation": 9, "enc_phones_solo": 12}
     ],
     "master": {"track_masterbus": 1, "track_booth": 2, "track_phones": 3,
-               "track_ph_mix": 8, "track_stem_pfl": 30, "aux_return": 25},
+               "aux_return": 25},
     "fx_slots": {"gain": 1, "eq": 2, "hipass": 3, "lopass": 4},
     "gain_params": {"channelbus": [1, 15], "masterbus": [1, 15, 29]},
     "addresses": {},
@@ -158,7 +158,7 @@ class TheRestOfTheMap(unittest.TestCase):
 SHAPES = json.dumps({
     "channels": [],
     "master": {"track_masterbus": 1, "track_booth": 2, "track_phones": 3,
-               "track_ph_mix": 8, "track_stem_pfl": 30, "aux_return": 25},
+               "aux_return": 25},
     "addresses": {
         "fx_param": "/track/{track}/fx/{slot}/fxparam/{param}/value",
         "track_volume": "/track/{track}/volume",
@@ -226,15 +226,15 @@ class TheMapRunsBothWays(unittest.TestCase):
             "channels": [
                 {"track_input": 12, "track_multi_enc": 11,
                  "track_stereo_enc": 10, "track_channelbus": 9,
-                 "track_pfl": 4, "enc_main_azimuth": 8,
+                 "enc_main_azimuth": 8,
                  "enc_main_elevation": 9, "enc_phones_solo": 12},
                 {"track_input": 16, "track_multi_enc": 15,
                  "track_stereo_enc": 14, "track_channelbus": 13,
-                 "track_pfl": 5, "enc_main_azimuth": 13,
+                 "enc_main_azimuth": 13,
                  "enc_main_elevation": 14, "enc_phones_solo": 17},
             ],
             "master": {"track_masterbus": 1, "track_booth": 2,
-                       "track_phones": 3, "track_ph_mix": 8, "track_stem_pfl": 30, "aux_return": 25},
+                       "track_phones": 3, "aux_return": 25},
             "addresses": {},
         })))
 
@@ -262,10 +262,10 @@ class TheMapRunsBothWays(unittest.TestCase):
 SENDS = json.dumps({
     "channels": [{"track_input": 12, "track_multi_enc": 11,
                   "track_stereo_enc": 10, "track_channelbus": 9,
-                  "track_pfl": 4, "enc_main_azimuth": 8,
+                  "enc_main_azimuth": 8,
                   "enc_main_elevation": 9, "enc_phones_solo": 12}],
     "master": {"track_masterbus": 1, "track_booth": 2, "track_phones": 3,
-               "track_ph_mix": 8, "track_stem_pfl": 30, "aux_return": 25},
+               "aux_return": 25},
     "sends": {"fx": 3},
     "addresses": {"track_send": "/track/{track}/send/{send}/volume"},
 })
