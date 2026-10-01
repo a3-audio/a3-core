@@ -37,12 +37,12 @@ MINIMAL = json.dumps({
     "channels": [
         {"track_input": 12, "track_multi_enc": 11, "track_stereo_enc": 10,
          "track_channelbus": 9, "enc_main_azimuth": 8,
-         "enc_main_elevation": 9, "enc_phones_solo": 12}
+         "enc_main_elevation": 9, "enc_phones_solo": 12, "analog_send": 1}
     ],
     # Master is required: defaulting those would drive tracks 0 and 0, on the
     # master bus of all places.
     "master": {"track_masterbus": 1, "track_booth": 2, "track_phones": 3,
-               "aux_return": 25, "track_stems": 31},
+               "aux_return": 25, "track_stems": 31, "track_analog": 30},
     "addresses": {
         "reaper_track_volume": "/track/{track}/volume",
         "led_pfl": "/channel/{channel}/led/pfl",
@@ -68,7 +68,7 @@ class TrackMap(unittest.TestCase):
             "channels": [{"track_input": 12}],
             "master": {"track_masterbus": 1, "track_booth": 2,
                        "track_phones": 3, "track_ph_mix": 8, "track_stem_pfl": 30,
-                       "aux_return": 25, "track_stems": 31},
+                       "aux_return": 25, "track_stems": 31, "track_analog": 30},
             "addresses": {}})
         with self.assertRaises(LayoutError):
             load_layout(written(broken))
@@ -111,10 +111,10 @@ FULL = json.dumps({
     "channels": [
         {"track_input": 12, "track_multi_enc": 11, "track_stereo_enc": 10,
          "track_channelbus": 9, "enc_main_azimuth": 8,
-         "enc_main_elevation": 9, "enc_phones_solo": 12}
+         "enc_main_elevation": 9, "enc_phones_solo": 12, "analog_send": 1}
     ],
     "master": {"track_masterbus": 1, "track_booth": 2, "track_phones": 3,
-               "aux_return": 25, "track_stems": 31},
+               "aux_return": 25, "track_stems": 31, "track_analog": 30},
     "fx_slots": {"gain": 1, "eq": 2, "hipass": 3, "lopass": 4},
     "gain_params": {"channelbus": [1, 15], "masterbus": [1, 15, 29]},
     "addresses": {},
@@ -158,7 +158,7 @@ class TheRestOfTheMap(unittest.TestCase):
 SHAPES = json.dumps({
     "channels": [],
     "master": {"track_masterbus": 1, "track_booth": 2, "track_phones": 3,
-               "aux_return": 25, "track_stems": 31},
+               "aux_return": 25, "track_stems": 31, "track_analog": 30},
     "addresses": {
         "fx_param": "/track/{track}/fx/{slot}/fxparam/{param}/value",
         "track_volume": "/track/{track}/volume",
@@ -227,14 +227,14 @@ class TheMapRunsBothWays(unittest.TestCase):
                 {"track_input": 12, "track_multi_enc": 11,
                  "track_stereo_enc": 10, "track_channelbus": 9,
                  "enc_main_azimuth": 8,
-                 "enc_main_elevation": 9, "enc_phones_solo": 12},
+                 "enc_main_elevation": 9, "enc_phones_solo": 12, "analog_send": 1},
                 {"track_input": 16, "track_multi_enc": 15,
                  "track_stereo_enc": 14, "track_channelbus": 13,
                  "enc_main_azimuth": 13,
-                 "enc_main_elevation": 14, "enc_phones_solo": 17},
+                 "enc_main_elevation": 14, "enc_phones_solo": 17, "analog_send": 1},
             ],
             "master": {"track_masterbus": 1, "track_booth": 2,
-                       "track_phones": 3, "aux_return": 25, "track_stems": 31},
+                       "track_phones": 3, "aux_return": 25, "track_stems": 31, "track_analog": 30},
             "addresses": {},
         })))
 
@@ -263,9 +263,9 @@ SENDS = json.dumps({
     "channels": [{"track_input": 12, "track_multi_enc": 11,
                   "track_stereo_enc": 10, "track_channelbus": 9,
                   "enc_main_azimuth": 8,
-                  "enc_main_elevation": 9, "enc_phones_solo": 12}],
+                  "enc_main_elevation": 9, "enc_phones_solo": 12, "analog_send": 1}],
     "master": {"track_masterbus": 1, "track_booth": 2, "track_phones": 3,
-               "aux_return": 25, "track_stems": 31},
+               "aux_return": 25, "track_stems": 31, "track_analog": 30},
     "sends": {"aux": 3},
     "addresses": {"track_send": "/track/{track}/send/{send}/volume"},
 })

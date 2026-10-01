@@ -1,33 +1,45 @@
-"""A stem assignment as REAPER messages and as what Core announces.
+"""The stem mirror as messages: the analog sends to REAPER, the desk's
+announcements, and switch commands to StemDeck (spec stemdeck-remote).
 
-Every send and analog mute in full: the caller drops what it already sent
-(broadcast and the REAPER side both remember), and a start-up replay needs
-the full set anyway. Send volume, not send mute: REAPER's OSC has no send
-mute (Default.ReaperOSC, 2026-10-01).
+Send volume, not send mute: REAPER's OSC has no send mute
+(Default.ReaperOSC, 2026-10-01).
 """
 
+from a3_core_stems import CHANNELS, PAIRS
 
-def reaper_messages(stems, layout, address):
-    out = []
-    for pair, (track, sends) in enumerate(layout.pairs, start=1):
-        for channel, send in enumerate(sends[:4]):
-            on = stems.channel_pair[channel] == pair
-            out.append((address("track_send", track=track, send=send),
-                        layout.send_unity if on else 0.0))
-        out.append((address("track_send", track=track, send=sends[4]),
-                    0.0 if stems.muted_on_return(pair) else layout.send_unity))
-    for channel, track in enumerate(layout.analog):
-        out.append((address("track_mute", track=track),
-                    1.0 if stems.channel_pair[channel] else 0.0))
-    return out
+STEMS_PER_DECK = 4
+
+
+def deck_and_stem(pair):
+    return (pair - 1) // STEMS_PER_DECK + 1, (pair - 1) % STEMS_PER_DECK + 1
+
+
+def pair_of(deck, stem):
+    return (deck - 1) * STEMS_PER_DECK + stem
+
+
+def analog_messages(stems, layout, unity):
+    """Channel N's analog input: the analog track's send to N-input, shut
+    while StemDeck has a stem on bus N."""
+    track = layout.master.track_analog
+    return [(layout.address("track_send", track=track, send=layout.channel(i).analog_send),
+             0.0 if stems.channel_mask(i) else unity)
+            for i in range(CHANNELS)]
 
 
 def announcements(stems, truth):
-    out = [(truth.address("channel.stem", ch=c + 1), pair)
-           for c, pair in enumerate(stems.channel_pair)]
-    plays = [int(not stems.muted_on_return(pair))
-             for pair in range(1, len(stems.return_muted) + 1)]
+    out = [(truth.address("channel.stem", ch=c + 1), stems.channel_mask(c))
+           for c in range(CHANNELS)]
+    plays = [int(stems.plays_on_return(p)) for p in range(1, PAIRS + 1)]
     out.append((truth.address("aux-return.stem"), [stems.return_cursor] + plays))
+    return out
+
+
+def command_messages(commands, truth):
+    out = []
+    for pair, bus, on in commands:
+        deck, stem = deck_and_stem(pair)
+        out.append((truth.address("stemdeck.bus", deck=deck, stem=stem, bus=bus), int(on)))
     return out
 
 

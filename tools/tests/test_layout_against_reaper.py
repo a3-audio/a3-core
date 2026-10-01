@@ -43,6 +43,7 @@ MASTER_NAME = {
     "track_phones": "dec_phones",
     "aux_return": "aux_return",
     "track_stems": "stems",
+    "track_analog": "analog",
 }
 
 #: The project the layout ships beside. Installed as the template REAPER starts
@@ -116,10 +117,11 @@ class LayoutAgainstReaper(unittest.TestCase):
         claimed |= {getattr(self.layout.master, f) for f in MASTER_FIELDS}
 
         unclaimed = {t: n for t, n in self.names.items() if t not in claimed}
-        # ENCODER, DECODER: folder tracks (template of 2026-10-01).
+        # ENCODER, DECODER: folder tracks (template of 2026-10-01). analog left
+        # this list for track_analog (spec stemdeck-remote): Core mutes its
+        # sends to the channel inputs while a stem plays there.
         self.assertEqual(sorted(unclaimed.values()),
-                         ["DECODER", "ENCODER", "INPUT", "analog", "enc_fx", "enc_main",
-                          "enc_phones"], unclaimed)
+                         ["DECODER", "ENCODER", "INPUT", "enc_fx", "enc_main", "enc_phones"], unclaimed)
 
     def test_the_recorded_names_are_the_shipped_projects(self):
         # The recording is only as good as the project it was taken from. A

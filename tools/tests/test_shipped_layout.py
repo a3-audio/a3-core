@@ -116,6 +116,11 @@ class TheRestOfTheMap(unittest.TestCase):
         self.assertEqual(self.layout.send("return_mix"), 2)
         self.assertEqual(self.layout.send("return_cue"), 3)
 
+    def test_the_analog_track_and_its_sends(self):
+        """Template of 2026-10-01 23:11: analog (27) sends 1-4 to 1-input ... 4-input."""
+        self.assertEqual(self.layout.master.track_analog, 27)
+        self.assertEqual([self.layout.channel(i).analog_send for i in range(4)], [1, 2, 3, 4])
+
     def test_every_gain_list_a3_core_asks_for_is_there(self):
         for name in ("channelbus", "masterbus", "boothbus", "aux_return"):
             params = self.layout.gain_params(name)
