@@ -19,6 +19,7 @@ class Stems:
         self.channel_pair = [0] * channels
         self.return_cursor = 0
         self.return_muted = [False] * pairs
+        self._move_cursor_to_a_free_pair()
 
     # -- channels ---------------------------------------------------------
 
@@ -36,6 +37,7 @@ class Stems:
         self.channel_pair[index] = after
         if before and before != after:
             self.return_muted[before - 1] = False      # released: unmuted
+            self._move_cursor_to_a_free_pair()         # pair is now free
         if self.return_cursor == after and after:
             self._move_cursor_to_a_free_pair()
 
@@ -92,7 +94,10 @@ class Stems:
                 s.return_muted = [m and (i + 1) not in s.channel_pair
                                   for i, m in enumerate(muted)]
             cursor = int(data.get("return_cursor", 0))
-            s.return_cursor = cursor if cursor in s.free_pairs() else 0
-        except (TypeError, KeyError, ValueError, AttributeError):
+            if cursor in s.free_pairs():
+                s.return_cursor = cursor
+            else:
+                s._move_cursor_to_a_free_pair()
+        except (TypeError, KeyError, ValueError, AttributeError, OverflowError):
             return cls(pairs, channels)
         return s

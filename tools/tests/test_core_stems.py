@@ -5,6 +5,7 @@ turning skips pairs held elsewhere; the FX return lists the pairs on no
 channel and mutes them one by one; releasing a pair unmutes it there.
 """
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -20,6 +21,10 @@ class ChannelTurns(unittest.TestCase):
         s = Stems()
         self.assertEqual(s.channel_pair, [0, 0, 0, 0])
         self.assertEqual(s.return_muted, [False] * 8)
+
+    def test_a_fresh_desk_cursor_points_to_first_free_pair(self):
+        s = Stems()
+        self.assertEqual(s.return_cursor, 1)
 
     def test_one_click_takes_the_first_pair(self):
         s = Stems()
@@ -49,6 +54,12 @@ class ChannelTurns(unittest.TestCase):
         s.channel_pair = [0, 3, 0, 0]
         s.turn_channel(0, +13)         # positions none,1,2,4,5,6,7,8: 13 % 8 = 5 -> pair 6
         self.assertEqual(s.channel_pair[0], 6)
+
+    def test_releasing_on_limited_pairs_points_cursor_to_freed_pair(self):
+        s = Stems(pairs=4)             # only 4 pairs total
+        s.channel_pair = [1, 2, 3, 4]  # all pairs assigned
+        s.turn_channel(0, -1)          # release pair 1
+        self.assertEqual(s.return_cursor, 1)
 
 
 class TheReturn(unittest.TestCase):
@@ -104,6 +115,25 @@ class StateOnDisk(unittest.TestCase):
                      {"channel_pair": [1, 1, 0, 0]}):
             s = Stems.from_data(data)
             self.assertEqual(s.channel_pair, [0, 0, 0, 0], data)
+
+    def test_overflow_in_channel_pair_or_cursor_never_raises(self):
+        """OverflowError on int(inf) or int(1e999) must be caught."""
+        for data in (json.loads('{"channel_pair":[0,0,0,0],"return_cursor":1e999}'),
+                     json.loads('{"channel_pair":[Infinity,0,0,0]}')):
+            s = Stems.from_data(data)
+            self.assertEqual(s.channel_pair, [0, 0, 0, 0], data)
+
+    def test_from_data_with_invalid_cursor_points_to_first_free_pair(self):
+        """A corrupted return_cursor 0 or -1 with free pairs should point to the first free."""
+        data = {"channel_pair": [1, 2, 0, 0], "return_cursor": 0}
+        s = Stems.from_data(data)
+        self.assertEqual(s.return_cursor, 3)  # first free pair
+
+    def test_from_data_with_negative_cursor_and_free_pairs(self):
+        """Negative return_cursor with free pairs should point to the first free."""
+        data = {"channel_pair": [1, 0, 0, 0], "return_cursor": -1}
+        s = Stems.from_data(data)
+        self.assertEqual(s.return_cursor, 2)  # first free pair
 
 
 if __name__ == "__main__":
