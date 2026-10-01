@@ -103,6 +103,17 @@ class ReaperHearsTheStemsOnceItListens(unittest.TestCase):
         self.assertGreater(recall.lineno, evening.lineno)
 
 
+class ReaperHearsTheCueOnceItListens(unittest.TestCase):
+    """The cue levels go out at start-up before REAPER listens, like the
+    stems; the same recall that repeats the stems must repeat them, or after
+    a cold boot the phones hear the template's sends, everything at 0 dB."""
+
+    def test_the_recall_sends_the_cue_levels(self):
+        calls = _calls_in("osc_handler_recall")
+        self.assertEqual(1, len([call for call in calls
+                                 if _is_named(call.func, "send_cue_levels")]))
+
+
 class TheReturnSaysWhatItCannotServe(unittest.TestCase):
     """A key of the return family that no branch serves is written down as
     unknown, like the channel handler's `else` -- not left looking served."""

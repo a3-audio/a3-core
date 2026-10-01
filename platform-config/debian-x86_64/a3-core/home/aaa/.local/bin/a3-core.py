@@ -1191,6 +1191,7 @@ def osc_handler_recall(client_address: Tuple[str, int], address: str,
             client.send_message(out, value)
 
     speak_stems(full=True)
+    send_cue_levels()
 
     print(f"{address}: replayed {len(messages)} messages "
           f"to {len(subscribers)} subscribers")
