@@ -109,6 +109,13 @@ class TheRestOfTheMap(unittest.TestCase):
         """
         self.assertEqual(self.layout.send("aux"), 1)
 
+    def test_the_returns_phones_sends_are_named(self):
+        """Template of 2026-10-01 23:11: aux_return sends 1 enc_main,
+        2 enc_phones post (mix), 3 enc_phones pre (cue), in the order of the
+        receiver's AUXRECV lines."""
+        self.assertEqual(self.layout.send("return_mix"), 2)
+        self.assertEqual(self.layout.send("return_cue"), 3)
+
     def test_every_gain_list_a3_core_asks_for_is_there(self):
         for name in ("channelbus", "masterbus", "boothbus", "aux_return"):
             params = self.layout.gain_params(name)

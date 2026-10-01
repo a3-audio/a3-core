@@ -114,6 +114,15 @@ class ReaperHearsTheCueOnceItListens(unittest.TestCase):
                                  if _is_named(call.func, "send_cue_levels")]))
 
 
+class TheReturnIsInTheCueLevels(unittest.TestCase):
+    def test_send_cue_levels_sets_both_return_sends(self):
+        source = ast.get_source_segment(CORE, next(
+            node for node in ast.walk(ast.parse(CORE))
+            if isinstance(node, ast.FunctionDef) and node.name == "send_cue_levels"))
+        self.assertIn('"return_mix"', source)
+        self.assertIn('"return_cue"', source)
+
+
 class ThePhonesMixIsWrittenDown(unittest.TestCase):
     """phones_mix is one of the state file's fields; a knob that moves it
     and never writes it comes back from a restart where it last was saved."""
