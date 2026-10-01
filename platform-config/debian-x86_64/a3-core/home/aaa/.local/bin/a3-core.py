@@ -926,13 +926,17 @@ def osc_handler_fx_return(client_address: Tuple[str, int], address: str,
         return
     key, _ = found
 
-    traffic.seen(IN, address, osc_arguments[0] if osc_arguments else None,
-                 peer_name(client_address[0], PEER_HOSTS, only=COMMANDERS))
+    value = osc_arguments[0] if osc_arguments else None
+    origin = peer_name(client_address[0], PEER_HOSTS, only=COMMANDERS)
+    traffic.seen(IN, address, value, origin)
     if key == "fx-return.stem.turn":
         _stems.turn_return(int(float(osc_arguments[0])))
     elif key == "fx-return.stem.push":
         _stems.push_return()
     else:
+        # Mapped, so seen() above has put it in the understood table; say
+        # that nobody serves it, as osc_handler_channel's `else` does.
+        traffic.unknown(address, value, origin)
         return
     speak_stems()
     remember_state()

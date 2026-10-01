@@ -89,5 +89,18 @@ class ReaperHearsTheStemsOnceItListens(unittest.TestCase):
         self.assertGreater(recall.lineno, evening.lineno)
 
 
+class TheReturnSaysWhatItCannotServe(unittest.TestCase):
+    """A key of the return family that no branch serves is written down as
+    unknown, like the channel handler's `else` -- not left looking served."""
+
+    def test_the_last_else_notes_it_as_unknown(self):
+        calls = _calls_in("osc_handler_fx_return")
+        unknown = [call for call in calls
+                   if isinstance(call.func, ast.Attribute)
+                   and _is_named(call.func.value, "traffic")
+                   and call.func.attr == "unknown"]
+        self.assertEqual(1, len(unknown))
+
+
 if __name__ == "__main__":
     unittest.main()
