@@ -1,11 +1,7 @@
-"""The rules of stems on the desk (spec stem-routing-on-the-desk).
+"""The mirror of StemDeck's bus switches and the desk's rules on it
+(spec stemdeck-remote, 2026-10-01). Pair p = deck ceil(p/4), stem
+(p-1) % 4 + 1; bus 1-4 the desk channels, 5 AUX, 6 CUE."""
 
-Eight stereo pairs, four desk channels. A channel holds one pair or none and
-turning skips pairs held elsewhere; the FX return lists the pairs on no
-channel and mutes them one by one; releasing a pair unmutes it there.
-"""
-
-import json
 import sys
 import unittest
 from pathlib import Path
@@ -13,164 +9,131 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local/lib"))
 
-from a3_core_stems import Stems  # noqa: E402
+from a3_core_stems import AUX, CUE, Stems  # noqa: E402
+
+
+def bit(bus):
+    return 1 << (bus - 1)
+
+
+def stems_with(**masks):
+    s = Stems()
+    for name, mask in masks.items():
+        s.report(int(name[1:]), mask)
+    return s
+
+
+class TheMirror(unittest.TestCase):
+    def test_a_fresh_mirror_has_nothing_on(self):
+        s = Stems()
+        self.assertEqual(s.masks, [0] * 8)
+        self.assertEqual([s.channel_mask(c) for c in range(4)], [0] * 4)
+
+    def test_a_report_sets_the_mask(self):
+        s = stems_with(p3=bit(2) | bit(AUX))
+        self.assertEqual(s.channel_mask(1), 1 << 2)
+        self.assertTrue(s.plays_on_return(3))
+
+    def test_a_channel_shows_every_stem_on_its_bus(self):
+        s = stems_with(p1=bit(1), p6=bit(1))
+        self.assertEqual(s.channel_mask(0), (1 << 0) | (1 << 5))
+
+    def test_a_damaged_report_changes_nothing(self):
+        s = Stems()
+        for pair, mask in ((0, 1), (9, 1), (1, 64), (1, -1), ("1", 1), (1, 1.5), (True, 1)):
+            self.assertFalse(s.report(pair, mask), (pair, mask))
+        self.assertEqual(s.masks, [0] * 8)
+
+    def test_a_good_report_is_accepted(self):
+        self.assertTrue(Stems().report(8, 63))
+
+    def test_any_cued_reads_the_cue_bus(self):
+        self.assertFalse(stems_with(p2=bit(1)).any_cued())
+        self.assertTrue(stems_with(p2=bit(CUE)).any_cued())
 
 
 class ChannelTurns(unittest.TestCase):
-    def test_a_fresh_desk_holds_nothing(self):
+    def test_one_click_from_a_takes_the_first_free_stem(self):
         s = Stems()
-        self.assertEqual(s.channel_pair, [0, 0, 0, 0])
-        self.assertEqual(s.return_muted, [False] * 8)
+        self.assertEqual(s.turn_channel(0, +1), [(1, 1, True), (1, AUX, False)])
+        self.assertEqual(s.channel_mask(0), 1)
 
-    def test_a_fresh_desk_cursor_points_to_first_free_pair(self):
-        s = Stems()
-        self.assertEqual(s.return_cursor, 1)
-
-    def test_one_click_takes_the_first_pair(self):
-        s = Stems()
+    def test_a_stem_on_another_channel_is_skipped(self):
+        s = stems_with(p1=bit(2))
         s.turn_channel(0, +1)
-        self.assertEqual(s.channel_pair[0], 1)
+        self.assertEqual(s.channel_mask(0), 1 << 1)       # pair 2
 
-    def test_a_pair_held_elsewhere_is_skipped(self):
+    def test_turning_back_to_a_releases_and_gives_aux_back(self):
+        s = stems_with(p1=bit(1))
+        self.assertEqual(s.turn_channel(0, -1), [(1, 1, False), (1, AUX, True)])
+        self.assertEqual(s.channel_mask(0), 0)
+
+    def test_a_turn_from_several_leaves_one(self):
+        s = stems_with(p2=bit(1), p5=bit(1))
+        commands = s.turn_channel(0, +1)                   # from pair 2 to the next free: 3
+        self.assertIn((3, 1, True), commands)
+        self.assertIn((2, 1, False), commands)
+        self.assertIn((5, 1, False), commands)
+        self.assertEqual(s.channel_mask(0), 1 << 2)
+
+    def test_a_released_stem_still_on_another_channel_keeps_aux_off(self):
+        s = stems_with(p1=bit(1) | bit(2))
+        commands = s.turn_channel(0, -1)
+        self.assertIn((1, 1, False), commands)
+        self.assertNotIn((1, AUX, True), commands)
+
+    def test_a_long_turn_wraps(self):
         s = Stems()
-        s.turn_channel(1, +1)          # channel 2 takes pair 1
-        s.turn_channel(0, +1)          # channel 1 skips it
-        self.assertEqual(s.channel_pair[:2], [2, 1])
+        s.turn_channel(0, 9 + 2)                           # positions A,1..8: 11 % 9 = 2 -> pair 2
+        self.assertEqual(s.channel_mask(0), 1 << 1)
 
-    def test_turning_back_past_one_is_none(self):
+    def test_a_report_overwrites_what_core_expected(self):
         s = Stems()
-        s.turn_channel(0, +1)
-        s.turn_channel(0, -1)
-        self.assertEqual(s.channel_pair[0], 0)
-
-    def test_down_from_none_wraps_to_the_last_free_pair(self):
-        s = Stems()
-        s.turn_channel(1, -1)          # channel 2: none -> 8
-        s.turn_channel(0, -1)          # channel 1: none -> 7 (8 is held)
-        self.assertEqual(s.channel_pair[:2], [7, 8])
-
-    def test_a_long_turn_wraps_and_skips(self):
-        s = Stems()
-        s.channel_pair = [0, 3, 0, 0]
-        s.turn_channel(0, +13)         # positions none,1,2,4,5,6,7,8: 13 % 8 = 5 -> pair 6
-        self.assertEqual(s.channel_pair[0], 6)
-
-    def test_releasing_on_limited_pairs_points_cursor_to_freed_pair(self):
-        s = Stems(pairs=4)             # only 4 pairs total
-        s.channel_pair = [1, 2, 3, 4]  # all pairs assigned
-        s.turn_channel(0, -1)          # release pair 1
-        self.assertEqual(s.return_cursor, 1)
+        s.turn_channel(0, +1)                              # Core expects pair 1 on bus 1
+        s.report(1, 0)                                     # StemDeck says: nothing
+        self.assertEqual(s.channel_mask(0), 0)
 
 
 class TheReturn(unittest.TestCase):
-    def test_it_lists_only_unassigned_pairs(self):
-        s = Stems()
-        s.channel_pair = [1, 2, 0, 0]
+    def test_the_cursor_skips_stems_on_channels(self):
+        s = stems_with(p1=bit(1), p2=bit(2))
+        s.return_cursor = 0
         s.turn_return(+1)
         self.assertEqual(s.return_cursor, 3)
 
-    def test_push_mutes_and_unmutes_the_shown_pair(self):
-        s = Stems()
-        s.turn_return(+1)
-        s.push_return()
-        self.assertTrue(s.return_muted[s.return_cursor - 1])
-        s.push_return()
-        self.assertFalse(s.return_muted[s.return_cursor - 1])
+    def test_push_toggles_aux_of_the_cursor_stem(self):
+        s = stems_with(p3=bit(AUX))
+        s.return_cursor = 3
+        self.assertEqual(s.push_return(), [(3, AUX, False)])
+        self.assertEqual(s.push_return(), [(3, AUX, True)])
 
-    def test_releasing_a_pair_unmutes_it_on_the_return(self):
+    def test_push_with_nothing_free_does_nothing(self):
+        s = stems_with(**{f"p{p}": bit(1 + (p - 1) % 4) for p in range(1, 9)})
+        s.return_cursor = 0
+        self.assertEqual(s.push_return(), [])
+
+    def test_the_cursor_moves_off_a_stem_that_joins_a_channel(self):
         s = Stems()
         s.return_cursor = 1
-        s.push_return()                # pair 1 muted on the return
-        s.turn_channel(0, +1)          # channel 1 takes pair 1
-        s.turn_channel(0, -1)          # and lets it go
-        self.assertFalse(s.return_muted[0])
-
-    def test_the_cursor_moves_off_a_pair_that_gets_assigned(self):
-        s = Stems()
-        s.return_cursor = 1
-        s.turn_channel(0, +1)          # pair 1 joins channel 1
+        s.report(1, bit(1))
         self.assertEqual(s.return_cursor, 2)
 
-    def test_cursor_stays_put_when_another_pair_is_released(self):
-        s = Stems()
-        s.turn_return(+1)              # cursor moves to first free: pair 2
-        s.turn_return(+1)              # cursor moves forward: pair 3
-        s.turn_channel(0, +1)          # channel 1 takes pair 1
-        s.turn_channel(0, -1)          # and releases it
-        self.assertEqual(s.return_cursor, 3)  # cursor unchanged
 
-
-class NoFreePair(unittest.TestCase):
-    def test_no_free_pair_turn_lands_on_c_and_mutes_nothing(self):
-        # Since the C field (2026-10-01) there is always somewhere to turn to.
-        s = Stems(pairs=4)             # a rig with as many pairs as channels
-        s.channel_pair = [1, 2, 3, 4]
-        s.turn_return(+1)
-        self.assertEqual(s.return_cursor, Stems.CUE)
-        self.assertEqual(s.push_return(), "cue")
-        self.assertEqual(s.return_muted, [False] * 4)
+class Forgetting(unittest.TestCase):
+    def test_forget_clears_every_mask(self):
+        s = stems_with(p1=bit(1), p4=bit(AUX))
+        s.forget()
+        self.assertEqual(s.masks, [0] * 8)
 
 
 class StateOnDisk(unittest.TestCase):
-    def test_it_comes_back_as_it_went(self):
+    def test_only_the_cursor_is_kept(self):
         s = Stems()
-        s.turn_channel(2, +2)
-        s.turn_return(+1)
-        s.push_return()
-        self.assertEqual(Stems.from_data(s.as_data()).as_data(), s.as_data())
+        s.return_cursor = 4
+        self.assertEqual(s.as_data(), {"return_cursor": 4})
+        self.assertEqual(Stems.from_data({"return_cursor": 4}).return_cursor, 4)
 
-    def test_a_garbled_entry_is_all_none(self):
-        for data in (None, {}, {"channel_pair": "x"}, {"channel_pair": [9, 9, 9, 9]},
-                     {"channel_pair": [1, 1, 0, 0]}):
-            s = Stems.from_data(data)
-            self.assertEqual(s.channel_pair, [0, 0, 0, 0], data)
-
-    def test_overflow_in_channel_pair_or_cursor_never_raises(self):
-        """OverflowError on int(inf) or int(1e999) must be caught."""
-        for data in (json.loads('{"channel_pair":[0,0,0,0],"return_cursor":1e999}'),
-                     json.loads('{"channel_pair":[Infinity,0,0,0]}')):
-            s = Stems.from_data(data)
-            self.assertEqual(s.channel_pair, [0, 0, 0, 0], data)
-
-    def test_from_data_with_invalid_cursor_points_to_first_free_pair(self):
-        """A corrupted return_cursor 0 or -1 with free pairs should point to the first free."""
-        data = {"channel_pair": [1, 2, 0, 0], "return_cursor": 0}
-        s = Stems.from_data(data)
-        self.assertEqual(s.return_cursor, 3)  # first free pair
-
-    def test_from_data_with_negative_cursor_and_free_pairs(self):
-        """Negative return_cursor with free pairs should point to the first free."""
-        data = {"channel_pair": [1, 0, 0, 0], "return_cursor": -1}
-        s = Stems.from_data(data)
-        self.assertEqual(s.return_cursor, 2)  # first free pair
-
-
-if __name__ == "__main__":
-    unittest.main()
-
-
-class TheCueField(unittest.TestCase):
-    """The aux-return display's C field (2026-10-01): a cursor position after
-    the free stems; a push there is the stem cue, not a stem's AUX."""
-
-    def test_turning_past_the_last_free_stem_lands_on_c(self):
-        s = Stems()
-        s.return_cursor = 8
-        s.turn_return(+1)
-        self.assertEqual(s.return_cursor, Stems.CUE)
-
-    def test_turning_on_from_c_comes_back_to_the_first_free_stem(self):
-        s = Stems()
-        s.return_cursor = Stems.CUE
-        s.turn_return(+1)
-        self.assertEqual(s.return_cursor, 1)
-
-    def test_a_push_on_c_says_cue_and_mutes_nothing(self):
-        s = Stems()
-        s.return_cursor = Stems.CUE
-        self.assertEqual(s.push_return(), "cue")
-        self.assertEqual(s.return_muted, [False] * 8)
-
-    def test_a_push_on_a_stem_says_nothing(self):
-        s = Stems()
-        self.assertIsNone(s.push_return())
+    def test_an_old_or_garbled_file_never_raises(self):
+        for data in (None, {}, {"return_cursor": "x"}, {"return_cursor": 1e999},
+                     {"channel_pair": [1, 0, 0, 0], "return_cursor": 9}):
+            Stems.from_data(data)
