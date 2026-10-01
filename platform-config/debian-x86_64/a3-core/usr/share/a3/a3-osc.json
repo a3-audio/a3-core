@@ -135,7 +135,7 @@
   "master.fx-return":         {"pattern": "/master/fx-return", "args": "f", "from": ["mixer", "motion"], "to": ["core"], "relayed_to": ["mixer", "motion"], "meaning": "the FX return, the fifth stereo input (was /master/return)"},
   "fx-return.stem.turn":      {"pattern": "/fx-return/stem/turn", "args": "i", "from": ["mixer"], "to": ["core"], "meaning": "the FX return's encoder turned by this many clicks (signed)"},
   "fx-return.stem.push":      {"pattern": "/fx-return/stem/push", "args": "i", "from": ["mixer"], "to": ["core"], "meaning": "the FX return's encoder pushed: mute or unmute the pair it shows"},
-  "fx-return.stem":           {"pattern": "/fx-return/stem", "args": "ii", "from": ["core"], "to": ["mixer", "motion"], "meaning": "the pair the FX return shows (0 none free) and whether it is muted there (1)"},
+  "fx-return.stem":           {"pattern": "/fx-return/stem", "args": "iiiiiiiii", "from": ["core"], "to": ["mixer", "motion"], "meaning": "the pair the FX return shows (0 none free), then pairs 1-8: 1 plays on the return, 0 is silent there (muted, or on a channel)"},
   "device.hello":             {"pattern": "/device/hello", "args": "ss", "from": ["mixer"], "to": ["core"], "meaning": "a device names itself and the sha256 of its copy of this file; Core's window shows whether it is Core's own"},
   "state.recall":             {"pattern": "/state/recall", "args": "i", "from": ["motion"], "to": ["core"], "meaning": "say the state again; the answer is the ordinary messages"},
   "beat":                     {"pattern": "/beat", "args": "iif", "from": ["beat-analyzer", "motion"], "to": ["core", "motion", "mixer", "radla", "beat-analyzer"], "meaning": "beat in bar, bar, tempo -- the clock (Motion sends it only in clock mode 0)"},
