@@ -699,7 +699,12 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
     # channel moves -- the balance between its moving and its steady track,
     # both of which go to the MultiEncoder. The same curves as fx-send above,
     # which is the road this arrived by until now.
-    if parameter == "3d":
+    #
+    # One chain from fx-send to filter.q, so the `else` at its end only sees
+    # what no branch took. Three separate chains (until 2026-10-01) sent every
+    # fader, gain and cue key into that `else` too: handled, and listed in the
+    # window as unknown all the same.
+    elif parameter == "3d":
         apply_3d_crossfade(channel_index, value)
 
     elif parameter == "gain":
@@ -755,7 +760,7 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
 
     # A3MOTION
 
-    if parameter == "azimuth":
+    elif parameter == "azimuth":
         # clamp -180..180 und sende als float an alle IEM-Empfänger
         az = float(max(min(value, 180.0), -180.0))
         # The clamped value, not the one that arrived: a recall has to replay
