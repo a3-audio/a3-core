@@ -260,6 +260,10 @@ NOT_ANSWERED_FOR = {
     "channel.filter.q": "the same",
     "channel.pfl": "a toggle of Core's own; comes back as a mute",
     "channel.filter": "the same",
+    # An encoder's clicks, not a value: there is nothing in REAPER to read
+    # back. The assignment it changes is Core's own (a3_core_stems) and is
+    # announced on /channel/n/stem.
+    "channel.stem.turn": "a relative turn; the result is announced as channel.stem",
 }
 
 
