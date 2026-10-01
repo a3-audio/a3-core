@@ -2,7 +2,7 @@
 """The addresses this system can speak -- a view of the one truth.
 
 **Why this is not the traffic window.** The window counts what flew past Core.
-It cannot answer "what is the address for a channel's FX send", because an
+It cannot answer "what is the address for a channel's aux send", because an
 address nobody has sent has no row there at all. A log shows what happened; a
 register shows what is possible.
 

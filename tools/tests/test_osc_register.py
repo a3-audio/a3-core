@@ -58,8 +58,8 @@ class WhatCoreHearsAndSays(unittest.TestCase):
 
     def test_an_entry_says_where_it_is_written(self):
         (entry,) = [e for e in reg.build(TRUTH)["entries"]
-                    if e["address"] == "/master/fx-return" and e["device"] == "mixer"]
-        self.assertEqual(entry["source"], "a3-osc.json: master.fx-return")
+                    if e["address"] == "/master/aux-return" and e["device"] == "mixer"]
+        self.assertEqual(entry["source"], "a3-osc.json: master.aux-return")
         self.assertTrue(entry["note"])
 
 

@@ -27,7 +27,7 @@ class TheTables(unittest.TestCase):
 
     def test_a_row_says_who_sends_it_and_who_hears_it(self):
         row = next(line for line in render_docs.addresses_table(TRUTH).splitlines()
-                   if "`/master/fx-return`" in line)
+                   if "`/master/aux-return`" in line)
         self.assertIn("mixer, motion", row)
         self.assertIn("core", row)
 

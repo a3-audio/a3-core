@@ -228,7 +228,7 @@ class TheMasterBendsBothWaysAlike(unittest.TestCase):
         # It said fx/3 at the call site, and slot 3 of enc_fx had become the
         # DualDelay: the return pot was writing delay parameters. A slot the
         # layout names moves with the project; a literal does not.
-        asked = [call.args[0].value for call in calls_in(self.branches["fx-return"])
+        asked = [call.args[0].value for call in calls_in(self.branches["aux-return"])
                  if isinstance(call.func, ast.Attribute)
                  and call.func.attr == "fx_slot"
                  and isinstance(call.args[0], ast.Constant)]

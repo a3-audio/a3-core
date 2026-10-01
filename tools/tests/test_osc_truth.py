@@ -108,7 +108,7 @@ class TheVocabulary(unittest.TestCase):
                          "/channel/3/filter/frequency")
         self.assertEqual(t.address("channel.filter.q", ch=4), "/channel/4/filter/q")
         # the delay send keeps its name: "fx" now means the delay only
-        self.assertEqual(t.address("channel.fx-send", ch=1), "/channel/1/fx-send")
+        self.assertEqual(t.address("channel.aux-send", ch=1), "/channel/1/aux-send")
 
     def test_lamps_stand_under_what_they_light(self):
         t = truth()
@@ -120,7 +120,7 @@ class TheVocabulary(unittest.TestCase):
         t = truth()
         self.assertEqual(t.address("master.phones-mix"), "/master/phones-mix")
         self.assertEqual(t.address("master.phones-volume"), "/master/phones-volume")
-        self.assertEqual(t.address("master.fx-return"), "/master/fx-return")
+        self.assertEqual(t.address("master.aux-return"), "/master/aux-return")
 
     def test_the_old_names_are_gone(self):
         patterns = {entry["pattern"] for entry in truth().addresses().values()}
@@ -160,7 +160,7 @@ class TakingAnAddressApart(unittest.TestCase):
                          ("channel.filter.frequency", {"ch": 4}))
 
     def test_an_address_without_fields(self):
-        self.assertEqual(truth().match("/master/fx-return"), ("master.fx-return", {}))
+        self.assertEqual(truth().match("/master/aux-return"), ("master.aux-return", {}))
 
     def test_a_vu_meter(self):
         self.assertEqual(truth().match("/vu/40"), ("vu", {"n": 40}))
@@ -210,22 +210,22 @@ class TheStemWords(unittest.TestCase):
 
     def test_the_desk_turns_and_pushes(self):
         self.assertEqual(self.t.address("channel.stem.turn", ch=2), "/channel/2/stem/turn")
-        self.assertEqual(self.t.address("fx-return.stem.turn"), "/fx-return/stem/turn")
-        self.assertEqual(self.t.address("fx-return.stem.push"), "/fx-return/stem/push")
+        self.assertEqual(self.t.address("aux-return.stem.turn"), "/aux-return/stem/turn")
+        self.assertEqual(self.t.address("aux-return.stem.push"), "/aux-return/stem/push")
 
     def test_core_says_what_is_where(self):
         self.assertEqual(self.t.address("channel.stem", ch=4), "/channel/4/stem")
-        self.assertEqual(self.t.address("fx-return.stem"), "/fx-return/stem")
+        self.assertEqual(self.t.address("aux-return.stem"), "/aux-return/stem")
 
     def test_who_speaks_and_who_hears(self):
         a = self.t.addresses()
-        for key in ("channel.stem.turn", "fx-return.stem.turn", "fx-return.stem.push"):
+        for key in ("channel.stem.turn", "aux-return.stem.turn", "aux-return.stem.push"):
             self.assertEqual((a[key]["from"], a[key]["to"]), (["mixer"], ["core"]), key)
-        for key in ("channel.stem", "fx-return.stem"):
+        for key in ("channel.stem", "aux-return.stem"):
             self.assertEqual((a[key]["from"], a[key]["to"]), (["core"], ["mixer", "motion"]), key)
 
     def test_the_return_carries_its_cursor_and_all_eight_pairs(self):
-        self.assertEqual(self.t.addresses()["fx-return.stem"]["args"], "i" * 9)
+        self.assertEqual(self.t.addresses()["aux-return.stem"]["args"], "i" * 9)
 
     def test_a_turn_is_matched_back(self):
         self.assertEqual(self.t.match("/channel/3/stem/turn"), ("channel.stem.turn", {"ch": 3}))

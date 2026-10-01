@@ -266,7 +266,7 @@ SENDS = json.dumps({
                   "enc_main_elevation": 9, "enc_phones_solo": 12}],
     "master": {"track_masterbus": 1, "track_booth": 2, "track_phones": 3,
                "track_ph_mix": 8, "track_stem_pfl": 30, "aux_return": 25},
-    "sends": {"fx": 3},
+    "sends": {"aux": 3},
     "addresses": {"track_send": "/track/{track}/send/{send}/volume"},
 })
 
@@ -282,7 +282,7 @@ class TheSends(unittest.TestCase):
     """
 
     def test_a_send_is_named_rather_than_numbered(self):
-        self.assertEqual(load_layout(written(SENDS)).send("fx"), 3)
+        self.assertEqual(load_layout(written(SENDS)).send("aux"), 3)
 
     def test_a_send_nobody_has_is_refused(self):
         """Loudly, like fx_slot. A send resolving to None would address
@@ -292,7 +292,7 @@ class TheSends(unittest.TestCase):
 
     def test_a_layout_without_sends_refuses_every_name(self):
         with self.assertRaises(LayoutError):
-            load_layout(written(MINIMAL)).send("fx")
+            load_layout(written(MINIMAL)).send("aux")
 
     def test_the_address_is_built_by_the_layout(self):
         self.assertEqual(

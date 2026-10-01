@@ -346,7 +346,7 @@ channel_infos = tuple(
 _state_file = StateFile(STATE_PATH)
 apply_state(_state_file.load(), channel_infos, master_info)
 
-#: Which StemDeck pair is on which channel, and what the FX return shows.
+#: Which StemDeck pair is on which channel, and what the aux return shows.
 #: Core's own like the toggles: no REAPER parameter holds it.
 _stems = apply_stems(_state_file.load())
 
@@ -550,7 +550,7 @@ def apply_3d_crossfade(channel_index, value):
     Aenderung; siehe das Issue unten.
 
     One road since 2026-09-12: `/channel/n/3d`, A3 Motion's pot. The mixer's
-    `fx-send` used to arrive here too -- it was the only continuous control
+    `fx-send` (now `aux-send`) used to arrive here too -- it was the only continuous control
     the desk had for this -- and now means what its name says again. The
     decision and its price (the desk has no 3D control any more) are in
     issues/a3-core-fx-send-fuehrt-noch-die-3d-funktion.md.
@@ -705,7 +705,7 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
 
     # POTENTIOMETER
 
-    if parameter == "fx-send":
+    if parameter == "aux-send":
         # The A3 Mixer's pot, and since 2026-09-12 it means what its name
         # says again: how much of this channel reaches the FX bus, where the
         # delay that follows the beat sits.
@@ -727,15 +727,15 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
         track_channelbus = channel_infos[channel_index].track_channelbus
         osc_reaper.send_message(
             _layout.address("track_send", track=track_channelbus,
-                            send=_layout.send("fx")),
+                            send=_layout.send("aux")),
             val)
 
     # What 3d is for: A3 Motion's per-channel pot, deciding how much of the
     # channel moves -- the balance between its moving and its steady track,
-    # both of which go to the MultiEncoder. The same curves as fx-send above,
+    # both of which go to the MultiEncoder. The same curves as aux-send above,
     # which is the road this arrived by until now.
     #
-    # One chain from fx-send to filter.q, so the `else` at its end only sees
+    # One chain from aux-send to filter.q, so the `else` at its end only sees
     # what no branch took. Three separate chains (until 2026-10-01) sent every
     # fader, gain and cue key into that `else` too: handled, and listed in the
     # window as unknown all the same.
@@ -906,8 +906,8 @@ def osc_handler_master(client_address: Tuple[str, int], address: str,
         track_phones = master_info.track_phones
         osc_reaper.send_message(f"/track/{track_phones}/fx/2/fxparam/1/value", val)
 
-    elif parameter == "fx-return":
-        # The FX-return pot on the desk. Since 2026-09-29 the return has its
+    elif parameter == "aux-return":
+        # The aux-return pot on the desk. Since 2026-09-29 the return has its
         # own track ("Return") with one Airwindows PurestGain on it, bent like
         # every other PurestGain volume here: full travel is 0 dB, never the
         # plug-in's +40 dB top. The call site said fx/3 until then, which on
@@ -918,9 +918,9 @@ def osc_handler_master(client_address: Tuple[str, int], address: str,
         for gain_vst_plugins_on_return in _layout.gain_params("aux_return"):
             osc_reaper.send_message(f"/track/{aux_return}/fx/{slot}/fxparam/{gain_vst_plugins_on_return}/value", val)
 
-def osc_handler_fx_return(client_address: Tuple[str, int], address: str,
+def osc_handler_aux_return(client_address: Tuple[str, int], address: str,
                           *osc_arguments: List[Any]) -> None:
-    """The FX return's encoder: turn selects a free pair, push mutes it."""
+    """The aux return's encoder: turn selects a free pair, push mutes it."""
     found = known_address(client_address, address, osc_arguments)
     if found is None:
         return
@@ -929,9 +929,9 @@ def osc_handler_fx_return(client_address: Tuple[str, int], address: str,
     value = osc_arguments[0] if osc_arguments else None
     origin = peer_name(client_address[0], PEER_HOSTS, only=COMMANDERS)
     traffic.seen(IN, address, value, origin)
-    if key == "fx-return.stem.turn":
+    if key == "aux-return.stem.turn":
         _stems.turn_return(int(float(osc_arguments[0])))
-    elif key == "fx-return.stem.push":
+    elif key == "aux-return.stem.push":
         _stems.push_return()
     else:
         # Mapped, so seen() above has put it in the understood table; say
@@ -1366,7 +1366,7 @@ if __name__ == "__main__":
     for family, handler in (("channel", osc_handler_channel),
                             ("master", osc_handler_master),
                             ("filter", osc_handler_filter),
-                            ("fx-return", osc_handler_fx_return)):
+                            ("aux-return", osc_handler_aux_return)):
         dispatcher.map(f"/{family}/*", handler, needs_reply_address=True)
     dispatcher.map(OSC_ADDRESS_RECALL, osc_handler_recall,
                    needs_reply_address=True)

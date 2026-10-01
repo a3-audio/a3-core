@@ -155,7 +155,7 @@ class WhatIsPassedOnWhenItArrives(unittest.TestCase):
         return relay_on_arrival(self.truth, address)
 
     def test_the_channel_strip_is_passed_on(self):
-        for parameter in ("gain", "volume", "fx-send", "3d"):
+        for parameter in ("gain", "volume", "aux-send", "3d"):
             with self.subTest(parameter=parameter):
                 self.assertTrue(self.relayed(f"/channel/1/{parameter}"))
 
@@ -166,7 +166,7 @@ class WhatIsPassedOnWhenItArrives(unittest.TestCase):
 
     def test_the_master_and_the_filter_are_passed_on(self):
         for address in ("/master/volume", "/master/booth", "/master/phones-mix",
-                        "/master/phones-volume", "/master/fx-return",
+                        "/master/phones-volume", "/master/aux-return",
                         "/filter/frequency", "/filter/resonance"):
             with self.subTest(address=address):
                 self.assertTrue(self.relayed(address))

@@ -2,7 +2,7 @@
 
 Eight stereo pairs (StemDeck's 16 outputs), four desk channels. A channel
 holds one pair or none (0); turning its encoder steps through none and the
-pairs no other channel holds. The FX return lists the pairs on no channel,
+pairs no other channel holds. The aux return lists the pairs on no channel,
 and its push mutes or unmutes the one it shows. A pair on a channel is
 always muted on the return; releasing it there unmutes it again (decided
 2026-10-01). Pure: no OSC, no REAPER -- a3-core.py turns the state into
@@ -70,7 +70,7 @@ class Stems:
             self.return_muted[i] = not self.return_muted[i]
 
     def muted_on_return(self, pair):
-        """Whether `pair` is silent on the FX return."""
+        """Whether `pair` is silent on the aux return."""
         return pair in self.channel_pair or self.return_muted[pair - 1]
 
     # -- on disk ------------------------------------------------------------

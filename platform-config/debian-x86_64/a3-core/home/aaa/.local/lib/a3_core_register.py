@@ -2,7 +2,7 @@
 
 `a3_core_traffic` counts what flew past. It cannot say what is *possible*: an
 address nobody has sent has no row there at all, which is why looking up a
-channel bus's FX send in the window gave three rows and none of them the
+channel bus's aux send in the window gave three rows and none of them the
 answer. The catalogue is the other half, generated from the six sources by
 tools/osc_register.py and shipped as share/a3-core/osc-register.json.
 
@@ -92,7 +92,7 @@ def matcher(template: str) -> Callable[[str], bool]:
       the whole branch with `dispatcher.map("/channel/*")`, so that template
       has to match `/channel/0/eq/high`.
 
-    Everything else is escaped, which matters more than it looks: `fx-send`,
+    Everything else is escaped, which matters more than it looks: `aux-send`,
     `SCROLL_X+` and `/scroll/x/-` all carry characters a regular expression
     would otherwise read as syntax.
     """

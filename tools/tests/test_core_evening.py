@@ -60,9 +60,15 @@ class WhatIsPlayedBack(unittest.TestCase):
                               "/channel/2/volume": 0.7,
                               "/channel/2/filter/frequency": 0.4,
                               "/master/volume": 0.8,
-                              "/master/fx-return": 0.1,
+                              "/master/aux-return": 0.1,
                               "/filter/frequency": 0.33})
         self.assertEqual(len(played), 7)
+
+    def test_an_evening_from_before_aux_comes_back_under_the_new_names(self):
+        # FX send / FX return were renamed aux send / aux return on
+        # 2026-10-01, wire included; an evening written before still says fx.
+        played = self.replay({"/channel/2/fx-send": 0.3, "/master/fx-return": 0.1})
+        self.assertEqual(played, {"/channel/2/aux-send": 0.3, "/master/aux-return": 0.1})
 
     def test_lamps_are_status_and_not_settings(self):
         played = self.replay({"/channel/1/pfl/led": 1.0, "/filter/led": "low_pass"})

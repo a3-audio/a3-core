@@ -24,6 +24,8 @@ wieder REAPER-Nachrichten macht.
   Einstellung, sondern Verkehr.
 """
 
+import re
+
 #: Was Core zwar weitergibt, aber nicht zurückspielt: der Crossfade steht in
 #: a3_core_state. Alles andere, was Core weitergibt (`relayed_to` in der einen
 #: Wahrheit), ist ein Wert, den REAPER hält -- genau das, was zurückkommt.
@@ -33,6 +35,20 @@ wieder REAPER-Nachrichten macht.
 #: Präfixen, die beim Umbenennen von /fx nach /filter (2026-09-30) den Filter
 #: still verloren und den Kanalschalter als Wert zurückgespielt hätte.
 NOT_REPLAYED = frozenset(("channel.3d",))
+
+#: Addresses renamed since an evening may have been written: FX send / FX
+#: return became aux send / aux return on 2026-10-01, wire included. An old
+#: evening still says fx and comes back under the new name instead of being
+#: dropped as an address the truth no longer has.
+RENAMED = ((re.compile(r"^/channel/(\d+)/fx-send$"), r"/channel/\1/aux-send"),
+           (re.compile(r"^/master/fx-return$"), "/master/aux-return"))
+
+
+def _current_name(address):
+    for old, new in RENAMED:
+        if old.match(address):
+            return old.sub(new, address)
+    return address
 
 
 def evening_state(relayed):
@@ -56,6 +72,7 @@ def replayable(truth, state):
     for address, value in values.items():
         if not isinstance(address, str):
             continue
+        address = _current_name(address)
         found = truth.match(address)
         if found is None:
             continue

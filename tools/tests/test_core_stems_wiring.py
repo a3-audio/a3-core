@@ -43,7 +43,7 @@ class CoreListens(unittest.TestCase):
         ast.parse(CORE)
 
     def test_the_return_family_is_mapped(self):
-        self.assertIn('("fx-return", osc_handler_fx_return)', CORE)
+        self.assertIn('("aux-return", osc_handler_aux_return)', CORE)
 
     def test_the_channel_turn_has_its_branch(self):
         self.assertIn('elif parameter == "stem.turn":', CORE)
@@ -94,7 +94,7 @@ class TheReturnSaysWhatItCannotServe(unittest.TestCase):
     unknown, like the channel handler's `else` -- not left looking served."""
 
     def test_the_last_else_notes_it_as_unknown(self):
-        calls = _calls_in("osc_handler_fx_return")
+        calls = _calls_in("osc_handler_aux_return")
         unknown = [call for call in calls
                    if isinstance(call.func, ast.Attribute)
                    and _is_named(call.func.value, "traffic")

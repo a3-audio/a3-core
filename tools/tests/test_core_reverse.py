@@ -63,12 +63,12 @@ class TheChannelStrip(ReverseCase):
                                    "track_channelbus")
                 self.assertEqual(entry.key, "channel.volume")
 
-    def test_the_fx_send_is_a_send_and_not_a_parameter(self):
+    def test_the_aux_send_is_a_send_and_not_a_parameter(self):
         """It leaves the track rather than sitting on it, so REAPER reports it
         on a shape of its own. Send 3 of the channelbus is the FX bus --
         measured on 2026-09-12 by moving the fader."""
         entry = self.found("/track/9/send/3/volume", "track_channelbus")
-        self.assertEqual(entry.key, "channel.fx-send")
+        self.assertEqual(entry.key, "channel.aux-send")
         self.assertEqual(entry.scope, CHANNEL)
 
     def test_another_send_of_the_same_track_is_not_it(self):
@@ -128,7 +128,7 @@ class TheMasterSection(ReverseCase):
         """Since 2026-09-29 the FX return is its own track, 28 "Return", with
         one Airwindows PurestGain as its first plug-in."""
         entry = self.found("/track/28/fx/1/fxparam/1/value", "aux_return")
-        self.assertEqual(entry.key, "master.fx-return")
+        self.assertEqual(entry.key, "master.aux-return")
         self.assertEqual(entry.curve, "slope_volume")
 
     def test_the_old_aux_return_address_is_not_answered(self):
