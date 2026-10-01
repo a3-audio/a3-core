@@ -54,6 +54,7 @@ from a3_core_reverse import reverse_for, reversed_address   # noqa: E402
 from a3_core_state import (StateFile, apply_state,   # noqa: E402
                            apply_stems, state_of)
 from a3_core_stems_reaper import (announcements as stem_announcements,   # noqa: E402
+                                  changed_messages,
                                   reaper_messages as stem_reaper_messages)
 from a3_core_recall import (FX_MODE_NUMBERS, FX_MODE_WORDS,   # noqa: E402
                             Relayed, STATE_OF, led_message,
@@ -489,16 +490,24 @@ def announce_flag(flag, channel_index):
               read(channel_infos[channel_index]))
 
 
+#: What stems last told REAPER, so a click sends only what it changed.
+_stems_sent_to_reaper = {}
+
+
 def speak_stems(full=False):
     """Stems on the desk to REAPER and to the subscribers.
 
     REAPER only when the layout has a stems block; the announcements always,
     so the desk shows its state before the routing exists. `full` sends
     every announcement (start-up, recall) instead of only the changed ones.
-    REAPER always gets the full set: nothing here de-duplicates its side."""
+    REAPER gets the differences only; `full` forgets what it was told and
+    sends the lot, because REAPER may have restarted since."""
     if _layout.stems is not None:
-        for address, value in stem_reaper_messages(_stems, _layout.stems,
-                                                   _layout.address):
+        if full:
+            _stems_sent_to_reaper.clear()
+        for address, value in changed_messages(
+                stem_reaper_messages(_stems, _layout.stems, _layout.address),
+                _stems_sent_to_reaper):
             osc_reaper.send_message(address, value)
     for address, value in stem_announcements(_stems, _truth):
         if full:

@@ -28,3 +28,15 @@ def announcements(stems, truth):
     muted = int(bool(stems.return_cursor) and stems.muted_on_return(stems.return_cursor))
     out.append((truth.address("fx-return.stem"), [stems.return_cursor, muted]))
     return out
+
+
+def changed_messages(messages, last_sent):
+    """The messages whose value differs from what was last sent, in order.
+
+    `last_sent` is the caller's memory ({address: value}); it is updated with
+    the returned pairs, so a second call with the same messages returns [].
+    Clear the dict to force a full send."""
+    changed = [(address, value) for address, value in messages
+               if last_sent.get(address) != value]
+    last_sent.update(changed)
+    return changed

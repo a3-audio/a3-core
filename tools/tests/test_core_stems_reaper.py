@@ -13,7 +13,8 @@ sys.path.insert(0, str(PACKAGE / "home/aaa/.local/lib"))
 import a3_osc                                         # noqa: E402
 from a3_core_layout import load_layout                # noqa: E402
 from a3_core_stems import Stems                       # noqa: E402
-from a3_core_stems_reaper import announcements, reaper_messages  # noqa: E402
+from a3_core_stems_reaper import (announcements, changed_messages,  # noqa: E402
+                                  reaper_messages)
 
 TRUTH = a3_osc.load(PACKAGE / "usr/share/a3/a3-osc.json")
 SHIPPED = PACKAGE / "home/aaa/.local/share/a3-core/layout.json"
@@ -72,6 +73,29 @@ class WhatReaperIsTold(unittest.TestCase):
         msgs = self.msgs(s)
         self.assertEqual(msgs["/track/31/send/5/volume"], 0.0)
         self.assertEqual(msgs["/track/32/send/5/volume"], 0.716)
+
+
+class OnlyWhatChanged(unittest.TestCase):
+    def setUp(self):
+        self.layout = layout_with(STEMS_BLOCK)
+        self.stems = Stems()
+        self.sent = {}
+
+    def messages(self):
+        return reaper_messages(self.stems, self.layout.stems, self.layout.address)
+
+    def test_the_first_call_sends_everything(self):
+        first = changed_messages(self.messages(), self.sent)
+        self.assertEqual(len(first), 44)
+
+    def test_a_repeat_sends_nothing(self):
+        changed_messages(self.messages(), self.sent)
+        self.assertEqual(changed_messages(self.messages(), self.sent), [])
+
+    def test_a_turn_sends_only_what_it_changed(self):
+        changed_messages(self.messages(), self.sent)
+        self.stems.turn_channel(1, +1)       # channel 2 onto pair 1
+        self.assertEqual(len(changed_messages(self.messages(), self.sent)), 3)
 
 
 class WhatCoreSays(unittest.TestCase):

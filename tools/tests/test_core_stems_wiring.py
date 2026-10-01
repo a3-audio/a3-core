@@ -49,7 +49,7 @@ class CoreListens(unittest.TestCase):
         self.assertIn('elif parameter == "stem.turn":', CORE)
 
     def test_recall_and_start_speak_the_stems(self):
-        self.assertGreaterEqual(CORE.count("speak_stems("), 3)   # def, recall, start-up
+        self.assertEqual(CORE.count("speak_stems(full=True)"), 2)   # recall, start-up
 
 
 if __name__ == "__main__":
