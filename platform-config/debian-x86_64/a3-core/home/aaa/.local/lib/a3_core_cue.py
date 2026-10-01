@@ -1,9 +1,9 @@
 """The headphones' crossfade, in the channel buses' sends.
 
 Since the template of 2026-10-01 there are no PFL tracks and no ph-mix: each
-channel bus sends to dec_phones twice -- pre-fader (the cue) and post-fader
-(the mix) -- and the stems track sends StemDeck's phones there as a cue of
-its own. The phones-mix knob fades cue (left) into mix (right) at constant
+channel bus sends to enc_phones twice -- pre-fader (the cue) and post-fader
+(the mix) -- and the stems track sends StemDeck's phones to dec_phones as a
+cue of its own. The phones-mix knob fades cue (left) into mix (right) at constant
 power; a cue send only opens while its cue is on, the mix sends follow the
 knob alone.
 

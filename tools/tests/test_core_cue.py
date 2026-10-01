@@ -1,6 +1,6 @@
 """The headphones' crossfade, in the channel buses' sends (template of
 2026-10-01): per deck send 3 (pre-fader, the cue) and send 4 (post-fader, the
-mix) to dec_phones, and the stems' send 6 to it as a cue of its own.
+mix) to enc_phones, and the stems' send 6 to dec_phones as a cue of its own.
 
 The phones-mix knob fades cue (left) into mix (right) at constant power. A
 deck's cue send only opens while its cue is on; its mix send follows the knob

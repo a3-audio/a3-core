@@ -67,8 +67,8 @@ class TheChannelStrip(ReverseCase):
         """It leaves the track rather than sitting on it, so REAPER reports it
         on a shape of its own. Send 1 of the channelbus is the aux bus --
         measured on 2026-10-01: sends 1-5 of track 1 set to five levels, the
-        maintainer read enc_fx on send 1 (2 enc_main, 3 dec_phones pre,
-        4 dec_phones post, 5 VU)."""
+        maintainer read enc_fx on send 1 (2 enc_main, 3 enc_phones pre,
+        4 enc_phones post, 5 VU)."""
         entry = self.found("/track/1/send/1/volume", "track_channelbus")
         self.assertEqual(entry.key, "channel.aux-send")
         self.assertEqual(entry.scope, CHANNEL)
@@ -141,7 +141,7 @@ class TheMasterSection(ReverseCase):
 
     def test_the_phones_mix_is_not_read_back_from_a_track(self):
         """Since the template of 2026-10-01 there is no ph-mix track: the
-        crossfade lives in the channel buses' sends to dec_phones, and Core's
+        crossfade lives in the channel buses' sends to enc_phones, and Core's
         cue logic for it follows. Until then nothing reports it."""
         self.assertFalse(any(e.key == "master.phones-mix" for e in REVERSALS))
 

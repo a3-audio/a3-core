@@ -142,7 +142,7 @@ class Layout:
         The number is the position among the *sending* track's sends, which
         REAPER derives from the order its receivers appear in the project.
         For the channelbuses (template of 2026-10-01) that is enc_fx, enc_main,
-        dec_phones pre, dec_phones post, VU -- measured by setting the five to
+        enc_phones pre, enc_phones post, VU (dec_phones until 21:49) -- measured by setting the five to
         five levels and reading them in REAPER.
         """
         if name not in self._sends:

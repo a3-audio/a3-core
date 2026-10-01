@@ -39,7 +39,7 @@ class _Master:
 
 
 class CueGoesThroughTheSends(unittest.TestCase):
-    """Since 2026-10-01 the cue is the channel buses' sends to dec_phones."""
+    """Since 2026-10-01 the cue is the channel buses' sends to enc_phones."""
 
     def test_the_stem_family_is_mapped(self):
         self.assertIn('("stem", osc_handler_stem)', CORE)

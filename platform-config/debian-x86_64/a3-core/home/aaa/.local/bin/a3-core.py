@@ -481,7 +481,7 @@ CUE_UNITY = 1.0
 
 def send_cue_levels():
     """The headphones' sends, all of them: every channel bus's cue (pre-fader)
-    and mix (post-fader) send to dec_phones, and the stems track's cue send.
+    and mix (post-fader) send to enc_phones, and the stems track's cue send.
     Nine messages; sent whole, since one knob moves eight of them."""
     levels = send_levels([channel.toggle_cue for channel in channel_infos],
                          master_info.stem_cue, master_info.phones_mix, CUE_UNITY)
@@ -815,7 +815,7 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
 
     elif parameter == "cue":
         # PFL until 2026-10-01. The cue is the channel bus's pre-fader send to
-        # dec_phones, faded against the post-fader one by the phones-mix knob.
+        # enc_phones, faded against the post-fader one by the phones-mix knob.
         wanted = wanted_toggle(raw, channel_infos[channel_index].toggle_cue)
         if wanted is not NO_CHANGE:
             channel_infos[channel_index].toggle_cue = wanted
@@ -927,7 +927,7 @@ def osc_handler_master(client_address: Tuple[str, int], address: str,
 
     if parameter == "phones-mix":
         # Cue (left) against mix (right), in the channel buses' sends to
-        # dec_phones since 2026-10-01 -- see a3_core_cue.
+        # enc_phones since 2026-10-01 -- see a3_core_cue.
         master_info.phones_mix = value
         send_cue_levels()
         remember_state()

@@ -104,7 +104,7 @@ class TheRestOfTheMap(unittest.TestCase):
 
         Measured on 2026-10-01 with the template that moved the cue into the
         sends: sends 1-5 of track 1 set to five levels, the maintainer read
-        1 enc_fx, 2 enc_main, 3 dec_phones pre, 4 dec_phones post, 5 VU.
+        1 enc_fx, 2 enc_main, 3 enc_phones pre, 4 enc_phones post, 5 VU.
         (Before: send 3, measured 2026-09-12 on the template with PFL tracks.)
         """
         self.assertEqual(self.layout.send("aux"), 1)

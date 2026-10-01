@@ -31,7 +31,10 @@
     "the PFL tracks and ph-mix are gone (cue moved into the channel buses' sends",
     "to dec_phones); the channels come first, then aux return, encoders, decoders.",
     "",
-    "Extended to 28 (stems) on 2026-10-01: Core sends the stem cue on its send 6."
+    "Extended to 28 (stems) on 2026-10-01: Core sends the stem cue on its send 6.",
+    "",
+    "Template of 2026-10-01 21:49: the channel buses' cue and mix sends go to",
+    "enc_phones instead of dec_phones; the send numbers stay 3 and 4."
   ],
   "track_names": {
     "1": "1-channelbus",
