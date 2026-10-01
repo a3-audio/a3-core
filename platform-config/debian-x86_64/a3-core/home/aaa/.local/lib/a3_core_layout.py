@@ -76,6 +76,7 @@ MASTER_FIELDS = (
     "track_booth",
     "track_phones",
     "track_ph_mix",
+    "track_stem_pfl",
     "aux_return",
 )
 
