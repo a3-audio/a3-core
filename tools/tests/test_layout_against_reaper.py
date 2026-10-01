@@ -41,7 +41,7 @@ MASTER_NAME = {
     "track_masterbus": "dec_master",
     "track_booth": "dec_booth",
     "track_phones": "dec_phones",
-    "aux_return": "aux return",
+    "aux_return": "aux_return",
 }
 
 #: The project the layout ships beside. Installed as the template REAPER starts
