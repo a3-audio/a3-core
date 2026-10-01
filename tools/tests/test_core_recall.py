@@ -45,7 +45,7 @@ class FXMode(Enum):
 @dataclass
 class FakeChannel:
     toggle_fx: bool = False
-    toggle_pfl: bool = False
+    toggle_cue: bool = False
     azimuth: float = None
     elevation: float = None
     three_d: float = None
@@ -79,29 +79,29 @@ class TheLights(unittest.TestCase):
         a3-mixer.py's `0 if led_on else 255`. What reaches the pixel is
         unchanged.
         """
-        lit = FakeChannel(toggle_pfl=True)
-        dark = FakeChannel(toggle_pfl=False)
-        self.assertEqual(led_message(self.truth, "pfl", 0, lit)[1], 1.0)
-        self.assertEqual(led_message(self.truth, "pfl", 0, dark)[1], 0.0)
+        lit = FakeChannel(toggle_cue=True)
+        dark = FakeChannel(toggle_cue=False)
+        self.assertEqual(led_message(self.truth, "cue", 0, lit)[1], 1.0)
+        self.assertEqual(led_message(self.truth, "cue", 0, dark)[1], 0.0)
 
     def test_no_lamp_is_inverted_any_more(self):
         """The rule, so the next lamp added cannot quietly get its own."""
         for flag in LED_OF:
             with self.subTest(flag=flag):
-                on = FakeChannel(toggle_pfl=True, toggle_fx=True)
+                on = FakeChannel(toggle_cue=True, toggle_fx=True)
                 self.assertEqual(led_message(self.truth, flag, 0, on)[1], 1.0)
 
     def test_the_lamps_of_a_rig_are_two_a_channel_and_the_filter(self):
         channels, master = a_rig()
         self.assertEqual(
             len(list(lamp_messages(self.truth, channels, master))),
-            4 * 2 + 1)
+            4 * 2 + 2)
 
     def test_the_flags_of_a_rig_are_two_a_channel_and_the_mode(self):
         channels, master = a_rig()
         self.assertEqual(
             len(list(flag_messages(self.truth, channels, master))),
-            4 * 2 + 1)
+            4 * 2 + 2)
 
     def test_the_lamp_says_the_mode_as_a_word_and_the_flag_as_a_number(self):
         channels, master = a_rig()
@@ -116,11 +116,11 @@ class TheLights(unittest.TestCase):
         disagreed, two pictures of the same channel would be on screen at
         once."""
         channels, master = a_rig()
-        channels[0].toggle_pfl = True
+        channels[0].toggle_cue = True
         lamps = dict(lamp_messages(self.truth, channels, master))
         flags = dict(flag_messages(self.truth, channels, master))
-        self.assertEqual(flags["/channel/1/pfl"], 1.0)
-        self.assertEqual(lamps["/channel/1/pfl/led"], 1.0)
+        self.assertEqual(flags["/channel/1/cue"], 1.0)
+        self.assertEqual(lamps["/channel/1/cue/led"], 1.0)
 
     def test_the_flag_carries_no_lamp_address(self):
         """Still two vocabularies, even though both now go everywhere: a lamp
@@ -146,7 +146,7 @@ class TheLights(unittest.TestCase):
         suffixes = {address.rsplit("/", 1)[-1]
                     for address, _ in flag_messages(self.truth, channels,
                                                     master)}
-        self.assertEqual(suffixes, {"pfl", "filter", "mode"})
+        self.assertEqual(suffixes, {"cue", "filter", "mode"})
 
 
 class WhatTheSourceSays(unittest.TestCase):
@@ -172,12 +172,12 @@ class WhatTheSourceSays(unittest.TestCase):
         self.assertEqual(modes, set(FX_MODE_WORDS))
 
     def test_every_light_the_truth_has_is_replayed(self):
-        """The truth names three lamps. Two are per channel and belong to a
-        flag; the third is the filter mode's, which lamp_messages sends on its
-        own."""
+        """The truth names four lamps. Two are per channel and belong to a
+        flag; the filter mode's and the stem cue's (2026-10-01) are the
+        master's, which lamp_messages sends on their own."""
         truth = a3_osc.load(TRUTH)
         named = {key for key in truth.addresses() if key.endswith(".led")}
-        replayed = {key for key, _ in LED_OF.values()} | {"filter.led"}
+        replayed = {key for key, _ in LED_OF.values()} | {"filter.led", "stem.cue.led"}
         self.assertEqual(named, replayed)
 
 
@@ -323,7 +323,7 @@ class TheWholeAnswer(unittest.TestCase):
         messages = list(recall_messages(self.truth, channels, master,
                                         relayed))
         self.assertEqual(messages[-1], ("/channel/0/gain", 0.7))
-        self.assertEqual(len(messages), 2 * (4 * 2 + 1) + 1)
+        self.assertEqual(len(messages), 2 * (4 * 2 + 2) + 1)
 
     def test_the_position_is_answered_between_the_flags_and_reaper(self):
         """Both of Core's own certainties first, REAPER's relayed values
@@ -336,10 +336,10 @@ class TheWholeAnswer(unittest.TestCase):
 
         messages = list(recall_messages(self.truth, channels, master,
                                         relayed))
-        self.assertEqual(messages[2 * (4 * 2 + 1)],
+        self.assertEqual(messages[2 * (4 * 2 + 2)],
                          ("/channel/2/azimuth", 45.0))
         self.assertEqual(messages[-1], ("/channel/0/gain", 0.7))
-        self.assertEqual(len(messages), 2 * (4 * 2 + 1) + 1 + 1)
+        self.assertEqual(len(messages), 2 * (4 * 2 + 2) + 1 + 1)
 
     def test_a_cold_core_still_answers_with_its_own_flags(self):
         """After Core itself restarts, nothing has been relayed yet: REAPER
@@ -350,7 +350,7 @@ class TheWholeAnswer(unittest.TestCase):
         channels, master = a_rig()
         messages = list(recall_messages(self.truth, channels, master,
                                         Relayed()))
-        self.assertEqual(len(messages), 2 * (4 * 2 + 1))
+        self.assertEqual(len(messages), 2 * (4 * 2 + 2))
 
     def test_a_cold_core_answers_no_position_either(self):
         """Core's own restart loses the position: it is held in memory and

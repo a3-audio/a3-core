@@ -113,7 +113,7 @@ class TheVocabulary(unittest.TestCase):
     def test_lamps_stand_under_what_they_light(self):
         t = truth()
         self.assertEqual(t.address("channel.filter.led", ch=1), "/channel/1/filter/led")
-        self.assertEqual(t.address("channel.pfl.led", ch=1), "/channel/1/pfl/led")
+        self.assertEqual(t.address("channel.cue.led", ch=1), "/channel/1/cue/led")
         self.assertEqual(t.address("filter.led"), "/filter/led")
 
     def test_the_master_section(self):
@@ -200,6 +200,29 @@ class TheStemMeters(unittest.TestCase):
 
     def test_a_stem_meter_has_its_address(self):
         self.assertEqual(self.t.address("vu", n=48), "/vu/48")
+
+
+class TheCueWords(unittest.TestCase):
+    """PFL is called cue since 2026-10-01, wire included; the stems have a
+    cue of their own (the C field on the aux-return display)."""
+
+    def setUp(self):
+        self.t = truth()
+
+    def test_a_channels_cue(self):
+        self.assertEqual(self.t.address("channel.cue", ch=2), "/channel/2/cue")
+        self.assertEqual(self.t.address("channel.cue.led", ch=2), "/channel/2/cue/led")
+
+    def test_the_stems_cue(self):
+        a = self.t.addresses()
+        self.assertEqual(self.t.address("stem.cue"), "/stem/cue")
+        self.assertEqual(self.t.address("stem.cue.led"), "/stem/cue/led")
+        self.assertEqual(a["stem.cue"]["to"], ["core"])
+        self.assertEqual(a["stem.cue.led"]["from"], ["core"])
+
+    def test_pfl_is_gone(self):
+        self.assertNotIn("channel.pfl", self.t.addresses())
+        self.assertIsNone(self.t.match("/channel/1/pfl"))
 
 
 class TheStemWords(unittest.TestCase):

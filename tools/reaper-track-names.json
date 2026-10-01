@@ -29,7 +29,9 @@
     "",
     "Tracks 1-25 retaken from the maintainer's template of 2026-10-01 20:28:",
     "the PFL tracks and ph-mix are gone (cue moved into the channel buses' sends",
-    "to dec_phones); the channels come first, then aux return, encoders, decoders."
+    "to dec_phones); the channels come first, then aux return, encoders, decoders.",
+    "",
+    "Extended to 28 (stems) on 2026-10-01: Core sends the stem cue on its send 6."
   ],
   "track_names": {
     "1": "1-channelbus",
@@ -56,6 +58,9 @@
     "22": "DECODER",
     "23": "dec_master",
     "24": "dec_booth",
-    "25": "dec_phones"
+    "25": "dec_phones",
+    "26": "INPUT",
+    "27": "analog",
+    "28": "stems"
   }
 }

@@ -67,10 +67,14 @@
   "track_masterbus": 23,
   "track_booth": 24,
   "track_phones": 25,
-  "aux_return": 17
+  "aux_return": 17,
+  "track_stems": 28
  },
  "sends": {
-  "aux": 1
+  "aux": 1,
+  "cue_pre": 3,
+  "cue_post": 4,
+  "stems_cue": 6
  },
  "fx_slots": {
   "gain": 1,

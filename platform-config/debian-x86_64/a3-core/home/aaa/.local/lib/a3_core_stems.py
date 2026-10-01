@@ -14,6 +14,10 @@ CHANNELS = 4
 
 
 class Stems:
+    #: The aux-return display's C field: a cursor position after the free
+    #: stems, where a push is the stem cue (2026-10-01).
+    CUE = 9
+
     def __init__(self, pairs=PAIRS, channels=CHANNELS):
         self.pairs = pairs
         self.channel_pair = [0] * channels
@@ -57,17 +61,20 @@ class Stems:
         self.return_cursor = later[0] if later else free[0]
 
     def turn_return(self, steps):
-        free = self.free_pairs()
-        if not free:
-            self.return_cursor = 0
-            return
-        here = free.index(self.return_cursor) if self.return_cursor in free else -1
-        self.return_cursor = free[(here + steps) % len(free)]
+        """Through the free stems, then the C field, and round again."""
+        positions = self.free_pairs() + [self.CUE]
+        here = positions.index(self.return_cursor) if self.return_cursor in positions else -1
+        self.return_cursor = positions[(here + steps) % len(positions)]
 
     def push_return(self):
+        """Toggle the cursor stem's AUX; on the C field, say "cue" instead
+        (Core toggles the stem cue, which is not this module's)."""
+        if self.return_cursor == self.CUE:
+            return "cue"
         if self.return_cursor in self.free_pairs():
             i = self.return_cursor - 1
             self.return_muted[i] = not self.return_muted[i]
+        return None
 
     def muted_on_return(self, pair):
         """Whether `pair` is silent on the aux return."""
@@ -95,7 +102,7 @@ class Stems:
                 s.return_muted = [m and (i + 1) not in s.channel_pair
                                   for i, m in enumerate(muted)]
             cursor = int(data.get("return_cursor", 0))
-            if cursor in s.free_pairs():
+            if cursor in s.free_pairs() or cursor == cls.CUE:
                 s.return_cursor = cursor
             else:
                 s._move_cursor_to_a_free_pair()

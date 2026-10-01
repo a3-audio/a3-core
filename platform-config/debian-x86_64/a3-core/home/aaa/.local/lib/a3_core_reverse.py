@@ -36,7 +36,7 @@ a3-core.py's `broadcast`.
   nothing for REAPER to report. Core remembers it instead; same place, same
   reason.
 
-- The toggles (pfl, fx, 4d) and the filter mode. They are Core's own state,
+- The toggles (cue, fx, 4d) and the filter mode. They are Core's own state,
   not REAPER's, and they come back from REAPER as a mute rather than as the
   flag they set. Core broadcasts them itself, on the addresses they arrive on.
 

@@ -172,12 +172,12 @@ class WhatIsPassedOnWhenItArrives(unittest.TestCase):
                 self.assertTrue(self.relayed(address))
 
     def test_a_flag_is_not_passed_on_here(self):
-        """`pfl`, the channel's filter key and the filter mode are announced
+        """`cue`, the channel's filter key and the filter mode are announced
         by announce_flag() and the mode branch -- to everybody, the sender
         included, because a lamp is status and the desk's own lamp has to
         follow its own key. Passing them on here as well would send each
         twice."""
-        for address in ("/channel/1/pfl", "/channel/4/filter", "/filter/mode"):
+        for address in ("/channel/1/cue", "/channel/4/filter", "/filter/mode"):
             with self.subTest(address=address):
                 self.assertFalse(self.relayed(address))
 

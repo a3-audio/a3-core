@@ -38,6 +38,20 @@ class _Master:
     fx_mode = _Mode()
 
 
+class CueGoesThroughTheSends(unittest.TestCase):
+    """Since 2026-10-01 the cue is the channel buses' sends to dec_phones."""
+
+    def test_the_stem_family_is_mapped(self):
+        self.assertIn('("stem", osc_handler_stem)', CORE)
+
+    def test_the_channel_cue_has_its_branch(self):
+        self.assertIn('elif parameter == "cue":', CORE)
+        self.assertNotIn('parameter == "pfl"', CORE)
+
+    def test_cue_knob_and_stem_cue_send_the_levels(self):
+        self.assertGreaterEqual(CORE.count("send_cue_levels("), 4)   # def, cue, stem, knob
+
+
 class CoreListens(unittest.TestCase):
     def test_core_still_parses(self):
         ast.parse(CORE)

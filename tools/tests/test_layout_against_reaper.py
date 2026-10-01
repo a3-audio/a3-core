@@ -42,6 +42,7 @@ MASTER_NAME = {
     "track_booth": "dec_booth",
     "track_phones": "dec_phones",
     "aux_return": "aux_return",
+    "track_stems": "stems",
 }
 
 #: The project the layout ships beside. Installed as the template REAPER starts
@@ -117,7 +118,8 @@ class LayoutAgainstReaper(unittest.TestCase):
         unclaimed = {t: n for t, n in self.names.items() if t not in claimed}
         # ENCODER, DECODER: folder tracks (template of 2026-10-01).
         self.assertEqual(sorted(unclaimed.values()),
-                         ["DECODER", "ENCODER", "enc_fx", "enc_main", "enc_phones"], unclaimed)
+                         ["DECODER", "ENCODER", "INPUT", "analog", "enc_fx", "enc_main",
+                          "enc_phones"], unclaimed)
 
     def test_the_recorded_names_are_the_shipped_projects(self):
         # The recording is only as good as the project it was taken from. A

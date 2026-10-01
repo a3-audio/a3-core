@@ -31,12 +31,12 @@ LOPASS = 4
 class Channel:
     track_input: int
     toggle_fx: bool = False
-    toggle_pfl: bool = False
+    toggle_cue: bool = False
 
 
 def channels(*toggles):
     return [Channel(track_input=10 + i, toggle_fx=fx,
-                    toggle_pfl=pfl)
+                    toggle_cue=pfl)
             for i, (fx, pfl) in enumerate(toggles)]
 
 

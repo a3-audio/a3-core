@@ -34,7 +34,7 @@ class WhatCoreHearsAndSays(unittest.TestCase):
                          {("mixer", "both"), ("motion", "both")})
 
     def test_a_lamp_only_goes_out(self):
-        self.assertEqual(entries_for("/channel/{ch}/pfl/led"),
+        self.assertEqual(entries_for("/channel/{ch}/cue/led"),
                          {("mixer", "out"), ("motion", "out")})
 
     def test_the_position_only_comes_in(self):

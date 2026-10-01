@@ -71,13 +71,13 @@ class WhatIsPlayedBack(unittest.TestCase):
         self.assertEqual(played, {"/channel/2/aux-send": 0.3, "/master/aux-return": 0.1})
 
     def test_lamps_are_status_and_not_settings(self):
-        played = self.replay({"/channel/1/pfl/led": 1.0, "/filter/led": "low_pass"})
+        played = self.replay({"/channel/1/cue/led": 1.0, "/filter/led": "low_pass"})
         self.assertEqual(played, {})
 
     def test_what_cores_own_state_file_already_keeps_is_left_out(self):
         # The toggles, the crossfade and the filter mode survive a restart in
         # a3_core_state; a second copy here could disagree with it.
-        played = self.replay({"/channel/1/pfl": 1.0, "/channel/1/filter": 1.0,
+        played = self.replay({"/channel/1/cue": 1.0, "/channel/1/filter": 1.0,
                               "/channel/4/3d": 0.5, "/filter/mode": 1})
         self.assertEqual(played, {})
 

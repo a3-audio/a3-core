@@ -258,7 +258,7 @@ NOT_ANSWERED_FOR = {
     "channel.filter.frequency": "REAPER holds it with the accent on top; "
                                 "relaying that ratchets",
     "channel.filter.q": "the same",
-    "channel.pfl": "a toggle of Core's own; comes back as a mute",
+    "channel.cue": "a toggle of Core's own; its level goes out as two sends",
     "channel.filter": "the same",
     # An encoder's clicks, not a value: there is nothing in REAPER to read
     # back. The assignment it changes is Core's own (a3_core_stems) and is

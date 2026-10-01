@@ -74,6 +74,7 @@ MASTER_FIELDS = (
     "track_booth",
     "track_phones",
     "aux_return",
+    "track_stems",
 )
 
 
@@ -140,9 +141,9 @@ class Layout:
 
         The number is the position among the *sending* track's sends, which
         REAPER derives from the order its receivers appear in the project.
-        For the channelbuses that is 1-pfl, ph-mix, enc_fx, enc_main, so the
-        FX bus is 3 -- confirmed on 2026-09-12 by moving the fader and
-        watching /track/9/send/3/volume arrive at Core.
+        For the channelbuses (template of 2026-10-01) that is enc_fx, enc_main,
+        dec_phones pre, dec_phones post, VU -- measured by setting the five to
+        five levels and reading them in REAPER.
         """
         if name not in self._sends:
             raise LayoutError(f"no send named {name}")

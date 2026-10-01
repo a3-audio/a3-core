@@ -53,6 +53,7 @@ from a3_core_echo import EchoFilter   # noqa: E402
 from a3_core_reverse import reverse_for, reversed_address   # noqa: E402
 from a3_core_state import (StateFile, apply_state,   # noqa: E402
                            apply_stems, state_of)
+from a3_core_cue import send_levels   # noqa: E402
 from a3_core_stems_reaper import (announcements as stem_announcements,   # noqa: E402
                                   changed_messages,
                                   reaper_messages as stem_reaper_messages)
@@ -250,6 +251,12 @@ class MasterInfo:
     track_booth: int
     track_phones: int
     aux_return: int
+    track_stems: int
+
+    # The headphones' moment (2026-10-01): the stem cue and where the
+    # phones-mix knob stands, both kept across a restart (a3_core_state).
+    stem_cue: bool = False
+    phones_mix: float = 0.0
 
     class FXMode(Enum):
         LOW_PASS = 0
@@ -261,6 +268,7 @@ master_info = MasterInfo(
     track_booth=_layout.master.track_booth,
     track_phones=_layout.master.track_phones,
     aux_return=_layout.master.aux_return,
+    track_stems=_layout.master.track_stems,
 )
 
 @dataclass
@@ -274,7 +282,7 @@ class ChannelInfo:
     track_stereo_enc: int
 
     toggle_fx: bool = False
-    toggle_pfl: bool = False
+    toggle_cue: bool = False
 
     # Where the sound is, as Motion last said it. Held here because nobody
     # else can be asked: Core writes the position straight to the IEM
@@ -308,7 +316,7 @@ class ChannelInfo:
 # with -- see .local/share/a3-core/layout.json.
 #
 # What stays in the dataclass is what changes while the thing runs: toggle_fx
-# and toggle_pfl. A number that describes the rig and a flag that
+# and toggle_cue. A number that describes the rig and a flag that
 # describes the moment are two different kinds of thing, and only one of them
 # belongs in a file that ships.
 #
@@ -466,11 +474,50 @@ def relay(address, raw, origin):
         client.send_message(address, number)
 
 
+#: REAPER's send value for 0 dB: the template's sends at 0 dB report 1.0
+#: (2026-10-01). Below that REAPER's scale is not measured yet; see a3_core_cue.
+CUE_UNITY = 1.0
+
+
+def send_cue_levels():
+    """The headphones' sends, all of them: every channel bus's cue (pre-fader)
+    and mix (post-fader) send to dec_phones, and the stems track's cue send.
+    Nine messages; sent whole, since one knob moves eight of them."""
+    levels = send_levels([channel.toggle_cue for channel in channel_infos],
+                         master_info.stem_cue, master_info.phones_mix, CUE_UNITY)
+    for channel, deck in zip(channel_infos, levels["decks"]):
+        for side, send in (("pre", "cue_pre"), ("post", "cue_post")):
+            osc_reaper.send_message(
+                _layout.address("track_send", track=channel.track_channelbus,
+                                send=_layout.send(send)), deck[side])
+    osc_reaper.send_message(
+        _layout.address("track_send", track=master_info.track_stems,
+                        send=_layout.send("stems_cue")), levels["stem"])
+
+
+def stem_cue_messages():
+    """The stem cue's flag and lamp, for the subscribers."""
+    on = float(master_info.stem_cue)
+    return [(_truth.address("stem.cue"), on), (_truth.address("stem.cue.led"), on)]
+
+
+def toggle_stem_cue(raw=None):
+    """Flip the stem cue (or set it from a key's value), tell everybody, send
+    the levels."""
+    wanted = wanted_toggle(raw, master_info.stem_cue) if raw is not None         else (not master_info.stem_cue)
+    if wanted is NO_CHANGE:
+        return
+    master_info.stem_cue = wanted
+    for address, value in stem_cue_messages():
+        broadcast(address, value)
+    send_cue_levels()
+
+
 def announce_flag(flag, channel_index):
     """Say a channel's flag twice, and tell everybody both times.
 
-    The **lamp** (`/channel/n/pfl/led`) is whether that light is on. The
-    **flag** (`/channel/n/pfl`) is the setting, on the address it arrived on.
+    The **lamp** (`/channel/n/cue/led`) is whether that light is on. The
+    **flag** (`/channel/n/cue`) is the setting, on the address it arrived on.
     Two vocabularies for one fact, and both are broadcast: a lamp is status,
     which makes it the screens' business as much as the desk's.
 
@@ -766,15 +813,14 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
 
     # BUTTONS
 
-    elif parameter == "pfl":
-        wanted = wanted_toggle(raw, channel_infos[channel_index].toggle_pfl)
+    elif parameter == "cue":
+        # PFL until 2026-10-01. The cue is the channel bus's pre-fader send to
+        # dec_phones, faded against the post-fader one by the phones-mix knob.
+        wanted = wanted_toggle(raw, channel_infos[channel_index].toggle_cue)
         if wanted is not NO_CHANGE:
-            channel_infos[channel_index].toggle_pfl = wanted
-            # The PFL tracks are gone (template of 2026-10-01): the cue is the
-            # channel bus's pre-fader send to dec_phones now, and Core's cue
-            # logic for it follows. Until then the key keeps its state and
-            # its lamp, and REAPER is not told.
-            announce_flag("pfl", channel_index)
+            channel_infos[channel_index].toggle_cue = wanted
+            announce_flag("cue", channel_index)
+            send_cue_levels()
 
     elif parameter == "filter":
         wanted = wanted_toggle(raw, channel_infos[channel_index].toggle_fx)
@@ -880,11 +926,10 @@ def osc_handler_master(client_address: Tuple[str, int], address: str,
             osc_reaper.send_message(f"/track/{boothbus}/fx/1/fxparam/{gain_vst_plugins_on_boothbus}/value", val)
 
     if parameter == "phones-mix":
-        # The crossfade moved into the channel buses' sends to dec_phones
-        # (pre-fader cue against post-fader mix, template of 2026-10-01);
-        # ph-mix and the PFL tracks are gone. Core's cue logic for it follows;
-        # until then the knob is relayed to the devices and REAPER is not told.
-        pass
+        # Cue (left) against mix (right), in the channel buses' sends to
+        # dec_phones since 2026-10-01 -- see a3_core_cue.
+        master_info.phones_mix = value
+        send_cue_levels()
 
     if parameter == "phones-volume":
         val = slope_volume(value)
@@ -917,13 +962,31 @@ def osc_handler_aux_return(client_address: Tuple[str, int], address: str,
     if key == "aux-return.stem.turn":
         _stems.turn_return(int(float(osc_arguments[0])))
     elif key == "aux-return.stem.push":
-        _stems.push_return()
+        if _stems.push_return() == "cue":     # the C field: the stem cue
+            toggle_stem_cue()
     else:
         # Mapped, so seen() above has put it in the understood table; say
         # that nobody serves it, as osc_handler_channel's `else` does.
         traffic.unknown(address, value, origin)
         return
     speak_stems()
+    remember_state()
+
+
+def osc_handler_stem(client_address: Tuple[str, int], address: str,
+                     *osc_arguments: List[Any]) -> None:
+    """The stem cue from a key: /stem/cue, toggled like a channel's cue."""
+    found = known_address(client_address, address, osc_arguments)
+    if found is None:
+        return
+    key, _ = found
+    value = osc_arguments[0] if osc_arguments else None
+    origin = peer_name(client_address[0], PEER_HOSTS, only=COMMANDERS)
+    traffic.seen(IN, address, value, origin)
+    if key != "stem.cue":
+        traffic.unknown(address, value, origin)
+        return
+    toggle_stem_cue(value)
     remember_state()
 
 
@@ -1043,6 +1106,7 @@ def speak_remembered_state() -> None:
             channel_infos, master_info.fx_mode.name.lower(),
             FX_INDEX_HIPASS, FX_INDEX_LOPASS):
         osc_reaper.send_message(address, value)
+    send_cue_levels()
 
     messages = list(recall_messages(_truth, channel_infos, master_info,
                                     _relayed))
@@ -1351,7 +1415,8 @@ if __name__ == "__main__":
     for family, handler in (("channel", osc_handler_channel),
                             ("master", osc_handler_master),
                             ("filter", osc_handler_filter),
-                            ("aux-return", osc_handler_aux_return)):
+                            ("aux-return", osc_handler_aux_return),
+                            ("stem", osc_handler_stem)):
         dispatcher.map(f"/{family}/*", handler, needs_reply_address=True)
     dispatcher.map(OSC_ADDRESS_RECALL, osc_handler_recall,
                    needs_reply_address=True)
