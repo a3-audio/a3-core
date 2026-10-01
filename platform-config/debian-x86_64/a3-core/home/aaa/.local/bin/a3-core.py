@@ -485,7 +485,7 @@ def send_cue_levels():
     the return's mix and cue sends. Eleven messages; sent whole, since one
     knob moves most of them."""
     levels = send_levels([channel.toggle_cue for channel in channel_infos],
-                         _stems.any_cued(), master_info.phones_mix, CUE_UNITY)
+                         master_info.phones_mix, CUE_UNITY)
     for channel, deck in zip(channel_infos, levels["decks"]):
         for side, send in (("pre", "cue_pre"), ("post", "cue_post")):
             osc_reaper.send_message(
@@ -529,9 +529,7 @@ def speak_stems(full=False):
 
     `full` sends every announcement (start-up, recall) instead of only the
     changed ones, and forgets what REAPER was told, because REAPER may have
-    restarted since. The headphones' levels follow when StemDeck's CUE bus
-    went from empty to used or back."""
-    global _stems_cued_before
+    restarted since."""
     if full:
         _stems_sent_to_reaper.clear()
     for address, value in changed_messages(
@@ -543,15 +541,11 @@ def speak_stems(full=False):
                 client.send_message(address, value)
         else:
             broadcast(address, value)
-    if _stems.any_cued() != _stems_cued_before:
-        _stems_cued_before = _stems.any_cued()
-        send_cue_levels()
 
 
 #: Where StemDeck listens: learnt from its hello, None while it is silent.
 _stemdeck_client = None
 _stemdeck_presence = Presence(STEMDECK_SILENCE)
-_stems_cued_before = False
 
 
 def send_to_stemdeck(commands):

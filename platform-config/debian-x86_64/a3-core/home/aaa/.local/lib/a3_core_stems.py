@@ -55,9 +55,6 @@ class Stems:
     def plays_on_return(self, pair):
         return self._on(pair, AUX)
 
-    def any_cued(self):
-        return any(self._on(p, CUE) for p in range(1, PAIRS + 1))
-
     def _on_a_channel(self, pair, except_index=None):
         return any(self._on(pair, c + 1) for c in range(CHANNELS) if c != except_index)
 

@@ -47,9 +47,9 @@ class CueGoesThroughTheSends(unittest.TestCase):
         self.assertIn('elif parameter == "cue":', CORE)
         self.assertNotIn('parameter == "pfl"', CORE)
 
-    def test_the_stems_cue_follows_stemdecks_switches(self):
+    def test_the_stems_cue_send_is_not_gated_by_core(self):
         source = _source_of("send_cue_levels")
-        self.assertIn("_stems.any_cued()", source)
+        self.assertNotIn("any_cued", source)
         self.assertNotIn("stem_cue", source)
 
 

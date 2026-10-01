@@ -16,17 +16,18 @@ Pure: no OSC, no REAPER.
 import math
 
 
-def send_levels(cues, stems_cued, mix, unity):
+def send_levels(cues, mix, unity):
     """{"decks": [{"pre": .., "post": ..}, ...], "stem": .., "return": {..}}
-    for the decks' cue flags, whether StemDeck has a stem on its CUE bus,
-    and the knob (0 cue .. 1 mix).
+    for the decks' cue flags and the knob (0 cue .. 1 mix).
 
     The return is on the mix side like a deck's post-fader send, and on the
     cue side while any deck is cued: a cued deck brings its FX along (spec
-    stemdeck-remote). The stems' cue send carries StemDeck's CUE bus."""
+    stemdeck-remote). The stems' cue send carries StemDeck's CUE bus, always
+    on the cue side: StemDeck decides what is on that bus (stem CUE switches,
+    the decks' PHONES buttons) and it is silent otherwise."""
     x = min(1.0, max(0.0, float(mix)))
     cue_side = unity * math.cos(x * math.pi / 2)
     mix_side = unity * math.sin(x * math.pi / 2)
     return {"decks": [{"pre": cue_side if on else 0.0, "post": mix_side} for on in cues],
-            "stem": cue_side if stems_cued else 0.0,
+            "stem": cue_side,
             "return": {"pre": cue_side if any(cues) else 0.0, "post": mix_side}}

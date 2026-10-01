@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local/lib"))
 
-from a3_core_stems import AUX, CUE, Stems  # noqa: E402
+from a3_core_stems import AUX, Stems  # noqa: E402
 
 
 def bit(bus):
@@ -46,10 +46,6 @@ class TheMirror(unittest.TestCase):
 
     def test_a_good_report_is_accepted(self):
         self.assertTrue(Stems().report(8, 63))
-
-    def test_any_cued_reads_the_cue_bus(self):
-        self.assertFalse(stems_with(p2=bit(1)).any_cued())
-        self.assertTrue(stems_with(p2=bit(CUE)).any_cued())
 
 
 class ChannelTurns(unittest.TestCase):

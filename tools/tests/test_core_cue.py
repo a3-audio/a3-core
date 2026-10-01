@@ -20,7 +20,9 @@ UNITY = 1.0
 
 
 def levels(cues=(False,) * 4, stem=False, mix=0.0):
-    return send_levels(list(cues), stem, mix, UNITY)
+    # `stem` is gone from send_levels (StemDeck's CUE bus is always on the
+    # cue side); kept here so the tests still say what they vary.
+    return send_levels(list(cues), mix, UNITY)
 
 
 class TheKnob(unittest.TestCase):
@@ -52,10 +54,14 @@ class TheCues(unittest.TestCase):
         a = levels(cues=(True, False, False, False), mix=0.3)
         self.assertAlmostEqual(a["decks"][0]["post"], a["decks"][1]["post"])
 
-    def test_a_stem_cued_in_stemdeck_is_like_a_deck_cue(self):
-        on = levels(stem=True, mix=0.25)
-        self.assertAlmostEqual(on["stem"], math.cos(0.25 * math.pi / 2))
-        self.assertEqual(levels(stem=False, mix=0.0)["stem"], 0.0)
+    def test_stemdecks_cue_bus_is_always_on_the_cue_side(self):
+        # StemDeck decides what is on its CUE bus: stem CUE switches and the
+        # decks' PHONES buttons; the bus is silent otherwise. So the stems'
+        # cue send is not gated here (final review 2026-10-02: PHONES alone
+        # never reached the phones).
+        for stem in (False, True):
+            self.assertAlmostEqual(levels(stem=stem, mix=0.25)["stem"],
+                                   math.cos(0.25 * math.pi / 2))
 
     def test_the_return_is_on_the_mix_side(self):
         # Template of 2026-10-01 23:11: the return reaches enc_phones twice,
