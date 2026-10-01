@@ -1527,12 +1527,20 @@ if __name__ == "__main__":
     # replayed before REAPER's template has loaded. Nothing is asked after
     # the replay for the same reason. It goes through Core's own port as
     # ordinary traffic, so the devices hear it too.
+    #
+    # Then a recall, through the same door. The stems Core said at start-up
+    # went to a REAPER that was not listening yet, and were marked as told
+    # all the same -- only changes would have followed. The recall makes the
+    # server thread send the full set again; asking for it rather than
+    # calling speak_stems() here keeps the stems on that one thread.
     def replay_once_reaper_is_quiet():
+        def send_to_self(address, value):
+            SimpleUDPClient(_truth.host("local"), args.port).send_message(
+                address, value)
+
         wait_until_quiet(reaper_arrivals, lambda: replay_evening(
-            evening,
-            lambda address, value:
-            SimpleUDPClient(_truth.host("local"), args.port)
-            .send_message(address, value)))
+            evening, send_to_self))
+        send_to_self(OSC_ADDRESS_RECALL, 1)
 
     threading.Thread(
         target=when_reaper_listens, daemon=True, name="a3-replay",

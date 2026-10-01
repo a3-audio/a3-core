@@ -52,5 +52,42 @@ class CoreListens(unittest.TestCase):
         self.assertEqual(CORE.count("speak_stems(full=True)"), 2)   # recall, start-up
 
 
+def _calls_in(function_name):
+    tree = ast.parse(CORE)
+    function = next(node for node in ast.walk(tree)
+                    if isinstance(node, ast.FunctionDef)
+                    and node.name == function_name)
+    return [node for node in ast.walk(function) if isinstance(node, ast.Call)]
+
+
+def _is_named(node, name):
+    return isinstance(node, ast.Name) and node.id == name
+
+
+class ReaperHearsTheStemsOnceItListens(unittest.TestCase):
+    """At start-up the stems go to REAPER before it listens, and are then
+    marked as told -- after a cold boot only changes followed, and the desk
+    showed pairs REAPER did not play. The replay thread asks Core for a
+    recall through its own port once REAPER is quiet, so the full set is
+    sent again from the server thread, the only one that touches `_stems`."""
+
+    def setUp(self):
+        self.calls = _calls_in("replay_once_reaper_is_quiet")
+
+    def test_the_replay_asks_for_a_recall(self):
+        recalls = [call for call in self.calls
+                   if any(_is_named(arg, "OSC_ADDRESS_RECALL") for arg in call.args)]
+        self.assertEqual(1, len(recalls))
+
+    def test_the_recall_comes_after_the_evening(self):
+        evening = next(call for call in self.calls
+                       if _is_named(call.func, "replay_evening"))
+        recall = next((call for call in self.calls
+                       if any(_is_named(arg, "OSC_ADDRESS_RECALL")
+                              for arg in call.args)), None)
+        self.assertIsNotNone(recall, "no recall in the replay")
+        self.assertGreater(recall.lineno, evening.lineno)
+
+
 if __name__ == "__main__":
     unittest.main()
