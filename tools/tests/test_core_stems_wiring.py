@@ -16,22 +16,22 @@ CORE = (PACKAGE / "home/aaa/.local/bin/a3-core.py").read_text()
 
 
 class TheStateFile(unittest.TestCase):
-    """Only the return cursor is Core's own; the switches are StemDeck's
-    (spec stemdeck-remote)."""
+    """Only the selections are Core's own; the switches are StemDeck's
+    (specs stemdeck-remote, desk-stem-selector)."""
 
-    def test_the_cursor_is_written_down(self):
+    def test_the_selections_are_written_down(self):
         s = Stems()
-        s.return_cursor = 5
-        self.assertEqual(state_of([], _Master(), s)["stems"], {"return_cursor": 5})
+        s.selected = [1, 0, 0, 0, 2]
+        self.assertEqual(state_of([], _Master(), s)["stems"], {"selected": [1, 0, 0, 0, 2]})
 
-    def test_a_state_without_stems_is_a_fresh_mirror(self):
-        self.assertEqual(apply_stems({}).masks, [0] * 8)
+    def test_a_state_without_stems_selects_nothing(self):
+        self.assertEqual(apply_stems({}).selected, [0] * 5)
         self.assertEqual(apply_stems({"stems": "garbage"}).masks, [0] * 8)
 
-    def test_the_cursor_survives_the_round_trip(self):
+    def test_the_selections_survive_the_round_trip(self):
         s = Stems()
-        s.return_cursor = 3
-        self.assertEqual(apply_stems(state_of([], _Master(), s)).return_cursor, 3)
+        s.selected = [0, 3, 0, 0, 0]
+        self.assertEqual(apply_stems(state_of([], _Master(), s)).selected, [0, 3, 0, 0, 0])
 
 
 class _Master:
