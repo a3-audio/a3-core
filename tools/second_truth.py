@@ -33,7 +33,7 @@ SKIPPED_DIRS = {"tests", "test", "a3-motion-tests", "build", "build-make",
 #: The families of our words. Not `fx`: that family became `filter` on
 #: 2026-09-30, and `/fx/` in code is REAPER's (`/track/N/fx/...`).
 OUR_WORDS = re.compile(
-    r"^/(channel|master|filter|fx-return|vu|beat|tap|clockmode|state|device)(/|$)")
+    r"^/(channel|master|filter|aux-return|stem|vu|beat|tap|clockmode|state|device)(/|$)")
 IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 
 

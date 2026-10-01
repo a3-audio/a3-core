@@ -58,7 +58,15 @@ from a3_core_stems import Stems
 #: send_elevation(), the one reader of either, is never called.
 #: See issues/a3-core-elevation-cache-ist-tot.md and
 #: issues/a3-core-position-hat-keinen-rueckweg-und-keinen-halter.md.
-CHANNEL_FIELDS = ("toggle_fx", "toggle_pfl", "three_d")
+CHANNEL_FIELDS = ("toggle_fx", "toggle_cue", "three_d")
+
+#: The master's own moment: the stem cue and where the phones-mix knob stands
+#: (both needed to set the headphones' sends at a start, since 2026-10-01).
+MASTER_FIELDS = ("stem_cue", "phones_mix")
+
+#: Renamed fields: PFL became cue on 2026-10-01, and a file from before says
+#: toggle_pfl.
+RENAMED_CHANNEL_FIELDS = {"toggle_pfl": "toggle_cue"}
 
 #: How long a change waits for the next one before it is written. A hand
 #: sweeping a knob is one intention, and a file write in the path of every OSC
@@ -74,6 +82,9 @@ def state_of(channels, master, stems=None):
                      for channel in channels],
         "fx_mode": master.fx_mode.value,
     }
+    for field in MASTER_FIELDS:
+        if hasattr(master, field):
+            state[field] = getattr(master, field)
     if stems is not None:
         state["stems"] = stems.as_data()
     return state
@@ -95,9 +106,16 @@ def apply_state(state, channels, master):
     starting is worse than no state file at all.
     """
     for channel, remembered in zip(channels, state.get("channels", ())):
+        for old, new in RENAMED_CHANNEL_FIELDS.items():
+            if old in remembered and new not in remembered:
+                setattr(channel, new, remembered[old])
         for field in CHANNEL_FIELDS:
             if field in remembered:
                 setattr(channel, field, remembered[field])
+
+    for field in MASTER_FIELDS:
+        if field in state and hasattr(master, field):
+            setattr(master, field, state[field])
 
     if "fx_mode" in state:
         try:

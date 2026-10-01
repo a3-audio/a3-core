@@ -40,13 +40,15 @@ class FakeChannel:
     `azimuth`, `elevation` and `width`, which are not kept; see
     WhatIsKeptAndWhatIsNot below."""
     toggle_fx: bool = False
-    toggle_pfl: bool = False
+    toggle_cue: bool = False
     three_d: float = None
 
 
 @dataclass
 class FakeMaster:
     fx_mode: FXMode = FXMode.LOW_PASS
+    stem_cue: bool = False
+    phones_mix: float = 0.0
 
 
 def a_rig(channels=4):
@@ -57,7 +59,7 @@ class WhatComesBack(unittest.TestCase):
     def test_a_round_trip_returns_every_field(self):
         channels, master = a_rig()
         channels[0].toggle_fx = True
-        channels[2].toggle_pfl = True
+        channels[2].toggle_cue = True
         channels[3].toggle_fx = True
         master.fx_mode = FXMode.HIGH_PASS
 
@@ -90,10 +92,10 @@ class WhatTheFileMayNotKnow(unittest.TestCase):
 
     def test_a_missing_field_leaves_the_default_alone(self):
         channels, master = a_rig()
-        channels[0].toggle_pfl = True
+        channels[0].toggle_cue = True
         apply_state({"channels": [{"toggle_fx": True}]}, channels, master)
         self.assertTrue(channels[0].toggle_fx)
-        self.assertTrue(channels[0].toggle_pfl)
+        self.assertTrue(channels[0].toggle_cue)
 
     def test_a_field_the_module_does_not_know_is_ignored(self):
         channels, master = a_rig()
@@ -262,3 +264,20 @@ class TheFileItself(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CueSinceTheRename(unittest.TestCase):
+    """PFL became cue on 2026-10-01; a state file from before says toggle_pfl."""
+
+    def test_an_old_pfl_flag_comes_back_as_cue(self):
+        channels = [FakeChannel() for _ in range(4)]
+        apply_state({"channels": [{"toggle_pfl": True}]}, channels, FakeMaster())
+        self.assertTrue(channels[0].toggle_cue)
+
+    def test_the_stem_cue_and_the_knob_are_kept(self):
+        master = FakeMaster()
+        master.stem_cue, master.phones_mix = True, 0.3
+        state = state_of([FakeChannel()], master)
+        back = FakeMaster()
+        apply_state(state, [FakeChannel()], back)
+        self.assertEqual((back.stem_cue, back.phones_mix), (True, 0.3))

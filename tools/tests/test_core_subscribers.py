@@ -155,7 +155,7 @@ class WhatIsPassedOnWhenItArrives(unittest.TestCase):
         return relay_on_arrival(self.truth, address)
 
     def test_the_channel_strip_is_passed_on(self):
-        for parameter in ("gain", "volume", "fx-send", "3d"):
+        for parameter in ("gain", "volume", "aux-send", "3d"):
             with self.subTest(parameter=parameter):
                 self.assertTrue(self.relayed(f"/channel/1/{parameter}"))
 
@@ -166,18 +166,18 @@ class WhatIsPassedOnWhenItArrives(unittest.TestCase):
 
     def test_the_master_and_the_filter_are_passed_on(self):
         for address in ("/master/volume", "/master/booth", "/master/phones-mix",
-                        "/master/phones-volume", "/master/fx-return",
+                        "/master/phones-volume", "/master/aux-return",
                         "/filter/frequency", "/filter/resonance"):
             with self.subTest(address=address):
                 self.assertTrue(self.relayed(address))
 
     def test_a_flag_is_not_passed_on_here(self):
-        """`pfl`, the channel's filter key and the filter mode are announced
+        """`cue`, the channel's filter key and the filter mode are announced
         by announce_flag() and the mode branch -- to everybody, the sender
         included, because a lamp is status and the desk's own lamp has to
         follow its own key. Passing them on here as well would send each
         twice."""
-        for address in ("/channel/1/pfl", "/channel/4/filter", "/filter/mode"):
+        for address in ("/channel/1/cue", "/channel/4/filter", "/filter/mode"):
             with self.subTest(address=address):
                 self.assertFalse(self.relayed(address))
 

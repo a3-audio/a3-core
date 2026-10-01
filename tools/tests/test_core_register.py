@@ -91,7 +91,7 @@ class WhatATemplateMatches(unittest.TestCase):
 
     def test_a_regex_character_in_an_address_is_a_character(self):
         # /channel/n/fx-send and SCROLL_X+ both carry one.
-        self.assertTrue(matcher("/channel/{ch}/fx-send")("/channel/1/fx-send"))
+        self.assertTrue(matcher("/channel/{ch}/aux-send")("/channel/1/aux-send"))
         self.assertTrue(matcher("/scroll/x/+")("/scroll/x/+"))
         self.assertFalse(matcher("/scroll/x/+")("/scroll/x/"))
 

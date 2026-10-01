@@ -35,8 +35,8 @@ class TheGuardSees(unittest.TestCase):
     def test_an_address_in_python(self):
         self.assertTrue(self.found_in("desk.py", 'send("/channel/1/volume", 0.5)\n'))
 
-    def test_an_fx_return_address(self):
-        self.assertTrue(self.found_in("desk.py", 'send("/fx-return/stem/push", 1)\n'))
+    def test_an_aux_return_address(self):
+        self.assertTrue(self.found_in("desk.py", 'send("/aux-return/stem/push", 1)\n'))
 
     def test_an_ip_in_cpp(self):
         self.assertTrue(self.found_in("net.cpp", 'auto core = "192.168.8.10";\n'))
@@ -96,6 +96,12 @@ class TheSystemSaysNone(unittest.TestCase):
             self.skipTest(f"not beside this checkout: {', '.join(absent)} -- "
                           f"run this in the a3-system workspace")
         found = second_truth.findings(repos, PORTS)
+        self.assertEqual([f"{label}:{line}: {value!r}" for label, line, value in found], [])
+
+    def test_no_second_truth_in_this_checkout(self):
+        # Runs where the test above skips: in a worktree, Core's own words
+        # would otherwise first meet the guard after the merge.
+        found = second_truth.findings({"a3-core": ROOT}, PORTS)
         self.assertEqual([f"{label}:{line}: {value!r}" for label, line, value in found], [])
 
 

@@ -53,7 +53,7 @@ than continuously the way a trajectory moves a position.
 #: two branches are now one), so the desk behaves exactly as before and
 #: `/channel/n/led/pfl` finally means "this lamp is lit".
 LED_OF = {
-    "pfl": ("channel.pfl.led", lambda channel: float(channel.toggle_pfl)),
+    "cue": ("channel.cue.led", lambda channel: float(channel.toggle_cue)),
     "fx": ("channel.filter.led", lambda channel: float(channel.toggle_fx)),
 }
 
@@ -126,7 +126,7 @@ def remembered_messages(truth, channels):
 #: v3.2, never sent by anything since, and replaced by the continuous blend on
 #: `/channel/n/3d`. Two flags left, and both are keys somebody can still press.
 STATE_OF = {
-    "pfl": ("channel.pfl", lambda channel: float(channel.toggle_pfl)),
+    "cue": ("channel.cue", lambda channel: float(channel.toggle_cue)),
     "fx": ("channel.filter", lambda channel: float(channel.toggle_fx)),
 }
 
@@ -153,7 +153,7 @@ def lamp_messages(truth, channels, master):
     so they are the UI's business too.*
 
     That made the inversion everyone's problem instead of nobody's, so it is
-    gone -- see LED_OF. `/channel/n/led/pfl` now says whether that lamp is
+    gone -- see LED_OF. `/channel/n/cue/led` (pfl until 2026-10-01) now says whether that lamp is
     lit, which is what its name always claimed.
 
     Kept separate from flag_messages because they are still two different
@@ -167,12 +167,14 @@ def lamp_messages(truth, channels, master):
 
     yield (truth.address("filter.led"),
            FX_MODE_WORDS[master.fx_mode.name])
+    # The stem cue's lamp, the aux-return display's C field (2026-10-01).
+    yield truth.address("stem.cue.led"), float(getattr(master, "stem_cue", False))
 
 
 def flag_messages(truth, channels, master):
     """The same flags as settings, on the addresses they arrive on.
 
-    A plain 0 or 1 on `/channel/n/pfl`, and the filter mode as a number on
+    A plain 0 or 1 on `/channel/n/cue`, and the filter mode as a number on
     `/filter/mode` -- the spelling A3 Motion sends, and the one
     a3_core_buttons already accepts on the way in. Nothing here needs to be
     learned: a device that can *set* the flag can read it.
@@ -182,6 +184,7 @@ def flag_messages(truth, channels, master):
             yield truth.address(control, ch=index + 1), read(channel)
 
     yield truth.address("filter.mode"), FX_MODE_NUMBERS[master.fx_mode.name]
+    yield truth.address("stem.cue"), float(getattr(master, "stem_cue", False))
 
 
 class Relayed:

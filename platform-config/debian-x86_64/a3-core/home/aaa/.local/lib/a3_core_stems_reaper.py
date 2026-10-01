@@ -27,7 +27,7 @@ def announcements(stems, truth):
            for c, pair in enumerate(stems.channel_pair)]
     plays = [int(not stems.muted_on_return(pair))
              for pair in range(1, len(stems.return_muted) + 1)]
-    out.append((truth.address("fx-return.stem"), [stems.return_cursor] + plays))
+    out.append((truth.address("aux-return.stem"), [stems.return_cursor] + plays))
     return out
 
 

@@ -63,14 +63,14 @@ class TheChannelStrip(ReverseCase):
                                    "track_channelbus")
                 self.assertEqual(entry.key, "channel.volume")
 
-    def test_the_fx_send_is_a_send_and_not_a_parameter(self):
+    def test_the_aux_send_is_a_send_and_not_a_parameter(self):
         """It leaves the track rather than sitting on it, so REAPER reports it
-        on a shape of its own. Send 1 of the channelbus is the FX bus --
+        on a shape of its own. Send 1 of the channelbus is the aux bus --
         measured on 2026-10-01: sends 1-5 of track 1 set to five levels, the
-        maintainer read enc_fx on send 1 (2 enc_main, 3 dec_phones pre,
-        4 dec_phones post, 5 VU)."""
+        maintainer read enc_fx on send 1 (2 enc_main, 3 enc_phones pre,
+        4 enc_phones post, 5 VU)."""
         entry = self.found("/track/1/send/1/volume", "track_channelbus")
-        self.assertEqual(entry.key, "channel.fx-send")
+        self.assertEqual(entry.key, "channel.aux-send")
         self.assertEqual(entry.scope, CHANNEL)
 
     def test_another_send_of_the_same_track_is_not_it(self):
@@ -130,7 +130,7 @@ class TheMasterSection(ReverseCase):
         """Since 2026-09-29 the FX return is its own track, 28 "Return", with
         one Airwindows PurestGain as its first plug-in."""
         entry = self.found("/track/28/fx/1/fxparam/1/value", "aux_return")
-        self.assertEqual(entry.key, "master.fx-return")
+        self.assertEqual(entry.key, "master.aux-return")
         self.assertEqual(entry.curve, "slope_volume")
 
     def test_the_old_aux_return_address_is_not_answered(self):
@@ -141,7 +141,7 @@ class TheMasterSection(ReverseCase):
 
     def test_the_phones_mix_is_not_read_back_from_a_track(self):
         """Since the template of 2026-10-01 there is no ph-mix track: the
-        crossfade lives in the channel buses' sends to dec_phones, and Core's
+        crossfade lives in the channel buses' sends to enc_phones, and Core's
         cue logic for it follows. Until then nothing reports it."""
         self.assertFalse(any(e.key == "master.phones-mix" for e in REVERSALS))
 

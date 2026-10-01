@@ -36,7 +36,7 @@ a3-core.py's `broadcast`.
   nothing for REAPER to report. Core remembers it instead; same place, same
   reason.
 
-- The toggles (pfl, fx, 4d) and the filter mode. They are Core's own state,
+- The toggles (cue, fx, 4d) and the filter mode. They are Core's own state,
   not REAPER's, and they come back from REAPER as a mute rather than as the
   flag they set. Core broadcasts them itself, on the addresses they arrive on.
 
@@ -119,11 +119,11 @@ REVERSALS = (
     Reverse(FXPARAM, "track_channelbus", "gain", GAINS,
             "slope_volume", "channel.volume", CHANNEL),
 
-    # The FX send, which is a send and not a parameter -- it leaves the track
+    # The aux send, which is a send and not a parameter -- it leaves the track
     # rather than sitting on it. No action script drives it, so relaying it is
     # as safe as relaying the gain.
-    Reverse(SEND, "track_channelbus", "fx", None,
-            "slope_constant_power", "channel.fx-send", CHANNEL),
+    Reverse(SEND, "track_channelbus", "aux", None,
+            "slope_constant_power", "channel.aux-send", CHANNEL),
 
     # The one filter all four channels share. Written to every channel's input
     # track and read back from whichever reports first; the answer is the same
@@ -147,9 +147,9 @@ REVERSALS = (
             "slope_volume", "master.booth", GLOBAL),
     Reverse(FXPARAM, "track_phones", "phones_gain", 1,
             "slope_volume", "master.phones-volume", GLOBAL),
-    # The FX return: track "Return", one PurestGain, since 2026-09-29.
+    # The aux return: track "Return", one PurestGain, since 2026-09-29.
     Reverse(FXPARAM, "aux_return", "aux_gain", GAINS,
-            "slope_volume", "master.fx-return", GLOBAL),
+            "slope_volume", "master.aux-return", GLOBAL),
 
     # The headphone mix used to be read back here as ph-mix's track volume.
     # That track is gone (template of 2026-10-01); the crossfade lives in the

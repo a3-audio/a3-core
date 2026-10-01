@@ -34,7 +34,7 @@ class WhatCoreHearsAndSays(unittest.TestCase):
                          {("mixer", "both"), ("motion", "both")})
 
     def test_a_lamp_only_goes_out(self):
-        self.assertEqual(entries_for("/channel/{ch}/pfl/led"),
+        self.assertEqual(entries_for("/channel/{ch}/cue/led"),
                          {("mixer", "out"), ("motion", "out")})
 
     def test_the_position_only_comes_in(self):
@@ -58,8 +58,8 @@ class WhatCoreHearsAndSays(unittest.TestCase):
 
     def test_an_entry_says_where_it_is_written(self):
         (entry,) = [e for e in reg.build(TRUTH)["entries"]
-                    if e["address"] == "/master/fx-return" and e["device"] == "mixer"]
-        self.assertEqual(entry["source"], "a3-osc.json: master.fx-return")
+                    if e["address"] == "/master/aux-return" and e["device"] == "mixer"]
+        self.assertEqual(entry["source"], "a3-osc.json: master.aux-return")
         self.assertTrue(entry["note"])
 
 

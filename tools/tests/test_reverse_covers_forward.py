@@ -228,7 +228,7 @@ class TheMasterBendsBothWaysAlike(unittest.TestCase):
         # It said fx/3 at the call site, and slot 3 of enc_fx had become the
         # DualDelay: the return pot was writing delay parameters. A slot the
         # layout names moves with the project; a literal does not.
-        asked = [call.args[0].value for call in calls_in(self.branches["fx-return"])
+        asked = [call.args[0].value for call in calls_in(self.branches["aux-return"])
                  if isinstance(call.func, ast.Attribute)
                  and call.func.attr == "fx_slot"
                  and isinstance(call.args[0], ast.Constant)]
@@ -258,7 +258,7 @@ NOT_ANSWERED_FOR = {
     "channel.filter.frequency": "REAPER holds it with the accent on top; "
                                 "relaying that ratchets",
     "channel.filter.q": "the same",
-    "channel.pfl": "a toggle of Core's own; comes back as a mute",
+    "channel.cue": "a toggle of Core's own; its level goes out as two sends",
     "channel.filter": "the same",
     # An encoder's clicks, not a value: there is nothing in REAPER to read
     # back. The assignment it changes is Core's own (a3_core_stems) and is

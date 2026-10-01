@@ -42,7 +42,7 @@ MINIMAL = json.dumps({
     # Master is required: defaulting those would drive tracks 0 and 0, on the
     # master bus of all places.
     "master": {"track_masterbus": 1, "track_booth": 2, "track_phones": 3,
-               "aux_return": 25},
+               "aux_return": 25, "track_stems": 31},
     "addresses": {
         "reaper_track_volume": "/track/{track}/volume",
         "led_pfl": "/channel/{channel}/led/pfl",
@@ -68,7 +68,7 @@ class TrackMap(unittest.TestCase):
             "channels": [{"track_input": 12}],
             "master": {"track_masterbus": 1, "track_booth": 2,
                        "track_phones": 3, "track_ph_mix": 8, "track_stem_pfl": 30,
-                       "aux_return": 25},
+                       "aux_return": 25, "track_stems": 31},
             "addresses": {}})
         with self.assertRaises(LayoutError):
             load_layout(written(broken))
@@ -114,7 +114,7 @@ FULL = json.dumps({
          "enc_main_elevation": 9, "enc_phones_solo": 12}
     ],
     "master": {"track_masterbus": 1, "track_booth": 2, "track_phones": 3,
-               "aux_return": 25},
+               "aux_return": 25, "track_stems": 31},
     "fx_slots": {"gain": 1, "eq": 2, "hipass": 3, "lopass": 4},
     "gain_params": {"channelbus": [1, 15], "masterbus": [1, 15, 29]},
     "addresses": {},
@@ -158,7 +158,7 @@ class TheRestOfTheMap(unittest.TestCase):
 SHAPES = json.dumps({
     "channels": [],
     "master": {"track_masterbus": 1, "track_booth": 2, "track_phones": 3,
-               "aux_return": 25},
+               "aux_return": 25, "track_stems": 31},
     "addresses": {
         "fx_param": "/track/{track}/fx/{slot}/fxparam/{param}/value",
         "track_volume": "/track/{track}/volume",
@@ -234,7 +234,7 @@ class TheMapRunsBothWays(unittest.TestCase):
                  "enc_main_elevation": 14, "enc_phones_solo": 17},
             ],
             "master": {"track_masterbus": 1, "track_booth": 2,
-                       "track_phones": 3, "aux_return": 25},
+                       "track_phones": 3, "aux_return": 25, "track_stems": 31},
             "addresses": {},
         })))
 
@@ -265,8 +265,8 @@ SENDS = json.dumps({
                   "enc_main_azimuth": 8,
                   "enc_main_elevation": 9, "enc_phones_solo": 12}],
     "master": {"track_masterbus": 1, "track_booth": 2, "track_phones": 3,
-               "aux_return": 25},
-    "sends": {"fx": 3},
+               "aux_return": 25, "track_stems": 31},
+    "sends": {"aux": 3},
     "addresses": {"track_send": "/track/{track}/send/{send}/volume"},
 })
 
@@ -282,7 +282,7 @@ class TheSends(unittest.TestCase):
     """
 
     def test_a_send_is_named_rather_than_numbered(self):
-        self.assertEqual(load_layout(written(SENDS)).send("fx"), 3)
+        self.assertEqual(load_layout(written(SENDS)).send("aux"), 3)
 
     def test_a_send_nobody_has_is_refused(self):
         """Loudly, like fx_slot. A send resolving to None would address
@@ -292,7 +292,7 @@ class TheSends(unittest.TestCase):
 
     def test_a_layout_without_sends_refuses_every_name(self):
         with self.assertRaises(LayoutError):
-            load_layout(written(MINIMAL)).send("fx")
+            load_layout(written(MINIMAL)).send("aux")
 
     def test_the_address_is_built_by_the_layout(self):
         self.assertEqual(

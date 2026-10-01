@@ -24,6 +24,9 @@ wieder REAPER-Nachrichten macht.
   Einstellung, sondern Verkehr.
 """
 
+import re
+from a3_osc import TruthError
+
 #: Was Core zwar weitergibt, aber nicht zurückspielt: der Crossfade steht in
 #: a3_core_state. Alles andere, was Core weitergibt (`relayed_to` in der einen
 #: Wahrheit), ist ein Wert, den REAPER hält -- genau das, was zurückkommt.
@@ -33,6 +36,27 @@ wieder REAPER-Nachrichten macht.
 #: Präfixen, die beim Umbenennen von /fx nach /filter (2026-09-30) den Filter
 #: still verloren und den Kanalschalter als Wert zurückgespielt hätte.
 NOT_REPLAYED = frozenset(("channel.3d",))
+
+#: Addresses renamed since an evening may have been written: FX send / FX
+#: return became aux send / aux return on 2026-10-01, wire included. An old
+#: evening still says fx and comes back under the new name instead of being
+#: dropped as an address the truth no longer has.
+#: The new name is a truth key, its address built from the truth -- a literal
+#: here would be a second truth.
+RENAMED = ((re.compile(r"^/channel/(?P<ch>\d+)/fx-send$"), "channel.aux-send"),
+           (re.compile(r"^/master/fx-return$"), "master.aux-return"))
+
+
+def _current_name(truth, address):
+    for old, key in RENAMED:
+        found = old.match(address)
+        if found:
+            fields = {name: int(value) for name, value in found.groupdict().items()}
+            try:
+                return truth.address(key, **fields)
+            except TruthError:
+                return None
+    return address
 
 
 def evening_state(relayed):
@@ -56,7 +80,8 @@ def replayable(truth, state):
     for address, value in values.items():
         if not isinstance(address, str):
             continue
-        found = truth.match(address)
+        address = _current_name(truth, address)
+        found = truth.match(address) if address else None
         if found is None:
             continue
         key = found[0]

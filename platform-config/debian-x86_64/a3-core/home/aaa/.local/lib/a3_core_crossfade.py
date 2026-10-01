@@ -7,9 +7,9 @@ tracks do to each other; the name `stereo` there is historical.
 
 It arrives on `/channel/n/3d`, A3 Motion's per-channel pot.
 
-It used to arrive on `/channel/n/fx-send` as well -- the mixer's pot was the
+It used to arrive on `/channel/n/fx-send` (now `aux-send`) as well -- the mixer's pot was the
 only continuous control the desk had for this before Motion existed. Since
-2026-09-12 that pot is the FX send again and this has one road. The decision
+2026-09-12 that pot is the aux send again and this has one road. The decision
 and its price (the desk has no 3D control any more) are in
 issues/a3-core-fx-send-fuehrt-noch-die-3d-funktion.md.
 

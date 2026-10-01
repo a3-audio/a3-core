@@ -101,12 +101,13 @@ class TheReturn(unittest.TestCase):
 
 
 class NoFreePair(unittest.TestCase):
-    def test_no_free_pair_turn_and_push_do_nothing(self):
+    def test_no_free_pair_turn_lands_on_c_and_mutes_nothing(self):
+        # Since the C field (2026-10-01) there is always somewhere to turn to.
         s = Stems(pairs=4)             # a rig with as many pairs as channels
         s.channel_pair = [1, 2, 3, 4]
         s.turn_return(+1)
-        s.push_return()
-        self.assertEqual(s.return_cursor, 0)
+        self.assertEqual(s.return_cursor, Stems.CUE)
+        self.assertEqual(s.push_return(), "cue")
         self.assertEqual(s.return_muted, [False] * 4)
 
 
@@ -146,3 +147,30 @@ class StateOnDisk(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheCueField(unittest.TestCase):
+    """The aux-return display's C field (2026-10-01): a cursor position after
+    the free stems; a push there is the stem cue, not a stem's AUX."""
+
+    def test_turning_past_the_last_free_stem_lands_on_c(self):
+        s = Stems()
+        s.return_cursor = 8
+        s.turn_return(+1)
+        self.assertEqual(s.return_cursor, Stems.CUE)
+
+    def test_turning_on_from_c_comes_back_to_the_first_free_stem(self):
+        s = Stems()
+        s.return_cursor = Stems.CUE
+        s.turn_return(+1)
+        self.assertEqual(s.return_cursor, 1)
+
+    def test_a_push_on_c_says_cue_and_mutes_nothing(self):
+        s = Stems()
+        s.return_cursor = Stems.CUE
+        self.assertEqual(s.push_return(), "cue")
+        self.assertEqual(s.return_muted, [False] * 8)
+
+    def test_a_push_on_a_stem_says_nothing(self):
+        s = Stems()
+        self.assertIsNone(s.push_return())

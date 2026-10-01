@@ -99,15 +99,15 @@ class TheRestOfTheMap(unittest.TestCase):
                      "channel_volume", "stereo_enc", "enc", "enc_pots"):
             self.assertGreater(self.layout.fx_slot(slot), 0, slot)
 
-    def test_the_fx_send_is_named_and_is_the_one_that_was_measured(self):
+    def test_the_aux_send_is_named_and_is_the_one_that_was_measured(self):
         """Send 1 of a channelbus reaches enc_fx, where the delay sits.
 
         Measured on 2026-10-01 with the template that moved the cue into the
         sends: sends 1-5 of track 1 set to five levels, the maintainer read
-        1 enc_fx, 2 enc_main, 3 dec_phones pre, 4 dec_phones post, 5 VU.
+        1 enc_fx, 2 enc_main, 3 enc_phones pre, 4 enc_phones post, 5 VU.
         (Before: send 3, measured 2026-09-12 on the template with PFL tracks.)
         """
-        self.assertEqual(self.layout.send("fx"), 1)
+        self.assertEqual(self.layout.send("aux"), 1)
 
     def test_every_gain_list_a3_core_asks_for_is_there(self):
         for name in ("channelbus", "masterbus", "boothbus", "aux_return"):

@@ -38,12 +38,26 @@ class _Master:
     fx_mode = _Mode()
 
 
+class CueGoesThroughTheSends(unittest.TestCase):
+    """Since 2026-10-01 the cue is the channel buses' sends to enc_phones."""
+
+    def test_the_stem_family_is_mapped(self):
+        self.assertIn('("stem", osc_handler_stem)', CORE)
+
+    def test_the_channel_cue_has_its_branch(self):
+        self.assertIn('elif parameter == "cue":', CORE)
+        self.assertNotIn('parameter == "pfl"', CORE)
+
+    def test_cue_knob_and_stem_cue_send_the_levels(self):
+        self.assertGreaterEqual(CORE.count("send_cue_levels("), 4)   # def, cue, stem, knob
+
+
 class CoreListens(unittest.TestCase):
     def test_core_still_parses(self):
         ast.parse(CORE)
 
     def test_the_return_family_is_mapped(self):
-        self.assertIn('("fx-return", osc_handler_fx_return)', CORE)
+        self.assertIn('("aux-return", osc_handler_aux_return)', CORE)
 
     def test_the_channel_turn_has_its_branch(self):
         self.assertIn('elif parameter == "stem.turn":', CORE)
@@ -89,12 +103,33 @@ class ReaperHearsTheStemsOnceItListens(unittest.TestCase):
         self.assertGreater(recall.lineno, evening.lineno)
 
 
+class ReaperHearsTheCueOnceItListens(unittest.TestCase):
+    """The cue levels go out at start-up before REAPER listens, like the
+    stems; the same recall that repeats the stems must repeat them, or after
+    a cold boot the phones hear the template's sends, everything at 0 dB."""
+
+    def test_the_recall_sends_the_cue_levels(self):
+        calls = _calls_in("osc_handler_recall")
+        self.assertEqual(1, len([call for call in calls
+                                 if _is_named(call.func, "send_cue_levels")]))
+
+
+class ThePhonesMixIsWrittenDown(unittest.TestCase):
+    """phones_mix is one of the state file's fields; a knob that moves it
+    and never writes it comes back from a restart where it last was saved."""
+
+    def test_the_master_handler_remembers(self):
+        calls = _calls_in("osc_handler_master")
+        self.assertEqual(1, len([call for call in calls
+                                 if _is_named(call.func, "remember_state")]))
+
+
 class TheReturnSaysWhatItCannotServe(unittest.TestCase):
     """A key of the return family that no branch serves is written down as
     unknown, like the channel handler's `else` -- not left looking served."""
 
     def test_the_last_else_notes_it_as_unknown(self):
-        calls = _calls_in("osc_handler_fx_return")
+        calls = _calls_in("osc_handler_aux_return")
         unknown = [call for call in calls
                    if isinstance(call.func, ast.Attribute)
                    and _is_named(call.func.value, "traffic")
