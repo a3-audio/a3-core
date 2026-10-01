@@ -98,6 +98,12 @@ class TheSystemSaysNone(unittest.TestCase):
         found = second_truth.findings(repos, PORTS)
         self.assertEqual([f"{label}:{line}: {value!r}" for label, line, value in found], [])
 
+    def test_no_second_truth_in_this_checkout(self):
+        # Runs where the test above skips: in a worktree, Core's own words
+        # would otherwise first meet the guard after the merge.
+        found = second_truth.findings({"a3-core": ROOT}, PORTS)
+        self.assertEqual([f"{label}:{line}: {value!r}" for label, line, value in found], [])
+
 
 if __name__ == "__main__":
     unittest.main()

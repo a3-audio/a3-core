@@ -70,6 +70,10 @@ class WhatIsPlayedBack(unittest.TestCase):
         played = self.replay({"/channel/2/fx-send": 0.3, "/master/fx-return": 0.1})
         self.assertEqual(played, {"/channel/2/aux-send": 0.3, "/master/aux-return": 0.1})
 
+    def test_an_old_name_out_of_range_is_dropped_not_raised(self):
+        played = self.replay({"/channel/99/fx-send": 0.3})
+        self.assertEqual(played, {})
+
     def test_lamps_are_status_and_not_settings(self):
         played = self.replay({"/channel/1/cue/led": 1.0, "/filter/led": "low_pass"})
         self.assertEqual(played, {})
