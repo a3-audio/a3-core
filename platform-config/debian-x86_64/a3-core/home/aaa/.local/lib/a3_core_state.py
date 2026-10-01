@@ -60,9 +60,10 @@ from a3_core_stems import Stems
 #: issues/a3-core-position-hat-keinen-rueckweg-und-keinen-halter.md.
 CHANNEL_FIELDS = ("toggle_fx", "toggle_cue", "three_d")
 
-#: The master's own moment: the stem cue and where the phones-mix knob stands
-#: (both needed to set the headphones' sends at a start, since 2026-10-01).
-MASTER_FIELDS = ("stem_cue", "phones_mix")
+#: The master's own moment: where the phones-mix knob stands (needed to set
+#: the headphones' sends at a start, since 2026-10-01). The stem cue left with
+#: the C field (spec stemdeck-remote); an old file's stem_cue is ignored.
+MASTER_FIELDS = ("phones_mix",)
 
 #: Renamed fields: PFL became cue on 2026-10-01, and a file from before says
 #: toggle_pfl.

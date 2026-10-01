@@ -52,7 +52,7 @@ class TheCues(unittest.TestCase):
         a = levels(cues=(True, False, False, False), mix=0.3)
         self.assertAlmostEqual(a["decks"][0]["post"], a["decks"][1]["post"])
 
-    def test_the_stem_cue_is_like_a_deck_cue(self):
+    def test_a_stem_cued_in_stemdeck_is_like_a_deck_cue(self):
         on = levels(stem=True, mix=0.25)
         self.assertAlmostEqual(on["stem"], math.cos(0.25 * math.pi / 2))
         self.assertEqual(levels(stem=False, mix=0.0)["stem"], 0.0)
@@ -64,10 +64,12 @@ class TheCues(unittest.TestCase):
             self.assertAlmostEqual(levels(mix=mix)["return"]["post"],
                                    math.sin(mix * math.pi / 2))
 
-    def test_the_c_field_cues_the_return_with_the_stems(self):
-        on = levels(stem=True, mix=0.25)
+    def test_a_deck_cue_brings_the_return(self):
+        # Spec stemdeck-remote: the C field is gone; cueing a deck brings the
+        # return (its FX) along on the cue side.
+        on = levels(cues=(False, True, False, False), mix=0.25)
         self.assertAlmostEqual(on["return"]["pre"], math.cos(0.25 * math.pi / 2))
-        self.assertEqual(levels(stem=False, mix=0.0)["return"]["pre"], 0.0)
+        self.assertEqual(levels(stem=True, mix=0.0)["return"]["pre"], 0.0)
 
     def test_the_knob_is_held_to_its_range(self):
         self.assertAlmostEqual(levels(cues=(True,) * 4, mix=-1)["decks"][0]["pre"], UNITY)
