@@ -43,6 +43,7 @@ MASTER_NAME = {
     "track_booth": "dec_booth",
     "track_phones": "dec_phones",
     "track_ph_mix": "ph-mix",
+    "track_stem_pfl": "stem-pfl",
     "aux_return": "Return",
 }
 
