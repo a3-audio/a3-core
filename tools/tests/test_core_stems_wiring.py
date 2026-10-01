@@ -114,6 +114,16 @@ class ReaperHearsTheCueOnceItListens(unittest.TestCase):
                                  if _is_named(call.func, "send_cue_levels")]))
 
 
+class ThePhonesMixIsWrittenDown(unittest.TestCase):
+    """phones_mix is one of the state file's fields; a knob that moves it
+    and never writes it comes back from a restart where it last was saved."""
+
+    def test_the_master_handler_remembers(self):
+        calls = _calls_in("osc_handler_master")
+        self.assertEqual(1, len([call for call in calls
+                                 if _is_named(call.func, "remember_state")]))
+
+
 class TheReturnSaysWhatItCannotServe(unittest.TestCase):
     """A key of the return family that no branch serves is written down as
     unknown, like the channel handler's `else` -- not left looking served."""

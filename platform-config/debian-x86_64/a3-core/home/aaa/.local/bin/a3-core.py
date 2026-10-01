@@ -930,6 +930,7 @@ def osc_handler_master(client_address: Tuple[str, int], address: str,
         # dec_phones since 2026-10-01 -- see a3_core_cue.
         master_info.phones_mix = value
         send_cue_levels()
+        remember_state()
 
     if parameter == "phones-volume":
         val = slope_volume(value)
