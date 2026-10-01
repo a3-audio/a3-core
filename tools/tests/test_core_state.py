@@ -231,8 +231,11 @@ class TheFileItself(unittest.TestCase):
         for value in range(20):
             state.remember({"fx_mode": value})
 
+        # Wait for the count, not the file: the writer replaces the file and
+        # counts after that, and a check in between read 0 on a loaded rig
+        # (2026-10-02, load 7.6 on four cores).
         deadline = time.monotonic() + 2.0
-        while not self.path.exists() and time.monotonic() < deadline:
+        while state.writes < 1 and time.monotonic() < deadline:
             time.sleep(0.01)
         self.assertEqual(state.writes, 1)
         self.assertEqual(StateFile(self.path).load(), {"fx_mode": 19})
