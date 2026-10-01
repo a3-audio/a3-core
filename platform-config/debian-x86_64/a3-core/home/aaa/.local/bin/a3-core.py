@@ -57,7 +57,7 @@ from a3_core_cue import send_levels   # noqa: E402
 from a3_core_stems_reaper import (analog_messages,   # noqa: E402
                                   announcements as stem_announcements,
                                   changed_messages, command_messages, pair_of)
-from a3_core_presence import STEMDECK_SILENCE, Presence   # noqa: E402
+from a3_core_presence import STEMDECK_SILENCE, StemDeckWatch   # noqa: E402
 from a3_core_recall import (FX_MODE_NUMBERS, FX_MODE_WORDS,   # noqa: E402
                             Relayed, STATE_OF, led_message,
                             recall_messages)   # noqa: E402
@@ -545,7 +545,7 @@ def speak_stems(full=False):
 
 #: Where StemDeck listens: learnt from its hello, None while it is silent.
 _stemdeck_client = None
-_stemdeck_presence = Presence(STEMDECK_SILENCE)
+_stemdeck_watch = StemDeckWatch(STEMDECK_SILENCE)
 
 
 def send_to_stemdeck(commands):
@@ -560,7 +560,7 @@ def notice_stemdeck_silence(now):
     """A minute without StemDeck's hello: nothing is on its buses any more,
     so the desk shows A and the channels' analog inputs play again."""
     global _stemdeck_client
-    if not _stemdeck_presence.gone(now):
+    if not _stemdeck_watch.silence(now):
         return
     print("stemdeck: silent for a minute, channels back to analog")
     _stemdeck_client = None
@@ -1179,10 +1179,11 @@ def osc_handler_device_hello(client_address: Tuple[str, int], address: str,
 
 
 def stemdeck_said_hello(host, now):
-    """StemDeck is there. When that is news, learn where it listens and ask
-    it for every stem's switches -- it may have restarted with others."""
+    """StemDeck is there. When that is news (a3_core_presence.StemDeckWatch),
+    learn where it listens and ask it for every stem's switches -- it may have
+    restarted with others."""
     global _stemdeck_client
-    if not _stemdeck_presence.heard(now) and _stemdeck_client is not None:
+    if not _stemdeck_watch.hello(host, now):
         return
     _stemdeck_client = WatchedClient(
         SimpleUDPClient(host, _truth.endpoint("stemdeck", "osc")[1]), "stemdeck")

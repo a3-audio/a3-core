@@ -72,6 +72,16 @@ class StemDeckIsWired(unittest.TestCase):
                  for c in calls}
         self.assertTrue({"forget", "speak_stems"} <= names, names)
 
+    def test_the_hello_and_the_silence_ask_the_watch(self):
+        # The sequences themselves are tested in test_core_presence.
+        self.assertIn("_stemdeck_watch.hello(", _source_of("stemdeck_said_hello"))
+        self.assertIn("_stemdeck_watch.silence(", _source_of("notice_stemdeck_silence"))
+
+    def test_a_stemdeck_hello_is_heard_before_the_silence_check(self):
+        source = _source_of("osc_handler_device_hello")
+        self.assertLess(source.index("stemdeck_said_hello("),
+                        source.index("notice_stemdeck_silence("))
+
     def test_every_hello_checks_for_silence(self):
         self.assertIn("notice_stemdeck_silence(", _source_of("osc_handler_device_hello"))
 
