@@ -25,8 +25,9 @@ def reaper_messages(stems, layout, address):
 def announcements(stems, truth):
     out = [(truth.address("channel.stem", ch=c + 1), pair)
            for c, pair in enumerate(stems.channel_pair)]
-    muted = int(bool(stems.return_cursor) and stems.muted_on_return(stems.return_cursor))
-    out.append((truth.address("fx-return.stem"), [stems.return_cursor, muted]))
+    plays = [int(not stems.muted_on_return(pair))
+             for pair in range(1, len(stems.return_muted) + 1)]
+    out.append((truth.address("fx-return.stem"), [stems.return_cursor] + plays))
     return out
 
 

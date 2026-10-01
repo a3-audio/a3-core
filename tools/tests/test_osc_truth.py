@@ -203,6 +203,9 @@ class TheStemWords(unittest.TestCase):
         for key in ("channel.stem", "fx-return.stem"):
             self.assertEqual((a[key]["from"], a[key]["to"]), (["core"], ["mixer", "motion"]), key)
 
+    def test_the_return_carries_its_cursor_and_all_eight_pairs(self):
+        self.assertEqual(self.t.addresses()["fx-return.stem"]["args"], "i" * 9)
+
     def test_a_turn_is_matched_back(self):
         self.assertEqual(self.t.match("/channel/3/stem/turn"), ("channel.stem.turn", {"ch": 3}))
 

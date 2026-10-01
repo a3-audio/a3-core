@@ -105,7 +105,18 @@ class WhatCoreSays(unittest.TestCase):
         said = dict((a, v) for a, v in announcements(s, TRUTH))
         self.assertEqual(said["/channel/4/stem"], 1)
         self.assertEqual(said["/channel/1/stem"], 0)
-        self.assertEqual(said["/fx-return/stem"], [2, 0])
+        # cursor, then pairs 1-8: 1 plays on the return, 0 is silent there
+        self.assertEqual(said["/fx-return/stem"], [2, 0, 1, 1, 1, 1, 1, 1, 1])
+
+    def test_the_return_says_every_pair(self):
+        """The desk's return display draws all eight pairs (2x4 squares,
+        filled = plays), so Core says each one, not just the cursor's."""
+        s = Stems()
+        s.turn_channel(0, +3)                           # channel 1 holds pair 3
+        s.turn_return(+1)                               # cursor 1 -> 2
+        s.push_return()                                 # pair 2 muted on the return
+        said = dict((a, v) for a, v in announcements(s, TRUTH))
+        self.assertEqual(said["/fx-return/stem"], [2, 1, 0, 0, 1, 1, 1, 1, 1])
 
 
 if __name__ == "__main__":
