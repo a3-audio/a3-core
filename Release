@@ -2,19 +2,19 @@ Origin: a3-audio
 Label: a3-core
 Suite: stable
 Codename: stable
-Date: Thu, 01 Oct 2026 15:53:19 +0000
+Date: Thu, 01 Oct 2026 15:59:07 +0000
 Architectures: amd64
 Components: main
 Description: a3-core apt repository
 MD5Sum:
- ecbd4bcd658b7a87e19e1ef20435aae4 1359 Packages
- 0a35c228c2d6166adc8b68650114af29 681 Packages.gz
- 59f8f7b94246feb56c50a3762edc9959 281 Release
+ 9ddd17c9da8e95c88aaaa89de7cfd215 1359 Packages
+ af7821bec720ecffee06550119c385ed 682 Packages.gz
+ 925e617fe5b31d8ba194891c3b88ef6d 281 Release
 SHA1:
- a0ead69181d141f42a8546a1bc43a380fb78cf88 1359 Packages
- 5685f411c3ab389a739edf667e28b89f0904f384 681 Packages.gz
- 914a5d96cfc1a0f092a3ca7957ec45f16160f528 447 Release
+ 4323f8e1cfe981322dfd3da9447dd114435f966d 1359 Packages
+ 21427889b97a794e1ecc21985a0363116b654a6f 682 Packages.gz
+ d02304a9092fdf39291bdff283ea44e7b1484e17 447 Release
 SHA256:
- 4098332d9d3b134d7cf896174ea65f268439188d013f9af4ab0c7f5c120e9030 1359 Packages
- 165da5effaaf1b03b6ecdd2c57826fa49be623b76bae1310271b5b6276755c0d 681 Packages.gz
- d267846665df9ca2ad048390dd31103720e27c9377dc690736ebaab4eb5b9af4 671 Release
+ ad4abdae8ac956a55b8425c6c0ce9ee6587603c9b36dde0f24cb55cf670c1908 1359 Packages
+ 7f2c2ffb83ca8baa0a3d4affb3bd3ba9f80c1606ed02e5454cafdbe0f766a888 682 Packages.gz
+ 230826545fe8b0528f77c68001f341e17018068238f179ddc578f64476f22029 671 Release
