@@ -94,6 +94,29 @@ class TheDesksBootstrap(unittest.TestCase):
                           second_truth.ALLOWED_LITERALS)
 
 
+class TheCppKeepersBootstrap(unittest.TestCase):
+    """Step 3 of truth-from-core: StemDeck's and Motion's keepers know the
+    announce port and word before they have a truth -- there and nowhere
+    else in those repos."""
+
+    KEEPER = 'constexpr int announcePort = 7790;\ninline const char* announceAddress = "/core/here";\n'
+
+    def found(self, repo, name):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / repo
+            path = root / name
+            path.parent.mkdir(parents=True)
+            path.write_text(self.KEEPER)
+            return second_truth.findings({repo: root}, PORTS)
+
+    def test_the_keepers_may_say_it(self):
+        self.assertEqual(self.found("stemdeck", "Source/TruthKeeper.h"), [])
+        self.assertEqual(self.found("a3-motion-ui", "src/a3-motion-engine/TruthKeeper.hh"), [])
+
+    def test_any_other_file_may_not(self):
+        self.assertEqual(len(self.found("stemdeck", "Source/Elsewhere.h")), 2)
+
+
 class TheSystemSaysNone(unittest.TestCase):
     """Across the checkouts beside this one -- the a3-system workspace. A repo
     that is not there is named, not passed over: a guard that looked at
