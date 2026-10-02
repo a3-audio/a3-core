@@ -52,6 +52,8 @@
    "carries": "the IEM EnergyVisualizer's /EnergyVisualizer/RMS"},
   {"name": "stemdeck.osc", "program": "stemdeck", "role": "osc", "host": "any", "port": 7780,
    "carries": "Core's bus switches and its request for all of them"},
+  {"name": "devices.announce", "program": "devices", "role": "announce", "host": "any", "port": 7790,
+   "carries": "Core's /core/here broadcast: where every device fetches the truth"},
   {"name": "mixer.osc", "program": "mixer", "role": "osc", "host": "mixer", "port": 7772,
    "carries": "Core's relays and lamps, /beat, /vu"},
   {"name": "beat-analyzer.clock", "program": "beat-analyzer", "role": "clock", "host": "any", "port": 7775,
@@ -108,6 +110,7 @@
   {"from": "stemdeck", "to": "prolink.status"},
   {"from": "stemdeck", "to": "core.osc"},
   {"from": "core", "to": "stemdeck.osc"},
+  {"from": "core", "to": "devices.announce"},
   {"from": "stemdeck", "to": "mixer.osc", "carries": "vu"},
   {"from": "prolink", "to": "prolink.beat"}
  ],
@@ -147,6 +150,7 @@
   "stemdeck.buses":           {"pattern": "/stemdeck/{deck}/{stem}/buses", "args": "i", "deck": [1, 2], "stem": [1, 4], "from": ["stemdeck"], "to": ["core"], "meaning": "a stem's bus switches as a bit mask (bit 0 = bus 1), after every change and for all 8 stems after /stemdeck/recall"},
   "stemdeck.recall":          {"pattern": "/stemdeck/recall", "args": "i", "from": ["core"], "to": ["stemdeck"], "meaning": "report every stem's buses once; Core asks when StemDeck's hello is news"},
   "device.hello":             {"pattern": "/device/hello", "args": "ss", "from": ["mixer", "stemdeck"], "to": ["core"], "meaning": "a device names itself and the sha256 of its copy of this file; Core's window shows whether it is Core's own"},
+  "core.here":                {"pattern": "/core/here", "args": "ss", "from": ["core"], "to": ["mixer", "motion", "stemdeck", "radla"], "meaning": "Core, every 2 s by broadcast: the URL of the joined truth and its fingerprint (sha256 of the canonical JSON)"},
   "state.recall":             {"pattern": "/state/recall", "args": "i", "from": ["motion"], "to": ["core"], "meaning": "say the state again; the answer is the ordinary messages"},
   "beat":                     {"pattern": "/beat", "args": "iif", "from": ["beat-analyzer", "motion"], "to": ["core", "motion", "mixer", "radla", "beat-analyzer"], "meaning": "beat in bar, bar, tempo -- the clock (Motion sends it only in clock mode 0)"},
   "tap":                      {"pattern": "/tap", "args": "i", "from": ["mixer", "motion"], "to": ["beat-analyzer"], "meaning": "a tap on the beat"},
@@ -174,6 +178,6 @@
    "/StereoEncoder/azimuth", "/StereoEncoder/elevation",
    "/EnergyVisualizer/RMS", "/DualDelay/delayBPML", "/DualDelay/delayBPMR"]}
  },
- "programs": ["core", "motion", "mixer", "beat-analyzer", "stemdeck", "reaper",
+ "programs": ["core", "motion", "mixer", "beat-analyzer", "stemdeck", "reaper", "devices",
               "iem", "dualdelay", "zita-j2n", "zita-n2j", "radla", "prolink"]
 }

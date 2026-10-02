@@ -295,3 +295,18 @@ class TheStemSelector(unittest.TestCase):
         self.assertEqual(self.truth.address("channel.stem.selected", ch=1),
                          "/channel/1/stem/selected")
         self.assertEqual(self.truth.addresses()["channel.stem.selected"]["from"], ["core"])
+
+
+class CoreAnnouncesItself(unittest.TestCase):
+    """Spec truth-from-core (2026-10-02): devices find Core by its broadcast."""
+
+    def setUp(self):
+        self.truth = a3_osc.load(TRUTH)
+
+    def test_every_device_listens_for_core_on_one_port(self):
+        self.assertEqual(self.truth.port("devices", "announce"), 7790)
+
+    def test_core_says_where_its_truth_is(self):
+        self.assertEqual(self.truth.address("core.here"), "/core/here")
+        self.assertEqual(self.truth.addresses()["core.here"]["args"], "ss")
+        self.assertEqual(self.truth.addresses()["core.here"]["from"], ["core"])
