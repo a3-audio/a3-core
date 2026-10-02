@@ -32,6 +32,22 @@ class TheJoin(unittest.TestCase):
         self.assertEqual(CONTRACT["hosts"], {"core": "192.168.8.10"})
 
 
+class AnIncompleteFile(unittest.TestCase):
+    """Final review 2026-10-02: a host deleted from the maintainer's file, or
+    one a later package adds, must come from the package's defaults --
+    replacing the whole block made Core fail to start."""
+
+    def test_a_host_missing_from_the_file_comes_from_the_package(self):
+        contract = dict(CONTRACT, hosts={"core": "192.168.8.10", "local": "127.0.0.1"})
+        joined = join(contract, {"hosts": {"core": "10.0.0.2"}, "network": {}})
+        self.assertEqual(joined["hosts"], {"core": "10.0.0.2", "local": "127.0.0.1"})
+
+    def test_a_network_key_missing_from_the_file_comes_from_the_package(self):
+        contract = dict(CONTRACT, network={"address": "192.168.8.10/24", "gateway": "192.168.8.1"})
+        joined = join(contract, {"hosts": {}, "network": {"address": "10.0.0.2/24"}})
+        self.assertEqual(joined["network"], {"address": "10.0.0.2/24", "gateway": "192.168.8.1"})
+
+
 class TheFingerprint(unittest.TestCase):
     def test_key_order_does_not_matter(self):
         a = {"b": 1, "a": {"y": 2, "x": 3}}

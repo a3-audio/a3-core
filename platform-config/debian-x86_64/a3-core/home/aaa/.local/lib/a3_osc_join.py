@@ -43,8 +43,12 @@ def read_network(path):
 
 
 def join(contract, network):
-    """The contract with the maintainer's network blocks put in."""
+    """The contract with the maintainer's network put in, key by key over
+    the package's blocks: a host he deleted, or one a later package adds,
+    comes from the package -- a whole block replaced made Core fail to start
+    on a missing host."""
     joined = dict(contract)
     if network is not None:
-        joined.update({key: network[key] for key in NETWORK_KEYS})
+        for key in NETWORK_KEYS:
+            joined[key] = {**contract.get(key, {}), **network[key]}
     return joined
