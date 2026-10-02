@@ -228,8 +228,14 @@ class TheSelectorIsWired(unittest.TestCase):
 
     def test_the_return_switches_its_mode_with_or_without_stemdeck(self):
         branch = _branch_of("osc_handler_aux_return", 'elif key == "aux-return.stem.push":')
-        self.assertLess(branch.index("_stems.push(RETURN)"),
+        self.assertLess(branch.index("_stems.push(RETURN"),
                         branch.index("_stemdeck_client is not None"))
+
+    def test_a_push_tells_stems_whether_stemdeck_is_there(self):
+        branch = _branch_of("osc_handler_channel", 'elif parameter == "stem.push":')
+        self.assertIn("connected=_stemdeck_client is not None", branch)
+        ret = _branch_of("osc_handler_aux_return", 'elif key == "aux-return.stem.push":')
+        self.assertIn("connected=_stemdeck_client is not None", ret)
 
     def test_a_push_moves_the_menu_and_says_so_with_or_without_stemdeck(self):
         """Spec desk-stem-grid-2: a push on D1/D2 enters the deck -- the desk

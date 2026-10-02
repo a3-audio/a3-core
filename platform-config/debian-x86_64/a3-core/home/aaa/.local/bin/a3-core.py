@@ -916,7 +916,7 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
     elif parameter == "stem.push":
         # The menu moves at once (into a deck, back); what a push loads goes
         # to StemDeck, and the desk shows it when StemDeck reports.
-        commands = _stems.push(channel_index)
+        commands = _stems.push(channel_index, connected=_stemdeck_client is not None)
         if _stemdeck_client is not None:
             send_to_stemdeck(commands)
             apply_stem_cue()
@@ -1006,7 +1006,7 @@ def osc_handler_aux_return(client_address: Tuple[str, int], address: str,
         _stems.turn(RETURN, int(float(osc_arguments[0])))
     elif key == "aux-return.stem.push":
         # The mode switches at once; its commands go to StemDeck if it is there.
-        commands = _stems.push(RETURN)
+        commands = _stems.push(RETURN, connected=_stemdeck_client is not None)
         if _stemdeck_client is not None:
             send_to_stemdeck(commands)
     else:

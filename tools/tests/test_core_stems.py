@@ -109,7 +109,43 @@ class TheMenu(unittest.TestCase):
         self.assertEqual((s.source(0), s.source(1)), (A, D2))
 
 
+class WithoutStemDeck(unittest.TestCase):
+    """Final review: without StemDeck a push loaded the mirror anyway, and
+    Core shut the channel's analog send for a stem nobody plays."""
+
+    def test_the_menu_moves_the_switches_do_not(self):
+        s = Stems()
+        s.menus[0] = (TOP, D1)
+        self.assertEqual(s.push(0, connected=False), [])
+        self.assertEqual(s.menus[0], (DECK_1, 0))
+        self.assertEqual(s.push(0, connected=False), [])
+        self.assertEqual(s.channel_mask(0), 0)
+
+    def test_a_does_not_touch_the_mirror_either(self):
+        s = stems_with(p3=bit(1))
+        s.menus[0] = (TOP, A)
+        self.assertEqual(s.push(0, connected=False), [])
+        self.assertEqual(s.channel_mask(0), 1 << 2)
+
+    def test_the_return_mode_switches_without_commands(self):
+        s = stems_with(p2=bit(AUX))
+        s.return_cursor = ANALOG_MODE
+        self.assertEqual(s.push(RETURN, connected=False), [])
+        self.assertEqual(s.return_mode, ANALOG_MODE)
+        self.assertTrue(s.plays_on_return(2))
+
+
 class OnePerChannel(unittest.TestCase):
+    def test_a_stem_on_two_channels_keeps_the_one_it_alone_obeys(self):
+        """Final review: pair 3 on channels 1 and 2, pair 1 on channel 1 --
+        pair 3 leaves channel 1 (pair 1 is lower) and must stay on 2."""
+        s = stems_with(p1=bit(1), p3=bit(1) | bit(2))
+        s.return_mode = ANALOG_MODE
+        commands = s.tidy()
+        self.assertEqual(s.channel_mask(0), 1)
+        self.assertEqual(s.channel_mask(1), 1 << 2)
+        self.assertEqual(len(commands), len(set(commands)))
+
     def test_two_stems_on_a_bus_keep_the_lowest(self):
         s = stems_with(p6=bit(1), p3=bit(1))
         s.return_mode = ANALOG_MODE

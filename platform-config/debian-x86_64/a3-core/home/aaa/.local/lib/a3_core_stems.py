@@ -104,21 +104,24 @@ class Stems:
         level, cursor = self.menus[index]
         self.menus[index] = (level, (cursor + steps) % _ENTRIES[level])
 
-    def push(self, index):
-        """The commands a push on place `index` means; the menu moves too."""
+    def push(self, index, connected=True):
+        """The commands a push on place `index` means; the menu moves too.
+        Without StemDeck (`connected` False) only the menu and the return's
+        mode move: the mirror is StemDeck's, and a stem nobody plays must
+        not shut a channel's analog input."""
         if index == RETURN:
             self.return_mode = self.return_cursor
-            return self.tidy()
+            return self.tidy() if connected else []
         level, cursor = self.menus[index]
         if level == TOP:
             if cursor == A:
-                return self._release(index) + self.tidy()
+                return self._release(index) + self.tidy() if connected else []
             self.menus[index] = (DECK_1 if cursor == D1 else DECK_2, 0)
             return []
         if cursor == BACK:
             self.menus[index] = (TOP, D1 if level == DECK_1 else D2)
             return []
-        return self._load(index, pair_of_deck(level, cursor))
+        return self._load(index, pair_of_deck(level, cursor)) if connected else []
 
     def _release(self, index):
         bus = index + 1
@@ -151,10 +154,14 @@ class Stems:
             bus = index + 1
             on = [p for p in range(1, PAIRS + 1) if self._on(p, bus)]
             commands += [(p, bus, False) for p in on[1:]]
+        # Applied before the next rule reads the mirror: a stem taken off one
+        # bus here may be alone, and right, on another.
+        self._apply_all(commands)
         for pair in range(1, PAIRS + 1):
             channels = [c for c in range(CHANNELS) if self._on(pair, c + 1)]
-            commands += [(pair, c + 1, False) for c in channels[1:]]
-        self._apply_all(commands)
+            spare = [(pair, c + 1, False) for c in channels[1:]]
+            self._apply_all(spare)
+            commands += spare
         for pair in range(1, PAIRS + 1):
             wanted = self.return_mode == STEM_MODE and self.place_of(pair) in (None, RETURN)
             if wanted != self._on(pair, AUX):
