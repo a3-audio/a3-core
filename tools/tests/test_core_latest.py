@@ -152,6 +152,26 @@ class TheLoop(unittest.TestCase):
         self.assertEqual(len(self.reports), 1)
 
 
+class TheLoopTicks(unittest.TestCase):
+    """serve() calls `tick` on its own thread -- after every pass, and at
+    the latest every tick_seconds while nothing arrives -- so work that waits
+    (Core's stem tidy, spec desk-stem-grid-2) never needs a second thread."""
+
+    def setUp(self):
+        self.receiver = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.receiver.bind(("127.0.0.1", 0))
+
+    def tearDown(self):
+        self.receiver.close()
+
+    def test_an_idle_loop_ticks(self):
+        ticks = []
+        passes = iter([True, True, False])
+        serve(self.receiver, lambda data, client: None, key, 100, print,
+              lambda: next(passes), tick=lambda: ticks.append(1), tick_seconds=0.01)
+        self.assertEqual(len(ticks), 2)
+
+
 class CoreReadsItsPortThisWay(unittest.TestCase):
     """The main port goes through serve(); the feedback port (REAPER's
     answers, no positions) keeps serve_forever."""

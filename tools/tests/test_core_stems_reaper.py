@@ -47,15 +47,37 @@ class WhatTheDeskHears(unittest.TestCase):
         msgs = dict(announcements(s, TRUTH))
         self.assertEqual(msgs["/aux-return/stem"][1:], [0, 0, 1, 0, 0, 0, 0, 0])
 
-    def test_each_channel_says_its_selection(self):
+    def test_each_channel_says_its_menu(self):
         s = Stems()
-        s.selected[2] = 6
-        self.assertEqual(dict(announcements(s, TRUTH))["/channel/3/stem/selected"], 6)
+        s.menus[2] = (2, 3)
+        msgs = dict(announcements(s, TRUTH))
+        self.assertEqual(msgs["/channel/3/stem/menu"], [2, 3])
+        self.assertFalse(any(a.endswith("/stem/selected") for a in msgs))
 
-    def test_the_return_says_its_selection_first(self):
+    def test_the_return_says_its_cursor_first_and_its_mode(self):
         s = Stems()
-        s.selected[4] = 2
-        self.assertEqual(dict(announcements(s, TRUTH))["/aux-return/stem"][0], 2)
+        s.return_cursor, s.return_mode = 0, 1
+        msgs = dict(announcements(s, TRUTH))
+        self.assertEqual(msgs["/aux-return/stem"][0], 0)
+        self.assertEqual(msgs["/aux-return/stem/mode"], 1)
+
+
+class TheTidySettles(unittest.TestCase):
+    """StemDeck reports stem by stem; Core tidies once they have settled,
+    never on a half-updated mirror (spec desk-stem-grid-2)."""
+
+    def test_due_once_after_the_quiet(self):
+        from a3_core_stems_reaper import Settle
+        settle = Settle(0.3)
+        settle.poke(0.0)
+        settle.poke(0.2)
+        self.assertFalse(settle.due(0.4))
+        self.assertTrue(settle.due(0.51))
+        self.assertFalse(settle.due(0.9))
+
+    def test_nothing_poked_is_never_due(self):
+        from a3_core_stems_reaper import Settle
+        self.assertFalse(Settle(0.3).due(100.0))
 
 
 class WhatStemDeckHears(unittest.TestCase):

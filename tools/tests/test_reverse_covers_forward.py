@@ -263,7 +263,7 @@ NOT_ANSWERED_FOR = {
     # An encoder's clicks, not a value: there is nothing in REAPER to read
     # back. The assignment it changes is Core's own (a3_core_stems) and is
     # announced on /channel/n/stem.
-    "channel.stem.turn": "a relative turn; the selection is announced as channel.stem.selected",
+    "channel.stem.turn": "a relative turn; the menu is announced as channel.stem.menu",
     "channel.stem.push": "a press; what it loads is announced as channel.stem once StemDeck reports",
 }
 
