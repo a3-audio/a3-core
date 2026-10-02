@@ -72,6 +72,14 @@ ALLOWED_LITERALS = {
         "the port every device knows before it has a truth (spec truth-from-core)",
     ("a3-mixer/software/scripts/a3_mixer_truth.py", "/core/here"):
         "the word a device hears before it has a truth (spec truth-from-core)",
+    ("stemdeck/Source/TruthKeeper.h", 7790):
+        "the port StemDeck knows before it has a truth (spec truth-from-core)",
+    ("stemdeck/Source/TruthKeeper.h", "/core/here"):
+        "the word StemDeck hears before it has a truth (spec truth-from-core)",
+    ("a3-motion-ui/src/a3-motion-engine/TruthKeeper.hh", 7790):
+        "the port Motion knows before it has a truth (spec truth-from-core)",
+    ("a3-motion-ui/src/a3-motion-engine/TruthKeeper.hh", "/core/here"):
+        "the word Motion hears before it has a truth (spec truth-from-core)",
     ("beat-analyzer/src/main.cpp", "  Beispiel: OSC_HOST_Protokol=127.0.0.1:9000\\n"):
         "the usage text's example of a target line",
 }
