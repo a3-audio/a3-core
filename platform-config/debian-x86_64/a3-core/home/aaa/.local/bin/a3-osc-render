@@ -20,6 +20,12 @@ import a3_osc_render   # noqa: E402
 
 def main(argv):
     truth = a3_osc.load()
+    if truth.network_problem:
+        # Said for every subcommand: the postinst's network render would
+        # otherwise configure the interface from the package's values without
+        # a word about the maintainer's file.
+        sys.stderr.write(f"network.json refused, the package's defaults are used: "
+                         f"{truth.network_problem}\n")
     if argv == ["user"]:
         a3_osc_render.write_user_files(truth, Path.home())
         return 0

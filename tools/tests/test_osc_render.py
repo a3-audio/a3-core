@@ -219,6 +219,16 @@ class TheToolWritesTheFiles(unittest.TestCase):
             self.run_tool("user", env_extra={"HOME": str(home)})
             self.assertFalse((home / "a3-system").exists())
 
+    def test_a_refused_network_file_is_said(self):
+        # Final review 2026-10-02: the postinst would configure the interface
+        # from the package's values without a word about the maintainer's file.
+        with tempfile.TemporaryDirectory() as tmp:
+            broken = Path(tmp) / "network.json"
+            broken.write_text("{")
+            done = self.run_tool("network", env_extra={"A3_NETWORK": str(broken)})
+        self.assertIn("network.json", done.stderr)
+        self.assertIn("refused", done.stderr)
+
     def test_network_prints_shell_assignments(self):
         out = self.run_tool("network").stdout
         self.assertEqual(out, a3_osc_render.network_defaults(TRUTH))
