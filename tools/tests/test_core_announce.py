@@ -73,3 +73,20 @@ class CoreAnnounces(unittest.TestCase):
 
     def test_a_refused_network_file_is_said(self):
         self.assertIn("_truth.network_problem", self.core)
+
+
+class CoreRendersForItsNeighbours(unittest.TestCase):
+    """Spec truth-from-core: zita and the analyzer read the .env Core's
+    renderer writes; Core writes it at its start, from the joined truth, so a
+    changed network.json reaches them without a reinstall (final review)."""
+
+    def setUp(self):
+        self.core = (PACKAGE / "home/aaa/.local/bin/a3-core.py").read_text()
+
+    def test_core_writes_the_user_files_at_start(self):
+        self.assertIn("write_user_files(_truth, Path.home())", self.core)
+
+    def test_a_failed_render_does_not_stop_core(self):
+        start = self.core.index("write_user_files(_truth, Path.home())")
+        before = self.core[:start].rsplit("\n", 3)
+        self.assertTrue(any(line.strip() == "try:" for line in before), before)

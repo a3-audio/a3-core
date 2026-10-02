@@ -63,6 +63,7 @@ from a3_core_presence import STEMDECK_SILENCE, StemDeckWatch   # noqa: E402
 from a3_core_latest import position_key, serve   # noqa: E402
 from a3_core_announce import (EVERY_SECONDS, announce, announcement,   # noqa: E402
                               broadcast_address)
+from a3_osc_render import write_user_files   # noqa: E402
 from a3_core_recall import (FX_MODE_NUMBERS, FX_MODE_WORDS,   # noqa: E402
                             Relayed, STATE_OF, led_message,
                             recall_messages)   # noqa: E402
@@ -1644,6 +1645,14 @@ if __name__ == "__main__":
     if _truth.network_problem:
         print(f"network.json refused, the package's defaults are used: "
               f"{_truth.network_problem}", file=sys.stderr)
+    # zita's and the analyzer's addresses, from the joined truth: a changed
+    # network.json reaches them with Core's restart, not only at an install.
+    # A failure is said, not fatal -- they keep what they had.
+    try:
+        write_user_files(_truth, Path.home())
+    except OSError as problem:
+        print(f"could not render osc.env / the analyzer's block: {problem}",
+              file=sys.stderr)
     announce_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     announce_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     announce_to = (broadcast_address(_truth.network()),
