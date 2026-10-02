@@ -253,7 +253,7 @@ def register_as_json(register_path: Path, traffic) -> Dict[str, Any]:
 
 
 def _handler_class(traffic, send: Optional[Callable], page: Path,
-                   register_path: Path, devices=None):
+                   register_path: Path, devices=None, truth=None):
 
     class Window(BaseHTTPRequestHandler):
         # Otherwise every request writes a line to stderr, which is the flood
@@ -262,11 +262,13 @@ def _handler_class(traffic, send: Optional[Callable], page: Path,
         def log_message(self, fmt, *args):
             pass
 
-        def _send(self, code, body, content_type):
+        def _send(self, code, body, content_type, headers=None):
             try:
                 self.send_response(code)
                 self.send_header("Content-Type", content_type)
                 self.send_header("Content-Length", str(len(body)))
+                for name, value in (headers or {}).items():
+                    self.send_header(name, value)
                 self.end_headers()
                 self.wfile.write(body)
             except (BrokenPipeError, ConnectionResetError):
@@ -322,6 +324,12 @@ def _handler_class(traffic, send: Optional[Callable], page: Path,
                            if devices else []}
                 self._send(200, json.dumps(payload).encode(),
                            "application/json")
+
+            elif self.path == "/api/truth" and truth is not None:
+                # The joined truth every device fetches, its fingerprint in
+                # a header (spec truth-from-core, 2026-10-02).
+                body, mark = truth()
+                self._send(200, body, "application/json", {"X-A3-Truth": mark})
 
             elif self.path == "/api/stream":
                 self._stream()
@@ -472,7 +480,7 @@ def default_bind(truth) -> str:
 def start_window(traffic, bind: str, send: Optional[Callable] = None,
                   page_path: Optional[Path] = None,
                   register_path: Optional[Path] = None,
-                  devices=None) -> bool:
+                  devices=None, truth=None) -> bool:
     """Start serving, on a daemon thread. True if it is listening.
 
     Returns False rather than raising when the port is taken or the address
@@ -488,7 +496,7 @@ def start_window(traffic, bind: str, send: Optional[Callable] = None,
         host, port = _address_from(bind)
         _server = ThreadingHTTPServer(
             (host, port), _handler_class(traffic, send, page, register,
-                                         devices))
+                                         devices, truth))
     except (OSError, ValueError, OverflowError) as problem:
         # OverflowError is what socket.bind() actually raises for a port
         # outside 0-65535 -- _address_from() already rejects that range, so
