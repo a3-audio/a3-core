@@ -84,6 +84,16 @@ class TheGuardSees(unittest.TestCase):
         self.assertEqual(self.found_in("core.py", 'A = "/track/3/fx/1/bypass"\n'), [])
 
 
+class TheDesksBootstrap(unittest.TestCase):
+    """Step 2 of truth-from-core: a desk with no truth must know where Core
+    speaks -- one port and one word, allowed by name, nowhere else."""
+
+    def test_the_desks_bootstrap_pair_is_allowed_by_name(self):
+        for literal in (7790, "/core/here"):
+            self.assertIn(("a3-mixer/software/scripts/a3_mixer_truth.py", literal),
+                          second_truth.ALLOWED_LITERALS)
+
+
 class TheSystemSaysNone(unittest.TestCase):
     """Across the checkouts beside this one -- the a3-system workspace. A repo
     that is not there is named, not passed over: a guard that looked at

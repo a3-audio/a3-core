@@ -120,5 +120,18 @@ class TheWordIsInTheTruth(unittest.TestCase):
         self.assertIn("mixer", truth.addresses()["device.hello"]["from"])
 
 
+
+
+class CoreComparesTheFingerprint(unittest.TestCase):
+    """Step 2 of truth-from-core: the desk hashes the body it fetched from
+    /api/truth, which is Core's canonical truth -- so Core's own hash for the
+    hello is the fingerprint, not the package file's bytes."""
+
+    def test_cores_hello_compares_the_fingerprint(self):
+        core = (Path(__file__).resolve().parents[2] / "platform-config/debian-x86_64/a3-core"
+                / "home/aaa/.local/bin/a3-core.py").read_text()
+        self.assertIn("Devices(_truth.fingerprint())", core)
+
+
 if __name__ == "__main__":
     unittest.main()

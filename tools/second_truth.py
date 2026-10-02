@@ -68,6 +68,10 @@ ALLOWED = {
 ALLOWED_LITERALS = {
     ("a3-core/platform-config/debian-x86_64/a3-core/home/aaa/.local/lib/a3_core_traffic.py", 50000):
         "a count of unknown addresses, not a port",
+    ("a3-mixer/software/scripts/a3_mixer_truth.py", 7790):
+        "the port every device knows before it has a truth (spec truth-from-core)",
+    ("a3-mixer/software/scripts/a3_mixer_truth.py", "/core/here"):
+        "the word a device hears before it has a truth (spec truth-from-core)",
     ("beat-analyzer/src/main.cpp", "  Beispiel: OSC_HOST_Protokol=127.0.0.1:9000\\n"):
         "the usage text's example of a target line",
 }
