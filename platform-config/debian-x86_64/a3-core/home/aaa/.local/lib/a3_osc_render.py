@@ -5,6 +5,7 @@ take their addresses as text. They get it from here, rendered from
 a3-osc.json, so the file stays the only place a port or an IP is written.
 """
 
+import json
 import re
 import shlex
 from pathlib import Path
@@ -102,3 +103,22 @@ def write_user_files(truth, home):
     if analyzer_env.exists():
         analyzer_env.write_text(put_analyzer_block(analyzer_env.read_text(),
                                                    analyzer_block(truth)))
+
+
+def network_file(truth):
+    """~/.config/a3/network.json as the installer first writes it: the
+    truth's hosts and network blocks (spec truth-from-core)."""
+    data = truth.data()
+    return json.dumps({key: data[key] for key in ("hosts", "network")}, indent=1) + "\n"
+
+
+def write_network_file_once(truth, path):
+    """Create the maintainer's network file; never overwrite it. True if it
+    was written."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with path.open("x") as handle:
+            handle.write(network_file(truth))
+    except FileExistsError:
+        return False
+    return True
