@@ -7,7 +7,8 @@ StemDeck's report overwrites whatever Core expected.
 
 The desk (spec desk-stem-grid-2, 2026-10-02): each channel encoder is a
 two-level menu -- D1 / D2 / A, then a deck's stems 1-4 and back; a push on a
-stem loads it as the channel's only stem, a push on A releases them all. A
+stem loads it as the channel's stem of that deck (one of each deck may play,
+2026-10-02) or, if loaded, unloads it; a push on A releases them all. A
 stem plays on one channel at most. The aux return knows two modes: stem
 (every stem on no channel plays on the return) and analog (no stem on it).
 tidy() makes the mirror obey both rules. Pure: no OSC.
@@ -39,6 +40,11 @@ def _bit(bus):
 
 def _is_int(value):
     return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _deck(pair):
+    """0 for StemDeck's deck 1 (pairs 1-4), 1 for deck 2 (pairs 5-8)."""
+    return (pair - 1) // STEMS_PER_DECK
 
 
 def pair_of_deck(level, stem):
@@ -86,14 +92,10 @@ class Stems:
                 return index
         return RETURN if self._on(pair, AUX) else None
 
-    def source(self, index):
-        """What channel `index` plays from: D1, D2 or A."""
-        mask = self.channel_mask(index)
-        if mask & 0x0F:
-            return D1
-        if mask & 0xF0:
-            return D2
-        return A
+    def sources(self, index):
+        """What channel `index` plays from: {D1}, {D2}, both, or {A}."""
+        decks = {_deck(p) for p in range(1, PAIRS + 1) if self._on(p, index + 1)}
+        return {D1 if d == 0 else D2 for d in decks} or {A}
 
     # -- turn and push --------------------------------------------------------
 
@@ -130,30 +132,35 @@ class Stems:
         return commands
 
     def _load(self, index, pair):
+        """Loads `pair` as this channel's stem of its deck -- the other
+        deck's stem stays -- or, if it is loaded already, unloads it."""
         place = self.place_of(pair)
         if place is not None and place not in (RETURN, index):
             return []
         bus = index + 1
-        commands = []
-        if not self._on(pair, bus):
+        if self._on(pair, bus):
+            commands = [(pair, bus, False)]
+        else:
             # A stem loaded on a channel is on the return no more.
             commands = [(pair, bus, True), (pair, AUX, False)]
-        commands += [(p, bus, False) for p in range(1, PAIRS + 1)
-                     if p != pair and self._on(p, bus)]
+            commands += [(p, bus, False) for p in range(1, PAIRS + 1)
+                         if p != pair and _deck(p) == _deck(pair) and self._on(p, bus)]
         self._apply_all(commands)
         return commands + self.tidy()
 
     # -- the rules ------------------------------------------------------------
 
     def tidy(self):
-        """The commands that make the mirror obey the rules -- one stem per
-        channel bus (the lowest stays), a stem on one channel at most, and
+        """The commands that make the mirror obey the rules -- one stem of
+        each deck per channel bus (the lowest stays), a stem on one channel
+        at most, and
         the return's mode -- applied at once. A second call returns []."""
         commands = []
         for index in range(CHANNELS):
             bus = index + 1
-            on = [p for p in range(1, PAIRS + 1) if self._on(p, bus)]
-            commands += [(p, bus, False) for p in on[1:]]
+            for deck in (0, 1):
+                on = [p for p in range(1, PAIRS + 1) if _deck(p) == deck and self._on(p, bus)]
+                commands += [(p, bus, False) for p in on[1:]]
         # Applied before the next rule reads the mirror: a stem taken off one
         # bus here may be alone, and right, on another.
         self._apply_all(commands)
