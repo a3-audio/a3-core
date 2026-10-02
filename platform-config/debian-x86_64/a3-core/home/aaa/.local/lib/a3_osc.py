@@ -10,14 +10,22 @@ A missing key is an error, not a default. The point of one truth is that a fact
 not written there does not exist; a silent fallback would be a second truth.
 """
 
+import copy
 import json
 import os
 import re
 from pathlib import Path
 
+from a3_osc_join import canonical, fingerprint, join, read_network
+
 #: Where the package puts the file. A3_OSC_TRUTH overrides it, for tests and
 #: for reading a checkout's copy before it is installed.
 DEFAULT_PATH = Path("/usr/share/a3/a3-osc.json")
+
+#: The maintainer's network (spec truth-from-core, 2026-10-02): the machines'
+#: addresses and Core's own interface, joined over the package's defaults.
+#: $A3_NETWORK names another file -- the postinst runs as root.
+NETWORK_PATH = Path.home() / ".config/a3/network.json"
 
 
 class TruthError(KeyError):
@@ -25,8 +33,19 @@ class TruthError(KeyError):
 
 
 class Truth:
+    network_problem = None
+
     def __init__(self, data):
         self._data = data
+
+    def data(self):
+        return copy.deepcopy(self._data)
+
+    def canonical(self):
+        return canonical(self._data)
+
+    def fingerprint(self):
+        return fingerprint(self._data)
 
     def network(self):
         return dict(self._data["network"])
@@ -127,6 +146,25 @@ def truth_path(path=None):
     return Path(path or os.environ.get("A3_OSC_TRUTH") or DEFAULT_PATH)
 
 
+def network_path(path=None):
+    """The network file load() joins: $A3_NETWORK, else the maintainer's for
+    the installed truth, else none -- an explicit truth (tests, a checkout)
+    never reads the maintainer's real file by accident."""
+    named = os.environ.get("A3_NETWORK")
+    if named:
+        return Path(named)
+    if path is None and not os.environ.get("A3_OSC_TRUTH"):
+        return NETWORK_PATH
+    return None
+
+
 def load(path=None):
-    """Read the truth: `path`, else $A3_OSC_TRUTH, else the installed file."""
-    return Truth(json.loads(truth_path(path).read_text()))
+    """The contract (`path`, else $A3_OSC_TRUTH, else the installed file),
+    joined with the network file network_path() names. A refused network file
+    leaves the package's blocks; why is in `network_problem`."""
+    contract = json.loads(truth_path(path).read_text())
+    where = network_path(path)
+    network, problem = read_network(where) if where else (None, None)
+    truth = Truth(join(contract, network))
+    truth.network_problem = problem
+    return truth

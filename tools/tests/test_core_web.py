@@ -254,6 +254,34 @@ class EverythingSurvivesJsonDumps(unittest.TestCase):
         self.assertEqual(row["last_value"], 0.5)
 
 
+class TheTruthIsServed(unittest.TestCase):
+    """Spec truth-from-core: every device fetches the joined truth here."""
+
+    def tearDown(self):
+        from a3_core_web import stop_window
+        stop_window()
+
+    def url(self, path):
+        from a3_core_web import window_address
+        host, port = window_address()
+        return f"http://{host}:{port}{path}"
+
+    def test_the_truth_is_served_with_its_fingerprint(self):
+        self.assertTrue(start_window(Traffic(), "127.0.0.1:0",
+                                     truth=lambda: (b'{"a":1}', "f" * 64)))
+        with urllib.request.urlopen(self.url("/api/truth"), timeout=5) as reply:
+            self.assertEqual(reply.read(), b'{"a":1}')
+            self.assertEqual(reply.headers["X-A3-Truth"], "f" * 64)
+            self.assertEqual(reply.headers["Content-Type"], "application/json")
+
+    def test_without_a_truth_there_is_none_to_serve(self):
+        import urllib.error
+        self.assertTrue(start_window(Traffic(), "127.0.0.1:0"))
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            urllib.request.urlopen(self.url("/api/truth"), timeout=5)
+        self.assertEqual(caught.exception.code, 404)
+
+
 class TheServerAnswers(unittest.TestCase):
     def setUp(self):
         self.traffic = Traffic()

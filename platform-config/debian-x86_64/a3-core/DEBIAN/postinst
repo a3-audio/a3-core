@@ -173,14 +173,21 @@ db_go || true
 db_get a3-core/configure-network
 CONFIGURE="$RET"
 
+# The maintainer's network (hosts, Core's interface): created once from the
+# package's defaults, never overwritten -- it is his to edit (spec
+# truth-from-core). Before the network render below, which reads it.
+sudo -u "$APPUSER" -H "${USER_HOME}/.local/bin/a3-osc-render" network-file \
+  || echo "a3-core: could not create ~/.config/a3/network.json" >&2
+
 if [ "x$CONFIGURE" = "xtrue" ]; then
   # Check if user wants the standard/default network
   db_get a3-core/install-default-network
   INSTALL_DEFAULT="$RET"
 
   if [ "x$INSTALL_DEFAULT" = "xtrue" ]; then
-    # INTERFACE, ADDR, GATEWAY, DNS and BRIDGE_WITH, from a3-osc.json.
-    eval "$("${USER_HOME}/.local/bin/a3-osc-render" network)"
+    # INTERFACE, ADDR, GATEWAY, DNS and BRIDGE_WITH, from the truth joined
+    # with the user's ~/.config/a3/network.json (not root's: this runs as root).
+    eval "$(A3_NETWORK="${USER_HOME}/.config/a3/network.json" "${USER_HOME}/.local/bin/a3-osc-render" network)"
   else
     ask_address_questions
 

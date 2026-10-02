@@ -6,6 +6,7 @@ would be a second truth, and the day the rig moved from 192.168.43.x to
 192.168.8.x showed how a second truth ends: some copies moved, some did not.
 """
 
+import json
 import os
 import shlex
 import subprocess
@@ -13,6 +14,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 PACKAGE = Path(__file__).resolve().parents[2] / "platform-config" / "debian-x86_64" / "a3-core"
 LIB = PACKAGE / "home/aaa/.local/lib"
@@ -217,12 +219,58 @@ class TheToolWritesTheFiles(unittest.TestCase):
             self.run_tool("user", env_extra={"HOME": str(home)})
             self.assertFalse((home / "a3-system").exists())
 
+    def test_a_refused_network_file_is_said(self):
+        # Final review 2026-10-02: the postinst would configure the interface
+        # from the package's values without a word about the maintainer's file.
+        with tempfile.TemporaryDirectory() as tmp:
+            broken = Path(tmp) / "network.json"
+            broken.write_text("{")
+            done = self.run_tool("network", env_extra={"A3_NETWORK": str(broken)})
+        self.assertIn("network.json", done.stderr)
+        self.assertIn("refused", done.stderr)
+
     def test_network_prints_shell_assignments(self):
         out = self.run_tool("network").stdout
         self.assertEqual(out, a3_osc_render.network_defaults(TRUTH))
 
     def test_postinst_renders_for_the_user(self):
         self.assertRegex(POSTINST.read_text(), r'a3-osc-render"? user')
+
+    def test_postinst_creates_the_network_file_as_the_user(self):
+        self.assertRegex(POSTINST.read_text(), r'sudo -u "\$APPUSER" -H [^\n]*a3-osc-render"? network-file')
+
+    def test_postinst_renders_the_users_network_as_root(self):
+        self.assertRegex(POSTINST.read_text(),
+                         r'A3_NETWORK="\$\{USER_HOME\}/\.config/a3/network\.json" [^\n]*a3-osc-render"? network\)')
+
+
+
+class TheNetworkFile(unittest.TestCase):
+    """Spec truth-from-core: ~/.config/a3/network.json, created once."""
+
+    def test_it_holds_the_two_network_blocks(self):
+        data = json.loads(a3_osc_render.network_file(TRUTH))
+        self.assertEqual(set(data), {"hosts", "network"})
+        self.assertEqual(data["hosts"]["mixer"], TRUTH.host("mixer"))
+
+    def test_it_is_created_once_and_never_overwritten(self):
+        path = Path(tempfile.mkdtemp()) / "a3" / "network.json"
+        self.assertTrue(a3_osc_render.write_network_file_once(TRUTH, path))
+        path.write_text('{"mine": true}')
+        self.assertFalse(a3_osc_render.write_network_file_once(TRUTH, path))
+        self.assertEqual(path.read_text(), '{"mine": true}')
+
+    def test_the_network_render_reads_the_named_file(self):
+        # The postinst renders Core's interface as root; A3_NETWORK points at
+        # the user's file, so root's home is never read.
+        path = Path(tempfile.mkdtemp()) / "network.json"
+        data = json.loads(a3_osc_render.network_file(TRUTH))
+        data["network"]["address"] = "10.1.2.3/24"
+        path.write_text(json.dumps(data))
+        with mock.patch.dict(os.environ, {"A3_NETWORK": str(path)}):
+            rendered = a3_osc_render.network_defaults(a3_osc.load(TRUTH_FILE))
+        self.assertIn("10.1.2.3/24", rendered)
+
 
 
 if __name__ == "__main__":

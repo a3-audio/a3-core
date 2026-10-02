@@ -4,6 +4,9 @@
   a3-osc-render user      ~/.config/a3/osc.env for the zita units, and the
                           target block in the beat-analyzer's .env if it is there
   a3-osc-render network   the default network as shell assignments, for postinst
+  a3-osc-render network-file
+                          ~/.config/a3/network.json, the maintainer's network,
+                          created once from the package's defaults
 """
 
 import sys
@@ -17,8 +20,19 @@ import a3_osc_render   # noqa: E402
 
 def main(argv):
     truth = a3_osc.load()
+    if truth.network_problem:
+        # Said for every subcommand: the postinst's network render would
+        # otherwise configure the interface from the package's values without
+        # a word about the maintainer's file.
+        sys.stderr.write(f"network.json refused, the package's defaults are used: "
+                         f"{truth.network_problem}\n")
     if argv == ["user"]:
         a3_osc_render.write_user_files(truth, Path.home())
+        return 0
+    if argv == ["network-file"]:
+        path = a3_osc.NETWORK_PATH
+        made = a3_osc_render.write_network_file_once(truth, path)
+        print(f"{path}: " + ("created" if made else "kept (the maintainer's)"))
         return 0
     if argv == ["network"]:
         sys.stdout.write(a3_osc_render.network_defaults(truth))

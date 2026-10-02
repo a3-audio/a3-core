@@ -25,6 +25,7 @@ import json
 import os
 import signal
 import sys
+import socket
 import threading
 from pathlib import Path
 import numpy as np
@@ -60,6 +61,9 @@ from a3_core_stems_reaper import (analog_messages,   # noqa: E402
                                   changed_messages, command_messages, pair_of)
 from a3_core_presence import STEMDECK_SILENCE, StemDeckWatch   # noqa: E402
 from a3_core_latest import position_key, serve   # noqa: E402
+from a3_core_announce import (EVERY_SECONDS, announce, announcement,   # noqa: E402
+                              broadcast_address)
+from a3_osc_render import write_user_files   # noqa: E402
 from a3_core_recall import (FX_MODE_NUMBERS, FX_MODE_WORDS,   # noqa: E402
                             Relayed, STATE_OF, led_message,
                             recall_messages)   # noqa: E402
@@ -1615,7 +1619,8 @@ if __name__ == "__main__":
     # gets a line in the journal and the rig still makes sound.
     if not args.no_web:
         if start_window(traffic, args.web_bind, send=send_from_bench,
-                        devices=_devices):
+                        devices=_devices,
+                        truth=lambda: (_truth.canonical(), _truth.fingerprint())):
             # window_address(), not args.web_bind: --web-bind accepts port 0
             # to let the OS choose one, and printing the requested bind would
             # then log "http://127.0.0.1:0" while the real port stays
@@ -1633,6 +1638,31 @@ if __name__ == "__main__":
     # other. tools/tests/test_core_servers_do_not_spawn.py holds it.
     server = osc_server.BlockingOSCUDPServer((args.ip, args.port), dispatcher)
     print("Serving on {}".format(server.server_address))
+
+    # Where the truth is, for every device on the LAN (spec truth-from-core):
+    # /core/here every 2 s by broadcast. A refused network file is said
+    # once; Core then runs on the package's network blocks.
+    if _truth.network_problem:
+        print(f"network.json refused, the package's defaults are used: "
+              f"{_truth.network_problem}", file=sys.stderr)
+    # zita's and the analyzer's addresses, from the joined truth: a changed
+    # network.json reaches them with Core's restart, not only at an install.
+    # A failure is said, not fatal -- they keep what they had.
+    try:
+        write_user_files(_truth, Path.home())
+    except OSError as problem:
+        print(f"could not render osc.env / the analyzer's block: {problem}",
+              file=sys.stderr)
+    announce_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    announce_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    announce_to = (broadcast_address(_truth.network()),
+                   _truth.port("devices", "announce"))
+    threading.Thread(
+        target=announce, daemon=True, name="a3-announce",
+        args=(announce_socket, announce_to, announcement(_truth), EVERY_SECONDS,
+              time.sleep, lambda: True,
+              lambda text: print(text, file=sys.stderr))).start()
+    print(f"announcing the truth to {announce_to[0]}:{announce_to[1]}")
 
     # Ask REAPER to say everything it knows until it does, let it finish
     # saying it, and only then play the evening back (#56). In that order and
