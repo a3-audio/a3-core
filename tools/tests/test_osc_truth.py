@@ -12,9 +12,14 @@ filter named for what it is, hyphens, lamps under what they light, and the VU
 map's forty meters on /vu/1..40.
 """
 
+import json
+import os
+import shutil
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core"
@@ -310,3 +315,37 @@ class CoreAnnouncesItself(unittest.TestCase):
         self.assertEqual(self.truth.address("core.here"), "/core/here")
         self.assertEqual(self.truth.addresses()["core.here"]["args"], "ss")
         self.assertEqual(self.truth.addresses()["core.here"]["from"], ["core"])
+
+
+class TheInstalledTruthIsJoined(unittest.TestCase):
+    """Spec truth-from-core: the network part is the maintainer's file."""
+
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.dir)
+        self.network = self.dir / "network.json"
+        package = json.loads(TRUTH.read_text())
+        hosts = dict(package["hosts"], mixer="10.9.9.9")
+        self.network.write_text(json.dumps({"hosts": hosts, "network": package["network"]}))
+
+    def test_a3_network_names_the_file_to_join(self):
+        with mock.patch.dict(os.environ, {"A3_NETWORK": str(self.network)}):
+            self.assertEqual(a3_osc.load(TRUTH).host("mixer"), "10.9.9.9")
+
+    def test_an_explicit_truth_reads_no_network_file(self):
+        with mock.patch.dict(os.environ, {}):
+            os.environ.pop("A3_NETWORK", None)
+            self.assertEqual(a3_osc.load(TRUTH).host("mixer"), "192.168.8.11")
+
+    def test_a_broken_network_file_leaves_the_defaults_and_says_why(self):
+        self.network.write_text("{")
+        with mock.patch.dict(os.environ, {"A3_NETWORK": str(self.network)}):
+            truth = a3_osc.load(TRUTH)
+        self.assertEqual(truth.host("mixer"), "192.168.8.11")
+        self.assertTrue(truth.network_problem)
+
+    def test_the_fingerprint_is_of_the_joined_truth(self):
+        with mock.patch.dict(os.environ, {"A3_NETWORK": str(self.network)}):
+            joined = a3_osc.load(TRUTH)
+        self.assertNotEqual(joined.fingerprint(), a3_osc.load(TRUTH).fingerprint())
+        self.assertEqual(json.loads(joined.canonical())["hosts"]["mixer"], "10.9.9.9")
