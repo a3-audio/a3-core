@@ -16,22 +16,25 @@ CORE = (PACKAGE / "home/aaa/.local/bin/a3-core.py").read_text()
 
 
 class TheStateFile(unittest.TestCase):
-    """Only the selections are Core's own; the switches are StemDeck's
-    (specs stemdeck-remote, desk-stem-selector)."""
+    """Only the menus and the return's mode are Core's own; the switches are
+    StemDeck's (specs stemdeck-remote, desk-stem-grid-2)."""
 
-    def test_the_selections_are_written_down(self):
+    def test_the_menus_and_mode_are_written_down(self):
         s = Stems()
-        s.selected = [1, 0, 0, 0, 2]
-        self.assertEqual(state_of([], _Master(), s)["stems"], {"selected": [1, 0, 0, 0, 2]})
+        s.menus[1] = (1, 2)
+        s.return_mode = 0
+        stems = state_of([], _Master(), s)["stems"]
+        self.assertEqual(stems["menus"][1], [1, 2])
+        self.assertEqual(stems["return_mode"], 0)
 
-    def test_a_state_without_stems_selects_nothing(self):
-        self.assertEqual(apply_stems({}).selected, [0] * 5)
+    def test_a_state_without_stems_starts_at_the_top(self):
+        self.assertEqual(apply_stems({}).menus, [(0, 0)] * 4)
         self.assertEqual(apply_stems({"stems": "garbage"}).masks, [0] * 8)
 
-    def test_the_selections_survive_the_round_trip(self):
+    def test_the_menus_survive_the_round_trip(self):
         s = Stems()
-        s.selected = [0, 3, 0, 0, 0]
-        self.assertEqual(apply_stems(state_of([], _Master(), s)).selected, [0, 3, 0, 0, 0])
+        s.menus[3] = (2, 4)
+        self.assertEqual(apply_stems(state_of([], _Master(), s)).menus[3], (2, 4))
 
 
 class _Master:
@@ -192,6 +195,20 @@ class TheReturnSaysWhatItCannotServe(unittest.TestCase):
         self.assertEqual(1, len(unknown))
 
 
+class TheTidyIsWired(unittest.TestCase):
+    """Spec desk-stem-grid-2: a report pokes the settle, the loop's tick
+    tidies -- never the report handler itself."""
+
+    def test_a_report_pokes_and_does_not_tidy(self):
+        handler = _source_of("osc_handler_stemdeck")
+        self.assertIn("_tidy_settle.poke(", handler)
+        self.assertNotIn(".tidy(", handler)
+
+    def test_the_loop_ticks_the_tidy(self):
+        self.assertIn("tick=tidy_when_settled", CORE)
+        self.assertIn("_stems.tidy()", _source_of("tidy_when_settled"))
+
+
 class TheSelectorIsWired(unittest.TestCase):
     """Spec desk-stem-selector: turn selects, push loads, cue through C."""
 
@@ -208,6 +225,26 @@ class TheSelectorIsWired(unittest.TestCase):
     def test_a_push_without_stemdeck_sends_nothing(self):
         branch = _branch_of("osc_handler_channel", 'elif parameter == "stem.push":')
         self.assertIn("_stemdeck_client is not None", branch)
+
+    def test_the_return_switches_its_mode_with_or_without_stemdeck(self):
+        branch = _branch_of("osc_handler_aux_return", 'elif key == "aux-return.stem.push":')
+        self.assertLess(branch.index("_stems.push(RETURN"),
+                        branch.index("_stemdeck_client is not None"))
+
+    def test_a_push_tells_stems_whether_stemdeck_is_there(self):
+        branch = _branch_of("osc_handler_channel", 'elif parameter == "stem.push":')
+        self.assertIn("connected=_stemdeck_client is not None", branch)
+        ret = _branch_of("osc_handler_aux_return", 'elif key == "aux-return.stem.push":')
+        self.assertIn("connected=_stemdeck_client is not None", ret)
+
+    def test_a_push_moves_the_menu_and_says_so_with_or_without_stemdeck(self):
+        """Spec desk-stem-grid-2: a push on D1/D2 enters the deck -- the desk
+        must hear the new menu, and the menu must move without StemDeck."""
+        branch = _branch_of("osc_handler_channel", 'elif parameter == "stem.push":')
+        push = branch.index("_stems.push(")
+        guard = branch.index("_stemdeck_client is not None")
+        self.assertLess(push, guard)
+        self.assertIn("speak_stems()", branch)
 
     def test_the_cue_sets_stemdecks_c(self):
         branch = _branch_of("osc_handler_channel", 'elif parameter == "cue":')

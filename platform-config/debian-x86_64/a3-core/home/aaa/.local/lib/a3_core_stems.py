@@ -1,26 +1,36 @@
-"""The mirror of StemDeck's bus switches, and the desk's selector on it.
+"""The mirror of StemDeck's bus switches, and the desk's menus on it.
 
 StemDeck owns the switches (spec stemdeck-remote, 2026-10-01); Core keeps
 what it last reported, one mask per stem pair (bit b-1 = bus b: 1-4 the desk
-channels, 5 AUX, 6 CUE). The desk selects and loads (spec desk-stem-selector,
-2026-10-02): five places -- the four channels and the aux return -- each with
-a selection, and a push turns it into switch commands. A stem plays on one
-channel or on the return, never on two channels (spec desk-stem-grid,
-2026-10-02): a channel turns over A and the stems on no other channel -- one
-on the return included, and loading it takes it off the return -- and the
-return turns over the stems on no channel and toggles them, so it may hold
-several. Core
-applies its commands to the mirror at once; StemDeck's report overwrites
-whatever Core expected. Pure: no OSC.
+channels, 5 AUX, 6 CUE). Core applies its commands to the mirror at once;
+StemDeck's report overwrites whatever Core expected.
+
+The desk (spec desk-stem-grid-2, 2026-10-02): each channel encoder is a
+two-level menu -- D1 / D2 / A, then a deck's stems 1-4 and back; a push on a
+stem loads it as the channel's only stem, a push on A releases them all. A
+stem plays on one channel at most. The aux return knows two modes: stem
+(every stem on no channel plays on the return) and analog (no stem on it).
+tidy() makes the mirror obey both rules. Pure: no OSC.
 """
 
 PAIRS = 8
 CHANNELS = 4
 RETURN = 4
-PLACES = 5
 AUX = 5
 CUE = 6
 ALL_BUSES = (1 << CUE) - 1
+STEMS_PER_DECK = 4
+
+#: A channel menu's levels, and the top level's entries.
+TOP, DECK_1, DECK_2 = 0, 1, 2
+D1, D2, A = 0, 1, 2
+#: A deck level's entries: stems 0-3, then back.
+BACK = STEMS_PER_DECK
+
+#: The aux return's two modes; its encoder's cursor runs over both.
+ANALOG_MODE, STEM_MODE = 0, 1
+
+_ENTRIES = {TOP: 3, DECK_1: STEMS_PER_DECK + 1, DECK_2: STEMS_PER_DECK + 1}
 
 
 def _bit(bus):
@@ -31,26 +41,32 @@ def _is_int(value):
     return isinstance(value, int) and not isinstance(value, bool)
 
 
+def pair_of_deck(level, stem):
+    """The pair (1-8) of a deck level's stem entry (0-3)."""
+    return (level - DECK_1) * STEMS_PER_DECK + stem + 1
+
+
 class Stems:
     def __init__(self):
         self.masks = [0] * PAIRS
-        self.selected = [0] * PLACES
+        self.menus = [(TOP, D1)] * CHANNELS
+        self.return_cursor = STEM_MODE
+        self.return_mode = STEM_MODE
 
     # -- what StemDeck says -------------------------------------------------
 
     def report(self, pair, mask):
-        """Take StemDeck's word for one stem. False for a damaged one."""
+        """Take StemDeck's word for one stem. False for a damaged one. The
+        rules are applied later (tidy), once the reports have settled."""
         if not (_is_int(pair) and _is_int(mask) and 1 <= pair <= PAIRS
                 and 0 <= mask <= ALL_BUSES):
             return False
         self.masks[pair - 1] = mask
-        self._keep_selections()
         return True
 
     def forget(self):
         """StemDeck is gone: nothing is on any bus."""
         self.masks = [0] * PAIRS
-        self._keep_selections()
 
     # -- where everything is -------------------------------------------------
 
@@ -70,47 +86,88 @@ class Stems:
                 return index
         return RETURN if self._on(pair, AUX) else None
 
-    def positions(self, index):
-        """Where place `index`'s selection may stand. A channel: A (0), then
-        the stems on no other channel. The return: the stems on no channel,
-        or 0 when there is none."""
-        if index == RETURN:
-            free = [p for p in range(1, PAIRS + 1) if self.place_of(p) in (None, RETURN)]
-            return free or [0]
-        return [0] + [p for p in range(1, PAIRS + 1)
-                      if self.place_of(p) in (None, RETURN, index)]
+    def source(self, index):
+        """What channel `index` plays from: D1, D2 or A."""
+        mask = self.channel_mask(index)
+        if mask & 0x0F:
+            return D1
+        if mask & 0xF0:
+            return D2
+        return A
 
     # -- turn and push --------------------------------------------------------
 
     def turn(self, index, steps):
-        positions = self.positions(index)
-        here = positions.index(self.selected[index]) if self.selected[index] in positions else 0
-        self.selected[index] = positions[(here + steps) % len(positions)]
-
-    def push(self, index):
-        """The commands that load place `index`'s selection there -- on the
-        return, that switch its selected stem on or off."""
-        chosen = self.selected[index]
         if index == RETURN:
-            return self._toggle_on_return(chosen)
+            self.return_cursor = (self.return_cursor + steps) % 2
+            return
+        level, cursor = self.menus[index]
+        self.menus[index] = (level, (cursor + steps) % _ENTRIES[level])
+
+    def push(self, index, connected=True):
+        """The commands a push on place `index` means; the menu moves too.
+        Without StemDeck (`connected` False) only the menu and the return's
+        mode move: the mirror is StemDeck's, and a stem nobody plays must
+        not shut a channel's analog input."""
+        if index == RETURN:
+            self.return_mode = self.return_cursor
+            return self.tidy() if connected else []
+        level, cursor = self.menus[index]
+        if level == TOP:
+            if cursor == A:
+                return self._release(index) + self.tidy() if connected else []
+            self.menus[index] = (DECK_1 if cursor == D1 else DECK_2, 0)
+            return []
+        if cursor == BACK:
+            self.menus[index] = (TOP, D1 if level == DECK_1 else D2)
+            return []
+        return self._load(index, pair_of_deck(level, cursor)) if connected else []
+
+    def _release(self, index):
         bus = index + 1
-        commands = [(p, bus, False) for p in range(1, PAIRS + 1)
-                    if p != chosen and self._on(p, bus)]
-        if chosen and not self._on(chosen, bus):
-            # A stem loaded on a channel is on the return no more.
-            commands[:0] = [(chosen, bus, True), (chosen, AUX, False)]
-        for pair, b, on in commands:
-            self._apply(pair, b, on)
-        self._keep_selections()
+        commands = [(p, bus, False) for p in range(1, PAIRS + 1) if self._on(p, bus)]
+        self._apply_all(commands)
         return commands
 
-    def _toggle_on_return(self, chosen):
-        if not chosen:
+    def _load(self, index, pair):
+        place = self.place_of(pair)
+        if place is not None and place not in (RETURN, index):
             return []
-        on = not self._on(chosen, AUX)
-        self._apply(chosen, AUX, on)
-        self._keep_selections()
-        return [(chosen, AUX, on)]
+        bus = index + 1
+        commands = []
+        if not self._on(pair, bus):
+            # A stem loaded on a channel is on the return no more.
+            commands = [(pair, bus, True), (pair, AUX, False)]
+        commands += [(p, bus, False) for p in range(1, PAIRS + 1)
+                     if p != pair and self._on(p, bus)]
+        self._apply_all(commands)
+        return commands + self.tidy()
+
+    # -- the rules ------------------------------------------------------------
+
+    def tidy(self):
+        """The commands that make the mirror obey the rules -- one stem per
+        channel bus (the lowest stays), a stem on one channel at most, and
+        the return's mode -- applied at once. A second call returns []."""
+        commands = []
+        for index in range(CHANNELS):
+            bus = index + 1
+            on = [p for p in range(1, PAIRS + 1) if self._on(p, bus)]
+            commands += [(p, bus, False) for p in on[1:]]
+        # Applied before the next rule reads the mirror: a stem taken off one
+        # bus here may be alone, and right, on another.
+        self._apply_all(commands)
+        for pair in range(1, PAIRS + 1):
+            channels = [c for c in range(CHANNELS) if self._on(pair, c + 1)]
+            spare = [(pair, c + 1, False) for c in channels[1:]]
+            self._apply_all(spare)
+            commands += spare
+        for pair in range(1, PAIRS + 1):
+            wanted = self.return_mode == STEM_MODE and self.place_of(pair) in (None, RETURN)
+            if wanted != self._on(pair, AUX):
+                commands.append((pair, AUX, wanted))
+                self._apply(pair, AUX, wanted)
+        return commands
 
     def cue_commands(self, cues):
         """StemDeck's C switches for the channel cues: a stem's C is on while
@@ -132,29 +189,41 @@ class Stems:
         else:
             self.masks[pair - 1] &= ~_bit(bus)
 
-    def _keep_selections(self):
-        """A selection whose stem went elsewhere moves to the next position."""
-        for index in range(PLACES):
-            positions = self.positions(index)
-            if self.selected[index] in positions:
-                continue
-            later = [p for p in positions if p > self.selected[index]]
-            self.selected[index] = later[0] if later else positions[0]
+    def _apply_all(self, commands):
+        for pair, bus, on in commands:
+            self._apply(pair, bus, on)
 
     # -- on disk ---------------------------------------------------------------
 
     def as_data(self):
-        return {"selected": list(self.selected)}
+        return {"menus": [list(m) for m in self.menus],
+                "return_cursor": self.return_cursor, "return_mode": self.return_mode}
 
     @classmethod
     def from_data(cls, data):
-        """The remembered selections, or none -- never raises. The switches
-        are StemDeck's and come back with its report."""
+        """The remembered menus and return mode, or the defaults -- never
+        raises. The switches are StemDeck's and come back with its report."""
         s = cls()
-        try:
-            selected = [int(v) for v in data["selected"]]
-        except (TypeError, KeyError, ValueError, OverflowError):
+        if not isinstance(data, dict):
             return s
-        if len(selected) == PLACES and all(0 <= v <= PAIRS for v in selected):
-            s.selected = selected
+        menus = _menus(data.get("menus"))
+        if menus is not None:
+            s.menus = menus
+        for name in ("return_cursor", "return_mode"):
+            if data.get(name) in (ANALOG_MODE, STEM_MODE) and _is_int(data.get(name)):
+                setattr(s, name, data[name])
         return s
+
+
+def _menus(data):
+    if not isinstance(data, list) or len(data) != CHANNELS:
+        return None
+    menus = []
+    for entry in data:
+        if not (isinstance(entry, list) and len(entry) == 2 and all(map(_is_int, entry))):
+            return None
+        level, cursor = entry
+        if level not in _ENTRIES or not 0 <= cursor < _ENTRIES[level]:
+            return None
+        menus.append((level, cursor))
+    return menus

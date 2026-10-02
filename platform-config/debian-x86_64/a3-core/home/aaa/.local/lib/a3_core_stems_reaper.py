@@ -5,7 +5,7 @@ Send volume, not send mute: REAPER's OSC has no send mute
 (Default.ReaperOSC, 2026-10-01).
 """
 
-from a3_core_stems import CHANNELS, PAIRS, RETURN
+from a3_core_stems import CHANNELS, PAIRS
 
 STEMS_PER_DECK = 4
 
@@ -28,15 +28,35 @@ def analog_messages(stems, layout, unity):
 
 
 def announcements(stems, truth):
-    """Per channel what plays there and where its selection stands, then
-    the return's selection and what plays on it."""
+    """Per channel what plays there and where its menu stands, then the
+    return's cursor and what plays on it, and its mode."""
     out = []
     for c in range(CHANNELS):
         out.append((truth.address("channel.stem", ch=c + 1), stems.channel_mask(c)))
-        out.append((truth.address("channel.stem.selected", ch=c + 1), stems.selected[c]))
+        out.append((truth.address("channel.stem.menu", ch=c + 1), list(stems.menus[c])))
     plays = [int(stems.plays_on_return(p)) for p in range(1, PAIRS + 1)]
-    out.append((truth.address("aux-return.stem"), [stems.selected[RETURN]] + plays))
+    out.append((truth.address("aux-return.stem"), [stems.return_cursor] + plays))
+    out.append((truth.address("aux-return.stem.mode"), stems.return_mode))
     return out
+
+
+class Settle:
+    """True once when `delay` seconds have passed since the last poke
+    (spec desk-stem-grid-2): StemDeck reports stem by stem, and Core tidies
+    only the settled picture. The caller passes the clock."""
+
+    def __init__(self, delay):
+        self._delay = delay
+        self._last = None
+
+    def poke(self, now):
+        self._last = now
+
+    def due(self, now):
+        if self._last is None or now - self._last < self._delay:
+            return False
+        self._last = None
+        return True
 
 
 def command_messages(commands, truth):

@@ -297,9 +297,10 @@ class TheStemSelector(unittest.TestCase):
         self.assertEqual(self.truth.addresses()["channel.stem.push"]["to"], ["core"])
 
     def test_core_announces_the_selection(self):
-        self.assertEqual(self.truth.address("channel.stem.selected", ch=1),
-                         "/channel/1/stem/selected")
-        self.assertEqual(self.truth.addresses()["channel.stem.selected"]["from"], ["core"])
+        self.assertEqual(self.truth.address("channel.stem.menu", ch=1),
+                         "/channel/1/stem/menu")
+        self.assertEqual(self.truth.addresses()["channel.stem.menu"]["from"], ["core"])
+        self.assertNotIn("channel.stem.selected", self.truth.addresses())
 
 
 class CoreAnnouncesItself(unittest.TestCase):

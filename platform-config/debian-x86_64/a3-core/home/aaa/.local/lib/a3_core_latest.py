@@ -63,14 +63,23 @@ def drain(sock, limit):
     return packets
 
 
-def serve(sock, handle, key_of, limit, report, running):
+def serve(sock, handle, key_of, limit, report, running, tick=None, tick_seconds=0.1):
     """Core's main loop: wait for the socket, take what waits, hand on what
     latest_wins keeps. A handler that raises is reported and the loop goes
-    on, as serve_forever's did -- one bad packet must not stop Core."""
+    on, as serve_forever's did -- one bad packet must not stop Core.
+
+    `tick`, if given, runs on this same thread after every pass and at the
+    latest every `tick_seconds` while nothing arrives: work that waits for
+    quiet needs no second thread on Core's state."""
     while running():
-        select.select([sock], [], [])
+        select.select([sock], [], [], tick_seconds if tick else None)
         for data, client in latest_wins(drain(sock, limit), key_of):
             try:
                 handle(data, client)
+            except Exception:  # noqa: BLE001 -- reported, never fatal
+                report(traceback.format_exc())
+        if tick:
+            try:
+                tick()
             except Exception:  # noqa: BLE001 -- reported, never fatal
                 report(traceback.format_exc())

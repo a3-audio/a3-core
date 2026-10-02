@@ -56,7 +56,7 @@ from a3_core_state import (StateFile, apply_state,   # noqa: E402
                            apply_stems, state_of)
 from a3_core_cue import send_levels   # noqa: E402
 from a3_core_stems import RETURN   # noqa: E402
-from a3_core_stems_reaper import (analog_messages,   # noqa: E402
+from a3_core_stems_reaper import (Settle, analog_messages,   # noqa: E402
                                   announcements as stem_announcements,
                                   changed_messages, command_messages, pair_of)
 from a3_core_presence import STEMDECK_SILENCE, StemDeckWatch   # noqa: E402
@@ -564,6 +564,11 @@ def speak_stems(full=False):
 _stemdeck_client = None
 _stemdeck_watch = StemDeckWatch(STEMDECK_SILENCE)
 
+#: StemDeck reports stem by stem; the rules are applied once its reports have
+#: been quiet this long (spec desk-stem-grid-2), never to a half-updated mirror.
+TIDY_AFTER_SECONDS = 0.3
+_tidy_settle = Settle(TIDY_AFTER_SECONDS)
+
 
 def send_to_stemdeck(commands):
     """Switch commands to StemDeck; the desk changes when StemDeck reports."""
@@ -903,16 +908,19 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
 
     elif parameter == "stem.turn":
-        # The selection only (spec desk-stem-selector): Core's own, shown at
-        # once, with or without StemDeck.
+        # The menu's cursor only (spec desk-stem-grid-2): Core's own, shown
+        # at once, with or without StemDeck.
         _stems.turn(channel_index, int(value))
         speak_stems()
 
     elif parameter == "stem.push":
-        # Loads the selection; the desk shows it when StemDeck reports.
+        # The menu moves at once (into a deck, back); what a push loads goes
+        # to StemDeck, and the desk shows it when StemDeck reports.
+        commands = _stems.push(channel_index, connected=_stemdeck_client is not None)
         if _stemdeck_client is not None:
-            send_to_stemdeck(_stems.push(channel_index))
+            send_to_stemdeck(commands)
             apply_stem_cue()
+        speak_stems()
 
     else:
         # Bis hierher gekommen und auf keinen Zweig gepasst.
@@ -997,8 +1005,10 @@ def osc_handler_aux_return(client_address: Tuple[str, int], address: str,
     if key == "aux-return.stem.turn":
         _stems.turn(RETURN, int(float(osc_arguments[0])))
     elif key == "aux-return.stem.push":
+        # The mode switches at once; its commands go to StemDeck if it is there.
+        commands = _stems.push(RETURN, connected=_stemdeck_client is not None)
         if _stemdeck_client is not None:
-            send_to_stemdeck(_stems.push(RETURN))
+            send_to_stemdeck(commands)
     else:
         # Mapped, so seen() above has put it in the understood table; say
         # that nobody serves it, as osc_handler_channel's `else` does.
@@ -1022,8 +1032,21 @@ def osc_handler_stemdeck(client_address: Tuple[str, int], address: str,
             pair_of(fields["deck"], fields["stem"]), value):
         traffic.unknown(address, value, origin)
         return
+    _tidy_settle.poke(time.monotonic())
     speak_stems()
     apply_stem_cue()
+
+
+def tidy_when_settled():
+    """The serve loop's tick: once StemDeck's reports have settled, make the
+    mirror obey the rules -- one stem per channel, the return's mode -- and
+    tell StemDeck. Runs on the serve thread, as every handler does."""
+    if not _tidy_settle.due(time.monotonic()) or _stemdeck_client is None:
+        return
+    send_to_stemdeck(_stems.tidy())
+    speak_stems()
+    apply_stem_cue()
+    remember_state()
 
 
 def osc_handler_filter(client_address: Tuple[str, int], address: str,
@@ -1701,4 +1724,4 @@ if __name__ == "__main__":
           lambda data, client: dispatcher.call_handlers_for_packet(data, client),
           lambda data: position_key(data, is_position),
           LATEST_WINS_LIMIT, lambda text: print(text, file=sys.stderr),
-          lambda: True)
+          lambda: True, tick=tidy_when_settled)
