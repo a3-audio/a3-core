@@ -80,7 +80,7 @@ from a3_core_startup import (filter_bypass_messages,   # noqa: E402
                              remembered_reaper_messages)
 from a3_core_evening import evening_state, replayable   # noqa: E402
 from a3_core_web import default_bind, start_window, window_address   # noqa: E402
-from a3_core_devices import Devices, truth_hash   # noqa: E402
+from a3_core_devices import Devices   # noqa: E402
 
 LAYOUT_PATH = (Path(__file__).resolve().parent.parent
                / "share/a3-core/layout.json")
@@ -115,7 +115,9 @@ from pythonosc.udp_client import SimpleUDPClient  # type: ignore
 _truth = a3_osc.load()
 
 # Which truth each device speaks, beside Core's own -- see a3_core_devices.
-_devices = Devices(truth_hash(a3_osc.truth_path()))
+# The canonical fingerprint (spec truth-from-core, step 2): the desk hashes
+# the body it fetched from /api/truth, which is exactly this.
+_devices = Devices(_truth.fingerprint())
 
 OSC_PORT_CORE: int = _truth.port("core", "osc")
 
