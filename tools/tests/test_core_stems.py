@@ -69,14 +69,30 @@ class TheMenu(unittest.TestCase):
         s.turn(0, +2)
         self.assertEqual(s.menus[0], (DECK_1, 1))
 
-    def test_push_on_a_stem_loads_it_as_the_only_one(self):
-        s = stems_with(p2=bit(1))
+    def test_push_on_a_stem_replaces_only_that_decks_stem(self):
+        """2026-10-02: a channel may play one stem of each deck -- D1's and
+        D2's -- at once."""
+        s = stems_with(p2=bit(1), p6=bit(1))
         s.return_mode = ANALOG_MODE
         s.menus[0] = (DECK_1, 2)                      # deck 1, stem 3 = pair 3
         commands = s.push(0)
         self.assertEqual(commands[:2], [(3, 1, True), (3, AUX, False)])
         self.assertIn((2, 1, False), commands)
-        self.assertEqual(s.channel_mask(0), 1 << 2)
+        self.assertNotIn((6, 1, False), commands)
+        self.assertEqual(s.channel_mask(0), (1 << 2) | (1 << 5))
+
+    def test_push_on_the_loaded_stem_unloads_it(self):
+        s = stems_with(p3=bit(1), p6=bit(1))
+        s.return_mode = ANALOG_MODE
+        s.menus[0] = (DECK_1, 2)
+        self.assertEqual(s.push(0), [(3, 1, False)])
+        self.assertEqual(s.channel_mask(0), 1 << 5)
+
+    def test_an_unloaded_stem_returns_to_aux_in_stem_mode(self):
+        s = stems_with(p3=bit(1))
+        s.tidy()
+        s.menus[0] = (DECK_1, 2)
+        self.assertIn((3, AUX, True), s.push(0))
 
     def test_deck_2_stems_are_pairs_5_to_8(self):
         s = Stems()
@@ -104,9 +120,9 @@ class TheMenu(unittest.TestCase):
         self.assertEqual(s.push(0), [(3, 1, False)])
         self.assertEqual(s.channel_mask(0), 0)
 
-    def test_source_marks_the_deck_or_a(self):
-        s = stems_with(p6=bit(2))
-        self.assertEqual((s.source(0), s.source(1)), (A, D2))
+    def test_sources_are_the_decks_or_a(self):
+        s = stems_with(p6=bit(2), p1=bit(3), p7=bit(3))
+        self.assertEqual((s.sources(0), s.sources(1), s.sources(2)), ({A}, {D2}, {D1, D2}))
 
 
 class WithoutStemDeck(unittest.TestCase):
@@ -146,11 +162,16 @@ class OnePerChannel(unittest.TestCase):
         self.assertEqual(s.channel_mask(1), 1 << 2)
         self.assertEqual(len(commands), len(set(commands)))
 
-    def test_two_stems_on_a_bus_keep_the_lowest(self):
-        s = stems_with(p6=bit(1), p3=bit(1))
+    def test_two_stems_of_one_deck_on_a_bus_keep_the_lowest(self):
+        s = stems_with(p4=bit(1), p3=bit(1))
         s.return_mode = ANALOG_MODE
-        self.assertEqual(s.tidy(), [(6, 1, False)])
+        self.assertEqual(s.tidy(), [(4, 1, False)])
         self.assertEqual(s.channel_mask(0), 1 << 2)
+
+    def test_one_stem_of_each_deck_may_stay(self):
+        s = stems_with(p3=bit(1), p6=bit(1))
+        s.return_mode = ANALOG_MODE
+        self.assertEqual(s.tidy(), [])
 
     def test_tidy_twice_is_nothing(self):
         s = stems_with(p3=bit(1), p6=bit(1), p4=bit(4), p8=bit(4))
@@ -221,10 +242,18 @@ class TheCue(unittest.TestCase):
         s = stems_with(p3=bit(1))
         s.return_mode = ANALOG_MODE
         s.cue_commands([True, False, False, False])
-        s.menus[0] = (DECK_2, 0)
+        s.menus[0] = (DECK_1, 3)                      # stem 4 of the same deck replaces 3
         s.push(0)
         self.assertEqual(sorted(s.cue_commands([True, False, False, False])),
-                         [(3, CUE, False), (5, CUE, True)])
+                         [(3, CUE, False), (4, CUE, True)])
+
+    def test_both_decks_stems_are_cued(self):
+        s = stems_with(p3=bit(1))
+        s.return_mode = ANALOG_MODE
+        s.cue_commands([True, False, False, False])
+        s.menus[0] = (DECK_2, 0)
+        s.push(0)
+        self.assertEqual(s.cue_commands([True, False, False, False]), [(5, CUE, True)])
 
     def test_nothing_changed_nothing_sent(self):
         s = stems_with(p3=bit(1) | bit(CUE))
