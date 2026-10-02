@@ -8,6 +8,12 @@ After=sound.target
 # started with -dhw:USB and fails outright if that card is not there yet;
 # sound.target above says the subsystem is up, not that this device is.
 ExecStartPre=/bin/sh -c 'until [ -d /proc/asound/USB ]; do sleep 0.1; done'
+# No deadline for that wait: on 2026-10-02 the Scarlett, switched on, was not
+# there within systemd's 90 s; the start-pre was killed and JACK never tried
+# again. And a jackd that falls over is started again.
+TimeoutStartSec=infinity
+Restart=on-failure
+RestartSec=2
 ExecStart=/usr/bin/jackd -P 19 -v -aa -dalsa -dhw:USB -r44100 -p256 
 ExecStop=/usr/bin/pkill -9 jackd
 Type=simple
