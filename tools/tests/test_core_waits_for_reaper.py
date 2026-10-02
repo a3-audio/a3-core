@@ -181,7 +181,7 @@ class CoreIsWiredThatWay(unittest.TestCase):
         """Measured 2026-09-26: a refresh right after a replay reports the
         old values of what was just set, and Core writes them down as news."""
         start = self.source.find("server = osc_server.BlockingOSCUDPServer(")
-        tail = self.source[start:self.source.rfind("server.serve_forever()")]
+        tail = self.source[start:self.source.rfind("serve(server.socket,")]
         replay_path = tail.split("def replay_once_reaper_is_quiet", 1)[1]
         replay_path = replay_path.split("threading.Thread(", 1)[0]
         self.assertLess(replay_path.find("wait_until_quiet("),
@@ -194,7 +194,7 @@ class CoreIsWiredThatWay(unittest.TestCase):
         tail = self.source[start:]
         self.assertIn("target=when_reaper_listens", tail)
         self.assertLess(tail.find("target=when_reaper_listens"),
-                        tail.rfind("server.serve_forever()"))
+                        tail.rfind("serve(server.socket,"))
         # No second, unconditional replay or refresh left beside it.
         self.assertNotIn("\n    replay_evening(", tail)
         self.assertNotIn("\n    osc_reaper.send_message(REFRESH_ACTION", tail)

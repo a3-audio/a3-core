@@ -48,7 +48,7 @@ class CoreAsksOnceItIsListening(unittest.TestCase):
         source = CORE.read_text()
         bound = source.find("server = osc_server.BlockingOSCUDPServer(")
         asked = source.find("osc_reaper.send_message(REFRESH_ACTION")
-        serving = source.rfind("server.serve_forever()")
+        serving = source.rfind("serve(server.socket,")
         self.assertNotEqual(-1, asked, "a3-core.py never asks REAPER")
         self.assertLess(bound, asked, "asked before the answer has a port to land in")
         self.assertLess(asked, serving)

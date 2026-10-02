@@ -59,6 +59,7 @@ from a3_core_stems_reaper import (analog_messages,   # noqa: E402
                                   announcements as stem_announcements,
                                   changed_messages, command_messages, pair_of)
 from a3_core_presence import STEMDECK_SILENCE, StemDeckWatch   # noqa: E402
+from a3_core_latest import position_key, serve   # noqa: E402
 from a3_core_recall import (FX_MODE_NUMBERS, FX_MODE_WORDS,   # noqa: E402
                             Relayed, STATE_OF, led_message,
                             recall_messages)   # noqa: E402
@@ -1208,6 +1209,19 @@ def stemdeck_said_hello(host, now):
     _stemdeck_client.send_message(_truth.address("stemdeck.recall"), 1)
 
 
+#: The words whose older values are worth nothing once a newer one waits.
+POSITION_WORDS = frozenset(("channel.azimuth", "channel.elevation"))
+
+#: How many waiting packets one pass takes: a burst of positions shrinks to
+#: one per channel, and a desk command is never more than one pass away.
+LATEST_WINS_LIMIT = 1024
+
+
+def is_position(address):
+    found = _truth.match(address)
+    return found is not None and found[0] in POSITION_WORDS
+
+
 def osc_handler_recall(client_address: Tuple[str, int], address: str,
                        *osc_arguments: List[Any]) -> None:
     """Say the whole state again, as the messages it would have arrived as.
@@ -1648,4 +1662,11 @@ if __name__ == "__main__":
               lambda: osc_reaper.send_message(REFRESH_ACTION, 1.0),
               replay_once_reaper_is_quiet)).start()
 
-    server.serve_forever()
+    # Not serve_forever: the newest position wins (a3_core_latest). Motion
+    # sends a position on every clock tick; under load the queue filled and
+    # a desk command waited behind thousands of stale ones (2026-10-02).
+    serve(server.socket,
+          lambda data, client: dispatcher.call_handlers_for_packet(data, client),
+          lambda data: position_key(data, is_position),
+          LATEST_WINS_LIMIT, lambda text: print(text, file=sys.stderr),
+          lambda: True)
