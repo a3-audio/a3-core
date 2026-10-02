@@ -16,10 +16,10 @@
     "aside"
   ],
   "entries": [
-    {"address": "/aux-return/stem", "device": "mixer", "direction": "out", "note": "the aux return's selection (0 = the empty field), then pairs 1-8: 1 = on the return (AUX)", "source": "a3-osc.json: aux-return.stem"},
-    {"address": "/aux-return/stem", "device": "motion", "direction": "out", "note": "the aux return's selection (0 = the empty field), then pairs 1-8: 1 = on the return (AUX)", "source": "a3-osc.json: aux-return.stem"},
-    {"address": "/aux-return/stem/push", "device": "mixer", "direction": "in", "note": "the aux return's encoder pushed: the selected stem becomes the one on the return (0: none)", "source": "a3-osc.json: aux-return.stem.push"},
-    {"address": "/aux-return/stem/turn", "device": "mixer", "direction": "in", "note": "the aux return's encoder turned by this many clicks (signed): moves its selection", "source": "a3-osc.json: aux-return.stem.turn"},
+    {"address": "/aux-return/stem", "device": "mixer", "direction": "out", "note": "the aux return's selection (1-8; 0 = no stem free), then pairs 1-8: 1 = on the return (AUX)", "source": "a3-osc.json: aux-return.stem"},
+    {"address": "/aux-return/stem", "device": "motion", "direction": "out", "note": "the aux return's selection (1-8; 0 = no stem free), then pairs 1-8: 1 = on the return (AUX)", "source": "a3-osc.json: aux-return.stem"},
+    {"address": "/aux-return/stem/push", "device": "mixer", "direction": "in", "note": "the aux return's encoder pushed: switches its selected stem on or off the return (0: none)", "source": "a3-osc.json: aux-return.stem.push"},
+    {"address": "/aux-return/stem/turn", "device": "mixer", "direction": "in", "note": "the aux return's encoder turned by this many clicks (signed): moves its selection over the stems on no channel", "source": "a3-osc.json: aux-return.stem.turn"},
     {"address": "/beat", "device": "beat-analyzer", "direction": "in", "note": "beat in bar, bar, tempo -- the clock (Motion sends it only in clock mode 0)", "source": "a3-osc.json: beat"},
     {"address": "/beat", "device": "mixer", "direction": "aside", "note": "beat in bar, bar, tempo -- the clock (Motion sends it only in clock mode 0)", "source": "a3-osc.json: beat"},
     {"address": "/beat", "device": "motion", "direction": "in", "note": "beat in bar, bar, tempo -- the clock (Motion sends it only in clock mode 0)", "source": "a3-osc.json: beat"},

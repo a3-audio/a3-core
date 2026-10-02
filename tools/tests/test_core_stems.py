@@ -46,11 +46,6 @@ class Turning(unittest.TestCase):
         self.assertEqual(s.selected[0], 1)
         self.assertEqual(s.masks, [0] * 8)
 
-    def test_a_turn_skips_stems_in_other_places(self):
-        s = stems_with(p1=bit(2), p2=bit(AUX))
-        s.turn(0, +1)
-        self.assertEqual(s.selected[0], 3)
-
     def test_a_turn_wraps_through_a(self):
         s = Stems()
         s.turn(0, -1)
@@ -58,13 +53,55 @@ class Turning(unittest.TestCase):
         s.turn(0, +1)
         self.assertEqual(s.selected[0], 0)
 
-    def test_the_return_turns_over_free_stems(self):
-        s = stems_with(p1=bit(1))
+    def test_a_channel_turns_over_stems_on_the_return(self):
+        s = stems_with(p1=bit(2), p2=bit(AUX))
+        s.turn(0, +1)
+        self.assertEqual(s.selected[0], 2)
+
+    def test_a_channel_skips_stems_on_other_channels(self):
+        s = stems_with(p1=bit(2))
+        s.turn(0, +1)
+        self.assertEqual(s.selected[0], 2)
+
+    def test_the_return_turns_over_stems_on_no_channel(self):
+        s = stems_with(p1=bit(1), p2=bit(AUX))
+        s.turn(RETURN, +1)
+        self.assertEqual(s.selected[RETURN], 3)
+        s.selected[RETURN] = 8
         s.turn(RETURN, +1)
         self.assertEqual(s.selected[RETURN], 2)
 
+    def test_the_return_has_no_empty_field(self):
+        s = Stems()
+        s.turn(RETURN, +1)
+        self.assertEqual(s.selected[RETURN], 2)
+
+    def test_nothing_free_leaves_the_return_at_zero(self):
+        s = stems_with(**{f"p{p}": bit(1) for p in range(1, 9)})
+        s.turn(RETURN, +1)
+        self.assertEqual(s.selected[RETURN], 0)
+        self.assertEqual(s.push(RETURN), [])
+
 
 class Pushing(unittest.TestCase):
+    def test_a_stem_on_the_return_moves_to_the_channel(self):
+        s = stems_with(p2=bit(AUX))
+        s.selected[1] = 2
+        self.assertEqual(s.push(1), [(2, 2, True), (2, AUX, False)])
+        self.assertEqual(s.place_of(2), 1)
+
+    def test_the_return_push_toggles(self):
+        s = stems_with(p2=bit(AUX))
+        s.selected[RETURN] = 4
+        self.assertEqual(s.push(RETURN), [(4, AUX, True)])
+        self.assertEqual(s.push(RETURN), [(4, AUX, False)])
+
+    def test_the_return_holds_several(self):
+        s = stems_with(p2=bit(AUX))
+        s.selected[RETURN] = 4
+        s.push(RETURN)
+        self.assertTrue(s.plays_on_return(2) and s.plays_on_return(4))
+
     def test_a_push_loads_the_selected_stem(self):
         s = Stems()
         s.selected[0] = 3
@@ -89,17 +126,6 @@ class Pushing(unittest.TestCase):
         s = stems_with(p3=bit(1))
         s.selected[0] = 3
         self.assertEqual(s.push(0), [])
-
-    def test_the_return_holds_one_stem(self):
-        s = stems_with(p2=bit(AUX))
-        s.selected[RETURN] = 4
-        self.assertEqual(s.push(RETURN), [(4, AUX, True), (2, AUX, False)])
-
-    def test_the_empty_field_empties_the_return(self):
-        s = stems_with(p2=bit(AUX))
-        s.selected[RETURN] = 0
-        self.assertEqual(s.push(RETURN), [(2, AUX, False)])
-
 
 class SelectionsFollow(unittest.TestCase):
     def test_a_selection_that_lost_its_stem_moves_on(self):
