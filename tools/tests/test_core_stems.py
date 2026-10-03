@@ -113,6 +113,47 @@ class TheMenu(unittest.TestCase):
         self.assertEqual(s.push(0), [])
         self.assertEqual(s.menus[0], (TOP, D2))
 
+    def test_entering_a_deck_starts_on_the_stem_it_plays(self):
+        """2026-10-03: the cursor jumps behind the dot of D1.x -- it starts
+        at x, what plays, not at stem 1."""
+        s = stems_with(p3=bit(1), p6=bit(1))
+        s.menus[0] = (TOP, D1)
+        s.push(0)
+        self.assertEqual(s.menus[0], (DECK_1, 2))
+        s.menus[0] = (TOP, D2)
+        s.push(0)
+        self.assertEqual(s.menus[0], (DECK_2, 1))
+
+    def test_entering_a_deck_with_no_stem_of_it_starts_on_stem_1(self):
+        s = stems_with(p6=bit(1), p2=bit(2))
+        s.menus[0] = (TOP, D1)
+        s.push(0)
+        self.assertEqual(s.menus[0], (DECK_1, 0))
+
+    def test_a_loaded_stem_jumps_back_to_the_top_on_its_deck(self):
+        """2026-10-03: no sub-level screen any more -- a push on a stem is the
+        last step of the edit."""
+        s = Stems()
+        s.return_mode = ANALOG_MODE
+        s.menus[0] = (DECK_2, 3)
+        s.push(0)
+        self.assertEqual(s.place_of(8), 0)
+        self.assertEqual(s.menus[0], (TOP, D2))
+
+    def test_an_unloaded_stem_jumps_back_too(self):
+        s = stems_with(p3=bit(1))
+        s.return_mode = ANALOG_MODE
+        s.menus[0] = (DECK_1, 2)
+        s.push(0)
+        self.assertEqual(s.channel_mask(0), 0)
+        self.assertEqual(s.menus[0], (TOP, D1))
+
+    def test_a_stem_on_another_channel_keeps_the_edit_open(self):
+        s = stems_with(p3=bit(2))
+        s.menus[0] = (DECK_1, 2)
+        s.push(0)
+        self.assertEqual(s.menus[0], (DECK_1, 2))
+
     def test_push_on_a_releases_every_stem(self):
         s = stems_with(p3=bit(1))
         s.return_mode = ANALOG_MODE
@@ -136,6 +177,7 @@ class WithoutStemDeck(unittest.TestCase):
         self.assertEqual(s.menus[0], (DECK_1, 0))
         self.assertEqual(s.push(0, connected=False), [])
         self.assertEqual(s.channel_mask(0), 0)
+        self.assertEqual(s.menus[0], (TOP, D1))
 
     def test_a_does_not_touch_the_mirror_either(self):
         s = stems_with(p3=bit(1))
