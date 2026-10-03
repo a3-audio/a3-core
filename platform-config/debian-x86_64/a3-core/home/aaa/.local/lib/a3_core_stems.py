@@ -8,7 +8,9 @@ StemDeck's report overwrites whatever Core expected.
 The desk (spec desk-stem-grid-2, 2026-10-02): each channel encoder is a
 two-level menu -- D1 / D2 / A, then a deck's stems 1-4 and back; a push on a
 stem loads it as the channel's stem of that deck (one of each deck may play,
-2026-10-02) or, if loaded, unloads it; a push on A releases them all. A
+2026-10-02) or, if loaded, unloads it, and returns to the top (2026-10-03:
+the desk edits the stem in place, behind the field's dot); a push on A
+releases them all. A
 stem plays on one channel at most. The aux return knows two modes: stem
 (every stem on no channel plays on the return) and analog (no stem on it).
 tidy() makes the mirror obey both rules. Pure: no OSC.
@@ -118,12 +120,32 @@ class Stems:
         if level == TOP:
             if cursor == A:
                 return self._release(index) + self.tidy() if connected else []
-            self.menus[index] = (DECK_1 if cursor == D1 else DECK_2, 0)
+            deck_level = DECK_1 if cursor == D1 else DECK_2
+            self.menus[index] = (deck_level, self._playing_stem(index, deck_level))
             return []
         if cursor == BACK:
             self.menus[index] = (TOP, D1 if level == DECK_1 else D2)
             return []
-        return self._load(index, pair_of_deck(level, cursor)) if connected else []
+        pair = pair_of_deck(level, cursor)
+        if self._elsewhere(index, pair):
+            return []
+        # The deck level is no screen of its own any more (2026-10-03): a
+        # push on a stem ends the edit, as back does.
+        self.menus[index] = (TOP, D1 if level == DECK_1 else D2)
+        return self._load(index, pair) if connected else []
+
+    def _playing_stem(self, index, level):
+        """The deck level's entry of the stem that deck plays on channel
+        `index`, or stem 0: the edit starts at what plays."""
+        for stem in range(STEMS_PER_DECK):
+            if self._on(pair_of_deck(level, stem), index + 1):
+                return stem
+        return 0
+
+    def _elsewhere(self, index, pair):
+        """True if `pair` plays on another channel: it cannot be loaded."""
+        place = self.place_of(pair)
+        return place is not None and place not in (RETURN, index)
 
     def _release(self, index):
         bus = index + 1
@@ -134,8 +156,7 @@ class Stems:
     def _load(self, index, pair):
         """Loads `pair` as this channel's stem of its deck -- the other
         deck's stem stays -- or, if it is loaded already, unloads it."""
-        place = self.place_of(pair)
-        if place is not None and place not in (RETURN, index):
+        if self._elsewhere(index, pair):
             return []
         bus = index + 1
         if self._on(pair, bus):
