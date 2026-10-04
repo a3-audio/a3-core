@@ -70,12 +70,14 @@ class TheCues(unittest.TestCase):
             self.assertAlmostEqual(levels(mix=mix)["return"]["post"],
                                    math.sin(mix * math.pi / 2))
 
-    def test_a_deck_cue_brings_the_return(self):
-        # Spec stemdeck-remote: the C field is gone; cueing a deck brings the
-        # return (its FX) along on the cue side.
-        on = levels(cues=(False, True, False, False), mix=0.25)
-        self.assertAlmostEqual(on["return"]["pre"], math.cos(0.25 * math.pi / 2))
-        self.assertEqual(levels(stem=True, mix=0.0)["return"]["pre"], 0.0)
+    def test_a_deck_cue_does_not_bring_the_return(self):
+        # The return carried the channels' FX when a cue brought it along;
+        # since the aux rename it carries stems or the analog return, and a
+        # cued channel brought the whole return into the phones. Its cue
+        # send stays shut (maintainer, 2026-10-04).
+        for cues in ((False,) * 4, (False, True, False, False), (True,) * 4):
+            for mix in (0.0, 0.25, 1.0):
+                self.assertEqual(levels(cues=cues, mix=mix)["return"]["pre"], 0.0)
 
     def test_the_knob_is_held_to_its_range(self):
         self.assertAlmostEqual(levels(cues=(True,) * 4, mix=-1)["decks"][0]["pre"], UNITY)
