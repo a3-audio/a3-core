@@ -33,10 +33,12 @@ class TheTables(unittest.TestCase):
 
     def test_a_pipe_in_a_cell_does_not_split_the_row(self):
         # "f|s" and "/DualDelay/delayBPML|R" are cells, not column breaks.
-        for table in (render_docs.addresses_table(TRUTH), render_docs.ports_table(TRUTH)):
+        for table, width in ((render_docs.addresses_table(TRUTH), 5),
+                             (render_docs.ports_table(TRUTH), 5),
+                             (render_docs.routes_table(TRUTH), 3)):
             for line in table.splitlines():
                 cells = [c for c in __import__("re").split(r"(?<!\\)\|", line)][1:-1]
-                self.assertEqual(len(cells), 5, line)
+                self.assertEqual(len(cells), width, line)
 
     def test_the_meters_count_from_one(self):
         table = render_docs.vu_table(TRUTH)
@@ -48,6 +50,33 @@ class TheTables(unittest.TestCase):
         table = render_docs.ports_table(TRUTH)
         for listener in TRUTH.listeners():
             self.assertIn(f"| {listener['program']} | {listener['role']} |", table)
+
+    def test_every_route_is_a_row(self):
+        table = render_docs.routes_table(TRUTH)
+        for route in TRUTH.routes():
+            self.assertIn(f"| {route['from']} | `{route['to']}` |", table, route)
+
+    def test_stemdeck_sends_its_beat_packets(self):
+        """As tempo master StemDeck broadcasts beats to the Pro DJ Link beat
+        port (ProLinkSender::run), not only keep-alives and status."""
+        table = render_docs.routes_table(TRUTH)
+        self.assertIn("| stemdeck | `prolink.beat` |", table)
+
+    def test_a_route_says_what_it_carries(self):
+        """Its own mark where it has one (the meters), the listener's words
+        where it has none."""
+        rows = render_docs.routes_table(TRUTH).splitlines()
+        self.assertIn("| stemdeck | `mixer.osc` | vu |", rows)
+        self.assertIn("| stemdeck | `prolink.beat` | Pro DJ Link beat packets (broadcast, not OSC) |", rows)
+
+    def test_a_senders_routes_stand_together(self):
+        senders = [line.split("|")[1].strip()
+                   for line in render_docs.routes_table(TRUTH).splitlines()[2:]]
+        seen = []
+        for sender in senders:
+            if not seen or seen[-1] != sender:
+                self.assertNotIn(sender, seen, senders)
+                seen.append(sender)
 
 
 class TheMarkers(unittest.TestCase):
@@ -77,6 +106,14 @@ class A3DocFollows(unittest.TestCase):
         """Since 2026-10-04 ~/a3-system is the umbrella's checkout, and a3-doc
         sits beside a3-core as its submodule, not under web/."""
         self.assertEqual(render_docs.default_doc(ROOT), ROOT.parent / "a3-doc")
+
+    def test_the_ports_page_renders_the_routes(self):
+        page = render_docs.default_doc(ROOT) / "src/ressources/ports.md"
+        if not page.exists():
+            self.skipTest(f"no {page} -- run this in the a3-system checkout")
+        text = page.read_text()
+        self.assertIn("<!-- a3-osc:routes -->", text)
+        self.assertIn("<!-- /a3-osc:routes -->", text)
 
     def test_the_committed_pages_are_the_render(self):
         doc = render_docs.default_doc(ROOT)
