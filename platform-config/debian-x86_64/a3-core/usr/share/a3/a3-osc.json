@@ -108,6 +108,7 @@
   {"from": "radla", "to": "zita-n2j.audio"},
   {"from": "stemdeck", "to": "prolink.announce"},
   {"from": "stemdeck", "to": "prolink.status"},
+  {"from": "stemdeck", "to": "prolink.beat"},
   {"from": "stemdeck", "to": "core.osc"},
   {"from": "core", "to": "stemdeck.osc"},
   {"from": "core", "to": "devices.announce"},
