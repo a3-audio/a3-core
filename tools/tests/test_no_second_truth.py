@@ -122,8 +122,15 @@ class TheSystemSaysNone(unittest.TestCase):
     that is not there is named, not passed over: a guard that looked at
     nothing would read as a system with nothing to find."""
 
+    def test_the_checkouts_are_the_umbrellas_submodules(self):
+        """Since 2026-10-04 ~/a3-system is the umbrella's checkout: the repos
+        sit beside a3-core, and a3-motion-ui is a3-motion's ui."""
+        repos = second_truth.checkouts(ROOT)
+        self.assertEqual(repos["a3-motion-ui"], ROOT.parent / "a3-motion" / "ui")
+        self.assertEqual(repos["stemdeck"], ROOT.parent / "stemdeck")
+
     def test_no_second_truth_anywhere(self):
-        repos = {name: ROOT.parent / name for name in second_truth.REPOS}
+        repos = second_truth.checkouts(ROOT)
         absent = [name for name, path in repos.items() if not path.is_dir()]
         if absent:
             self.skipTest(f"not beside this checkout: {', '.join(absent)} -- "
