@@ -10,6 +10,7 @@ stays the writers'.
   <!-- /a3-osc:addresses -->  sends it, who hears it, what it means
   <!-- a3-osc:vu -->          the meters: /vu/N and what each measures
   <!-- a3-osc:ports -->        who listens where
+  <!-- a3-osc:routes -->       who sends to which listener
 
 Usage: render_docs.py [A3_DOC_CHECKOUT]   (default: a3-doc beside a3-core)
 """
@@ -61,7 +62,22 @@ def ports_table(truth):
     return "\n".join(rows)
 
 
-TABLES = {"addresses": addresses_table, "vu": vu_table, "ports": ports_table}
+def routes_table(truth):
+    """One row a route, a sender's routes together in the order the truth
+    first names it. Carries: the route's own mark where it has one (the
+    meters), else what its listener takes."""
+    listeners = {listener["name"]: listener for listener in truth.listeners()}
+    routes = truth.routes()
+    senders = list(dict.fromkeys(route["from"] for route in routes))
+    rows = [_row(["From", "To", "Carries"]), _row(["---"] * 3)]
+    for route in sorted(routes, key=lambda route: senders.index(route["from"])):
+        carries = route.get("carries") or listeners[route["to"]].get("carries", "")
+        rows.append(_row([route["from"], f"`{route['to']}`", carries]))
+    return "\n".join(rows)
+
+
+TABLES = {"addresses": addresses_table, "vu": vu_table, "ports": ports_table,
+          "routes": routes_table}
 
 
 def put_tables(text, truth):
