@@ -11,7 +11,7 @@ stays the writers'.
   <!-- a3-osc:vu -->          the meters: /vu/N and what each measures
   <!-- a3-osc:ports -->        who listens where
 
-Usage: render_docs.py [A3_DOC_CHECKOUT]   (default: web/a3-doc beside a3-core)
+Usage: render_docs.py [A3_DOC_CHECKOUT]   (default: a3-doc beside a3-core)
 """
 
 import re
@@ -74,12 +74,18 @@ def put_tables(text, truth):
     return text
 
 
+def default_doc(root):
+    """a3-doc beside the a3-core checkout `root`: both are submodules of the
+    a3-system umbrella (since 2026-10-04 at ~/a3-system's top)."""
+    return root.parent / "a3-doc"
+
+
 def main(argv):
     root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(root / "platform-config/debian-x86_64/a3-core/home/aaa/.local/lib"))
     import a3_osc
     truth = a3_osc.load(root / "platform-config/debian-x86_64/a3-core/usr/share/a3/a3-osc.json")
-    doc = Path(argv[0]) if argv else root.parent / "web" / "a3-doc"
+    doc = Path(argv[0]) if argv else default_doc(root)
     for page in PAGES:
         path = doc / page
         before = path.read_text()

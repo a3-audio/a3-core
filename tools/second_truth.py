@@ -18,8 +18,15 @@ import re
 import sys
 from pathlib import Path
 
-#: The repos, by the name of their checkout beside a3-core.
+#: The repos, by name, and where each sits in the a3-system umbrella's
+#: checkout (~/a3-system since 2026-10-04), relative to it.
 REPOS = ("a3-core", "a3-motion-ui", "a3-mixer", "beat-analyzer", "stemdeck")
+CHECKOUT_PATHS = {"a3-motion-ui": "a3-motion/ui"}
+
+
+def checkouts(root):
+    """Each repo's checkout, beside the a3-core checkout `root`."""
+    return {name: root.parent / CHECKOUT_PATHS.get(name, name) for name in REPOS}
 
 CODE = {".py", ".cpp", ".cc", ".h", ".hh", ".service"}
 
@@ -170,7 +177,7 @@ def main(argv):
     import a3_osc
     truth = a3_osc.load(root / "platform-config/debian-x86_64/a3-core/usr/share/a3/a3-osc.json")
     repos = dict(arg.split("=", 1) for arg in argv) if argv else \
-        {name: root.parent / name for name in REPOS}
+        checkouts(root)
     for label, line, value in findings({k: Path(v) for k, v in repos.items()},
                                        truth_ports(truth)):
         print(f"{label}:{line}: {value!r}")
