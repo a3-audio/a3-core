@@ -296,10 +296,13 @@ class TheStemSelector(unittest.TestCase):
         self.assertEqual(self.truth.address("channel.stem.push", ch=3), "/channel/3/stem/push")
         self.assertEqual(self.truth.addresses()["channel.stem.push"]["to"], ["core"])
 
-    def test_core_announces_the_selection(self):
-        self.assertEqual(self.truth.address("channel.stem.menu", ch=1),
-                         "/channel/1/stem/menu")
-        self.assertEqual(self.truth.addresses()["channel.stem.menu"]["from"], ["core"])
+    def test_core_announces_the_cursor(self):
+        """2026-10-04: the menu became an input selector, one cursor 0-8."""
+        self.assertEqual(self.truth.address("channel.stem.cursor", ch=1),
+                         "/channel/1/stem/cursor")
+        entry = self.truth.addresses()["channel.stem.cursor"]
+        self.assertEqual((entry["from"], entry["args"]), (["core"], "i"))
+        self.assertNotIn("channel.stem.menu", self.truth.addresses())
         self.assertNotIn("channel.stem.selected", self.truth.addresses())
 
 

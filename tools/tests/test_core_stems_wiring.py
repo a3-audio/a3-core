@@ -16,25 +16,25 @@ CORE = (PACKAGE / "home/aaa/.local/bin/a3-core.py").read_text()
 
 
 class TheStateFile(unittest.TestCase):
-    """Only the menus and the return's mode are Core's own; the switches are
-    StemDeck's (specs stemdeck-remote, desk-stem-grid-2)."""
+    """Only the cursors and the return's mode are Core's own; the switches are
+    StemDeck's (specs stemdeck-remote, desk input selector 2026-10-04)."""
 
-    def test_the_menus_and_mode_are_written_down(self):
+    def test_the_cursors_and_mode_are_written_down(self):
         s = Stems()
-        s.menus[1] = (1, 2)
+        s.cursors[1] = 2
         s.return_mode = 0
         stems = state_of([], _Master(), s)["stems"]
-        self.assertEqual(stems["menus"][1], [1, 2])
+        self.assertEqual(stems["cursors"][1], 2)
         self.assertEqual(stems["return_mode"], 0)
 
-    def test_a_state_without_stems_starts_at_the_top(self):
-        self.assertEqual(apply_stems({}).menus, [(0, 0)] * 4)
+    def test_a_state_without_stems_starts_on_a(self):
+        self.assertEqual(apply_stems({}).cursors, [8] * 4)
         self.assertEqual(apply_stems({"stems": "garbage"}).masks, [0] * 8)
 
-    def test_the_menus_survive_the_round_trip(self):
+    def test_the_cursors_survive_the_round_trip(self):
         s = Stems()
-        s.menus[3] = (2, 4)
-        self.assertEqual(apply_stems(state_of([], _Master(), s)).menus[3], (2, 4))
+        s.cursors[3] = 4
+        self.assertEqual(apply_stems(state_of([], _Master(), s)).cursors[3], 4)
 
 
 class _Master:
@@ -237,9 +237,9 @@ class TheSelectorIsWired(unittest.TestCase):
         ret = _branch_of("osc_handler_aux_return", 'elif key == "aux-return.stem.push":')
         self.assertIn("connected=_stemdeck_client is not None", ret)
 
-    def test_a_push_moves_the_menu_and_says_so_with_or_without_stemdeck(self):
-        """Spec desk-stem-grid-2: a push on D1/D2 enters the deck -- the desk
-        must hear the new menu, and the menu must move without StemDeck."""
+    def test_a_push_is_said_with_or_without_stemdeck(self):
+        """The desk must hear what a push did, and the push must reach the
+        selector without StemDeck too (it then moves only the cursor)."""
         branch = _branch_of("osc_handler_channel", 'elif parameter == "stem.push":')
         push = branch.index("_stems.push(")
         guard = branch.index("_stemdeck_client is not None")

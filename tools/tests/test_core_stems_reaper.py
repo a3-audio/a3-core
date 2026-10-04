@@ -47,11 +47,12 @@ class WhatTheDeskHears(unittest.TestCase):
         msgs = dict(announcements(s, TRUTH))
         self.assertEqual(msgs["/aux-return/stem"][1:], [0, 0, 1, 0, 0, 0, 0, 0])
 
-    def test_each_channel_says_its_menu(self):
+    def test_each_channel_says_its_cursor(self):
         s = Stems()
-        s.menus[2] = (2, 3)
+        s.cursors[2] = 6
         msgs = dict(announcements(s, TRUTH))
-        self.assertEqual(msgs["/channel/3/stem/menu"], [2, 3])
+        self.assertEqual(msgs["/channel/3/stem/cursor"], 6)
+        self.assertFalse(any(a.endswith("/stem/menu") for a in msgs))
         self.assertFalse(any(a.endswith("/stem/selected") for a in msgs))
 
     def test_the_return_says_its_cursor_first_and_its_mode(self):
