@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local/lib"))
 
-from a3_core_stems import (ANALOG, ANALOG_MODE, AUX, CUE, INPUTS, RETURN,  # noqa: E402
+from a3_core_stems import (TOGGLE, ANALOG_MODE, AUX, CUE, INPUTS, RETURN,  # noqa: E402
                            STEM_MODE, Stems)
 
 
@@ -42,14 +42,14 @@ class TheMirror(unittest.TestCase):
 
 class TheSelector(unittest.TestCase):
     """Each channel encoder is an input selector (2026-10-04): one cursor
-    over nine inputs -- D1's stems, D2's stems, A -- and a push makes the
-    input under it the channel's only one."""
+    over nine inputs -- D1's stems, D2's stems, the STEM toggle -- and a
+    push on a stem makes it the channel's only input."""
 
-    def test_nine_inputs_the_last_is_a(self):
-        self.assertEqual((INPUTS, ANALOG), (9, 8))
+    def test_nine_inputs_the_last_is_the_toggle(self):
+        self.assertEqual((INPUTS, TOGGLE), (9, 8))
 
-    def test_the_cursor_starts_on_a(self):
-        self.assertEqual(Stems().cursors, [ANALOG] * 4)
+    def test_the_cursor_starts_on_the_toggle(self):
+        self.assertEqual(Stems().cursors, [TOGGLE] * 4)
 
     def test_the_cursor_runs_over_all_nine_and_stops_at_the_ends(self):
         s = Stems()
@@ -60,7 +60,7 @@ class TheSelector(unittest.TestCase):
         s.turn(0, +3)
         self.assertEqual(s.cursors[0], 3)
         s.turn(0, +20)
-        self.assertEqual(s.cursors[0], ANALOG)
+        self.assertEqual(s.cursors[0], TOGGLE)
 
     def test_turning_switches_nothing(self):
         s = stems_with(p3=bit(1))
@@ -100,14 +100,14 @@ class TheSelector(unittest.TestCase):
         self.assertIn((3, 1, True), commands)
         self.assertEqual((s.place_of(3), s.channel_mask(1)), (0, 0))
 
-    def test_push_on_a_releases_every_stem(self):
+    def test_toggle_off_releases_every_stem(self):
         s = stems_with(p3=bit(1))
         s.return_mode = ANALOG_MODE
-        s.cursors[0] = ANALOG
+        s.cursors[0] = TOGGLE
         self.assertEqual(s.push(0), [(3, 1, False)])
         self.assertEqual(s.channel_mask(0), 0)
 
-    def test_push_on_a_while_analog_plays_changes_nothing(self):
+    def test_toggle_without_memory_while_analog_plays_changes_nothing(self):
         s = Stems()
         s.return_mode = ANALOG_MODE
         self.assertEqual(s.push(0), [])
@@ -117,6 +117,121 @@ class TheSelector(unittest.TestCase):
         s.cursors[0] = 5
         s.report(2, bit(1))
         self.assertEqual(s.cursors[0], 5)
+
+
+class TheStemToggle(unittest.TestCase):
+    """Position 8 is a STEM on/off toggle (2026-10-04): off releases every
+    stem and remembers the one that played; on brings the remembered stem
+    back as if it were pushed on its own position."""
+
+    def toggle(self, s, index=0, connected=True):
+        s.cursors[index] = TOGGLE
+        return s.push(index, connected=connected)
+
+    def select(self, s, index, pair):
+        s.cursors[index] = pair - 1
+        return s.push(index)
+
+    def test_off_releases_the_stem_and_remembers_it(self):
+        s = stems_with(p3=bit(1))
+        s.return_mode = ANALOG_MODE
+        self.assertEqual(self.toggle(s), [(3, 1, False)])
+        self.assertEqual((s.channel_mask(0), s.last_stems[0]), (0, 3))
+
+    def test_on_restores_the_remembered_stem(self):
+        s = stems_with(p3=bit(1))
+        s.return_mode = ANALOG_MODE
+        self.toggle(s)
+        commands = self.toggle(s)
+        self.assertEqual(commands[:2], [(3, 1, True), (3, AUX, False)])
+        self.assertEqual(s.channel_mask(0), 1 << 2)
+        self.assertEqual(s.last_stems[0], 3)
+
+    def test_on_takes_the_stem_off_the_return(self):
+        s = stems_with(p3=bit(1))
+        s.tidy()
+        self.toggle(s)
+        self.assertTrue(s.plays_on_return(3))
+        self.assertIn((3, AUX, False), self.toggle(s))
+        self.assertFalse(s.plays_on_return(3))
+
+    def test_on_moves_the_stem_back_from_another_channel(self):
+        s = stems_with(p3=bit(1))
+        s.return_mode = ANALOG_MODE
+        self.toggle(s)                                   # channel 1 remembers 3
+        self.select(s, 1, 3)                             # channel 2 takes it
+        self.assertEqual(s.last_stems, [3, 3, None, None])
+        commands = self.toggle(s)
+        self.assertIn((3, 2, False), commands)
+        self.assertEqual((s.place_of(3), s.channel_mask(1)), (0, 0))
+
+    def test_a_stem_taken_away_while_on_keeps_the_memory(self):
+        s = Stems()
+        s.return_mode = ANALOG_MODE
+        self.select(s, 0, 3)
+        self.select(s, 1, 3)                             # moves away from channel 1
+        self.assertEqual(s.last_stems[0], 3)
+        self.toggle(s)                                   # nothing plays: on
+        self.assertEqual(s.place_of(3), 0)
+
+    def test_without_memory_on_does_nothing(self):
+        s = Stems()
+        self.assertEqual(self.toggle(s), [])
+        self.assertEqual((s.channel_mask(0), s.last_stems[0]), (0, None))
+
+    def test_selecting_a_stem_sets_the_memory(self):
+        s = Stems()
+        s.return_mode = ANALOG_MODE
+        self.select(s, 2, 6)
+        self.assertEqual(s.last_stems, [None, None, 6, None])
+        self.select(s, 2, 1)
+        self.assertEqual(s.last_stems[2], 1)
+
+    def test_a_push_on_what_plays_also_sets_the_memory(self):
+        s = stems_with(p4=bit(1))                        # put there by StemDeck
+        s.return_mode = ANALOG_MODE
+        self.assertEqual(self.select(s, 0, 4), [])
+        self.assertEqual(s.last_stems[0], 4)
+
+    def test_off_remembers_a_stem_stemdeck_put_there(self):
+        s = stems_with(p5=bit(2))
+        s.return_mode = ANALOG_MODE
+        self.toggle(s, 1)
+        self.assertEqual(s.last_stems[1], 5)
+
+    def test_stemdeck_removing_the_stem_keeps_the_memory(self):
+        s = Stems()
+        s.return_mode = ANALOG_MODE
+        self.select(s, 0, 3)
+        s.report(3, 0)
+        s.tidy()
+        self.assertEqual(s.last_stems[0], 3)
+        self.toggle(s)
+        self.assertEqual(s.place_of(3), 0)
+
+    def test_stemdeck_gone_keeps_the_memory(self):
+        s = Stems()
+        self.select(s, 0, 3)
+        s.forget()
+        self.assertEqual(s.last_stems[0], 3)
+
+    def test_disconnected_off_switches_nothing_and_remembers_nothing(self):
+        s = stems_with(p3=bit(1))
+        self.assertEqual(self.toggle(s, connected=False), [])
+        self.assertEqual((s.channel_mask(0), s.last_stems[0]), (1 << 2, None))
+
+    def test_disconnected_on_switches_nothing(self):
+        s = Stems()
+        s.last_stems[0] = 3
+        self.assertEqual(self.toggle(s, connected=False), [])
+        self.assertEqual(s.place_of(3), None)
+
+    def test_disconnected_select_leaves_the_memory(self):
+        s = Stems()
+        s.last_stems[0] = 3
+        s.cursors[0] = 5
+        s.push(0, connected=False)
+        self.assertEqual(s.last_stems[0], 3)
 
 
 class WithoutStemDeck(unittest.TestCase):
@@ -129,7 +244,7 @@ class WithoutStemDeck(unittest.TestCase):
         self.assertEqual(s.push(0, connected=False), [])
         self.assertEqual((s.cursors[0], s.channel_mask(0)), (2, 0))
 
-    def test_a_does_not_touch_the_mirror_either(self):
+    def test_the_toggle_does_not_touch_the_mirror_either(self):
         s = stems_with(p3=bit(1))
         self.assertEqual(s.push(0, connected=False), [])
         self.assertEqual(s.channel_mask(0), 1 << 2)
@@ -200,7 +315,7 @@ class ReturnModes(unittest.TestCase):
     def test_a_released_stem_returns_to_aux_in_stem_mode(self):
         s = stems_with(p3=bit(1))
         s.tidy()
-        s.cursors[0] = ANALOG
+        s.cursors[0] = TOGGLE
         self.assertIn((3, AUX, True), s.push(0))
 
     def test_analog_to_stem_puts_only_the_free_stems_on_aux(self):
@@ -220,7 +335,7 @@ class TheCue(unittest.TestCase):
         s = stems_with(p3=bit(1))
         self.assertEqual(s.cue_commands([True, False, False, False]), [(3, CUE, True)])
 
-    def test_a_channel_on_a_cues_nothing_in_stemdeck(self):
+    def test_a_channel_on_analog_cues_nothing_in_stemdeck(self):
         s = stems_with(p3=bit(CUE))                       # clicked on StemDeck's screen
         self.assertEqual(s.cue_commands([True, False, False, False]), [(3, CUE, False)])
 
@@ -250,11 +365,25 @@ class TheCue(unittest.TestCase):
 class StateOnDisk(unittest.TestCase):
     def test_cursors_and_mode_are_kept(self):
         s = Stems()
-        s.cursors = [ANALOG, 3, 0, 7]
+        s.cursors = [TOGGLE, 3, 0, 7]
         s.return_cursor, s.return_mode = ANALOG_MODE, ANALOG_MODE
         back = Stems.from_data(s.as_data())
         self.assertEqual(back.cursors, s.cursors)
         self.assertEqual((back.return_cursor, back.return_mode), (ANALOG_MODE, ANALOG_MODE))
+
+    def test_the_last_stems_are_kept(self):
+        s = Stems()
+        s.last_stems = [3, None, 8, 1]
+        self.assertEqual(Stems.from_data(s.as_data()).last_stems, [3, None, 8, 1])
+        self.assertEqual(s.as_data()["last_stems"], [3, None, 8, 1])
+
+    def test_garbled_last_stems_mean_no_memory(self):
+        for value in (None, "x", [3, 3, 3], [0, None, None, None],
+                      [9, None, None, None], [True, None, None, None],
+                      [1.0, None, None, None], {"0": 3}):
+            s = Stems.from_data({"last_stems": value, "cursors": [1, 2, 3, 4]})
+            self.assertEqual(s.last_stems, [None] * 4, value)
+            self.assertEqual(s.cursors, [1, 2, 3, 4], value)
 
     def test_an_old_or_garbled_file_never_raises(self):
         for data in (None, {}, {"menus": [[0, 0]] * 4}, {"cursors": "x"},
@@ -262,5 +391,6 @@ class StateOnDisk(unittest.TestCase):
                      {"cursors": [True, 0, 0, 0]}, {"return_mode": 7},
                      {"cursors": [1e999, 0, 0, 0]}):
             s = Stems.from_data(data)
-            self.assertEqual(s.cursors, [ANALOG] * 4, data)
+            self.assertEqual(s.cursors, [TOGGLE] * 4, data)
             self.assertEqual(s.return_mode, STEM_MODE, data)
+            self.assertEqual(s.last_stems, [None] * 4, data)

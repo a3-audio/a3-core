@@ -580,7 +580,7 @@ def send_to_stemdeck(commands):
 
 def notice_stemdeck_silence(now):
     """A minute without StemDeck's hello: nothing is on its buses any more,
-    so the desk shows A and the channels' analog inputs play again."""
+    so no stem is on any channel and their analog inputs play again."""
     global _stemdeck_client
     if not _stemdeck_watch.silence(now):
         return
