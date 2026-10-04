@@ -77,6 +77,18 @@
    <plug>out25</plug>
    <plug>out26</plug>
   </socket>
+  <socket client="REAPER" exclusive="off" name="reaper_vu_main" type="jack-audio">
+   <plug>out41</plug>
+   <plug>out42</plug>
+   <plug>out43</plug>
+   <plug>out44</plug>
+   <plug>out45</plug>
+   <plug>out46</plug>
+   <plug>out47</plug>
+   <plug>out48</plug>
+   <plug>out49</plug>
+   <plug>out50</plug>
+  </socket>
   <socket client="REAPER" exclusive="off" name="reaper_vu_decks_pre" type="jack-audio">
    <plug>out31</plug>
    <plug>out32</plug>
@@ -209,22 +221,22 @@
  </input-sockets>
  <slots/>
  <cables>
-  <cable input="beat-analyzer_decks_pre" output="reaper_vu_decks_pre" type="jack-audio"/>
-  <cable input="zita_stemdeck" output="reaper_rec" type="jack-audio"/>
-  <cable input="local_stemdeck" output="reaper_rec" type="jack-audio"/>
-  <cable input="beat-analyzer_bpm" output="reaper_rec" type="jack-audio"/>
-  <cable input="beat-analyzer_vu_rec" output="reaper_rec" type="jack-audio"/>
-  <cable input="alsa-scarlett_main" output="reaper_main" type="jack-audio"/>
-  <cable input="beat_analyzer_vu_main" output="reaper_main" type="jack-audio"/>
   <cable input="reaper_analog" output="system_in" type="jack-audio"/>
-  <cable input="reaper_stems" output="zita_stemdeck" type="jack-audio"/>
   <cable input="reaper_stems" output="local_stemdeck" type="jack-audio"/>
+  <cable input="reaper_stems" output="zita_stemdeck" type="jack-audio"/>
+  <cable input="alsa-scarlett_main" output="reaper_main" type="jack-audio"/>
   <cable input="alsa-scarlett_booth" output="reaper_booth" type="jack-audio"/>
   <cable input="beat_analyzer_vu_booth" output="reaper_booth" type="jack-audio"/>
   <cable input="alsa-scarlett_phones" output="reaper_phones" type="jack-audio"/>
   <cable input="beat-analyzer_vu_phones" output="reaper_phones" type="jack-audio"/>
+  <cable input="zita_stemdeck" output="reaper_rec" type="jack-audio"/>
+  <cable input="local_stemdeck" output="reaper_rec" type="jack-audio"/>
+  <cable input="beat-analyzer_bpm" output="reaper_rec" type="jack-audio"/>
+  <cable input="beat-analyzer_vu_rec" output="reaper_rec" type="jack-audio"/>
   <cable input="beat\-analyzer_aux" output="reaper_aux" type="jack-audio"/>
+  <cable input="beat-analyzer_decks_pre" output="reaper_vu_decks_pre" type="jack-audio"/>
   <cable input="beat-analyzer_decks_post" output="reaper_vu_decks_post" type="jack-audio"/>
+  <cable input="beat_analyzer_vu_main" output="reaper_vu_main" type="jack-audio"/>
  </cables>
 </patchbay>
 
