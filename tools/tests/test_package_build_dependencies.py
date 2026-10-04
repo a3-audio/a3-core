@@ -19,12 +19,18 @@ NEEDED = (
     "libasound2-dev", "libx11-dev", "libxcomposite-dev", "libxcursor-dev",
     "libxext-dev", "libxinerama-dev", "libxrandr-dev", "libxrender-dev",
     "libfreetype-dev", "libfontconfig1-dev", "libglu1-mesa-dev",
+    # JUCE 9's OpenGL module includes EGL/egl.h; without egl.pc at configure
+    # time JUCE drops its egl;gl group silently (a3-motion-ui ARCHITECTURE.md)
+    "libegl-dev",
     # StemDeck
     "libflac-dev", "libvorbis-dev", "libogg-dev", "libjack-jackd2-dev",
     # Motion UI and its V3 hardware interface
     "libgsl-dev", "libgpiod-dev", "libserial-dev",
     # building at all
     "cmake", "pkg-config", "git", "build-essential",
+    # building again after an update: StemDeck and Motion UI compile through
+    # ccache when it is installed, and a rebuild is then mostly cache hits
+    "ccache",
 )
 
 
