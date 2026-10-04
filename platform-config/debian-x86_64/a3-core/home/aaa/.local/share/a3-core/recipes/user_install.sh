@@ -61,8 +61,9 @@ if wanted /home/aaa/.local/opt/REAPER/reaper REAPER; then
 fi
 
 # The REAPER configuration is no longer an archive. It is plain files in the
-# package, and postinst installs them with `cp -rn` -- which does not clobber,
-# where `unzip -o` did. That overwrote a live project with a six month old one
+# package, and postinst installs them -- asking first whether to replace the
+# ones that differ, and keeping a copy of each it replaces -- where `unzip -o`
+# overwrote without a word. That put a six month old project over a live one
 # on 2026-09-24, along with the plugin scan cache, which took the whole IEM
 # suite out of REAPER until the search path was repaired.
 
@@ -176,3 +177,4 @@ else
     mkdir -p "$ANALYZER/build"
     cp -n "$ANALYZER/.env.example" "$ANALYZER/build/.env" || true
 fi
+

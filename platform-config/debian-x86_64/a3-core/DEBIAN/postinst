@@ -46,6 +46,131 @@ apply_headless_choice() {
   fi
 }
 
+# The parts of the shipped config the replace question offers, by the top
+# folder a file sits in. Parts, not files: a3nuc2 alone had eleven files that
+# differed, and with REAPER's presets a list of files runs past a screen.
+config_group() {
+  case "$1" in
+    REAPER/*)     echo reaper ;;
+    i3/*)         echo i3 ;;
+    systemd/*)    echo systemd ;;
+    rncbc.org/*)  echo qjackctl ;;
+    IEM/*)        echo iem ;;
+    *)            echo other ;;
+  esac
+}
+
+config_group_label() {
+  case "$1" in
+    reaper)   echo "REAPER: template + OSC map + presets + effects" ;;
+    i3)       echo "i3 config" ;;
+    systemd)  echo "systemd user units" ;;
+    qjackctl) echo "QjackCtl and patchbay" ;;
+    iem)      echo "IEM plugin settings" ;;
+    *)        echo "other files" ;;
+  esac
+}
+
+# The parts with at least one file that is there and differs from the shipped
+# one, in debconf's list form ("reaper, i3") and always in the same order. A
+# file that is not there yet is not in it: installing it replaces nothing, so
+# there is nothing to ask.
+differing_config_groups() {
+  src="$1"; dst="$2"
+  found="$(find "$src" -type f | while IFS= read -r shipped; do
+    rel="${shipped#"$src"/}"
+    [ -e "$dst/$rel" ] || continue
+    cmp -s "$shipped" "$dst/$rel" && continue
+    config_group "$rel"
+  done)"
+  for g in reaper i3 systemd qjackctl iem other; do
+    echo "$found" | grep -qx "$g" && echo "$g"
+  done | paste -sd, - | sed 's/,/, /g'
+}
+
+# Whether $1 is in the debconf list $2 ("reaper, i3").
+in_list() {
+  case ", $2," in
+    *", $1,"*) return 0 ;;
+  esac
+  return 1
+}
+
+# Put the shipped config in place, file by file. It used to be `cp -rn`, which
+# never replaced anything: a Core set up from a home with an older a3 in it
+# kept the old REAPER template, OSC map, i3 config and user units, and a new
+# package changed nothing (a3nuc2, 2026-10-04). A file that is missing is
+# installed. One that differs is replaced only if its part is in $replace --
+# the answer to a3-core/replace-config -- and is copied to $backup first,
+# keeping its path, and named: a local edit is replaced but neither lost nor
+# silent. One whose part was not chosen stays, and is named too.
+install_shipped_config() {
+  src="$1"; dst="$2"; backup="$3"; replace="$4"
+  find "$src" -type f | while IFS= read -r shipped; do
+    rel="${shipped#"$src"/}"
+    target="$dst/$rel"
+    cmp -s "$shipped" "$target" && continue
+    if [ -e "$target" ]; then
+      if ! in_list "$(config_group "$rel")" "$replace"; then
+        echo "a3-core: kept the local ~/.config/$rel"
+        continue
+      fi
+      mkdir -p "$(dirname "$backup/$rel")"
+      cp -p "$target" "$backup/$rel"
+      echo "a3-core: replaced ~/.config/$rel (previous in $backup)"
+    fi
+    mkdir -p "$(dirname "$target")"
+    cp "$shipped" "$target"
+  done
+}
+
+# Ask which differing parts to replace. Every one is offered ticked: the old
+# answer, replacing nothing, is what left a3nuc2 on a six-month-old REAPER,
+# and nothing replaced is lost (decided 2026-10-04). Asked only when something
+# differs, at high, and its choices are this machine's. An unattended install
+# takes the ticked default: everything. The answer is left in REPLACE_CONFIG.
+# Labels carry no commas: debconf reads a comma as the next choice.
+#
+# The a3-system installer asks this itself, before the package is installed,
+# and hands the answer over preseeded and marked seen. Such an answer is taken
+# as it is, not asked again and not overwritten with the default; seen is
+# then cleared, so a later install without the installer asks once more.
+ask_replace_question() {
+  groups="$1"
+  db_fget a3-core/replace-config seen || true
+  if [ "x$RET" = "xtrue" ]; then
+    db_get a3-core/replace-config
+    REPLACE_CONFIG="$RET"
+    db_fset a3-core/replace-config seen false || true
+    return 0
+  fi
+  labels=""
+  for g in $(echo "$groups" | tr -d ','); do
+    labels="${labels:+$labels, }$(config_group_label "$g")"
+  done
+  db_subst a3-core/replace-config choices_c "$groups" || true
+  db_subst a3-core/replace-config choices "$labels" || true
+  db_set a3-core/replace-config "$groups" || true
+  db_input high a3-core/replace-config || true
+  db_go || true
+  db_get a3-core/replace-config
+  REPLACE_CONFIG="$RET"
+  # Shown, debconf marks it seen; cleared, so it does not pass for the
+  # installer's answer next time.
+  db_fset a3-core/replace-config seen false || true
+}
+
+# REAPER's service saves the running project over the template when it stops
+# (-saveas in a3-reaper.service). A template copied in while REAPER runs is
+# undone by the next stop. So when the template changes, a running REAPER is
+# stopped first -- its save lands in the old file, which then goes to the
+# backup -- and started again on the new one. An unchanged template leaves
+# REAPER alone (a3-core#55: no restarts on the live rig without a reason).
+reaper_template_changes() {
+  ! cmp -s "$1/REAPER/ProjectTemplates/a3-reaper.RPP" \
+           "$2/REAPER/ProjectTemplates/a3-reaper.RPP"
+}
+
 # Ask for the address, gateway and DNS on every install and upgrade, pre-filled
 # with what is stored -- Enter keeps it. They ran at `medium`, which Debian does
 # not show by default, and an answered question is never asked again: the
@@ -231,7 +356,35 @@ python3 -m venv "${USER_HOME}/.venv" || true
 "${USER_HOME}/.venv/bin/pip" install -r "${USER_HOME}/.local/share/a3-core/recipes/requirements.txt" || true
 
 mkdir -p /home/aaa/.config
-cp -rn /home/aaa/.local/share/a3-core/config/* /home/aaa/.config/
+SHIPPED_CONFIG="${USER_HOME}/.local/share/a3-core/config"
+user_systemctl() {
+  sudo -u "$APPUSER" env XDG_RUNTIME_DIR="/run/user/$UID" \
+    DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$UID/bus" systemctl --user "$@"
+}
+
+REPLACE_CONFIG=""
+DIFFERING="$(differing_config_groups "$SHIPPED_CONFIG" "${USER_HOME}/.config")"
+if [ -n "$DIFFERING" ]; then
+  ask_replace_question "$DIFFERING"
+fi
+
+# A missing template is installed whatever the answer; an existing one only
+# when REAPER was chosen. Only then can the template change under REAPER.
+reaper_paused=0
+if reaper_template_changes "$SHIPPED_CONFIG" "${USER_HOME}/.config" \
+    && { [ ! -e "${USER_HOME}/.config/REAPER/ProjectTemplates/a3-reaper.RPP" ] \
+         || in_list reaper "$REPLACE_CONFIG"; } \
+    && user_systemctl is-active --quiet a3-reaper.service 2>/dev/null; then
+  echo "a3-core: stopping REAPER to install the new template"
+  user_systemctl stop a3-reaper.service && reaper_paused=1
+fi
+install_shipped_config "$SHIPPED_CONFIG" "${USER_HOME}/.config" \
+  "${USER_HOME}/.config/a3-replaced/$(date +%Y-%m-%d_%H%M%S)" "$REPLACE_CONFIG"
+if [ "$reaper_paused" = 1 ]; then
+  chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.config/REAPER" || true
+  user_systemctl start a3-reaper.service || true
+fi
+
 
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.local" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.config" || true

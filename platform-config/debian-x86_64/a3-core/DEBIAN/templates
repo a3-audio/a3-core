@@ -45,3 +45,17 @@ Description: Second network socket to bridge with the first (empty: no bridge)
  socket. Name that socket here (for example enp5s0) and both become one
  network segment, br0, which carries this Core's address. Leave it empty to
  use one socket only. Takes effect at the next boot.
+
+Template: a3-core/replace-config
+Type: multiselect
+Choices-C: ${choices_c}
+Choices: ${choices}
+Description: Local files differ from this package. Which should be replaced?
+ These parts of ~/.config differ from what this package ships -- left over
+ from an older a3, or edited on this machine. A chosen part is replaced; every
+ file that is replaced is kept first in ~/.config/a3-replaced/<time>/ and
+ named on the output. A part that is not chosen stays as it is.
+ .
+ The REAPER template nearly always differs: REAPER saves the running project
+ over it whenever it stops. Replacing it stops REAPER for a moment and starts
+ it again on the new template.
