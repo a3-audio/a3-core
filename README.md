@@ -1,89 +1,57 @@
 # A³ Core
 
-The 3D sound server: the machine that carries the audio. A Debian x86_64
-installation running JACK and REAPER, remote-controlled over
-OSC by [A³ Mixer](https://github.com/a3-audio/a3-mixer) and
-[A³ Motion](https://github.com/a3-audio/a3-motion). The beat clock and the VU
-meters come from the separate
-[beat-analyzer](https://github.com/rafjagger/beat-analyzer) on the same JACK
-graph, which the package starts as a user service.
+The 3D sound server of [A³ Audio](https://github.com/a3-audio/a3-system): a
+Debian x86_64 machine running JACK, REAPER and the beat-analyzer. A³ Mixer and
+A³ Motion control it over OSC. This repository *is* the deployment: the `.deb`
+package tree under `platform-config/debian-x86_64/a3-core/`, not application
+source.
 
-This repository *is* the deployment: the `.deb` package tree under
-`platform-config/`, not application source.
+**Documentation: https://a3-audio.github.io/a3-doc/**
 
-## Prerequisites
-- Blank debian installation
-  - user: aaa
-  - without desktop environment
-  - with ssh server
+- [Using A³ Core](https://a3-audio.github.io/a3-doc/user/a3core.html)
+- [Configuration](https://a3-audio.github.io/a3-doc/configuration/core.html):
+  installing, what the package does, the services, the files
+- [Development](https://a3-audio.github.io/a3-doc/development/core.html):
+  `a3-core.py`, the window, the OSC register
 
 ## Install
-- login to your debian
-  - `su root`
-  - `apt install sudo wget`
-  - `/usr/sbin/usermod -aG sudo aaa`
-- logout and back in
-  - `wget -qO- "https://raw.githubusercontent.com/a3-audio/a3-core/main/platform-config/debian-x86_64/a3-core_install.sh" | sudo bash`
 
-## Version
+On a blank Debian with a user `aaa` who may use `sudo`
+([before you start](https://a3-audio.github.io/a3-doc/configuration/core.html#core-package)):
 
-The package version is set by the workflow, not by hand: the last `v*` tag plus the
-commits since it (`v03.0` with 63 commits on top is `03.0+63`), written into
-`DEBIAN/control` before the build. The `1.0.0` in the checked-in `control` is only what a
-package built by hand gets, and apt treats it as older than anything published.
-`python3 tools/package_version.py` prints the version the next build will carry.
+```sh
+wget -qO- "https://raw.githubusercontent.com/a3-audio/a3-core/main/platform-config/debian-x86_64/a3-core_install.sh" | sudo bash
+sudo dpkg-reconfigure a3-core     # network, bridge, headless screen
+sudo dpkg-reconfigure jackd2      # realtime priorities for JACK
+```
 
-## Config
-- enable realtime priorities `sudo dpkg-reconfigure jackd2`
-- configure network `sudo dpkg-reconfigure a3-core`
-- headless or not: the same `sudo dpkg-reconfigure a3-core` asks whether this
-  Core draws to a dummy screen (no monitor, used over VNC). Default **no**.
-  Answer yes only on a machine without a monitor: with the dummy screen on, a
-  plugged-in monitor stays black while everything runs behind it. The config
-  ships as `~/.local/share/a3-core/x11/10-headless.conf` and is copied to
-  `/etc/X11/xorg.conf.d/` on yes; X reads it on its next start.
+The script switches the machine to Debian testing. Updates after that are
+`sudo apt update && sudo apt install a3-core`.
 
-## apt install a3-core - postinst
-- configure network interface in /etc/systemd/network/a3.network
-- ask whether to use the headless dummy screen (see Config)
-- ask whether to bridge a second network socket (`a3-core/bridge-with`, pre-filled with the
-  other wired socket the first time): with it, both sockets become `br0` (STP on) and the
-  Core's address moves onto the bridge -- router in one socket, mixer in the other. Empty
-  means one socket, as before. Takes effect at the next boot
-- setup user aaa
-- enable system services
-  - systemd-networkd
-  - x11vnc.service
-  - vnc-display.service
-- enable user services
-  - a3-main.service
-- enable lightdm autologin for user aaa
-- configure audio interface in a3-jack.service
-- onfigure channel routing in qjackctl make patchbay persistant .lokal/share/qjackctl
-- configure irq priorities in /etc/rtirq.conf (rtirq package not in testing repo atm)
-- configure core osc .lokal/bin/a3-core.py
-- configure realtime privileges
-- install iem-plugin-suite
-- trigger a3-user-install.service >> 
+## Build and test
 
-## a3-user-install.service
-this one-shot service is triggert by `apt install a3-core`
-- install reaper & config
-- install Airwindows plugin suite
-- install TAL Software - talfilter 2
-- install beat-analyzer & build
+A push to `main` builds the package and publishes the apt archive
+(`.github/workflows/pages-deploy.yml`). The version is the last `v*` tag plus
+the commits since it; `python3 tools/package_version.py` prints it. To build by
+hand:
 
-## Links:
-- https://airwindows.com/vsts
-- https://tal-software.com/products/tal-filter
-- https://github.com/rafjagger/beat-analyzer
-- https://plugins.iem.at
+```sh
+cd platform-config/debian-x86_64 && dpkg-deb --build --root-owner-group a3-core
+```
 
-## Where this fits
+Tests run on a Python with the packages from
+`platform-config/debian-x86_64/a3-core/home/aaa/.local/share/a3-core/recipes/requirements.txt`
+(on a Core: `~/.venv/bin/python3`):
 
-A³ is seven repositories and one system. **The structure, the workflow and the
-versioning are described once, in the umbrella:**
-[a3-audio/a3-system](https://github.com/a3-audio/a3-system#repositories-and-versioning).
+```sh
+~/.venv/bin/python3 -m unittest discover -s tools/tests
+```
 
-The short of it: work happens on `main`, a version is an annotated tag, and
-the same tag name is set in every repository at once — `v03.0` is the first.
+The OSC register test needs the other A³ repositories checked out beside this
+one, as in [a3-system](https://github.com/a3-audio/a3-system); without them it
+skips.
+
+## License
+
+REUSE-compliant: the license of each path is in `.reuse/dep5`, the texts are in
+`LICENSES/` (GPL-3.0-or-later, CC-BY-SA-4.0, CC0-1.0).
