@@ -9,8 +9,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local/lib"))
 
-from a3_core_stems import (TOGGLE, ANALOG_MODE, AUX, CUE, INPUTS, RETURN,  # noqa: E402
-                           STEM_MODE, Stems)
+from a3_core_stems import (TOGGLE, ANALOG_MODE, AUX, CUE, CUE_FIELD, INPUTS,  # noqa: E402
+                           RETURN, STEM_MODE, Stems)
 
 
 def bit(bus):
@@ -322,13 +322,38 @@ class ReturnModes(unittest.TestCase):
         self.assertEqual(sorted(s.tidy()), [(1, AUX, False), (2, AUX, False)])
         self.assertEqual(s.channel_mask(0), 1)
 
-    def test_the_encoder_knows_two_options(self):
+    def test_the_encoder_runs_a_ring_of_three(self):
+        # The display's order, left to right: STEM, ANALOG, CUE, and round
+        # again (spec return-cue, 2026-10-04).
         s = Stems()
         self.assertEqual(s.return_cursor, STEM_MODE)
         s.turn(RETURN, +1)
         self.assertEqual(s.return_cursor, ANALOG_MODE)
         s.turn(RETURN, +1)
+        self.assertEqual(s.return_cursor, CUE_FIELD)
+        s.turn(RETURN, +1)
         self.assertEqual(s.return_cursor, STEM_MODE)
+
+    def test_left_from_stem_is_cue(self):
+        s = Stems()
+        s.turn(RETURN, -1)
+        self.assertEqual(s.return_cursor, CUE_FIELD)
+
+    def test_a_fast_turn_counts_every_click(self):
+        s = Stems()
+        s.turn(RETURN, +2)
+        self.assertEqual(s.return_cursor, CUE_FIELD)
+        s.turn(RETURN, -4)
+        self.assertEqual(s.return_cursor, ANALOG_MODE)
+
+    def test_push_on_cue_switches_nothing_and_keeps_the_mode(self):
+        s = stems_with(p1=bit(1), p2=bit(AUX))
+        s.return_mode = ANALOG_MODE
+        s.return_cursor = CUE_FIELD
+        masks = list(s.masks)
+        self.assertEqual(s.push(RETURN), [])
+        self.assertEqual(s.return_mode, ANALOG_MODE)
+        self.assertEqual(s.masks, masks)
 
     def test_push_switches_the_mode(self):
         s = stems_with(p2=bit(AUX))
@@ -394,6 +419,15 @@ class StateOnDisk(unittest.TestCase):
         back = Stems.from_data(s.as_data())
         self.assertEqual(back.cursors, s.cursors)
         self.assertEqual((back.return_cursor, back.return_mode), (ANALOG_MODE, ANALOG_MODE))
+
+    def test_the_cursor_on_cue_is_kept(self):
+        s = Stems()
+        s.return_cursor = CUE_FIELD
+        self.assertEqual(Stems.from_data(s.as_data()).return_cursor, CUE_FIELD)
+
+    def test_cue_is_never_a_mode(self):
+        self.assertEqual(Stems.from_data({"return_mode": CUE_FIELD}).return_mode, STEM_MODE)
+        self.assertEqual(Stems.from_data({"return_cursor": 3}).return_cursor, STEM_MODE)
 
     def test_the_last_stems_are_kept(self):
         s = Stems()

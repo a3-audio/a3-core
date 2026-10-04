@@ -16,12 +16,14 @@
     "aside"
   ],
   "entries": [
-    {"address": "/aux-return/stem", "device": "mixer", "direction": "out", "note": "the aux return's cursor (0 = analog, 1 = stem), then pairs 1-8: 1 = on the return (AUX)", "source": "a3-osc.json: aux-return.stem"},
-    {"address": "/aux-return/stem", "device": "motion", "direction": "out", "note": "the aux return's cursor (0 = analog, 1 = stem), then pairs 1-8: 1 = on the return (AUX)", "source": "a3-osc.json: aux-return.stem"},
+    {"address": "/aux-return/cue/led", "device": "mixer", "direction": "out", "note": "the aux return's cue lamp, 1 = on", "source": "a3-osc.json: aux-return.cue.led"},
+    {"address": "/aux-return/cue/led", "device": "motion", "direction": "out", "note": "the aux return's cue lamp, 1 = on", "source": "a3-osc.json: aux-return.cue.led"},
+    {"address": "/aux-return/stem", "device": "mixer", "direction": "out", "note": "the aux return's cursor (0 = analog, 1 = stem, 2 = cue), then pairs 1-8: 1 = on the return (AUX)", "source": "a3-osc.json: aux-return.stem"},
+    {"address": "/aux-return/stem", "device": "motion", "direction": "out", "note": "the aux return's cursor (0 = analog, 1 = stem, 2 = cue), then pairs 1-8: 1 = on the return (AUX)", "source": "a3-osc.json: aux-return.stem"},
     {"address": "/aux-return/stem/mode", "device": "mixer", "direction": "out", "note": "the aux return's mode: 1 = stem (every stem on no channel plays on the return), 0 = analog (no stem on the return)", "source": "a3-osc.json: aux-return.stem.mode"},
     {"address": "/aux-return/stem/mode", "device": "motion", "direction": "out", "note": "the aux return's mode: 1 = stem (every stem on no channel plays on the return), 0 = analog (no stem on the return)", "source": "a3-osc.json: aux-return.stem.mode"},
-    {"address": "/aux-return/stem/push", "device": "mixer", "direction": "in", "note": "the aux return's encoder pushed: switches the return to the mode under the cursor", "source": "a3-osc.json: aux-return.stem.push"},
-    {"address": "/aux-return/stem/turn", "device": "mixer", "direction": "in", "note": "the aux return's encoder turned by this many clicks (signed): moves its cursor between analog (0) and stem (1)", "source": "a3-osc.json: aux-return.stem.turn"},
+    {"address": "/aux-return/stem/push", "device": "mixer", "direction": "in", "note": "the aux return's encoder pushed: switches the return to the mode under the cursor; on CUE it toggles the return's cue and switches no mode", "source": "a3-osc.json: aux-return.stem.push"},
+    {"address": "/aux-return/stem/turn", "device": "mixer", "direction": "in", "note": "the aux return's encoder turned by this many clicks (signed): moves its cursor in a ring along the display, STEM (1) -> ANALOG (0) -> CUE (2) -> STEM; switches nothing", "source": "a3-osc.json: aux-return.stem.turn"},
     {"address": "/beat", "device": "beat-analyzer", "direction": "in", "note": "beat in bar, bar, tempo -- the clock (Motion sends it only in clock mode 0)", "source": "a3-osc.json: beat"},
     {"address": "/beat", "device": "mixer", "direction": "aside", "note": "beat in bar, bar, tempo -- the clock (Motion sends it only in clock mode 0)", "source": "a3-osc.json: beat"},
     {"address": "/beat", "device": "motion", "direction": "in", "note": "beat in bar, bar, tempo -- the clock (Motion sends it only in clock mode 0)", "source": "a3-osc.json: beat"},

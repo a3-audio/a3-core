@@ -19,10 +19,11 @@ from a3_core_cue import send_levels   # noqa: E402
 UNITY = 1.0
 
 
-def levels(cues=(False,) * 4, stem=False, mix=0.0, stem_on=(False,) * 4):
+def levels(cues=(False,) * 4, stem=False, mix=0.0, stem_on=(False,) * 4,
+           return_cue=False):
     # `stem` is gone from send_levels (StemDeck's CUE bus is always on the
     # cue side); kept here so the tests still say what they vary.
-    return send_levels(list(cues), list(stem_on), mix, UNITY)
+    return send_levels(list(cues), list(stem_on), mix, UNITY, return_cue)
 
 
 class TheKnob(unittest.TestCase):
@@ -78,6 +79,18 @@ class TheCues(unittest.TestCase):
         for cues in ((False,) * 4, (False, True, False, False), (True,) * 4):
             for mix in (0.0, 0.25, 1.0):
                 self.assertEqual(levels(cues=cues, mix=mix)["return"]["pre"], 0.0)
+
+    def test_the_return_cue_opens_on_the_cue_side(self):
+        # The return's own cue (spec return-cue, 2026-10-04): its pre-fader
+        # send fades like a deck's cue send.
+        for mix in (0.0, 0.25, 1.0):
+            self.assertAlmostEqual(levels(mix=mix, return_cue=True)["return"]["pre"],
+                                   math.cos(mix * math.pi / 2))
+
+    def test_the_return_cue_leaves_its_mix_side_alone(self):
+        for mix in (0.0, 0.3, 1.0):
+            self.assertAlmostEqual(levels(mix=mix, return_cue=True)["return"]["post"],
+                                   levels(mix=mix)["return"]["post"])
 
     def test_the_knob_is_held_to_its_range(self):
         self.assertAlmostEqual(levels(cues=(True,) * 4, mix=-1)["decks"][0]["pre"], UNITY)

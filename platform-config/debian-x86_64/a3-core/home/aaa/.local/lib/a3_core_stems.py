@@ -16,8 +16,9 @@ were pushed on its own position. The memory is only a memory: a stem moved
 to another channel or taken off by StemDeck leaves it as it is. A channel
 plays one stem at most, and a stem plays on one channel at most. The aux return
 knows two modes: stem (every stem on no channel plays on the return) and
-analog (no stem on it). tidy() makes the mirror obey these rules. Pure: no
-OSC.
+analog (no stem on it); its cursor runs over both and a CUE field, a ring
+STEM -> ANALOG -> CUE (spec return-cue, 2026-10-04). tidy() makes the mirror
+obey these rules. Pure: no OSC.
 """
 
 PAIRS = 8
@@ -32,8 +33,12 @@ STEMS_PER_DECK = 4
 INPUTS = PAIRS + 1
 TOGGLE = PAIRS
 
-#: The aux return's two modes; its encoder's cursor runs over both.
-ANALOG_MODE, STEM_MODE = 0, 1
+#: The aux return's two modes; its encoder's cursor runs over both and the
+#: CUE field, which is a switch of its own and never a mode (spec return-cue).
+ANALOG_MODE, STEM_MODE, CUE_FIELD = 0, 1, 2
+
+#: The return cursor's ring, in the display's order left to right.
+RETURN_RING = (STEM_MODE, ANALOG_MODE, CUE_FIELD)
 
 def _bit(bus):
     return 1 << (bus - 1)
@@ -89,7 +94,8 @@ class Stems:
 
     def turn(self, index, steps):
         if index == RETURN:
-            self.return_cursor = (self.return_cursor + steps) % 2
+            place = RETURN_RING.index(self.return_cursor)
+            self.return_cursor = RETURN_RING[(place + steps) % len(RETURN_RING)]
             return
         # Round in a ring: left from stem 1 is the STEM toggle, one turn away.
         self.cursors[index] = (self.cursors[index] + steps) % INPUTS
@@ -97,8 +103,12 @@ class Stems:
     def push(self, index, connected=True):
         """The commands a push on place `index` means. Without StemDeck
         (`connected` False) nothing is switched: the mirror is StemDeck's,
-        and a stem nobody plays must not shut a channel's analog input."""
+        and a stem nobody plays must not shut a channel's analog input.
+        On the return's CUE field nothing is switched: the cue is Core's,
+        not StemDeck's."""
         if index == RETURN:
+            if self.return_cursor == CUE_FIELD:
+                return []
             self.return_mode = self.return_cursor
             return self.tidy() if connected else []
         if not connected:
@@ -209,8 +219,9 @@ class Stems:
         last_stems = _last_stems(data.get("last_stems"))
         if last_stems is not None:
             s.last_stems = last_stems
-        for name in ("return_cursor", "return_mode"):
-            if data.get(name) in (ANALOG_MODE, STEM_MODE) and _is_int(data.get(name)):
+        for name, allowed in (("return_cursor", RETURN_RING),
+                              ("return_mode", (ANALOG_MODE, STEM_MODE))):
+            if _is_int(data.get(name)) and data[name] in allowed:
                 setattr(s, name, data[name])
         return s
 

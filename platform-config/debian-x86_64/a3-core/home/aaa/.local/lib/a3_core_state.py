@@ -61,9 +61,11 @@ from a3_core_stems import Stems
 CHANNEL_FIELDS = ("toggle_fx", "toggle_cue", "three_d")
 
 #: The master's own moment: where the phones-mix knob stands (needed to set
-#: the headphones' sends at a start, since 2026-10-01). The stem cue left with
-#: the C field (spec stemdeck-remote); an old file's stem_cue is ignored.
-MASTER_FIELDS = ("phones_mix",)
+#: the headphones' sends at a start, since 2026-10-01), and the aux return's
+#: cue (spec return-cue, 2026-10-04; a file from before has none and the cue
+#: stays off). The stem cue left with the C field (spec stemdeck-remote); an
+#: old file's stem_cue is ignored.
+MASTER_FIELDS = ("phones_mix", "return_cue")
 
 #: Renamed fields: PFL became cue on 2026-10-01, and a file from before says
 #: toggle_pfl.

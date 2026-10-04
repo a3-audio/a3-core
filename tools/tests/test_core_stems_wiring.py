@@ -172,6 +172,31 @@ class TheReturnIsInTheCueLevels(unittest.TestCase):
         self.assertIn('"return_cue"', source)
 
 
+class TheReturnCueIsWired(unittest.TestCase):
+    """Spec return-cue: a push on the CUE field toggles the return's cue,
+    which opens its cue send and lights its lamp at once."""
+
+    def test_the_cue_levels_know_the_return_cue(self):
+        self.assertIn("master_info.return_cue", _source_of("send_cue_levels"))
+
+    def test_a_push_on_cue_toggles_it(self):
+        branch = _branch_of("osc_handler_aux_return", 'elif key == "aux-return.stem.push":')
+        self.assertIn("_stems.return_cursor == CUE_FIELD", branch)
+        self.assertIn("toggle_return_cue()", branch)
+
+    def test_a_toggle_flips_lights_and_sounds(self):
+        source = _source_of("toggle_return_cue")
+        self.assertIn("master_info.return_cue = not master_info.return_cue", source)
+        self.assertIn("return_cue_lamp(", source)
+        self.assertIn("broadcast(", source)
+        self.assertIn("send_cue_levels()", source)
+
+    def test_the_return_handler_remembers(self):
+        calls = _calls_in("osc_handler_aux_return")
+        self.assertEqual(1, len([call for call in calls
+                                 if _is_named(call.func, "remember_state")]))
+
+
 class ThePhonesMixIsWrittenDown(unittest.TestCase):
     """phones_mix is one of the state file's fields; a knob that moves it
     and never writes it comes back from a restart where it last was saved."""
