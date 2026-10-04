@@ -291,12 +291,20 @@ ask_bridge_question() {
 # no as the answer offered: debconf would offer the stored answer and skip a
 # seen question, and one "yes" walked every later install through the whole
 # network setup again (2026-10-01). Enter leaves the network as it is.
-db_reset a3-core/configure-network || true
-db_fset a3-core/configure-network seen false || true
-db_input high a3-core/configure-network || true
-db_go || true
+#
+# Except when the a3-system installer has asked it already: it preseeds the
+# answer marked seen, and that is taken. Seen is cleared after either way, so
+# neither the installer's answer nor one shown here passes for the next.
+db_fget a3-core/configure-network seen || true
+if [ "x$RET" != "xtrue" ]; then
+  db_reset a3-core/configure-network || true
+  db_fset a3-core/configure-network seen false || true
+  db_input high a3-core/configure-network || true
+  db_go || true
+fi
 db_get a3-core/configure-network
 CONFIGURE="$RET"
+db_fset a3-core/configure-network seen false || true
 
 # The maintainer's network (hosts, Core's interface): created once from the
 # package's defaults, never overwritten -- it is his to edit (spec
