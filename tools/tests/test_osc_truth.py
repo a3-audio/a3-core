@@ -280,6 +280,26 @@ class TheStemWords(unittest.TestCase):
         self.assertEqual(self.t.match("/channel/3/stem/turn"), ("channel.stem.turn", {"ch": 3}))
 
 
+class TheReturnCue(unittest.TestCase):
+    """The aux return's own cue (spec return-cue, 2026-10-04): a third field
+    on its cursor, and a lamp Core announces."""
+
+    def setUp(self):
+        self.t = truth()
+
+    def test_the_lamp_has_its_address(self):
+        self.assertEqual(self.t.address("aux-return.cue.led"), "/aux-return/cue/led")
+        self.assertEqual(self.t.match("/aux-return/cue/led"), ("aux-return.cue.led", {}))
+
+    def test_core_tells_the_desk_and_motion(self):
+        entry = self.t.addresses()["aux-return.cue.led"]
+        self.assertEqual((entry["args"], entry["from"], entry["to"]),
+                         ("f", ["core"], ["mixer", "motion"]))
+
+    def test_the_cursor_names_its_third_field(self):
+        self.assertIn("2 = cue", self.t.addresses()["aux-return.stem"]["meaning"])
+
+
 if __name__ == "__main__":
     unittest.main()
 

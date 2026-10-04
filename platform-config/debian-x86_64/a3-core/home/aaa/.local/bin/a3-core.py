@@ -55,7 +55,7 @@ from a3_core_reverse import reverse_for, reversed_address   # noqa: E402
 from a3_core_state import (StateFile, apply_state,   # noqa: E402
                            apply_stems, state_of)
 from a3_core_cue import send_levels   # noqa: E402
-from a3_core_stems import RETURN   # noqa: E402
+from a3_core_stems import CUE_FIELD, RETURN   # noqa: E402
 from a3_core_stems_reaper import (Settle, analog_messages,   # noqa: E402
                                   announcements as stem_announcements,
                                   changed_messages, command_messages, pair_of)
@@ -66,7 +66,7 @@ from a3_core_announce import (EVERY_SECONDS, announce, announcement,   # noqa: E
 from a3_osc_render import write_user_files   # noqa: E402
 from a3_core_recall import (FX_MODE_NUMBERS, FX_MODE_WORDS,   # noqa: E402
                             Relayed, STATE_OF, led_message,
-                            recall_messages)   # noqa: E402
+                            recall_messages, return_cue_lamp)   # noqa: E402
 from a3_core_subscribers import (SHIPPED, SubscriberError,   # noqa: E402
                                  everyone_but, parse_subscribers,
                                  relay_on_arrival)
@@ -265,6 +265,9 @@ class MasterInfo:
     # The headphones' moment (2026-10-01): where the phones-mix knob
     # stands, kept across a restart (a3_core_state).
     phones_mix: float = 0.0
+    # The aux return's own cue (spec return-cue, 2026-10-04), kept like the
+    # channels' toggle_cue.
+    return_cue: bool = False
 
     class FXMode(Enum):
         LOW_PASS = 0
@@ -494,7 +497,7 @@ def send_cue_levels():
     knob moves most of them."""
     levels = send_levels([channel.toggle_cue for channel in channel_infos],
                          [bool(_stems.channel_mask(i)) for i in range(len(channel_infos))],
-                         master_info.phones_mix, CUE_UNITY)
+                         master_info.phones_mix, CUE_UNITY, master_info.return_cue)
     for channel, deck in zip(channel_infos, levels["decks"]):
         for side, send in (("pre", "cue_pre"), ("post", "cue_post")):
             osc_reaper.send_message(
@@ -514,6 +517,14 @@ def apply_stem_cue():
     channel with a stem cues it in StemDeck, its own cue send stays shut
     (spec desk-stem-selector)."""
     send_to_stemdeck(_stems.cue_commands([c.toggle_cue for c in channel_infos]))
+    send_cue_levels()
+
+
+def toggle_return_cue():
+    """The return's cue on or off: its lamp to everybody, its cue send at
+    once. StemDeck is not asked -- the return's cue is a send in REAPER."""
+    master_info.return_cue = not master_info.return_cue
+    broadcast(*return_cue_lamp(_truth, master_info))
     send_cue_levels()
 
 
@@ -993,7 +1004,8 @@ def osc_handler_master(client_address: Tuple[str, int], address: str,
 
 def osc_handler_aux_return(client_address: Tuple[str, int], address: str,
                           *osc_arguments: List[Any]) -> None:
-    """The aux return's encoder: turn selects a free pair, push mutes it."""
+    """The aux return's encoder: turn moves the cursor over STEM, ANALOG and
+    CUE; push switches the mode, or on CUE toggles the return's cue."""
     found = known_address(client_address, address, osc_arguments)
     if found is None:
         return
@@ -1009,6 +1021,8 @@ def osc_handler_aux_return(client_address: Tuple[str, int], address: str,
         commands = _stems.push(RETURN, connected=_stemdeck_client is not None)
         if _stemdeck_client is not None:
             send_to_stemdeck(commands)
+        if _stems.return_cursor == CUE_FIELD:
+            toggle_return_cue()
     else:
         # Mapped, so seen() above has put it in the understood table; say
         # that nobody serves it, as osc_handler_channel's `else` does.

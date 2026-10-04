@@ -54,6 +54,13 @@ class FakeChannel:
 @dataclass
 class FakeMaster:
     fx_mode: FXMode = FXMode.LOW_PASS
+    return_cue: bool = False
+
+
+#: A rig's lamps: two a channel, the filter's and the return's cue
+#: (spec return-cue). Its flags: two a channel and the filter mode.
+LAMPS = 4 * 2 + 2
+FLAGS = 4 * 2 + 1
 
 
 def a_rig(channels=4):
@@ -91,17 +98,22 @@ class TheLights(unittest.TestCase):
                 on = FakeChannel(toggle_cue=True, toggle_fx=True)
                 self.assertEqual(led_message(self.truth, flag, 0, on)[1], 1.0)
 
-    def test_the_lamps_of_a_rig_are_two_a_channel_and_the_filter(self):
+    def test_the_lamps_of_a_rig_are_two_a_channel_the_filter_and_the_return_cue(self):
         channels, master = a_rig()
         self.assertEqual(
-            len(list(lamp_messages(self.truth, channels, master))),
-            4 * 2 + 1)
+            len(list(lamp_messages(self.truth, channels, master))), LAMPS)
+
+    def test_the_return_cue_lamp_says_whether_it_is_lit(self):
+        channels, master = a_rig()
+        for on in (False, True):
+            master.return_cue = on
+            lamps = dict(lamp_messages(self.truth, channels, master))
+            self.assertEqual(lamps["/aux-return/cue/led"], float(on))
 
     def test_the_flags_of_a_rig_are_two_a_channel_and_the_mode(self):
         channels, master = a_rig()
         self.assertEqual(
-            len(list(flag_messages(self.truth, channels, master))),
-            4 * 2 + 1)
+            len(list(flag_messages(self.truth, channels, master))), FLAGS)
 
     def test_the_lamp_says_the_mode_as_a_word_and_the_flag_as_a_number(self):
         channels, master = a_rig()
@@ -172,13 +184,14 @@ class WhatTheSourceSays(unittest.TestCase):
         self.assertEqual(modes, set(FX_MODE_WORDS))
 
     def test_every_light_the_truth_has_is_replayed(self):
-        """The truth names three lamps. Two are per channel and belong to a
-        flag; the filter mode's is the master's, which lamp_messages sends
-        on its own. (The stem cue's lamp went with the C field, spec
-        stemdeck-remote.)"""
+        """The truth names four lamps. Two are per channel and belong to a
+        flag; the filter mode's and the return cue's are the master's, which
+        lamp_messages sends on their own. (The stem cue's lamp went with the
+        C field, spec stemdeck-remote.)"""
         truth = a3_osc.load(TRUTH)
         named = {key for key in truth.addresses() if key.endswith(".led")}
-        replayed = {key for key, _ in LED_OF.values()} | {"filter.led"}
+        replayed = ({key for key, _ in LED_OF.values()}
+                    | {"filter.led", "aux-return.cue.led"})
         self.assertEqual(named, replayed)
 
 
@@ -324,7 +337,7 @@ class TheWholeAnswer(unittest.TestCase):
         messages = list(recall_messages(self.truth, channels, master,
                                         relayed))
         self.assertEqual(messages[-1], ("/channel/0/gain", 0.7))
-        self.assertEqual(len(messages), 2 * (4 * 2 + 1) + 1)
+        self.assertEqual(len(messages), LAMPS + FLAGS + 1)
 
     def test_the_position_is_answered_between_the_flags_and_reaper(self):
         """Both of Core's own certainties first, REAPER's relayed values
@@ -337,10 +350,10 @@ class TheWholeAnswer(unittest.TestCase):
 
         messages = list(recall_messages(self.truth, channels, master,
                                         relayed))
-        self.assertEqual(messages[2 * (4 * 2 + 1)],
+        self.assertEqual(messages[LAMPS + FLAGS],
                          ("/channel/2/azimuth", 45.0))
         self.assertEqual(messages[-1], ("/channel/0/gain", 0.7))
-        self.assertEqual(len(messages), 2 * (4 * 2 + 1) + 1 + 1)
+        self.assertEqual(len(messages), LAMPS + FLAGS + 1 + 1)
 
     def test_a_cold_core_still_answers_with_its_own_flags(self):
         """After Core itself restarts, nothing has been relayed yet: REAPER
@@ -351,7 +364,7 @@ class TheWholeAnswer(unittest.TestCase):
         channels, master = a_rig()
         messages = list(recall_messages(self.truth, channels, master,
                                         Relayed()))
-        self.assertEqual(len(messages), 2 * (4 * 2 + 1))
+        self.assertEqual(len(messages), LAMPS + FLAGS)
 
     def test_a_cold_core_answers_no_position_either(self):
         """Core's own restart loses the position: it is held in memory and

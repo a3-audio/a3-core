@@ -49,6 +49,7 @@ class FakeMaster:
     fx_mode: FXMode = FXMode.LOW_PASS
     stem_cue: bool = False
     phones_mix: float = 0.0
+    return_cue: bool = False
 
 
 def a_rig(channels=4):
@@ -284,6 +285,18 @@ class CueSinceTheRename(unittest.TestCase):
         back = FakeMaster()
         apply_state(state, [FakeChannel()], back)
         self.assertEqual(back.phones_mix, 0.3)
+
+    def test_the_return_cue_is_kept(self):
+        master = FakeMaster(return_cue=True)
+        back = FakeMaster()
+        apply_state(json.loads(json.dumps(state_of([FakeChannel()], master))),
+                    [FakeChannel()], back)
+        self.assertTrue(back.return_cue)
+
+    def test_an_old_file_has_the_return_cue_off(self):
+        back = FakeMaster()
+        apply_state({"phones_mix": 0.5}, [FakeChannel()], back)
+        self.assertFalse(back.return_cue)
 
     def test_the_stem_cue_is_no_longer_written(self):
         # Spec stemdeck-remote: StemDeck's CUE switches are its own.

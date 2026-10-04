@@ -72,6 +72,12 @@ def led_message(truth, flag, index, channel):
     return truth.address(name, ch=index + 1), read(channel)
 
 
+def return_cue_lamp(truth, master):
+    """The aux return's cue lamp (spec return-cue): the toggle and the
+    recall say it through this one function, so they cannot disagree."""
+    return truth.address("aux-return.cue.led"), float(master.return_cue)
+
+
 #: What Core holds because nobody else can be asked, as (address, field).
 #:
 #: Address and field are the same word except where they cannot be: `3d` is
@@ -167,6 +173,7 @@ def lamp_messages(truth, channels, master):
 
     yield (truth.address("filter.led"),
            FX_MODE_WORDS[master.fx_mode.name])
+    yield return_cue_lamp(truth, master)
 
 
 def flag_messages(truth, channels, master):
