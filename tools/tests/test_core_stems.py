@@ -9,8 +9,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local/lib"))
 
-from a3_core_stems import (A, ANALOG_MODE, AUX, BACK, CUE, D1, D2, DECK_1, DECK_2,  # noqa: E402
-                           RETURN, STEM_MODE, TOP, Stems)
+from a3_core_stems import (ANALOG, ANALOG_MODE, AUX, CUE, INPUTS, RETURN,  # noqa: E402
+                           STEM_MODE, Stems)
 
 
 def bit(bus):
@@ -40,148 +40,97 @@ class TheMirror(unittest.TestCase):
         self.assertEqual((s.place_of(1), s.place_of(2), s.place_of(3)), (0, RETURN, None))
 
 
-class TheMenu(unittest.TestCase):
-    """Each channel encoder is a two-level menu (spec desk-stem-grid-2,
-    2026-10-02): D1 / D2 / A, then a deck's stems 1-4 and back."""
+class TheSelector(unittest.TestCase):
+    """Each channel encoder is an input selector (2026-10-04): one cursor
+    over nine inputs -- D1's stems, D2's stems, A -- and a push makes the
+    input under it the channel's only one."""
 
-    def test_turning_at_the_top_runs_d1_d2_a(self):
+    def test_nine_inputs_the_last_is_a(self):
+        self.assertEqual((INPUTS, ANALOG), (9, 8))
+
+    def test_the_cursor_starts_on_a(self):
+        self.assertEqual(Stems().cursors, [ANALOG] * 4)
+
+    def test_the_cursor_runs_over_all_nine_and_stops_at_the_ends(self):
         s = Stems()
-        self.assertEqual(s.menus[0], (TOP, D1))
-        s.turn(0, +1)
-        self.assertEqual(s.menus[0], (TOP, D2))
-        s.turn(0, +1)
-        self.assertEqual(s.menus[0], (TOP, A))
-        s.turn(0, +1)
-        self.assertEqual(s.menus[0], (TOP, D1))
-
-    def test_push_on_a_deck_enters_and_switches_nothing(self):
-        s = stems_with(p2=bit(1))
-        s.menus[0] = (TOP, D2)
-        self.assertEqual(s.push(0), [])
-        self.assertEqual(s.menus[0], (DECK_2, 0))
-        self.assertEqual(s.channel_mask(0), 1 << 1)
-
-    def test_turning_in_a_deck_runs_four_stems_and_back(self):
-        s = Stems()
-        s.menus[0] = (DECK_1, 0)
         s.turn(0, -1)
-        self.assertEqual(s.menus[0], (DECK_1, BACK))
-        s.turn(0, +2)
-        self.assertEqual(s.menus[0], (DECK_1, 1))
+        self.assertEqual(s.cursors[0], 7)
+        s.turn(0, -20)
+        self.assertEqual(s.cursors[0], 0)
+        s.turn(0, +3)
+        self.assertEqual(s.cursors[0], 3)
+        s.turn(0, +20)
+        self.assertEqual(s.cursors[0], ANALOG)
 
-    def test_push_on_a_stem_replaces_only_that_decks_stem(self):
-        """2026-10-02: a channel may play one stem of each deck -- D1's and
-        D2's -- at once."""
+    def test_turning_switches_nothing(self):
+        s = stems_with(p3=bit(1))
+        s.turn(0, -5)
+        self.assertEqual(s.channel_mask(0), 1 << 2)
+
+    def test_push_on_a_stem_makes_it_the_only_input(self):
         s = stems_with(p2=bit(1), p6=bit(1))
         s.return_mode = ANALOG_MODE
-        s.menus[0] = (DECK_1, 2)                      # deck 1, stem 3 = pair 3
+        s.cursors[0] = 2                                   # D1, stem 3 = pair 3
         commands = s.push(0)
         self.assertEqual(commands[:2], [(3, 1, True), (3, AUX, False)])
         self.assertIn((2, 1, False), commands)
-        self.assertNotIn((6, 1, False), commands)
-        self.assertEqual(s.channel_mask(0), (1 << 2) | (1 << 5))
+        self.assertIn((6, 1, False), commands)
+        self.assertEqual(s.channel_mask(0), 1 << 2)
 
-    def test_push_on_the_loaded_stem_unloads_it(self):
-        s = stems_with(p3=bit(1), p6=bit(1))
-        s.return_mode = ANALOG_MODE
-        s.menus[0] = (DECK_1, 2)
-        self.assertEqual(s.push(0), [(3, 1, False)])
-        self.assertEqual(s.channel_mask(0), 1 << 5)
-
-    def test_an_unloaded_stem_returns_to_aux_in_stem_mode(self):
-        s = stems_with(p3=bit(1))
-        s.tidy()
-        s.menus[0] = (DECK_1, 2)
-        self.assertIn((3, AUX, True), s.push(0))
-
-    def test_deck_2_stems_are_pairs_5_to_8(self):
+    def test_deck_2_stems_are_inputs_4_to_7(self):
         s = Stems()
         s.return_mode = ANALOG_MODE
-        s.menus[1] = (DECK_2, 0)
+        s.cursors[1] = 4
         s.push(1)
         self.assertEqual(s.place_of(5), 1)
 
-    def test_a_stem_on_another_channel_does_nothing(self):
-        s = stems_with(p3=bit(2))
-        s.menus[0] = (DECK_1, 2)
-        self.assertEqual(s.push(0), [])
-        self.assertEqual(s.place_of(3), 1)
-
-    def test_back_returns_to_the_top_on_that_deck(self):
-        s = Stems()
-        s.menus[0] = (DECK_2, BACK)
-        self.assertEqual(s.push(0), [])
-        self.assertEqual(s.menus[0], (TOP, D2))
-
-    def test_entering_a_deck_starts_on_the_stem_it_plays(self):
-        """2026-10-03: the cursor jumps behind the dot of D1.x -- it starts
-        at x, what plays, not at stem 1."""
-        s = stems_with(p3=bit(1), p6=bit(1))
-        s.menus[0] = (TOP, D1)
-        s.push(0)
-        self.assertEqual(s.menus[0], (DECK_1, 2))
-        s.menus[0] = (TOP, D2)
-        s.push(0)
-        self.assertEqual(s.menus[0], (DECK_2, 1))
-
-    def test_entering_a_deck_with_no_stem_of_it_starts_on_stem_1(self):
-        s = stems_with(p6=bit(1), p2=bit(2))
-        s.menus[0] = (TOP, D1)
-        s.push(0)
-        self.assertEqual(s.menus[0], (DECK_1, 0))
-
-    def test_a_loaded_stem_jumps_back_to_the_top_on_its_deck(self):
-        """2026-10-03: no sub-level screen any more -- a push on a stem is the
-        last step of the edit."""
-        s = Stems()
-        s.return_mode = ANALOG_MODE
-        s.menus[0] = (DECK_2, 3)
-        s.push(0)
-        self.assertEqual(s.place_of(8), 0)
-        self.assertEqual(s.menus[0], (TOP, D2))
-
-    def test_an_unloaded_stem_jumps_back_too(self):
+    def test_push_on_what_plays_changes_nothing(self):
         s = stems_with(p3=bit(1))
         s.return_mode = ANALOG_MODE
-        s.menus[0] = (DECK_1, 2)
-        s.push(0)
-        self.assertEqual(s.channel_mask(0), 0)
-        self.assertEqual(s.menus[0], (TOP, D1))
+        s.cursors[0] = 2
+        self.assertEqual(s.push(0), [])
+        self.assertEqual(s.channel_mask(0), 1 << 2)
 
-    def test_a_stem_on_another_channel_keeps_the_edit_open(self):
+    def test_a_stem_on_another_channel_moves_here(self):
         s = stems_with(p3=bit(2))
-        s.menus[0] = (DECK_1, 2)
-        s.push(0)
-        self.assertEqual(s.menus[0], (DECK_1, 2))
+        s.return_mode = ANALOG_MODE
+        s.cursors[0] = 2
+        commands = s.push(0)
+        self.assertIn((3, 2, False), commands)
+        self.assertIn((3, 1, True), commands)
+        self.assertEqual((s.place_of(3), s.channel_mask(1)), (0, 0))
 
     def test_push_on_a_releases_every_stem(self):
         s = stems_with(p3=bit(1))
         s.return_mode = ANALOG_MODE
-        s.menus[0] = (TOP, A)
+        s.cursors[0] = ANALOG
         self.assertEqual(s.push(0), [(3, 1, False)])
         self.assertEqual(s.channel_mask(0), 0)
 
-    def test_sources_are_the_decks_or_a(self):
-        s = stems_with(p6=bit(2), p1=bit(3), p7=bit(3))
-        self.assertEqual((s.sources(0), s.sources(1), s.sources(2)), ({A}, {D2}, {D1, D2}))
+    def test_push_on_a_while_analog_plays_changes_nothing(self):
+        s = Stems()
+        s.return_mode = ANALOG_MODE
+        self.assertEqual(s.push(0), [])
+
+    def test_a_report_does_not_move_the_cursor(self):
+        s = Stems()
+        s.cursors[0] = 5
+        s.report(2, bit(1))
+        self.assertEqual(s.cursors[0], 5)
 
 
 class WithoutStemDeck(unittest.TestCase):
     """Final review: without StemDeck a push loaded the mirror anyway, and
     Core shut the channel's analog send for a stem nobody plays."""
 
-    def test_the_menu_moves_the_switches_do_not(self):
+    def test_the_cursor_moves_the_switches_do_not(self):
         s = Stems()
-        s.menus[0] = (TOP, D1)
+        s.turn(0, -6)
         self.assertEqual(s.push(0, connected=False), [])
-        self.assertEqual(s.menus[0], (DECK_1, 0))
-        self.assertEqual(s.push(0, connected=False), [])
-        self.assertEqual(s.channel_mask(0), 0)
-        self.assertEqual(s.menus[0], (TOP, D1))
+        self.assertEqual((s.cursors[0], s.channel_mask(0)), (2, 0))
 
     def test_a_does_not_touch_the_mirror_either(self):
         s = stems_with(p3=bit(1))
-        s.menus[0] = (TOP, A)
         self.assertEqual(s.push(0, connected=False), [])
         self.assertEqual(s.channel_mask(0), 1 << 2)
 
@@ -204,16 +153,11 @@ class OnePerChannel(unittest.TestCase):
         self.assertEqual(s.channel_mask(1), 1 << 2)
         self.assertEqual(len(commands), len(set(commands)))
 
-    def test_two_stems_of_one_deck_on_a_bus_keep_the_lowest(self):
-        s = stems_with(p4=bit(1), p3=bit(1))
+    def test_two_stems_on_a_bus_keep_the_lowest_whatever_their_deck(self):
+        s = stems_with(p6=bit(1), p3=bit(1))
         s.return_mode = ANALOG_MODE
-        self.assertEqual(s.tidy(), [(4, 1, False)])
+        self.assertEqual(s.tidy(), [(6, 1, False)])
         self.assertEqual(s.channel_mask(0), 1 << 2)
-
-    def test_one_stem_of_each_deck_may_stay(self):
-        s = stems_with(p3=bit(1), p6=bit(1))
-        s.return_mode = ANALOG_MODE
-        self.assertEqual(s.tidy(), [])
 
     def test_tidy_twice_is_nothing(self):
         s = stems_with(p3=bit(1), p6=bit(1), p4=bit(4), p8=bit(4))
@@ -256,7 +200,7 @@ class ReturnModes(unittest.TestCase):
     def test_a_released_stem_returns_to_aux_in_stem_mode(self):
         s = stems_with(p3=bit(1))
         s.tidy()
-        s.menus[0] = (TOP, A)
+        s.cursors[0] = ANALOG
         self.assertIn((3, AUX, True), s.push(0))
 
     def test_analog_to_stem_puts_only_the_free_stems_on_aux(self):
@@ -284,18 +228,19 @@ class TheCue(unittest.TestCase):
         s = stems_with(p3=bit(1))
         s.return_mode = ANALOG_MODE
         s.cue_commands([True, False, False, False])
-        s.menus[0] = (DECK_1, 3)                      # stem 4 of the same deck replaces 3
+        s.cursors[0] = 3                              # stem 4 replaces 3
         s.push(0)
         self.assertEqual(sorted(s.cue_commands([True, False, False, False])),
                          [(3, CUE, False), (4, CUE, True)])
 
-    def test_both_decks_stems_are_cued(self):
+    def test_a_deck_2_stem_is_cued_in_place_of_deck_1s(self):
         s = stems_with(p3=bit(1))
         s.return_mode = ANALOG_MODE
         s.cue_commands([True, False, False, False])
-        s.menus[0] = (DECK_2, 0)
+        s.cursors[0] = 4
         s.push(0)
-        self.assertEqual(s.cue_commands([True, False, False, False]), [(5, CUE, True)])
+        self.assertEqual(sorted(s.cue_commands([True, False, False, False])),
+                         [(3, CUE, False), (5, CUE, True)])
 
     def test_nothing_changed_nothing_sent(self):
         s = stems_with(p3=bit(1) | bit(CUE))
@@ -303,18 +248,19 @@ class TheCue(unittest.TestCase):
 
 
 class StateOnDisk(unittest.TestCase):
-    def test_menus_and_mode_are_kept(self):
+    def test_cursors_and_mode_are_kept(self):
         s = Stems()
-        s.menus = [(TOP, A), (DECK_1, 3), (DECK_2, BACK), (TOP, D2)]
+        s.cursors = [ANALOG, 3, 0, 7]
         s.return_cursor, s.return_mode = ANALOG_MODE, ANALOG_MODE
         back = Stems.from_data(s.as_data())
-        self.assertEqual(back.menus, s.menus)
+        self.assertEqual(back.cursors, s.cursors)
         self.assertEqual((back.return_cursor, back.return_mode), (ANALOG_MODE, ANALOG_MODE))
 
     def test_an_old_or_garbled_file_never_raises(self):
-        for data in (None, {}, {"selected": [1, 2, 0, 0, 5]}, {"menus": "x"},
-                     {"menus": [[9, 9]] * 4}, {"menus": [[0, 0]] * 3},
-                     {"return_mode": 7}, {"menus": [[1e999, 0]] * 4}):
+        for data in (None, {}, {"menus": [[0, 0]] * 4}, {"cursors": "x"},
+                     {"cursors": [9, 0, 0, 0]}, {"cursors": [0, 0, 0]},
+                     {"cursors": [True, 0, 0, 0]}, {"return_mode": 7},
+                     {"cursors": [1e999, 0, 0, 0]}):
             s = Stems.from_data(data)
-            self.assertEqual(s.menus, [(TOP, D1)] * 4, data)
+            self.assertEqual(s.cursors, [ANALOG] * 4, data)
             self.assertEqual(s.return_mode, STEM_MODE, data)
