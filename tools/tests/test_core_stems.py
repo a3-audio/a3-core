@@ -51,16 +51,21 @@ class TheSelector(unittest.TestCase):
     def test_the_cursor_starts_on_the_toggle(self):
         self.assertEqual(Stems().cursors, [TOGGLE] * 4)
 
-    def test_the_cursor_runs_over_all_nine_and_stops_at_the_ends(self):
+    def test_the_cursor_runs_over_all_nine_and_wraps_around(self):
+        # Left from stem 1 lands on the STEM toggle, right from the toggle
+        # on stem 1 (maintainer, 2026-10-04): the toggle is one turn away.
         s = Stems()
         s.turn(0, -1)
         self.assertEqual(s.cursors[0], 7)
-        s.turn(0, -20)
+        s.cursors[0] = 0
+        s.turn(0, -1)
+        self.assertEqual(s.cursors[0], TOGGLE)
+        s.turn(0, +1)
         self.assertEqual(s.cursors[0], 0)
         s.turn(0, +3)
         self.assertEqual(s.cursors[0], 3)
-        s.turn(0, +20)
-        self.assertEqual(s.cursors[0], TOGGLE)
+        s.turn(0, -5)
+        self.assertEqual(s.cursors[0], 7)
 
     def test_turning_switches_nothing(self):
         s = stems_with(p3=bit(1))
@@ -84,12 +89,31 @@ class TheSelector(unittest.TestCase):
         s.push(1)
         self.assertEqual(s.place_of(5), 1)
 
-    def test_push_on_what_plays_changes_nothing(self):
+    def test_push_on_what_plays_sends_it_to_the_return(self):
+        # A push on the stem that plays here takes it off the channel, which
+        # plays its analog input again; in STEM mode the stem lands on the
+        # return (maintainer, 2026-10-04).
         s = stems_with(p3=bit(1))
-        s.return_mode = ANALOG_MODE
         s.cursors[0] = 2
-        self.assertEqual(s.push(0), [])
-        self.assertEqual(s.channel_mask(0), 1 << 2)
+        commands = s.push(0)
+        self.assertIn((3, 1, False), commands)
+        self.assertIn((3, AUX, True), commands)
+        self.assertEqual((s.channel_mask(0), s.place_of(3)), (0, RETURN))
+
+    def test_a_second_push_brings_it_back_from_the_return(self):
+        s = stems_with(p3=bit(1))
+        s.cursors[0] = 2
+        s.push(0)
+        s.push(0)
+        self.assertEqual((s.channel_mask(0), s.place_of(3)), (1 << 2, 0))
+
+    def test_push_on_what_plays_is_remembered_by_the_toggle(self):
+        s = stems_with(p3=bit(1))
+        s.cursors[0] = 2
+        s.push(0)
+        s.cursors[0] = TOGGLE
+        s.push(0)
+        self.assertEqual(s.place_of(3), 0)
 
     def test_a_stem_on_another_channel_moves_here(self):
         s = stems_with(p3=bit(2))
@@ -187,10 +211,10 @@ class TheStemToggle(unittest.TestCase):
         self.select(s, 2, 1)
         self.assertEqual(s.last_stems[2], 1)
 
-    def test_a_push_on_what_plays_also_sets_the_memory(self):
+    def test_a_push_on_what_plays_releases_it_and_sets_the_memory(self):
         s = stems_with(p4=bit(1))                        # put there by StemDeck
         s.return_mode = ANALOG_MODE
-        self.assertEqual(self.select(s, 0, 4), [])
+        self.assertEqual(self.select(s, 0, 4), [(4, 1, False)])
         self.assertEqual(s.last_stems[0], 4)
 
     def test_off_remembers_a_stem_stemdeck_put_there(self):

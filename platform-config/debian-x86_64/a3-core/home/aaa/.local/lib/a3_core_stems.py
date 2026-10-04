@@ -91,7 +91,8 @@ class Stems:
         if index == RETURN:
             self.return_cursor = (self.return_cursor + steps) % 2
             return
-        self.cursors[index] = max(0, min(TOGGLE, self.cursors[index] + steps))
+        # Round in a ring: left from stem 1 is the STEM toggle, one turn away.
+        self.cursors[index] = (self.cursors[index] + steps) % INPUTS
 
     def push(self, index, connected=True):
         """The commands a push on place `index` means. Without StemDeck
@@ -103,7 +104,9 @@ class Stems:
         if not connected:
             return []
         cursor = self.cursors[index]
-        if cursor == TOGGLE:
+        # On the toggle, or on the stem that plays here: the toggle's off,
+        # which in STEM mode sends that stem to the return.
+        if cursor == TOGGLE or self._on(cursor + 1, index + 1):
             return self._toggle(index)
         self.last_stems[index] = cursor + 1
         return self._select(index, cursor + 1)
