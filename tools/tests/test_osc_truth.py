@@ -135,13 +135,13 @@ class TheVocabulary(unittest.TestCase):
                     "/master/phones_mix", "/master/phones_volume", "/master/return"):
             self.assertNotIn(old, patterns)
 
-    def test_forty_eight_vu_meters_from_one(self):
-        # 40 REAPER outs, then the 8 stem pairs (issue a3-system#71)
+    def test_fifty_vu_meters_from_one(self):
+        # 40 REAPER outs, the 8 stem pairs (issue a3-system#71), StemDeck's AUX bus
         t = truth()
         self.assertEqual(t.address("vu", n=1), "/vu/1")
-        self.assertEqual(t.index_range("vu", "n"), (1, 48))
+        self.assertEqual(t.index_range("vu", "n"), (1, 50))
         meters = t.vu_meters()
-        self.assertEqual(len(meters), 48)
+        self.assertEqual(len(meters), 50)
         self.assertEqual(meters[0], "in1_pre")
         self.assertEqual(meters[10], "main_sub")
         self.assertEqual(meters[39], "free70")
@@ -173,7 +173,7 @@ class TakingAnAddressApart(unittest.TestCase):
     def test_outside_the_range_is_no_match(self):
         self.assertIsNone(truth().match("/channel/0/volume"))
         self.assertIsNone(truth().match("/channel/5/volume"))
-        self.assertIsNone(truth().match("/vu/49"))
+        self.assertIsNone(truth().match("/vu/51"))
 
     def test_an_old_or_unknown_address_is_no_match(self):
         for address in ("/fx/frequency", "/master/return", "/channel/1/pot_1",
@@ -195,17 +195,43 @@ class TheStemMeters(unittest.TestCase):
     def setUp(self):
         self.t = truth()
 
-    def test_vu_reaches_forty_eight(self):
-        self.assertEqual(self.t.addresses()["vu"]["n"], [1, 48])
-
     def test_the_stems_follow_the_forty(self):
         meters = self.t.vu_meters()
-        self.assertEqual(len(meters), 48)
-        self.assertEqual(meters[40:], ["stem_a1", "stem_a2", "stem_a3", "stem_a4",
+        self.assertEqual(meters[40:48], ["stem_a1", "stem_a2", "stem_a3", "stem_a4",
                                        "stem_b1", "stem_b2", "stem_b3", "stem_b4"])
 
     def test_a_stem_meter_has_its_address(self):
         self.assertEqual(self.t.address("vu", n=48), "/vu/48")
+
+
+class TheAuxBusMeters(unittest.TestCase):
+    """StemDeck's AUX bus as a true stereo pair (decided 2026-10-04): the
+    desk's aux-return display shows SA (these) beside A (aux_L/aux_R)."""
+
+    def setUp(self):
+        self.t = truth()
+
+    def test_vu_reaches_fifty(self):
+        self.assertEqual(self.t.addresses()["vu"]["n"], [1, 50])
+
+    def test_the_aux_bus_follows_the_stems(self):
+        meters = self.t.vu_meters()
+        self.assertEqual(len(meters), 50)
+        self.assertEqual(meters[48:], ["stem_aux_L", "stem_aux_R"])
+
+    def test_meter_n_is_the_list_index_plus_one(self):
+        meters = self.t.vu_meters()
+        self.assertEqual(meters.index("stem_aux_L") + 1, 49)
+        self.assertEqual(meters.index("stem_aux_R") + 1, 50)
+        self.assertEqual(self.t.match("/vu/50"), ("vu", {"n": 50}))
+
+    def test_stemdeck_sends_them_to_the_desk(self):
+        self.assertIn("stemdeck", self.t.addresses()["vu"]["from"])
+        self.assertIn({"from": "stemdeck", "to": "mixer.osc", "carries": "vu"},
+                      self.t.routes())
+
+    def test_the_meaning_names_the_aux_bus(self):
+        self.assertIn("49-50 StemDeck's AUX bus", self.t.addresses()["vu"]["meaning"])
 
 
 class TheCueWords(unittest.TestCase):

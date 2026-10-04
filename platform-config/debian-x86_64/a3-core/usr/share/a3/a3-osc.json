@@ -157,7 +157,7 @@
   "beat":                     {"pattern": "/beat", "args": "iif", "from": ["beat-analyzer", "motion"], "to": ["core", "motion", "mixer", "radla", "beat-analyzer"], "meaning": "beat in bar, bar, tempo -- the clock (Motion sends it only in clock mode 0)"},
   "tap":                      {"pattern": "/tap", "args": "i", "from": ["mixer", "motion"], "to": ["beat-analyzer"], "meaning": "a tap on the beat"},
   "clockmode":                {"pattern": "/clockmode", "args": "i", "from": ["motion"], "to": ["beat-analyzer"], "meaning": "0 a3motion, 1 intern, 2 pioneer"},
-  "vu":                       {"pattern": "/vu/{n}", "args": "ff", "n": [1, 48], "from": ["beat-analyzer", "stemdeck"], "to": ["motion", "mixer", "radla"], "meaning": "peak, rms (linear) of VU channel n = REAPER out 30 + n for 1-40; 41-48 StemDeck's stems, one each (stem_a1 ... stem_b4: peak of the louder side, rms over both, after knob and mute); see vu_meters"}
+  "vu":                       {"pattern": "/vu/{n}", "args": "ff", "n": [1, 50], "from": ["beat-analyzer", "stemdeck"], "to": ["motion", "mixer", "radla"], "meaning": "peak, rms (linear) of VU channel n = REAPER out 30 + n for 1-40; 41-48 StemDeck's stems, one each (stem_a1 ... stem_b4: peak of the louder side, rms over both, after knob and mute); 49-50 StemDeck's AUX bus, L and R: peak and rms of each side after the bus; see vu_meters"}
  },
  "vu_meters": [
   "in1_pre", "in2_pre", "in3_pre", "in4_pre",
@@ -169,7 +169,8 @@
   "booth_top5", "booth_top6", "booth_top7", "booth_top8", "booth_top9",
   "phones_L", "phones_R", "rec_L", "rec_R", "aux_L", "aux_R",
   "free67", "free68", "free69", "free70",
-  "stem_a1", "stem_a2", "stem_a3", "stem_a4", "stem_b1", "stem_b2", "stem_b3", "stem_b4"
+  "stem_a1", "stem_a2", "stem_a3", "stem_a4", "stem_b1", "stem_b2", "stem_b3", "stem_b4",
+  "stem_aux_L", "stem_aux_R"
  ],
  "external": {
   "reaper": {"owner": "REAPER (a3-core.ReaperOSC)", "patterns": [
