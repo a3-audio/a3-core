@@ -216,10 +216,10 @@ exec /usr/bin/xset s off &
 exec /usr/bin/xset s noblank &
 exec /usr/bin/xset -dpms &
 
-# Workaround: initial KMS modeset on HDMI-2 sometimes fails to reach the
-# panel (black screen despite X/i3 running fine). Forcing the output off
-# and back on shortly after startup retriggers a working modeset.
-exec --no-startup-id sh -c 'sleep 2 && xrandr --output HDMI-2 --off && sleep 1 && xrandr --output HDMI-2 --mode 1024x768 --pos 0x0 --rotate right'
+# Rotation and touch are in /etc/X11/xorg.conf.d/10-a3-display.conf. The
+# off-and-on of HDMI-2 that was here worked around the modesetting driver's
+# failed first modeset (black screen); the amdgpu driver sets it the first time
+# (a3nuc2, 2026-10-04).
 exec /usr/bin/xrandr --dpi 120 &
 #exec /usr/bin/qasmixer -t &
 #exec /home/aaa/a3-core.lokal/alsa-scarlett-gui &

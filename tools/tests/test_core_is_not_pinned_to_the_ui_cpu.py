@@ -8,9 +8,11 @@ kernel dropped 14,461 packets in seven minutes. Unpinned live, three minutes of
 play: no drop, the queue peaked at 8.8 KB, and no crackle -- the audio threads
 on CPUs 1-3 run real-time, so an ordinary Core only takes what they leave.
 
-It ships as a drop-in because the postinst copies the config with `cp -rn`,
-which never overwrites: a changed line in a3-core.service would reach fresh
-installs only, while a new file reaches every rig on the next upgrade.
+It ships as a drop-in because the postinst then copied the config with
+`cp -rn`, which never overwrote: a changed line in a3-core.service reached
+fresh installs only, while a new file reached every rig on the next upgrade.
+(The postinst now replaces changed files too; see
+test_package_installs_its_config.)
 """
 
 import unittest
