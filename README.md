@@ -1,9 +1,12 @@
 # A³ Core
 
 The 3D sound server: the machine that carries the audio. A Debian x86_64
-installation running JACK, REAPER and SuperCollider, remote-controlled over
+installation running JACK and REAPER, remote-controlled over
 OSC by [A³ Mixer](https://github.com/a3-audio/a3-mixer) and
-[A³ Motion](https://github.com/a3-audio/a3-motion).
+[A³ Motion](https://github.com/a3-audio/a3-motion). The beat clock and the VU
+meters come from the separate
+[beat-analyzer](https://github.com/rafjagger/beat-analyzer) on the same JACK
+graph, which the package starts as a user service.
 
 This repository *is* the deployment: the `.deb` package tree under
 `platform-config/`, not application source.
