@@ -73,10 +73,15 @@ class TheMarkers(unittest.TestCase):
 class A3DocFollows(unittest.TestCase):
     """a3-doc beside this checkout: its pages hold what the truth renders."""
 
+    def test_a3_doc_is_the_umbrellas_submodule_beside_this_one(self):
+        """Since 2026-10-04 ~/a3-system is the umbrella's checkout, and a3-doc
+        sits beside a3-core as its submodule, not under web/."""
+        self.assertEqual(render_docs.default_doc(ROOT), ROOT.parent / "a3-doc")
+
     def test_the_committed_pages_are_the_render(self):
-        doc = ROOT.parent / "web" / "a3-doc"
+        doc = render_docs.default_doc(ROOT)
         if not doc.is_dir():
-            self.skipTest(f"no a3-doc at {doc} -- run this in the a3-system workspace")
+            self.skipTest(f"no a3-doc at {doc} -- run this in the a3-system checkout")
         for page in render_docs.PAGES:
             path = doc / page
             if not path.exists():
