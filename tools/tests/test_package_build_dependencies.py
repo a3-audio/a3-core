@@ -22,6 +22,9 @@ NEEDED = (
     # JUCE 9's OpenGL module includes EGL/egl.h; without egl.pc at configure
     # time JUCE drops its egl;gl group silently (a3-motion-ui ARCHITECTURE.md)
     "libegl-dev",
+    # JUCE 9's juce_gui_basics includes X11/extensions/XInput2.h; a3nuc2's
+    # first installer run stopped there (2026-10-05)
+    "libxi-dev",
     # StemDeck
     "libflac-dev", "libvorbis-dev", "libogg-dev", "libjack-jackd2-dev",
     # Motion UI and its V3 hardware interface
