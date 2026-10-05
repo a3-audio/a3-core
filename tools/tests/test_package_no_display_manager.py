@@ -45,5 +45,23 @@ class ThePackageHasNoDisplayManager(unittest.TestCase):
             self.assertNotIn("lightdm", path.read_text(errors="replace").lower(), path)
 
 
+
+USER_UNITS = PACKAGE / "home/aaa/.local/share/a3-core/config/systemd/user"
+WAIT = "ExecStartPre=/home/aaa/.local/bin/a3-wait-for-the-screen"
+
+
+class WindowsWaitForTheScreen(unittest.TestCase):
+    """Without a display manager, getty logs aaa in before X is up, so the
+    user manager starts these units before ~/.xinitrc has imported DISPLAY
+    (2026-10-05). Each unit that opens a window names its display and waits
+    for the screen itself, as a3-bar-per-workspace already did."""
+
+    def test_each_window_names_the_display_and_waits(self):
+        for name in ("a3-reaper.service", "qjackctl.service", "a3-bar-per-workspace.service"):
+            text = (USER_UNITS / name).read_text()
+            self.assertIn("Environment=DISPLAY=:0", text, name)
+            self.assertIn(WAIT, text, name)
+
+
 if __name__ == "__main__":
     unittest.main()

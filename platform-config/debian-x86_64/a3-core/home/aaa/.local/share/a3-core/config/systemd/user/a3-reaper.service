@@ -5,6 +5,11 @@ After=graphical.target a3-jack.service
 
 [Service]
 PrivateTmp=true
+# The display by name and the screen awaited here: getty logs aaa in before
+# X is up, so the user manager may start this unit before ~/.xinitrc has
+# imported DISPLAY (2026-10-05, no display manager any more).
+Environment=DISPLAY=:0
+ExecStartPre=/home/aaa/.local/bin/a3-wait-for-the-screen
 #WorkingDirectory=/home/aaa/.config/REAPER
 # jackd accepting clients, not two seconds. After=a3-jack.service says jackd
 # was started, which is not the same as ready -- jackd has no readiness
