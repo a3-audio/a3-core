@@ -145,3 +145,19 @@ def everyone_but(subscribers, origin):
     Reads only `.name`, so a WatchedClient and a stand-in behave alike.
     """
     return [client for client in subscribers if client.name != origin]
+
+
+def replace_named(subscribers, client):
+    """Put `client` in the slot of the subscriber with its name, in place.
+
+    In place, because the handlers and the REAPER feedback thread all hold
+    this one list; in its slot, because the order is the replay order. A
+    remote Motion takes the rig's Motion's place this way -- instead of it,
+    never beside it. A name that is not there is a KeyError: adding is
+    --subscriber's job, at start-up.
+    """
+    for index, existing in enumerate(subscribers):
+        if existing.name == client.name:
+            subscribers[index] = client
+            return
+    raise KeyError(client.name)

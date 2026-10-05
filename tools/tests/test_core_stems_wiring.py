@@ -158,9 +158,10 @@ class ReaperHearsTheCueOnceItListens(unittest.TestCase):
     a cold boot the phones hear the template's sends, everything at 0 dB."""
 
     def test_the_recall_sends_the_cue_levels(self):
-        calls = _calls_in("osc_handler_recall")
+        calls = _calls_in("say_the_whole_state")
         self.assertEqual(1, len([call for call in calls
                                  if _is_named(call.func, "send_cue_levels")]))
+        self.assertIn("say_the_whole_state(", _source_of("osc_handler_recall"))
 
 
 class TheReturnIsInTheCueLevels(unittest.TestCase):
@@ -230,7 +231,8 @@ class TheTidyIsWired(unittest.TestCase):
         self.assertNotIn(".tidy(", handler)
 
     def test_the_loop_ticks_the_tidy(self):
-        self.assertIn("tick=tidy_when_settled", CORE)
+        self.assertIn("tick=on_tick", CORE)
+        self.assertIn("tidy_when_settled()", _source_of("on_tick"))
         self.assertIn("_stems.tidy()", _source_of("tidy_when_settled"))
 
 
