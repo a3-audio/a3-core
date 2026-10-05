@@ -1,5 +1,4 @@
 /etc/default/grub
-/etc/lightdm/lightdm.conf.d/99-a3-core.conf
 /etc/X11/xorg.conf.d/10-a3-display.conf
 /etc/rtirq.conf
 /etc/security/limits.d/audio.conf

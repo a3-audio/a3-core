@@ -3,6 +3,11 @@ Description=qjackctl.service
 PartOf=a3-main.service
 After=graphical.target a3-jack.service a3-reaper.service beat-analyzer.service
 [Service]
+# The display by name and the screen awaited here: getty logs aaa in before
+# X is up, so the user manager may start this unit before ~/.xinitrc has
+# imported DISPLAY (2026-10-05, no display manager any more).
+Environment=DISPLAY=:0
+ExecStartPre=/home/aaa/.local/bin/a3-wait-for-the-screen
 # Only jack has to be there. The patchbay reconnects clients as they appear,
 # so REAPER and the beat-analyzer do not have to be up first -- the four
 # seconds were waiting for something that waits for itself.
