@@ -1,10 +1,12 @@
 """Whether a device that says hello is still there.
 
 StemDeck says hello every 30 s; Core counts it gone after a minute without
-one (spec stemdeck-remote). Pure: the caller passes the clock.
+one (spec stemdeck-remote); Motion the same since 2026-10-05
+(spec devices-and-remote-access). Pure: the caller passes the clock.
 """
 
 STEMDECK_SILENCE = 60.0
+MOTION_SILENCE = 60.0
 
 
 class Presence:
@@ -31,29 +33,43 @@ class Presence:
         return True
 
 
-class StemDeckWatch:
-    """What StemDeck's hello means for Core's link to it.
+class HelloWatch:
+    """What a device's hello means for Core's link to it -- StemDeck's and
+    Motion's alike, one of each at a time.
 
-    A hello that is news -- the first, one after silence, or one from a new
-    host -- means: send to that host from now on and ask for every switch.
-    A minute without one means: forget it, once. Pure; the caller passes
-    the clock and does the sending."""
+    A hello that is news -- the first, one after silence, or one from a host
+    that has just arrived -- means: send to that host from now on (and ask it
+    for everything). A minute without one from the host followed means:
+    forget it, once. Pure; the caller passes the clock and does the sending.
+
+    Each host is watched on its own, so a host already there that keeps
+    saying hello every 30 s is not an arrival: two running at once would
+    otherwise take the link from each other on every hello.
+    """
 
     def __init__(self, silence_after):
-        self._presence = Presence(silence_after)
+        self._silence_after = silence_after
+        self._heard = {}
         self.host = None
 
     def hello(self, host, now):
         """True when Core should (re)connect to `host` and send a recall."""
-        news = self._presence.heard(now)
-        if not news and host == self.host:
+        self._forget_the_silent(now)
+        presence = self._heard.setdefault(host, Presence(self._silence_after))
+        arrived = presence.heard(now)
+        if not arrived and self.host is not None:
             return False
         self.host = host
         return True
 
     def silence(self, now):
-        """True exactly once when StemDeck has gone quiet."""
-        if not self._presence.gone(now):
+        """True exactly once when the host followed has gone quiet."""
+        if self.host is None or self._heard[self.host].present(now):
             return False
         self.host = None
         return True
+
+    def _forget_the_silent(self, now):
+        for host in [h for h, p in self._heard.items()
+                     if h != self.host and not p.present(now)]:
+            del self._heard[host]

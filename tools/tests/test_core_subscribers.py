@@ -18,7 +18,7 @@ TRUTH = ROOT / "platform-config/debian-x86_64/a3-core/usr/share/a3/a3-osc.json"
 
 import a3_osc   # noqa: E402
 from a3_core_subscribers import (SHIPPED, SubscriberError,   # noqa: E402
-                                 everyone_but,
+                                 everyone_but, replace_named,
                                  parse_subscriber,
                                  parse_subscribers,
                                  relay_on_arrival)
@@ -135,6 +135,26 @@ class WhoHearsAValueThatJustArrived(unittest.TestCase):
     def test_the_order_is_the_subscriber_order(self):
         """Same reason SHIPPED is ordered: a replay reads the same twice."""
         self.assertEqual(self.names("light"), ["mixer", "motion"])
+
+
+class AMotionThatMoves(unittest.TestCase):
+    """A remote Motion takes the rig's place in the list (spec
+    devices-and-remote-access): in its slot, so a replay still reads mixer
+    first, and never beside it, so nothing is said twice."""
+
+    def setUp(self):
+        self.everyone = [Named("mixer"), Named("motion"), Named("light")]
+
+    def test_it_takes_the_slot_of_its_name(self):
+        moved = Named("motion")
+        replace_named(self.everyone, moved)
+        self.assertIs(self.everyone[1], moved)
+        self.assertEqual([c.name for c in self.everyone],
+                         ["mixer", "motion", "light"])
+
+    def test_a_name_not_in_the_list_is_refused(self):
+        with self.assertRaises(KeyError):
+            replace_named(self.everyone, Named("video"))
 
 
 class WhatIsPassedOnWhenItArrives(unittest.TestCase):

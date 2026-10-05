@@ -1,13 +1,19 @@
 [Unit]
 Description=x11vnc
 After=graphical.target
+# The screen with a password, never without one: once the Vigor forwards
+# the VNC port, anyone reaching it would otherwise have the panel. The
+# password file is made on this machine, as aaa, and never shipped:
+#   x11vnc -storepasswd ~/.vnc/passwd
+# Without it this unit fails and `systemctl status x11vnc` names the path.
+AssertFileNotEmpty=/home/aaa/.vnc/passwd
 
 [Service]
 User=aaa
 WorkingDirectory=/home/aaa
 Environment=DISPLAY=:0
 ExecStartPre=/usr/bin/sleep 5
-ExecStart=/usr/bin/x11vnc -reopen -shared -forever -rfbport 5901 -display :0 -ncache 0 -auth /home/aaa/.Xauthority
+ExecStart=/usr/bin/x11vnc -reopen -shared -forever -rfbport 5901 -display :0 -ncache 0 -auth /home/aaa/.Xauthority -rfbauth /home/aaa/.vnc/passwd
 Restart=on-failure
 
 [Install]

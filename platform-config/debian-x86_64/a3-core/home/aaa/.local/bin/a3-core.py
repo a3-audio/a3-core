@@ -59,7 +59,9 @@ from a3_core_stems import CUE_FIELD, RETURN   # noqa: E402
 from a3_core_stems_reaper import (Settle, analog_messages,   # noqa: E402
                                   announcements as stem_announcements,
                                   changed_messages, command_messages, pair_of)
-from a3_core_presence import STEMDECK_SILENCE, StemDeckWatch   # noqa: E402
+from a3_core_presence import STEMDECK_SILENCE, HelloWatch   # noqa: E402
+from a3_core_motion import MotionTarget   # noqa: E402
+from a3_core_vu_relay import relay as relay_vu   # noqa: E402
 from a3_core_latest import position_key, serve   # noqa: E402
 from a3_core_announce import (EVERY_SECONDS, announce, announcement,   # noqa: E402
                               broadcast_address)
@@ -69,7 +71,7 @@ from a3_core_recall import (FX_MODE_NUMBERS, FX_MODE_WORDS,   # noqa: E402
                             recall_messages, return_cue_lamp)   # noqa: E402
 from a3_core_subscribers import (SHIPPED, SubscriberError,   # noqa: E402
                                  everyone_but, parse_subscribers,
-                                 relay_on_arrival)
+                                 relay_on_arrival, replace_named)
 from a3_core_traffic import (ANSWERERS, COMMANDERS, IN,   # noqa: E402
                              OUT, Traffic, peer_name)   # noqa: E402
 from a3_core_seen import SeenFile, state_path   # noqa: E402
@@ -223,6 +225,17 @@ osc_a3mixer = WatchedClient(SimpleUDPClient(A3MIXER_HOST, A3MIXER_PORT),
                             "mixer")
 osc_a3motion = WatchedClient(SimpleUDPClient(A3MOTION_HOST, A3MOTION_PORT),
                              "motion")
+
+#: The addresses a hello from the rig's own Motion can come from, besides
+#: loopback: it reaches Core on 127.0.0.1 or on the rig's LAN address,
+#: depending on which one it was pointed at. --motion adds its host below.
+MOTION_OWN_HOSTS = frozenset((_truth.host("core"),
+                              _truth.network()["address"].partition("/")[0]))
+
+#: Which Motion hears Core: the rig's own until another one says hello --
+#: see a3_core_motion. Rebuilt from --motion below.
+_motion = MotionTarget((A3MOTION_HOST, A3MOTION_PORT), A3MOTION_PORT,
+                       MOTION_OWN_HOSTS, _truth.port("motion", "vu"))
 osc_reaper = WatchedClient(SimpleUDPClient(REAPER_HOST, REAPER_PORT),
                            "reaper")
 
@@ -573,7 +586,7 @@ def speak_stems(full=False):
 
 #: Where StemDeck listens: learnt from its hello, None while it is silent.
 _stemdeck_client = None
-_stemdeck_watch = StemDeckWatch(STEMDECK_SILENCE)
+_stemdeck_watch = HelloWatch(STEMDECK_SILENCE)
 
 #: StemDeck reports stem by stem; the rules are applied once its reports have
 #: been quiet this long (spec desk-stem-grid-2), never to a half-updated mirror.
@@ -1051,8 +1064,14 @@ def osc_handler_stemdeck(client_address: Tuple[str, int], address: str,
     apply_stem_cue()
 
 
+def on_tick():
+    """The serve loop's tick, on the serve thread as every handler is."""
+    tidy_when_settled()
+    notice_motion_silence(time.monotonic())
+
+
 def tidy_when_settled():
-    """The serve loop's tick: once StemDeck's reports have settled, make the
+    """Every tick: once StemDeck's reports have settled, make the
     mirror obey the rules -- one stem per channel, the return's mode -- and
     tell StemDeck. Runs on the serve thread, as every handler does."""
     if not _tidy_settle.due(time.monotonic()) or _stemdeck_client is None:
@@ -1233,6 +1252,8 @@ def osc_handler_device_hello(client_address: Tuple[str, int], address: str,
     now = time.monotonic()
     if device == "stemdeck":
         stemdeck_said_hello(client_address[0], now)
+    if device == "motion":
+        motion_said_hello(client_address[0], now)
     notice_stemdeck_silence(now)
     if _devices.heard(device, their_hash, now):
         verdict = ("is Core's" if their_hash == _devices.own_hash
@@ -1241,7 +1262,7 @@ def osc_handler_device_hello(client_address: Tuple[str, int], address: str,
 
 
 def stemdeck_said_hello(host, now):
-    """StemDeck is there. When that is news (a3_core_presence.StemDeckWatch),
+    """StemDeck is there. When that is news (a3_core_presence.HelloWatch),
     learn where it listens and ask it for every stem's switches -- it may have
     restarted with others."""
     global _stemdeck_client
@@ -1250,6 +1271,37 @@ def stemdeck_said_hello(host, now):
     _stemdeck_client = WatchedClient(
         SimpleUDPClient(host, _truth.endpoint("stemdeck", "osc")[1]), "stemdeck")
     _stemdeck_client.send_message(_truth.address("stemdeck.recall"), 1)
+
+
+def motion_said_hello(host, now):
+    """Motion is there. If it is a Motion that has just arrived somewhere
+    else, Core talks to that one from now on (a3_core_motion.MotionTarget)."""
+    moved = _motion.hello(host, now)
+    if moved is not None:
+        point_motion_at(moved, "said hello")
+
+
+def notice_motion_silence(now):
+    """A minute without the remote Motion's hello: back to the rig's own."""
+    moved = _motion.silence(now)
+    if moved is not None:
+        point_motion_at(moved, "the remote one is silent, back to the rig's")
+
+
+def point_motion_at(endpoint, why):
+    """Send Motion's traffic to `endpoint` from now on, and say everything.
+
+    Motion's slot among the subscribers, not a second entry: one Motion at a
+    time (maintainer, 2026-10-05). The whole state follows at once, because a
+    Motion that has just come up knows nothing -- and its own /state/recall
+    may have reached Core before its hello and gone to the old target."""
+    global osc_a3motion
+    host, port = endpoint
+    osc_a3motion = WatchedClient(SimpleUDPClient(host, port), "motion")
+    replace_named(subscribers, osc_a3motion)
+    PEER_HOSTS["motion"] = host
+    told = say_the_whole_state()
+    print(f"motion: {why}, now {host}:{port}; replayed {told} messages")
 
 
 #: The words whose older values are worth nothing once a newer one waits.
@@ -1281,6 +1333,15 @@ def osc_handler_recall(client_address: Tuple[str, int], address: str,
                  peer_name(client_address[0], PEER_HOSTS,
                            only=COMMANDERS))
 
+    told = say_the_whole_state()
+    print(f"{address}: replayed {told} messages "
+          f"to {len(subscribers)} subscribers")
+
+
+def say_the_whole_state() -> int:
+    """Every value, to every subscriber, as the messages it would have arrived
+    as -- what a recall answers and what a Motion that moved is told. Returns
+    how many A3 messages that was."""
     messages = list(recall_messages(_truth, channel_infos, master_info,
                                     _relayed))
 
@@ -1294,9 +1355,7 @@ def osc_handler_recall(client_address: Tuple[str, int], address: str,
 
     speak_stems(full=True)
     send_cue_levels()
-
-    print(f"{address}: replayed {len(messages)} messages "
-          f"to {len(subscribers)} subscribers")
+    return len(messages)
 
 
 #: Where REAPER's feedback is heard. Its own port, not Core's: REAPER speaks
@@ -1477,6 +1536,12 @@ if __name__ == "__main__":
     # it did before.
     subscribers = [osc_a3mixer, osc_a3motion]
 
+    # --motion is the rig's own Motion; a remote one's port is the truth's.
+    motion_host, _, motion_port = args.motion.rpartition(":")
+    _motion = MotionTarget((motion_host, int(motion_port)), A3MOTION_PORT,
+                           MOTION_OWN_HOSTS | {motion_host},
+                           _truth.port("motion", "vu"))
+
     try:
         extra = parse_subscribers(args.subscriber,
                                   reserved=SHIPPED + ("reaper", "iem",
@@ -1573,6 +1638,22 @@ if __name__ == "__main__":
                      daemon=True).start()
     print(f"listening for REAPER feedback on "
           f"{args.ip}:{args.feedback_port}")
+
+    # The analyzer's meters, for a remote Motion only (a3_core_vu_relay). They
+    # arrive only if the analyzer's build/.env has OSC_VU_core=<this port>:
+    # Core renders that line into the analyzer's block from the truth below
+    # (write_user_files), and the analyzer reads it at its next start.
+    # A busy port costs a remote Motion its meters, not the rig its sound.
+    vu_inbox = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        vu_inbox.bind(_truth.endpoint("core", "vu-relay"))
+    except OSError as problem:
+        print(f"no meters for a remote Motion: {problem}", file=sys.stderr)
+    else:
+        threading.Thread(target=relay_vu, daemon=True, name="a3-vu-relay",
+                         args=(vu_inbox, lambda: _motion.vu_destination())).start()
+        print(f"forwarding the analyzer's meters from "
+              f"{vu_inbox.getsockname()} to a remote Motion")
 
     # Zwischendurch sichern. The project is what a power cut costs: Core's own
     # state file is written two seconds after a change, REAPER's project only
@@ -1738,4 +1819,4 @@ if __name__ == "__main__":
           lambda data, client: dispatcher.call_handlers_for_packet(data, client),
           lambda data: position_key(data, is_position),
           LATEST_WINS_LIMIT, lambda text: print(text, file=sys.stderr),
-          lambda: True, tick=tidy_when_settled)
+          lambda: True, tick=on_tick)
