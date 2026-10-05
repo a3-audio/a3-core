@@ -61,6 +61,7 @@ from a3_core_stems_reaper import (Settle, analog_messages,   # noqa: E402
                                   changed_messages, command_messages, pair_of)
 from a3_core_presence import STEMDECK_SILENCE, HelloWatch   # noqa: E402
 from a3_core_motion import MotionTarget   # noqa: E402
+from a3_core_vu_relay import relay as relay_vu   # noqa: E402
 from a3_core_latest import position_key, serve   # noqa: E402
 from a3_core_announce import (EVERY_SECONDS, announce, announcement,   # noqa: E402
                               broadcast_address)
@@ -234,7 +235,7 @@ MOTION_OWN_HOSTS = frozenset((_truth.host("core"),
 #: Which Motion hears Core: the rig's own until another one says hello --
 #: see a3_core_motion. Rebuilt from --motion below.
 _motion = MotionTarget((A3MOTION_HOST, A3MOTION_PORT), A3MOTION_PORT,
-                       MOTION_OWN_HOSTS)
+                       MOTION_OWN_HOSTS, _truth.port("motion", "vu"))
 osc_reaper = WatchedClient(SimpleUDPClient(REAPER_HOST, REAPER_PORT),
                            "reaper")
 
@@ -1538,7 +1539,8 @@ if __name__ == "__main__":
     # --motion is the rig's own Motion; a remote one's port is the truth's.
     motion_host, _, motion_port = args.motion.rpartition(":")
     _motion = MotionTarget((motion_host, int(motion_port)), A3MOTION_PORT,
-                           MOTION_OWN_HOSTS | {motion_host})
+                           MOTION_OWN_HOSTS | {motion_host},
+                           _truth.port("motion", "vu"))
 
     try:
         extra = parse_subscribers(args.subscriber,
@@ -1636,6 +1638,22 @@ if __name__ == "__main__":
                      daemon=True).start()
     print(f"listening for REAPER feedback on "
           f"{args.ip}:{args.feedback_port}")
+
+    # The analyzer's meters, for a remote Motion only (a3_core_vu_relay). They
+    # arrive only if the analyzer's build/.env has OSC_VU_core=<this port>:
+    # Core renders that line into the analyzer's block from the truth below
+    # (write_user_files), and the analyzer reads it at its next start.
+    # A busy port costs a remote Motion its meters, not the rig its sound.
+    vu_inbox = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        vu_inbox.bind(_truth.endpoint("core", "vu-relay"))
+    except OSError as problem:
+        print(f"no meters for a remote Motion: {problem}", file=sys.stderr)
+    else:
+        threading.Thread(target=relay_vu, daemon=True, name="a3-vu-relay",
+                         args=(vu_inbox, lambda: _motion.vu_destination())).start()
+        print(f"forwarding the analyzer's meters from "
+              f"{vu_inbox.getsockname()} to a remote Motion")
 
     # Zwischendurch sichern. The project is what a power cut costs: Core's own
     # state file is written two seconds after a change, REAPER's project only

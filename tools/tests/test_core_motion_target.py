@@ -24,7 +24,7 @@ NOTEBOOK = "192.168.43.70"
 
 def target():
     return MotionTarget(DEFAULT, remote_port=7771, own_hosts=OWN,
-                        silence_after=60)
+                        silence_after=60, vu_port=7772)
 
 
 class ThisMachine(unittest.TestCase):
@@ -75,7 +75,7 @@ class ARemoteMotion(unittest.TestCase):
 
     def test_the_port_is_the_truths_not_the_default(self):
         t = MotionTarget(("127.0.0.1", 17771), remote_port=7771,
-                         own_hosts=OWN, silence_after=60)
+                         own_hosts=OWN, silence_after=60, vu_port=7772)
         self.assertEqual(t.hello(A3NUC2, 0.0), (A3NUC2, 7771))
 
     def test_a_minute_of_silence_falls_back_to_the_rigs(self):
@@ -111,3 +111,26 @@ class ARemoteMotion(unittest.TestCase):
         t.hello(A3NUC2, 0.0)
         t.silence(61.0)
         self.assertEqual(t.hello(A3NUC2, 70.0), (A3NUC2, 7771))
+
+
+class TheMetersForARemoteMotion(unittest.TestCase):
+    """The analyzer sends /vu straight to the rig's Motion and the desk; a
+    Motion elsewhere gets them from Core, and only while it is the target --
+    the rig's own already has them, twice would be double the load."""
+
+    def test_the_rigs_own_gets_nothing_from_core(self):
+        t = target()
+        self.assertIsNone(t.vu_destination())
+        t.hello("127.0.0.1", 0.0)
+        self.assertIsNone(t.vu_destination())
+
+    def test_a_remote_one_gets_them_on_its_vu_port(self):
+        t = target()
+        t.hello(A3NUC2, 0.0)
+        self.assertEqual(t.vu_destination(), (A3NUC2, 7772))
+
+    def test_after_the_fallback_nothing_is_forwarded(self):
+        t = target()
+        t.hello(A3NUC2, 0.0)
+        t.silence(61.0)
+        self.assertIsNone(t.vu_destination())

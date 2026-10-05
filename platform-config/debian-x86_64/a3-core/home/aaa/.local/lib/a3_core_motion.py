@@ -34,11 +34,12 @@ def is_this_machine(host, own_hosts):
 
 
 class MotionTarget:
-    def __init__(self, default, remote_port, own_hosts,
+    def __init__(self, default, remote_port, own_hosts, vu_port,
                  silence_after=MOTION_SILENCE):
         self.default = tuple(default)
         self.current = self.default
         self._remote_port = remote_port
+        self._vu_port = vu_port
         self._own_hosts = frozenset(own_hosts)
         self._watch = HelloWatch(silence_after)
 
@@ -59,6 +60,13 @@ class MotionTarget:
         if not self._watch.silence(now):
             return None
         return self._point_at(self.default)
+
+    def vu_destination(self):
+        """Where Core forwards the analyzer's meters: the remote Motion's vu
+        port, or None -- the rig's own gets them from the analyzer directly."""
+        if not self.remote:
+            return None
+        return self.current[0], self._vu_port
 
     def _point_at(self, endpoint):
         if endpoint == self.current:
