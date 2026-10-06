@@ -15,7 +15,7 @@ import json
 import sys
 import time
 import unittest
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -50,7 +50,7 @@ class FakeMaster:
     stem_cue: bool = False
     phones_mix: float = 0.0
     return_cue: bool = False
-    cue_switches_cleared: bool = False
+    cue_cleared_on: list = field(default_factory=list)
 
 
 def a_rig(channels=4):
@@ -294,17 +294,19 @@ class CueSinceTheRename(unittest.TestCase):
                     [FakeChannel()], back)
         self.assertTrue(back.return_cue)
 
-    def test_the_old_c_switches_stay_cleared_across_a_restart(self):
-        master = FakeMaster(cue_switches_cleared=True)
+    def test_the_machines_cleared_stay_cleared_across_a_restart(self):
+        master = FakeMaster(cue_cleared_on=["local", "192.168.8.20"])
         back = FakeMaster()
         apply_state(json.loads(json.dumps(state_of([FakeChannel()], master))),
                     [FakeChannel()], back)
-        self.assertTrue(back.cue_switches_cleared)
+        self.assertEqual(back.cue_cleared_on, ["local", "192.168.8.20"])
 
-    def test_an_old_file_has_not_cleared_them_yet(self):
+    def test_an_old_file_has_cleared_no_machine(self):
+        # Including one with the bool of 2026-10-06 13:05: that cleared only
+        # the StemDeck Core followed first (the rig's), not a3nuc2's.
         back = FakeMaster()
-        apply_state({"phones_mix": 0.5}, [FakeChannel()], back)
-        self.assertFalse(back.cue_switches_cleared)
+        apply_state({"phones_mix": 0.5, "cue_switches_cleared": True}, [FakeChannel()], back)
+        self.assertEqual(back.cue_cleared_on, [])
 
     def test_an_old_file_has_the_return_cue_off(self):
         back = FakeMaster()
