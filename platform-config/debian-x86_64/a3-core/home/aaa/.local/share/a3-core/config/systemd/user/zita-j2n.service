@@ -9,6 +9,9 @@ Type=simple
 ExecStartPre=/usr/bin/sleep 2
 # Addresses and ports come from a3-osc.json, rendered by a3-osc-render.
 EnvironmentFile=%h/.config/a3/osc.env
+# Where the return goes while a remote StemDeck is played: Core writes it
+# and restarts this unit (a3_core_return). Read last, so its values win.
+EnvironmentFile=-%h/.config/a3/zita-return.env
 ExecStart=/usr/bin/zita-j2n --chan 2 --24bit ${A3_ZITA_J2N_HOST} ${A3_ZITA_J2N_PORT}
 CPUAffinity=1 2 3
 CPUSchedulingPolicy=rr

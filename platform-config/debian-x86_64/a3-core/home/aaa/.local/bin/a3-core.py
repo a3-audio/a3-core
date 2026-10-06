@@ -61,6 +61,8 @@ from a3_core_stems_reaper import (Settle, analog_messages,   # noqa: E402
                                   changed_messages, command_messages, pair_of)
 from a3_core_presence import STEMDECK_SILENCE, HelloWatch   # noqa: E402
 from a3_core_motion import MotionTarget   # noqa: E402
+from a3_core_return import (ReturnTarget, point_zita_at,   # noqa: E402
+                            start_at_radla)
 from a3_core_vu_relay import relay as relay_vu   # noqa: E402
 from a3_core_latest import position_key, serve   # noqa: E402
 from a3_core_announce import (EVERY_SECONDS, announce, announcement,   # noqa: E402
@@ -588,6 +590,11 @@ def speak_stems(full=False):
 _stemdeck_client = None
 _stemdeck_watch = HelloWatch(STEMDECK_SILENCE)
 
+#: Where zita-j2n sends the return: the active StemDeck's machine, or radla
+#: (a3_core_return). Re-read from the file at start-up below.
+RADLA_RETURN = _truth.endpoint("radla", "zita-n2j")
+_return = ReturnTarget(RADLA_RETURN, MOTION_OWN_HOSTS)
+
 #: StemDeck reports stem by stem; the rules are applied once its reports have
 #: been quiet this long (spec desk-stem-grid-2), never to a half-updated mirror.
 TIDY_AFTER_SECONDS = 0.3
@@ -610,6 +617,7 @@ def notice_stemdeck_silence(now):
         return
     print("stemdeck: silent for a minute, channels back to analog")
     _stemdeck_client = None
+    follow_the_return(None)
     _stems.forget()
     speak_stems()
     send_cue_levels()
@@ -1271,6 +1279,22 @@ def stemdeck_said_hello(host, now):
     _stemdeck_client = WatchedClient(
         SimpleUDPClient(host, _truth.endpoint("stemdeck", "osc")[1]), "stemdeck")
     _stemdeck_client.send_message(_truth.address("stemdeck.recall"), 1)
+    follow_the_return(host)
+
+
+def follow_the_return(stemdeck_host):
+    """The return goes where the active StemDeck plays -- see a3_core_return.
+    Only a change restarts zita-j2n: each restart is a dropout."""
+    moved = _return.follow(stemdeck_host)
+    if moved is None:
+        return
+    try:
+        point_zita_at(moved, Path.home())
+    except OSError as problem:
+        print(f"return: could not point zita-j2n at {moved[0]}:{moved[1]}: "
+              f"{problem}", file=sys.stderr)
+        return
+    print(f"return: zita-j2n now sends to {moved[0]}:{moved[1]}")
 
 
 def motion_said_hello(host, now):
@@ -1772,6 +1796,13 @@ if __name__ == "__main__":
         write_user_files(_truth, Path.home())
     except OSError as problem:
         print(f"could not render osc.env / the analyzer's block: {problem}",
+              file=sys.stderr)
+    # No StemDeck is known yet, so the return goes to radla until one says
+    # hello; a remote target from before a reboot would otherwise survive it.
+    try:
+        _return = start_at_radla(RADLA_RETURN, MOTION_OWN_HOSTS, Path.home())
+    except OSError as problem:
+        print(f"could not write the return's target: {problem}",
               file=sys.stderr)
     announce_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     announce_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
