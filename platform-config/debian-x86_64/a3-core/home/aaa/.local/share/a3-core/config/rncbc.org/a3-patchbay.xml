@@ -101,6 +101,26 @@
    <plug>out37</plug>
    <plug>out38</plug>
   </socket>
+  <socket client="REAPER" exclusive="off" name="reaper_vu_channels_pre" type="jack-audio">
+   <plug>out51</plug>
+   <plug>out52</plug>
+   <plug>out53</plug>
+   <plug>out54</plug>
+   <plug>out55</plug>
+   <plug>out56</plug>
+   <plug>out57</plug>
+   <plug>out58</plug>
+  </socket>
+  <socket client="REAPER" exclusive="off" name="reaper_vu_channels_post" type="jack-audio">
+   <plug>out59</plug>
+   <plug>out60</plug>
+   <plug>out61</plug>
+   <plug>out62</plug>
+   <plug>out63</plug>
+   <plug>out64</plug>
+   <plug>out65</plug>
+   <plug>out66</plug>
+  </socket>
  </output-sockets>
  <input-sockets>
   <socket client="REAPER" exclusive="off" name="reaper_analog" type="jack-audio">
@@ -218,6 +238,26 @@
    <plug>vu_in3_post</plug>
    <plug>vu_in4_post</plug>
   </socket>
+  <socket client="beat\-analyzer" exclusive="off" name="beat-analyzer_channels_pre" type="jack-audio">
+   <plug>vu_in1_pre_L</plug>
+   <plug>vu_in1_pre_R</plug>
+   <plug>vu_in2_pre_L</plug>
+   <plug>vu_in2_pre_R</plug>
+   <plug>vu_in3_pre_L</plug>
+   <plug>vu_in3_pre_R</plug>
+   <plug>vu_in4_pre_L</plug>
+   <plug>vu_in4_pre_R</plug>
+  </socket>
+  <socket client="beat\-analyzer" exclusive="off" name="beat-analyzer_channels_post" type="jack-audio">
+   <plug>vu_in1_post_L</plug>
+   <plug>vu_in1_post_R</plug>
+   <plug>vu_in2_post_L</plug>
+   <plug>vu_in2_post_R</plug>
+   <plug>vu_in3_post_L</plug>
+   <plug>vu_in3_post_R</plug>
+   <plug>vu_in4_post_L</plug>
+   <plug>vu_in4_post_R</plug>
+  </socket>
  </input-sockets>
  <slots/>
  <cables>
@@ -236,6 +276,8 @@
   <cable input="beat\-analyzer_aux" output="reaper_aux" type="jack-audio"/>
   <cable input="beat-analyzer_decks_pre" output="reaper_vu_decks_pre" type="jack-audio"/>
   <cable input="beat-analyzer_decks_post" output="reaper_vu_decks_post" type="jack-audio"/>
+  <cable input="beat-analyzer_channels_pre" output="reaper_vu_channels_pre" type="jack-audio"/>
+  <cable input="beat-analyzer_channels_post" output="reaper_vu_channels_post" type="jack-audio"/>
   <cable input="beat_analyzer_vu_main" output="reaper_vu_main" type="jack-audio"/>
  </cables>
 </patchbay>

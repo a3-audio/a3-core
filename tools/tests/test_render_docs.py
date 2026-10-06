@@ -44,6 +44,8 @@ class TheTables(unittest.TestCase):
         table = render_docs.vu_table(TRUTH)
         self.assertIn("| `/vu/1` | in1_pre |", table)
         self.assertIn("| `/vu/40` |", table)
+        self.assertIn("| `/vu/51` | in1_pre_L |", table)
+        self.assertIn("| `/vu/66` | in4_post_R |", table)
         self.assertNotIn("`/vu/0`", table)
 
     def test_every_listener_is_a_row(self):
