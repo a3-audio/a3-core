@@ -176,18 +176,6 @@ class Stems:
                 self._apply(pair, AUX, wanted)
         return commands
 
-    def cue_commands(self, cues):
-        """StemDeck's C switches for the channel cues: a stem's C is on while
-        it plays on a cued channel, off otherwise -- clicks on StemDeck's own
-        C are overridden (spec desk-stem-selector)."""
-        commands = []
-        for pair in range(1, PAIRS + 1):
-            wanted = any(cues[c] and self._on(pair, c + 1) for c in range(CHANNELS))
-            if wanted != self._on(pair, CUE):
-                commands.append((pair, CUE, wanted))
-                self._apply(pair, CUE, wanted)
-        return commands
-
     # -- inside ---------------------------------------------------------------
 
     def _apply(self, pair, bus, on):

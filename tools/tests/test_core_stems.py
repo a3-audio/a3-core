@@ -376,39 +376,12 @@ class ReturnModes(unittest.TestCase):
                          [(p, AUX, True) for p in range(5, 9)])
 
 
-class TheCue(unittest.TestCase):
-    """A channel's cue plays its stem through StemDeck's C (spec
-    desk-stem-selector); Core overrides C clicks on StemDeck's screen."""
+class TheCueLeavesStemDeckAlone(unittest.TestCase):
+    """The channel cue goes through the channel bus (2026-10-06); StemDeck's
+    C switches are StemDeck's own pre-listening again, Core sets none."""
 
-    def test_a_cued_channel_cues_its_stem(self):
-        s = stems_with(p3=bit(1))
-        self.assertEqual(s.cue_commands([True, False, False, False]), [(3, CUE, True)])
-
-    def test_a_channel_on_analog_cues_nothing_in_stemdeck(self):
-        s = stems_with(p3=bit(CUE))                       # clicked on StemDeck's screen
-        self.assertEqual(s.cue_commands([True, False, False, False]), [(3, CUE, False)])
-
-    def test_the_cue_moves_with_the_push(self):
-        s = stems_with(p3=bit(1))
-        s.return_mode = ANALOG_MODE
-        s.cue_commands([True, False, False, False])
-        s.cursors[0] = 3                              # stem 4 replaces 3
-        s.push(0)
-        self.assertEqual(sorted(s.cue_commands([True, False, False, False])),
-                         [(3, CUE, False), (4, CUE, True)])
-
-    def test_a_deck_2_stem_is_cued_in_place_of_deck_1s(self):
-        s = stems_with(p3=bit(1))
-        s.return_mode = ANALOG_MODE
-        s.cue_commands([True, False, False, False])
-        s.cursors[0] = 4
-        s.push(0)
-        self.assertEqual(sorted(s.cue_commands([True, False, False, False])),
-                         [(3, CUE, False), (5, CUE, True)])
-
-    def test_nothing_changed_nothing_sent(self):
-        s = stems_with(p3=bit(1) | bit(CUE))
-        self.assertEqual(s.cue_commands([True, False, False, False]), [])
+    def test_the_mirror_has_no_cue_commands(self):
+        self.assertFalse(hasattr(Stems(), "cue_commands"))
 
 
 class StateOnDisk(unittest.TestCase):

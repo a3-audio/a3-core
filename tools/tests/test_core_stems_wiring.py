@@ -247,7 +247,6 @@ class TheSelectorIsWired(unittest.TestCase):
     def test_a_push_loads(self):
         branch = _branch_of("osc_handler_channel", 'elif parameter == "stem.push":')
         self.assertIn("_stems.push(", branch)
-        self.assertIn("apply_stem_cue()", branch)
 
     def test_a_push_without_stemdeck_sends_nothing(self):
         branch = _branch_of("osc_handler_channel", 'elif parameter == "stem.push":')
@@ -273,15 +272,17 @@ class TheSelectorIsWired(unittest.TestCase):
         self.assertLess(push, guard)
         self.assertIn("speak_stems()", branch)
 
-    def test_the_cue_sets_stemdecks_c(self):
+    def test_the_cue_sends_the_levels_and_nothing_to_stemdeck(self):
         branch = _branch_of("osc_handler_channel", 'elif parameter == "cue":')
-        self.assertIn("apply_stem_cue()", branch)
+        self.assertIn("send_cue_levels()", branch)
+        self.assertNotIn("send_to_stemdeck", branch)
 
-    def test_the_cue_send_knows_where_stems_are(self):
-        self.assertIn("channel_mask", _source_of("send_cue_levels"))
+    def test_the_cue_send_does_not_ask_where_stems_are(self):
+        self.assertNotIn("channel_mask", _source_of("send_cue_levels"))
 
-    def test_a_report_resets_the_cue(self):
-        self.assertIn("apply_stem_cue()", _source_of("osc_handler_stemdeck"))
+    def test_nothing_drives_stemdecks_c_any_more(self):
+        self.assertNotIn("apply_stem_cue", CORE)
+        self.assertNotIn("cue_commands", CORE)
 
 
 def _branch_of(function_name, head):

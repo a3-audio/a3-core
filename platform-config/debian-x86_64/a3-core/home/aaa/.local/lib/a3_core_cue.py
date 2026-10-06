@@ -16,14 +16,15 @@ Pure: no OSC, no REAPER.
 import math
 
 
-def send_levels(cues, stem_on, mix, unity, return_cue):
+def send_levels(cues, mix, unity, return_cue):
     """{"decks": [{"pre": .., "post": ..}, ...], "stem": .., "return": {..}}
-    for the decks' cue flags, whether a stem plays on each channel, the
-    knob (0 cue .. 1 mix) and the return's own cue flag.
+    for the decks' cue flags, the knob (0 cue .. 1 mix) and the return's own
+    cue flag.
 
-    A deck's cue send (pre-fader) opens only while its cue is on and the
-    channel plays its analog input: a stem there is cued through StemDeck's
-    C switch instead, so it is not heard twice (spec desk-stem-selector).
+    A deck's cue send (pre-fader) opens while its cue is on, whether the
+    channel plays its analog input or a stem: the cue carries what the
+    channel makes of it, filter and EQ (2026-10-06; StemDeck's C used to cue
+    the raw stem).
 
     The return is on the mix side like a deck's post-fader send. On the cue
     side only with its own cue (spec return-cue, 2026-10-04): it carries
@@ -34,7 +35,7 @@ def send_levels(cues, stem_on, mix, unity, return_cue):
     x = min(1.0, max(0.0, float(mix)))
     cue_side = unity * math.cos(x * math.pi / 2)
     mix_side = unity * math.sin(x * math.pi / 2)
-    return {"decks": [{"pre": cue_side if on and not has_stem else 0.0, "post": mix_side}
-                      for on, has_stem in zip(cues, stem_on)],
+    return {"decks": [{"pre": cue_side if on else 0.0, "post": mix_side}
+                      for on in cues],
             "stem": cue_side,
             "return": {"pre": cue_side if return_cue else 0.0, "post": mix_side}}
