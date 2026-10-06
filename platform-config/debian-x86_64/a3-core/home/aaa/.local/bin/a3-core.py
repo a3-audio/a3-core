@@ -644,6 +644,14 @@ def apply_3d_crossfade(channel_index, value):
     Wege gehen in denselben MultiEncoder, `3d` je Kanal auf dessen Kanaele
     1-4, der stehende Weg auf 5-n ueber alle Lautsprecher gleichzeitig.
 
+    **No longer a crossfade** (2026-10-06, finding F14 in the gain-structure
+    notes): the steady track stays at 0 dB for every 3D value, and 3D sets
+    only how much of the isolated band moves -- the stereo-enc container gain,
+    which scales the moving band and the subtracted band alike. So band +
+    remainder = input at every position, provided both Isolators have the
+    same frequency and Q; the `filter.frequency`/`filter.q` branches send to
+    both. The law is crossfade_gains() in a3_core_crossfade.
+
     Der Name `stereo_enc` ist damit ueberholt. Der IEM StereoEncoder liegt
     nicht mehr auf der Spur -- sie bleibt im Signalweg und traegt weiterhin
     den Filter, den pot_1/pot_2 (freq, Q) fahren --, und der Weg muesste

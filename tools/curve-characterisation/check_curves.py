@@ -80,6 +80,10 @@ def load_curves(source):
     # Und es sind nicht dieselben: die alte war konstante Leistung (cos/sin mit
     # overlap 4.5), die laufende ist eine stueckweise lineare Blende.
     #
+    # Since 2026-10-06 it is no fade at all: multi stays at 0 dB and stereo is
+    # 3D as an amplitude in PurestGain's dB law (F14, the neutral 3D law). The
+    # golden rows were re-recorded for that change.
+    #
     # Importiert statt aus dem Baum gehoben: das Modul ist reine Arithmetik und
     # oeffnet nichts.
     sys.path.insert(0, str(LIB))
