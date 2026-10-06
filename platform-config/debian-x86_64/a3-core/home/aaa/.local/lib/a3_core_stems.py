@@ -176,6 +176,13 @@ class Stems:
                 self._apply(pair, AUX, wanted)
         return commands
 
+    def all_cue_off(self):
+        """Every stem's C off, once after the channel cue left StemDeck's C
+        (2026-10-06): a C Core had set would play a cued stem twice."""
+        commands = [(pair, CUE, False) for pair in range(1, PAIRS + 1)]
+        self._apply_all(commands)
+        return commands
+
     # -- inside ---------------------------------------------------------------
 
     def _apply(self, pair, bus, on):

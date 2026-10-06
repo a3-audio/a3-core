@@ -280,6 +280,15 @@ class TheSelectorIsWired(unittest.TestCase):
     def test_the_cue_send_does_not_ask_where_stems_are(self):
         self.assertNotIn("channel_mask", _source_of("send_cue_levels"))
 
+    def test_the_old_c_switches_are_cleared_once(self):
+        hello = _source_of("stemdeck_said_hello")
+        self.assertIn("clear_the_old_cue_switches()", hello)
+        clear = _source_of("clear_the_old_cue_switches")
+        self.assertIn("if master_info.cue_switches_cleared", clear)
+        self.assertIn("send_to_stemdeck(_stems.all_cue_off())", clear)
+        self.assertIn("master_info.cue_switches_cleared = True", clear)
+        self.assertIn("remember_state()", clear)
+
     def test_nothing_drives_stemdecks_c_any_more(self):
         self.assertNotIn("apply_stem_cue", CORE)
         self.assertNotIn("cue_commands", CORE)

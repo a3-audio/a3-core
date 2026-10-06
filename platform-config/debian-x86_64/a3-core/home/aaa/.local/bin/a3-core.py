@@ -283,6 +283,8 @@ class MasterInfo:
     # The aux return's own cue (spec return-cue, 2026-10-04), kept like the
     # channels' toggle_cue.
     return_cue: bool = False
+    # The old C switches were switched off once (clear_the_old_cue_switches).
+    cue_switches_cleared: bool = False
 
     class FXMode(Enum):
         LOW_PASS = 0
@@ -1268,7 +1270,19 @@ def stemdeck_said_hello(host, now):
     _stemdeck_client = WatchedClient(
         SimpleUDPClient(host, _truth.endpoint("stemdeck", "osc")[1]), "stemdeck")
     _stemdeck_client.send_message(_truth.address("stemdeck.recall"), 1)
+    clear_the_old_cue_switches()
     follow_the_return(host)
+
+
+def clear_the_old_cue_switches():
+    """Once ever, not at every start: the C switches Core used to set for the
+    channel cue (until 2026-10-06) would play a cued stem twice. After that
+    they are StemDeck's own and Core never touches them."""
+    if master_info.cue_switches_cleared:
+        return
+    send_to_stemdeck(_stems.all_cue_off())
+    master_info.cue_switches_cleared = True
+    remember_state()
 
 
 def follow_the_return(stemdeck_host):

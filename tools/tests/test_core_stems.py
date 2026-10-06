@@ -383,6 +383,11 @@ class TheCueLeavesStemDeckAlone(unittest.TestCase):
     def test_the_mirror_has_no_cue_commands(self):
         self.assertFalse(hasattr(Stems(), "cue_commands"))
 
+    def test_clearing_the_old_c_switches_is_every_stem_off(self):
+        """Once, after the change: the C switches Core had set would play a
+        cued stem twice -- through the channel and StemDeck's CUE bus."""
+        self.assertEqual(Stems().all_cue_off(), [(p, CUE, False) for p in range(1, 9)])
+
 
 class StateOnDisk(unittest.TestCase):
     def test_cursors_and_mode_are_kept(self):
