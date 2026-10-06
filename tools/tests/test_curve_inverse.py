@@ -94,7 +94,9 @@ class TheOneThatCannot(unittest.TestCase):
         # This named slope_crossfade_gain until 2026-09-21, which was the old
         # constant-power version of the same idea -- pinned in the golden file
         # while nothing called it any more, and not the same arithmetic as the
-        # piecewise-linear fade that runs today.
+        # piecewise-linear fade that ran after it. Since 2026-10-06 multi is
+        # fixed at 0 dB and only stereo follows 3D, but the curve still
+        # returns two numbers, and the refusal still stands.
         curves = load_curves(CURVES)
         with self.assertRaises(CurveNotInvertible):
             invert(curves["crossfade_gains"], 0.25)

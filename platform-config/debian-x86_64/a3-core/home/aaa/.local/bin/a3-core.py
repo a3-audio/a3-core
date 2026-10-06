@@ -46,7 +46,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 from a3_core_layout import load_layout   # noqa: E402
 import a3_osc   # noqa: E402
 from a3_core_curves import CurveNotInvertible, invert, load_curves  # noqa: E402
-from a3_core_crossfade import crossfade_gains   # noqa: E402
+from a3_core_crossfade import band_filter_messages, crossfade_gains   # noqa: E402
 from a3_core_tempo import (NO_CHANGE as NO_TEMPO,   # noqa: E402
                            TempoFollower)
 from a3_core_buttons import (NO_CHANGE, wanted_fx_mode,   # noqa: E402
@@ -136,12 +136,8 @@ FX_INDEX_HIPASS: int = _layout.fx_slot("hipass")
 FX_INDEX_LOPASS: int = _layout.fx_slot("lopass")
 FX_INDEX_CHANNEL_VOLUME: int = _layout.fx_slot("channel_volume")
 FX_INDEX_ENC: int = _layout.fx_slot("enc")
-#: The plugin on the steady track (`1-stereo-enc`, an overhauled name -- see
-#: apply_3d_crossfade) that carries the encoder's two pots. It was the literal
-#: 2 in both pot branches -- the one number in the forward path that the
-#: layout did not name, which is also why the reverse table could not name it
-#: either.
-FX_INDEX_ENC_POTS: int = _layout.fx_slot("enc_pots")
+# The two Isolators that carry the filter pots on n-stereo-enc are named in
+# a3_core_crossfade.BAND_FILTER_SLOTS; band_filter_messages() writes both.
 
 CHANNEL_ENC_MAIN: int = 26
 CHANNEL_ENC_PHONES: int = 27
@@ -644,6 +640,14 @@ def apply_3d_crossfade(channel_index, value):
     Wege gehen in denselben MultiEncoder, `3d` je Kanal auf dessen Kanaele
     1-4, der stehende Weg auf 5-n ueber alle Lautsprecher gleichzeitig.
 
+    **No longer a crossfade** (2026-10-06, finding F14 in the gain-structure
+    notes): the steady track stays at 0 dB for every 3D value, and 3D sets
+    only how much of the isolated band moves -- the stereo-enc container gain,
+    which scales the moving band and the subtracted band alike. So band +
+    remainder = input at every position, provided both Isolators have the
+    same frequency and Q; the `filter.frequency`/`filter.q` branches send to
+    both. The law is crossfade_gains() in a3_core_crossfade.
+
     Der Name `stereo_enc` ist damit ueberholt. Der IEM StereoEncoder liegt
     nicht mehr auf der Spur -- sie bleibt im Signalweg und traegt weiterhin
     den Filter, den pot_1/pot_2 (freq, Q) fahren --, und der Weg muesste
@@ -918,22 +922,16 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
     elif parameter == "filter.frequency":
         val = np.interp(value, [0, 1], [0.05, 0.9])
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
-        #osc_reaper.send_message(
-        #    f"/track/{track_stereo_enc}/fx/2/fxparam/1/value", value)
-        osc_reaper.send_message(
-            f"/track/{track_stereo_enc}/fx/{FX_INDEX_ENC_POTS}"
-            f"/fxparam/{_layout.fx_param('enc_pot_1')}/value", val)
-        track_stereo_enc = channel_infos[channel_index].track_stereo_enc
+        for address, same_val in band_filter_messages(
+                _layout, track_stereo_enc, "enc_pot_1", val):
+            osc_reaper.send_message(address, same_val)
 
     elif parameter == "filter.q":
         val = np.interp(value, [0, 1], [0.05, 0.9])
         track_stereo_enc = channel_infos[channel_index].track_stereo_enc
-        #osc_reaper.send_message(
-        #    f"/track/{track_stereo_enc}/fx/2/fxparam/2/value", value)
-        osc_reaper.send_message(
-            f"/track/{track_stereo_enc}/fx/{FX_INDEX_ENC_POTS}"
-            f"/fxparam/{_layout.fx_param('enc_pot_2')}/value", val)
-        track_stereo_enc = channel_infos[channel_index].track_stereo_enc
+        for address, same_val in band_filter_messages(
+                _layout, track_stereo_enc, "enc_pot_2", val):
+            osc_reaper.send_message(address, same_val)
 
     elif parameter == "stem.turn":
         # The menu's cursor only (spec desk-stem-grid-2): Core's own, shown

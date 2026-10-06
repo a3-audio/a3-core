@@ -87,6 +87,7 @@
   "lopass": 4,
   "channel_volume": 1,
   "enc_pots": 2,
+  "enc_pots_inverted": 3,
   "stereo_enc": 4,
   "enc": 1,
   "phones_gain": 2,

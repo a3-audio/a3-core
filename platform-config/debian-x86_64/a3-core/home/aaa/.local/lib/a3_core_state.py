@@ -9,9 +9,10 @@ touched REAPER directly.
 
 What is left is what REAPER cannot answer for: the three toggles a channel
 carries, the filter mode, and the 3D crossfade. The toggles and the mode have
-no REAPER parameter behind them at all. The crossfade has two -- a gain on
-each of two tracks -- and that is the problem: a single number cannot say
-which input produced them, so REAPER holds the consequence and not the cause.
+no REAPER parameter behind them at all. The 3D value has two -- a gain on
+each of two tracks; since 2026-10-06 only the band gain follows it, and every
+value from 0 to 0.01 lands on its -40 dB floor -- so REAPER holds the
+consequence and not the cause.
 All four exist in Core's head and nowhere else, and a restart loses them
 unless they are written down.
 

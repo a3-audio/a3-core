@@ -96,8 +96,16 @@ class TheRestOfTheMap(unittest.TestCase):
         # Core that does not start -- which is the right failure, but it
         # should be found here.
         for slot in ("gain", "eq", "eq_enc", "hipass", "lopass",
-                     "channel_volume", "stereo_enc", "enc", "enc_pots"):
+                     "channel_volume", "stereo_enc", "enc", "enc_pots",
+                     "enc_pots_inverted"):
             self.assertGreater(self.layout.fx_slot(slot), 0, slot)
+
+    def test_the_two_isolators_on_stereo_enc_are_neighbours(self):
+        """Template of 2026-10-06: on n-stereo-enc fx 1 is the gain
+        container, fx 2 the Isolator3 for the band, fx 3 the one that cuts
+        the band from the inverted steady copy."""
+        self.assertEqual(self.layout.fx_slot("enc_pots"), 2)
+        self.assertEqual(self.layout.fx_slot("enc_pots_inverted"), 3)
 
     def test_the_aux_send_is_named_and_is_the_one_that_was_measured(self):
         """Send 1 of a channelbus reaches enc_fx, where the delay sits.
