@@ -61,3 +61,22 @@ def _band_gain(amplitude):
     db = 20 * math.log10(amplitude)
     a = (db - PUREST_GAIN_FLOOR_DB) / PUREST_GAIN_RANGE_DB
     return min(PUREST_GAIN_UNITY, max(0.0, a))
+
+
+#: The two Isolator3 instances on n-stereo-enc, by layout fx-slot name: the
+#: band that moves, and the same band cut from the phase-inverted steady copy.
+BAND_FILTER_SLOTS = ("enc_pots", "enc_pots_inverted")
+
+
+def band_filter_messages(layout, track, pot, value):
+    """The REAPER messages for one filter pot (frequency or Q): both Isolators,
+    the same parameter, the same value.
+
+    The subtraction only cancels the band when both filter alike. Isolator #2
+    was meant to follow #1 through a REAPER parameter link, which measurably
+    did not (F14, 2026-10-06), so Core writes both itself.
+    """
+    param = layout.fx_param(pot)
+    return [(layout.address("fx_param", track=track,
+                            slot=layout.fx_slot(slot), param=param), value)
+            for slot in BAND_FILTER_SLOTS]
