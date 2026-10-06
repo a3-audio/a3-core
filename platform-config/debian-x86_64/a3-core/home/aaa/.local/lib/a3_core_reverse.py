@@ -25,9 +25,10 @@ a3-core.py's `broadcast`.
 
 **What is deliberately not reversed:**
 
-- The stereo/multi crossfade (`3d`). One input becomes two gains on two
-  tracks; a single number cannot say which input it came from, and
-  a3_core_curves refuses it rather than inventing one. It is answered for
+- The 3D value (`3d`). One input becomes two gains on two tracks (since
+  2026-10-06 the steady one is fixed at 0 dB and only the band gain follows,
+  with 0 to 0.01 all on its -40 dB floor), and a3_core_curves refuses a
+  two-number curve rather than inventing an inverse. It is answered for
   anyway, from the other end: Core holds what it was sent and replays that,
   the way it replays the position -- see a3_core_recall.REMEMBERED_CONTROLS.
 

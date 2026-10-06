@@ -15,8 +15,10 @@ The state comes from three different places and it matters which:
   reason -- in fact for two. The position reaches the IEM plugins on their
   own OSC port rather than through a REAPER track, so REAPER never reports it
   back: the plugins hold it, but they are written to, not read from. The
-  crossfade does reach REAPER, as two gains on two tracks, and a single
-  number cannot say which input produced them. Nobody was told, or nobody can
+  3D value does reach REAPER, as the band gain on stereo-enc (the steady
+  gain is fixed at 0 dB since 2026-10-06), but everything from 0 to 0.01
+  lands on the same -40 dB floor, and a3_core_curves refuses to read a
+  two-number curve backwards anyway. Nobody was told, or nobody can
   be asked; either way Core passed it on and Core is the only one who knows.
   See REMEMBERED_CONTROLS.
 - **The continuous values** are REAPER's. Core does not hold them -- it
@@ -87,10 +89,10 @@ def return_cue_lamp(truth, master):
 #: The two reasons are different and both end here. The **position** never
 #: reaches a REAPER track at all -- Core writes it straight to the IEM
 #: plugins' own OSC port -- so there is nothing for REAPER to report. The
-#: **crossfade** does reach REAPER, as two gains on two tracks, and a single
-#: number cannot say which input produced them; a3_core_curves refuses to
-#: guess. Nobody was told, or nobody can be asked: either way Core is the
-#: only one who knows.
+#: **3D value** does reach REAPER, as the band gain on stereo-enc, but 0 to
+#: 0.01 all land on the -40 dB floor, and a3_core_curves refuses to read the
+#: two-number curve backwards. Nobody was told, or nobody can be asked:
+#: either way Core is the only one who knows.
 REMEMBERED_CONTROLS = (
     ("channel.azimuth", "azimuth"),
     ("channel.elevation", "elevation"),
