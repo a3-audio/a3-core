@@ -301,6 +301,17 @@ class CueSinceTheRename(unittest.TestCase):
                     [FakeChannel()], back)
         self.assertEqual(back.cue_cleared_on, ["local", "192.168.8.20"])
 
+    def test_a_snapshot_does_not_share_the_list_with_the_rig(self):
+        """StateFile writes only when the state changed, comparing with the
+        last snapshot. A snapshot holding the master's own list changed with
+        it, so appending a machine was never written (2026-10-06)."""
+        master = FakeMaster(cue_cleared_on=["local"])
+        before = state_of([FakeChannel()], master)
+        master.cue_cleared_on.append("192.168.8.20")
+        after = state_of([FakeChannel()], master)
+        self.assertEqual(before["cue_cleared_on"], ["local"])
+        self.assertNotEqual(before, after)
+
     def test_an_old_file_has_cleared_no_machine(self):
         # Including one with the bool of 2026-10-06 13:05: that cleared only
         # the StemDeck Core followed first (the rig's), not a3nuc2's.
