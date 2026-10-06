@@ -15,9 +15,10 @@ ExecStartPre=/usr/bin/jack_wait -w
 ExecStart=/usr/bin/qjackctl -a /home/aaa/.config/rncbc.org/a3-patchbay.xml
 ExecStop=/usr/bin/pkill -9 qjackctl
 Type=simple
+# No CPUScheduling here: raising the whole process put its GUI/OSC threads
+# above JACK's process threads (late clients on a3nuc1, 2026-10-06). The
+# audio threads get their priority from JACK (server -P minus 5).
 CPUAffinity=1 2 3
-CPUSchedulingPolicy=rr
-CPUSchedulingPriority=83
 Restart=on-failure
 
 [Install]
