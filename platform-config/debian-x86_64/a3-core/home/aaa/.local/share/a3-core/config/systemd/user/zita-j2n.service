@@ -13,9 +13,10 @@ EnvironmentFile=%h/.config/a3/osc.env
 # and restarts this unit (a3_core_return). Read last, so its values win.
 EnvironmentFile=-%h/.config/a3/zita-return.env
 ExecStart=/usr/bin/zita-j2n --chan 2 --24bit ${A3_ZITA_J2N_HOST} ${A3_ZITA_J2N_PORT}
+# No CPUScheduling here: raising the whole process put it above JACK's
+# process threads (late clients on a3nuc1, 2026-10-06). zita sets its own
+# network thread explicitly from its JACK thread's priority, so it needs no RR.
 CPUAffinity=1 2 3
-CPUSchedulingPolicy=rr
-CPUSchedulingPriority=64
 # Faellt zita aus (Status 0 trotzdem), kommt es nach 2 s wieder, ohne Obergrenze.
 Restart=always
 RestartSec=2

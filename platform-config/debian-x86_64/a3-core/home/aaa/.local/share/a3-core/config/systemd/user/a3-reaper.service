@@ -18,11 +18,10 @@ ExecStartPre=/home/aaa/.local/bin/a3-wait-for-the-screen
 ExecStartPre=/usr/bin/jack_wait -w
 ExecStart=/bin/bash -c "/home/aaa/.local/opt/REAPER/reaper -nosplash -ignoreerrors -template /home/aaa/.config/REAPER/ProjectTemplates/a3-reaper.RPP"
 ExecStop=/home/aaa/.local/opt/REAPER/reaper -saveas -template /home/aaa/.config/REAPER/ProjectTemplates/a3-reaper.RPP -close all :nosave
+# No CPUScheduling here: raising the whole process put its GUI/OSC threads
+# above JACK's process threads (late clients on a3nuc1, 2026-10-06). The
+# audio threads get their priority from JACK (server -P minus 5).
 CPUAffinity=1 2 3
-CPUSchedulingPolicy=rr
-CPUSchedulingPriority=75
-
-#LimitRTPRIO=19
 
 [Install]
 WantedBy=default.target

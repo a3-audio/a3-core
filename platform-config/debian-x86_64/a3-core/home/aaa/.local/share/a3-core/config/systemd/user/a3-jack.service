@@ -14,12 +14,15 @@ ExecStartPre=/bin/sh -c 'until [ -d /proc/asound/USB ]; do sleep 0.1; done'
 TimeoutStartSec=infinity
 Restart=on-failure
 RestartSec=2
-ExecStart=/usr/bin/jackd -P 19 -v -aa -dalsa -dhw:USB -r44100 -p256 
+# -P 80: JACK2 runs its own process thread at -P and every client's at -P
+# minus 5 (75); jackd -P 19 left the clients at 14, below GUI threads the
+# units had raised (late clients on a3nuc1, 2026-10-06). Below the USB IRQ
+# threads (FIFO 95). No CPUScheduling for the process: only that one thread
+# is real-time work, and rtprio 95 comes from limits.d/audio.conf.
+ExecStart=/usr/bin/jackd -P 80 -v -aa -dalsa -dhw:USB -r44100 -p256 
 ExecStop=/usr/bin/pkill -9 jackd
 Type=simple
 CPUAffinity=1 2 3
-CPUSchedulingPolicy=rr
-CPUSchedulingPriority=85
 
 [Install]
 WantedBy=default.target

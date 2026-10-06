@@ -11,9 +11,10 @@ ExecStartPre=/usr/bin/sleep 2
 EnvironmentFile=%h/.config/a3/osc.env
 ExecStart=/usr/bin/zita-n2j --chan 1-10 --buff 20 --info ${A3_ZITA_N2J_HOST} ${A3_ZITA_N2J_PORT}
 
+# No CPUScheduling here: raising the whole process put it above JACK's
+# process threads (late clients on a3nuc1, 2026-10-06). zita sets its own
+# network thread explicitly from its JACK thread's priority, so it needs no RR.
 CPUAffinity=1 2 3
-CPUSchedulingPolicy=rr
-CPUSchedulingPriority=64
 # Faellt zita aus (Status 0 trotzdem), kommt es nach 2 s wieder, ohne Obergrenze.
 Restart=always
 RestartSec=2
