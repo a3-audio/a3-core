@@ -33,6 +33,12 @@ def is_this_machine(host, own_hosts):
     return host in own_hosts
 
 
+def machine_key(host, own_hosts):
+    """A machine as the state file names it: the rig as LOCAL, any other by
+    the address it speaks from."""
+    return LOCAL if is_this_machine(host, own_hosts) else host
+
+
 class MotionTarget:
     def __init__(self, default, remote_port, own_hosts, vu_port,
                  silence_after=MOTION_SILENCE):

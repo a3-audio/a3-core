@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local/lib"))
 
-from a3_core_motion import MotionTarget, is_this_machine  # noqa: E402
+from a3_core_motion import LOCAL, MotionTarget, is_this_machine, machine_key  # noqa: E402
 
 DEFAULT = ("127.0.0.1", 7771)
 OWN = {"192.168.8.10"}
@@ -25,6 +25,17 @@ NOTEBOOK = "192.168.43.70"
 def target():
     return MotionTarget(DEFAULT, remote_port=7771, own_hosts=OWN,
                         silence_after=60, vu_port=7772)
+
+
+class WhichMachine(unittest.TestCase):
+    """A machine's key in the state file: the rig as "local", others by the
+    address they speak from."""
+
+    def test_the_rig_is_local(self):
+        self.assertEqual(machine_key("127.0.0.1", OWN), LOCAL)
+
+    def test_another_machine_is_its_address(self):
+        self.assertEqual(machine_key("192.168.8.20", OWN), "192.168.8.20")
 
 
 class ThisMachine(unittest.TestCase):

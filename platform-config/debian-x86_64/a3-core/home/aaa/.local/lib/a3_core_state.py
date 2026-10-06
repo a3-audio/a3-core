@@ -65,7 +65,7 @@ CHANNEL_FIELDS = ("toggle_fx", "toggle_cue", "three_d")
 #: cue (spec return-cue, 2026-10-04; a file from before has none and the cue
 #: stays off). The stem cue left with the C field (spec stemdeck-remote); an
 #: old file's stem_cue is ignored.
-MASTER_FIELDS = ("phones_mix", "return_cue", "cue_switches_cleared")
+MASTER_FIELDS = ("phones_mix", "return_cue", "cue_cleared_on")
 
 #: Renamed fields: PFL became cue on 2026-10-01, and a file from before says
 #: toggle_pfl.

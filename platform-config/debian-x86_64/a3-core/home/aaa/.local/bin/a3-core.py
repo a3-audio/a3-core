@@ -33,6 +33,7 @@ import time
 import math
 from typing import List, Any, Optional, Tuple
 from enum import Enum
+import dataclasses
 from dataclasses import dataclass
 from pythonosc import dispatcher  # type: ignore
 from pythonosc import dispatcher as osc_dispatcher  # type: ignore
@@ -60,7 +61,7 @@ from a3_core_stems_reaper import (Settle, analog_messages,   # noqa: E402
                                   announcements as stem_announcements,
                                   changed_messages, command_messages, pair_of)
 from a3_core_presence import STEMDECK_SILENCE, HelloWatch   # noqa: E402
-from a3_core_motion import MotionTarget, is_this_machine   # noqa: E402
+from a3_core_motion import MotionTarget, is_this_machine, machine_key   # noqa: E402
 from a3_core_return import (ReturnTarget, point_zita_at,   # noqa: E402
                             start_at_radla)
 from a3_core_vu_relay import relay as relay_vu   # noqa: E402
@@ -283,8 +284,9 @@ class MasterInfo:
     # The aux return's own cue (spec return-cue, 2026-10-04), kept like the
     # channels' toggle_cue.
     return_cue: bool = False
-    # The old C switches were switched off once (clear_the_old_cue_switches).
-    cue_switches_cleared: bool = False
+    # The StemDeck machines whose old C switches Core switched off once
+    # (clear_the_old_cue_switches): "local" for the rig, else the address.
+    cue_cleared_on: list = dataclasses.field(default_factory=list)
 
     class FXMode(Enum):
         LOW_PASS = 0
@@ -1270,18 +1272,19 @@ def stemdeck_said_hello(host, now):
     _stemdeck_client = WatchedClient(
         SimpleUDPClient(host, _truth.endpoint("stemdeck", "osc")[1]), "stemdeck")
     _stemdeck_client.send_message(_truth.address("stemdeck.recall"), 1)
-    clear_the_old_cue_switches()
+    clear_the_old_cue_switches(host)
     follow_the_return(host)
 
 
-def clear_the_old_cue_switches():
-    """Once ever, not at every start: the C switches Core used to set for the
-    channel cue (until 2026-10-06) would play a cued stem twice. After that
-    they are StemDeck's own and Core never touches them."""
-    if master_info.cue_switches_cleared:
+def clear_the_old_cue_switches(host):
+    """Once per StemDeck machine, not at every start: the C switches Core
+    used to set for the channel cue (until 2026-10-06) would play a cued stem
+    twice. After that they are StemDeck's own and Core never touches them."""
+    machine = machine_key(host, MOTION_OWN_HOSTS)
+    if machine in master_info.cue_cleared_on:
         return
     send_to_stemdeck(_stems.all_cue_off())
-    master_info.cue_switches_cleared = True
+    master_info.cue_cleared_on.append(machine)
     remember_state()
 
 
