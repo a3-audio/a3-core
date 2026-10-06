@@ -41,7 +41,7 @@ class MotionTarget:
         self._remote_port = remote_port
         self._vu_port = vu_port
         self._own_hosts = frozenset(own_hosts)
-        self._watch = HelloWatch(silence_after)
+        self._watch = HelloWatch(silence_after, is_local=lambda host: host == LOCAL)
 
     @property
     def remote(self):

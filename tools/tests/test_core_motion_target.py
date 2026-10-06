@@ -95,10 +95,19 @@ class ARemoteMotion(unittest.TestCase):
         self.assertIsNone(t.hello("127.0.0.1", 30.0))
         self.assertTrue(t.remote)
 
-    def test_the_rigs_motion_started_again_takes_over(self):
+    def test_the_rigs_motion_started_again_does_not_take_over(self):
+        """A remote Motion keeps the lead while it says hello (2026-10-06):
+        a restart on the rig used to take it from a3nuc2 unseen."""
         t = target()
         t.hello(A3NUC2, 0.0)
-        self.assertEqual(t.hello("127.0.0.1", 10.0), DEFAULT)
+        self.assertIsNone(t.hello("127.0.0.1", 10.0))
+        self.assertTrue(t.remote)
+
+    def test_the_rigs_motion_takes_over_once_the_remote_is_quiet(self):
+        t = target()
+        t.hello(A3NUC2, 0.0)
+        t.hello("127.0.0.1", 10.0)
+        self.assertEqual(t.silence(61.0), DEFAULT)
         self.assertFalse(t.remote)
 
     def test_the_newest_remote_wins(self):

@@ -126,3 +126,46 @@ class TwoHostsSayingHelloInTurn(unittest.TestCase):
         w.silence(71.0)
         self.assertTrue(w.hello("10.0.0.5", 90.0))
         self.assertEqual(w.host, "10.0.0.5")
+
+
+class ARemoteKeepsTheLead(unittest.TestCase):
+    """A machine of its own (a3nuc2) runs instead of the rig's StemDeck and
+    Motion (maintainer, 2026-10-06). A restart on the rig used to make the
+    rig's own the newest arrival and took the link from the remote one
+    silently -- a3nuc2's meters stopped and its rec went quiet. Now a remote
+    host keeps the lead while it says hello; the rig's own takes it back
+    only when the remote one has gone quiet."""
+
+    RIG = "127.0.0.1"
+
+    def watch(self):
+        return HelloWatch(60, is_local=lambda host: host == self.RIG)
+
+    def test_the_rig_arriving_does_not_take_it_from_a_remote_one(self):
+        w = self.watch()
+        w.hello("10.0.0.20", 0.0)
+        self.assertFalse(w.hello(self.RIG, 10.0))
+        self.assertEqual(w.host, "10.0.0.20")
+
+    def test_after_a_core_start_the_remote_one_takes_it_from_the_rig(self):
+        # Both arrive anew at Core's start; the rig's own may say hello first.
+        w = self.watch()
+        w.hello(self.RIG, 0.0)
+        self.assertTrue(w.hello("10.0.0.20", 5.0))
+        self.assertEqual(w.host, "10.0.0.20")
+        self.assertFalse(w.hello(self.RIG, 30.0))
+
+    def test_the_rig_takes_it_back_once_the_remote_one_is_quiet(self):
+        w = self.watch()
+        w.hello("10.0.0.20", 0.0)
+        w.hello(self.RIG, 10.0)
+        self.assertTrue(w.silence(61.0))
+        self.assertTrue(w.hello(self.RIG, 70.0))
+        self.assertEqual(w.host, self.RIG)
+
+    def test_among_remote_ones_the_newest_arrival_still_wins(self):
+        w = self.watch()
+        w.hello("10.0.0.20", 0.0)
+        self.assertTrue(w.hello("10.0.0.21", 10.0))
+        self.assertFalse(w.hello("10.0.0.20", 30.0))
+        self.assertEqual(w.host, "10.0.0.21")

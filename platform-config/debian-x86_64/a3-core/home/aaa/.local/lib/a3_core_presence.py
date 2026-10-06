@@ -47,17 +47,32 @@ class HelloWatch:
     otherwise take the link from each other on every hello.
     """
 
-    def __init__(self, silence_after):
+    def __init__(self, silence_after, is_local=lambda host: False):
         self._silence_after = silence_after
+        self._is_local = is_local
         self._heard = {}
         self.host = None
 
     def hello(self, host, now):
-        """True when Core should (re)connect to `host` and send a recall."""
+        """True when Core should (re)connect to `host` and send a recall.
+
+        A remote host keeps the lead over the rig's own while it says hello
+        (2026-10-06): a restart on the rig makes its own an arrival, which
+        used to take the link from a3nuc2 without anyone seeing it."""
         self._forget_the_silent(now)
         presence = self._heard.setdefault(host, Presence(self._silence_after))
         arrived = presence.heard(now)
-        if not arrived and self.host is not None:
+        if self.host is None:
+            self.host = host
+            return True
+        if self.host == host:
+            return arrived
+        if self._is_local(host) and not self._is_local(self.host):
+            return False
+        if not self._is_local(host) and self._is_local(self.host):
+            self.host = host
+            return True
+        if not arrived:
             return False
         self.host = host
         return True

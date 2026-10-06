@@ -60,7 +60,7 @@ from a3_core_stems_reaper import (Settle, analog_messages,   # noqa: E402
                                   announcements as stem_announcements,
                                   changed_messages, command_messages, pair_of)
 from a3_core_presence import STEMDECK_SILENCE, HelloWatch   # noqa: E402
-from a3_core_motion import MotionTarget   # noqa: E402
+from a3_core_motion import MotionTarget, is_this_machine   # noqa: E402
 from a3_core_return import (ReturnTarget, point_zita_at,   # noqa: E402
                             start_at_radla)
 from a3_core_vu_relay import relay as relay_vu   # noqa: E402
@@ -588,7 +588,8 @@ def speak_stems(full=False):
 
 #: Where StemDeck listens: learnt from its hello, None while it is silent.
 _stemdeck_client = None
-_stemdeck_watch = HelloWatch(STEMDECK_SILENCE)
+_stemdeck_watch = HelloWatch(
+    STEMDECK_SILENCE, is_local=lambda host: is_this_machine(host, MOTION_OWN_HOSTS))
 
 #: Where zita-j2n sends the return: the active StemDeck's machine, or radla
 #: (a3_core_return). Re-read from the file at start-up below.

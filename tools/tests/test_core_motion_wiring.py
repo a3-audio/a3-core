@@ -67,3 +67,14 @@ class TheTruth(unittest.TestCase):
     def test_motion_says_hello(self):
         truth = a3_osc.load(TRUTH)
         self.assertIn("motion", truth.addresses()["device.hello"]["from"])
+
+
+class StemDeckKeepsARemoteLead(unittest.TestCase):
+    """The StemDeck watch knows the rig's own host, so a StemDeck on another
+    machine keeps the lead while it says hello (2026-10-06)."""
+
+    def test_the_stemdeck_watch_is_told_what_is_local(self):
+        source = (Path(__file__).resolve().parents[2]
+                  / "platform-config/debian-x86_64/a3-core/home/aaa/.local/bin/a3-core.py").read_text()
+        self.assertIn("_stemdeck_watch = HelloWatch(\n    STEMDECK_SILENCE, "
+                      "is_local=lambda host: is_this_machine(host, MOTION_OWN_HOSTS))", source)
