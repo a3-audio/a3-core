@@ -414,6 +414,8 @@ fi
 echo "enable system services..."
 systemctl daemon-reload || true
 systemctl enable x11vnc.service || true
+# Start it now too: enabling alone left VNC off until the next reboot (2026-10-06).
+systemctl restart x11vnc.service || true
 systemctl enable set_irq_prio.service || true
 
 echo "enable userservices..."

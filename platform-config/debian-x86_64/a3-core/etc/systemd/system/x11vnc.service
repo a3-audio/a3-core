@@ -1,6 +1,8 @@
 [Unit]
 Description=x11vnc
 After=graphical.target
+# Never give up: X may come up late, and the screen must always be reachable.
+StartLimitIntervalSec=0
 
 [Service]
 User=aaa
@@ -8,7 +10,8 @@ WorkingDirectory=/home/aaa
 Environment=DISPLAY=:0
 ExecStartPre=/usr/bin/sleep 5
 ExecStart=/usr/bin/x11vnc -reopen -shared -forever -rfbport 5901 -display :0 -ncache 0 -auth /home/aaa/.Xauthority
-Restart=on-failure
+Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=graphical.target
