@@ -77,6 +77,13 @@ RENAMED_CHANNEL_FIELDS = {"toggle_pfl": "toggle_cue"}
 DEFAULT_DELAY = 2.0
 
 
+def _own_copy(value):
+    """A list as a copy: StateFile writes only when a snapshot differs from
+    the last one, and a snapshot sharing the rig's list changes with it --
+    an appended machine was never written (2026-10-06)."""
+    return list(value) if isinstance(value, list) else value
+
+
 def state_of(channels, master, stems=None):
     """Everything worth remembering, as data that json can write."""
     state = {
@@ -87,7 +94,7 @@ def state_of(channels, master, stems=None):
     }
     for field in MASTER_FIELDS:
         if hasattr(master, field):
-            state[field] = getattr(master, field)
+            state[field] = _own_copy(getattr(master, field))
     if stems is not None:
         state["stems"] = stems.as_data()
     return state
@@ -118,7 +125,7 @@ def apply_state(state, channels, master):
 
     for field in MASTER_FIELDS:
         if field in state and hasattr(master, field):
-            setattr(master, field, state[field])
+            setattr(master, field, _own_copy(state[field]))
 
     if "fx_mode" in state:
         try:
