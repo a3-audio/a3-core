@@ -283,6 +283,8 @@ class MasterInfo:
     # The aux return's own cue (spec return-cue, 2026-10-04), kept like the
     # channels' toggle_cue.
     return_cue: bool = False
+    # The old C switches were switched off once (clear_the_old_cue_switches).
+    cue_switches_cleared: bool = False
 
     class FXMode(Enum):
         LOW_PASS = 0
@@ -511,7 +513,6 @@ def send_cue_levels():
     the return's mix and cue sends. Eleven messages; sent whole, since one
     knob moves most of them."""
     levels = send_levels([channel.toggle_cue for channel in channel_infos],
-                         [bool(_stems.channel_mask(i)) for i in range(len(channel_infos))],
                          master_info.phones_mix, CUE_UNITY, master_info.return_cue)
     for channel, deck in zip(channel_infos, levels["decks"]):
         for side, send in (("pre", "cue_pre"), ("post", "cue_post")):
@@ -525,14 +526,6 @@ def send_cue_levels():
         osc_reaper.send_message(
             _layout.address("track_send", track=master_info.aux_return,
                             send=_layout.send(send)), levels["return"][side])
-
-
-def apply_stem_cue():
-    """The cues as StemDeck's C switches and the headphones' sends: a cued
-    channel with a stem cues it in StemDeck, its own cue send stays shut
-    (spec desk-stem-selector)."""
-    send_to_stemdeck(_stems.cue_commands([c.toggle_cue for c in channel_infos]))
-    send_cue_levels()
 
 
 def toggle_return_cue():
@@ -884,7 +877,7 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
         if wanted is not NO_CHANGE:
             channel_infos[channel_index].toggle_cue = wanted
             announce_flag("cue", channel_index)
-            apply_stem_cue()
+            send_cue_levels()
 
     elif parameter == "filter":
         wanted = wanted_toggle(raw, channel_infos[channel_index].toggle_fx)
@@ -952,7 +945,6 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
         commands = _stems.push(channel_index, connected=_stemdeck_client is not None)
         if _stemdeck_client is not None:
             send_to_stemdeck(commands)
-            apply_stem_cue()
         speak_stems()
 
     else:
@@ -1070,7 +1062,6 @@ def osc_handler_stemdeck(client_address: Tuple[str, int], address: str,
         return
     _tidy_settle.poke(time.monotonic())
     speak_stems()
-    apply_stem_cue()
 
 
 def on_tick():
@@ -1087,7 +1078,6 @@ def tidy_when_settled():
         return
     send_to_stemdeck(_stems.tidy())
     speak_stems()
-    apply_stem_cue()
     remember_state()
 
 
@@ -1280,7 +1270,19 @@ def stemdeck_said_hello(host, now):
     _stemdeck_client = WatchedClient(
         SimpleUDPClient(host, _truth.endpoint("stemdeck", "osc")[1]), "stemdeck")
     _stemdeck_client.send_message(_truth.address("stemdeck.recall"), 1)
+    clear_the_old_cue_switches()
     follow_the_return(host)
+
+
+def clear_the_old_cue_switches():
+    """Once ever, not at every start: the C switches Core used to set for the
+    channel cue (until 2026-10-06) would play a cued stem twice. After that
+    they are StemDeck's own and Core never touches them."""
+    if master_info.cue_switches_cleared:
+        return
+    send_to_stemdeck(_stems.all_cue_off())
+    master_info.cue_switches_cleared = True
+    remember_state()
 
 
 def follow_the_return(stemdeck_host):

@@ -50,6 +50,7 @@ class FakeMaster:
     stem_cue: bool = False
     phones_mix: float = 0.0
     return_cue: bool = False
+    cue_switches_cleared: bool = False
 
 
 def a_rig(channels=4):
@@ -292,6 +293,18 @@ class CueSinceTheRename(unittest.TestCase):
         apply_state(json.loads(json.dumps(state_of([FakeChannel()], master))),
                     [FakeChannel()], back)
         self.assertTrue(back.return_cue)
+
+    def test_the_old_c_switches_stay_cleared_across_a_restart(self):
+        master = FakeMaster(cue_switches_cleared=True)
+        back = FakeMaster()
+        apply_state(json.loads(json.dumps(state_of([FakeChannel()], master))),
+                    [FakeChannel()], back)
+        self.assertTrue(back.cue_switches_cleared)
+
+    def test_an_old_file_has_not_cleared_them_yet(self):
+        back = FakeMaster()
+        apply_state({"phones_mix": 0.5}, [FakeChannel()], back)
+        self.assertFalse(back.cue_switches_cleared)
 
     def test_an_old_file_has_the_return_cue_off(self):
         back = FakeMaster()

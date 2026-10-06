@@ -19,11 +19,10 @@ from a3_core_cue import send_levels   # noqa: E402
 UNITY = 1.0
 
 
-def levels(cues=(False,) * 4, stem=False, mix=0.0, stem_on=(False,) * 4,
-           return_cue=False):
+def levels(cues=(False,) * 4, stem=False, mix=0.0, return_cue=False):
     # `stem` is gone from send_levels (StemDeck's CUE bus is always on the
     # cue side); kept here so the tests still say what they vary.
-    return send_levels(list(cues), list(stem_on), mix, UNITY, return_cue)
+    return send_levels(list(cues), mix, UNITY, return_cue)
 
 
 class TheKnob(unittest.TestCase):
@@ -98,12 +97,16 @@ class TheCues(unittest.TestCase):
 
 
 
-class AStemIsCuedInStemDeck(unittest.TestCase):
-    def test_a_stem_on_the_channel_shuts_its_cue_send(self):
-        # Its cue is StemDeck's C (spec desk-stem-selector): not twice.
-        out = levels(cues=(True, True, False, False), stem_on=(True, False, False, False), mix=0.0)
-        self.assertEqual(out["decks"][0]["pre"], 0.0)
+class AStemIsCuedThroughItsChannel(unittest.TestCase):
+    """A cued channel playing a stem opens its own cue send, like an analog
+    one: the cue carries what the channel makes of the stem, its filter and
+    EQ (maintainer, 2026-10-06). StemDeck's C used to cue the raw stem."""
+
+    def test_every_cued_channel_opens_its_cue_send(self):
+        out = levels(cues=(True, True, False, False), mix=0.0)
+        self.assertAlmostEqual(out["decks"][0]["pre"], UNITY)
         self.assertAlmostEqual(out["decks"][1]["pre"], UNITY)
+        self.assertEqual(out["decks"][2]["pre"], 0.0)
 
 
 if __name__ == "__main__":
