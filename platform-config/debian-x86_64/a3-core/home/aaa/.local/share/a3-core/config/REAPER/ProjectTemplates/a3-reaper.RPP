@@ -390,22 +390,6 @@
       MULTIFXLINK 0
       FLOATPOS 28 47 600 378
       FXID {765CEB0E-E475-25F0-2948-B36721489B43}
-      <PROGRAMENV 0:-1350049956 0 "Iso / Airwindows Consolidated"
-        PARAMBASE 0
-        LFO 0
-        LFOWT 1 1
-        AUDIOCTL 0
-        AUDIOCTLWT 1 1
-        PLINK 1 1:-1 0:-1350049956 0 ""
-      >
-      <PROGRAMENV 1:-1350049955 0 "Q / Airwindows Consolidated"
-        PARAMBASE 0
-        LFO 0
-        LFOWT 1 1
-        AUDIOCTL 0
-        AUDIOCTLWT 1 1
-        PLINK 1 1:-1 1:-1350049955 0 ""
-      >
       WAK 0 0
     >
   >
@@ -841,24 +825,6 @@
       MULTIFXLINK 0
       FLOATPOS 87 314 600 378
       FXID {33482C06-4291-1DB3-58EE-82F52296EA8C}
-      <PROGRAMENV 0:-1350049956 0 "Iso / Airwindows Consolidated"
-        PARAMBASE 0
-        LFO 0
-        LFOWT 1 1
-        AUDIOCTL 0
-        AUDIOCTLWT 1 1
-        PLINK 1 1:-1 0:-1350049956 0 ""
-        MODWND 0 877 288 1308 457
-      >
-      <PROGRAMENV 1:-1350049955 0 "Q / Airwindows Consolidated"
-        PARAMBASE 0
-        LFO 0
-        LFOWT 1 1
-        AUDIOCTL 0
-        AUDIOCTLWT 1 1
-        PLINK 1 1:-1 1:-1350049955 0 ""
-        MODWND 0 873 240 1304 409
-      >
       WAK 0 0
     >
   >
@@ -1298,22 +1264,6 @@
       MULTIFXLINK 0
       FLOATPOS 0 0 0 0
       FXID {364E343F-AC87-F545-5C9F-E351873DB5FC}
-      <PROGRAMENV 0:-1350049956 0 "Iso / Airwindows Consolidated"
-        PARAMBASE 0
-        LFO 0
-        LFOWT 1 1
-        AUDIOCTL 0
-        AUDIOCTLWT 1 1
-        PLINK 1 1:-1 0:-1350049956 0 ""
-      >
-      <PROGRAMENV 1:-1350049955 0 "Q / Airwindows Consolidated"
-        PARAMBASE 0
-        LFO 0
-        LFOWT 1 1
-        AUDIOCTL 0
-        AUDIOCTLWT 1 1
-        PLINK 1 1:-1 1:-1350049955 0 ""
-      >
       WAK 0 0
     >
   >
@@ -1752,22 +1702,6 @@
       MULTIFXLINK 0
       FLOATPOS 22 -24 600 378
       FXID {FD8D4C61-FCD4-08B9-FA99-9D9B5EDD66B3}
-      <PROGRAMENV 0:-1350049956 0 "Iso / Airwindows Consolidated"
-        PARAMBASE 0
-        LFO 0
-        LFOWT 1 1
-        AUDIOCTL 0
-        AUDIOCTLWT 1 1
-        PLINK 1 1:-1 0:-1350049956 0 ""
-      >
-      <PROGRAMENV 1:-1350049955 0 "Q / Airwindows Consolidated"
-        PARAMBASE 0
-        LFO 0
-        LFOWT 1 1
-        AUDIOCTL 0
-        AUDIOCTLWT 1 1
-        PLINK 1 1:-1 1:-1350049955 0 ""
-      >
       WAK 0 0
     >
   >
