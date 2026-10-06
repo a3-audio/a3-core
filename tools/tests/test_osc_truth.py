@@ -135,13 +135,14 @@ class TheVocabulary(unittest.TestCase):
                     "/master/phones_mix", "/master/phones_volume", "/master/return"):
             self.assertNotIn(old, patterns)
 
-    def test_fifty_vu_meters_from_one(self):
-        # 40 REAPER outs, the 8 stem pairs (issue a3-system#71), StemDeck's AUX bus
+    def test_sixty_six_vu_meters_from_one(self):
+        # 40 REAPER outs, the 8 stem pairs (issue a3-system#71), StemDeck's AUX
+        # bus, the 16 stereo channel meters (spec stereo-channel-meters)
         t = truth()
         self.assertEqual(t.address("vu", n=1), "/vu/1")
-        self.assertEqual(t.index_range("vu", "n"), (1, 50))
+        self.assertEqual(t.index_range("vu", "n"), (1, 66))
         meters = t.vu_meters()
-        self.assertEqual(len(meters), 50)
+        self.assertEqual(len(meters), 66)
         self.assertEqual(meters[0], "in1_pre")
         self.assertEqual(meters[10], "main_sub")
         self.assertEqual(meters[39], "free70")
@@ -173,7 +174,7 @@ class TakingAnAddressApart(unittest.TestCase):
     def test_outside_the_range_is_no_match(self):
         self.assertIsNone(truth().match("/channel/0/volume"))
         self.assertIsNone(truth().match("/channel/5/volume"))
-        self.assertIsNone(truth().match("/vu/51"))
+        self.assertIsNone(truth().match("/vu/67"))
 
     def test_an_old_or_unknown_address_is_no_match(self):
         for address in ("/fx/frequency", "/master/return", "/channel/1/pot_1",
@@ -211,13 +212,9 @@ class TheAuxBusMeters(unittest.TestCase):
     def setUp(self):
         self.t = truth()
 
-    def test_vu_reaches_fifty(self):
-        self.assertEqual(self.t.addresses()["vu"]["n"], [1, 50])
-
     def test_the_aux_bus_follows_the_stems(self):
         meters = self.t.vu_meters()
-        self.assertEqual(len(meters), 50)
-        self.assertEqual(meters[48:], ["stem_aux_L", "stem_aux_R"])
+        self.assertEqual(meters[48:50], ["stem_aux_L", "stem_aux_R"])
 
     def test_meter_n_is_the_list_index_plus_one(self):
         meters = self.t.vu_meters()
@@ -232,6 +229,50 @@ class TheAuxBusMeters(unittest.TestCase):
 
     def test_the_meaning_names_the_aux_bus(self):
         self.assertIn("49-50 StemDeck's AUX bus", self.t.addresses()["vu"]["meaning"])
+
+
+class TheStereoChannelMeters(unittest.TestCase):
+    """Every channel metered as stereo, the louder side shown, like a DJ mixer
+    (spec stereo-channel-meters, 2026-10-06): /vu/51-66 = REAPER outs 51-66,
+    sent by the beat-analyzer. The mono in*_pre/in*_post stay until every
+    consumer reads these."""
+
+    PRE = ["in1_pre_L", "in1_pre_R", "in2_pre_L", "in2_pre_R",
+           "in3_pre_L", "in3_pre_R", "in4_pre_L", "in4_pre_R"]
+    POST = ["in1_post_L", "in1_post_R", "in2_post_L", "in2_post_R",
+            "in3_post_L", "in3_post_R", "in4_post_L", "in4_post_R"]
+
+    def setUp(self):
+        self.t = truth()
+
+    def test_they_follow_the_aux_bus(self):
+        meters = self.t.vu_meters()
+        self.assertEqual(meters[50:58], self.PRE)
+        self.assertEqual(meters[58:66], self.POST)
+
+    def test_their_numbers(self):
+        meters = self.t.vu_meters()
+        self.assertEqual(meters.index("in1_pre_L") + 1, 51)
+        self.assertEqual(meters.index("in4_post_R") + 1, 66)
+        self.assertEqual(self.t.match("/vu/51"), ("vu", {"n": 51}))
+        self.assertEqual(self.t.match("/vu/66"), ("vu", {"n": 66}))
+
+    def test_the_mono_meters_stay(self):
+        self.assertEqual(self.t.vu_meters()[:8],
+                         ["in1_pre", "in2_pre", "in3_pre", "in4_pre",
+                          "in1_post", "in2_post", "in3_post", "in4_post"])
+
+    def test_the_meaning_names_them(self):
+        self.assertIn("51-66", self.t.addresses()["vu"]["meaning"])
+
+
+class TheVuRange(unittest.TestCase):
+    """A consumer drops /vu/N outside the address's range before it looks up
+    a name: the range and the list must cover each other exactly."""
+
+    def test_the_range_covers_every_meter(self):
+        t = truth()
+        self.assertEqual(t.index_range("vu", "n"), (1, len(t.vu_meters())))
 
 
 class TheCueWords(unittest.TestCase):
