@@ -86,6 +86,7 @@ from a3_core_startup import (filter_bypass_messages,   # noqa: E402
 from a3_core_evening import evening_state, replayable   # noqa: E402
 from a3_core_web import default_bind, start_window, window_address   # noqa: E402
 from a3_core_devices import Devices   # noqa: E402
+from a3_core_gate import Gate, StartupRecall, open_after_recall   # noqa: E402
 
 LAYOUT_PATH = (Path(__file__).resolve().parent.parent
                / "share/a3-core/layout.json")
@@ -391,6 +392,11 @@ _evening_file = StateFile(EVENING_PATH)
 reaper_heard = threading.Event()
 #: Every packet REAPER sends, counted; the replay waits for them to thin out.
 reaper_arrivals = Arrivals()
+#: REAPER's outputs as REAPER reports them -- shut in the template, opened
+#: after the start-up recall (a3_core_gate, a3-system#74).
+_gate = Gate(_layout.gate)
+#: Marks the one recall Core sends itself after the replay.
+_startup_recall = StartupRecall()
 
 
 #: What Core has passed on, so it can say it again. In memory only -- see
@@ -1347,6 +1353,17 @@ def osc_handler_recall(client_address: Tuple[str, int], address: str,
     print(f"{address}: replayed {told} messages "
           f"to {len(subscribers)} subscribers")
 
+    # Core's own recall, sent after the evening replay: every replayed value
+    # has been handled before it on this serial loop, so the recall is
+    # applied -- open REAPER's outputs (a3_core_gate). In a thread: the fade
+    # takes a second, and this loop never waits.
+    if _startup_recall.is_it(osc_arguments):
+        threading.Thread(
+            target=open_after_recall, daemon=True, name="a3-gate",
+            args=(_gate,
+                  lambda name, track: _layout.address(name, track=track),
+                  osc_reaper.send_message, print)).start()
+
 
 def say_the_whole_state() -> int:
     """Every value, to every subscriber, as the messages it would have arrived
@@ -1423,6 +1440,13 @@ def reaper_feedback_handler(client_address: Tuple[str, int], address: str,
         track = int(parts[1])
     except ValueError:
         traffic.unknown(address, value, peer)
+        return
+
+    # The outputs' mute and fader, for the start-up gate only (a3_core_gate):
+    # never relayed, never written to the evening. Core's own fade steps come
+    # back as echoes and were dropped above.
+    if _gate.heard(track, parts[2] if len(parts) == 3 else "", value):
+        traffic.seen(IN, address, value, peer)
         return
 
     # A channel's track first, then the master's. Two questions rather than
@@ -1817,6 +1841,8 @@ if __name__ == "__main__":
     # all the same -- only changes would have followed. The recall makes the
     # server thread send the full set again; asking for it rather than
     # calling speak_stems() here keeps the stems on that one thread.
+    # The recall carries Core's start-up token: handling it opens the gate
+    # (a3_core_gate).
     def replay_once_reaper_is_quiet():
         def send_to_self(address, value):
             SimpleUDPClient(_truth.host("local"), args.port).send_message(
@@ -1824,7 +1850,7 @@ if __name__ == "__main__":
 
         wait_until_quiet(reaper_arrivals, lambda: replay_evening(
             evening, send_to_self))
-        send_to_self(OSC_ADDRESS_RECALL, 1)
+        send_to_self(OSC_ADDRESS_RECALL, _startup_recall.token)
 
     threading.Thread(
         target=when_reaper_listens, daemon=True, name="a3-replay",
