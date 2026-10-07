@@ -58,7 +58,8 @@ from a3_core_cue import send_levels   # noqa: E402
 from a3_core_stems import CUE_FIELD, RETURN   # noqa: E402
 from a3_core_stems_reaper import (Settle, analog_messages,   # noqa: E402
                                   announcements as stem_announcements,
-                                  changed_messages, command_messages, pair_of)
+                                  changed_messages, command_messages, pair_of,
+                                  return_source_messages)
 from a3_core_presence import STEMDECK_SILENCE, HelloWatch   # noqa: E402
 from a3_core_motion import MotionTarget, is_this_machine   # noqa: E402
 from a3_core_return import (ReturnTarget, point_zita_at,   # noqa: E402
@@ -551,15 +552,17 @@ _stems_sent_to_reaper = {}
 
 
 def speak_stems(full=False):
-    """The stem mirror to REAPER (the analog sends) and to the subscribers.
+    """The stem mirror to REAPER (the analog sends, the return's source) and
+    to the subscribers.
 
     `full` sends every announcement (start-up, recall) instead of only the
     changed ones, and forgets what REAPER was told, because REAPER may have
     restarted since."""
     if full:
         _stems_sent_to_reaper.clear()
-    for address, value in changed_messages(
-            analog_messages(_stems, _layout, CUE_UNITY), _stems_sent_to_reaper):
+    to_reaper = (analog_messages(_stems, _layout, CUE_UNITY)
+                 + return_source_messages(_stems, _layout, CUE_UNITY))
+    for address, value in changed_messages(to_reaper, _stems_sent_to_reaper):
         osc_reaper.send_message(address, value)
     for address, value in stem_announcements(_stems, _truth):
         if full:

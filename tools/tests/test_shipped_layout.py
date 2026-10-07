@@ -135,6 +135,13 @@ class TheRestOfTheMap(unittest.TestCase):
         self.assertEqual(self.layout.master.track_analog, 27)
         self.assertEqual([self.layout.channel(i).analog_send for i in range(4)], [1, 2, 3, 4])
 
+    def test_the_returns_two_receives_are_named(self):
+        """The return mode chooses aux_return's source by send volume
+        (return-sources, 2026-10-07): send 5 of analog (after 1-4 to the
+        n-inputs) and send 5 of stems (the same)."""
+        self.assertEqual(self.layout.send("analog_to_return"), 5)
+        self.assertEqual(self.layout.send("stems_to_return"), 5)
+
     def test_every_gain_list_a3_core_asks_for_is_there(self):
         for name in ("channelbus", "masterbus", "boothbus", "aux_return"):
             params = self.layout.gain_params(name)

@@ -96,6 +96,10 @@ class StemDeckIsWired(unittest.TestCase):
     def test_the_analog_sends_go_to_reaper(self):
         self.assertIn("analog_messages(", _source_of("speak_stems"))
 
+    def test_the_returns_source_goes_to_reaper(self):
+        # speak_stems runs after every return push, at recall and at start-up.
+        self.assertIn("return_source_messages(", _source_of("speak_stems"))
+
 
 def _source_of(function_name):
     node = next(n for n in ast.walk(ast.parse(CORE))
