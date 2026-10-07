@@ -8,6 +8,9 @@ laid out. Everything else asks it: `host("mixer")`, `port("motion", "vu")`,
 
 A missing key is an error, not a default. The point of one truth is that a fact
 not written there does not exist; a silent fallback would be a second truth.
+The one exception is `meters()`: the ballistics are a behaviour every display
+already had before the block (2026-10-07), so an older truth reads as the
+numbers the block came with (METER_DEFAULTS).
 """
 
 import copy
@@ -15,6 +18,7 @@ import json
 import os
 import re
 from pathlib import Path
+from typing import NamedTuple
 
 from a3_osc_join import canonical, fingerprint, join, read_network
 
@@ -30,6 +34,33 @@ NETWORK_PATH = Path.home() / ".config/a3/network.json"
 
 class TruthError(KeyError):
     """A fact the file does not have."""
+
+
+class Meters(NamedTuple):
+    """How every display moves a meter bar (decided 2026-10-07)."""
+    attack_ms: float
+    release_db_per_second: float
+    peak_hold_seconds: float
+
+
+#: The numbers the block came with. A truth from before the block -- a
+#: device's cache -- reads as these, not as an error: the meters are a
+#: behaviour every device already had, not a fact that may be missing.
+METER_DEFAULTS = Meters(attack_ms=0, release_db_per_second=20, peak_hold_seconds=1.5)
+
+#: name -> (lowest allowed, whether the lowest itself is allowed).
+_METER_FLOORS = {"attack_ms": (0, True), "release_db_per_second": (0, False),
+                 "peak_hold_seconds": (0, True)}
+
+
+def _meter_value(name, value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TruthError(f"meters.{name} is not a number: {value!r}")
+    floor, floor_allowed = _METER_FLOORS[name]
+    if value < floor or (value == floor and not floor_allowed):
+        relation = ">=" if floor_allowed else ">"
+        raise TruthError(f"meters.{name} must be {relation} {floor}, is {value}")
+    return value
 
 
 class Truth:
@@ -135,6 +166,19 @@ class Truth:
 
     def vu_meters(self):
         return list(self._data["vu_meters"])
+
+    def meters(self):
+        """The meter ballistics, each missing number at its default; a
+        wrong type, a value out of range or an unknown key is a TruthError."""
+        block = self._data.get("meters", {})
+        if not isinstance(block, dict):
+            raise TruthError(f"meters is not an object: {block!r}")
+        given = {key: value for key, value in block.items() if not key.startswith("_")}
+        unknown = sorted(set(given) - set(Meters._fields))
+        if unknown:
+            raise TruthError(f"meters has unknown keys: {', '.join(unknown)}")
+        merged = {**METER_DEFAULTS._asdict(), **given}
+        return Meters(**{name: _meter_value(name, value) for name, value in merged.items()})
 
     def external(self):
         return {name: dict(block) for name, block in self._data["external"].items()}
