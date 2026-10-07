@@ -13,11 +13,14 @@ that already plays here releases it. A push on A only ever selects analog
 (2026-10-07; until then a STEM toggle that brought the last stem back):
 while a stem plays every stem leaves the channel, while analog plays
 nothing changes. Core remembers no stem. A channel
-plays one stem at most, and a stem plays on one channel at most. The aux return
-knows two modes: stem (every stem on no channel plays on the return) and
-analog (no stem on it); its cursor runs over both and a CUE field, a ring
-STEM -> ANALOG -> CUE (spec return-cue, 2026-10-04). tidy() makes the mirror
-obey these rules. Pure: no OSC.
+plays one stem at most, and a stem plays on one channel at most; every stem
+on no channel is on AUX, in either return mode (one stem per bus, the rest on
+AUX -- StemDeck's own rule since 2026-10-07). The aux return knows two modes,
+which only choose its source in REAPER: stem (StemDeck's AUX) and analog
+(analog 11/12), so in analog mode the stems on AUX are not heard. Its cursor
+runs over both and a CUE field, a ring STEM -> ANALOG -> CUE (spec
+return-cue, 2026-10-04). tidy() makes the mirror obey these rules. Pure: no
+OSC.
 """
 
 PAIRS = 8
@@ -113,8 +116,8 @@ class Stems:
         if not connected:
             return []
         cursor = self.cursors[index]
-        # On A, or on the stem that plays here: analog, which in STEM mode
-        # sends the released stem to the return.
+        # On A, or on the stem that plays here: analog; the released stem
+        # goes to AUX.
         if cursor == ANALOG_INPUT or self._on(cursor + 1, index + 1):
             return self._select_analog(index)
         return self._select(index, cursor + 1)
@@ -146,7 +149,8 @@ class Stems:
     def tidy(self):
         """The commands that make the mirror obey the rules -- one stem per
         channel bus (the lowest stays), a stem on one channel at most, and
-        the return's mode -- applied at once. A second call returns []."""
+        on AUX exactly the stems on no channel, whatever the return's mode
+        -- applied at once. A second call returns []."""
         commands = []
         for index in range(CHANNELS):
             bus = index + 1
@@ -161,7 +165,7 @@ class Stems:
             self._apply_all(spare)
             commands += spare
         for pair in range(1, PAIRS + 1):
-            wanted = self.return_mode == STEM_MODE and self.place_of(pair) in (None, RETURN)
+            wanted = self.place_of(pair) in (None, RETURN)
             if wanted != self._on(pair, AUX):
                 commands.append((pair, AUX, wanted))
                 self._apply(pair, AUX, wanted)
