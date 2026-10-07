@@ -11,10 +11,11 @@ sys.path.insert(0, str(PACKAGE / "home/aaa/.local/lib"))
 
 import a3_osc                                         # noqa: E402
 from a3_core_layout import load_layout                # noqa: E402
-from a3_core_stems import Stems                       # noqa: E402
+from a3_core_stems import ANALOG_MODE, STEM_MODE, Stems   # noqa: E402
 from a3_core_stems_reaper import (analog_messages, announcements,  # noqa: E402
                                   changed_messages, command_messages,
-                                  deck_and_stem, pair_of)
+                                  deck_and_stem, pair_of,
+                                  return_source_messages)
 
 TRUTH = a3_osc.load(PACKAGE / "usr/share/a3/a3-osc.json")
 LAYOUT = load_layout(PACKAGE / "home/aaa/.local/share/a3-core/layout.json")
@@ -31,6 +32,34 @@ class TheAnalogInput(unittest.TestCase):
         msgs = dict(analog_messages(s, LAYOUT, 1.0))
         self.assertEqual(msgs["/track/27/send/2/volume"], 0.0)
         self.assertEqual(msgs["/track/27/send/1/volume"], 1.0)
+
+
+class TheReturnsSource(unittest.TestCase):
+    """The return plays analog 11/12 or StemDeck's AUX, never both: its
+    mode opens one receive and shuts the other (return-sources, 2026-10-07)."""
+
+    ANALOG = "/track/27/send/5/volume"
+    STEMS = "/track/28/send/5/volume"
+
+    def _mode(self, mode):
+        s = Stems()
+        s.return_mode = mode
+        return dict(return_source_messages(s, LAYOUT, 0.7))
+
+    def test_stem_mode_opens_stemdecks_aux_and_shuts_analog(self):
+        msgs = self._mode(STEM_MODE)
+        self.assertEqual(msgs, {self.STEMS: 0.7, self.ANALOG: 0.0})
+
+    def test_analog_mode_opens_analog_and_shuts_stemdecks_aux(self):
+        msgs = self._mode(ANALOG_MODE)
+        self.assertEqual(msgs, {self.ANALOG: 0.7, self.STEMS: 0.0})
+
+    def test_the_source_does_not_depend_on_which_stems_play(self):
+        s = Stems()
+        s.return_mode = ANALOG_MODE
+        before = return_source_messages(s, LAYOUT, 1.0)
+        s.report(3, 1 << 4)                                # AUX, as reported
+        self.assertEqual(return_source_messages(s, LAYOUT, 1.0), before)
 
 
 class WhatTheDeskHears(unittest.TestCase):

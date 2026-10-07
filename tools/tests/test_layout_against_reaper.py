@@ -150,3 +150,49 @@ class OscReachesEveryTrack(unittest.TestCase):
     def test_the_osc_track_bank_covers_every_track_in_the_shipped_project(self):
         tracks = len(track_names_in_project(SHIPPED_PROJECT))
         self.assertGreaterEqual(osc_track_bank_size(SHIPPED_OSC_PATTERN), tracks)
+
+
+def send_destinations_in_project(path):
+    """Per sending track (one-based), the tracks its sends reach, in send
+    order. REAPER stores a send as an AUXRECV line in the *receiving* track,
+    with the sender zero-based; a track's send N is its Nth such line in
+    project order."""
+    destinations = {}
+    track = 0
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith("  <TRACK"):
+            track += 1
+        match = re.match(r"\s+AUXRECV (\d+) ", line)
+        if track and match:
+            destinations.setdefault(int(match.group(1)) + 1, []).append(track)
+    return destinations
+
+
+class TheReturnsReceivesAreTheTemplates(unittest.TestCase):
+    """The return mode opens one of aux_return's two receives by send volume
+    (return-sources, 2026-10-07). A send number that shifts in the template
+    would open a channel input instead, so it is read from the project."""
+
+    def setUp(self):
+        self.layout = load_layout(PACKAGE / "share/a3-core/layout.json")
+        self.sends = send_destinations_in_project(SHIPPED_PROJECT)
+
+    def _reaches(self, track, send):
+        return self.sends[track][send - 1]
+
+    def test_the_analog_send_reaches_the_return(self):
+        master = self.layout.master
+        self.assertEqual(self._reaches(master.track_analog, self.layout.send("analog_to_return")),
+                         master.aux_return)
+
+    def test_the_stems_send_reaches_the_return(self):
+        master = self.layout.master
+        self.assertEqual(self._reaches(master.track_stems, self.layout.send("stems_to_return")),
+                         master.aux_return)
+
+    def test_the_channel_analog_sends_reach_the_inputs(self):
+        # The same reading, held against the numbers measured by ear in 2026-10-01.
+        for index in range(self.layout.channel_count):
+            channel = self.layout.channel(index)
+            self.assertEqual(self._reaches(self.layout.master.track_analog, channel.analog_send),
+                             channel.track_input)

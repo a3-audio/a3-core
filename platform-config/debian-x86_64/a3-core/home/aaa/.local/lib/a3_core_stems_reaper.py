@@ -1,11 +1,12 @@
-"""The stem mirror as messages: the analog sends to REAPER, the desk's
-announcements, and switch commands to StemDeck (spec stemdeck-remote).
+"""The stem mirror as messages: the analog sends and the return's source to
+REAPER, the desk's announcements, and switch commands to StemDeck (spec
+stemdeck-remote).
 
 Send volume, not send mute: REAPER's OSC has no send mute
 (Default.ReaperOSC, 2026-10-01).
 """
 
-from a3_core_stems import CHANNELS, PAIRS, STEMS_PER_DECK
+from a3_core_stems import ANALOG_MODE, CHANNELS, PAIRS, STEMS_PER_DECK
 
 
 
@@ -24,6 +25,19 @@ def analog_messages(stems, layout, unity):
     return [(layout.address("track_send", track=track, send=layout.channel(i).analog_send),
              0.0 if stems.channel_mask(i) else unity)
             for i in range(CHANNELS)]
+
+
+def return_source_messages(stems, layout, unity):
+    """The return's source: analog 11/12 in ANALOG mode, StemDeck's AUX in
+    STEM mode, never both -- the other track's send to aux_return is shut."""
+    master = layout.master
+    analog = stems.return_mode == ANALOG_MODE
+    return [(layout.address("track_send", track=master.track_analog,
+                            send=layout.send("analog_to_return")),
+             unity if analog else 0.0),
+            (layout.address("track_send", track=master.track_stems,
+                            send=layout.send("stems_to_return")),
+             0.0 if analog else unity)]
 
 
 def announcements(stems, truth):

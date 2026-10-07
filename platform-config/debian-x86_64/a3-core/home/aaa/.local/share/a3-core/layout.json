@@ -76,7 +76,9 @@
   "cue_pre": 3,
   "cue_post": 4,
   "return_mix": 2,
-  "return_cue": 3
+  "return_cue": 3,
+  "analog_to_return": 5,
+  "stems_to_return": 5
  },
  "fx_slots": {
   "gain": 1,
