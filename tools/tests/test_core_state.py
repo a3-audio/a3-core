@@ -15,7 +15,7 @@ import json
 import sys
 import time
 import unittest
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local"
 sys.path.insert(0, str(PACKAGE / "lib"))
 
-from a3_core_state import (StateFile, apply_state,   # noqa: E402
+from a3_core_state import (MASTER_FIELDS, StateFile, apply_state,   # noqa: E402
                            state_of)
 
 
@@ -50,7 +50,6 @@ class FakeMaster:
     stem_cue: bool = False
     phones_mix: float = 0.0
     return_cue: bool = False
-    cue_cleared_on: list = field(default_factory=list)
 
 
 def a_rig(channels=4):
@@ -294,30 +293,19 @@ class CueSinceTheRename(unittest.TestCase):
                     [FakeChannel()], back)
         self.assertTrue(back.return_cue)
 
-    def test_the_machines_cleared_stay_cleared_across_a_restart(self):
-        master = FakeMaster(cue_cleared_on=["local", "192.168.8.20"])
-        back = FakeMaster()
-        apply_state(json.loads(json.dumps(state_of([FakeChannel()], master))),
-                    [FakeChannel()], back)
-        self.assertEqual(back.cue_cleared_on, ["local", "192.168.8.20"])
+    def test_the_cleared_machines_are_no_longer_kept(self):
+        # StemDeck's C switches are gone (2026-10-07), and with them the
+        # once-per-machine clearing that list recorded.
+        self.assertNotIn("cue_cleared_on", MASTER_FIELDS)
+        self.assertNotIn("cue_cleared_on", state_of([FakeChannel()], FakeMaster()))
 
-    def test_a_snapshot_does_not_share_the_list_with_the_rig(self):
-        """StateFile writes only when the state changed, comparing with the
-        last snapshot. A snapshot holding the master's own list changed with
-        it, so appending a machine was never written (2026-10-06)."""
-        master = FakeMaster(cue_cleared_on=["local"])
-        before = state_of([FakeChannel()], master)
-        master.cue_cleared_on.append("192.168.8.20")
-        after = state_of([FakeChannel()], master)
-        self.assertEqual(before["cue_cleared_on"], ["local"])
-        self.assertNotEqual(before, after)
-
-    def test_an_old_file_has_cleared_no_machine(self):
-        # Including one with the bool of 2026-10-06 13:05: that cleared only
-        # the StemDeck Core followed first (the rig's), not a3nuc2's.
+    def test_an_old_file_with_cleared_machines_still_loads(self):
         back = FakeMaster()
-        apply_state({"phones_mix": 0.5, "cue_switches_cleared": True}, [FakeChannel()], back)
-        self.assertEqual(back.cue_cleared_on, [])
+        apply_state({"phones_mix": 0.5, "return_cue": True,
+                     "cue_cleared_on": ["local", "192.168.8.20"]}, [FakeChannel()], back)
+        self.assertEqual(back.phones_mix, 0.5)
+        self.assertTrue(back.return_cue)
+        self.assertFalse(hasattr(back, "cue_cleared_on"))
 
     def test_an_old_file_has_the_return_cue_off(self):
         back = FakeMaster()

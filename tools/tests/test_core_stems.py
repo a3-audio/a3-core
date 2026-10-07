@@ -1,6 +1,6 @@
 """The mirror of StemDeck's bus switches and the desk's rules on it
 (spec stemdeck-remote, 2026-10-01). Pair p = deck ceil(p/4), stem
-(p-1) % 4 + 1; bus 1-4 the desk channels, 5 AUX, 6 CUE."""
+(p-1) % 4 + 1; bus 1-4 the desk channels, 5 AUX."""
 
 import sys
 import unittest
@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local/lib"))
 
-from a3_core_stems import (ANALOG_INPUT, ANALOG_MODE, AUX, CUE, CUE_FIELD, INPUTS,  # noqa: E402
+from a3_core_stems import (ANALOG_INPUT, ANALOG_MODE, AUX, CUE_FIELD, INPUTS,  # noqa: E402
                            RETURN, STEM_MODE, Stems)
 
 
@@ -320,10 +320,17 @@ class TheCueLeavesStemDeckAlone(unittest.TestCase):
     def test_the_mirror_has_no_cue_commands(self):
         self.assertFalse(hasattr(Stems(), "cue_commands"))
 
-    def test_clearing_the_old_c_switches_is_every_stem_off(self):
-        """Once, after the change: the C switches Core had set would play a
-        cued stem twice -- through the channel and StemDeck's CUE bus."""
-        self.assertEqual(Stems().all_cue_off(), [(p, CUE, False) for p in range(1, 9)])
+    def test_there_is_no_c_switch_to_clear(self):
+        # StemDeck's C switches are gone (2026-10-07).
+        self.assertFalse(hasattr(Stems(), "all_cue_off"))
+
+    def test_an_older_stemdecks_c_bit_is_not_a_bus(self):
+        # A StemDeck from before 2026-10-07 may still report its C (bit 5):
+        # the stem is taken at its word on buses 1-5 and the C is dropped,
+        # not the whole report.
+        s = Stems()
+        self.assertTrue(s.report(1, bit(1) | (1 << 5)))
+        self.assertEqual(s.masks[0], bit(1))
 
 
 class StateOnDisk(unittest.TestCase):

@@ -352,8 +352,15 @@ class TheStemDeckSpeaks(unittest.TestCase):
         self.truth = a3_osc.load(TRUTH)
 
     def test_core_sets_a_switch(self):
-        self.assertEqual(self.truth.address("stemdeck.bus", deck=2, stem=4, bus=6),
-                         "/stemdeck/2/4/bus/6")
+        self.assertEqual(self.truth.address("stemdeck.bus", deck=2, stem=4, bus=5),
+                         "/stemdeck/2/4/bus/5")
+
+    def test_a_stem_has_no_cue_bus(self):
+        # StemDeck's CUE bus (6) is gone, 2026-10-07: buses 1-4 the desk
+        # channels, 5 AUX.
+        entry = self.truth.addresses()["stemdeck.bus"]
+        self.assertEqual(entry["bus"], [1, 5])
+        self.assertNotIn("CUE", entry["meaning"])
 
     def test_stemdeck_reports_a_mask(self):
         self.assertEqual(self.truth.address("stemdeck.buses", deck=1, stem=1),

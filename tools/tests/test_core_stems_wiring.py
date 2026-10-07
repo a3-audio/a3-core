@@ -50,10 +50,12 @@ class CueGoesThroughTheSends(unittest.TestCase):
         self.assertIn('elif parameter == "cue":', CORE)
         self.assertNotIn('parameter == "pfl"', CORE)
 
-    def test_the_stems_cue_send_is_not_gated_by_core(self):
+    def test_the_stems_track_has_no_cue_send(self):
+        # Maintainer, 2026-10-07: StemDeck's cue is gone; whatever a channel
+        # plays is cued through the channel.
         source = _source_of("send_cue_levels")
-        self.assertNotIn("any_cued", source)
-        self.assertNotIn("stem_cue", source)
+        self.assertNotIn("stems_cue", source)
+        self.assertNotIn("track_stems", source)
 
 
 class StemDeckIsWired(unittest.TestCase):
@@ -280,17 +282,11 @@ class TheSelectorIsWired(unittest.TestCase):
     def test_the_cue_send_does_not_ask_where_stems_are(self):
         self.assertNotIn("channel_mask", _source_of("send_cue_levels"))
 
-    def test_the_old_c_switches_are_cleared_once_per_machine(self):
-        """Once per StemDeck machine (2026-10-06): once ever cleared only the
-        StemDeck Core happened to follow first, and a3nuc2's kept three."""
-        hello = _source_of("stemdeck_said_hello")
-        self.assertIn("clear_the_old_cue_switches(host)", hello)
-        clear = _source_of("clear_the_old_cue_switches")
-        self.assertIn("machine = machine_key(host, MOTION_OWN_HOSTS)", clear)
-        self.assertIn("if machine in master_info.cue_cleared_on", clear)
-        self.assertIn("send_to_stemdeck(_stems.all_cue_off())", clear)
-        self.assertIn("master_info.cue_cleared_on.append(machine)", clear)
-        self.assertIn("remember_state()", clear)
+    def test_no_c_switch_is_cleared_any_more(self):
+        # StemDeck has no C switches since 2026-10-07: nothing to clear.
+        self.assertNotIn("clear_the_old_cue_switches", CORE)
+        self.assertNotIn("cue_cleared_on", CORE)
+        self.assertNotIn("all_cue_off", CORE)
 
     def test_nothing_drives_stemdecks_c_any_more(self):
         self.assertNotIn("apply_stem_cue", CORE)

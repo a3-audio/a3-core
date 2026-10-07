@@ -33,7 +33,6 @@ import time
 import math
 from typing import List, Any, Optional, Tuple
 from enum import Enum
-import dataclasses
 from dataclasses import dataclass
 from pythonosc import dispatcher  # type: ignore
 from pythonosc import dispatcher as osc_dispatcher  # type: ignore
@@ -61,7 +60,7 @@ from a3_core_stems_reaper import (Settle, analog_messages,   # noqa: E402
                                   announcements as stem_announcements,
                                   changed_messages, command_messages, pair_of)
 from a3_core_presence import STEMDECK_SILENCE, HelloWatch   # noqa: E402
-from a3_core_motion import MotionTarget, is_this_machine, machine_key   # noqa: E402
+from a3_core_motion import MotionTarget, is_this_machine   # noqa: E402
 from a3_core_return import (ReturnTarget, point_zita_at,   # noqa: E402
                             start_at_radla)
 from a3_core_vu_relay import relay as relay_vu   # noqa: E402
@@ -272,7 +271,6 @@ class MasterInfo:
     track_booth: int
     track_phones: int
     aux_return: int
-    track_stems: int
 
     # The headphones' moment (2026-10-01): where the phones-mix knob
     # stands, kept across a restart (a3_core_state).
@@ -280,9 +278,6 @@ class MasterInfo:
     # The aux return's own cue (spec return-cue, 2026-10-04), kept like the
     # channels' toggle_cue.
     return_cue: bool = False
-    # The StemDeck machines whose old C switches Core switched off once
-    # (clear_the_old_cue_switches): "local" for the rig, else the address.
-    cue_cleared_on: list = dataclasses.field(default_factory=list)
 
     class FXMode(Enum):
         LOW_PASS = 0
@@ -294,7 +289,6 @@ master_info = MasterInfo(
     track_booth=_layout.master.track_booth,
     track_phones=_layout.master.track_phones,
     aux_return=_layout.master.aux_return,
-    track_stems=_layout.master.track_stems,
 )
 
 @dataclass
@@ -507,9 +501,10 @@ CUE_UNITY = 1.0
 
 def send_cue_levels():
     """The headphones' sends, all of them: every channel bus's cue (pre-fader)
-    and mix (post-fader) send to enc_phones, the stems track's cue send, and
-    the return's mix and cue sends. Eleven messages; sent whole, since one
-    knob moves most of them."""
+    and mix (post-fader) send to enc_phones, and the return's mix and cue
+    sends. Ten messages; sent whole, since one knob moves most of them.
+    StemDeck has no cue send since 2026-10-07: a channel is cued through its
+    own bus, whatever it plays."""
     levels = send_levels([channel.toggle_cue for channel in channel_infos],
                          master_info.phones_mix, CUE_UNITY, master_info.return_cue)
     for channel, deck in zip(channel_infos, levels["decks"]):
@@ -517,9 +512,6 @@ def send_cue_levels():
             osc_reaper.send_message(
                 _layout.address("track_send", track=channel.track_channelbus,
                                 send=_layout.send(send)), deck[side])
-    osc_reaper.send_message(
-        _layout.address("track_send", track=master_info.track_stems,
-                        send=_layout.send("stems_cue")), levels["stem"])
     for side, send in (("pre", "return_cue"), ("post", "return_mix")):
         osc_reaper.send_message(
             _layout.address("track_send", track=master_info.aux_return,
@@ -1270,20 +1262,7 @@ def stemdeck_said_hello(host, now):
     _stemdeck_client = WatchedClient(
         SimpleUDPClient(host, _truth.endpoint("stemdeck", "osc")[1]), "stemdeck")
     _stemdeck_client.send_message(_truth.address("stemdeck.recall"), 1)
-    clear_the_old_cue_switches(host)
     follow_the_return(host)
-
-
-def clear_the_old_cue_switches(host):
-    """Once per StemDeck machine, not at every start: the C switches Core
-    used to set for the channel cue (until 2026-10-06) would play a cued stem
-    twice. After that they are StemDeck's own and Core never touches them."""
-    machine = machine_key(host, MOTION_OWN_HOSTS)
-    if machine in master_info.cue_cleared_on:
-        return
-    send_to_stemdeck(_stems.all_cue_off())
-    master_info.cue_cleared_on.append(machine)
-    remember_state()
 
 
 def follow_the_return(stemdeck_host):
