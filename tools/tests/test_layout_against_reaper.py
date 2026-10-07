@@ -199,8 +199,9 @@ class TheReturnsReceivesAreTheTemplates(unittest.TestCase):
 
 
 class TheGateIsTheTemplatesOutputs(unittest.TestCase):
-    """The three gated tracks are the template's speaker feeds, read by name
-    from the shipped project (the recording stops at track 28)."""
+    """The gated tracks are the template's speaker feeds and the main meter's
+    track, read by name from the shipped project (the recording stops at
+    track 28)."""
 
     def setUp(self):
         self.layout = load_layout(PACKAGE / "share/a3-core/layout.json")
@@ -215,6 +216,12 @@ class TheGateIsTheTemplatesOutputs(unittest.TestCase):
         # rec feeds zita-j2n, StemDeck's rec input and the analyzer's bpm input.
         rec = next(track for track, name in self.names.items() if name == "rec")
         self.assertNotIn(rec, self.layout.gate.values())
+
+    def test_the_main_meter_is_gated(self):
+        # main_vu feeds out41-50, which beat-analyzer turns into the desk's
+        # main meter; gated, the meter is dark while the room is silent.
+        self.assertEqual(self.layout.gate.get("main_vu"), 38)
+        self.assertEqual(self.names.get(38), "main_vu")
 
     def test_reaper_reports_every_gate_track(self):
         self.assertLessEqual(max(self.layout.gate.values()),
