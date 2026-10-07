@@ -59,3 +59,10 @@ Description: Local files differ from this package. Which should be replaced?
  The REAPER template nearly always differs: REAPER saves the running project
  over it whenever it stops. Replacing it stops REAPER for a moment and starts
  it again on the new template.
+
+Template: a3-core/preseeded
+Type: boolean
+Default: false
+Description: for internal use
+ Set by the a3-system installer together with its network answers, so the
+ postinst takes them without asking. Cleared by the postinst on every install.
