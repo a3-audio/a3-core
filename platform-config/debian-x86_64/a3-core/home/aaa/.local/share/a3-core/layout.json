@@ -74,7 +74,8 @@
  "gate": {
   "main": 30,
   "booth": 31,
-  "phones": 32
+  "phones": 32,
+  "main_vu": 38
  },
  "sends": {
   "aux": 1,

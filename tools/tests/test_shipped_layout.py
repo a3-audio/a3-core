@@ -232,6 +232,7 @@ class AddressesMatchTheSource(unittest.TestCase):
 
 
 class ShippedGate(unittest.TestCase):
-    def test_main_booth_and_phones_are_gated_and_rec_is_not(self):
+    def test_the_outputs_and_the_main_meter_are_gated_and_rec_is_not(self):
         layout = load_layout(PACKAGE / "share/a3-core/layout.json")
-        self.assertEqual(layout.gate, {"main": 30, "booth": 31, "phones": 32})
+        self.assertEqual(layout.gate, {"main": 30, "booth": 31, "phones": 32,
+                                       "main_vu": 38})
