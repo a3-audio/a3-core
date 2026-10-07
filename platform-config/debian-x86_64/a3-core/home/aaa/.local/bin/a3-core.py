@@ -1775,6 +1775,9 @@ if __name__ == "__main__":
     if _truth.network_problem:
         print(f"network.json refused, the package's defaults are used: "
               f"{_truth.network_problem}", file=sys.stderr)
+    if _truth.meters_problem:
+        print(f"network.json's meters refused, the package's are used: "
+              f"{_truth.meters_problem}", file=sys.stderr)
     # zita's and the analyzer's addresses, from the joined truth: a changed
     # network.json reaches them with Core's restart, not only at an install.
     # A failure is said, not fatal -- they keep what they had.

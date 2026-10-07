@@ -65,6 +65,7 @@ def _meter_value(name, value):
 
 class Truth:
     network_problem = None
+    meters_problem = None
 
     def __init__(self, data):
         self._data = data
@@ -205,10 +206,22 @@ def network_path(path=None):
 def load(path=None):
     """The contract (`path`, else $A3_OSC_TRUTH, else the installed file),
     joined with the network file network_path() names. A refused network file
-    leaves the package's blocks; why is in `network_problem`."""
+    leaves the package's blocks; why is in `network_problem`. A local `meters`
+    block that does not pass meters() is dropped alone -- the package's
+    numbers stand, the network still joins -- and why is in `meters_problem`:
+    a typo on the rig must not take Core down."""
     contract = json.loads(truth_path(path).read_text())
     where = network_path(path)
     network, problem = read_network(where) if where else (None, None)
     truth = Truth(join(contract, network))
+    meters_problem = None
+    if network is not None and "meters" in network:
+        try:
+            truth.meters()
+        except TruthError as refused:
+            meters_problem = f"{where}: {refused.args[0]}"
+            local = {key: block for key, block in network.items() if key != "meters"}
+            truth = Truth(join(contract, local))
     truth.network_problem = problem
+    truth.meters_problem = meters_problem
     return truth
