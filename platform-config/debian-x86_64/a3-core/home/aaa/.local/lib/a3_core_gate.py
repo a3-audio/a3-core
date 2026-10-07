@@ -52,6 +52,12 @@ class Gate:
             self._faders[track] = float(value)
         return True
 
+    def unheard(self):
+        """Names of the gate tracks REAPER sent no mute report for, in track
+        order. Their state is unknown, so they stay shut."""
+        return [self._names[track] for track in sorted(self._names)
+                if track not in self._muted]
+
     def to_open(self):
         """The tracks to open, in track order, and the names of muted tracks
         that stay shut because no fader was reported for them."""
@@ -99,10 +105,13 @@ def open_after_recall(gate, address, send, say, settle=SETTLE_SECONDS,
     in a thread of its own so the command loop never waits on it."""
     sleep(settle)
     opening, shut = gate.to_open()
+    unheard = gate.unheard()
+    if unheard:
+        say("gate: no mute report from " + ", ".join(unheard) + " \u2014 left shut")
     for name in shut:
         say(f"gate: {name} stays shut, REAPER reported no fader for it")
     if not opening:
-        if not shut:
+        if not shut and not unheard:
             say("gate: left alone, REAPER reports its outputs open")
         return []
     run_fade(fade_frames(opening, address), send, sleep=sleep)

@@ -161,6 +161,18 @@ class OpeningAfterTheRecall(unittest.TestCase):
         self.assertFalse(any("gate: opened" in line for line in said))
         self.assertIn("gate: left alone, REAPER reports its outputs open", said)
 
+    def test_no_mute_report_is_named_and_is_not_called_open(self):
+        opened, sent, said, _ = self.open(reported({32: 0.0}, {32: 0.72}))
+        self.assertEqual((opened, sent), ([], []))
+        self.assertIn("gate: no mute report from main, booth \u2014 left shut", said)
+        self.assertFalse(any("left alone" in line for line in said))
+
+    def test_a_partial_report_names_only_the_unheard(self):
+        opened, _, said, _ = self.open(reported({30: 1.0, 32: 0.0},
+                                                {30: 0.5, 32: 0.7}))
+        self.assertEqual([o.name for o in opened], ["main"])
+        self.assertIn("gate: no mute report from booth \u2014 left shut", said)
+
     def test_a_shut_track_is_named_and_not_touched(self):
         opened, sent, said, _ = self.open(reported({30: 1.0, 31: 1.0}, {30: 0.5}))
         self.assertEqual([o.name for o in opened], ["main"])
