@@ -21,7 +21,7 @@ ExecStart=/bin/bash -c "/home/aaa/.local/opt/REAPER/reaper -nosplash -ignoreerro
 # 2026-10-07; that wrote the outputs back open, which the silent start
 # (a3-system#74) needs shut. Core replays every controlled value at start;
 # anything set only in REAPER is saved by hand, on purpose.
-ExecStop=/home/aaa/.local/opt/REAPER/reaper -close all :nosave
+ExecStop=/home/aaa/.local/opt/REAPER/reaper -closeall:nosave
 # No CPUScheduling here: raising the whole process put its GUI/OSC threads
 # above JACK's process threads (late clients on a3nuc1, 2026-10-06). The
 # audio threads get their priority from JACK (server -P minus 5).

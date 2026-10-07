@@ -37,6 +37,16 @@ class TheStopSavesNothing(unittest.TestCase):
         for line in directives("ExecStop"):
             self.assertNotIn("a3-reaper.RPP", line)
 
+    def test_the_stop_uses_the_documented_spelling(self):
+        # `reaper -h`: -close[all][:save|:nosave][:exit]. With spaces, "all"
+        # and ":nosave" would be read as file names.
+        self.assertEqual(
+            [line.split()[-1] for line in directives("ExecStop")],
+            ["-closeall:nosave"])
+        for line in directives("ExecStop"):
+            self.assertNotIn("close all", line)
+            self.assertNotIn(" :nosave", line)
+
     def test_the_start_still_opens_the_template(self):
         self.assertTrue(any(f"-template {TEMPLATE}" in line
                             for line in directives("ExecStart")))
