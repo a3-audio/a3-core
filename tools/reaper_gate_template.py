@@ -12,6 +12,7 @@ Usage:
 Exit status: 0 when exactly three lines changed, 1 otherwise, 2 on refusal.
 """
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -19,7 +20,7 @@ from pathlib import Path
 GATE_NAMES = ("main", "booth", "phones")
 
 #: A track's own lines sit at four spaces inside its <TRACK block; deeper ones
-#: belong to plug-ins and envelopes (as in test_layout_against_reaper).
+#: belong to plug-ins and envelopes (a track's own lines, as this tool reads them).
 _TRACK = "  <TRACK"
 _NAME = "    NAME "
 _MUTESOLO = re.compile(r"^(    MUTESOLO )\S+((?: \S+)*)(\r?\n)?$")
@@ -66,19 +67,28 @@ def main(argv):
         print(__doc__)
         return 2
     source, dest = Path(argv[0]), Path(argv[1])
-    if dest.resolve() == source.resolve():
+    if dest.exists() and os.path.samefile(source, dest) \
+            or dest.resolve() == source.resolve():
         print("refused: DEST is SOURCE -- the template is never edited in place")
         return 2
     # Bytes, not read_text: text mode would translate line ends, and
     # surrogateescape keeps any non-UTF-8 byte of a plug-in's state as it was.
     before = source.read_bytes().decode("utf-8", "surrogateescape")
-    after = mute_tracks(before)
-    dest.write_bytes(after.encode("utf-8", "surrogateescape"))
+    try:
+        after = mute_tracks(before)
+    except ValueError as refusal:
+        print(f"refused: {refusal}", file=sys.stderr)
+        return 2
     changes = changed_lines(before, after)
     for number, old, new in changes:
         print(f"{number}: {old.strip()}  ->  {new.strip()}")
+    if len(changes) != len(GATE_NAMES):
+        print(f"{len(changes)} lines changed, expected {len(GATE_NAMES)}; "
+              "nothing written")
+        return 1
+    dest.write_bytes(after.encode("utf-8", "surrogateescape"))
     print(f"{len(changes)} lines changed; {dest} written")
-    return 0 if len(changes) == len(GATE_NAMES) else 1
+    return 0
 
 
 if __name__ == "__main__":

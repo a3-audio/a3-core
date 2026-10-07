@@ -7,10 +7,11 @@ diffed before it goes anywhere.
 """
 
 import io
+import os
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -103,6 +104,24 @@ class TheScript(unittest.TestCase):
         self.source.write_text(mute_tracks(SAMPLE))
         with redirect_stdout(io.StringIO()):
             self.assertEqual(main([str(self.source), str(self.dest)]), 1)
+        self.assertFalse(self.dest.exists())
+
+    def test_it_refuses_a_hard_link_to_its_source(self):
+        link = Path(self.tmp.name) / "link.RPP"
+        os.link(self.source, link)
+        with redirect_stdout(io.StringIO()):
+            self.assertEqual(main([str(self.source), str(link)]), 2)
+        self.assertEqual(self.source.read_text(), SAMPLE)
+
+    def test_a_missing_or_doubled_track_is_exit_2_and_no_copy(self):
+        for broken in (SAMPLE.replace("NAME phones", "NAME headphones"),
+                       SAMPLE.replace("NAME rec", "NAME main")):
+            self.source.write_text(broken)
+            with redirect_stdout(io.StringIO()), \
+                    redirect_stderr(io.StringIO()) as err:
+                self.assertEqual(main([str(self.source), str(self.dest)]), 2)
+            self.assertTrue(err.getvalue())
+            self.assertFalse(self.dest.exists())
 
 
 if __name__ == "__main__":
