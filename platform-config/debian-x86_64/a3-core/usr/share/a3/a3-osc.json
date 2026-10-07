@@ -18,7 +18,10 @@
   "  relayed_to: Core passes an arrival on to these, the sender left out.",
   "  announced_to: Core says it itself, to everybody, the sender too -- a lamp",
   "  is status, so the desk's lamp follows the desk's own key.",
-  "external: vocabularies we speak but do not own (REAPER, the IEM plug-ins)."
+  "external: vocabularies we speak but do not own (REAPER, the IEM plug-ins).",
+  "meters: how every display moves a meter bar (decided 2026-10-07). The sources",
+  "  send raw peaks; each display applies these on its own clock: attack (0 =",
+  "  at once), release in dB per second, and how long the highest peak is held."
  ],
  "version": 1,
  "network": {
@@ -178,6 +181,7 @@
   "in1_pre_L", "in1_pre_R", "in2_pre_L", "in2_pre_R", "in3_pre_L", "in3_pre_R", "in4_pre_L", "in4_pre_R",
   "in1_post_L", "in1_post_R", "in2_post_L", "in2_post_R", "in3_post_L", "in3_post_R", "in4_post_L", "in4_post_R"
  ],
+ "meters": {"attack_ms": 0, "release_db_per_second": 20, "peak_hold_seconds": 1.5},
  "external": {
   "reaper": {"owner": "REAPER (a3-core.ReaperOSC)", "patterns": [
    "/track/@/volume", "/track/@/mute", "/track/@/send/@/volume",
