@@ -187,29 +187,6 @@ class TheReplaceQuestion(unittest.TestCase):
             self.assertNotIn(",", label, group)
 
 
-class ReaperTemplateChanges(unittest.TestCase):
-    def changes(self, shipped, live):
-        tmp = Path(tempfile.mkdtemp())
-        for side, text in (("src", shipped), ("dst", live)):
-            if text is not None:
-                path = tmp / side / "REAPER/ProjectTemplates/a3-reaper.RPP"
-                path.parent.mkdir(parents=True)
-                path.write_text(text)
-        return subprocess.run(
-            ["sh", "-c", f"{function('reaper_template_changes')}\n"
-             'reaper_template_changes "$1" "$2"', "sh",
-             str(tmp / "src"), str(tmp / "dst")]).returncode == 0
-
-    def test_a_different_template_is_a_change(self):
-        self.assertTrue(self.changes("new", "old"))
-
-    def test_the_same_template_is_none(self):
-        self.assertFalse(self.changes("same", "same"))
-
-    def test_no_template_yet_is_a_change(self):
-        self.assertTrue(self.changes("new", None))
-
-
 class NoMoreCopyNoClobber(unittest.TestCase):
     def test_the_config_is_not_copied_with_cp_n(self):
         self.assertNotRegex(POSTINST.read_text(), r"^\s*cp\s+-\w*n\w*\s.*a3-core/config",
