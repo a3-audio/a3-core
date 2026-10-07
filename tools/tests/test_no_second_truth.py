@@ -117,6 +117,14 @@ class TheCppKeepersBootstrap(unittest.TestCase):
         self.assertEqual(len(self.found("stemdeck", "Source/Elsewhere.h")), 2)
 
 
+class StemDecksDataFolder(unittest.TestCase):
+    """~/.local/share/stemdeck is a folder, not the /stemdeck family."""
+
+    def test_its_name_is_allowed_where_the_path_is_made(self):
+        self.assertIn(("stemdeck/Source/DataPaths.cpp", "/stemdeck"),
+                      second_truth.ALLOWED_LITERALS)
+
+
 class TheSystemSaysNone(unittest.TestCase):
     """Across the checkouts beside this one -- the a3-system workspace. A repo
     that is not there is named, not passed over: a guard that looked at
