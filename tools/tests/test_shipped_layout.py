@@ -229,3 +229,9 @@ class AddressesMatchTheSource(unittest.TestCase):
                     "enc_pot_1": 1, "enc_pot_2": 2}
         for name, number in expected.items():
             self.assertEqual(self.layout.fx_param(name), number, name)
+
+
+class ShippedGate(unittest.TestCase):
+    def test_main_booth_and_phones_are_gated_and_rec_is_not(self):
+        layout = load_layout(PACKAGE / "share/a3-core/layout.json")
+        self.assertEqual(layout.gate, {"main": 30, "booth": 31, "phones": 32})

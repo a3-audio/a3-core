@@ -196,3 +196,26 @@ class TheReturnsReceivesAreTheTemplates(unittest.TestCase):
             channel = self.layout.channel(index)
             self.assertEqual(self._reaches(self.layout.master.track_analog, channel.analog_send),
                              channel.track_input)
+
+
+class TheGateIsTheTemplatesOutputs(unittest.TestCase):
+    """The three gated tracks are the template's speaker feeds, read by name
+    from the shipped project (the recording stops at track 28)."""
+
+    def setUp(self):
+        self.layout = load_layout(PACKAGE / "share/a3-core/layout.json")
+        self.names = track_names_in_project(SHIPPED_PROJECT)
+
+    def test_each_gate_track_has_its_name_in_the_template(self):
+        for name, track in self.layout.gate.items():
+            with self.subTest(name=name):
+                self.assertEqual(self.names.get(track), name)
+
+    def test_rec_is_never_gated(self):
+        # rec feeds zita-j2n, StemDeck's rec input and the analyzer's bpm input.
+        rec = next(track for track, name in self.names.items() if name == "rec")
+        self.assertNotIn(rec, self.layout.gate.values())
+
+    def test_reaper_reports_every_gate_track(self):
+        self.assertLessEqual(max(self.layout.gate.values()),
+                             osc_track_bank_size(SHIPPED_OSC_PATTERN))
