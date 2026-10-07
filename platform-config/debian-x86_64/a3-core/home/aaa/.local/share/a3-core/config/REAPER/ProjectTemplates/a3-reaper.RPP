@@ -4469,6 +4469,7 @@
     PERF 0
     MIDIOUT -1 -1
     MAINSEND 0 0
+    HWOUT 30 0 1 0 0 0 4096 -1:U -1
     <FXCHAIN
       SHOW 0
       LASTSEL 0
@@ -4774,17 +4775,12 @@
     FX 1
     TRACKID {E4041AC2-EA8C-B543-BA38-3EE7F946E321}
     PERF 0
-    AUXRECV 3 0 1 0 0 0 0 0 1024 -1:U 0 -1 ''
     AUXRECV 3 0 1 0 0 0 0 0 4 -1:U 0 -1 ''
-    AUXRECV 7 0 1 0 0 0 0 0 1025 -1:U 0 -1 ''
     AUXRECV 7 0 1 0 0 0 0 0 6 -1:U 0 -1 ''
-    AUXRECV 11 0 1 0 0 0 0 0 1026 -1:U 0 -1 ''
     AUXRECV 11 0 1 0 0 0 0 0 8 -1:U 0 -1 ''
-    AUXRECV 15 0 1 0 0 0 0 0 1027 -1:U 0 -1 ''
     AUXRECV 15 0 1 0 0 0 0 0 10 -1:U 0 -1 ''
     MIDIOUT -1 -1
     MAINSEND 0 0
-    HWOUT 30 0 1 0 0 0 2048 -1:U -1
     HWOUT 50 0 1 0 0 0 4100 -1:U -1
     <FXCHAIN
       SHOW 0
@@ -4814,21 +4810,16 @@
     FX 1
     TRACKID {65203160-1AE7-9B64-5A03-22CB9A04E6B9}
     PERF 0
-    AUXRECV 0 0 1 0 0 0 0 2048 1024 -1:U 0 -1 ''
     AUXRECV 0 0 1 0 0 0 0 0 4 -1:U 0 -1 ''
     AUXRECV 0 0 1 0 0 0 0 2 4 -1:U 0 -1 ''
-    AUXRECV 4 0 1 0 0 0 0 2048 1025 -1:U 0 -1 ''
     AUXRECV 4 0 1 0 0 0 0 0 6 -1:U 0 -1 ''
     AUXRECV 4 0 1 0 0 0 0 2 6 -1:U 0 -1 ''
-    AUXRECV 8 0 1 0 0 0 0 2048 1026 -1:U 0 -1 ''
     AUXRECV 8 0 1 0 0 0 0 0 8 -1:U 0 -1 ''
     AUXRECV 8 0 1 0 0 0 0 2 8 -1:U 0 -1 ''
-    AUXRECV 12 0 1 0 0 0 0 2048 1027 -1:U 0 -1 ''
     AUXRECV 12 0 1 0 0 0 0 0 10 -1:U 0 -1 ''
     AUXRECV 12 0 1 0 0 0 0 2 10 -1:U 0 -1 ''
     MIDIOUT -1 -1
     MAINSEND 0 0
-    HWOUT 34 0 1 0 0 0 2048 -1:U -1
     HWOUT 58 0 1 0 0 0 4100 -1:U -1
     <FXCHAIN
       SHOW 0
