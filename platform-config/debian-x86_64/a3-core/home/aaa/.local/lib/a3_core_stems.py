@@ -6,14 +6,13 @@ channels, 5 AUX, 6 CUE). Core applies its commands to the mirror at once;
 StemDeck's report overwrites whatever Core expected.
 
 The desk (2026-10-04): each channel encoder is an input selector -- one
-cursor over nine positions, deck 1's stems 1-4, deck 2's stems 1-4 and the
-STEM toggle. A push on a stem makes it the channel's only input (a stem
-playing on another channel moves here) and the channel's last stem. A push
-on the toggle switches stems off and on: while a stem plays it releases
-every stem, so the channel's analog input plays again, and remembers the
-one that played; while none plays it brings the last stem back as if it
-were pushed on its own position. The memory is only a memory: a stem moved
-to another channel or taken off by StemDeck leaves it as it is. A channel
+cursor over nine positions, deck 1's stems 1-4, deck 2's stems 1-4 and A,
+the channel's analog input. A push on a stem makes it the channel's only
+input (a stem playing on another channel moves here); a push on the stem
+that already plays here releases it. A push on A only ever selects analog
+(2026-10-07; until then a STEM toggle that brought the last stem back):
+while a stem plays every stem leaves the channel, while analog plays
+nothing changes. Core remembers no stem. A channel
 plays one stem at most, and a stem plays on one channel at most. The aux return
 knows two modes: stem (every stem on no channel plays on the return) and
 analog (no stem on it); its cursor runs over both and a CUE field, a ring
@@ -29,9 +28,9 @@ CUE = 6
 ALL_BUSES = (1 << CUE) - 1
 STEMS_PER_DECK = 4
 
-#: A channel selector's positions: 0-7 the stem pairs 1-8, then TOGGLE.
+#: A channel selector's positions: 0-7 the stem pairs 1-8, then A.
 INPUTS = PAIRS + 1
-TOGGLE = PAIRS
+ANALOG_INPUT = PAIRS
 
 #: The aux return's two modes; its encoder's cursor runs over both and the
 #: CUE field, which is a switch of its own and never a mode (spec return-cue).
@@ -51,9 +50,7 @@ def _is_int(value):
 class Stems:
     def __init__(self):
         self.masks = [0] * PAIRS
-        self.cursors = [TOGGLE] * CHANNELS
-        #: Per channel, the pair the STEM toggle brings back, or None.
-        self.last_stems = [None] * CHANNELS
+        self.cursors = [ANALOG_INPUT] * CHANNELS
         self.return_cursor = STEM_MODE
         self.return_mode = STEM_MODE
 
@@ -97,7 +94,7 @@ class Stems:
             place = RETURN_RING.index(self.return_cursor)
             self.return_cursor = RETURN_RING[(place + steps) % len(RETURN_RING)]
             return
-        # Round in a ring: left from stem 1 is the STEM toggle, one turn away.
+        # Round in a ring: left from stem 1 is A, one turn away.
         self.cursors[index] = (self.cursors[index] + steps) % INPUTS
 
     def push(self, index, connected=True):
@@ -114,28 +111,20 @@ class Stems:
         if not connected:
             return []
         cursor = self.cursors[index]
-        # On the toggle, or on the stem that plays here: the toggle's off,
-        # which in STEM mode sends that stem to the return.
-        if cursor == TOGGLE or self._on(cursor + 1, index + 1):
-            return self._toggle(index)
-        self.last_stems[index] = cursor + 1
+        # On A, or on the stem that plays here: analog, which in STEM mode
+        # sends the released stem to the return.
+        if cursor == ANALOG_INPUT or self._on(cursor + 1, index + 1):
+            return self._select_analog(index)
         return self._select(index, cursor + 1)
 
-    def _toggle(self, index):
-        """Off while a stem plays (remembering it), on while none does."""
-        playing = [p for p in range(1, PAIRS + 1) if self._on(p, index + 1)]
-        if playing:
-            self.last_stems[index] = playing[0]
-            return self._release(index) + self.tidy()
-        if self.last_stems[index] is None:
-            return []
-        return self._select(index, self.last_stems[index])
-
-    def _release(self, index):
+    def _select_analog(self, index):
+        """Every stem off the channel; with none on it, nothing to do."""
         bus = index + 1
         commands = [(p, bus, False) for p in range(1, PAIRS + 1) if self._on(p, bus)]
+        if not commands:
+            return []
         self._apply_all(commands)
-        return commands
+        return commands + self.tidy()
 
     def _select(self, index, pair):
         """`pair` as the channel's only input; from another channel it moves."""
@@ -198,22 +187,19 @@ class Stems:
     # -- on disk ---------------------------------------------------------------
 
     def as_data(self):
-        return {"cursors": list(self.cursors), "last_stems": list(self.last_stems),
+        return {"cursors": list(self.cursors),
                 "return_cursor": self.return_cursor, "return_mode": self.return_mode}
 
     @classmethod
     def from_data(cls, data):
-        """The remembered cursors, last stems and return mode, or the
-        defaults -- never raises. The switches are StemDeck's and come back with its report."""
+        """The remembered cursors and return mode, or the defaults -- never
+        raises; an older file's "last_stems" is ignored. The switches are StemDeck's and come back with its report."""
         s = cls()
         if not isinstance(data, dict):
             return s
         cursors = _cursors(data.get("cursors"))
         if cursors is not None:
             s.cursors = cursors
-        last_stems = _last_stems(data.get("last_stems"))
-        if last_stems is not None:
-            s.last_stems = last_stems
         for name, allowed in (("return_cursor", RETURN_RING),
                               ("return_mode", (ANALOG_MODE, STEM_MODE))):
             if _is_int(data.get(name)) and data[name] in allowed:
@@ -224,14 +210,7 @@ class Stems:
 def _cursors(data):
     if not isinstance(data, list) or len(data) != CHANNELS:
         return None
-    if not all(_is_int(c) and 0 <= c <= TOGGLE for c in data):
+    if not all(_is_int(c) and 0 <= c <= ANALOG_INPUT for c in data):
         return None
     return list(data)
 
-
-def _last_stems(data):
-    if not isinstance(data, list) or len(data) != CHANNELS:
-        return None
-    if not all(p is None or (_is_int(p) and 1 <= p <= PAIRS) for p in data):
-        return None
-    return list(data)
