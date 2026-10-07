@@ -71,6 +71,11 @@
   "track_stems": 28,
   "track_analog": 27
  },
+ "gate": {
+  "main": 30,
+  "booth": 31,
+  "phones": 32
+ },
  "sends": {
   "aux": 1,
   "cue_pre": 3,

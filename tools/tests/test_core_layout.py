@@ -339,3 +339,32 @@ class TheEncoderGainsAreNamedLikeEveryOtherGain(unittest.TestCase):
     def test_the_slot_they_sit_in_is_named_too(self):
         # fx/1 stand als Zahl im f-String, obwohl es den Namen längst gab.
         self.assertEqual(1, load_layout(SHIPPED).fx_slot("enc"))
+
+
+class TheGate(unittest.TestCase):
+    """REAPER's outputs, shut in the template until Core opens them after the
+    start-up recall (a3-system#74)."""
+
+    def test_the_gate_is_read_by_name(self):
+        parsed = json.loads(MINIMAL)
+        parsed["gate"] = {"main": 30, "booth": 31, "phones": 32}
+        layout = load_layout(written(json.dumps(parsed)))
+        self.assertEqual(layout.gate, {"main": 30, "booth": 31, "phones": 32})
+
+    def test_no_gate_block_opens_nothing(self):
+        # Safe on purpose: without a gate Core opens nothing, so a layout that
+        # lost the block is a silent rig, never a loud one.
+        self.assertEqual(load_layout(written(MINIMAL)).gate, {})
+
+    def test_a_gate_track_that_is_not_a_number_is_refused(self):
+        parsed = json.loads(MINIMAL)
+        parsed["gate"] = {"main": "thirty"}
+        with self.assertRaises(LayoutError):
+            load_layout(written(json.dumps(parsed)))
+
+    def test_the_caller_cannot_change_the_gate(self):
+        parsed = json.loads(MINIMAL)
+        parsed["gate"] = {"main": 30}
+        layout = load_layout(written(json.dumps(parsed)))
+        layout.gate["main"] = 1
+        self.assertEqual(layout.gate, {"main": 30})

@@ -88,7 +88,7 @@ class Master(Channel):
 
 class Layout:
     def __init__(self, channels, master, fx_slots, fx_params, gain_params,
-                 addresses, sends):
+                 addresses, sends, gate=None):
         self._channels = channels
         self._master = master
         self._fx_slots = fx_slots
@@ -96,6 +96,14 @@ class Layout:
         self._gain_params = gain_params
         self._addresses = addresses
         self._sends = sends
+        self._gate = dict(gate or {})
+
+    @property
+    def gate(self):
+        """REAPER's output tracks, by name, that the template starts muted and
+        Core opens after its start-up recall (a3-system#74). A copy: the
+        caller cannot open a track by editing the answer."""
+        return dict(self._gate)
 
     @property
     def master(self):
@@ -249,9 +257,16 @@ def load_layout(path):
         raise LayoutError(f"{path} has no master block")
     master = Master(parsed["master"])
 
+    try:
+        gate = {str(name): int(track)
+                for name, track in parsed.get("gate", {}).items()}
+    except (AttributeError, TypeError, ValueError) as problem:
+        raise LayoutError(f"{path}: the gate block is not name -> track "
+                          f"number: {problem}") from problem
+
     return Layout(channels, master,
                   dict(parsed.get("fx_slots", {})),
                   dict(parsed.get("fx_params", {})),
                   dict(parsed.get("gain_params", {})),
                   dict(parsed.get("addresses", {})),
-                  dict(parsed.get("sends", {})))
+                  dict(parsed.get("sends", {})), gate)
