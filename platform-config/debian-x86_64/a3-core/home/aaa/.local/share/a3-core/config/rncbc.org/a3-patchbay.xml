@@ -26,8 +26,6 @@
    <plug>deck4_R</plug>
    <plug>aux_L</plug>
    <plug>aux_R</plug>
-   <plug>phones_L</plug>
-   <plug>phones_R</plug>
   </socket>
   <socket client="zita\-n2j" exclusive="off" name="zita_stemdeck" type="jack-audio">
    <plug>out_1</plug>
@@ -148,8 +146,6 @@
    <plug>in20</plug>
    <plug>in21</plug>
    <plug>in22</plug>
-   <plug>in23</plug>
-   <plug>in24</plug>
   </socket>
   <socket client="REAPER" exclusive="off" name="reaper_aux" type="jack-audio">
    <plug>in9</plug>

@@ -35,6 +35,28 @@ def socket_client(sockets, name):
     return sockets[name].get("client").replace("\\", "")
 
 
+class StemDeckHasNoPhones(unittest.TestCase):
+    """Maintainer, 2026-10-07: StemDeck's CUE bus and PHONES outputs are gone;
+    a channel is cued through its own channel bus. Its phones_L/R went to
+    REAPER in23-24 for the stems track's cue send."""
+
+    def setUp(self):
+        self.outputs, self.inputs, self.cables = sockets_and_cables(PATCHBAY)
+
+    def plugs(self, socket):
+        return [p.text for p in socket.findall("plug")]
+
+    def test_no_stemdeck_socket_carries_phones(self):
+        for name, socket in self.outputs.items():
+            if socket_client(self.outputs, name) == "StemDeck":
+                self.assertNotIn("phones_L", self.plugs(socket), name)
+                self.assertNotIn("phones_R", self.plugs(socket), name)
+
+    def test_the_stems_track_takes_no_phones_inputs(self):
+        self.assertNotIn("in23", self.plugs(self.inputs["reaper_stems"]))
+        self.assertNotIn("in24", self.plugs(self.inputs["reaper_stems"]))
+
+
 class PatchbayWiresZita(unittest.TestCase):
     def setUp(self):
         self.outputs, self.inputs, self.cables = sockets_and_cables(PATCHBAY)
@@ -54,7 +76,8 @@ class PatchbayWiresZita(unittest.TestCase):
 
     def test_every_wired_n2j_channel_has_a_reaper_input(self):
         # At least: since 2026-09-30 StemDeck on the Core itself feeds the same
-        # REAPER socket with its twelve outputs, beside zita's ten.
+        # REAPER socket with its ten outputs (twelve until its phones went,
+        # 2026-10-07), beside zita's ten.
         (out, into), = [c for c in self.cables_from("zita-n2j")]
         self.assertGreaterEqual(len(self.inputs[into].findall("plug")),
                                 len(self.outputs[out].findall("plug")))
