@@ -241,7 +241,7 @@ class TheToolWritesTheFiles(unittest.TestCase):
 
     def test_postinst_renders_the_users_network_as_root(self):
         self.assertRegex(POSTINST.read_text(),
-                         r'A3_NETWORK="\$\{USER_HOME\}/\.config/a3/network\.json" [^\n]*a3-osc-render"? network\)')
+                         r'(?m)A3_NETWORK="\$\{USER_HOME\}/\.config/a3/network\.json" [^\n]*a3-osc-render"? network$')
 
 
 
