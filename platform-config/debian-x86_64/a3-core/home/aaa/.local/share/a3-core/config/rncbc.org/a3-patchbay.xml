@@ -87,13 +87,11 @@
    <plug>out49</plug>
    <plug>out50</plug>
   </socket>
-  <socket client="REAPER" exclusive="off" name="reaper_vu_decks_pre" type="jack-audio">
+  <socket client="REAPER" exclusive="off" name="reaper_vu_analog" type="jack-audio">
    <plug>out31</plug>
    <plug>out32</plug>
    <plug>out33</plug>
    <plug>out34</plug>
-  </socket>
-  <socket client="REAPER" exclusive="off" name="reaper_vu_decks_post" type="jack-audio">
    <plug>out35</plug>
    <plug>out36</plug>
    <plug>out37</plug>
@@ -222,17 +220,15 @@
    <plug>vu_aux_L</plug>
    <plug>vu_aux_R</plug>
   </socket>
-  <socket client="beat\-analyzer" exclusive="off" name="beat-analyzer_decks_pre" type="jack-audio">
-   <plug>vu_in1_pre</plug>
-   <plug>vu_in2_pre</plug>
-   <plug>vu_in3_pre</plug>
-   <plug>vu_in4_pre</plug>
-  </socket>
-  <socket client="beat\-analyzer" exclusive="off" name="beat-analyzer_decks_post" type="jack-audio">
-   <plug>vu_in1_post</plug>
-   <plug>vu_in2_post</plug>
-   <plug>vu_in3_post</plug>
-   <plug>vu_in4_post</plug>
+  <socket client="beat\-analyzer" exclusive="off" name="beat-analyzer_analog" type="jack-audio">
+   <plug>vu_analog1_L</plug>
+   <plug>vu_analog1_R</plug>
+   <plug>vu_analog2_L</plug>
+   <plug>vu_analog2_R</plug>
+   <plug>vu_analog3_L</plug>
+   <plug>vu_analog3_R</plug>
+   <plug>vu_analog4_L</plug>
+   <plug>vu_analog4_R</plug>
   </socket>
   <socket client="beat\-analyzer" exclusive="off" name="beat-analyzer_channels_pre" type="jack-audio">
    <plug>vu_in1_pre_L</plug>
@@ -270,8 +266,7 @@
   <cable input="beat-analyzer_bpm" output="reaper_rec" type="jack-audio"/>
   <cable input="beat-analyzer_vu_rec" output="reaper_rec" type="jack-audio"/>
   <cable input="beat\-analyzer_aux" output="reaper_aux" type="jack-audio"/>
-  <cable input="beat-analyzer_decks_pre" output="reaper_vu_decks_pre" type="jack-audio"/>
-  <cable input="beat-analyzer_decks_post" output="reaper_vu_decks_post" type="jack-audio"/>
+  <cable input="beat-analyzer_analog" output="reaper_vu_analog" type="jack-audio"/>
   <cable input="beat-analyzer_channels_pre" output="reaper_vu_channels_pre" type="jack-audio"/>
   <cable input="beat-analyzer_channels_post" output="reaper_vu_channels_post" type="jack-audio"/>
   <cable input="beat_analyzer_vu_main" output="reaper_vu_main" type="jack-audio"/>
