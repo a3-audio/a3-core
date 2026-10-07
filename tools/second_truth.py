@@ -87,6 +87,8 @@ ALLOWED_LITERALS = {
         "the port Motion knows before it has a truth (spec truth-from-core)",
     ("a3-motion-ui/src/a3-motion-engine/TruthKeeper.hh", "/core/here"):
         "the word Motion hears before it has a truth (spec truth-from-core)",
+    ("stemdeck/Source/DataPaths.cpp", "/stemdeck"):
+        "the last part of StemDeck's data folder, ~/.local/share/stemdeck, not an address",
     ("beat-analyzer/src/main.cpp", "  Beispiel: OSC_HOST_Protokol=127.0.0.1:9000\\n"):
         "the usage text's example of a target line",
 }
