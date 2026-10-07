@@ -143,7 +143,7 @@ class TheVocabulary(unittest.TestCase):
         self.assertEqual(t.index_range("vu", "n"), (1, 66))
         meters = t.vu_meters()
         self.assertEqual(len(meters), 66)
-        self.assertEqual(meters[0], "in1_pre")
+        self.assertEqual(meters[0], "analog1_L")
         self.assertEqual(meters[10], "main_sub")
         self.assertEqual(meters[39], "free70")
 
@@ -234,8 +234,7 @@ class TheAuxBusMeters(unittest.TestCase):
 class TheStereoChannelMeters(unittest.TestCase):
     """Every channel metered as stereo, the louder side shown, like a DJ mixer
     (spec stereo-channel-meters, 2026-10-06): /vu/51-66 = REAPER outs 51-66,
-    sent by the beat-analyzer. The mono in*_pre/in*_post stay until every
-    consumer reads these."""
+    sent by the beat-analyzer."""
 
     PRE = ["in1_pre_L", "in1_pre_R", "in2_pre_L", "in2_pre_R",
            "in3_pre_L", "in3_pre_R", "in4_pre_L", "in4_pre_R"]
@@ -257,13 +256,35 @@ class TheStereoChannelMeters(unittest.TestCase):
         self.assertEqual(self.t.match("/vu/51"), ("vu", {"n": 51}))
         self.assertEqual(self.t.match("/vu/66"), ("vu", {"n": 66}))
 
-    def test_the_mono_meters_stay(self):
-        self.assertEqual(self.t.vu_meters()[:8],
-                         ["in1_pre", "in2_pre", "in3_pre", "in4_pre",
-                          "in1_post", "in2_post", "in3_post", "in4_post"])
-
     def test_the_meaning_names_them(self):
         self.assertIn("51-66", self.t.addresses()["vu"]["meaning"])
+
+
+class TheAnalogInputMeters(unittest.TestCase):
+    """The desk's A shows the channel's analog input even while a stem plays
+    (note analog-input-meters, 2026-10-07): /vu 1-8 = REAPER out31-38, tapped
+    from the "analog" track. They reuse the slots of the retired mono
+    in*_pre/in*_post meters."""
+
+    ANALOG = ["analog1_L", "analog1_R", "analog2_L", "analog2_R",
+              "analog3_L", "analog3_R", "analog4_L", "analog4_R"]
+
+    def setUp(self):
+        self.t = truth()
+
+    def test_they_are_the_first_eight(self):
+        self.assertEqual(self.t.vu_meters()[:8], self.ANALOG)
+
+    def test_the_mono_channel_meters_are_gone(self):
+        meters = self.t.vu_meters()
+        for channel in range(1, 5):
+            for side in ("pre", "post"):
+                self.assertNotIn(f"in{channel}_{side}", meters)
+
+    def test_the_meaning_names_them(self):
+        meaning = self.t.addresses()["vu"]["meaning"]
+        self.assertIn("1-8 analog1_L ... analog4_R", meaning)
+        self.assertNotIn("in1_pre ", meaning)
 
 
 class TheVuRange(unittest.TestCase):

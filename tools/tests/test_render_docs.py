@@ -42,7 +42,8 @@ class TheTables(unittest.TestCase):
 
     def test_the_meters_count_from_one(self):
         table = render_docs.vu_table(TRUTH)
-        self.assertIn("| `/vu/1` | in1_pre |", table)
+        self.assertIn("| `/vu/1` | analog1_L |", table)
+        self.assertIn("| `/vu/8` | analog4_R |", table)
         self.assertIn("| `/vu/40` |", table)
         self.assertIn("| `/vu/51` | in1_pre_L |", table)
         self.assertIn("| `/vu/66` | in4_post_R |", table)
