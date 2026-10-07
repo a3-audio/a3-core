@@ -26,7 +26,7 @@ PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local"
 
 sys.path.insert(0, str(PACKAGE / "lib"))
 
-from a3_core_layout import CHANNEL_FIELDS, load_layout   # noqa: E402
+from a3_core_layout import CHANNEL_FIELDS, LayoutError, load_layout   # noqa: E402
 
 
 class ShippedLayout(unittest.TestCase):
@@ -123,6 +123,12 @@ class TheRestOfTheMap(unittest.TestCase):
         receiver's AUXRECV lines."""
         self.assertEqual(self.layout.send("return_mix"), 2)
         self.assertEqual(self.layout.send("return_cue"), 3)
+
+    def test_the_stems_track_has_no_cue_send(self):
+        """StemDeck's cue is gone (2026-10-07): the stems track sends nothing
+        to enc_phones, so the layout names no such send."""
+        with self.assertRaises(LayoutError):
+            self.layout.send("stems_cue")
 
     def test_the_analog_track_and_its_sends(self):
         """Template of 2026-10-01 23:11: analog (27) sends 1-4 to 1-input ... 4-input."""

@@ -1,10 +1,11 @@
 """The headphones' crossfade, in the channel buses' sends (template of
 2026-10-01): per deck send 3 (pre-fader, the cue) and send 4 (post-fader, the
-mix) to enc_phones, and the stems' send 6 to dec_phones as a cue of its own.
+mix) to enc_phones; the return's two sends beside them.
 
 The phones-mix knob fades cue (left) into mix (right) at constant power. A
 deck's cue send only opens while its cue is on; its mix send follows the knob
-alone. The stem cue behaves like a deck's cue."""
+alone. StemDeck has no cue of its own since 2026-10-07: whatever a channel
+plays is cued through that channel."""
 
 import math
 import sys
@@ -19,9 +20,7 @@ from a3_core_cue import send_levels   # noqa: E402
 UNITY = 1.0
 
 
-def levels(cues=(False,) * 4, stem=False, mix=0.0, return_cue=False):
-    # `stem` is gone from send_levels (StemDeck's CUE bus is always on the
-    # cue side); kept here so the tests still say what they vary.
+def levels(cues=(False,) * 4, mix=0.0, return_cue=False):
     return send_levels(list(cues), mix, UNITY, return_cue)
 
 
@@ -54,14 +53,11 @@ class TheCues(unittest.TestCase):
         a = levels(cues=(True, False, False, False), mix=0.3)
         self.assertAlmostEqual(a["decks"][0]["post"], a["decks"][1]["post"])
 
-    def test_stemdecks_cue_bus_is_always_on_the_cue_side(self):
-        # StemDeck decides what is on its CUE bus: stem CUE switches and the
-        # decks' PHONES buttons; the bus is silent otherwise. So the stems'
-        # cue send is not gated here (final review 2026-10-02: PHONES alone
-        # never reached the phones).
-        for stem in (False, True):
-            self.assertAlmostEqual(levels(stem=stem, mix=0.25)["stem"],
-                                   math.cos(0.25 * math.pi / 2))
+    def test_stemdeck_has_no_cue_send_of_its_own(self):
+        # Maintainer, 2026-10-07: the cue is always the channel, whatever its
+        # input; StemDeck's CUE bus and PHONES outputs are gone, and with
+        # them the stems track's send to enc_phones.
+        self.assertEqual(set(levels(mix=0.25)), {"decks", "return"})
 
     def test_the_return_is_on_the_mix_side(self):
         # Template of 2026-10-01 23:11: the return reaches enc_phones twice,

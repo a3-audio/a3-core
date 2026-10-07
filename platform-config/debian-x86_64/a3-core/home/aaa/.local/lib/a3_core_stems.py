@@ -2,7 +2,7 @@
 
 StemDeck owns the switches (spec stemdeck-remote, 2026-10-01); Core keeps
 what it last reported, one mask per stem pair (bit b-1 = bus b: 1-4 the desk
-channels, 5 AUX, 6 CUE). Core applies its commands to the mirror at once;
+channels, 5 AUX). Core applies its commands to the mirror at once;
 StemDeck's report overwrites whatever Core expected.
 
 The desk (2026-10-04): each channel encoder is an input selector -- one
@@ -24,8 +24,10 @@ PAIRS = 8
 CHANNELS = 4
 RETURN = 4
 AUX = 5
-CUE = 6
-ALL_BUSES = (1 << CUE) - 1
+ALL_BUSES = (1 << AUX) - 1
+#: The width a report may have: a StemDeck from before 2026-10-07 still had a
+#: sixth bus, its CUE, and may report it. That bit is dropped, not the report.
+REPORT_BUSES = (1 << (AUX + 1)) - 1
 STEMS_PER_DECK = 4
 
 #: A channel selector's positions: 0-7 the stem pairs 1-8, then A.
@@ -60,9 +62,9 @@ class Stems:
         """Take StemDeck's word for one stem. False for a damaged one. The
         rules are applied later (tidy), once the reports have settled."""
         if not (_is_int(pair) and _is_int(mask) and 1 <= pair <= PAIRS
-                and 0 <= mask <= ALL_BUSES):
+                and 0 <= mask <= REPORT_BUSES):
             return False
-        self.masks[pair - 1] = mask
+        self.masks[pair - 1] = mask & ALL_BUSES
         return True
 
     def forget(self):
@@ -163,13 +165,6 @@ class Stems:
             if wanted != self._on(pair, AUX):
                 commands.append((pair, AUX, wanted))
                 self._apply(pair, AUX, wanted)
-        return commands
-
-    def all_cue_off(self):
-        """Every stem's C off, once after the channel cue left StemDeck's C
-        (2026-10-06): a C Core had set would play a cued stem twice."""
-        commands = [(pair, CUE, False) for pair in range(1, PAIRS + 1)]
-        self._apply_all(commands)
         return commands
 
     # -- inside ---------------------------------------------------------------

@@ -65,8 +65,9 @@ CHANNEL_FIELDS = ("toggle_fx", "toggle_cue", "three_d")
 #: the headphones' sends at a start, since 2026-10-01), and the aux return's
 #: cue (spec return-cue, 2026-10-04; a file from before has none and the cue
 #: stays off). The stem cue left with the C field (spec stemdeck-remote); an
-#: old file's stem_cue is ignored.
-MASTER_FIELDS = ("phones_mix", "return_cue", "cue_cleared_on")
+#: old file's stem_cue is ignored, and so is its cue_cleared_on (the StemDeck
+#: machines whose C switches Core cleared, until StemDeck lost them 2026-10-07).
+MASTER_FIELDS = ("phones_mix", "return_cue")
 
 #: Renamed fields: PFL became cue on 2026-10-01, and a file from before says
 #: toggle_pfl.
