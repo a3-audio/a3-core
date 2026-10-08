@@ -28,7 +28,7 @@ def checkouts(root):
     """Each repo's checkout, beside the a3-core checkout `root`."""
     return {name: root.parent / CHECKOUT_PATHS.get(name, name) for name in REPOS}
 
-CODE = {".py", ".cpp", ".cc", ".h", ".hh", ".service"}
+CODE = {".py", ".cpp", ".cc", ".h", ".hh", ".service", ".sh"}
 
 #: Never looked at: tests say the words on purpose, builds and vendored code
 #: are not ours to hold.
@@ -133,9 +133,21 @@ def _unit_literals(path):
             yield number, int(word) if word.isdigit() else word
 
 
+def _shell_literals(path):
+    """The words of a shell script, comment lines left out: a3vnc.sh named
+    the Core's address for years where the guard did not look (a3-core#63)."""
+    for number, line in enumerate(path.read_text(errors="replace").splitlines(), 1):
+        if line.lstrip().startswith("#"):
+            continue
+        for word in re.split(r"[\s\"'=]+", line):
+            if word:
+                yield number, int(word) if word.isdigit() else word
+
+
 def literals(path):
     reader = {".py": _python_literals,
-              ".service": _unit_literals}.get(path.suffix, _cpp_literals)
+              ".service": _unit_literals,
+              ".sh": _shell_literals}.get(path.suffix, _cpp_literals)
     try:
         yield from reader(path)
     except (SyntaxError, UnicodeDecodeError):
