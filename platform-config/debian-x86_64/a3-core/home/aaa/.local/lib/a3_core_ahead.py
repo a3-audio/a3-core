@@ -9,6 +9,10 @@ only: the desk has no use for it.
 It is never noted and never replayed. A preview is about the next bars; one
 replayed to a Motion that has just arrived would tell it about bars long
 gone. Motion counts a preview older than four bars as absent anyway.
+
+Only the StemDeck Core follows (a3_core_presence.HelloWatch) may say it: two
+can run at once, the rig's own and a remote one, and Motion would otherwise
+hear both sets interleaved.
 """
 
 #: section, next, bars until next, energy -- as the truth's "ssif" says.
@@ -29,3 +33,9 @@ def ahead_arguments(arguments):
     if isinstance(energy, bool) or not isinstance(energy, (int, float)):
         return None
     return [section, following, bars, float(energy)]
+
+
+def from_the_followed(sender_host, followed_host):
+    """True if a preview from `sender_host` may go on: it is the StemDeck
+    Core follows. None followed (no hello yet, or it fell silent): none."""
+    return followed_host is not None and sender_host == followed_host

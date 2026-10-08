@@ -65,7 +65,7 @@ from a3_core_motion import MotionTarget, is_this_machine   # noqa: E402
 from a3_core_return import (ReturnTarget, point_zita_at,   # noqa: E402
                             start_at_radla)
 from a3_core_vu_relay import relay as relay_vu   # noqa: E402
-from a3_core_ahead import ahead_arguments   # noqa: E402
+from a3_core_ahead import ahead_arguments, from_the_followed   # noqa: E402
 from a3_core_latest import position_key, serve   # noqa: E402
 from a3_core_announce import (EVERY_SECONDS, announce, announcement,   # noqa: E402
                               broadcast_address)
@@ -1060,7 +1060,8 @@ def osc_handler_stemdeck(client_address: Tuple[str, int], address: str,
     origin = peer_name(client_address[0], PEER_HOSTS)
     traffic.seen(IN, address, value, origin)
     if key == "stemdeck.ahead":
-        forward_ahead(address, osc_arguments, origin)
+        if from_the_followed(client_address[0], _stemdeck_watch.host):
+            forward_ahead(address, osc_arguments, origin)
         return
     if key != "stemdeck.buses" or not _stems.report(
             pair_of(fields["deck"], fields["stem"]), value):

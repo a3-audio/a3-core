@@ -15,7 +15,7 @@ PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core"
 sys.path.insert(0, str(PACKAGE / "home/aaa/.local/lib"))
 
 import a3_osc   # noqa: E402
-from a3_core_ahead import ahead_arguments   # noqa: E402
+from a3_core_ahead import ahead_arguments, from_the_followed   # noqa: E402
 
 CORE = (PACKAGE / "home/aaa/.local/bin/a3-core.py").read_text()
 TRUTH = a3_osc.load(PACKAGE / "usr/share/a3/a3-osc.json")
@@ -67,11 +67,29 @@ class WhatGoesOn(unittest.TestCase):
                 self.assertIsNone(ahead_arguments(wrong))
 
 
+class WhoMaySayIt(unittest.TestCase):
+    """Two StemDecks can run at once (the rig's own and a3nuc2's); Motion
+    hears the preview of the one Core follows, not a mix of both."""
+
+    def test_the_stemdeck_core_follows(self):
+        self.assertTrue(from_the_followed("192.168.8.20", "192.168.8.20"))
+
+    def test_not_another_one(self):
+        self.assertFalse(from_the_followed("127.0.0.1", "192.168.8.20"))
+
+    def test_not_while_core_follows_none(self):
+        self.assertFalse(from_the_followed("192.168.8.20", None))
+
+
 class CoreIsWired(unittest.TestCase):
     def test_the_stemdeck_handler_passes_it_on(self):
         body = _body("osc_handler_stemdeck")
         self.assertIn('key == "stemdeck.ahead"', body)
         self.assertIn("forward_ahead(", body)
+
+    def test_only_from_the_followed_stemdeck(self):
+        body = _body("osc_handler_stemdeck")
+        self.assertIn("from_the_followed(client_address[0], _stemdeck_watch.host)", body)
 
     def test_it_goes_to_motion_only(self):
         body = _body("forward_ahead")
