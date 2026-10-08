@@ -49,6 +49,20 @@ apply_headless_choice() {
   fi
 }
 
+# Put back the authorized_keys the preinst kept aside, when the unpack took it
+# (older versions shipped the file, a3-core#66). A file that is there is the
+# machine's and stays; the copy goes either way.
+restore_authorized_keys() {
+  ssh_dir="$1"
+  kept="$ssh_dir/authorized_keys.a3-core-keep"
+  [ -f "$kept" ] || return 0
+  if [ -e "$ssh_dir/authorized_keys" ]; then
+    rm -f "$kept"
+  else
+    mv "$kept" "$ssh_dir/authorized_keys"
+  fi
+}
+
 # The parts of the shipped config the replace question offers, by the top
 # folder a file sits in. Parts, not files: a3nuc2 alone had eleven files that
 # differed, and with REAPER's presets a list of files runs past a screen.
@@ -441,6 +455,8 @@ fi
 install_shipped_config "$SHIPPED_CONFIG" "${USER_HOME}/.config" \
   "${USER_HOME}/.config/a3-replaced/$(date +%Y-%m-%d_%H%M%S)" "$REPLACE_CONFIG"
 echo "a3-core: nothing restarted; restart a3-main to run the new config"
+
+restore_authorized_keys "${USER_HOME}/.ssh"
 
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.local" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.config" || true

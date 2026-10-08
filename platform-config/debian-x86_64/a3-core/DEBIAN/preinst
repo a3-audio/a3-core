@@ -1,0 +1,20 @@
+#!/bin/sh
+set -e
+
+# Older versions shipped ~/.ssh/authorized_keys, so dpkg deletes it while
+# unpacking a version that no longer does. Keep a copy beside it; the postinst
+# puts it back (a3-core#66). Which keys may log in is the machine's business.
+keep_authorized_keys() {
+  ssh_dir="$1"
+  [ -f "$ssh_dir/authorized_keys" ] || return 0
+  cp -p "$ssh_dir/authorized_keys" "$ssh_dir/authorized_keys.a3-core-keep"
+}
+
+case "$1" in
+  install|upgrade)
+    USER_HOME=$(getent passwd aaa | cut -d: -f6 || echo /home/aaa)
+    keep_authorized_keys "${USER_HOME:-/home/aaa}/.ssh"
+  ;;
+esac
+
+exit 0
