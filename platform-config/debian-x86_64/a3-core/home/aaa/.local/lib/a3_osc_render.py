@@ -10,7 +10,8 @@ import re
 import shlex
 from pathlib import Path
 
-#: Where the zita units find their arguments (systemd's %h is the home).
+#: Where the zita units and x11vnc find their arguments (systemd's %h is the
+#: home; x11vnc is a system unit and names it in full).
 SYSTEMD_ENV_FILE = "%h/.config/a3/osc.env"
 ENV_FILE = Path(".config/a3/osc.env")
 
@@ -47,6 +48,15 @@ def zita_env(truth):
         ("A3_ZITA_N2J_HOST", truth.host(n2j["host"])),
         ("A3_ZITA_N2J_PORT", n2j["port"]),
     ])
+
+
+def vnc_env(truth):
+    return lines([("A3_VNC_PORT", truth.port("x11vnc", "vnc"))])
+
+
+def osc_env(truth):
+    """osc.env: zita's arguments and x11vnc's port."""
+    return zita_env(truth) + vnc_env(truth)
 
 
 def network_defaults(truth):
@@ -98,7 +108,7 @@ def retired(line):
 def write_user_files(truth, home):
     env_file = home / ENV_FILE
     env_file.parent.mkdir(parents=True, exist_ok=True)
-    env_file.write_text(zita_env(truth))
+    env_file.write_text(osc_env(truth))
     analyzer_env = home / ANALYZER_ENV
     if analyzer_env.exists():
         analyzer_env.write_text(put_analyzer_block(analyzer_env.read_text(),

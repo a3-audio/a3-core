@@ -35,6 +35,15 @@ class TheGuardSees(unittest.TestCase):
     def test_an_address_in_python(self):
         self.assertTrue(self.found_in("desk.py", 'send("/channel/1/volume", 0.5)\n'))
 
+    def test_an_ip_in_a_shell_script(self):
+        self.assertTrue(self.found_in("viewer.sh", "vncviewer QualityLevel 2 192.168.8.10\n"))
+
+    def test_a_port_in_a_shell_script(self):
+        self.assertTrue(self.found_in("send.sh", "oscsend localhost 9000 /beat i 1\n"))
+
+    def test_a_shell_comment_says_nothing(self):
+        self.assertFalse(self.found_in("viewer.sh", "# the Core is 192.168.8.10\ntrue\n"))
+
     def test_an_aux_return_address(self):
         self.assertTrue(self.found_in("desk.py", 'send("/aux-return/stem/push", 1)\n'))
 
