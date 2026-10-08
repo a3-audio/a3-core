@@ -46,7 +46,7 @@
   {"name": "core.reaper-feedback", "program": "core", "role": "reaper-feedback", "host": "local", "port": 9002,
    "carries": "REAPER's own OSC feedback"},
   {"name": "core.vu-relay", "program": "core", "role": "vu-relay", "host": "local", "port": 9003,
-   "carries": "the analyzer's /vu bundles, forwarded unchanged to a remote Motion while one is followed (the analyzer's .env needs OSC_VU_core=127.0.0.1:9003; Core renders it into the analyzer's block)"},
+   "carries": "the analyzer's /vu bundles, forwarded unchanged to a remote Motion while one is followed (the analyzer needs OSC_VU_core=127.0.0.1:9003; Core renders it into the analyzer's conf.d, 50-a3-osc.env)"},
   {"name": "core.web", "program": "core", "role": "web", "host": "any", "port": 9080,
    "carries": "the traffic window (HTTP, not OSC); every interface, decided 2026-09-30"},
   {"name": "motion.osc", "program": "motion", "role": "osc", "host": "any", "port": 7771,
