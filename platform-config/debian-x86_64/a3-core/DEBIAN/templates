@@ -66,3 +66,13 @@ Default: false
 Description: for internal use
  Set by the a3-system installer together with its network answers, so the
  postinst takes them without asking. Cleared by the postinst on every install.
+
+Template: a3-core/ssh-key
+Type: string
+Default:
+Description: Public ssh key allowed to log in as aaa (empty: none)
+ Paste one public key line, for example "ssh-ed25519 AAAA... you@laptop".
+ It is added to ~/.ssh/authorized_keys of the user aaa, next to the keys
+ already there, and is not added twice. Leave it empty to add nothing. The
+ answer is forgotten after the install, so a later upgrade does not put back
+ a key that was removed by hand.

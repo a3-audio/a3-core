@@ -9,7 +9,10 @@ User=aaa
 WorkingDirectory=/home/aaa
 Environment=DISPLAY=:0
 ExecStartPre=/usr/bin/sleep 5
-ExecStart=/usr/bin/x11vnc -reopen -shared -forever -rfbport 5901 -display :0 -ncache 0 -auth /home/aaa/.Xauthority
+# The port comes from a3-osc.json, rendered by a3-osc-render. %h would be
+# root's home here, whatever User= says.
+EnvironmentFile=/home/aaa/.config/a3/osc.env
+ExecStart=/usr/bin/x11vnc -reopen -shared -forever -rfbport ${A3_VNC_PORT} -display :0 -ncache 0 -auth /home/aaa/.Xauthority
 Restart=always
 RestartSec=5
 

@@ -69,8 +69,9 @@ NEVER = (
 NOT_OURS_TO_LIST = (
     Path("home/aaa"), Path("home/aaa/.config"), Path("home/aaa/.local"),
     Path("home/aaa/.local/share"),
-    # The machine's own keys sit beside the shipped authorized_keys: never
-    # named, so never offered for taking into a public repository.
+    # The package ships nothing here since a3-core#66; should it ever again,
+    # the machine's own keys beside it are never named, so never offered for
+    # taking into a public repository.
     Path("home/aaa/.ssh"),
 )
 

@@ -76,6 +76,47 @@ class ZitaIsRendered(unittest.TestCase):
                 self.assertIn(f"EnvironmentFile={a3_osc_render.SYSTEMD_ENV_FILE}", text)
 
 
+SYSTEM_UNITS = PACKAGE / "etc/systemd/system"
+RECIPES = PACKAGE / "home/aaa/.local/share/a3-core/recipes"
+
+
+class VncIsRendered(unittest.TestCase):
+    """x11vnc's port and the viewer's address were written beside the truth
+    (a3-core#63)."""
+
+    def test_the_truth_names_vncs_listener(self):
+        listener = TRUTH.listener("x11vnc", "vnc")
+        self.assertEqual("any", listener["host"])
+
+    def test_the_rendered_file_carries_vncs_port(self):
+        env = pairs(a3_osc_render.osc_env(TRUTH))
+        self.assertEqual(int(env["A3_VNC_PORT"]), TRUTH.port("x11vnc", "vnc"))
+
+    def test_the_rendered_file_still_carries_zitas(self):
+        self.assertIn(a3_osc_render.zita_env(TRUTH), a3_osc_render.osc_env(TRUTH))
+
+    def test_the_unit_takes_its_port_from_the_rendered_file(self):
+        text = (SYSTEM_UNITS / "x11vnc.service").read_text()
+        # A system unit's %h is root's home, whatever User= says.
+        self.assertIn("EnvironmentFile=/home/aaa/" + str(a3_osc_render.ENV_FILE), text)
+        start = next(line for line in text.splitlines() if line.startswith("ExecStart="))
+        self.assertIn("-rfbport ${A3_VNC_PORT}", start)
+        self.assertNotRegex(start, r"\b\d{4,5}\b")
+
+    def test_the_viewer_recipe_asks_the_truth(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = Path(tmp) / "vncviewer"
+            fake.write_text('#!/bin/sh\necho "$@"\n')
+            fake.chmod(0o755)
+            env = dict(os.environ, A3_OSC_TRUTH=str(TRUTH_FILE),
+                       PATH=f"{tmp}:{os.environ['PATH']}")
+            done = subprocess.run(["bash", str(RECIPES / "a3vnc.sh")], env=env,
+                                  capture_output=True, text=True, check=True)
+        host = TRUTH.host("core")
+        port = TRUTH.port("x11vnc", "vnc")
+        self.assertEqual(f"QualityLevel 2 {host}::{port}", done.stdout.strip())
+
+
 class TheNetworkDefaultsAreRendered(unittest.TestCase):
     def test_the_default_network_is_the_truths(self):
         shell = pairs(a3_osc_render.network_defaults(TRUTH))
@@ -226,7 +267,7 @@ class TheToolWritesTheFiles(unittest.TestCase):
             home = Path(tmp)
             self.run_tool("user", env_extra={"HOME": str(home)})
             zita = home / ".config/a3/osc.env"
-            self.assertEqual(zita.read_text(), a3_osc_render.zita_env(TRUTH))
+            self.assertEqual(zita.read_text(), a3_osc_render.osc_env(TRUTH))
             analyzer = home / ".config/beat-analyzer/conf.d/50-a3-osc.env"
             self.assertEqual(analyzer.read_text(), a3_osc_render.analyzer_block(TRUTH))
             self.assertFalse((home / "a3-system").exists())

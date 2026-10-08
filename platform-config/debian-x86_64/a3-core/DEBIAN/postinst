@@ -13,6 +13,48 @@ APPUSER="aaa"
 UID=$(id -u $APPUSER)
 USER_HOME=$(getent passwd "$APPUSER" | cut -d: -f6 || echo "/home/$APPUSER")
 
+# Put back the authorized_keys the preinst kept aside, when the unpack took it
+# (older versions shipped the file, a3-core#66). A file that is there is the
+# machine's and stays; the copy goes either way. Never through a symlink: root
+# would write wherever aaa pointed it. Runs before anything that can fail, so
+# a failed upgrade never leaves a machine run over ssh without its keys.
+KEPT_KEYS=/var/lib/a3-core/authorized_keys.keep
+
+restore_authorized_keys() {
+  ssh_dir="$1"
+  kept="$2"
+  owner="$3"
+  [ -f "$kept" ] || return 0
+  if [ -L "$ssh_dir" ] || [ -L "$ssh_dir/authorized_keys" ]; then
+    echo "a3-core: $ssh_dir is behind a symlink; the old keys stay in $kept" >&2
+    return 0
+  fi
+  if [ -e "$ssh_dir/authorized_keys" ]; then
+    rm -f "$kept"
+    return 0
+  fi
+  if [ ! -d "$ssh_dir" ]; then
+    mkdir -p "$ssh_dir"
+    chmod 700 "$ssh_dir"
+    chown "$owner" "$ssh_dir"
+  fi
+  mv "$kept" "$ssh_dir/authorized_keys"
+}
+
+restore_authorized_keys "${USER_HOME}/.ssh" "$KEPT_KEYS" "$APPUSER"
+
+# limits.d/audio.conf gives @audio realtime priority; on the rig aaa was put in
+# the group by hand, on a fresh machine nobody did (a3-core#65). Takes effect
+# at the next login.
+join_audio_group() {
+  case " $(id -nG "$1") " in
+    *" audio "*) return 0 ;;
+  esac
+  usermod -aG audio "$1"
+}
+
+join_audio_group "$APPUSER"
+
 # Take an interface out of ifupdown's hands, so systemd-networkd is the only
 # thing that configures it. With both, /etc/network/interfaces' DHCP stanza and
 # a3.network's static address claimed the same interface, and the address the
@@ -47,6 +89,47 @@ apply_headless_choice() {
   if [ -f "$target" ] && cmp -s "$shipped" "$target"; then
     mv -f "$target" "$target.off"
   fi
+}
+
+# One public key, given at install time (a3-core/ssh-key), appended to the
+# keys already there. Anything but a single public-key line is refused without
+# failing the install; options such as command="..." are left to the hand.
+install_ssh_key() {
+  ssh_dir="$1"
+  key="$(printf '%s' "$2" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  [ -n "$key" ] || return 0
+  if [ "$(printf '%s\n' "$key" | wc -l)" -ne 1 ] || ! printf '%s\n' "$key" | grep -Eq \
+      '^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)|sk-ssh-ed25519@openssh\.com|sk-ecdsa-sha2-nistp256@openssh\.com) AAAA[A-Za-z0-9+/]+={0,3}( .*)?$'; then
+    echo "a3-core: the answer to a3-core/ssh-key is not a public key; no key added" >&2
+    return 0
+  fi
+  keys="$ssh_dir/authorized_keys"
+  if [ -L "$ssh_dir" ] || [ -L "$keys" ]; then
+    echo "a3-core: $keys is behind a symlink; no key added" >&2
+    return 0
+  fi
+  mkdir -p "$ssh_dir"
+  chmod 700 "$ssh_dir"
+  # The same key under another comment, or with options in front, is the same key.
+  body="$(printf '%s\n' "$key" | cut -d' ' -f2)"
+  if [ -f "$keys" ] && awk -v body="$body" '{ for (i = 1; i <= NF; i++) if ($i == body) found = 1 } END { exit !found }' "$keys"; then
+    return 0
+  fi
+  if [ -s "$keys" ] && [ -n "$(tail -c1 "$keys")" ]; then
+    echo >> "$keys"
+  fi
+  printf '%s\n' "$key" >> "$keys"
+  chmod 600 "$keys"
+}
+
+# Ask for the key, add it, then forget the answer: an upgrade must not put
+# back a key somebody has since removed by hand.
+ssh_key_step() {
+  db_input high a3-core/ssh-key || true
+  db_go || true
+  db_get a3-core/ssh-key
+  install_ssh_key "$1" "$RET"
+  db_set a3-core/ssh-key "" || true
 }
 
 # The parts of the shipped config the replace question offers, by the top
@@ -466,6 +549,8 @@ CONFIG_BACKUP="${USER_HOME}/.config/a3-replaced/$(date +%Y-%m-%d_%H%M%S)"
 install_shipped_config "$SHIPPED_CONFIG" "${USER_HOME}/.config" "$CONFIG_BACKUP" "$REPLACE_CONFIG"
 retire_checkout_analyzer_unit "${USER_HOME}/.config" "$CONFIG_BACKUP"
 echo "a3-core: nothing restarted; restart a3-main to run the new config"
+
+ssh_key_step "${USER_HOME}/.ssh"
 
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.local" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.config" || true
