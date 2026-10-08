@@ -146,8 +146,8 @@ class MirrorCheck(unittest.TestCase):
         self.assertEqual(mirror_check.new_beside(self.m.pairs(), self.m.root), [])
 
     def test_nothing_beside_the_shipped_ssh_key_is_named(self):
-        # The package ships authorized_keys; the machine's own keys sit beside
-        # it and must never be offered for taking.
+        # The package ships nothing under .ssh since a3-core#66; should it
+        # again, the machine's own keys beside it must never be offered.
         self.m.ship("home/aaa/.ssh/authorized_keys", "k")
         self.m.put("home/aaa/.ssh/authorized_keys", "k")
         self.m.put("home/aaa/.ssh/id_private", "secret")
