@@ -16,15 +16,58 @@ POSTINST = PACKAGE / "DEBIAN/postinst"
 CONTROL = PACKAGE / "DEBIAN/control"
 I3_CONFIG = PACKAGE / "home/aaa/.local/share/a3-core/config/i3/config"
 
-#: Programs the i3 config runs, and the Debian package each comes from.
+#: Every program the i3 config starts or binds, and the Debian package it
+#: comes from. A program the config names but this map does not is a red test:
+#: say where it comes from before shipping it.
 #: unclutter's --hide-on-touch and --exclude-root are unclutter-xfixes' options.
-I3_PROGRAMS = {
+PROGRAM_PACKAGES = {
     "dex": "dex",
     "unclutter": "unclutter-xfixes",
     "maim": "maim",
     "xclip": "xclip",
     "brightnessctl": "brightnessctl",
+    "i3-sensible-terminal": "i3",
+    "i3-nagbar": "i3",
+    "i3-msg": "i3",
+    "dmenu_run": "suckless-tools",
+    "xset": "x11-xserver-utils",
+    "xrandr": "x11-xserver-utils",
+    "xss-lock": "xss-lock",
+    "i3lock": "i3lock",
+    "pactl": "pulseaudio-utils",
+    "nm-applet": "network-manager-gnome",
+    "firefox": "firefox-esr",
 }
+
+#: Packages a fresh install brings without naming them in Depends: the
+#: installer runs apt-get without --no-install-recommends.
+RECOMMENDED_BY_A_DEPENDS = {
+    "suckless-tools": "i3 recommends it",
+}
+
+#: Gaps known and left open on purpose, each with the reason. Keep it short.
+KNOWN_GAPS = {
+    "firefox": "$mod+b; no browser in Depends, waiting on the maintainer",
+}
+
+
+def i3_programs():
+    """The first word of every command an exec line or an exec binding runs,
+    split at pipes, && and ;, with i3's --no-startup-id and quotes removed."""
+    programs = set()
+    for line in I3_CONFIG.read_text().splitlines():
+        match = re.match(r"\s*(?:bindsym\s+\S+\s+)?exec(?:_always)?\s+(.*)", line)
+        if match is None:
+            continue
+        command = match.group(1).replace("--no-startup-id", "").strip()
+        command = command.strip("\"").replace("'", " ")
+        for part in re.split(r"\|\||&&|\||;|\s--\s", command):
+            words = part.split()
+            while words and (words[0].startswith("$") or words[0] in ("-t", "-m", "-B")):
+                words = words[1:]
+            if words and not words[0].startswith("-"):
+                programs.add(Path(words[0]).name)
+    return programs
 
 
 def depends():
@@ -42,14 +85,32 @@ def function(name):
 
 
 class TheI3ToolsAreInstalled(unittest.TestCase):
-    def test_every_named_program_is_still_in_the_config(self):
-        config = I3_CONFIG.read_text()
-        for program in I3_PROGRAMS:
-            self.assertRegex(config, rf"\b{program}\b", program)
+    """Whatever the i3 config runs, a fresh install brings (a3-core#65):
+    nm-applet, xss-lock with i3lock and pactl failed silently every login."""
 
-    def test_their_packages_are_in_depends(self):
-        missing = {p: pkg for p, pkg in I3_PROGRAMS.items() if pkg not in depends()}
+    def test_every_program_says_where_it_comes_from(self):
+        unknown = i3_programs() - PROGRAM_PACKAGES.keys()
+        self.assertEqual(set(), unknown)
+
+    def test_every_program_is_installed_with_the_package(self):
+        installed = depends() | RECOMMENDED_BY_A_DEPENDS.keys()
+        missing = {program: PROGRAM_PACKAGES.get(program) for program in i3_programs()
+                   if PROGRAM_PACKAGES.get(program) not in installed
+                   and program not in KNOWN_GAPS}
         self.assertEqual({}, missing)
+
+    def test_no_program_needs_a_conflicting_package(self):
+        blocked = {program: PROGRAM_PACKAGES.get(program) for program in i3_programs()
+                   if PROGRAM_PACKAGES.get(program) in conflicts()}
+        self.assertEqual({}, blocked)
+
+    def test_the_parser_sees_commands_after_a_pipe(self):
+        self.assertIn("xclip", i3_programs())
+
+    def test_a_known_gap_is_still_a_gap(self):
+        for program in KNOWN_GAPS:
+            self.assertIn(program, i3_programs(), f"{program} is gone: drop it from KNOWN_GAPS")
+            self.assertNotIn(PROGRAM_PACKAGES[program], depends())
 
 
 def conflicts():
