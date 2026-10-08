@@ -77,4 +77,11 @@ apt install -y a3-core
 echo "Installation complete."
 
 echo "Configure Network."
-dpkg-reconfigure a3-core
+# Without the noninteractive frontend the apt steps above need: under it,
+# debconf takes the stored answers and asks nothing. Run as `| sudo bash`,
+# stdin is this script, so the questions read from the terminal (a3-core#62).
+if { : </dev/tty; } 2>/dev/null; then
+  env -u DEBIAN_FRONTEND dpkg-reconfigure a3-core </dev/tty
+else
+  echo "No terminal to ask on: run 'sudo dpkg-reconfigure a3-core' by hand."
+fi
