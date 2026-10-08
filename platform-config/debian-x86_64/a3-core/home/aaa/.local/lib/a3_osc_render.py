@@ -6,6 +6,7 @@ a3-osc.json, so the file stays the only place a port or an IP is written.
 """
 
 import json
+import os
 import shlex
 from pathlib import Path
 
@@ -79,9 +80,17 @@ def write_user_files(truth, home):
     env_file = home / ENV_FILE
     env_file.parent.mkdir(parents=True, exist_ok=True)
     env_file.write_text(zita_env(truth))
-    analyzer_conf = home / ANALYZER_CONF
-    analyzer_conf.parent.mkdir(parents=True, exist_ok=True)
-    analyzer_conf.write_text(analyzer_block(truth))
+    replace_whole(home / ANALYZER_CONF, analyzer_block(truth))
+
+
+def replace_whole(path, text):
+    """Swap the new file in whole: Core rewrites this at every start while
+    the analyzer may be reading it. The temporary name is hidden, which the
+    analyzer's conf.d skips."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(text)
+    os.replace(temporary, path)
 
 
 def network_file(truth):

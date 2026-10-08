@@ -183,6 +183,26 @@ class TheAnalyzerGetsAFileOfItsOwn(unittest.TestCase):
             a3_osc_render.write_user_files(TRUTH, home)
             self.assertEqual(conf.read_text(), once)
 
+    def test_a_reader_never_sees_an_empty_file(self):
+        """Core rewrites the file at every start while the analyzer may be
+        reading it: the new file is swapped in whole, never emptied first."""
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            conf = home / a3_osc_render.ANALYZER_CONF
+            conf.parent.mkdir(parents=True)
+            conf.write_text("OLD=1\n")
+            with conf.open() as reader:
+                a3_osc_render.write_user_files(TRUTH, home)
+                self.assertEqual(reader.read(), "OLD=1\n")
+            self.assertEqual(conf.read_text(), a3_osc_render.analyzer_block(TRUTH))
+
+    def test_no_temporary_file_is_left_for_the_analyzer_to_read(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            a3_osc_render.write_user_files(TRUTH, home)
+            names = sorted(p.name for p in (home / a3_osc_render.ANALYZER_CONF).parent.iterdir())
+            self.assertEqual(names, ["50-a3-osc.env"])
+
     def test_the_old_checkout_env_is_left_alone(self):
         """The package never reads build/.env; the rig's copy is carried over
         by hand (smoke-test/beat-analyzer-deb.md), not rewritten here."""
