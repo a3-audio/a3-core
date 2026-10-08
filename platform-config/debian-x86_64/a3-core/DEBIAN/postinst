@@ -529,7 +529,7 @@ ssh_key_step "${USER_HOME}/.ssh"
 
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.local" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.config" || true
-chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.ssh" || true
+[ -d "${USER_HOME}/.ssh" ] && chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.ssh" || true
 
 # zita's arguments and the beat-analyzer's targets, from a3-osc.json. A failure
 # is said out loud: the zita units would start without their addresses.
@@ -551,22 +551,29 @@ systemctl enable x11vnc.service || true
 systemctl restart x11vnc.service || true
 systemctl enable set_irq_prio.service || true
 
+# Install REAPER and the plugins as aaa, in aaa's user manager, and wait for
+# it. Linger only starts that manager -- asynchronously -- and taking linger
+# away stops it when aaa has no session: the download died two seconds in and
+# was never started again, since apt doesn't rerun the postinst for the same
+# version (a3-core#70). So the manager is started and waited for, the install
+# runs to its end, and only then is linger taken away -- unless it was on
+# before; the rig starts its services from the autologin session, not linger.
+run_user_install() {
+  linger_before="$(loginctl show-user "$APPUSER" -p Linger --value 2>/dev/null || echo no)"
+  loginctl enable-linger "$APPUSER" || true
+  systemctl start "user@${UID}.service" || true
+  if user_systemctl daemon-reload; then
+    echo "a3-core: installing REAPER and the plugins as $APPUSER (this downloads)..."
+    user_systemctl start --wait a3-user-install.service \
+      || echo "a3-core: the user install failed -- see 'journalctl --user -u a3-user-install' as $APPUSER" >&2
+  else
+    echo "a3-core: no user manager for $APPUSER -- REAPER not installed; run 'dpkg-reconfigure a3-core'" >&2
+  fi
+  [ "x$linger_before" = "xyes" ] || loginctl disable-linger "$APPUSER" || true
+}
+
 echo "enable userservices..."
-# allow user services to run without an interactive session
-loginctl enable-linger "${APPUSER}" || true
-
-UID=$(id -u "$APPUSER")
-XDG_RUNTIME_DIR="/run/user/$UID"
-DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
-
-if sudo -u "$APPUSER" env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" systemctl --user daemon-reload; then
-   # sudo -u "$APPUSER" env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" systemctl --user enable a3-main.service || true
-    sudo -u "$APPUSER" env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" systemctl --user start a3-user-install.service || true
-else
-    echo "Failed to reload user daemon for $APPUSER"
-fi
-
-loginctl disable-linger "${APPUSER}" || true
+run_user_install
 
 echo "update grub..."
 update-grub || true
