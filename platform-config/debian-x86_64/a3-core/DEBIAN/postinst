@@ -13,6 +13,18 @@ APPUSER="aaa"
 UID=$(id -u $APPUSER)
 USER_HOME=$(getent passwd "$APPUSER" | cut -d: -f6 || echo "/home/$APPUSER")
 
+# limits.d/audio.conf gives @audio realtime priority; on the rig aaa was put in
+# the group by hand, on a fresh machine nobody did (a3-core#65). Takes effect
+# at the next login.
+join_audio_group() {
+  case " $(id -nG "$1") " in
+    *" audio "*) return 0 ;;
+  esac
+  usermod -aG audio "$1"
+}
+
+join_audio_group "$APPUSER"
+
 # Take an interface out of ifupdown's hands, so systemd-networkd is the only
 # thing that configures it. With both, /etc/network/interfaces' DHCP stanza and
 # a3.network's static address claimed the same interface, and the address the

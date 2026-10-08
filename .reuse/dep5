@@ -39,8 +39,3 @@ License: CC-BY-SA-4.0
 Files: .github/*
 Copyright: 2026 A3 Audio <contact@a3-audio.com>
 License: CC0-1.0
-
-Files: platform-config/debian-x86_64/a3-core/etc/rtirq.conf
-Copyright: 2004-2015 rncbc aka Rui Nuno Capela
-License: GPL-2.0-or-later
-Comment: Third-party configuration file from rtirq (https://github.com/rncbc/rtirq), shipped in the A3 Core package.
