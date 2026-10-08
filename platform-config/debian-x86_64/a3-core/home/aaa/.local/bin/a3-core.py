@@ -65,6 +65,7 @@ from a3_core_motion import MotionTarget, is_this_machine   # noqa: E402
 from a3_core_return import (ReturnTarget, point_zita_at,   # noqa: E402
                             start_at_radla)
 from a3_core_vu_relay import relay as relay_vu   # noqa: E402
+from a3_core_ahead import ahead_arguments   # noqa: E402
 from a3_core_latest import position_key, serve   # noqa: E402
 from a3_core_announce import (EVERY_SECONDS, announce, announcement,   # noqa: E402
                               broadcast_address)
@@ -1049,7 +1050,8 @@ def osc_handler_aux_return(client_address: Tuple[str, int], address: str,
 
 def osc_handler_stemdeck(client_address: Tuple[str, int], address: str,
                          *osc_arguments: List[Any]) -> None:
-    """StemDeck's report of one stem's bus switches (spec stemdeck-remote)."""
+    """StemDeck's report of one stem's bus switches (spec stemdeck-remote),
+    and its preview of the music (spec fpv-pilots, phase A)."""
     found = known_address(client_address, address, osc_arguments)
     if found is None:
         return
@@ -1057,12 +1059,27 @@ def osc_handler_stemdeck(client_address: Tuple[str, int], address: str,
     value = osc_arguments[0] if osc_arguments else None
     origin = peer_name(client_address[0], PEER_HOSTS)
     traffic.seen(IN, address, value, origin)
+    if key == "stemdeck.ahead":
+        forward_ahead(address, osc_arguments, origin)
+        return
     if key != "stemdeck.buses" or not _stems.report(
             pair_of(fields["deck"], fields["stem"]), value):
         traffic.unknown(address, value, origin)
         return
     _tidy_settle.poke(time.monotonic())
     speak_stems()
+
+
+def forward_ahead(address, osc_arguments, origin):
+    """StemDeck's preview, on to the Motion Core follows -- unchanged, and
+    never noted: a3_core_ahead says why it is not replayed. Not the
+    one-number relay path: it drops a repeat and writes the evening, and a
+    preview repeats every bar on purpose."""
+    arguments = ahead_arguments(osc_arguments)
+    if arguments is None:
+        traffic.unknown(address, list(osc_arguments), origin)
+        return
+    osc_a3motion.send_message(address, arguments)
 
 
 def on_tick():
