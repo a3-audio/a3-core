@@ -13,6 +13,36 @@ APPUSER="aaa"
 UID=$(id -u $APPUSER)
 USER_HOME=$(getent passwd "$APPUSER" | cut -d: -f6 || echo "/home/$APPUSER")
 
+# Put back the authorized_keys the preinst kept aside, when the unpack took it
+# (older versions shipped the file, a3-core#66). A file that is there is the
+# machine's and stays; the copy goes either way. Never through a symlink: root
+# would write wherever aaa pointed it. Runs before anything that can fail, so
+# a failed upgrade never leaves a machine run over ssh without its keys.
+KEPT_KEYS=/var/lib/a3-core/authorized_keys.keep
+
+restore_authorized_keys() {
+  ssh_dir="$1"
+  kept="$2"
+  owner="$3"
+  [ -f "$kept" ] || return 0
+  if [ -L "$ssh_dir" ] || [ -L "$ssh_dir/authorized_keys" ]; then
+    echo "a3-core: $ssh_dir is behind a symlink; the old keys stay in $kept" >&2
+    return 0
+  fi
+  if [ -e "$ssh_dir/authorized_keys" ]; then
+    rm -f "$kept"
+    return 0
+  fi
+  if [ ! -d "$ssh_dir" ]; then
+    mkdir -p "$ssh_dir"
+    chmod 700 "$ssh_dir"
+    chown "$owner" "$ssh_dir"
+  fi
+  mv "$kept" "$ssh_dir/authorized_keys"
+}
+
+restore_authorized_keys "${USER_HOME}/.ssh" "$KEPT_KEYS" "$APPUSER"
+
 # Take an interface out of ifupdown's hands, so systemd-networkd is the only
 # thing that configures it. With both, /etc/network/interfaces' DHCP stanza and
 # a3.network's static address claimed the same interface, and the address the
@@ -49,20 +79,6 @@ apply_headless_choice() {
   fi
 }
 
-# Put back the authorized_keys the preinst kept aside, when the unpack took it
-# (older versions shipped the file, a3-core#66). A file that is there is the
-# machine's and stays; the copy goes either way.
-restore_authorized_keys() {
-  ssh_dir="$1"
-  kept="$ssh_dir/authorized_keys.a3-core-keep"
-  [ -f "$kept" ] || return 0
-  if [ -e "$ssh_dir/authorized_keys" ]; then
-    rm -f "$kept"
-  else
-    mv "$kept" "$ssh_dir/authorized_keys"
-  fi
-}
-
 # One public key, given at install time (a3-core/ssh-key), appended to the
 # keys already there. Anything but a single public-key line is refused without
 # failing the install; options such as command="..." are left to the hand.
@@ -75,10 +91,16 @@ install_ssh_key() {
     echo "a3-core: the answer to a3-core/ssh-key is not a public key; no key added" >&2
     return 0
   fi
+  keys="$ssh_dir/authorized_keys"
+  if [ -L "$ssh_dir" ] || [ -L "$keys" ]; then
+    echo "a3-core: $keys is behind a symlink; no key added" >&2
+    return 0
+  fi
   mkdir -p "$ssh_dir"
   chmod 700 "$ssh_dir"
-  keys="$ssh_dir/authorized_keys"
-  if [ -f "$keys" ] && grep -qxF "$key" "$keys"; then
+  # The same key under another comment, or with options in front, is the same key.
+  body="$(printf '%s\n' "$key" | cut -d' ' -f2)"
+  if [ -f "$keys" ] && awk -v body="$body" '{ for (i = 1; i <= NF; i++) if ($i == body) found = 1 } END { exit !found }' "$keys"; then
     return 0
   fi
   if [ -s "$keys" ] && [ -n "$(tail -c1 "$keys")" ]; then
@@ -491,7 +513,6 @@ install_shipped_config "$SHIPPED_CONFIG" "${USER_HOME}/.config" \
   "${USER_HOME}/.config/a3-replaced/$(date +%Y-%m-%d_%H%M%S)" "$REPLACE_CONFIG"
 echo "a3-core: nothing restarted; restart a3-main to run the new config"
 
-restore_authorized_keys "${USER_HOME}/.ssh"
 ssh_key_step "${USER_HOME}/.ssh"
 
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.local" || true

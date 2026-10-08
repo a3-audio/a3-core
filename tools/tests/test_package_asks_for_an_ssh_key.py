@@ -109,6 +109,34 @@ class InstallingTheKey(unittest.TestCase):
         self.install(KEY)
         self.assertEqual(KEY + "\n", self.keys.read_text())
 
+    def test_the_same_key_with_another_comment_is_one_line(self):
+        self.install(KEY)
+        self.install(KEY.rsplit(" ", 1)[0] + " renamed@desk")
+        self.assertEqual(KEY + "\n", self.keys.read_text())
+
+    def test_a_key_already_there_with_options_is_not_added_again(self):
+        self.ssh.mkdir()
+        self.keys.write_text(f'from="192.168.8.0/24" {KEY}\n')
+        self.install(KEY)
+        self.assertEqual(f'from="192.168.8.0/24" {KEY}\n', self.keys.read_text())
+
+    def test_a_symlinked_key_file_is_not_written_through(self):
+        self.ssh.mkdir()
+        target = Path(self.tmp.name) / "elsewhere"
+        target.write_text("x\n")
+        self.keys.symlink_to(target)
+        result = self.install(KEY)
+        self.assertEqual("x\n", target.read_text())
+        self.assertIn("symlink", result.stderr)
+
+    def test_a_symlinked_folder_is_not_written_through(self):
+        elsewhere = Path(self.tmp.name) / "elsewhere"
+        elsewhere.mkdir()
+        self.ssh.symlink_to(elsewhere)
+        result = self.install(KEY)
+        self.assertEqual([], list(elsewhere.iterdir()))
+        self.assertIn("symlink", result.stderr)
+
     def test_surrounding_blanks_are_ignored(self):
         self.install(f"  {KEY}  ")
         self.assertEqual(KEY + "\n", self.keys.read_text())
