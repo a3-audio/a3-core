@@ -4,3 +4,4 @@
 /etc/systemd/system/set_irq_prio.service
 /etc/systemd/system/vnc-display.service
 /etc/systemd/system/x11vnc.service
+remove-on-upgrade /etc/rtirq.conf

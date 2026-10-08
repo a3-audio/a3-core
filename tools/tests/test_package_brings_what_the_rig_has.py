@@ -63,8 +63,16 @@ class NothingNeedsWhatCannotBeInstalled(unittest.TestCase):
 
     def test_no_rtirq_config_is_shipped(self):
         self.assertFalse((PACKAGE / "etc/rtirq.conf").exists())
-        self.assertNotIn("/etc/rtirq.conf",
-                         (PACKAGE / "DEBIAN/conffiles").read_text().split())
+        entries = [line.split() for line in
+                   (PACKAGE / "DEBIAN/conffiles").read_text().splitlines()]
+        self.assertNotIn(["/etc/rtirq.conf"], entries)
+
+    def test_an_upgrade_takes_the_old_rtirq_config_away(self):
+        """dpkg keeps a conffile the new version no longer ships; the flag
+        removes it on the upgrade, or keeps it as .dpkg-bak if it was edited."""
+        entries = [line.split() for line in
+                   (PACKAGE / "DEBIAN/conffiles").read_text().splitlines()]
+        self.assertIn(["remove-on-upgrade", "/etc/rtirq.conf"], entries)
 
     def test_the_i3_config_starts_no_nm_applet(self):
         self.assertIn("network-manager", conflicts())
