@@ -63,6 +63,41 @@ restore_authorized_keys() {
   fi
 }
 
+# One public key, given at install time (a3-core/ssh-key), appended to the
+# keys already there. Anything but a single public-key line is refused without
+# failing the install; options such as command="..." are left to the hand.
+install_ssh_key() {
+  ssh_dir="$1"
+  key="$(printf '%s' "$2" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  [ -n "$key" ] || return 0
+  if [ "$(printf '%s\n' "$key" | wc -l)" -ne 1 ] || ! printf '%s\n' "$key" | grep -Eq \
+      '^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)|sk-ssh-ed25519@openssh\.com|sk-ecdsa-sha2-nistp256@openssh\.com) AAAA[A-Za-z0-9+/]+={0,3}( .*)?$'; then
+    echo "a3-core: the answer to a3-core/ssh-key is not a public key; no key added" >&2
+    return 0
+  fi
+  mkdir -p "$ssh_dir"
+  chmod 700 "$ssh_dir"
+  keys="$ssh_dir/authorized_keys"
+  if [ -f "$keys" ] && grep -qxF "$key" "$keys"; then
+    return 0
+  fi
+  if [ -s "$keys" ] && [ -n "$(tail -c1 "$keys")" ]; then
+    echo >> "$keys"
+  fi
+  printf '%s\n' "$key" >> "$keys"
+  chmod 600 "$keys"
+}
+
+# Ask for the key, add it, then forget the answer: an upgrade must not put
+# back a key somebody has since removed by hand.
+ssh_key_step() {
+  db_input high a3-core/ssh-key || true
+  db_go || true
+  db_get a3-core/ssh-key
+  install_ssh_key "$1" "$RET"
+  db_set a3-core/ssh-key "" || true
+}
+
 # The parts of the shipped config the replace question offers, by the top
 # folder a file sits in. Parts, not files: a3nuc2 alone had eleven files that
 # differed, and with REAPER's presets a list of files runs past a screen.
@@ -457,6 +492,7 @@ install_shipped_config "$SHIPPED_CONFIG" "${USER_HOME}/.config" \
 echo "a3-core: nothing restarted; restart a3-main to run the new config"
 
 restore_authorized_keys "${USER_HOME}/.ssh"
+ssh_key_step "${USER_HOME}/.ssh"
 
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.local" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.config" || true
