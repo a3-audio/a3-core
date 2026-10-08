@@ -35,7 +35,9 @@ from a3_osc import TruthError
 #: Verkehr. Die Regel steht damit in der Wahrheit und nicht in einer Liste von
 #: Präfixen, die beim Umbenennen von /fx nach /filter (2026-09-30) den Filter
 #: still verloren und den Kanalschalter als Wert zurückgespielt hätte.
-NOT_REPLAYED = frozenset(("channel.3d",))
+#: A music preview is about the next bars: replayed, it would tell Motion
+#: about bars long gone (a3_core_ahead).
+NOT_REPLAYED = frozenset(("channel.3d", "stemdeck.ahead"))
 
 #: Addresses renamed since an evening may have been written: FX send / FX
 #: return became aux send / aux return on 2026-10-01, wire included. An old

@@ -92,6 +92,12 @@ class WhatIsPlayedBack(unittest.TestCase):
                               "/channel/1/elevation": 10.0})
         self.assertEqual(played, {})
 
+    def test_a_music_preview_is_never_played_back(self):
+        # It is about the next bars; replayed at start-up it would tell Motion
+        # about bars long gone (a3_core_ahead).
+        played = self.replay({"/stemdeck/ahead": "drop"})
+        self.assertEqual(played, {})
+
     def test_an_address_core_does_not_set_is_left_alone(self):
         played = self.replay({"/vu/3": 0.2, "/beat": 1, "/state/recall": 1})
         self.assertEqual(played, {})
