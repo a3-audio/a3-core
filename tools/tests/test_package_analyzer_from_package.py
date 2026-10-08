@@ -94,16 +94,19 @@ class TheOldUnitIsRetired(unittest.TestCase):
         self.config, self.backup = root / "config", root / "backup"
         self.unit = self.config / "systemd/user/beat-analyzer.service"
         self.unit.parent.mkdir(parents=True)
+        self.package_unit = root / "usr-lib/beat-analyzer.service"
+        self.package_unit.parent.mkdir(parents=True)
+        self.package_unit.write_text("[Service]\nExecStart=/usr/bin/beat-analyzer\n")
 
     def tearDown(self):
         self.tmp.cleanup()
 
-    def retire(self):
+    def retire(self, check=True):
         return subprocess.run(
             ["sh", "-c", f"set -e\n{postinst_function('retire_checkout_analyzer_unit')}\n"
-             'retire_checkout_analyzer_unit "$1" "$2"', "sh",
-             str(self.config), str(self.backup)],
-            capture_output=True, text=True, check=True)
+             'retire_checkout_analyzer_unit "$1" "$2" "$3"\necho went-on', "sh",
+             str(self.config), str(self.backup), str(self.package_unit)],
+            capture_output=True, text=True, check=check)
 
     def test_the_checkout_unit_goes_to_the_backup(self):
         self.unit.write_text(OLD_UNIT)
@@ -119,10 +122,32 @@ class TheOldUnitIsRetired(unittest.TestCase):
         self.assertFalse(self.backup.exists())
         self.assertIn("kept", done.stdout)
 
+    def test_without_the_package_the_checkout_unit_stays(self):
+        """Without the package's unit, moving the old one away leaves a3-main
+        wanting a unit that no longer exists: no /beat, no meters."""
+        self.unit.write_text(OLD_UNIT)
+        self.package_unit.unlink()
+        done = self.retire()
+        self.assertEqual(self.unit.read_text(), OLD_UNIT)
+        self.assertFalse(self.backup.exists())
+        self.assertIn("not installed", done.stdout)
+
+    def test_the_postinst_looks_for_the_package_unit_where_it_is_installed(self):
+        self.assertIn("/usr/lib/systemd/user/beat-analyzer.service", POSTINST.read_text())
+
+    def test_a_failed_move_warns_and_the_install_goes_on(self):
+        self.unit.write_text(OLD_UNIT)
+        self.backup.write_text("a file where the backup folder should be")
+        done = self.retire(check=False)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("went-on", done.stdout)
+        self.assertTrue(self.unit.exists())
+        self.assertIn("could not", done.stderr)
+
     def test_no_unit_is_nothing_to_do(self):
         done = self.retire()
         self.assertFalse(self.backup.exists())
-        self.assertEqual(done.stdout, "")
+        self.assertEqual(done.stdout, "went-on\n")
 
 
 if __name__ == "__main__":
