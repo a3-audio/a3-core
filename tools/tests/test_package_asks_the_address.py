@@ -65,7 +65,7 @@ class TheAddressIsAskedEveryTime(unittest.TestCase):
         self.assertEqual("go", self.calls()[-1])
 
     def test_the_postinst_uses_it(self):
-        self.assertRegex(POSTINST.read_text(), r"\n\s+ask_address_questions\n")
+        self.assertRegex(POSTINST.read_text(), r"! ask_address_questions; then\n")
 
 
 class ARetiredAnswerIsNotOffered(unittest.TestCase):

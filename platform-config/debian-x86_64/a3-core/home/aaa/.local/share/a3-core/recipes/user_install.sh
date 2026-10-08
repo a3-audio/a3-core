@@ -141,40 +141,9 @@ if wanted /home/aaa/.local/clap/airwindows.clap Airwindows; then
     echo "done: /home/aaa/.local/clap/airwindows.clap"
 fi
 
-#### Install Beat Analyzer
+#### Beat Analyzer
 
-echo "Installing Beat Analyzer..."
-# The workspace checkout, not a clone of our own.
-#
-# This used to clone https://github.com/rafjagger/beat-analyzer into
-# /home/aaa and build that. beat-analyzer.service has pointed at the
-# workspace copy for as long as anyone can remember, so the installer was
-# building something nothing ran -- two checkouts, one of them with the
-# tuned build/.env in it and neither aware of the other.
-#
-# The workspace is where it comes from: a3-system carries beat-analyzer as a
-# submodule, so a machine set up by cloning that umbrella has it already.
-ANALYZER=/home/aaa/a3-system/beat-analyzer
-
-if [ ! -d "$ANALYZER/.git" ]; then
-    # Not an error. The workspace is set up by hand, and an install that
-    # happens first should say so rather than invent a second checkout.
-    echo "SKIP: no beat-analyzer at $ANALYZER."
-    echo "      Set up the a3-system workspace first (it carries beat-analyzer"
-    echo "      as a submodule), then re-run a3-user-install.service."
-else
-    if wanted "$ANALYZER/build/beat-analyzer" beat-analyzer; then
-        (cd "$ANALYZER" && ./build.sh)
-    fi
-
-    # -n, because build/.env is configuration somebody edited: ports, the
-    # clock mode, the JACK names. Copying the example over it on every update
-    # is the same fault this package's conffiles list exists to prevent.
-    #
-    # It matters more than it looks: with no .env at all the analyzer falls
-    # back to a single target on 127.0.0.1 and reaches nothing off the
-    # machine, without saying so.
-    mkdir -p "$ANALYZER/build"
-    cp -n "$ANALYZER/.env.example" "$ANALYZER/build/.env" || true
-fi
+# Not built here any more: it is its own package, beat-analyzer, which a3-core
+# recommends (2026-10-08). Building it here, inside the checkout its unit ran
+# from, took the service down on every rebuild.
 

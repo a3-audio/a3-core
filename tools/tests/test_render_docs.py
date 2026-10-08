@@ -49,6 +49,12 @@ class TheTables(unittest.TestCase):
         self.assertIn("| `/vu/66` | in4_post_R |", table)
         self.assertNotIn("`/vu/0`", table)
 
+    def test_the_meter_ballistics(self):
+        table = render_docs.meters_table(TRUTH)
+        self.assertIn("| `attack_ms` | 0 |", table)
+        self.assertIn("| `release_db_per_second` | 20 |", table)
+        self.assertIn("| `peak_hold_seconds` | 1.5 |", table)
+
     def test_every_listener_is_a_row(self):
         table = render_docs.ports_table(TRUTH)
         for listener in TRUTH.listeners():

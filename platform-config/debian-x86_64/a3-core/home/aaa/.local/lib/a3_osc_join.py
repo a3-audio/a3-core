@@ -11,6 +11,11 @@ import json
 
 NETWORK_KEYS = ("hosts", "network")
 
+#: Blocks the maintainer's file may carry beside the network, joined key by
+#: key the same way: the meter ballistics, tuned on the rig without a package
+#: (decided 2026-10-07). a3_osc checks the values, not this pure join.
+LOCAL_OPTIONAL_KEYS = ("meters",)
+
 
 def canonical(data):
     """The bytes every device hashes alike: sorted keys, no spaces, UTF-8."""
@@ -39,7 +44,8 @@ def read_network(path):
     for key in NETWORK_KEYS:
         if not isinstance(data.get(key), dict):
             return None, f"{path} has no '{key}' object"
-    return {key: data[key] for key in NETWORK_KEYS}, None
+    keys = NETWORK_KEYS + tuple(k for k in LOCAL_OPTIONAL_KEYS if k in data)
+    return {key: data[key] for key in keys}, None
 
 
 def join(contract, network):
@@ -49,6 +55,15 @@ def join(contract, network):
     on a missing host."""
     joined = dict(contract)
     if network is not None:
-        for key in NETWORK_KEYS:
-            joined[key] = {**contract.get(key, {}), **network[key]}
+        for key in NETWORK_KEYS + LOCAL_OPTIONAL_KEYS:
+            if key in network:
+                joined[key] = _key_by_key(contract.get(key, {}), network[key])
     return joined
+
+
+def _key_by_key(packaged, local):
+    """`local` over `packaged`; a local value that is not an object is kept
+    whole, so the reader refuses it with a reason instead of this hiding it."""
+    if not isinstance(local, dict):
+        return local
+    return {**packaged, **local}

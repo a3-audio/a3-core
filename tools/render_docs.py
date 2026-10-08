@@ -11,6 +11,7 @@ stays the writers'.
   <!-- a3-osc:vu -->          the meters: /vu/N and what each measures
   <!-- a3-osc:ports -->        who listens where
   <!-- a3-osc:routes -->       who sends to which listener
+  <!-- a3-osc:meters -->       how every display moves a meter bar
 
 Usage: render_docs.py [A3_DOC_CHECKOUT]   (default: a3-doc beside a3-core)
 """
@@ -76,8 +77,16 @@ def routes_table(truth):
     return "\n".join(rows)
 
 
+def meters_table(truth):
+    """The meter ballistics, one row a number, in the truth's own words."""
+    rows = [_row(["Key", "Value"]), _row(["---"] * 2)]
+    for name, value in truth.meters()._asdict().items():
+        rows.append(_row([f"`{name}`", value]))
+    return "\n".join(rows)
+
+
 TABLES = {"addresses": addresses_table, "vu": vu_table, "ports": ports_table,
-          "routes": routes_table}
+          "routes": routes_table, "meters": meters_table}
 
 
 def put_tables(text, truth):

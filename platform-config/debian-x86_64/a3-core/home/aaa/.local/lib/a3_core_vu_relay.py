@@ -1,10 +1,10 @@
 """The analyzer's meters, passed on to a Motion that is not the rig's own.
 
 The beat-analyzer sends its /vu bundles straight to fixed targets from its
-build/.env -- the rig's Motion, the desk, radla. A Motion on another machine
+config -- the rig's Motion, the desk, radla. A Motion on another machine
 is none of them, so the analyzer also sends them to Core's vu-relay port
 (`OSC_VU_core=127.0.0.1:<core.vu-relay port>`, which Core renders into the
-analyzer's block from the truth's route at its start), and Core forwards
+analyzer's conf.d file from the truth's route at its start), and Core forwards
 each packet to the Motion it follows (spec devices-and-remote-access).
 
 Bytes in, the same bytes out: nothing is parsed, so nothing here can be

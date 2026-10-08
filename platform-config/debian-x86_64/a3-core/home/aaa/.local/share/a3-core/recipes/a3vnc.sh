@@ -15,4 +15,13 @@
 
 # © Copyright 2021 Raphael Eismann, Patric Schmitz
 
-/usr/bin/vncviewer QualityLevel 2 192.168.8.10
+# The Core's address and VNC's port come from a3-osc.json (a3-core#63).
+lib="$(dirname "${BASH_SOURCE[0]}")/../../../lib"
+read -r host port < <(A3_LIB="$lib" python3 -c '
+import os, sys
+sys.path.insert(0, os.environ["A3_LIB"])
+import a3_osc
+truth = a3_osc.load()
+print(truth.host("core"), truth.port("x11vnc", "vnc"))
+')
+vncviewer QualityLevel 2 "${host}::${port}"

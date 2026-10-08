@@ -81,8 +81,11 @@ class CoreSendsWhereThePortsPageSays(unittest.TestCase):
 
 
 class VncLooksForTheCoreWhereItIs(unittest.TestCase):
-    def test_the_viewer_points_at_the_core(self):
-        self.assertIn(CORE_ADDRESS.split("/")[0], VNC.read_text())
+    """The viewer reads the Core's address from the truth now (a3-core#63,
+    test_osc_render.VncIsRendered); here it may only not carry a stale one."""
+
+    def test_the_viewer_names_no_address_of_its_own(self):
+        self.assertNotIn(CORE_ADDRESS.split("/")[0], VNC.read_text())
 
 
 class OneManagerOwnsTheInterface(unittest.TestCase):

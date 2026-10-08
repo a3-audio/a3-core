@@ -5,10 +5,55 @@ set -e
 if [ -f /usr/share/debconf/confmodule ]; then
   . /usr/share/debconf/confmodule
 fi
+# ESC (back) in a dialog comes back from db_go as 30 instead of being taken as
+# the pre-filled answer. The network step leaves on it (a3-core#68).
+db_capb backup
 
 APPUSER="aaa"
 UID=$(id -u $APPUSER)
 USER_HOME=$(getent passwd "$APPUSER" | cut -d: -f6 || echo "/home/$APPUSER")
+
+# Put back the authorized_keys the preinst kept aside, when the unpack took it
+# (older versions shipped the file, a3-core#66). A file that is there is the
+# machine's and stays; the copy goes either way. Never through a symlink: root
+# would write wherever aaa pointed it. Runs before anything that can fail, so
+# a failed upgrade never leaves a machine run over ssh without its keys.
+KEPT_KEYS=/var/lib/a3-core/authorized_keys.keep
+
+restore_authorized_keys() {
+  ssh_dir="$1"
+  kept="$2"
+  owner="$3"
+  [ -f "$kept" ] || return 0
+  if [ -L "$ssh_dir" ] || [ -L "$ssh_dir/authorized_keys" ]; then
+    echo "a3-core: $ssh_dir is behind a symlink; the old keys stay in $kept" >&2
+    return 0
+  fi
+  if [ -e "$ssh_dir/authorized_keys" ]; then
+    rm -f "$kept"
+    return 0
+  fi
+  if [ ! -d "$ssh_dir" ]; then
+    mkdir -p "$ssh_dir"
+    chmod 700 "$ssh_dir"
+    chown "$owner" "$ssh_dir"
+  fi
+  mv "$kept" "$ssh_dir/authorized_keys"
+}
+
+restore_authorized_keys "${USER_HOME}/.ssh" "$KEPT_KEYS" "$APPUSER"
+
+# limits.d/audio.conf gives @audio realtime priority; on the rig aaa was put in
+# the group by hand, on a fresh machine nobody did (a3-core#65). Takes effect
+# at the next login.
+join_audio_group() {
+  case " $(id -nG "$1") " in
+    *" audio "*) return 0 ;;
+  esac
+  usermod -aG audio "$1"
+}
+
+join_audio_group "$APPUSER"
 
 # Take an interface out of ifupdown's hands, so systemd-networkd is the only
 # thing that configures it. With both, /etc/network/interfaces' DHCP stanza and
@@ -44,6 +89,47 @@ apply_headless_choice() {
   if [ -f "$target" ] && cmp -s "$shipped" "$target"; then
     mv -f "$target" "$target.off"
   fi
+}
+
+# One public key, given at install time (a3-core/ssh-key), appended to the
+# keys already there. Anything but a single public-key line is refused without
+# failing the install; options such as command="..." are left to the hand.
+install_ssh_key() {
+  ssh_dir="$1"
+  key="$(printf '%s' "$2" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  [ -n "$key" ] || return 0
+  if [ "$(printf '%s\n' "$key" | wc -l)" -ne 1 ] || ! printf '%s\n' "$key" | grep -Eq \
+      '^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)|sk-ssh-ed25519@openssh\.com|sk-ecdsa-sha2-nistp256@openssh\.com) AAAA[A-Za-z0-9+/]+={0,3}( .*)?$'; then
+    echo "a3-core: the answer to a3-core/ssh-key is not a public key; no key added" >&2
+    return 0
+  fi
+  keys="$ssh_dir/authorized_keys"
+  if [ -L "$ssh_dir" ] || [ -L "$keys" ]; then
+    echo "a3-core: $keys is behind a symlink; no key added" >&2
+    return 0
+  fi
+  mkdir -p "$ssh_dir"
+  chmod 700 "$ssh_dir"
+  # The same key under another comment, or with options in front, is the same key.
+  body="$(printf '%s\n' "$key" | cut -d' ' -f2)"
+  if [ -f "$keys" ] && awk -v body="$body" '{ for (i = 1; i <= NF; i++) if ($i == body) found = 1 } END { exit !found }' "$keys"; then
+    return 0
+  fi
+  if [ -s "$keys" ] && [ -n "$(tail -c1 "$keys")" ]; then
+    echo >> "$keys"
+  fi
+  printf '%s\n' "$key" >> "$keys"
+  chmod 600 "$keys"
+}
+
+# Ask for the key, add it, then forget the answer: an upgrade must not put
+# back a key somebody has since removed by hand.
+ssh_key_step() {
+  db_input high a3-core/ssh-key || true
+  db_go || true
+  db_get a3-core/ssh-key
+  install_ssh_key "$1" "$RET"
+  db_set a3-core/ssh-key "" || true
 }
 
 # The parts of the shipped config the replace question offers, by the top
@@ -124,6 +210,30 @@ install_shipped_config() {
   done
 }
 
+# beat-analyzer.service as a3-core shipped it before the analyzer had its own
+# package: it ran the checkout's build/, and in ~/.config it hides the
+# package's unit in /usr/lib. Moved to the backup, not deleted. A unit of that
+# name that does something else is somebody's own: kept, and named.
+retire_checkout_analyzer_unit() {
+  unit="$1/systemd/user/beat-analyzer.service"; backup="$2"
+  package_unit="${3:-/usr/lib/systemd/user/beat-analyzer.service}"
+  [ -f "$unit" ] || return 0
+  if ! grep -q '^ExecStart=.*/beat-analyzer/build/beat-analyzer' "$unit"; then
+    echo "a3-core: kept the local ~/.config/systemd/user/beat-analyzer.service -- it hides the beat-analyzer package's unit"
+    return 0
+  fi
+  if [ ! -f "$package_unit" ]; then
+    echo "a3-core: kept ~/.config/systemd/user/beat-analyzer.service (it runs the checkout) -- the beat-analyzer package is not installed"
+    return 0
+  fi
+  if mkdir -p "$backup/systemd/user" 2>/dev/null \
+     && mv "$unit" "$backup/systemd/user/beat-analyzer.service"; then
+    echo "a3-core: moved ~/.config/systemd/user/beat-analyzer.service (it ran the checkout) to $backup"
+  else
+    echo "a3-core: could not move ~/.config/systemd/user/beat-analyzer.service -- it still hides the package's unit" >&2
+  fi
+}
+
 # Ask which differing parts to replace. Every one is offered ticked: the old
 # answer, replacing nothing, is what left a3nuc2 on a six-month-old REAPER,
 # and nothing replaced is lost (decided 2026-10-04). Asked only when something
@@ -160,17 +270,6 @@ ask_replace_question() {
   db_fset a3-core/replace-config seen false || true
 }
 
-# REAPER's service saves the running project over the template when it stops
-# (-saveas in a3-reaper.service). A template copied in while REAPER runs is
-# undone by the next stop. So when the template changes, a running REAPER is
-# stopped first -- its save lands in the old file, which then goes to the
-# backup -- and started again on the new one. An unchanged template leaves
-# REAPER alone (a3-core#55: no restarts on the live rig without a reason).
-reaper_template_changes() {
-  ! cmp -s "$1/REAPER/ProjectTemplates/a3-reaper.RPP" \
-           "$2/REAPER/ProjectTemplates/a3-reaper.RPP"
-}
-
 # Ask for the address, gateway and DNS on every install and upgrade, pre-filled
 # with what is stored -- Enter keeps it. They ran at `medium`, which Debian does
 # not show by default, and an answered question is never asked again: the
@@ -198,7 +297,7 @@ ask_address_questions() {
     db_input high "a3-core/$question" || true
   done
   db_input medium a3-core/interface || true
-  db_go || true
+  db_go || return 1
 }
 
 # The other wired socket on this machine, to offer as the bridge's second
@@ -230,12 +329,27 @@ write_network_config() {
   dir="$1"; iface="$2"; with="$3"; addr="$4"; gateway="$5"; dns="$6"
   mkdir -p "$dir"
 
+  # Only a unit whose content changes is written, and the one it replaces --
+  # or removes -- is kept beside it as <name>.bak-<time>, a name networkd does
+  # not read: a wrong write can be undone (a3-core#68).
+  stamp="$(date +%Y%m%d-%H%M%S)"
   put_unit () {
     tmp="$(mktemp "$1.XXXXXX")"
     printf '%s\n' "$2" > "$tmp"
+    if cmp -s "$tmp" "$1"; then
+      rm -f "$tmp"
+      return 0
+    fi
+    if [ -e "$1" ]; then
+      cp -p "$1" "$1.bak-$stamp"
+    fi
     chmod 644 "$tmp"
     chown root:root "$tmp" 2>/dev/null || true
     mv -f "$tmp" "$1"
+  }
+  retire_unit () {
+    [ -e "$1" ] || return 0
+    mv -f "$1" "$1.bak-$stamp"
   }
 
   if [ -n "$with" ]; then
@@ -258,7 +372,7 @@ Address=${addr}
 Gateway=${gateway}
 DNS=${dns}
 ConfigureWithoutCarrier=yes"
-    rm -f "$dir/a3.network"
+    retire_unit "$dir/a3.network"
   else
     put_unit "$dir/a3.network" "[Match]
 Name=${iface}
@@ -267,8 +381,9 @@ Name=${iface}
 Address=${addr}
 Gateway=${gateway}
 DNS=${dns}"
-    rm -f "$dir/10-a3-bridge.netdev" "$dir/20-a3-bridge-ports.network" \
-          "$dir/30-a3-bridge-address.network"
+    retire_unit "$dir/10-a3-bridge.netdev"
+    retire_unit "$dir/20-a3-bridge-ports.network"
+    retire_unit "$dir/30-a3-bridge-address.network"
   fi
 }
 
@@ -283,7 +398,20 @@ ask_bridge_question() {
   fi
   db_fset a3-core/bridge-with seen false || true
   db_input high a3-core/bridge-with || true
-  db_go || true
+  db_go || return 1
+}
+
+# Whether the a3-system installer answered the network questions. It preseeds
+# its answers together with a3-core/preseeded=true; the marker is cleared here
+# whatever it says, so it counts for this one install only. The `seen` flag is
+# no such sign: package 1.0.0 showed configure-network itself, and the seen
+# flag it left behind passed for the installer's answer -- an upgrade then
+# rewrote the network unasked (a3-core#68).
+installer_answered_network() {
+  db_get a3-core/preseeded || true
+  answered="$RET"
+  db_set a3-core/preseeded false || true
+  [ "x$answered" = "xtrue" ]
 }
 
 # Ask whether to configure network. High: at medium a fresh machine never saw
@@ -291,62 +419,99 @@ ask_bridge_question() {
 # no as the answer offered: debconf would offer the stored answer and skip a
 # seen question, and one "yes" walked every later install through the whole
 # network setup again (2026-10-01). Enter leaves the network as it is.
-#
-# Except when the a3-system installer has asked it already: it preseeds the
-# answer marked seen, and that is taken. Seen is cleared after either way, so
-# neither the installer's answer nor one shown here passes for the next.
-db_fget a3-core/configure-network seen || true
-if [ "x$RET" != "xtrue" ]; then
+# Fails on ESC.
+ask_configure_network() {
   db_reset a3-core/configure-network || true
   db_fset a3-core/configure-network seen false || true
   db_input high a3-core/configure-network || true
-  db_go || true
-fi
-db_get a3-core/configure-network
-CONFIGURE="$RET"
-db_fset a3-core/configure-network seen false || true
+  db_go || return 1
+}
 
+# The steps below need root or the user's real home; they are functions of
+# their own so the tests can stand in for them.
+#
 # The maintainer's network (hosts, Core's interface): created once from the
 # package's defaults, never overwritten -- it is his to edit (spec
-# truth-from-core). Before the network render below, which reads it.
-sudo -u "$APPUSER" -H "${USER_HOME}/.local/bin/a3-osc-render" network-file \
-  || echo "a3-core: could not create ~/.config/a3/network.json" >&2
+# truth-from-core).
+create_network_file() {
+  sudo -u "$APPUSER" -H "${USER_HOME}/.local/bin/a3-osc-render" network-file \
+    || echo "a3-core: could not create ~/.config/a3/network.json" >&2
+}
 
-if [ "x$CONFIGURE" = "xtrue" ]; then
-  # Check if user wants the standard/default network
-  db_get a3-core/install-default-network
-  INSTALL_DEFAULT="$RET"
+# INTERFACE, ADDR, GATEWAY, DNS and BRIDGE_WITH as shell assignments, from the
+# truth joined with the user's ~/.config/a3/network.json (not root's: this
+# runs as root).
+render_default_network() {
+  A3_NETWORK="${USER_HOME}/.config/a3/network.json" "${USER_HOME}/.local/bin/a3-osc-render" network
+}
 
-  if [ "x$INSTALL_DEFAULT" = "xtrue" ]; then
-    # INTERFACE, ADDR, GATEWAY, DNS and BRIDGE_WITH, from the truth joined
-    # with the user's ~/.config/a3/network.json (not root's: this runs as root).
-    eval "$(A3_NETWORK="${USER_HOME}/.config/a3/network.json" "${USER_HOME}/.local/bin/a3-osc-render" network)"
+# Enable systemd-networkd but do NOT start it: the files take effect at boot.
+enable_networkd() {
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl daemon-reload || true
+    systemctl enable systemd-networkd.service || true
+  fi
+}
+
+network_left() {
+  echo "a3-core: network setup left (ESC), the network is as it was"
+}
+
+# The network step: the installer's marked answers, or asked here. ESC in any
+# of its dialogs leaves it without writing anything -- no unit, no ifupdown
+# edit, no network.json -- and the rest of the postinst carries on.
+# network.json is created only for the default network, which is what it
+# describes: asked answers are not in it, and a network left alone gets none
+# (it used to be created on every install, naming eno1, a bridge with enp5s0
+# and .10 on machines that had none of them).
+network_step() {
+  netdir="$1"; interfaces="$2"
+  if installer_answered_network; then
+    preseeded=true
   else
-    ask_address_questions
+    preseeded=false
+    if ! ask_configure_network; then
+      network_left
+      return 0
+    fi
+  fi
+  db_get a3-core/configure-network
+  configure="$RET"
+  db_fset a3-core/configure-network seen false || true
+  [ "x$configure" = "xtrue" ] || return 0
 
+  db_get a3-core/install-default-network
+  if [ "x$RET" = "xtrue" ]; then
+    create_network_file
+    eval "$(render_default_network)"
+  else
+    if [ "$preseeded" = false ] && ! ask_address_questions; then
+      network_left
+      return 0
+    fi
     db_get a3-core/interface; INTERFACE="$RET"
     db_get a3-core/address; ADDR="$RET"
     db_get a3-core/gateway; GATEWAY="$RET"
     db_get a3-core/dns; DNS="$RET"
 
-    ask_bridge_question "$INTERFACE"
+    if [ "$preseeded" = false ] && ! ask_bridge_question "$INTERFACE"; then
+      network_left
+      return 0
+    fi
     db_get a3-core/bridge-with; BRIDGE_WITH="$RET"
   fi
 
-  write_network_config /etc/systemd/network "$INTERFACE" "$BRIDGE_WITH" \
+  write_network_config "$netdir" "$INTERFACE" "$BRIDGE_WITH" \
     "$ADDR" "$GATEWAY" "$DNS"
 
-  disable_ifupdown_for "$INTERFACE" /etc/network/interfaces
+  disable_ifupdown_for "$INTERFACE" "$interfaces"
   if [ -n "$BRIDGE_WITH" ]; then
-    disable_ifupdown_for "$BRIDGE_WITH" /etc/network/interfaces
+    disable_ifupdown_for "$BRIDGE_WITH" "$interfaces"
   fi
+  enable_networkd
+}
 
-  # Enable systemd-networkd unit but do NOT start it
-  if command -v systemctl >/dev/null 2>&1; then
-    systemctl daemon-reload || true
-    systemctl enable systemd-networkd.service || true
-  fi
-fi
+network_step /etc/systemd/network /etc/network/interfaces
 
 # Ask whether this Core runs without a monitor. High, not medium: Debian shows
 # high and above by default, and the wrong default here is a black screen.
@@ -376,27 +541,20 @@ if [ -n "$DIFFERING" ]; then
   ask_replace_question "$DIFFERING"
 fi
 
-# A missing template is installed whatever the answer; an existing one only
-# when REAPER was chosen. Only then can the template change under REAPER.
-reaper_paused=0
-if reaper_template_changes "$SHIPPED_CONFIG" "${USER_HOME}/.config" \
-    && { [ ! -e "${USER_HOME}/.config/REAPER/ProjectTemplates/a3-reaper.RPP" ] \
-         || in_list reaper "$REPLACE_CONFIG"; } \
-    && user_systemctl is-active --quiet a3-reaper.service 2>/dev/null; then
-  echo "a3-core: stopping REAPER to install the new template"
-  user_systemctl stop a3-reaper.service && reaper_paused=1
-fi
-install_shipped_config "$SHIPPED_CONFIG" "${USER_HOME}/.config" \
-  "${USER_HOME}/.config/a3-replaced/$(date +%Y-%m-%d_%H%M%S)" "$REPLACE_CONFIG"
-if [ "$reaper_paused" = 1 ]; then
-  chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.config/REAPER" || true
-  user_systemctl start a3-reaper.service || true
-fi
+# The postinst restarts nothing of the rig. A running REAPER keeps the old
+# template in memory until it is restarted, and its stop no longer saves
+# (a3-system#74), so the new file is not undone. The maintainer restarts
+# a3-main himself after an upgrade.
+CONFIG_BACKUP="${USER_HOME}/.config/a3-replaced/$(date +%Y-%m-%d_%H%M%S)"
+install_shipped_config "$SHIPPED_CONFIG" "${USER_HOME}/.config" "$CONFIG_BACKUP" "$REPLACE_CONFIG"
+retire_checkout_analyzer_unit "${USER_HOME}/.config" "$CONFIG_BACKUP"
+echo "a3-core: nothing restarted; restart a3-main to run the new config"
 
+ssh_key_step "${USER_HOME}/.ssh"
 
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.local" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.config" || true
-chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.ssh" || true
+[ -d "${USER_HOME}/.ssh" ] && chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.ssh" || true
 
 # zita's arguments and the beat-analyzer's targets, from a3-osc.json. A failure
 # is said out loud: the zita units would start without their addresses.
@@ -418,22 +576,29 @@ systemctl enable x11vnc.service || true
 systemctl restart x11vnc.service || true
 systemctl enable set_irq_prio.service || true
 
+# Install REAPER and the plugins as aaa, in aaa's user manager, and wait for
+# it. Linger only starts that manager -- asynchronously -- and taking linger
+# away stops it when aaa has no session: the download died two seconds in and
+# was never started again, since apt doesn't rerun the postinst for the same
+# version (a3-core#70). So the manager is started and waited for, the install
+# runs to its end, and only then is linger taken away -- unless it was on
+# before; the rig starts its services from the autologin session, not linger.
+run_user_install() {
+  linger_before="$(loginctl show-user "$APPUSER" -p Linger --value 2>/dev/null || echo no)"
+  loginctl enable-linger "$APPUSER" || true
+  systemctl start "user@${UID}.service" || true
+  if user_systemctl daemon-reload; then
+    echo "a3-core: installing REAPER and the plugins as $APPUSER (this downloads)..."
+    user_systemctl start --wait a3-user-install.service \
+      || echo "a3-core: the user install failed -- see 'journalctl --user -u a3-user-install' as $APPUSER" >&2
+  else
+    echo "a3-core: no user manager for $APPUSER -- REAPER not installed; run 'dpkg-reconfigure a3-core'" >&2
+  fi
+  [ "x$linger_before" = "xyes" ] || loginctl disable-linger "$APPUSER" || true
+}
+
 echo "enable userservices..."
-# allow user services to run without an interactive session
-loginctl enable-linger "${APPUSER}" || true
-
-UID=$(id -u "$APPUSER")
-XDG_RUNTIME_DIR="/run/user/$UID"
-DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
-
-if sudo -u "$APPUSER" env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" systemctl --user daemon-reload; then
-   # sudo -u "$APPUSER" env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" systemctl --user enable a3-main.service || true
-    sudo -u "$APPUSER" env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" systemctl --user start a3-user-install.service || true
-else
-    echo "Failed to reload user daemon for $APPUSER"
-fi
-
-loginctl disable-linger "${APPUSER}" || true
+run_user_install
 
 echo "update grub..."
 update-grub || true
