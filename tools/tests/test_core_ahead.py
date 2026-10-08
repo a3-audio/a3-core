@@ -1,5 +1,4 @@
-"""StemDeck's preview of the music reaches Motion through Core (spec
-fpv-pilots, phase A).
+"""StemDeck's preview of the music reaches Motion through Core.
 
 StemDeck sends /stemdeck/ahead section next bars energy on every downbeat to
 Core, because Core is the one that knows which Motion is listening. Core

@@ -1050,8 +1050,8 @@ def osc_handler_aux_return(client_address: Tuple[str, int], address: str,
 
 def osc_handler_stemdeck(client_address: Tuple[str, int], address: str,
                          *osc_arguments: List[Any]) -> None:
-    """StemDeck's report of one stem's bus switches (spec stemdeck-remote),
-    and its preview of the music (spec fpv-pilots, phase A)."""
+    """StemDeck's report of one stem's bus switches, and its preview of the
+    music, which goes on to Motion."""
     found = known_address(client_address, address, osc_arguments)
     if found is None:
         return

@@ -1,5 +1,4 @@
-"""StemDeck's preview of the music, on its way to Motion (spec fpv-pilots,
-phase A).
+"""StemDeck's preview of the music, on its way to Motion.
 
 StemDeck says where the audible deck is in its set's sections --
 /stemdeck/ahead section next bars energy -- on every downbeat, to Core,
