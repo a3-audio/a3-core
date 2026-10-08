@@ -52,6 +52,25 @@ class TheI3ToolsAreInstalled(unittest.TestCase):
         self.assertEqual({}, missing)
 
 
+def conflicts():
+    line = next(l for l in CONTROL.read_text().splitlines() if l.startswith("Conflicts:"))
+    return {entry.strip() for entry in line.split(":", 1)[1].split(",")}
+
+
+class NothingNeedsWhatCannotBeInstalled(unittest.TestCase):
+    """rtirq-init is not in the Debian archive, and nm-applet needs
+    network-manager, which the package conflicts with (a3-core#65)."""
+
+    def test_no_rtirq_config_is_shipped(self):
+        self.assertFalse((PACKAGE / "etc/rtirq.conf").exists())
+        self.assertNotIn("/etc/rtirq.conf",
+                         (PACKAGE / "DEBIAN/conffiles").read_text().split())
+
+    def test_the_i3_config_starts_no_nm_applet(self):
+        self.assertIn("network-manager", conflicts())
+        self.assertNotRegex(I3_CONFIG.read_text(), r"(?m)^\s*exec\b.*\bnm-applet\b")
+
+
 class AaaJoinsTheAudioGroup(unittest.TestCase):
     """Driven with fake `id` and `usermod`, never the real ones."""
 
