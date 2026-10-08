@@ -63,10 +63,14 @@ class TheTable(unittest.TestCase):
         self.assertNotIn("Default", table)
 
     def test_a_phase_the_renderer_does_not_know_is_refused(self):
-        # A new set (Space, say) must be placed in the night's order on purpose,
+        # A new set must be placed in the night's order on purpose,
         # not slip to the end of the table unseen.
         with self.assertRaises(ValueError):
-            render_library.clips_table([clip("Space Anchor")], [])
+            render_library.clips_table([clip("Lunar Anchor")], [])
+
+    def test_the_space_set_has_its_place(self):
+        table = render_library.clips_table([clip("Space Anchor")], [])
+        self.assertIn("Anchor", table)
 
     def test_a_clip_without_a_mood_shows_a_dash(self):
         table = render_library.clips_table([clip("Warmup Halo", mood="")], [])

@@ -28,7 +28,7 @@ SETS = "pattern/sessions/system"
 #: the first word of its name; a phase missing here is refused rather than
 #: sorted somewhere, so a new set is placed in the table on purpose.
 PHASES = ("Warmup", "Groove", "Build", "Peak", "Drop", "Break", "Dub", "Deep",
-          "Float", "Closing", "Tribal", "Tension", "Acid", "Ambient")
+          "Float", "Closing", "Tribal", "Tension", "Acid", "Ambient", "Space")
 
 BEGIN, END = "<!-- a3-motion:clips -->", "<!-- /a3-motion:clips -->"
 
