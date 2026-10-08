@@ -1,12 +1,11 @@
 """The one truth, written out for what cannot read JSON.
 
-zita's units, the postinst's default network and the beat-analyzer's .env
+zita's units, the postinst's default network and the beat-analyzer's conf.d
 take their addresses as text. They get it from here, rendered from
 a3-osc.json, so the file stays the only place a port or an IP is written.
 """
 
 import json
-import re
 import shlex
 from pathlib import Path
 
@@ -14,16 +13,11 @@ from pathlib import Path
 SYSTEMD_ENV_FILE = "%h/.config/a3/osc.env"
 ENV_FILE = Path(".config/a3/osc.env")
 
-#: The analyzer's .env, a checkout on the Core. Only the block between the
-#: markers is ours; the rest of the file is the maintainer's.
-ANALYZER_ENV = Path("a3-system/beat-analyzer/build/.env")
-BEGIN = "# >>> a3-osc: rendered from a3-osc.json by a3-osc-render -- edit the truth, not this"
-END = "# <<< a3-osc"
-
-#: Analyzer keys that are facts of the truth. Found outside the block they are
-#: a second truth, and they are commented out, not deleted.
-ANALYZER_KEY = re.compile(
-    r"^(OSC_HOST_\w+|OSC_VU_\w+|OSC_PORT_A3MOTION|OSC_ADDRESS_\w+|PIONEER_PORT_\w+)=")
+#: The analyzer's file of ours. The beat-analyzer package reads conf.d/*.env
+#: after the user's beat-analyzer.env, so this whole file is a3-core's and the
+#: truth wins key by key; the user's file is never touched (2026-10-08).
+ANALYZER_CONF = Path(".config/beat-analyzer/conf.d/50-a3-osc.env")
+HEADER = "# rendered from a3-osc.json by a3-osc-render -- edit the truth, not this file"
 
 
 def analyzer_prefix(route):
@@ -78,31 +72,16 @@ def analyzer_block(truth):
                 ("PIONEER_PORT_ANNOUNCE", truth.port("prolink", "announce")),
                 ("PIONEER_PORT_BEAT", truth.port("prolink", "beat")),
                 ("PIONEER_PORT_STATUS", truth.port("prolink", "status"))]
-    return f"{BEGIN}\n{lines(targets)}{END}\n"
-
-
-def put_analyzer_block(text, block):
-    """`text` with `block` in place of the old one, or appended if there is none."""
-    before, found, rest = text.partition(BEGIN)
-    after = rest.partition(END + "\n")[2] if found else ""
-    kept = "".join(retired(line) for line in (before + after).splitlines(keepends=True))
-    if kept and not kept.endswith("\n"):
-        kept += "\n"
-    return kept + block
-
-
-def retired(line):
-    return "# was: " + line if ANALYZER_KEY.match(line) else line
+    return f"{HEADER}\n{lines(targets)}"
 
 
 def write_user_files(truth, home):
     env_file = home / ENV_FILE
     env_file.parent.mkdir(parents=True, exist_ok=True)
     env_file.write_text(zita_env(truth))
-    analyzer_env = home / ANALYZER_ENV
-    if analyzer_env.exists():
-        analyzer_env.write_text(put_analyzer_block(analyzer_env.read_text(),
-                                                   analyzer_block(truth)))
+    analyzer_conf = home / ANALYZER_CONF
+    analyzer_conf.parent.mkdir(parents=True, exist_ok=True)
+    analyzer_conf.write_text(analyzer_block(truth))
 
 
 def network_file(truth):
