@@ -210,6 +210,30 @@ install_shipped_config() {
   done
 }
 
+# beat-analyzer.service as a3-core shipped it before the analyzer had its own
+# package: it ran the checkout's build/, and in ~/.config it hides the
+# package's unit in /usr/lib. Moved to the backup, not deleted. A unit of that
+# name that does something else is somebody's own: kept, and named.
+retire_checkout_analyzer_unit() {
+  unit="$1/systemd/user/beat-analyzer.service"; backup="$2"
+  package_unit="${3:-/usr/lib/systemd/user/beat-analyzer.service}"
+  [ -f "$unit" ] || return 0
+  if ! grep -q '^ExecStart=.*/beat-analyzer/build/beat-analyzer' "$unit"; then
+    echo "a3-core: kept the local ~/.config/systemd/user/beat-analyzer.service -- it hides the beat-analyzer package's unit"
+    return 0
+  fi
+  if [ ! -f "$package_unit" ]; then
+    echo "a3-core: kept ~/.config/systemd/user/beat-analyzer.service (it runs the checkout) -- the beat-analyzer package is not installed"
+    return 0
+  fi
+  if mkdir -p "$backup/systemd/user" 2>/dev/null \
+     && mv "$unit" "$backup/systemd/user/beat-analyzer.service"; then
+    echo "a3-core: moved ~/.config/systemd/user/beat-analyzer.service (it ran the checkout) to $backup"
+  else
+    echo "a3-core: could not move ~/.config/systemd/user/beat-analyzer.service -- it still hides the package's unit" >&2
+  fi
+}
+
 # Ask which differing parts to replace. Every one is offered ticked: the old
 # answer, replacing nothing, is what left a3nuc2 on a six-month-old REAPER,
 # and nothing replaced is lost (decided 2026-10-04). Asked only when something
@@ -521,8 +545,9 @@ fi
 # template in memory until it is restarted, and its stop no longer saves
 # (a3-system#74), so the new file is not undone. The maintainer restarts
 # a3-main himself after an upgrade.
-install_shipped_config "$SHIPPED_CONFIG" "${USER_HOME}/.config" \
-  "${USER_HOME}/.config/a3-replaced/$(date +%Y-%m-%d_%H%M%S)" "$REPLACE_CONFIG"
+CONFIG_BACKUP="${USER_HOME}/.config/a3-replaced/$(date +%Y-%m-%d_%H%M%S)"
+install_shipped_config "$SHIPPED_CONFIG" "${USER_HOME}/.config" "$CONFIG_BACKUP" "$REPLACE_CONFIG"
+retire_checkout_analyzer_unit "${USER_HOME}/.config" "$CONFIG_BACKUP"
 echo "a3-core: nothing restarted; restart a3-main to run the new config"
 
 ssh_key_step "${USER_HOME}/.ssh"

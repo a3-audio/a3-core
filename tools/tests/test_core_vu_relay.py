@@ -99,8 +99,8 @@ class TheTruth(unittest.TestCase):
         self.assertIn({"from": "core", "to": "motion.vu"}, TRUTH.routes())
 
     def test_the_analyzers_env_gets_the_line(self):
-        """Core renders the analyzer's block at its start, so the line reaches
-        the rig's build/.env without a hand edit."""
+        """Core renders the analyzer's conf.d file at its start, so the line
+        reaches the analyzer without a hand edit."""
         host, port = TRUTH.endpoint("core", "vu-relay")
         self.assertIn(f"OSC_VU_core={host}:{port}\n",
                       a3_osc_render.analyzer_block(TRUTH))

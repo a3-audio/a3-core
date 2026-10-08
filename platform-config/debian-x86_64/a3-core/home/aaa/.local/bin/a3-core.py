@@ -1674,8 +1674,8 @@ if __name__ == "__main__":
           f"{args.ip}:{args.feedback_port}")
 
     # The analyzer's meters, for a remote Motion only (a3_core_vu_relay). They
-    # arrive only if the analyzer's build/.env has OSC_VU_core=<this port>:
-    # Core renders that line into the analyzer's block from the truth below
+    # arrive only if the analyzer's config has OSC_VU_core=<this port>: Core
+    # renders that line into its conf.d file from the truth below
     # (write_user_files), and the analyzer reads it at its next start.
     # A busy port costs a remote Motion its meters, not the rig its sound.
     vu_inbox = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -1808,7 +1808,7 @@ if __name__ == "__main__":
     try:
         write_user_files(_truth, Path.home())
     except OSError as problem:
-        print(f"could not render osc.env / the analyzer's block: {problem}",
+        print(f"could not render osc.env / the analyzer's conf.d file: {problem}",
               file=sys.stderr)
     # No StemDeck is known yet, so the return goes to radla until one says
     # hello; a remote target from before a reboot would otherwise survive it.

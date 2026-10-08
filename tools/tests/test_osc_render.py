@@ -199,42 +199,61 @@ class TheAnalyzerTargetsAreRendered(unittest.TestCase):
                          TRUTH.port("beat-analyzer", "clock"))
 
 
-class TheAnalyzerEnvKeepsTheRest(unittest.TestCase):
-    MAINTAINERS = ("JACK_CLIENT_NAME=beat-analyzer\n"
-                   "OSC_HOST_core=127.0.0.1:9000\n"
-                   "OSC_VU_motion=127.0.0.1:7772\n"
-                   "OSC_SEND_RATE=25\n"
-                   "OSC_PORT_A3MOTION=7775\n"
-                   "LOG_LEVEL=1\n")
+class TheAnalyzerGetsAFileOfItsOwn(unittest.TestCase):
+    """The beat-analyzer is its own package and reads conf.d/*.env after the
+    user's file (2026-10-08). a3-core owns one whole file there, so nothing
+    is spliced into a file somebody edits, and the truth wins key by key."""
 
-    def put(self, text):
-        return a3_osc_render.put_analyzer_block(text, a3_osc_render.analyzer_block(TRUTH))
+    def test_the_file_sits_in_the_analyzers_conf_d(self):
+        self.assertEqual(a3_osc_render.ANALYZER_CONF,
+                         Path(".config/beat-analyzer/conf.d/50-a3-osc.env"))
 
-    def test_the_first_render_retires_the_hand_written_targets(self):
-        rendered = self.put(self.MAINTAINERS)
-        outside = rendered.split(a3_osc_render.BEGIN)[0]
-        self.assertNotIn("\nOSC_HOST_core=", "\n" + outside)
-        self.assertNotIn("\nOSC_VU_motion=", "\n" + outside)
-        self.assertNotIn("\nOSC_PORT_A3MOTION=", "\n" + outside)
-        self.assertIn("# was: OSC_HOST_core=127.0.0.1:9000", outside)
+    def test_the_file_says_whose_it_is(self):
+        first = a3_osc_render.analyzer_block(TRUTH).splitlines()[0]
+        self.assertTrue(first.startswith("#"))
+        self.assertIn("a3-osc-render", first)
 
-    def test_the_rest_stays_as_it_was(self):
-        rendered = self.put(self.MAINTAINERS)
-        for line in ("JACK_CLIENT_NAME=beat-analyzer", "OSC_SEND_RATE=25", "LOG_LEVEL=1"):
-            self.assertIn(line + "\n", rendered)
+    def test_written_whole_and_the_same_again(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            a3_osc_render.write_user_files(TRUTH, home)
+            conf = home / a3_osc_render.ANALYZER_CONF
+            once = conf.read_text()
+            self.assertEqual(once, a3_osc_render.analyzer_block(TRUTH))
+            conf.write_text(once.replace("=", "=stale", 1))
+            a3_osc_render.write_user_files(TRUTH, home)
+            self.assertEqual(conf.read_text(), once)
 
-    def test_a_second_render_changes_nothing(self):
-        once = self.put(self.MAINTAINERS)
-        self.assertEqual(self.put(once), once)
+    def test_a_reader_never_sees_an_empty_file(self):
+        """Core rewrites the file at every start while the analyzer may be
+        reading it: the new file is swapped in whole, never emptied first."""
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            conf = home / a3_osc_render.ANALYZER_CONF
+            conf.parent.mkdir(parents=True)
+            conf.write_text("OLD=1\n")
+            with conf.open() as reader:
+                a3_osc_render.write_user_files(TRUTH, home)
+                self.assertEqual(reader.read(), "OLD=1\n")
+            self.assertEqual(conf.read_text(), a3_osc_render.analyzer_block(TRUTH))
 
-    def test_only_the_block_is_replaced(self):
-        once = self.put(self.MAINTAINERS)
-        stale = once.replace("127.0.0.1:9000", "10.0.0.1:1")
-        edited = stale.replace("LOG_LEVEL=1", "LOG_LEVEL=0")
-        again = self.put(edited)
-        self.assertIn("LOG_LEVEL=0\n", again)
-        self.assertIn("OSC_HOST_core=127.0.0.1:9000", again)
-        self.assertNotIn("10.0.0.1:1", again.split(a3_osc_render.BEGIN)[1])
+    def test_no_temporary_file_is_left_for_the_analyzer_to_read(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            a3_osc_render.write_user_files(TRUTH, home)
+            names = sorted(p.name for p in (home / a3_osc_render.ANALYZER_CONF).parent.iterdir())
+            self.assertEqual(names, ["50-a3-osc.env"])
+
+    def test_the_old_checkout_env_is_left_alone(self):
+        """The package never reads build/.env; the rig's copy is carried over
+        by hand (smoke-test/beat-analyzer-deb.md), not rewritten here."""
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            old = home / "a3-system/beat-analyzer/build/.env"
+            old.parent.mkdir(parents=True)
+            old.write_text("LOG_LEVEL=1\n")
+            a3_osc_render.write_user_files(TRUTH, home)
+            self.assertEqual(old.read_text(), "LOG_LEVEL=1\n")
 
 
 class TheToolWritesTheFiles(unittest.TestCase):
@@ -243,21 +262,14 @@ class TheToolWritesTheFiles(unittest.TestCase):
         return subprocess.run([sys.executable, str(TOOL), *args], env=env,
                               check=True, capture_output=True, text=True)
 
-    def test_user_writes_zitas_file_and_the_analyzers_block(self):
+    def test_user_writes_zitas_file_and_the_analyzers_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
-            analyzer_env = home / "a3-system/beat-analyzer/build/.env"
-            analyzer_env.parent.mkdir(parents=True)
-            analyzer_env.write_text(TheAnalyzerEnvKeepsTheRest.MAINTAINERS)
             self.run_tool("user", env_extra={"HOME": str(home)})
             zita = home / ".config/a3/osc.env"
             self.assertEqual(zita.read_text(), a3_osc_render.osc_env(TRUTH))
-            self.assertIn(a3_osc_render.BEGIN, analyzer_env.read_text())
-
-    def test_user_leaves_a_missing_analyzer_alone(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp)
-            self.run_tool("user", env_extra={"HOME": str(home)})
+            analyzer = home / ".config/beat-analyzer/conf.d/50-a3-osc.env"
+            self.assertEqual(analyzer.read_text(), a3_osc_render.analyzer_block(TRUTH))
             self.assertFalse((home / "a3-system").exists())
 
     def test_a_refused_network_file_is_said(self):
