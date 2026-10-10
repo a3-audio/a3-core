@@ -14,9 +14,11 @@ that already plays here releases it. A push on A only ever selects analog
 while a stem plays every stem leaves the channel, while analog plays
 nothing changes. Core remembers no stem. A channel
 plays one stem at most, and a stem plays on one channel at most; every stem
-on no channel is on AUX, in either return mode (one stem per bus, the rest on
-AUX -- StemDeck's own rule since 2026-10-07). The aux return knows two modes,
-which only choose its source in REAPER: stem (StemDeck's AUX) and analog
+on a channel is not on AUX, and a stem taken off its channel goes to AUX, in
+either return mode (one stem per bus, the rest on AUX -- StemDeck's own rule
+since 2026-10-07). A stem StemDeck reports on no bus at all is left there:
+its Auto-DJ holds stems off the buses until their switch. The aux return
+knows two modes, which only choose its source in REAPER: stem (StemDeck's AUX) and analog
 (analog 11/12), so in analog mode the stems on AUX are not heard. Its cursor
 runs over both and a CUE field, a ring STEM -> ANALOG -> CUE (spec
 return-cue, 2026-10-04). tidy() makes the mirror obey these rules. Pure: no
@@ -125,10 +127,14 @@ class Stems:
     def _select_analog(self, index):
         """Every stem off the channel; with none on it, nothing to do."""
         bus = index + 1
-        commands = [(p, bus, False) for p in range(1, PAIRS + 1) if self._on(p, bus)]
-        if not commands:
+        released = [p for p in range(1, PAIRS + 1) if self._on(p, bus)]
+        if not released:
             return []
+        commands = [(p, bus, False) for p in released]
         self._apply_all(commands)
+        for pair in released:
+            if self.place_of(pair) is None:
+                commands += self._to_aux(pair)
         return commands + self.tidy()
 
     def _select(self, index, pair):
@@ -136,21 +142,28 @@ class Stems:
         bus = index + 1
         if self._on(pair, bus):
             return []
+        displaced = [p for p in range(1, PAIRS + 1) if p != pair and self._on(p, bus)]
         commands = [(pair, bus, True), (pair, AUX, False)]
-        commands += [(p, bus, False) for p in range(1, PAIRS + 1)
-                     if p != pair and self._on(p, bus)]
+        commands += [(p, bus, False) for p in displaced]
         commands += [(pair, c + 1, False) for c in range(CHANNELS)
                      if c != index and self._on(pair, c + 1)]
         self._apply_all(commands)
+        for p in displaced:
+            if self.place_of(p) is None:
+                commands += self._to_aux(p)
         return commands + self.tidy()
 
     # -- the rules ------------------------------------------------------------
 
     def tidy(self):
         """The commands that make the mirror obey the rules -- one stem per
-        channel bus (the lowest stays), a stem on one channel at most, and
-        on AUX exactly the stems on no channel, whatever the return's mode
-        -- applied at once. A second call returns []."""
+        channel bus (the lowest stays), a stem on one channel at most, a
+        stem on a channel not also on AUX, and a stem this takes off its
+        last channel onto AUX, whatever the return's mode -- applied at
+        once. A stem StemDeck reports on no bus at all stays there: its
+        Auto-DJ holds the incoming deck's stems off until their switch. A
+        second call returns []."""
+        before = [self.place_of(p) for p in range(1, PAIRS + 1)]
         commands = []
         for index in range(CHANNELS):
             bus = index + 1
@@ -165,13 +178,22 @@ class Stems:
             self._apply_all(spare)
             commands += spare
         for pair in range(1, PAIRS + 1):
-            wanted = self.place_of(pair) in (None, RETURN)
-            if wanted != self._on(pair, AUX):
-                commands.append((pair, AUX, wanted))
-                self._apply(pair, AUX, wanted)
+            place = self.place_of(pair)
+            was_on_a_channel = before[pair - 1] not in (None, RETURN)
+            if place is None and was_on_a_channel:
+                commands += self._to_aux(pair)
+            elif place not in (None, RETURN) and self._on(pair, AUX):
+                commands.append((pair, AUX, False))
+                self._apply(pair, AUX, False)
         return commands
 
     # -- inside ---------------------------------------------------------------
+
+    def _to_aux(self, pair):
+        """A stem Core takes off its channel goes to the return, as StemDeck
+        sends one a click displaces."""
+        self._apply(pair, AUX, True)
+        return [(pair, AUX, True)]
 
     def _apply(self, pair, bus, on):
         if on:

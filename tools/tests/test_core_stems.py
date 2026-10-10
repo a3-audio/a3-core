@@ -255,29 +255,28 @@ class OnePerChannel(unittest.TestCase):
 
 
 class ReturnModes(unittest.TestCase):
-    def test_stem_mode_puts_every_free_stem_on_aux(self):
+    def test_a_stem_on_no_bus_stays_off(self):
+        # StemDeck's Auto-DJ leaves the incoming deck's stems on no bus at all
+        # until their switch; putting them on AUX would play them early.
         s = stems_with(p1=bit(1))
-        commands = s.tidy()
-        self.assertEqual(sorted(p for p, b, on in commands if b == AUX and on),
-                         list(range(2, 9)))
+        self.assertEqual(s.tidy(), [])
+        self.assertEqual(s.masks[1:], [0] * 7)
         self.assertFalse(s.plays_on_return(1))
 
     def test_a_stem_on_a_channel_leaves_aux(self):
         s = stems_with(p1=bit(1) | bit(AUX))
         self.assertIn((1, AUX, False), s.tidy())
 
-    def test_analog_mode_puts_every_free_stem_on_aux_too(self):
-        # One stem per bus, the rest on AUX, whatever the mode (2026-10-07):
-        # Core switches the return's source in REAPER, so AUX is silent on
-        # the return in ANALOG mode.
+    def test_analog_mode_takes_a_stem_on_a_channel_off_aux_too(self):
+        # One stem per bus whatever the mode: Core switches the return's
+        # source in REAPER, so AUX is silent on the return in ANALOG mode.
         s = stems_with(p1=bit(1) | bit(AUX), p2=bit(AUX))
         s.return_mode = ANALOG_MODE
-        self.assertEqual(sorted(s.tidy()),
-                         [(1, AUX, False)] + [(p, AUX, True) for p in range(3, 9)])
+        self.assertEqual(sorted(s.tidy()), [(1, AUX, False)])
         self.assertEqual(s.channel_mask(0), 1)
         self.assertTrue(s.plays_on_return(2))
 
-    def test_in_both_modes_a_stem_is_on_aux_exactly_when_on_no_channel(self):
+    def test_in_both_modes_the_rules_hold_and_an_off_stem_stays_off(self):
         import random
         rng = random.Random(20261007)
         for mode in MODES:
@@ -285,13 +284,17 @@ class ReturnModes(unittest.TestCase):
                 s = stems_with(**{f"p{p}": rng.randrange(1 << AUX)
                                   for p in range(1, PAIRS + 1)})
                 s.return_mode = mode
+                off = [p for p in range(1, PAIRS + 1) if s.masks[p - 1] == 0]
                 s.tidy()
                 for index in range(CHANNELS):
                     self.assertLessEqual(bin(s.channel_mask(index)).count("1"), 1)
                 for pair in range(1, PAIRS + 1):
                     channels = [c for c in range(CHANNELS) if s.channel_mask(c) >> (pair - 1) & 1]
                     self.assertLessEqual(len(channels), 1)
-                    self.assertEqual(s.plays_on_return(pair), not channels, (mode, s.masks))
+                    if channels:
+                        self.assertFalse(s.plays_on_return(pair), (mode, s.masks))
+                for pair in off:
+                    self.assertEqual(s.masks[pair - 1], 0, (mode, pair))
                 self.assertEqual(s.tidy(), [])
 
     def test_the_encoder_runs_a_ring_of_three(self):
@@ -343,12 +346,20 @@ class ReturnModes(unittest.TestCase):
         s.cursors[0] = ANALOG_INPUT
         self.assertIn((3, AUX, True), s.push(0))
 
-    def test_analog_mode_keeps_the_free_stems_on_aux(self):
+    def test_analog_mode_leaves_the_stems_on_no_bus_off(self):
         s = stems_with(**{f"p{p}": bit(p) for p in range(1, 5)})   # 1-4 on channels 1-4
         s.return_mode = ANALOG_MODE
-        self.assertEqual(sorted(s.tidy()), [(p, AUX, True) for p in range(5, 9)])
+        self.assertEqual(s.tidy(), [])
         s.return_cursor = STEM_MODE
         self.assertEqual(s.push(RETURN), [])
+
+    def test_a_stem_a_push_takes_off_its_channel_goes_to_aux(self):
+        s = stems_with(p3=bit(1), p5=bit(AUX))
+        s.cursors[0] = 4                    # pair 5 onto channel 1
+        commands = s.push(0)
+        self.assertIn((3, 1, False), commands)
+        self.assertIn((3, AUX, True), commands)
+        self.assertTrue(s.plays_on_return(3))
 
 
 class TheCueLeavesStemDeckAlone(unittest.TestCase):
