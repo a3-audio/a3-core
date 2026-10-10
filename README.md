@@ -51,6 +51,32 @@ The OSC register test needs the other A³ repositories checked out beside this
 one, as in [a3-system](https://github.com/a3-audio/a3-system); without them it
 skips.
 
+## Screencast for OBS
+
+`a3-screencast` streams this machine's screen and sound (x264 on the CPU, AAC,
+MPEG-TS) as a listener on the port `screencast.stream` of `a3-osc.json` (9930).
+It runs at idle priority on the highest core only, so it never takes time from
+the live programs. The package does not enable it; per machine:
+
+```sh
+systemctl --user enable --now a3-screencast
+```
+
+The sound is a JACK client `screencast`; connect `screencast:input_1/2` yourself
+(it is never connected for you, unconnected it is silent). Optional settings in
+`~/.config/a3/screencast.env`: `A3_SCREENCAST_CPUS` (default: the highest core),
+`A3_SCREENCAST_FPS` (30), `A3_SCREENCAST_CRF` (23, lower is better).
+
+On the viewing machine, tunnel to the rigs and add a Media Source in OBS:
+
+```sh
+ssh -N -L 5931:192.168.8.10:9930 -L 5932:192.168.8.20:9930 <jump host>
+```
+
+Uncheck *Local File*, Input `tcp://127.0.0.1:5931`, Input Format `mpegts`,
+enable *Restart playback when source becomes active*, and reduce buffering.
+Anyone on the rig's LAN can watch the port; it is never forwarded on the router.
+
 ## License
 
 REUSE-compliant: the license of each path is in `.reuse/dep5`, the texts are in

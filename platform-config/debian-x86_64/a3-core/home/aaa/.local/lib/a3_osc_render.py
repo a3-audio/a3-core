@@ -10,7 +10,7 @@ import os
 import shlex
 from pathlib import Path
 
-#: Where the zita units and x11vnc find their arguments (systemd's %h is the
+#: Where the zita units, the screencast and x11vnc find their arguments (systemd's %h is the
 #: home; x11vnc is a system unit and names it in full).
 SYSTEMD_ENV_FILE = "%h/.config/a3/osc.env"
 ENV_FILE = Path(".config/a3/osc.env")
@@ -49,9 +49,13 @@ def vnc_env(truth):
     return lines([("A3_VNC_PORT", truth.port("x11vnc", "vnc"))])
 
 
+def screencast_env(truth):
+    return lines([("A3_SCREENCAST_PORT", truth.port("screencast", "stream"))])
+
+
 def osc_env(truth):
-    """osc.env: zita's arguments and x11vnc's port."""
-    return zita_env(truth) + vnc_env(truth)
+    """osc.env: zita's arguments and the ports of x11vnc and the screencast."""
+    return zita_env(truth) + vnc_env(truth) + screencast_env(truth)
 
 
 def network_defaults(truth):
