@@ -82,6 +82,7 @@ from a3_core_seen import SeenFile, state_path   # noqa: E402
 from a3_core_snapshot import Snapshot   # noqa: E402
 from a3_core_reaper import (Arrivals, REFRESH_ACTION,   # noqa: E402
                             wait_until_quiet, when_reaper_listens)
+from a3_core_receive_buffer import widen_receive_buffer   # noqa: E402
 from a3_core_startup import (filter_bypass_messages,   # noqa: E402
                              remembered_reaper_messages)
 from a3_core_evening import evening_state, replayable   # noqa: E402
@@ -1686,10 +1687,14 @@ if __name__ == "__main__":
     # (issue #51) -- see the command server below for what that did.
     feedback_server = osc_server.BlockingOSCUDPServer(
         (args.ip, args.feedback_port), feedback_dispatcher)
+    # A report pass must fit while Core reads it, or its overflow is lost
+    # without a word -- the gate's mute reports among it (a3_core_receive_buffer).
+    feedback_buffer = widen_receive_buffer(feedback_server.socket)
     threading.Thread(target=feedback_server.serve_forever,
                      daemon=True).start()
     print(f"listening for REAPER feedback on "
-          f"{args.ip}:{args.feedback_port}")
+          f"{args.ip}:{args.feedback_port}, "
+          f"buffer {feedback_buffer // 1024} KB")
 
     # The analyzer's meters, for a remote Motion only (a3_core_vu_relay). They
     # arrive only if the analyzer's config has OSC_VU_core=<this port>: Core
