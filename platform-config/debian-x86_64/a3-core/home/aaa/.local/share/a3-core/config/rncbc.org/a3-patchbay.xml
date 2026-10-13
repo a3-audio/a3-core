@@ -197,13 +197,9 @@
    <plug>rec_L</plug>
    <plug>rec_R</plug>
   </socket>
-  <socket client="AES67\ a3nuc1\ out" exclusive="off" name="zita_stemdeck" type="jack-audio">
+  <socket client="AES67\ a3nuc1\ out" exclusive="off" name="aes67_rec" type="jack-audio">
    <plug>send_CH1</plug>
    <plug>send_CH2</plug>
-  </socket>
-  <socket client="zita\-j2n\-obs" exclusive="off" name="zita_obs" type="jack-audio">
-   <plug>in_1</plug>
-   <plug>in_2</plug>
   </socket>
   <socket client="beat\-analyzer" exclusive="off" name="beat-analyzer_bpm" type="jack-audio">
    <plug>bpm_1</plug>
@@ -278,10 +274,6 @@
    <plug>in23</plug>
    <plug>in24</plug>
   </socket>
-  <socket client="AES67 a3nuc1 out" exclusive="off" name="aes67_rec_to_stemdeck" type="jack-audio">
-   <plug>send_CH1</plug>
-   <plug>send_CH2</plug>
-  </socket>
  </input-sockets>
  <slots/>
  <cables>
@@ -293,12 +285,10 @@
   <cable input="beat_analyzer_vu_booth" output="reaper_booth" type="jack-audio"/>
   <cable input="alsa-scarlett_phones" output="reaper_phones" type="jack-audio"/>
   <cable input="beat-analyzer_vu_phones" output="reaper_phones" type="jack-audio"/>
-  <cable input="zita_stemdeck" output="reaper_rec" type="jack-audio"/>
+  <cable input="aes67_rec" output="reaper_rec" type="jack-audio"/>
   <cable input="local_stemdeck" output="reaper_rec" type="jack-audio"/>
   <cable input="beat-analyzer_bpm" output="reaper_rec" type="jack-audio"/>
   <cable input="beat-analyzer_vu_rec" output="reaper_rec" type="jack-audio"/>
-  <cable input="zita_obs" output="reaper_rec" type="jack-audio"/>
-  <cable input="aes67_rec_to_stemdeck" output="reaper_rec" type="jack-audio"/>
   <cable input="beat\-analyzer_aux" output="reaper_aux" type="jack-audio"/>
   <cable input="beat_analyzer_vu_main" output="reaper_vu_main" type="jack-audio"/>
   <cable input="beat-analyzer_analog" output="reaper_vu_analog" type="jack-audio"/>
