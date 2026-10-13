@@ -27,7 +27,7 @@
    <plug>aux_L</plug>
    <plug>aux_R</plug>
   </socket>
-  <socket client="AES67\ a3nuc2\ stems" exclusive="off" name="zita_stemdeck" type="jack-audio">
+  <socket client="AES67\ .*\ stems" exclusive="off" name="zita_stemdeck" type="jack-audio">
    <plug>receive_D1L</plug>
    <plug>receive_D1R</plug>
    <plug>receive_D2L</plug>
@@ -119,7 +119,7 @@
    <plug>out65</plug>
    <plug>out66</plug>
   </socket>
-  <socket client="AES67 a3nuc2 stems" exclusive="off" name="aes67_stems_from_stemdeck" type="jack-audio">
+  <socket client="AES67\ .*\ stems" exclusive="off" name="aes67_stems_from_stemdeck" type="jack-audio">
    <plug>receive_D1L</plug>
    <plug>receive_D1R</plug>
    <plug>receive_D2L</plug>
@@ -131,7 +131,7 @@
    <plug>receive_AUXL</plug>
    <plug>receive_AUXR</plug>
   </socket>
-  <socket client="AES67 a3nuc2 stems" exclusive="off" name="aes67_cue_from_stemdeck" type="jack-audio">
+  <socket client="AES67\ .*\ stems" exclusive="off" name="aes67_cue_from_stemdeck" type="jack-audio">
    <plug>receive_CUEL</plug>
    <plug>receive_CUER</plug>
   </socket>
@@ -197,7 +197,7 @@
    <plug>rec_L</plug>
    <plug>rec_R</plug>
   </socket>
-  <socket client="AES67\ a3nuc1\ out" exclusive="off" name="aes67_rec" type="jack-audio">
+  <socket client="AES67\ .*\ out" exclusive="off" name="aes67_rec" type="jack-audio">
    <plug>send_CH1</plug>
    <plug>send_CH2</plug>
   </socket>

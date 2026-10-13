@@ -9,6 +9,7 @@ through an AES67 receiver, REAPER's recording bus goes out through this
 Core's AES67 sender.
 """
 
+import re
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -106,6 +107,30 @@ class PatchbayWiresAes67(unittest.TestCase):
         for sockets in (self.outputs, self.inputs):
             for name in sockets:
                 self.assertNotIn(socket_client(sockets, name), ("zita-n2j", "zita-j2n"), name)
+
+
+class TheStreamsFitAnyMachine(unittest.TestCase):
+    """The AES67 streams are named after their machine ("AES67 <host> out",
+    "AES67 <host> stems"), so the patchbay matches them by pattern -- QjackCtl
+    reads a socket's client as a regular expression -- never by one machine's
+    name (decided 2026-10-14)."""
+
+    def aes67_clients(self):
+        root = ET.parse(PATCHBAY).getroot()
+        return [s.get("client") for s in root.iter("socket")
+                if s.get("client").replace("\\", "").startswith("AES67")]
+
+    def test_there_are_some(self):
+        self.assertTrue(self.aes67_clients())
+
+    def test_no_machine_is_named(self):
+        for client in self.aes67_clients():
+            self.assertNotIn("a3nuc", client)
+
+    def test_another_machines_streams_are_matched_too(self):
+        for client in self.aes67_clients():
+            self.assertTrue(re.fullmatch(client, "AES67 studio-2 stems")
+                            or re.fullmatch(client, "AES67 core-b out"), client)
 
 
 if __name__ == "__main__":
