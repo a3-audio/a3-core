@@ -566,6 +566,11 @@ if [ -d /home/aaa/.ssh ]; then
   find /home/aaa/.ssh -type f -exec chmod 0600 {} \;
 fi
 
+# The loader's cache with pipewire-jack's libjack in it
+# (/etc/ld.so.conf.d/pipewire-jack-x86_64-linux-gnu.conf), before anything
+# that runs a JACK program is started.
+ldconfig || true
+
 echo "enable system services..."
 systemctl daemon-reload || true
 systemctl enable x11vnc.service || true
