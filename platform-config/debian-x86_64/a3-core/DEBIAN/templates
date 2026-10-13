@@ -37,14 +37,21 @@ Description: Draw to a dummy screen instead of a monitor?
  black. Answer no on a machine with a screen, such as one that also runs
  A3 Motion with its touch panel.
 
-Template: a3-core/bridge-with
+Template: a3-core/audio-port
 Type: string
 Default:
-Description: Second network socket to bridge with the first (empty: no bridge)
- The router has one free port, so the mixer can hang on this Core's second
- socket. Name that socket here (for example enp5s0) and both become one
- network segment, br0, which carries this Core's address. Leave it empty to
- use one socket only. Takes effect at the next boot.
+Description: Second network socket for AES67 audio and PTP (empty: none)
+ The second socket carries the audio network: AES67 streams and the PTP clock,
+ on a subnet of their own without gateway, so the Core's own network on the
+ first socket stays as it is. Name that socket here (for example enp5s0), or
+ leave it empty to use one socket only. Takes effect at the next boot.
+
+Template: a3-core/audio-address
+Type: string
+Default: 192.168.9.10/24
+Description: This Core's address on the audio network (CIDR)
+ Its own subnet, different from the first socket's: a reply always leaves by
+ the socket it came in on. No gateway and no DNS on this network.
 
 Template: a3-core/replace-config
 Type: multiselect

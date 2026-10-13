@@ -300,9 +300,8 @@ ask_address_questions() {
   db_go || return 1
 }
 
-# The other wired socket on this machine, to offer as the bridge's second
-# port: physical, not Wi-Fi, not the one already configured. Empty if there is
-# none. A bridge onto lo or onto br0 itself would cut the box off.
+# The other wired socket on this machine, to offer for the audio network:
+# physical, not Wi-Fi, not the one already configured. Empty if there is none.
 other_wired_interface() {
   primary="$1"
   sysnet="${2:-/sys/class/net}"
@@ -317,16 +316,18 @@ other_wired_interface() {
   done
 }
 
-# Write the network for systemd-networkd into $dir: one socket in a3.network,
-# or -- with a second socket -- the bridge prepared on 2026-09-09. The router
-# has one free port, so the mixer hangs on the Core's second socket and the
-# bridge makes both one segment. STP is on: once a switch is added, two cables
-# into it are a loop, and a loop on a show network is a broadcast storm; the
-# price is about thirty seconds after boot. Each variant removes the other's
-# files, so answering "no bridge" is also the way back. Nothing is switched
-# here: networkd reads the files at the next boot.
+# Write the network for systemd-networkd into $dir: the first socket with the
+# Core's address, gateway and DNS in 10-a3.network, and -- with a second
+# socket -- the audio network (AES67, PTP) in 20-a3-aes67.network: a subnet of
+# its own without gateway, so a reply always leaves by the socket it came in
+# on. Two networks, not a bridge: with the bridge (2026-09-25 to 2026-10-14)
+# every carrier drop on one socket cost both some thirty seconds of STP. The
+# bridge files and the old single a3.network are retired, so an upgrade is
+# also the way out of the bridge. Nothing is switched here: networkd reads
+# the files at the next boot.
 write_network_config() {
-  dir="$1"; iface="$2"; with="$3"; addr="$4"; gateway="$5"; dns="$6"
+  dir="$1"; iface="$2"; addr="$3"; gateway="$4"; dns="$5"
+  audio_port="$6"; audio_addr="$7"
   mkdir -p "$dir"
 
   # Only a unit whose content changes is written, and the one it replaces --
@@ -352,52 +353,47 @@ write_network_config() {
     mv -f "$1" "$1.bak-$stamp"
   }
 
-  if [ -n "$with" ]; then
-    put_unit "$dir/10-a3-bridge.netdev" "[NetDev]
-Name=br0
-Kind=bridge
-
-[Bridge]
-STP=yes"
-    put_unit "$dir/20-a3-bridge-ports.network" "[Match]
-Name=${iface} ${with}
-
-[Network]
-Bridge=br0"
-    put_unit "$dir/30-a3-bridge-address.network" "[Match]
-Name=br0
-
-[Network]
-Address=${addr}
-Gateway=${gateway}
-DNS=${dns}
-ConfigureWithoutCarrier=yes"
-    retire_unit "$dir/a3.network"
-  else
-    put_unit "$dir/a3.network" "[Match]
+  put_unit "$dir/10-a3.network" "[Match]
 Name=${iface}
 
 [Network]
 Address=${addr}
 Gateway=${gateway}
 DNS=${dns}"
-    retire_unit "$dir/10-a3-bridge.netdev"
-    retire_unit "$dir/20-a3-bridge-ports.network"
-    retire_unit "$dir/30-a3-bridge-address.network"
+
+  if [ -n "$audio_port" ]; then
+    put_unit "$dir/20-a3-aes67.network" "[Match]
+Name=${audio_port}
+
+[Network]
+# AES67 and PTP in a subnet of their own: one subnet per port, so a reply
+# always leaves by the port it came in on.
+# No gateway and no DNS here: the only way out is the first socket.
+Address=${audio_addr}"
+  else
+    retire_unit "$dir/20-a3-aes67.network"
   fi
+
+  retire_unit "$dir/a3.network"
+  retire_unit "$dir/10-a3-bridge.netdev"
+  retire_unit "$dir/20-a3-bridge-ports.network"
+  retire_unit "$dir/30-a3-bridge-address.network"
 }
 
-# Which socket to bridge with the configured one; empty is no bridge. Asked on
-# every install like the address. Pre-filled with the other wired socket only
-# the first time it is ever asked -- after that the stored answer stands, an
-# empty one included, so a Core set to "no bridge" is not talked back into one.
-ask_bridge_question() {
-  db_fget a3-core/bridge-with seen || true
+# The socket and the address for the audio network; an empty socket is none.
+# Asked on every install like the address. The socket is pre-filled with the
+# other wired one only the first time it is ever asked -- after that the
+# stored answer stands, an empty one included, so a Core set to "none" is not
+# talked back into one.
+ask_audio_questions() {
+  db_fget a3-core/audio-port seen || true
   if [ "x$RET" != "xtrue" ]; then
-    db_set a3-core/bridge-with "$(other_wired_interface "$1")" || true
+    db_set a3-core/audio-port "$(other_wired_interface "$1")" || true
   fi
-  db_fset a3-core/bridge-with seen false || true
-  db_input high a3-core/bridge-with || true
+  db_fset a3-core/audio-port seen false || true
+  db_input high a3-core/audio-port || true
+  db_fset a3-core/audio-address seen false || true
+  db_input high a3-core/audio-address || true
   db_go || return 1
 }
 
@@ -438,7 +434,7 @@ create_network_file() {
     || echo "a3-core: could not create ~/.config/a3/network.json" >&2
 }
 
-# INTERFACE, ADDR, GATEWAY, DNS and BRIDGE_WITH as shell assignments, from the
+# INTERFACE, ADDR, GATEWAY, DNS, AUDIO_PORT and AUDIO_ADDR as shell assignments, from the
 # truth joined with the user's ~/.config/a3/network.json (not root's: this
 # runs as root).
 render_default_network() {
@@ -462,8 +458,8 @@ network_left() {
 # edit, no network.json -- and the rest of the postinst carries on.
 # network.json is created only for the default network, which is what it
 # describes: asked answers are not in it, and a network left alone gets none
-# (it used to be created on every install, naming eno1, a bridge with enp5s0
-# and .10 on machines that had none of them).
+# (it used to be created on every install, naming eno1, a second socket and
+# .10 on machines that had none of them).
 network_step() {
   netdir="$1"; interfaces="$2"
   if installer_answered_network; then
@@ -494,19 +490,20 @@ network_step() {
     db_get a3-core/gateway; GATEWAY="$RET"
     db_get a3-core/dns; DNS="$RET"
 
-    if [ "$preseeded" = false ] && ! ask_bridge_question "$INTERFACE"; then
+    if [ "$preseeded" = false ] && ! ask_audio_questions "$INTERFACE"; then
       network_left
       return 0
     fi
-    db_get a3-core/bridge-with; BRIDGE_WITH="$RET"
+    db_get a3-core/audio-port; AUDIO_PORT="$RET"
+    db_get a3-core/audio-address; AUDIO_ADDR="$RET"
   fi
 
-  write_network_config "$netdir" "$INTERFACE" "$BRIDGE_WITH" \
-    "$ADDR" "$GATEWAY" "$DNS"
+  write_network_config "$netdir" "$INTERFACE" "$ADDR" "$GATEWAY" "$DNS" \
+    "$AUDIO_PORT" "$AUDIO_ADDR"
 
   disable_ifupdown_for "$INTERFACE" "$interfaces"
-  if [ -n "$BRIDGE_WITH" ]; then
-    disable_ifupdown_for "$BRIDGE_WITH" "$interfaces"
+  if [ -n "$AUDIO_PORT" ]; then
+    disable_ifupdown_for "$AUDIO_PORT" "$interfaces"
   fi
   enable_networkd
 }

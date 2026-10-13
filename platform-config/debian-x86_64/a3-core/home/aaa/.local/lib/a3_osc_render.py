@@ -7,7 +7,6 @@ a3-osc.json, so the file stays the only place a port or an IP is written.
 
 import json
 import os
-import shlex
 from pathlib import Path
 
 #: Where the zita units and x11vnc find their arguments (systemd's %h is the
@@ -56,13 +55,13 @@ def osc_env(truth):
 
 def network_defaults(truth):
     network = truth.network()
-    others = [port for port in network["bridge_ports"] if port != network["interface"]]
     return lines([
         ("INTERFACE", network["interface"]),
         ("ADDR", network["address"]),
         ("GATEWAY", network["gateway"]),
         ("DNS", network["dns"]),
-        ("BRIDGE_WITH", shlex.quote(" ".join(others))),
+        ("AUDIO_PORT", network["audio_port"]),
+        ("AUDIO_ADDR", network["audio_address"]),
     ])
 
 
