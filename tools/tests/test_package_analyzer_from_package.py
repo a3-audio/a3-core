@@ -59,7 +59,7 @@ class TheUnitIsThePackages(unittest.TestCase):
     def test_the_drop_in_ties_it_to_the_rig(self):
         unit = section(DROP_IN, "Unit")
         self.assertEqual(unit.get("PartOf"), "a3-main.service")
-        self.assertIn("a3-jack.service", unit.get("After", ""))
+        self.assertIn("pipewire.service", unit.get("After", "").split())
 
     def test_the_drop_in_keeps_its_cpus_and_raises_nothing(self):
         service = section(DROP_IN, "Service")

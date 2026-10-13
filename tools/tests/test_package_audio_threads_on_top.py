@@ -1,15 +1,17 @@
-"""JACK's process threads sit above everything else the package starts
-(2026-10-06).
+"""The audio threads sit above everything else the package starts
+(2026-10-06, on PipeWire since 2026-10-14).
 
 On a3nuc1 (RT kernel, threadirqs) JACK logged about 106 late clients a minute
-with no device xrun. jackd ran with -P 19, so every client's process thread
-was at FIFO 14, while the units raised whole processes with RR: QjackCtl 83,
-REAPER's GUI, video and OSC threads 75, all beat-analyzer threads 65, zita 64.
-GUI threads preempted the audio threads. With jackd's process thread at 80,
-the clients' at 75 and the GUI threads back at SCHED_OTHER the next two
-minutes had no late client at all.
+with no device xrun: the units raised whole processes with RR -- QjackCtl 83,
+REAPER's GUI, video and OSC threads 75, the beat-analyzer 65 -- above the
+clients' process threads. With the GUI threads back at SCHED_OTHER the late
+clients were gone. That half still holds: no unit raises a whole process.
 
-The USB IRQ threads stay above it all: set_irq_prio puts xhci at FIFO 95."""
+The audio server is PipeWire now. Its module-rt puts the data loop at FIFO 83,
+which it may only do when limits.d gives @audio an rtprio above that; the JACK
+clients' threads run below it (REAPER's are set by the realtime preload, see
+test_package_reaper_runs_realtime). The USB IRQ threads stay above it all:
+set_irq_prio puts xhci at FIFO 95."""
 
 import configparser
 import re
@@ -17,11 +19,14 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-UNITS = ROOT / ("platform-config/debian-x86_64/a3-core/home/aaa/.local/share/"
-                "a3-core/config/systemd/user")
+PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core"
+CONFIG = PACKAGE / "home/aaa/.local/share/a3-core/config"
+UNITS = CONFIG / "systemd/user"
+LIMITS = PACKAGE / "etc/security/limits.d/audio.conf"
 
 USB_IRQ_PRIORITY = 95
-JACK_UNIT = "a3-jack.service"
+#: PipeWire's data loop: module-rt's default rt.prio.
+DATA_LOOP_PRIORITY = 83
 CLIENT_UNITS = ("a3-reaper.service", "qjackctl.service")
 # beat-analyzer: its own package's unit plus a3-core's drop-in, see
 # test_package_analyzer_from_package.
@@ -35,26 +40,37 @@ def service(name):
     return parser["Service"]
 
 
-def jack_priority():
-    match = re.search(r"\s-P\s*(\d+)\s", service(JACK_UNIT)["ExecStart"] + " ")
+def audio_rtprio():
+    match = re.search(r"(?m)^@audio\s+-\s+rtprio\s+(\d+)\s*$", LIMITS.read_text())
     if match is None:
-        raise AssertionError("jackd is started without -P")
+        raise AssertionError("limits.d gives @audio no rtprio")
     return int(match.group(1))
 
 
+def shipped_pipewire_configs():
+    return sorted((CONFIG / "pipewire").rglob("*.conf"))
+
+
 class AudioThreadsOnTop(unittest.TestCase):
-    def test_jack_runs_high_but_below_the_usb_irq_threads(self):
-        self.assertGreaterEqual(jack_priority(), 70)
-        self.assertLess(jack_priority(), USB_IRQ_PRIORITY)
+    def test_the_data_loop_may_run_at_its_priority(self):
+        self.assertGreater(audio_rtprio(), DATA_LOOP_PRIORITY)
+        self.assertLessEqual(audio_rtprio(), USB_IRQ_PRIORITY)
+
+    def test_no_shipped_config_moves_the_data_loop(self):
+        for path in shipped_pipewire_configs():
+            with self.subTest(config=path.name):
+                set_lines = [l for l in path.read_text().splitlines()
+                             if re.match(r"\s*rt\.prio\s*=", l)]
+                self.assertEqual(set_lines, [])
 
     def test_no_unit_raises_a_whole_process(self):
-        for name in (JACK_UNIT,) + CLIENT_UNITS:
+        for name in CLIENT_UNITS:
             for key in SCHEDULING_KEYS:
                 with self.subTest(unit=name, key=key):
                     self.assertNotIn(key, service(name))
 
     def test_the_units_keep_their_cpu_affinity(self):
-        for name in (JACK_UNIT,) + CLIENT_UNITS:
+        for name in CLIENT_UNITS:
             with self.subTest(unit=name):
                 self.assertEqual(service(name).get("CPUAffinity"), "1 2 3")
 
