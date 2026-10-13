@@ -53,6 +53,7 @@ class TheUserInstallRunsToTheEnd(unittest.TestCase):
                 ["sh", "-c", "set -e\nAPPUSER=aaa\nUID=1000\n"
                  f"{function('user_systemctl')}\n{function('run_user_install')}\n"
                  f'enable_aes67() {{ echo "enable_aes67" >> {log}; }}\n'
+                 f'stop_retired_units() {{ echo "stop_retired_units" >> {log}; }}\n'
                  "run_user_install"],
                 env={"PATH": f"{bin_dir}:/usr/bin:/bin"},
                 check=True, capture_output=True, text=True)

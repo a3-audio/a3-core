@@ -236,6 +236,44 @@ retire_checkout_analyzer_unit() {
   fi
 }
 
+# a3-jack, zita-j2n and zita-n2j as earlier versions of the package shipped
+# them: PipeWire and AES67 replaced them (2026-10-14), and left enabled in
+# ~/.config an old unit would start jackd and take the sound card away from
+# PipeWire. Disabled (their links in the .wants folders) and moved to the
+# backup, not deleted. Only the Core's own -- the ones that run jackd or zita
+# itself; StemDeck's zita units of the same names stay, and are named. Their
+# names are collected in RETIRED_UNITS, to be stopped once aaa's manager is up.
+retire_jack_and_zita_units() {
+  units_dir="$1/systemd/user"; backup="$2"
+  for name in a3-jack.service zita-j2n.service zita-n2j.service; do
+    unit="$units_dir/$name"
+    [ -f "$unit" ] || continue
+    case "$name" in
+      a3-jack.service) program=/usr/bin/jackd ;;
+      *)               program="/usr/bin/${name%.service}" ;;
+    esac
+    if ! grep -Eq "^ExecStart=${program}( |\$)" "$unit"; then
+      echo "a3-core: kept the local ~/.config/systemd/user/$name -- not the Core's"
+      continue
+    fi
+    if mkdir -p "$backup/systemd/user" 2>/dev/null \
+       && mv "$unit" "$backup/systemd/user/$name"; then
+      find "$units_dir" -mindepth 2 -maxdepth 2 -type l -path "*.wants/$name" \
+        -exec rm -f {} + || true
+      RETIRED_UNITS="${RETIRED_UNITS:+$RETIRED_UNITS }$name"
+      echo "a3-core: moved ~/.config/systemd/user/$name (jackd and zita are gone) to $backup"
+    else
+      echo "a3-core: could not move ~/.config/systemd/user/$name -- it may still start" >&2
+    fi
+  done
+}
+
+# Stop what retire_jack_and_zita_units took away and still runs.
+stop_retired_units() {
+  [ -n "$RETIRED_UNITS" ] || return 0
+  user_systemctl stop $RETIRED_UNITS || true
+}
+
 # Ask which differing parts to replace. Every one is offered ticked: the old
 # answer, replacing nothing, is what left a3nuc2 on a six-month-old REAPER,
 # and nothing replaced is lost (decided 2026-10-04). Asked only when something
@@ -547,6 +585,8 @@ fi
 CONFIG_BACKUP="${USER_HOME}/.config/a3-replaced/$(date +%Y-%m-%d_%H%M%S)"
 install_shipped_config "$SHIPPED_CONFIG" "${USER_HOME}/.config" "$CONFIG_BACKUP" "$REPLACE_CONFIG"
 retire_checkout_analyzer_unit "${USER_HOME}/.config" "$CONFIG_BACKUP"
+RETIRED_UNITS=""
+retire_jack_and_zita_units "${USER_HOME}/.config" "$CONFIG_BACKUP"
 echo "a3-core: nothing restarted; restart a3-main to run the new config"
 
 ssh_key_step "${USER_HOME}/.ssh"
@@ -613,6 +653,7 @@ run_user_install() {
     echo "a3-core: installing REAPER and the plugins as $APPUSER (this downloads)..."
     user_systemctl start --wait a3-user-install.service \
       || echo "a3-core: the user install failed -- see 'journalctl --user -u a3-user-install' as $APPUSER" >&2
+    stop_retired_units
     enable_aes67
   else
     echo "a3-core: no user manager for $APPUSER -- REAPER not installed; run 'dpkg-reconfigure a3-core'" >&2
