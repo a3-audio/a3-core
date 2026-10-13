@@ -76,7 +76,7 @@ class CoreAnnounces(unittest.TestCase):
 
 
 class CoreRendersForItsNeighbours(unittest.TestCase):
-    """Spec truth-from-core: zita and the analyzer read the .env Core's
+    """Spec truth-from-core: x11vnc and the analyzer read the .env Core's
     renderer writes; Core writes it at its start, from the joined truth, so a
     changed network.json reaches them without a reinstall (final review)."""
 

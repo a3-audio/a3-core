@@ -553,10 +553,10 @@ chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.local" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.config" || true
 [ -d "${USER_HOME}/.ssh" ] && chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.ssh" || true
 
-# zita's arguments and the beat-analyzer's targets, from a3-osc.json. A failure
-# is said out loud: the zita units would start without their addresses.
+# x11vnc's port and the beat-analyzer's targets, from a3-osc.json. A failure
+# is said out loud: they would start without their addresses.
 sudo -u "$APPUSER" -H "${USER_HOME}/.local/bin/a3-osc-render" user \
-  || echo "a3-core: a3-osc-render user failed -- zita and the analyzer lack their addresses" >&2
+  || echo "a3-core: a3-osc-render user failed -- x11vnc and the analyzer lack their addresses" >&2
 
 find "$USER_HOME/.config" -type d -exec chmod 0755 {} \;
 find "$USER_HOME/.config" -type f -exec chmod 0664 {} \;

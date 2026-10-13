@@ -76,8 +76,6 @@ class ThePorts(unittest.TestCase):
         self.assertEqual(t.port("beat-analyzer", "clock"), 7775)
         self.assertEqual(t.port("reaper", "osc"), 9001)
         self.assertEqual(t.port("dualdelay", "osc"), 1340)
-        self.assertEqual(t.port("zita-n2j", "audio"), 65100)
-        self.assertEqual(t.port("radla", "zita-n2j"), 55100)
         self.assertEqual(t.port("prolink", "announce"), 50000)
 
     def test_no_two_listeners_on_one_host_and_port(self):
@@ -98,6 +96,13 @@ class ThePorts(unittest.TestCase):
         for route in t.routes():
             self.assertIn(route["from"], programs, route)
             self.assertIn(route["to"], names, route)
+
+    def test_no_zita_is_left(self):
+        """AES67 carries the network audio since 2026-10-14; a zita port in
+        the truth would be rendered into the docs as one still open."""
+        t = truth()
+        self.assertFalse([p for p in t.programs() if p.startswith("zita")])
+        self.assertFalse([l["name"] for l in t.listeners() if "zita" in l["name"]])
 
 
 class TheVocabulary(unittest.TestCase):

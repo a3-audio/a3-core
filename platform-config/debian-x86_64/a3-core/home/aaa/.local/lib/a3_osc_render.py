@@ -1,6 +1,6 @@
 """The one truth, written out for what cannot read JSON.
 
-zita's units, the postinst's default network and the beat-analyzer's conf.d
+x11vnc's unit, the postinst's default network and the beat-analyzer's conf.d
 take their addresses as text. They get it from here, rendered from
 a3-osc.json, so the file stays the only place a port or an IP is written.
 """
@@ -9,9 +9,8 @@ import json
 import os
 from pathlib import Path
 
-#: Where the zita units and x11vnc find their arguments (systemd's %h is the
-#: home; x11vnc is a system unit and names it in full).
-SYSTEMD_ENV_FILE = "%h/.config/a3/osc.env"
+#: Where x11vnc finds its port (a system unit: it names the home in full;
+#: %h would be root's).
 ENV_FILE = Path(".config/a3/osc.env")
 
 #: The analyzer's file of ours. The beat-analyzer package reads conf.d/*.env
@@ -33,24 +32,13 @@ def lines(pairs):
     return "".join(f"{key}={value}\n" for key, value in pairs)
 
 
-def zita_env(truth):
-    j2n_host, j2n_port = truth.endpoint("radla", "zita-n2j")
-    n2j = truth.listener("zita-n2j", "audio")
-    return lines([
-        ("A3_ZITA_J2N_HOST", j2n_host),
-        ("A3_ZITA_J2N_PORT", j2n_port),
-        ("A3_ZITA_N2J_HOST", truth.host(n2j["host"])),
-        ("A3_ZITA_N2J_PORT", n2j["port"]),
-    ])
-
-
 def vnc_env(truth):
     return lines([("A3_VNC_PORT", truth.port("x11vnc", "vnc"))])
 
 
 def osc_env(truth):
-    """osc.env: zita's arguments and x11vnc's port."""
-    return zita_env(truth) + vnc_env(truth)
+    """osc.env: x11vnc's port."""
+    return vnc_env(truth)
 
 
 def network_defaults(truth):

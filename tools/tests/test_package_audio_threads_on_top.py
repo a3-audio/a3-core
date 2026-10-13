@@ -22,9 +22,7 @@ UNITS = ROOT / ("platform-config/debian-x86_64/a3-core/home/aaa/.local/share/"
 
 USB_IRQ_PRIORITY = 95
 JACK_UNIT = "a3-jack.service"
-CLIENT_UNITS = ("a3-reaper.service", "qjackctl.service",
-                "zita-j2n.service",
-                "zita-n2j.service")
+CLIENT_UNITS = ("a3-reaper.service", "qjackctl.service")
 # beat-analyzer: its own package's unit plus a3-core's drop-in, see
 # test_package_analyzer_from_package.
 SCHEDULING_KEYS = ("CPUSchedulingPolicy", "CPUSchedulingPriority")

@@ -213,7 +213,7 @@ class TheGateIsTheTemplatesOutputs(unittest.TestCase):
                 self.assertEqual(self.names.get(track), name)
 
     def test_rec_is_never_gated(self):
-        # rec feeds zita-j2n, StemDeck's rec input and the analyzer's bpm input.
+        # rec feeds the AES67 sender, StemDeck's rec input and the analyzer's bpm input.
         rec = next(track for track, name in self.names.items() if name == "rec")
         self.assertNotIn(rec, self.layout.gate.values())
 

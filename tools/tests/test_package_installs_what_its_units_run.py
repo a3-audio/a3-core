@@ -52,8 +52,6 @@ PROVIDED_BY = {
     "/usr/bin/jackd": "jackd2",
     "/usr/bin/jack_wait": "jack-example-tools",
     "/usr/bin/qjackctl": "qjackctl",
-    "/usr/bin/zita-j2n": "zita-njbridge",
-    "/usr/bin/zita-n2j": "zita-njbridge",
     "/usr/bin/python3": "python3",
 }
 
@@ -105,12 +103,11 @@ def programs_run_by(unit_names):
 
 
 class WhatIsStarted(unittest.TestCase):
-    def test_the_bridges_and_the_whole_group_are_started(self):
+    def test_the_whole_group_is_started(self):
         started = started_units()
         for unit in ("a3-main.service", "a3-jack.service",
                      "a3-reaper.service", "qjackctl.service",
-                     "a3-core.service", "zita-j2n.service",
-                     "zita-n2j.service"):
+                     "a3-core.service"):
             self.assertIn(unit, started)
 
 
