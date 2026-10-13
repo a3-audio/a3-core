@@ -53,6 +53,7 @@ class TheUserInstallRunsToTheEnd(unittest.TestCase):
                 ["sh", "-c", "set -e\nAPPUSER=aaa\nUID=1000\n"
                  f"{function('user_systemctl')}\n{function('run_user_install')}\n"
                  f'enable_aes67() {{ echo "enable_aes67" >> {log}; }}\n'
+                 f'enable_the_rig() {{ echo "enable_the_rig" >> {log}; }}\n'
                  f'stop_retired_units() {{ echo "stop_retired_units" >> {log}; }}\n'
                  "run_user_install"],
                 env={"PATH": f"{bin_dir}:/usr/bin:/bin"},
@@ -81,6 +82,13 @@ class TheUserInstallRunsToTheEnd(unittest.TestCase):
         self.assertLess(self.position(calls, r"^systemctl --user daemon-reload$"),
                         self.position(calls, r"^enable_aes67$"))
         self.assertLess(self.position(calls, r"^enable_aes67$"),
+                        self.position(calls, r"^loginctl disable-linger aaa$"))
+
+    def test_the_rig_is_enabled_while_the_manager_is_up(self):
+        calls = self.run_user_install()
+        self.assertLess(self.position(calls, r"^systemctl --user daemon-reload$"),
+                        self.position(calls, r"^enable_the_rig$"))
+        self.assertLess(self.position(calls, r"^enable_the_rig$"),
                         self.position(calls, r"^loginctl disable-linger aaa$"))
 
     def test_linger_goes_only_after_the_install(self):

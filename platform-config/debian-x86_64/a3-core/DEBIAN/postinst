@@ -654,11 +654,19 @@ run_user_install() {
     user_systemctl start --wait a3-user-install.service \
       || echo "a3-core: the user install failed -- see 'journalctl --user -u a3-user-install' as $APPUSER" >&2
     stop_retired_units
+    enable_the_rig
     enable_aes67
   else
     echo "a3-core: no user manager for $APPUSER -- REAPER not installed; run 'dpkg-reconfigure a3-core'" >&2
   fi
   [ "x$linger_before" = "xyes" ] || loginctl disable-linger "$APPUSER" || true
+}
+
+# a3-main wants qjackctl, REAPER, Core, the analyzer and Motion: enabled, the
+# rig comes up at the next login. The shipped units arrive as files only, never
+# with their .wants links, and replacing the systemd group took the link away.
+enable_the_rig() {
+  user_systemctl enable a3-main.service || true
 }
 
 # The audio network's socket, from the truth joined with network.json --
