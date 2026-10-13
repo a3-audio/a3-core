@@ -8,7 +8,6 @@ would be a second truth, and the day the rig moved from 192.168.43.x to
 
 import json
 import os
-import shlex
 import subprocess
 import sys
 import tempfile
@@ -126,11 +125,11 @@ class TheNetworkDefaultsAreRendered(unittest.TestCase):
         self.assertEqual(shell["GATEWAY"], network["gateway"])
         self.assertEqual(shell["DNS"], network["dns"])
 
-    def test_the_default_bridges_the_other_port(self):
+    def test_the_default_puts_the_audio_network_on_the_other_port(self):
         shell = pairs(a3_osc_render.network_defaults(TRUTH))
-        others = [port for port in TRUTH.network()["bridge_ports"]
-                  if port != TRUTH.network()["interface"]]
-        self.assertEqual(shell["BRIDGE_WITH"], shlex.quote(" ".join(others)))
+        self.assertEqual(shell["AUDIO_PORT"], TRUTH.network()["audio_port"])
+        self.assertEqual(shell["AUDIO_ADDR"], TRUTH.network()["audio_address"])
+        self.assertNotIn("BRIDGE_WITH", shell)
 
     def test_postinst_takes_the_default_from_the_tool(self):
         text = POSTINST.read_text()
@@ -151,6 +150,7 @@ class TheNetworkDefaultsAreRendered(unittest.TestCase):
         self.assertEqual(defaults["a3-core/address"], network["address"])
         self.assertEqual(defaults["a3-core/gateway"], network["gateway"])
         self.assertEqual(defaults["a3-core/dns"], network["dns"])
+        self.assertEqual(defaults["a3-core/audio-address"], network["audio_address"])
 
 
 class TheAnalyzerTargetsAreRendered(unittest.TestCase):

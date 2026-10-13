@@ -14,8 +14,8 @@ a machine where nobody wanted it. Two faults together:
 Now the installer marks its answers explicitly (a3-core/preseeded), the
 postinst takes them only then and clears the marker, and an ESC anywhere in
 the network dialogs ends the network step without writing anything; the rest
-of the postinst carries on. a3.network is written only when it changes, and
-the file it replaces is kept beside it.
+of the postinst carries on. A network unit is written only when it changes,
+and the file it replaces is kept beside it.
 """
 
 import re
@@ -31,7 +31,7 @@ TEMPLATES = PACKAGE / "DEBIAN" / "templates"
 # The postinst's own functions the network step is made of.
 FUNCTIONS = ("forget_retired_network", "ask_address_questions",
              "other_wired_interface", "write_network_config",
-             "ask_bridge_question", "disable_ifupdown_for",
+             "ask_audio_questions", "disable_ifupdown_for",
              "installer_answered_network", "ask_configure_network",
              "network_left", "network_step")
 
@@ -69,7 +69,7 @@ db_go () {
 }
 create_network_file () { mkdir -p "$HOME_DIR/.config/a3"; echo '{}' > "$HOME_DIR/.config/a3/network.json"; }
 render_default_network () {
-  echo "INTERFACE=eno1 ADDR=192.168.8.10/24 GATEWAY=192.168.8.1 DNS=192.168.8.1 BRIDGE_WITH=''"
+  echo "INTERFACE=eno1 ADDR=192.168.8.10/24 GATEWAY=192.168.8.1 DNS=192.168.8.1 AUDIO_PORT=enp5s0 AUDIO_ADDR=192.168.9.10/24"
 }
 enable_networkd () { echo "enable networkd"; }
 """
@@ -136,7 +136,8 @@ class NetworkStep(unittest.TestCase):
         stored, no marker."""
         self.store(configure_network="true", install_default_network="false",
                    interface="eno1", address="192.168.8.10/24",
-                   gateway="192.168.8.1", dns="192.168.8.1", bridge_with="")
+                   gateway="192.168.8.1", dns="192.168.8.1", audio_port="",
+                   audio_address="")
         self.flag("configure-network", "seen", "true")
 
     def assertNothingWritten(self):
@@ -168,10 +169,10 @@ class TheInstallersMarkedAnswersAreTaken(NetworkStep):
     def preseed(self):
         self.store(configure_network="true", install_default_network="false",
                    interface="eno1", address="192.168.8.20/24",
-                   gateway="192.168.8.1", dns="192.168.8.1", bridge_with="",
-                   preseeded="true")
+                   gateway="192.168.8.1", dns="192.168.8.1", audio_port="enp5s0",
+                   audio_address="192.168.9.20/24", preseeded="true")
         for q in ("configure-network", "interface", "address", "gateway", "dns",
-                  "bridge-with"):
+                  "audio-port", "audio-address"):
             self.flag(q, "seen", "true")
 
     def test_nothing_is_asked(self):
@@ -182,7 +183,9 @@ class TheInstallersMarkedAnswersAreTaken(NetworkStep):
     def test_the_answers_are_written(self):
         self.preseed()
         self.run_step()
-        self.assertIn("Address=192.168.8.20/24", (self.net / "a3.network").read_text())
+        self.assertIn("Address=192.168.8.20/24", (self.net / "10-a3.network").read_text())
+        self.assertIn("Address=192.168.9.20/24",
+                      (self.net / "20-a3-aes67.network").read_text())
 
     def test_the_marker_is_cleared(self):
         self.preseed()
@@ -204,7 +207,7 @@ class EscWritesNothing(NetworkStep):
     def a_user_who_says_yes(self):
         self.a_machine_set_up_by_package_1_0_0()
         self.user_answers(configure_network="true", address="10.0.0.5/24",
-                          bridge_with="enp5s0")
+                          audio_port="enp5s0", audio_address="10.0.9.5/24")
 
     def test_esc_at_the_first_question(self):
         self.a_machine_set_up_by_package_1_0_0()
@@ -221,31 +224,31 @@ class EscWritesNothing(NetworkStep):
         self.run_step(esc_at="a3-core/interface")
         self.assertNothingWritten()
 
-    def test_esc_at_the_bridge(self):
+    def test_esc_at_the_audio_port(self):
         self.a_user_who_says_yes()
-        self.run_step(esc_at="a3-core/bridge-with")
+        self.run_step(esc_at="a3-core/audio-port")
         self.assertNothingWritten()
 
     def test_without_esc_the_answers_are_written(self):
         """The counter-check: the same user, no ESC, gets the network."""
         self.a_user_who_says_yes()
         self.run_step()
-        self.assertIn("Address=10.0.0.5/24",
-                      (self.net / "30-a3-bridge-address.network").read_text())
+        self.assertIn("Address=10.0.0.5/24", (self.net / "10-a3.network").read_text())
+        self.assertIn("Address=10.0.9.5/24", (self.net / "20-a3-aes67.network").read_text())
         self.assertIn("enable networkd", self.calls)
 
     def test_the_postinst_can_go_back(self):
         self.assertRegex(POSTINST.read_text(), r"\ndb_capb backup\b")
 
     def test_no_network_dialog_discards_what_db_go_says(self):
-        for name in ("ask_address_questions", "ask_bridge_question",
+        for name in ("ask_address_questions", "ask_audio_questions",
                      "ask_configure_network"):
             self.assertNotRegex(function(name), r"db_go \|\| true", name)
 
 
 class TheNetworkFileIsOnlyWhatWasConfigured(NetworkStep):
-    """~/.config/a3/network.json carries the package's defaults (eno1, a
-    bridge with enp5s0, .10): on a machine whose network was not configured,
+    """~/.config/a3/network.json carries the package's defaults (eno1, the
+    audio network on enp5s0, .10): on a machine whose network was not configured,
     or was configured from other answers, it names another machine."""
 
     def test_not_written_when_the_network_is_left(self):
@@ -274,17 +277,19 @@ class TheUnitIsWrittenOnlyWhenItChanges(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def write(self, addr, with_=""):
+    def write(self, addr, audio_port=""):
+        audio_address = "192.168.9.10/24" if audio_port else ""
         subprocess.run(["sh", "-c", function("write_network_config")
                         + '\nwrite_network_config "$@"', "sh", str(self.dir),
-                        "eno1", with_, addr, "192.168.8.1", "192.168.8.1"], check=True)
+                        "eno1", addr, "192.168.8.1", "192.168.8.1",
+                        audio_port, audio_address], check=True)
 
     def backups(self):
         return sorted(p.name for p in self.dir.iterdir() if ".bak-" in p.name)
 
     def test_unchanged_content_is_not_rewritten(self):
         self.write("192.168.8.10/24")
-        unit = self.dir / "a3.network"
+        unit = self.dir / "10-a3.network"
         before = unit.stat()
         self.write("192.168.8.10/24")
         after = unit.stat()
@@ -292,24 +297,25 @@ class TheUnitIsWrittenOnlyWhenItChanges(unittest.TestCase):
         self.assertEqual([], self.backups())
 
     def test_changed_content_keeps_the_old_file(self):
-        unit = self.dir / "a3.network"
+        unit = self.dir / "10-a3.network"
         unit.write_text("[Match]\nName=eno1\n\n[Network]\nAddress=192.168.8.30/24\n")
         self.write("192.168.8.10/24")
         backups = self.backups()
         self.assertEqual(1, len(backups), backups)
-        self.assertTrue(backups[0].startswith("a3.network.bak-"))
+        self.assertTrue(backups[0].startswith("10-a3.network.bak-"))
         self.assertIn("192.168.8.30/24", (self.dir / backups[0]).read_text())
         self.assertIn("192.168.8.10/24", unit.read_text())
 
     def test_a_unit_the_other_variant_removes_is_kept_too(self):
-        unit = self.dir / "a3.network"
-        unit.write_text("[Match]\nName=eno1\n\n[Network]\nAddress=192.168.8.30/24\n")
+        unit = self.dir / "20-a3-aes67.network"
         self.write("192.168.8.10/24", "enp5s0")
+        self.write("192.168.8.10/24")
         self.assertFalse(unit.exists())
-        self.assertEqual(1, len([b for b in self.backups() if b.startswith("a3.network.bak-")]))
+        self.assertEqual(
+            1, len([b for b in self.backups() if b.startswith("20-a3-aes67.network.bak-")]))
 
     def test_a_backup_does_not_end_in_a_suffix_networkd_reads(self):
-        (self.dir / "a3.network").write_text("old\n")
+        (self.dir / "10-a3.network").write_text("old\n")
         self.write("192.168.8.10/24")
         for name in self.backups():
             self.assertFalse(name.endswith((".network", ".netdev", ".link")), name)

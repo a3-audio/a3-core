@@ -36,11 +36,14 @@ def truth():
 class TheNetwork(unittest.TestCase):
     """As it stands on the rig (/etc/systemd/network, 2026-09-30)."""
 
-    def test_the_bridge(self):
+    def test_the_second_port_is_the_audio_network(self):
+        """Two networks since 2026-10-14, no bridge: AES67 and PTP on a
+        subnet of their own."""
         network = truth().network()
-        self.assertEqual(network["bridge"], "br0")
-        self.assertEqual(network["bridge_ports"], ["eno1", "enp5s0"])
-        self.assertTrue(network["stp"])
+        self.assertEqual(network["audio_port"], "enp5s0")
+        self.assertEqual(network["audio_address"], "192.168.9.10/24")
+        for gone in ("bridge", "bridge_ports", "stp"):
+            self.assertNotIn(gone, network)
 
     def test_the_cores_address(self):
         network = truth().network()
