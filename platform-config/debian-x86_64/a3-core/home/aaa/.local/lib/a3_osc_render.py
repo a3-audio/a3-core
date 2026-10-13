@@ -86,9 +86,16 @@ def aes67_conf(truth, hostname, template=AES67_TEMPLATE):
     port = truth.network().get("audio_port", "")
     if not port:
         return None
+    stream_ip, stream_port = truth.endpoint("aes67", "stream")
+    sap_ip, sap_port = truth.endpoint("aes67", "sap")
     text = Path(template).read_text()
-    text = text.replace("@AUDIO_PORT@", port)
-    text = text.replace("@SENDER_NAME@", f"AES67 {hostname} out")
+    for placeholder, filled in (("@AUDIO_PORT@", port),
+                                ("@SENDER_NAME@", f"AES67 {hostname} out"),
+                                ("@STREAM_IP@", stream_ip),
+                                ("@STREAM_PORT@", str(stream_port)),
+                                ("@SAP_IP@", sap_ip),
+                                ("@SAP_PORT@", str(sap_port))):
+        text = text.replace(placeholder, filled)
     return f"{HEADER}\n{text}"
 
 

@@ -45,6 +45,9 @@ class TruthWithPort:
     def __init__(self, port):
         self._port = port
 
+    def __getattr__(self, name):
+        return getattr(TRUTH, name)
+
     def network(self):
         network = TRUTH.network()
         network["audio_port"] = self._port
@@ -107,6 +110,41 @@ class TheConfigIsThisMachines(unittest.TestCase):
 
     def test_no_audio_port_is_no_config(self):
         self.assertIsNone(rendered(port=""))
+
+
+class TheTruthNamesTheAudioNetwork(unittest.TestCase):
+    """The audio network's groups and ports are in the truth like every other
+    port (decided 2026-10-14), so the ports page lists them and the config
+    takes them from there instead of writing them a second time."""
+
+    def endpoint(self, program, role):
+        listener = TRUTH.listener(program, role)
+        return TRUTH.host(listener["host"]), listener["port"]
+
+    def test_the_cores_stream(self):
+        self.assertEqual(("239.69.150.243", 5004), self.endpoint("aes67", "stream"))
+
+    def test_the_announcements(self):
+        self.assertEqual(("239.255.255.255", 9875), self.endpoint("aes67", "sap"))
+
+    def test_ptp(self):
+        self.assertEqual(("224.0.1.129", 319), self.endpoint("ptp4l", "event"))
+        self.assertEqual(("224.0.1.129", 320), self.endpoint("ptp4l", "general"))
+
+    def test_the_config_takes_the_stream_from_the_truth(self):
+        sender = block(rendered(), "libpipewire-module-rtp-sink")
+        self.assertEqual("239.69.150.243", value(sender, "destination.ip"))
+        self.assertEqual("5004", value(sender, "destination.port"))
+
+    def test_the_config_takes_the_announcements_from_the_truth(self):
+        sap = block(rendered(), "libpipewire-module-rtp-sap")
+        self.assertEqual("239.255.255.255", value(sap, "sap.ip"))
+        self.assertEqual("9875", value(sap, "sap.port"))
+
+    def test_the_template_writes_none_of_them(self):
+        template = a3_osc_render.AES67_TEMPLATE.read_text()
+        for written in ("239.69.150.243", "239.255.255.255", "5004", "9875"):
+            self.assertNotIn(written, template)
 
 
 class WhatTheRigSettledOn(unittest.TestCase):

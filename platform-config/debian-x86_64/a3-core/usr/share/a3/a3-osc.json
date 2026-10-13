@@ -37,7 +37,10 @@
   "mixer": "192.168.8.11",
   "radla": "192.168.43.96",
   "local": "127.0.0.1",
-  "any": "0.0.0.0"
+  "any": "0.0.0.0",
+  "aes67-core": "239.69.150.243",
+  "sap": "239.255.255.255",
+  "ptp": "224.0.1.129"
  },
  "listeners": [
   {"name": "core.osc", "program": "core", "role": "osc", "host": "any", "port": 9000,
@@ -83,7 +86,15 @@
   {"name": "prolink.beat", "program": "prolink", "role": "beat", "host": "any", "port": 50001,
    "carries": "Pro DJ Link beat packets (broadcast, not OSC)"},
   {"name": "prolink.status", "program": "prolink", "role": "status", "host": "any", "port": 50002,
-   "carries": "Pro DJ Link status packets (broadcast, not OSC)"}
+   "carries": "Pro DJ Link status packets (broadcast, not OSC)"},
+  {"name": "aes67.stream", "program": "aes67", "role": "stream", "host": "aes67-core", "port": 5004,
+   "carries": "the Core's 12 channels as AES67 (RTP, L24, 44.1 kHz, 0.5 ms packets), multicast on the audio socket; not OSC"},
+  {"name": "aes67.sap", "program": "aes67", "role": "sap", "host": "sap", "port": 9875,
+   "carries": "AES67 stream announcements (SAP/SDP), multicast on the audio socket, every sender and receiver; not OSC"},
+  {"name": "ptp4l.event", "program": "ptp4l", "role": "event", "host": "ptp", "port": 319,
+   "carries": "PTP event messages; the Core is master on the audio socket; not OSC"},
+  {"name": "ptp4l.general", "program": "ptp4l", "role": "general", "host": "ptp", "port": 320,
+   "carries": "PTP general messages (announce, follow-up); not OSC"}
  ],
  "routes": [
   {"from": "mixer", "to": "core.osc"},
@@ -188,5 +199,5 @@
    "/EnergyVisualizer/RMS", "/DualDelay/delayBPML", "/DualDelay/delayBPMR"]}
  },
  "programs": ["core", "motion", "mixer", "beat-analyzer", "stemdeck", "reaper", "devices",
-              "iem", "dualdelay", "x11vnc", "radla", "prolink"]
+              "iem", "dualdelay", "x11vnc", "radla", "prolink", "aes67", "ptp4l"]
 }

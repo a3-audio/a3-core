@@ -72,8 +72,8 @@ context.modules = [
         args = {
             ### Please select the interface here
             local.ifname = "@AUDIO_PORT@"
-            sap.ip = 239.255.255.255
-            sap.port = 9875
+            sap.ip = @SAP_IP@
+            sap.port = @SAP_PORT@
             net.ttl = 32
             net.loop = false
             # If you use another PTPv2 daemon supporting management
@@ -113,13 +113,11 @@ context.modules = [
     },
     { name = libpipewire-module-rtp-sink
         args = {
-            ### Please select the interface here
             local.ifname = "@AUDIO_PORT@"
-            ### If you want to create multiple output streams, please copy the whole
-            ### module-rtp-sink block, but change this multicast IP to another unused
-            ### one keeping 239.69.x.x range unless you know you need another one
-            destination.ip = 239.69.150.243
-            destination.port = 5004
+            # Group and port are the truth's aes67.stream (a3-osc.json); a second
+            # sender needs a listener of its own there, in the 239.69.x.x range.
+            destination.ip = @STREAM_IP@
+            destination.port = @STREAM_PORT@
             net.mtu = 1500
             net.ttl = 32
             net.loop = false
