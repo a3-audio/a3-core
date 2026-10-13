@@ -141,6 +141,7 @@ config_group() {
     i3/*)         echo i3 ;;
     systemd/*)    echo systemd ;;
     rncbc.org/*)  echo qjackctl ;;
+    pipewire/*)   echo pipewire ;;
     IEM/*)        echo iem ;;
     *)            echo other ;;
   esac
@@ -152,6 +153,7 @@ config_group_label() {
     i3)       echo "i3 config" ;;
     systemd)  echo "systemd user units" ;;
     qjackctl) echo "QjackCtl and patchbay" ;;
+    pipewire) echo "PipeWire: rate + block + AES67" ;;
     iem)      echo "IEM plugin settings" ;;
     *)        echo "other files" ;;
   esac
@@ -169,7 +171,7 @@ differing_config_groups() {
     cmp -s "$shipped" "$dst/$rel" && continue
     config_group "$rel"
   done)"
-  for g in reaper i3 systemd qjackctl iem other; do
+  for g in reaper i3 systemd qjackctl pipewire iem other; do
     echo "$found" | grep -qx "$g" && echo "$g"
   done | paste -sd, - | sed 's/,/, /g'
 }

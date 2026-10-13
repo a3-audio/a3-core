@@ -60,7 +60,7 @@ class InstallShippedConfig(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def install(self, replace="reaper, i3, systemd, qjackctl, iem, other"):
+    def install(self, replace="reaper, i3, systemd, qjackctl, pipewire, iem, other"):
         return subprocess.run(
             ["sh", "-c", f"set -e\n{function(*INSTALLING)}\n"
              'install_shipped_config "$1" "$2" "$3" "$4"', "sh",
@@ -179,7 +179,7 @@ class TheReplaceQuestion(unittest.TestCase):
 
     def test_labels_carry_no_comma(self):
         """debconf reads a comma in Choices as the next choice."""
-        for group in ("reaper", "i3", "systemd", "qjackctl", "iem", "other"):
+        for group in ("reaper", "i3", "systemd", "qjackctl", "pipewire", "iem", "other"):
             label = subprocess.run(
                 ["sh", "-c", f"{function('config_group_label')}\n"
                  'config_group_label "$1"', "sh", group],
