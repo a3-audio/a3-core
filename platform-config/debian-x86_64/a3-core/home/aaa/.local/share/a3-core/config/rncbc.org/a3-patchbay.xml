@@ -27,17 +27,19 @@
    <plug>aux_L</plug>
    <plug>aux_R</plug>
   </socket>
-  <socket client="zita\-n2j" exclusive="off" name="zita_stemdeck" type="jack-audio">
-   <plug>out_1</plug>
-   <plug>out_2</plug>
-   <plug>out_3</plug>
-   <plug>out_4</plug>
-   <plug>out_5</plug>
-   <plug>out_6</plug>
-   <plug>out_7</plug>
-   <plug>out_8</plug>
-   <plug>out_9</plug>
-   <plug>out_10</plug>
+  <socket client="AES67\ a3nuc2\ stems" exclusive="off" name="zita_stemdeck" type="jack-audio">
+   <plug>receive_D1L</plug>
+   <plug>receive_D1R</plug>
+   <plug>receive_D2L</plug>
+   <plug>receive_D2R</plug>
+   <plug>receive_D3L</plug>
+   <plug>receive_D3R</plug>
+   <plug>receive_D4L</plug>
+   <plug>receive_D4R</plug>
+   <plug>receive_AUXL</plug>
+   <plug>receive_AUXR</plug>
+   <plug>receive_CUEL</plug>
+   <plug>receive_CUER</plug>
   </socket>
   <socket client="REAPER" exclusive="off" name="reaper_main" type="jack-audio">
    <plug>out1</plug>
@@ -117,6 +119,22 @@
    <plug>out65</plug>
    <plug>out66</plug>
   </socket>
+  <socket client="AES67 a3nuc2 stems" exclusive="off" name="aes67_stems_from_stemdeck" type="jack-audio">
+   <plug>receive_D1L</plug>
+   <plug>receive_D1R</plug>
+   <plug>receive_D2L</plug>
+   <plug>receive_D2R</plug>
+   <plug>receive_D3L</plug>
+   <plug>receive_D3R</plug>
+   <plug>receive_D4L</plug>
+   <plug>receive_D4R</plug>
+   <plug>receive_AUXL</plug>
+   <plug>receive_AUXR</plug>
+  </socket>
+  <socket client="AES67 a3nuc2 stems" exclusive="off" name="aes67_cue_from_stemdeck" type="jack-audio">
+   <plug>receive_CUEL</plug>
+   <plug>receive_CUER</plug>
+  </socket>
  </output-sockets>
  <input-sockets>
   <socket client="REAPER" exclusive="off" name="reaper_analog" type="jack-audio">
@@ -144,6 +162,8 @@
    <plug>in20</plug>
    <plug>in21</plug>
    <plug>in22</plug>
+   <plug>in23</plug>
+   <plug>in24</plug>
   </socket>
   <socket client="REAPER" exclusive="off" name="reaper_aux" type="jack-audio">
    <plug>in9</plug>
@@ -177,7 +197,11 @@
    <plug>rec_L</plug>
    <plug>rec_R</plug>
   </socket>
-  <socket client="zita\-j2n" exclusive="off" name="zita_stemdeck" type="jack-audio">
+  <socket client="AES67\ a3nuc1\ out" exclusive="off" name="zita_stemdeck" type="jack-audio">
+   <plug>send_CH1</plug>
+   <plug>send_CH2</plug>
+  </socket>
+  <socket client="zita\-j2n\-obs" exclusive="off" name="zita_obs" type="jack-audio">
    <plug>in_1</plug>
    <plug>in_2</plug>
   </socket>
@@ -250,6 +274,14 @@
    <plug>vu_in4_post_L</plug>
    <plug>vu_in4_post_R</plug>
   </socket>
+  <socket client="REAPER" exclusive="off" name="reaper_cue" type="jack-audio">
+   <plug>in23</plug>
+   <plug>in24</plug>
+  </socket>
+  <socket client="AES67 a3nuc1 out" exclusive="off" name="aes67_rec_to_stemdeck" type="jack-audio">
+   <plug>send_CH1</plug>
+   <plug>send_CH2</plug>
+  </socket>
  </input-sockets>
  <slots/>
  <cables>
@@ -265,11 +297,15 @@
   <cable input="local_stemdeck" output="reaper_rec" type="jack-audio"/>
   <cable input="beat-analyzer_bpm" output="reaper_rec" type="jack-audio"/>
   <cable input="beat-analyzer_vu_rec" output="reaper_rec" type="jack-audio"/>
+  <cable input="zita_obs" output="reaper_rec" type="jack-audio"/>
+  <cable input="aes67_rec_to_stemdeck" output="reaper_rec" type="jack-audio"/>
   <cable input="beat\-analyzer_aux" output="reaper_aux" type="jack-audio"/>
+  <cable input="beat_analyzer_vu_main" output="reaper_vu_main" type="jack-audio"/>
   <cable input="beat-analyzer_analog" output="reaper_vu_analog" type="jack-audio"/>
   <cable input="beat-analyzer_channels_pre" output="reaper_vu_channels_pre" type="jack-audio"/>
   <cable input="beat-analyzer_channels_post" output="reaper_vu_channels_post" type="jack-audio"/>
-  <cable input="beat_analyzer_vu_main" output="reaper_vu_main" type="jack-audio"/>
+  <cable input="reaper_stems" output="aes67_stems_from_stemdeck" type="jack-audio"/>
+  <cable input="reaper_cue" output="aes67_cue_from_stemdeck" type="jack-audio"/>
  </cables>
 </patchbay>
 

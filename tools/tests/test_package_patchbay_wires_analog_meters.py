@@ -9,7 +9,7 @@ import json
 import unittest
 
 from tools.tests.test_package_patchbay_wires_stereo_meters import TRUTH, wired_pairs
-from tools.tests.test_package_patchbay_wires_zita import PATCHBAY
+from tools.tests.test_package_patchbay_wires_aes67 import PATCHBAY
 
 FIRST_REAPER_METER_OUTPUT = 30
 ANALOG_METERS = range(1, 9)

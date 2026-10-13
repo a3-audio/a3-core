@@ -9,7 +9,7 @@ import json
 import unittest
 from pathlib import Path
 
-from tools.tests.test_package_patchbay_wires_zita import (
+from tools.tests.test_package_patchbay_wires_aes67 import (
     PATCHBAY, sockets_and_cables, socket_client)
 
 ROOT = Path(__file__).resolve().parents[2]

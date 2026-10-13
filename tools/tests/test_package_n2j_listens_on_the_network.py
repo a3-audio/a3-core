@@ -25,8 +25,6 @@ import a3_osc          # noqa: E402
 import a3_osc_render   # noqa: E402
 UNIT = (ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local"
         / "share/a3-core/config/systemd/user/zita-n2j.service")
-PATCHBAY = (ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local"
-            / "share/a3-core/config/rncbc.org/a3-patchbay.xml")
 
 
 def exec_start(unit):
@@ -58,21 +56,6 @@ class N2jListensOnTheNetwork(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-
-class N2jTakesWhatThePatchbayWires(unittest.TestCase):
-    """--chan opens as many JACK outputs as it names; the patchbay wires the
-    stem player's ten. Sixteen left six ports hanging (2026-09-29)."""
-
-    def test_the_channel_count_is_the_patchbays(self):
-        import xml.etree.ElementTree as ET
-        args = exec_start(UNIT)
-        chan = args[args.index("--chan") + 1]
-        first, last = (int(n) for n in chan.split("-"))
-        n2j = [s for s in ET.parse(PATCHBAY).getroot().iter("socket")
-               if s.get("client").replace("\\", "") == "zita-n2j"]
-        self.assertEqual(len(n2j), 1)
-        self.assertEqual(last - first + 1, len(n2j[0].findall("plug")))
 
 
 class ZitaComesBackByItself(unittest.TestCase):
