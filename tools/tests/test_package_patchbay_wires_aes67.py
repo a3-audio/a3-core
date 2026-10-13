@@ -133,5 +133,23 @@ class TheStreamsFitAnyMachine(unittest.TestCase):
                             or re.fullmatch(client, "AES67 core-b out"), client)
 
 
+class EachConnectionOnce(unittest.TestCase):
+    """A socket left from zita (zita_stemdeck) repeated the AES67 stems
+    socket's ten connections into REAPER; removed 2026-10-14."""
+
+    def test_no_socket_is_named_after_zita(self):
+        outputs, inputs, _ = sockets_and_cables(PATCHBAY)
+        for name in list(outputs) + list(inputs):
+            self.assertNotIn("zita", name)
+
+    def test_no_connection_is_made_twice(self):
+        outputs, inputs, cables = sockets_and_cables(PATCHBAY)
+        made = []
+        for out, into in cables:
+            made += list(zip(plugs(outputs[out]), plugs(inputs[into])))
+        repeated = {pair for pair in made if made.count(pair) > 1}
+        self.assertEqual(set(), repeated)
+
+
 if __name__ == "__main__":
     unittest.main()

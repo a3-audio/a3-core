@@ -27,20 +27,6 @@
    <plug>aux_L</plug>
    <plug>aux_R</plug>
   </socket>
-  <socket client="AES67\ .*\ stems" exclusive="off" name="zita_stemdeck" type="jack-audio">
-   <plug>receive_D1L</plug>
-   <plug>receive_D1R</plug>
-   <plug>receive_D2L</plug>
-   <plug>receive_D2R</plug>
-   <plug>receive_D3L</plug>
-   <plug>receive_D3R</plug>
-   <plug>receive_D4L</plug>
-   <plug>receive_D4R</plug>
-   <plug>receive_AUXL</plug>
-   <plug>receive_AUXR</plug>
-   <plug>receive_CUEL</plug>
-   <plug>receive_CUER</plug>
-  </socket>
   <socket client="REAPER" exclusive="off" name="reaper_main" type="jack-audio">
    <plug>out1</plug>
    <plug>out2</plug>
@@ -279,7 +265,6 @@
  <cables>
   <cable input="reaper_analog" output="system_in" type="jack-audio"/>
   <cable input="reaper_stems" output="local_stemdeck" type="jack-audio"/>
-  <cable input="reaper_stems" output="zita_stemdeck" type="jack-audio"/>
   <cable input="alsa-scarlett_main" output="reaper_main" type="jack-audio"/>
   <cable input="alsa-scarlett_booth" output="reaper_booth" type="jack-audio"/>
   <cable input="beat_analyzer_vu_booth" output="reaper_booth" type="jack-audio"/>
