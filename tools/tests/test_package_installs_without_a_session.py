@@ -52,6 +52,7 @@ class TheUserInstallRunsToTheEnd(unittest.TestCase):
             subprocess.run(
                 ["sh", "-c", "set -e\nAPPUSER=aaa\nUID=1000\n"
                  f"{function('user_systemctl')}\n{function('run_user_install')}\n"
+                 f'enable_aes67() {{ echo "enable_aes67" >> {log}; }}\n'
                  "run_user_install"],
                 env={"PATH": f"{bin_dir}:/usr/bin:/bin"},
                 check=True, capture_output=True, text=True)
@@ -73,6 +74,13 @@ class TheUserInstallRunsToTheEnd(unittest.TestCase):
     def test_the_install_is_waited_for(self):
         calls = self.run_user_install()
         self.assertIn("systemctl --user start --wait a3-user-install.service", calls)
+
+    def test_aes67_is_enabled_while_the_manager_is_up(self):
+        calls = self.run_user_install()
+        self.assertLess(self.position(calls, r"^systemctl --user daemon-reload$"),
+                        self.position(calls, r"^enable_aes67$"))
+        self.assertLess(self.position(calls, r"^enable_aes67$"),
+                        self.position(calls, r"^loginctl disable-linger aaa$"))
 
     def test_linger_goes_only_after_the_install(self):
         calls = self.run_user_install()

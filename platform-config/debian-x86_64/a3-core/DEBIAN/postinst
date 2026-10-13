@@ -595,10 +595,35 @@ run_user_install() {
     echo "a3-core: installing REAPER and the plugins as $APPUSER (this downloads)..."
     user_systemctl start --wait a3-user-install.service \
       || echo "a3-core: the user install failed -- see 'journalctl --user -u a3-user-install' as $APPUSER" >&2
+    enable_aes67
   else
     echo "a3-core: no user manager for $APPUSER -- REAPER not installed; run 'dpkg-reconfigure a3-core'" >&2
   fi
   [ "x$linger_before" = "xyes" ] || loginctl disable-linger "$APPUSER" || true
+}
+
+# The audio network's socket, from the truth joined with network.json --
+# the one place it is named; empty on a machine without one.
+audio_port() {
+  (
+    eval "$(render_default_network)"
+    printf '%s' "${AUDIO_PORT:-}"
+  )
+}
+
+# AES67 and PTP on the audio socket: ptp4l@<port> (linuxptp's unit, its stock
+# /etc/linuxptp/ptp4l.conf: master unless a better clock is there) and the
+# AES67 instance in aaa's user manager. Enabled, not started: they come up
+# with the next boot or login. Without an audio socket neither is enabled.
+enable_aes67() {
+  port="$(audio_port)"
+  if [ -z "$port" ]; then
+    echo "a3-core: no audio port in the network -- AES67 and PTP not enabled"
+    user_systemctl disable a3-aes67.service || true
+    return 0
+  fi
+  systemctl enable "ptp4l@${port}.service" || true
+  user_systemctl enable a3-aes67.service || true
 }
 
 echo "enable userservices..."

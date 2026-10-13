@@ -1801,14 +1801,15 @@ if __name__ == "__main__":
     if _truth.meters_problem:
         print(f"network.json's meters refused, the package's are used: "
               f"{_truth.meters_problem}", file=sys.stderr)
-    # x11vnc's port and the analyzer's addresses, from the joined truth: a changed
-    # network.json reaches them with Core's restart, not only at an install.
+    # x11vnc's port, the analyzer's addresses and the AES67 config, from the
+    # joined truth: a changed network.json reaches them with Core's restart,
+    # not only at an install (a3-aes67 reads its config when it starts).
     # A failure is said, not fatal -- they keep what they had.
     try:
-        write_user_files(_truth, Path.home())
+        print(f"aes67: {write_user_files(_truth, Path.home())}")
     except OSError as problem:
-        print(f"could not render osc.env / the analyzer's conf.d file: {problem}",
-              file=sys.stderr)
+        print(f"could not render osc.env / the analyzer's conf.d file / the "
+              f"AES67 config: {problem}", file=sys.stderr)
     announce_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     announce_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     announce_to = (broadcast_address(_truth.network()),
