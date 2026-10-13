@@ -551,6 +551,24 @@ echo "a3-core: nothing restarted; restart a3-main to run the new config"
 
 ssh_key_step "${USER_HOME}/.ssh"
 
+# REAPER's realtime preload (see the source's comment): pipewire-jack answers
+# its maximum realtime priority from an uninitialised variable, and REAPER ran
+# its worker threads without realtime. The package is built by dpkg-deb
+# alone, so the library is compiled here. A failed build is said, not fatal:
+# REAPER then runs as before, its workers without realtime.
+build_jack_rt_shim() {
+  shim_source="$1"; library="$2"
+  mkdir -p "$(dirname "$library")" || true
+  if gcc -shared -fPIC -O2 -Wall -o "$library.new" "$shim_source"; then
+    mv -f "$library.new" "$library"
+  else
+    rm -f "$library.new"
+    echo "a3-core: could not build $library -- REAPER's workers run without realtime" >&2
+  fi
+}
+
+build_jack_rt_shim "${USER_HOME}/.local/share/a3-core/src/jack-rt-priority.c" "${USER_HOME}/.local/lib/a3/libjack-rt-priority.so"
+
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.local" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.config" || true
 [ -d "${USER_HOME}/.ssh" ] && chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.ssh" || true
