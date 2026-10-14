@@ -141,6 +141,7 @@ config_group() {
     i3/*)         echo i3 ;;
     systemd/*)    echo systemd ;;
     rncbc.org/*)  echo qjackctl ;;
+    pipewire/*)   echo pipewire ;;
     IEM/*)        echo iem ;;
     *)            echo other ;;
   esac
@@ -152,6 +153,7 @@ config_group_label() {
     i3)       echo "i3 config" ;;
     systemd)  echo "systemd user units" ;;
     qjackctl) echo "QjackCtl and patchbay" ;;
+    pipewire) echo "PipeWire: rate + block + AES67" ;;
     iem)      echo "IEM plugin settings" ;;
     *)        echo "other files" ;;
   esac
@@ -169,7 +171,7 @@ differing_config_groups() {
     cmp -s "$shipped" "$dst/$rel" && continue
     config_group "$rel"
   done)"
-  for g in reaper i3 systemd qjackctl iem other; do
+  for g in reaper i3 systemd qjackctl pipewire iem other; do
     echo "$found" | grep -qx "$g" && echo "$g"
   done | paste -sd, - | sed 's/,/, /g'
 }
@@ -232,6 +234,44 @@ retire_checkout_analyzer_unit() {
   else
     echo "a3-core: could not move ~/.config/systemd/user/beat-analyzer.service -- it still hides the package's unit" >&2
   fi
+}
+
+# a3-jack, zita-j2n and zita-n2j as earlier versions of the package shipped
+# them: PipeWire and AES67 replaced them (2026-10-14), and left enabled in
+# ~/.config an old unit would start jackd and take the sound card away from
+# PipeWire. Disabled (their links in the .wants folders) and moved to the
+# backup, not deleted. Only the Core's own -- the ones that run jackd or zita
+# itself; StemDeck's zita units of the same names stay, and are named. Their
+# names are collected in RETIRED_UNITS, to be stopped once aaa's manager is up.
+retire_jack_and_zita_units() {
+  units_dir="$1/systemd/user"; backup="$2"
+  for name in a3-jack.service zita-j2n.service zita-n2j.service; do
+    unit="$units_dir/$name"
+    [ -f "$unit" ] || continue
+    case "$name" in
+      a3-jack.service) program=/usr/bin/jackd ;;
+      *)               program="/usr/bin/${name%.service}" ;;
+    esac
+    if ! grep -Eq "^ExecStart=${program}( |\$)" "$unit"; then
+      echo "a3-core: kept the local ~/.config/systemd/user/$name -- not the Core's"
+      continue
+    fi
+    if mkdir -p "$backup/systemd/user" 2>/dev/null \
+       && mv "$unit" "$backup/systemd/user/$name"; then
+      find "$units_dir" -mindepth 2 -maxdepth 2 -type l -path "*.wants/$name" \
+        -exec rm -f {} + || true
+      RETIRED_UNITS="${RETIRED_UNITS:+$RETIRED_UNITS }$name"
+      echo "a3-core: moved ~/.config/systemd/user/$name (jackd and zita are gone) to $backup"
+    else
+      echo "a3-core: could not move ~/.config/systemd/user/$name -- it may still start" >&2
+    fi
+  done
+}
+
+# Stop what retire_jack_and_zita_units took away and still runs.
+stop_retired_units() {
+  [ -n "$RETIRED_UNITS" ] || return 0
+  user_systemctl stop $RETIRED_UNITS || true
 }
 
 # Ask which differing parts to replace. Every one is offered ticked: the old
@@ -545,18 +585,38 @@ fi
 CONFIG_BACKUP="${USER_HOME}/.config/a3-replaced/$(date +%Y-%m-%d_%H%M%S)"
 install_shipped_config "$SHIPPED_CONFIG" "${USER_HOME}/.config" "$CONFIG_BACKUP" "$REPLACE_CONFIG"
 retire_checkout_analyzer_unit "${USER_HOME}/.config" "$CONFIG_BACKUP"
+RETIRED_UNITS=""
+retire_jack_and_zita_units "${USER_HOME}/.config" "$CONFIG_BACKUP"
 echo "a3-core: nothing restarted; restart a3-main to run the new config"
 
 ssh_key_step "${USER_HOME}/.ssh"
+
+# REAPER's realtime preload (see the source's comment): pipewire-jack answers
+# its maximum realtime priority from an uninitialised variable, and REAPER ran
+# its worker threads without realtime. The package is built by dpkg-deb
+# alone, so the library is compiled here. A failed build is said, not fatal:
+# REAPER then runs as before, its workers without realtime.
+build_jack_rt_shim() {
+  shim_source="$1"; library="$2"
+  mkdir -p "$(dirname "$library")" || true
+  if gcc -shared -fPIC -O2 -Wall -o "$library.new" "$shim_source"; then
+    mv -f "$library.new" "$library"
+  else
+    rm -f "$library.new"
+    echo "a3-core: could not build $library -- REAPER's workers run without realtime" >&2
+  fi
+}
+
+build_jack_rt_shim "${USER_HOME}/.local/share/a3-core/src/jack-rt-priority.c" "${USER_HOME}/.local/lib/a3/libjack-rt-priority.so"
 
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.local" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.config" || true
 [ -d "${USER_HOME}/.ssh" ] && chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.ssh" || true
 
-# zita's arguments and the beat-analyzer's targets, from a3-osc.json. A failure
-# is said out loud: the zita units would start without their addresses.
+# x11vnc's port and the beat-analyzer's targets, from a3-osc.json. A failure
+# is said out loud: they would start without their addresses.
 sudo -u "$APPUSER" -H "${USER_HOME}/.local/bin/a3-osc-render" user \
-  || echo "a3-core: a3-osc-render user failed -- zita and the analyzer lack their addresses" >&2
+  || echo "a3-core: a3-osc-render user failed -- x11vnc and the analyzer lack their addresses" >&2
 
 find "$USER_HOME/.config" -type d -exec chmod 0755 {} \;
 find "$USER_HOME/.config" -type f -exec chmod 0664 {} \;
@@ -565,6 +625,11 @@ if [ -d /home/aaa/.ssh ]; then
   chmod 0700 /home/aaa/.ssh
   find /home/aaa/.ssh -type f -exec chmod 0600 {} \;
 fi
+
+# The loader's cache with pipewire-jack's libjack in it
+# (/etc/ld.so.conf.d/pipewire-jack-x86_64-linux-gnu.conf), before anything
+# that runs a JACK program is started.
+ldconfig || true
 
 echo "enable system services..."
 systemctl daemon-reload || true
@@ -588,10 +653,44 @@ run_user_install() {
     echo "a3-core: installing REAPER and the plugins as $APPUSER (this downloads)..."
     user_systemctl start --wait a3-user-install.service \
       || echo "a3-core: the user install failed -- see 'journalctl --user -u a3-user-install' as $APPUSER" >&2
+    stop_retired_units
+    enable_the_rig
+    enable_aes67
   else
     echo "a3-core: no user manager for $APPUSER -- REAPER not installed; run 'dpkg-reconfigure a3-core'" >&2
   fi
   [ "x$linger_before" = "xyes" ] || loginctl disable-linger "$APPUSER" || true
+}
+
+# a3-main wants qjackctl, REAPER, Core, the analyzer and Motion: enabled, the
+# rig comes up at the next login. The shipped units arrive as files only, never
+# with their .wants links, and replacing the systemd group took the link away.
+enable_the_rig() {
+  user_systemctl enable a3-main.service || true
+}
+
+# The audio network's socket, from the truth joined with network.json --
+# the one place it is named; empty on a machine without one.
+audio_port() {
+  (
+    eval "$(render_default_network)"
+    printf '%s' "${AUDIO_PORT:-}"
+  )
+}
+
+# AES67 and PTP on the audio socket: ptp4l@<port> (linuxptp's unit, its stock
+# /etc/linuxptp/ptp4l.conf: master unless a better clock is there) and the
+# AES67 instance in aaa's user manager. Enabled, not started: they come up
+# with the next boot or login. Without an audio socket neither is enabled.
+enable_aes67() {
+  port="$(audio_port)"
+  if [ -z "$port" ]; then
+    echo "a3-core: no audio port in the network -- AES67 and PTP not enabled"
+    user_systemctl disable a3-aes67.service || true
+    return 0
+  fi
+  systemctl enable "ptp4l@${port}.service" || true
+  user_systemctl enable a3-aes67.service || true
 }
 
 echo "enable userservices..."
@@ -603,5 +702,4 @@ update-grub || true
 echo "Installation complete."
 echo "use 'systemctl --user status a3-user-install.service' to check status"
 echo "use 'dpkg-reconfigure a3-core' to configure network and the headless screen"
-echo "use 'dpkg-reconfigure jackd2' to enable rt-priority"
 echo "Please Reboot or manage a3-core manually with 'systemctl --user start a3-main.service'"

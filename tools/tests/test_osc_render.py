@@ -1,6 +1,6 @@
 """What lives outside Python is rendered from the one truth.
 
-zita's arguments, the default network and the beat-analyzer's targets are
+x11vnc's port, the default network and the beat-analyzer's targets are
 facts the truth already holds. Written by hand in a unit file or an .env they
 would be a second truth, and the day the rig moved from 192.168.43.x to
 192.168.8.x showed how a second truth ends: some copies moved, some did not.
@@ -48,31 +48,12 @@ def exec_start(unit):
     raise AssertionError(f"{unit} has no ExecStart")
 
 
-class ZitaIsRendered(unittest.TestCase):
-    def test_j2n_sends_where_the_truth_routes_it(self):
-        env = pairs(a3_osc_render.zita_env(TRUTH))
-        self.assertEqual((env["A3_ZITA_J2N_HOST"], int(env["A3_ZITA_J2N_PORT"])),
-                         TRUTH.endpoint("radla", "zita-n2j"))
+class NoZitaIsRendered(unittest.TestCase):
+    """zita is gone from the Core (2026-10-14): AES67 carries the network
+    audio, and osc.env names no bridge any more."""
 
-    def test_n2j_listens_where_the_truth_says(self):
-        env = pairs(a3_osc_render.zita_env(TRUTH))
-        listener = TRUTH.listener("zita-n2j", "audio")
-        self.assertEqual(env["A3_ZITA_N2J_HOST"], TRUTH.host(listener["host"]))
-        self.assertEqual(int(env["A3_ZITA_N2J_PORT"]), listener["port"])
-
-    def test_the_units_carry_no_address_of_their_own(self):
-        for unit in ("zita-j2n.service", "zita-n2j.service"):
-            with self.subTest(unit=unit):
-                line = exec_start(unit)
-                self.assertNotRegex(line, r"\d+\.\d+\.\d+\.\d+")
-                self.assertNotRegex(line, r"\b\d{4,5}\b")
-                self.assertIn("${A3_ZITA_", line)
-
-    def test_the_units_read_the_rendered_file(self):
-        for unit in ("zita-j2n.service", "zita-n2j.service"):
-            with self.subTest(unit=unit):
-                text = (UNITS / unit).read_text()
-                self.assertIn(f"EnvironmentFile={a3_osc_render.SYSTEMD_ENV_FILE}", text)
+    def test_the_rendered_file_names_no_zita(self):
+        self.assertNotIn("ZITA", a3_osc_render.osc_env(TRUTH))
 
 
 SYSTEM_UNITS = PACKAGE / "etc/systemd/system"
@@ -90,9 +71,6 @@ class VncIsRendered(unittest.TestCase):
     def test_the_rendered_file_carries_vncs_port(self):
         env = pairs(a3_osc_render.osc_env(TRUTH))
         self.assertEqual(int(env["A3_VNC_PORT"]), TRUTH.port("x11vnc", "vnc"))
-
-    def test_the_rendered_file_still_carries_zitas(self):
-        self.assertIn(a3_osc_render.zita_env(TRUTH), a3_osc_render.osc_env(TRUTH))
 
     def test_the_unit_takes_its_port_from_the_rendered_file(self):
         text = (SYSTEM_UNITS / "x11vnc.service").read_text()
@@ -262,12 +240,12 @@ class TheToolWritesTheFiles(unittest.TestCase):
         return subprocess.run([sys.executable, str(TOOL), *args], env=env,
                               check=True, capture_output=True, text=True)
 
-    def test_user_writes_zitas_file_and_the_analyzers_file(self):
+    def test_user_writes_the_env_file_and_the_analyzers_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             self.run_tool("user", env_extra={"HOME": str(home)})
-            zita = home / ".config/a3/osc.env"
-            self.assertEqual(zita.read_text(), a3_osc_render.osc_env(TRUTH))
+            env_file = home / ".config/a3/osc.env"
+            self.assertEqual(env_file.read_text(), a3_osc_render.osc_env(TRUTH))
             analyzer = home / ".config/beat-analyzer/conf.d/50-a3-osc.env"
             self.assertEqual(analyzer.read_text(), a3_osc_render.analyzer_block(TRUTH))
             self.assertFalse((home / "a3-system").exists())

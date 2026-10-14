@@ -1,7 +1,7 @@
 [Unit]                                                                                     
 Description=a3-reaper
 PartOf=a3-main.service
-After=graphical.target a3-jack.service
+After=graphical.target pipewire.service wireplumber.service
 
 [Service]
 PrivateTmp=true
@@ -11,10 +11,9 @@ PrivateTmp=true
 Environment=DISPLAY=:0
 ExecStartPre=/home/aaa/.local/bin/a3-wait-for-the-screen
 #WorkingDirectory=/home/aaa/.config/REAPER
-# jackd accepting clients, not two seconds. After=a3-jack.service says jackd
-# was started, which is not the same as ready -- jackd has no readiness
-# notification, and that gap is what the sleep was standing in for. jack_wait
-# blocks until the server answers.
+# The JACK server accepting clients, not two seconds: After= says the audio
+# server was started, which is not the same as ready. jack_wait blocks until
+# it answers -- through pipewire-jack, PipeWire's JACK library.
 ExecStartPre=/usr/bin/jack_wait -w
 ExecStart=/bin/bash -c "/home/aaa/.local/opt/REAPER/reaper -nosplash -ignoreerrors -template /home/aaa/.config/REAPER/ProjectTemplates/a3-reaper.RPP"
 # Closes without saving. It saved the project over the template until
@@ -24,7 +23,11 @@ ExecStart=/bin/bash -c "/home/aaa/.local/opt/REAPER/reaper -nosplash -ignoreerro
 ExecStop=/home/aaa/.local/opt/REAPER/reaper -closeall:nosave
 # No CPUScheduling here: raising the whole process put its GUI/OSC threads
 # above JACK's process threads (late clients on a3nuc1, 2026-10-06). The
-# audio threads get their priority from JACK (server -P minus 5).
+# audio threads get their priority from the JACK library -- pipewire-jack's
+# answer is uninitialised, so this preload gives the right one (77 for the
+# workers, under PipeWire's data loop at 83); the postinst builds it from
+# ~/.local/share/a3-core/src/jack-rt-priority.c.
+Environment=LD_PRELOAD=%h/.local/lib/a3/libjack-rt-priority.so
 CPUAffinity=1 2 3
 
 [Install]

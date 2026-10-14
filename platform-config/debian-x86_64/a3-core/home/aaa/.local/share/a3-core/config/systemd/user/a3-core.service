@@ -11,9 +11,9 @@ PartOf=a3-main.service
 # lib/a3_core_reaper.py), so either order works. It stays first because that
 # is still the order with one burst instead of two.
 #
-# jack still has to be up first: REAPER needs it, and Core reaching the void
-# for a moment costs nothing -- the previous ordering said as much.
-After=a3-jack.service
+# The audio server still comes first: REAPER needs it, and Core reaching the
+# void for a moment costs nothing -- the previous ordering said as much.
+After=pipewire.service wireplumber.service
 Before=a3-reaper.service
 
 

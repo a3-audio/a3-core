@@ -1,5 +1,6 @@
 /etc/default/grub
 /etc/X11/xorg.conf.d/10-a3-display.conf
+/etc/ld.so.conf.d/pipewire-jack-x86_64-linux-gnu.conf
 /etc/security/limits.d/audio.conf
 /etc/systemd/system/set_irq_prio.service
 /etc/systemd/system/vnc-display.service

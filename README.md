@@ -1,7 +1,7 @@
 # A³ Core
 
 The 3D sound server of [A³ Audio](https://github.com/a3-audio/a3-system): a
-Debian x86_64 machine running JACK, REAPER and the beat-analyzer. A³ Mixer and
+Debian x86_64 machine running PipeWire, REAPER and the beat-analyzer. A³ Mixer and
 A³ Motion control it over OSC. This repository *is* the deployment: the `.deb`
 package tree under `platform-config/debian-x86_64/a3-core/`, not application
 source.
@@ -22,7 +22,6 @@ On a blank Debian with a user `aaa` who may use `sudo`
 ```sh
 wget -qO- "https://raw.githubusercontent.com/a3-audio/a3-core/main/platform-config/debian-x86_64/a3-core_install.sh" | sudo bash
 sudo dpkg-reconfigure a3-core     # network, bridge, headless screen
-sudo dpkg-reconfigure jackd2      # realtime priorities for JACK
 ```
 
 The script switches the machine to Debian testing. Updates after that are

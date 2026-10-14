@@ -1,17 +1,17 @@
 """The one truth, written out for what cannot read JSON.
 
-zita's units, the postinst's default network and the beat-analyzer's conf.d
-take their addresses as text. They get it from here, rendered from
+x11vnc's unit, the postinst's default network, the beat-analyzer's conf.d and
+PipeWire's AES67 config take their addresses as text. They get it from here, rendered from
 a3-osc.json, so the file stays the only place a port or an IP is written.
 """
 
 import json
 import os
+import socket
 from pathlib import Path
 
-#: Where the zita units and x11vnc find their arguments (systemd's %h is the
-#: home; x11vnc is a system unit and names it in full).
-SYSTEMD_ENV_FILE = "%h/.config/a3/osc.env"
+#: Where x11vnc finds its port (a system unit: it names the home in full;
+#: %h would be root's).
 ENV_FILE = Path(".config/a3/osc.env")
 
 #: The analyzer's file of ours. The beat-analyzer package reads conf.d/*.env
@@ -19,6 +19,12 @@ ENV_FILE = Path(".config/a3/osc.env")
 #: truth wins key by key; the user's file is never touched (2026-10-08).
 ANALYZER_CONF = Path(".config/beat-analyzer/conf.d/50-a3-osc.env")
 HEADER = "# rendered from a3-osc.json by a3-osc-render -- edit the truth, not this file"
+
+#: PipeWire's AES67 instance (a3-aes67.service): its config, rendered from the
+#: package's template with the audio socket and this machine's name.
+AES67_CONF = Path(".config/pipewire/pipewire-aes67.conf")
+AES67_TEMPLATE = (Path(__file__).resolve().parent.parent
+                  / "share/a3-core/pipewire/pipewire-aes67.conf.in")
 
 
 def analyzer_prefix(route):
@@ -33,24 +39,13 @@ def lines(pairs):
     return "".join(f"{key}={value}\n" for key, value in pairs)
 
 
-def zita_env(truth):
-    j2n_host, j2n_port = truth.endpoint("radla", "zita-n2j")
-    n2j = truth.listener("zita-n2j", "audio")
-    return lines([
-        ("A3_ZITA_J2N_HOST", j2n_host),
-        ("A3_ZITA_J2N_PORT", j2n_port),
-        ("A3_ZITA_N2J_HOST", truth.host(n2j["host"])),
-        ("A3_ZITA_N2J_PORT", n2j["port"]),
-    ])
-
-
 def vnc_env(truth):
     return lines([("A3_VNC_PORT", truth.port("x11vnc", "vnc"))])
 
 
 def osc_env(truth):
-    """osc.env: zita's arguments and x11vnc's port."""
-    return zita_env(truth) + vnc_env(truth)
+    """osc.env: x11vnc's port."""
+    return vnc_env(truth)
 
 
 def network_defaults(truth):
@@ -85,11 +80,58 @@ def analyzer_block(truth):
     return f"{HEADER}\n{lines(targets)}"
 
 
+def aes67_conf(truth, hostname, template=AES67_TEMPLATE):
+    """The AES67 config for this machine, or None without an audio socket:
+    AES67 and PTP run on the audio network only."""
+    port = truth.network().get("audio_port", "")
+    if not port:
+        return None
+    stream_ip, stream_port = truth.endpoint("aes67", "stream")
+    sap_ip, sap_port = truth.endpoint("aes67", "sap")
+    text = Path(template).read_text()
+    for placeholder, filled in (("@AUDIO_PORT@", port),
+                                ("@SENDER_NAME@", f"AES67 {hostname} out"),
+                                ("@STREAM_IP@", stream_ip),
+                                ("@STREAM_PORT@", str(stream_port)),
+                                ("@SAP_IP@", sap_ip),
+                                ("@SAP_PORT@", str(sap_port))):
+        text = text.replace(placeholder, filled)
+    return f"{HEADER}\n{text}"
+
+
+def is_rendered(path):
+    try:
+        with path.open() as handle:
+            return handle.readline().rstrip("\n") == HEADER
+    except OSError:
+        return False
+
+
+def write_aes67_conf(truth, home, hostname=None):
+    """Render the AES67 config into PipeWire's folder; what happened, said.
+    A config written by hand is never replaced: it stays and is named. Without
+    an audio socket a rendered one goes, so a3-aes67 does not start."""
+    path = home / AES67_CONF
+    text = aes67_conf(truth, hostname or socket.gethostname())
+    if path.exists() and not is_rendered(path):
+        return f"kept ~/{AES67_CONF}: not rendered by a3-osc-render"
+    if text is None:
+        if path.exists():
+            path.unlink()
+            return f"removed ~/{AES67_CONF}: no audio port in the network"
+        return "no audio port in the network: no AES67"
+    replace_whole(path, text)
+    return f"rendered ~/{AES67_CONF}"
+
+
 def write_user_files(truth, home):
+    """osc.env, the analyzer's conf.d file and the AES67 config; what the
+    AES67 step did is returned, to be said."""
     env_file = home / ENV_FILE
     env_file.parent.mkdir(parents=True, exist_ok=True)
     env_file.write_text(osc_env(truth))
     replace_whole(home / ANALYZER_CONF, analyzer_block(truth))
+    return write_aes67_conf(truth, home)
 
 
 def replace_whole(path, text):
