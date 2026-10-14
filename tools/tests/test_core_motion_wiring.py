@@ -70,11 +70,12 @@ class TheTruth(unittest.TestCase):
 
 
 class StemDeckKeepsARemoteLead(unittest.TestCase):
-    """The StemDeck watch knows the rig's own host, so a StemDeck on another
-    machine keeps the lead while it says hello (2026-10-06)."""
+    """The StemDeck watch knows the rig's own host (2026-10-06). Since
+    2026-10-14 it also follows one StemDeck at a time, so a second one never
+    takes the lead while the first is alive (test_core_one_stemdeck_wiring)."""
 
     def test_the_stemdeck_watch_is_told_what_is_local(self):
         source = (Path(__file__).resolve().parents[2]
                   / "platform-config/debian-x86_64/a3-core/home/aaa/.local/bin/a3-core.py").read_text()
         self.assertIn("_stemdeck_watch = HelloWatch(\n    STEMDECK_SILENCE, "
-                      "is_local=lambda host: is_this_machine(host, MOTION_OWN_HOSTS))", source)
+                      "is_local=lambda host: is_this_machine(host, MOTION_OWN_HOSTS),", source)

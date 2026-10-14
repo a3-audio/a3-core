@@ -52,6 +52,13 @@ class Gate:
             self._faders[track] = float(value)
         return True
 
+    def forget(self):
+        """REAPER closed its project: what it said about the outputs was
+        said about a project that is gone. A track the next one does not
+        report stays shut."""
+        self._muted = {}
+        self._faders = {}
+
     def unheard(self):
         """Names of the gate tracks REAPER sent no mute report for, in track
         order. Their state is unknown, so they stay shut."""
@@ -129,8 +136,14 @@ class StartupRecall:
     only the first one carrying it counts."""
 
     def __init__(self, token=None):
+        self.rearm(token)
+
+    def rearm(self, token=None):
+        """A new token for the next replay, after REAPER came back under a
+        running Core: the recall that follows it opens the gate again."""
         self.token = token if token is not None else 2 + secrets.randbelow(2 ** 30)
         self._taken = False
+        return self.token
 
     def is_it(self, osc_arguments):
         if self._taken or not osc_arguments:

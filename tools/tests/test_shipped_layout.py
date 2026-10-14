@@ -48,6 +48,15 @@ class ShippedLayout(unittest.TestCase):
                 self.assertIsInstance(getattr(channel, field), int,
                                       f"channel {index}, {field}")
 
+    def test_it_names_the_channel_master_and_gate_tracks_and_no_other(self):
+        # REAPER's bank reports tracks past the project's end as -2.75 in
+        # every pass; only a track the layout names going there is a closed
+        # project (test_core_reaper_restart).
+        for track in (1, 4, 13, 16, 23, 28, 30, 32, 38):
+            self.assertTrue(self.layout.names(track), track)
+        for track in (0, 18, 19, 29, 39, 40):
+            self.assertFalse(self.layout.names(track), track)
+
     def test_no_two_channels_share_a_track(self):
         # Two channels on one track is a wiring mistake that sounds like one
         # channel being deaf, which is hard to trace back to a number.
