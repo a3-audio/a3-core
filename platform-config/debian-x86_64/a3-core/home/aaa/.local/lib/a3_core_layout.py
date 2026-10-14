@@ -173,6 +173,14 @@ class Layout:
                 return field
         return None
 
+    def names(self, track):
+        """Whether this REAPER track is one A3 names: a channel's, the
+        master's, or a gate track. REAPER's bank also reports tracks the
+        project does not have, and those say nothing about the project."""
+        return (self.track_role(track) is not None
+                or self.master_role(track) is not None
+                or track in self._gate.values())
+
     def channel_for_track(self, track):
         """Just the channel, for callers that do not care which track it is."""
         found = self.track_role(track)

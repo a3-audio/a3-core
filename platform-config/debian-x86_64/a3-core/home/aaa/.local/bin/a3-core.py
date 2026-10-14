@@ -82,8 +82,9 @@ from a3_core_traffic import (ANSWERERS, COMMANDERS, IN,   # noqa: E402
                              OUT, Traffic, peer_name)   # noqa: E402
 from a3_core_seen import SeenFile, state_path   # noqa: E402
 from a3_core_snapshot import Snapshot   # noqa: E402
-from a3_core_reaper import (Arrivals, REFRESH_ACTION,   # noqa: E402
-                            wait_until_quiet, when_reaper_listens)
+from a3_core_reaper import (Arrivals, CLOSED, REFRESH_ACTION,   # noqa: E402
+                            ReaperProject, replay_after_every_start,
+                            wait_until_quiet)
 from a3_core_receive_buffer import widen_receive_buffer   # noqa: E402
 from a3_core_startup import (filter_bypass_messages,   # noqa: E402
                              remembered_reaper_messages)
@@ -394,8 +395,14 @@ _evening_file = StateFile(EVENING_PATH)
 #: Set once REAPER reports a track the layout names; the start-up replay
 #: waits for it.
 reaper_heard = threading.Event()
+#: Set when REAPER's project closes under a running Core: the replay loop
+#: then waits for REAPER again, as at Core's own start.
+reaper_gone = threading.Event()
 #: Every packet REAPER sends, counted; the replay waits for them to thin out.
 reaper_arrivals = Arrivals()
+#: Whether REAPER's reports are the evening, and the evening to replay when
+#: they are not. Built again in main with the evening read from the file.
+_project = ReaperProject()
 #: REAPER's outputs as REAPER reports them -- shut in the template, opened
 #: after the start-up recall (a3_core_gate, a3-system#74).
 _gate = Gate(_layout.gate)
@@ -430,6 +437,14 @@ def note_passed_on(address, value):
     report something afterwards (#56).
     """
     _relayed.note(address, value)
+    # Only while REAPER's word is the evening: a template announcing itself or
+    # a project closing is not (a3_core_reaper.ReaperProject). What passed
+    # meanwhile is written once the replay is through.
+    if _project.live:
+        write_the_evening()
+
+
+def write_the_evening():
     # Mitgeschrieben, damit ein Stromausfall den Abend nicht kostet: REAPER
     # schreibt seine Werte erst beim Beenden weg. Siehe a3_core_evening.
     _evening_file.remember(evening_state(_relayed))
@@ -1447,6 +1462,35 @@ OSC_PORT_REAPER_FEEDBACK: int = _truth.port("core", "reaper-feedback")
 _curves = load_curves(json.loads(CURVES_PATH.read_text()))
 
 
+def reaper_project_closed(address, value):
+    """Show a report to the project watch; True while REAPER's project is
+    closed, and the report is then nobody's to pass on (a3_core_reaper).
+
+    Before the echo filters: a closing project's -2.75 is never an echo, and
+    must not be taken for one.
+    """
+    parts = address.strip("/").split("/")
+    if len(parts) >= 3 and parts[0] == "track" and parts[1].isdigit() \
+            and _layout.names(int(parts[1])):
+        word = parts[2] if len(parts) == 3 else ""
+        if _project.report(word, value, lambda: replayable(
+                _truth, evening_state(_relayed))) == CLOSED:
+            reaper_closed_its_project()
+    return not _project.is_open
+
+
+def reaper_closed_its_project():
+    """REAPER closed its project under a running Core -- a stop, a restart,
+    a reboot. The evening is held; once REAPER is back and quiet the replay
+    loop plays it in again and the gate opens, as at Core's own start."""
+    reaper_heard.clear()
+    _gate.forget()
+    echo_filter.forget()
+    reaper_gone.set()
+    print("reaper: its project closed; the evening is held and replayed "
+          "once REAPER is back")
+
+
 def reaper_feedback_handler(client_address: Tuple[str, int], address: str,
                             *osc_arguments: List[Any]) -> None:
     """One value REAPER reports, on its way back to the device that set it.
@@ -1464,6 +1508,12 @@ def reaper_feedback_handler(client_address: Tuple[str, int], address: str,
         value = float(osc_arguments[0])   # type: ignore
     except (TypeError, ValueError):
         return                            # a name or a string, not a value
+
+    # A project closing, or a REAPER not back yet: its zeros are no evening.
+    if reaper_project_closed(address, value):
+        traffic.seen(IN, address, value,
+                     peer_name(client_address[0], PEER_HOSTS, only=ANSWERERS))
+        return
 
     # Core's own confirmation. Passing it on would tell the mixer what the
     # mixer just said, after a trip through a curve and back -- and on the
@@ -1708,10 +1758,12 @@ if __name__ == "__main__":
     # In a thread of its own so a burst does not hold up the commands coming
     # in on the main port: REAPER sends twenty-five thousand messages when the
     # surface reconnects, and a set does not wait for that.
-    # Read now, before the feedback port opens: every value REAPER reports is
-    # also written to evening.json, and a REAPER that announces its template
-    # first would otherwise overwrite what the replay below is for.
+    # Read now, before the feedback port opens: a REAPER that announces its
+    # template first would otherwise overwrite what the replay below is for.
+    # The project holds it, and evening.json is not written again until the
+    # replay is through (a3_core_reaper.ReaperProject).
     evening = list(replayable(_truth, _evening_file.load()))
+    _project = ReaperProject(evening)
 
     feedback_dispatcher = osc_dispatcher.Dispatcher()
     feedback_dispatcher.set_default_handler(reaper_feedback_handler,
@@ -1900,24 +1952,31 @@ if __name__ == "__main__":
     # calling speak_stems() here keeps the stems on that one thread.
     # The recall carries Core's start-up token: handling it opens the gate
     # (a3_core_gate).
-    def replay_once_reaper_is_quiet():
-        # One socket, bound before the first send, so the hello gate can
-        # trust this port and no other: the replay is Core's own word, but it
-        # arrives from loopback like a local Motion does.
-        self_client = SimpleUDPClient(_truth.host("local"), args.port)
-        self_client._sock.bind((_truth.host("local"), 0))
-        _hello_gate.trust(self_client._sock.getsockname())
+    # One socket for every replay, bound before the first send, so the hello
+    # gate can trust this port and no other: the replay is Core's own word,
+    # but it arrives from loopback like a local Motion does.
+    self_client = SimpleUDPClient(_truth.host("local"), args.port)
+    self_client._sock.bind((_truth.host("local"), 0))
+    _hello_gate.trust(self_client._sock.getsockname())
 
+    def replay_once_reaper_is_quiet():
         def send_to_self(address, value):
             self_client.send_message(address, value)
 
+        # A close during the wait makes this round's replay not count.
+        round_started = _project.round
         wait_until_quiet(reaper_arrivals, lambda: replay_evening(
-            evening, send_to_self))
+            _project.evening(), send_to_self))
+        _startup_recall.rearm()
         send_to_self(OSC_ADDRESS_RECALL, _startup_recall.token)
+        if _project.replayed(round_started):
+            write_the_evening()
 
+    # Once for Core's own start, and again whenever REAPER closes its project
+    # and comes back under this Core (a3_core_reaper.ReaperProject).
     threading.Thread(
-        target=when_reaper_listens, daemon=True, name="a3-replay",
-        args=(reaper_heard,
+        target=replay_after_every_start, daemon=True, name="a3-replay",
+        args=(reaper_heard, reaper_gone,
               lambda: osc_reaper.send_message(REFRESH_ACTION, 1.0),
               replay_once_reaper_is_quiet)).start()
 
