@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local/lib"))
 
-from a3_core_presence import Presence  # noqa: E402
+from a3_core_presence import HelloWatch, Presence  # noqa: E402
 
 
 class AHelloEveryThirtySeconds(unittest.TestCase):
@@ -41,7 +41,6 @@ class AHelloEveryThirtySeconds(unittest.TestCase):
         self.assertFalse(p.gone(1000.0))
 
 
-from a3_core_presence import HelloWatch  # noqa: E402
 
 
 class WhatAHelloMeansForTheLink(unittest.TestCase):
@@ -169,3 +168,49 @@ class ARemoteKeepsTheLead(unittest.TestCase):
         self.assertTrue(w.hello("10.0.0.21", 10.0))
         self.assertFalse(w.hello("10.0.0.20", 30.0))
         self.assertEqual(w.host, "10.0.0.21")
+
+
+class OnlyOneMayRun(unittest.TestCase):
+    """Two StemDecks at once (2026-10-14): Core followed whichever said hello
+    last and nobody was told. With one_at_a_time the follower keeps the link
+    and the newcomer is reported once."""
+
+    def setUp(self):
+        self.watch = HelloWatch(60, one_at_a_time=True)
+        self.watch.hello("a", 0.0)
+
+    def test_a_newcomer_does_not_take_the_link_while_the_followed_is_alive(self):
+        self.assertFalse(self.watch.hello("b", 10.0))
+        self.assertEqual(self.watch.host, "a")
+
+    def test_the_newcomer_is_reported_once(self):
+        self.watch.hello("b", 10.0)
+        self.assertEqual(self.watch.take_rivals(), ["b"])
+        self.watch.hello("b", 40.0)
+        self.assertEqual(self.watch.take_rivals(), [])
+
+    def test_a_newcomer_that_went_quiet_and_returns_is_reported_again(self):
+        self.watch.hello("b", 10.0)
+        self.watch.take_rivals()
+        self.watch.hello("a", 60.0)
+        self.watch.hello("a", 90.0)       # b is forgotten: silent
+        self.watch.hello("b", 100.0)
+        self.assertEqual(self.watch.take_rivals(), ["b"])
+
+    def test_the_followed_one_saying_hello_again_is_no_rival(self):
+        self.watch.hello("a", 30.0)
+        self.assertEqual(self.watch.take_rivals(), [])
+
+    def test_once_the_followed_one_is_silent_the_newcomer_is_followed(self):
+        self.watch.hello("b", 10.0)
+        self.watch.hello("b", 40.0)
+        self.watch.hello("b", 70.0)
+        self.assertTrue(self.watch.silence(70.0))
+        self.assertTrue(self.watch.hello("b", 100.0))
+        self.assertEqual(self.watch.host, "b")
+
+    def test_the_default_still_lets_the_newest_arrival_win(self):
+        watch = HelloWatch(60)
+        watch.hello("a", 0.0)
+        self.assertTrue(watch.hello("b", 10.0))
+        self.assertEqual(watch.take_rivals(), [])
