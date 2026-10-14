@@ -62,7 +62,8 @@ from a3_core_stems_reaper import (Settle, analog_messages,   # noqa: E402
                                   return_source_messages)
 from a3_core_presence import STEMDECK_SILENCE, HelloWatch   # noqa: E402
 from a3_core_motion import MotionTarget, is_this_machine   # noqa: E402
-from a3_core_hello_gate import ADMIT, REFUSE_FIRST, HelloGate   # noqa: E402
+from a3_core_hello_gate import (ADMIT, REFUSE_DIFFERS_FIRST,   # noqa: E402
+                               REFUSE_FIRST, HelloGate)   # noqa: E402
 from a3_core_return import (ReturnTarget, point_zita_at,   # noqa: E402
                             start_at_radla)
 from a3_core_vu_relay import relay as relay_vu   # noqa: E402
@@ -781,9 +782,12 @@ def values_refused(client_address: Tuple[str, int], address: str) -> bool:
     verdict = _hello_gate.check(host, port)
     if verdict == ADMIT:
         return False
+    who = peer_name(host, PEER_HOSTS, only=COMMANDERS)
     if verdict == REFUSE_FIRST:
-        who = peer_name(host, PEER_HOSTS, only=COMMANDERS)
         print(f"{who} ({host}): values before its hello ignored")
+    if verdict == REFUSE_DIFFERS_FIRST:
+        print(f"{who} ({host}): values ignored, its a3-osc.json differs "
+              f"from Core's")
     return True
 
 
@@ -1302,7 +1306,7 @@ def osc_handler_device_hello(client_address: Tuple[str, int], address: str,
         stemdeck_said_hello(client_address[0], now)
     if device == "motion":
         motion_said_hello(client_address[0], now)
-    _hello_gate.greet(client_address[0])
+    _hello_gate.greet(client_address[0], their_hash == _devices.own_hash)
     notice_stemdeck_silence(now)
     if _devices.heard(device, their_hash, now):
         verdict = ("is Core's" if their_hash == _devices.own_hash

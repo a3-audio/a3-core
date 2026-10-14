@@ -49,3 +49,10 @@ class TheHandlersAsk(unittest.TestCase):
         must not be refused as a stranger's values."""
         self.assertIn("_hello_gate.trust(", CORE)
         self.assertIn("_hello_gate.check(host, port)", _source_of("values_refused"))
+
+    def test_the_hello_opens_only_on_cores_own_fingerprint(self):
+        self.assertIn("_hello_gate.greet(client_address[0], their_hash == "
+                      "_devices.own_hash)", _source_of("osc_handler_device_hello"))
+
+    def test_a_differing_truth_is_said_once(self):
+        self.assertIn("its a3-osc.json differs", _source_of("values_refused"))
