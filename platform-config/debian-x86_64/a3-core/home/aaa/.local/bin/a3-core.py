@@ -84,6 +84,7 @@ from a3_core_reaper import (Arrivals, CLOSED, REFRESH_ACTION,   # noqa: E402
                             ReaperProject, replay_after_every_start,
                             wait_until_quiet)
 from a3_core_receive_buffer import widen_receive_buffer   # noqa: E402
+from a3_core_send_failures import SendFailures   # noqa: E402
 from a3_core_startup import (filter_bypass_messages,   # noqa: E402
                              remembered_reaper_messages)
 from a3_core_evening import evening_state, replayable   # noqa: E402
@@ -221,7 +222,13 @@ class WatchedClient:
     def send_message(self, address, value):
         echo_filter.sent(address, value)
         traffic.seen(OUT, address, value, self.name)
-        self._client.send_message(address, value)
+        # A destination the network cannot reach (yet) must not end the
+        # handler that is sending: the others still get it (a3_core_send_failures).
+        _send_failures.send(self.name,
+                            lambda: self._client.send_message(address, value))
+
+
+_send_failures = SendFailures()
 
 
 osc_a3mixer = WatchedClient(SimpleUDPClient(A3MIXER_HOST, A3MIXER_PORT),
