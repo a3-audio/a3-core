@@ -7,12 +7,38 @@ StemDeck's report overwrites whatever Core expected.
 
 The desk (2026-10-04): each channel encoder is an input selector -- one
 cursor over nine positions, deck 1's stems 1-4, deck 2's stems 1-4 and A,
-the channel's analog input. A push on a stem makes it the channel's only
-input (a stem playing on another channel moves here); a push on the stem
-that already plays here releases it. A push on A only ever selects analog
-(2026-10-07; until then a STEM toggle that brought the last stem back):
-while a stem plays every stem leaves the channel, while analog plays
-nothing changes. Core remembers no stem. A channel
+the channel's analog input.
+
+Each channel has a source, STEM or ANALOG, and it is Core's own
+(maintainer, 2026-10-14): REAPER plays the channel's input from the stems
+track's send or from the analog track's send, never both, and nothing
+StemDeck reports -- an Auto-DJ switch, a click in StemDeck -- changes it.
+On ANALOG the channel simply does not hear bus N. The source is written
+down with the cursors and replayed into REAPER after any restart.
+
+A channel with no stored source is UNDECIDED: Core leaves its two sends in
+REAPER as they are and does not guess. StemDeck's first settled report
+decides it (adopt_sources, maintainer 2026-10-14): STEM where bus N has a
+stem, ANALOG where it has none. A stored source always wins, and only that
+first report decides; later ones never change a source.
+
+- A push on A makes the source ANALOG and sends StemDeck nothing: the stem
+  on bus N stays there and nothing moves to AUX ("A should switch to the
+  analog input in REAPER, not touch StemDeck"). Until 2026-10-14 A took
+  every stem off the bus, StemDeck parked it on AUX, and the analog send
+  opened because the bus was empty.
+- A push on a stem makes the source STEM and, as before, the stem the
+  channel's only input on bus N (a stem playing on another channel moves
+  here; that channel keeps its source and, on STEM, plays its now empty
+  bus: silence). A push on the stem that already
+  plays here changes nothing (until 2026-10-14 it released it to AUX).
+  Without StemDeck a stem push changes nothing: a stem nobody plays must
+  not shut a channel's analog input.
+- The desk shows A while the source is ANALOG, whatever is on bus N, and
+  the stem on bus N while it is STEM or UNDECIDED (A as well while that
+  bus is empty -- the announcement has no "nothing").
+
+Core remembers no stem. A channel
 plays one stem at most, and a stem plays on one channel at most; every stem
 on a channel is not on AUX, and a stem taken off its channel goes to AUX, in
 either return mode (one stem per bus, the rest on AUX -- StemDeck's own rule
@@ -39,6 +65,11 @@ STEMS_PER_DECK = 4
 INPUTS = PAIRS + 1
 ANALOG_INPUT = PAIRS
 
+#: A channel's source (2026-10-14): which of its two sends in REAPER is open.
+#: UNDECIDED (None, null on disk) until a push or StemDeck's first report.
+ANALOG_SOURCE, STEM_SOURCE, UNDECIDED = 0, 1, None
+SOURCES = (ANALOG_SOURCE, STEM_SOURCE)
+
 #: The aux return's two modes; its encoder's cursor runs over both and the
 #: CUE field, which is a switch of its own and never a mode (spec return-cue).
 ANALOG_MODE, STEM_MODE, CUE_FIELD = 0, 1, 2
@@ -58,6 +89,7 @@ class Stems:
     def __init__(self):
         self.masks = [0] * PAIRS
         self.cursors = [ANALOG_INPUT] * CHANNELS
+        self.sources = [UNDECIDED] * CHANNELS
         self.return_cursor = STEM_MODE
         self.return_mode = STEM_MODE
 
@@ -94,6 +126,16 @@ class Stems:
                 return index
         return RETURN if self._on(pair, AUX) else None
 
+    def adopt_sources(self):
+        """Decide every UNDECIDED channel from the buses as they are now:
+        STEM where its bus has a stem, ANALOG where it has none. Called on
+        StemDeck's settled report; a decided source is never touched, so
+        only the first report after a start without one decides."""
+        for index in range(CHANNELS):
+            if self.sources[index] is UNDECIDED:
+                self.sources[index] = (STEM_SOURCE if self.channel_mask(index)
+                                       else ANALOG_SOURCE)
+
     # -- turn and push --------------------------------------------------------
 
     def turn(self, index, steps):
@@ -105,37 +147,25 @@ class Stems:
         self.cursors[index] = (self.cursors[index] + steps) % INPUTS
 
     def push(self, index, connected=True):
-        """The commands a push on place `index` means. Without StemDeck
-        (`connected` False) nothing is switched: the mirror is StemDeck's,
-        and a stem nobody plays must not shut a channel's analog input.
-        On the return's CUE field nothing is switched: the cue is Core's,
-        not StemDeck's."""
+        """The commands to StemDeck a push on place `index` means. A on a
+        channel only sets its source, with or without StemDeck. Without
+        StemDeck (`connected` False) a stem push changes nothing: the mirror
+        is StemDeck's, and a stem nobody plays must not shut a channel's
+        analog input. On the return's CUE field nothing is switched: the cue
+        is Core's, not StemDeck's."""
         if index == RETURN:
             if self.return_cursor == CUE_FIELD:
                 return []
             self.return_mode = self.return_cursor
             return self.tidy() if connected else []
+        cursor = self.cursors[index]
+        if cursor == ANALOG_INPUT:
+            self.sources[index] = ANALOG_SOURCE
+            return []
         if not connected:
             return []
-        cursor = self.cursors[index]
-        # On A, or on the stem that plays here: analog; the released stem
-        # goes to AUX.
-        if cursor == ANALOG_INPUT or self._on(cursor + 1, index + 1):
-            return self._select_analog(index)
+        self.sources[index] = STEM_SOURCE
         return self._select(index, cursor + 1)
-
-    def _select_analog(self, index):
-        """Every stem off the channel; with none on it, nothing to do."""
-        bus = index + 1
-        released = [p for p in range(1, PAIRS + 1) if self._on(p, bus)]
-        if not released:
-            return []
-        commands = [(p, bus, False) for p in released]
-        self._apply_all(commands)
-        for pair in released:
-            if self.place_of(pair) is None:
-                commands += self._to_aux(pair)
-        return commands + self.tidy()
 
     def _select(self, index, pair):
         """`pair` as the channel's only input; from another channel it moves."""
@@ -208,24 +238,37 @@ class Stems:
     # -- on disk ---------------------------------------------------------------
 
     def as_data(self):
-        return {"cursors": list(self.cursors),
+        return {"cursors": list(self.cursors), "sources": list(self.sources),
                 "return_cursor": self.return_cursor, "return_mode": self.return_mode}
 
     @classmethod
     def from_data(cls, data):
-        """The remembered cursors and return mode, or the defaults -- never
-        raises; an older file's "last_stems" is ignored. The switches are StemDeck's and come back with its report."""
+        """The remembered cursors, sources and return mode, or the defaults --
+        never raises; an older file's "last_stems" is ignored, and one
+        without "sources" leaves every channel UNDECIDED. The switches are
+        StemDeck's and come back with its report."""
         s = cls()
         if not isinstance(data, dict):
             return s
         cursors = _cursors(data.get("cursors"))
         if cursors is not None:
             s.cursors = cursors
+        sources = _sources(data.get("sources"))
+        if sources is not None:
+            s.sources = sources
         for name, allowed in (("return_cursor", RETURN_RING),
                               ("return_mode", (ANALOG_MODE, STEM_MODE))):
             if _is_int(data.get(name)) and data[name] in allowed:
                 setattr(s, name, data[name])
         return s
+
+
+def _sources(data):
+    if not isinstance(data, list) or len(data) != CHANNELS:
+        return None
+    if not all(s is UNDECIDED or (_is_int(s) and s in SOURCES) for s in data):
+        return None
+    return list(data)
 
 
 def _cursors(data):

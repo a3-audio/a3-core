@@ -59,7 +59,7 @@ from a3_core_stems import CUE_FIELD, RETURN   # noqa: E402
 from a3_core_stems_reaper import (Settle, analog_messages,   # noqa: E402
                                   announcements as stem_announcements,
                                   changed_messages, command_messages, pair_of,
-                                  return_source_messages)
+                                  return_source_messages, stems_messages)
 from a3_core_presence import STEMDECK_SILENCE, HelloWatch   # noqa: E402
 from a3_core_motion import MotionTarget, is_this_machine   # noqa: E402
 from a3_core_hello_gate import (ADMIT, REFUSE_DIFFERS_FIRST,   # noqa: E402
@@ -377,8 +377,10 @@ channel_infos = tuple(
 _state_file = StateFile(STATE_PATH)
 apply_state(_state_file.load(), channel_infos, master_info)
 
-#: Which StemDeck pair is on which channel, and what the aux return shows.
-#: Core's own like the toggles: no REAPER parameter holds it.
+#: Which StemDeck pair is on which channel, each channel's source (STEM or
+#: ANALOG, 2026-10-14), and what the aux return shows. The cursors, sources
+#: and the return's mode are Core's own like the toggles: no REAPER
+#: parameter holds them.
 _stems = apply_stems(_state_file.load())
 
 
@@ -577,7 +579,8 @@ _stems_sent_to_reaper = {}
 
 
 def speak_stems(full=False):
-    """The stem mirror to REAPER (the analog sends, the return's source) and
+    """The stem mirror to REAPER (each channel's analog and stems sends, by
+    its source; the return's source) and
     to the subscribers.
 
     `full` sends every announcement (start-up, recall) instead of only the
@@ -586,6 +589,7 @@ def speak_stems(full=False):
     if full:
         _stems_sent_to_reaper.clear()
     to_reaper = (analog_messages(_stems, _layout, CUE_UNITY)
+                 + stems_messages(_stems, _layout, CUE_UNITY)
                  + return_source_messages(_stems, _layout, CUE_UNITY))
     for address, value in changed_messages(to_reaper, _stems_sent_to_reaper):
         osc_reaper.send_message(address, value)
@@ -623,12 +627,13 @@ def send_to_stemdeck(commands):
 
 
 def notice_stemdeck_silence(now):
-    """A minute without StemDeck's hello: nothing is on its buses any more,
-    so no stem is on any channel and their analog inputs play again."""
+    """A minute without StemDeck's hello: nothing is on its buses any more.
+    Each channel keeps its source (2026-10-14): one on STEM stays silent
+    until StemDeck is back or the desk chooses A."""
     global _stemdeck_client
     if not _stemdeck_watch.silence(now):
         return
-    print("stemdeck: silent for a minute, channels back to analog")
+    print("stemdeck: silent for a minute, its buses are empty")
     _stemdeck_client = None
     follow_the_return(None)
     _stems.forget()
@@ -988,8 +993,9 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
         speak_stems()
 
     elif parameter == "stem.push":
-        # The menu moves at once (into a deck, back); what a push loads goes
-        # to StemDeck, and the desk shows it when StemDeck reports.
+        # The channel's source switches at once in REAPER (A on its own,
+        # 2026-10-14); what a stem push loads goes to StemDeck, and the desk
+        # shows it when StemDeck reports.
         commands = _stems.push(channel_index, connected=_stemdeck_client is not None)
         if _stemdeck_client is not None:
             send_to_stemdeck(commands)
@@ -1140,10 +1146,12 @@ def on_tick():
 def tidy_when_settled():
     """Every tick: once StemDeck's reports have settled, make the
     mirror obey the rules -- one stem per channel, the return's mode -- and
-    tell StemDeck. Runs on the serve thread, as every handler does."""
+    tell StemDeck; then let the buses decide any channel that has no source
+    yet (2026-10-14). Runs on the serve thread, as every handler does."""
     if not _tidy_settle.due(time.monotonic()) or _stemdeck_client is None:
         return
     send_to_stemdeck(_stems.tidy())
+    _stems.adopt_sources()
     speak_stems()
     remember_state()
 

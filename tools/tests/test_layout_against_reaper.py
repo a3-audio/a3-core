@@ -152,20 +152,34 @@ class OscReachesEveryTrack(unittest.TestCase):
         self.assertGreaterEqual(osc_track_bank_size(SHIPPED_OSC_PATTERN), tracks)
 
 
+#: What a hardware output occupies in a track's send numbering.
+HARDWARE_OUTPUT = "hardware output"
+
+
 def send_destinations_in_project(path):
-    """Per sending track (one-based), the tracks its sends reach, in send
-    order. REAPER stores a send as an AUXRECV line in the *receiving* track,
-    with the sender zero-based; a track's send N is its Nth such line in
-    project order."""
-    destinations = {}
+    """Per sending track (one-based), what its sends reach, in the numbering
+    REAPER's OSC uses: the track's hardware outputs (HWOUT lines, in the
+    sending track) come first, then the tracks its sends reach. REAPER
+    stores a send as an AUXRECV line in the *receiving* track, with the
+    sender zero-based; a track's Nth send after its hardware outputs is its
+    Nth such line in project order. Counting the hardware outputs matters:
+    two meter outputs on the analog track moved every channel's analog send
+    by two (2026-10-14)."""
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    hardware, receivers = {}, {}
     track = 0
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    for line in lines:
         if line.startswith("  <TRACK"):
             track += 1
+        if not track:
+            continue
+        if re.match(r"\s+HWOUT ", line):
+            hardware[track] = hardware.get(track, 0) + 1
         match = re.match(r"\s+AUXRECV (\d+) ", line)
-        if track and match:
-            destinations.setdefault(int(match.group(1)) + 1, []).append(track)
-    return destinations
+        if match:
+            receivers.setdefault(int(match.group(1)) + 1, []).append(track)
+    return {sender: [HARDWARE_OUTPUT] * hardware.get(sender, 0) + reached
+            for sender, reached in receivers.items()}
 
 
 class TheReturnsReceivesAreTheTemplates(unittest.TestCase):
@@ -195,6 +209,15 @@ class TheReturnsReceivesAreTheTemplates(unittest.TestCase):
         for index in range(self.layout.channel_count):
             channel = self.layout.channel(index)
             self.assertEqual(self._reaches(self.layout.master.track_analog, channel.analog_send),
+                             channel.track_input)
+
+    def test_the_channel_stems_sends_reach_the_inputs(self):
+        # A on the desk shuts the stems track's send to the channel's input
+        # and opens the analog one (maintainer, 2026-10-14): the stems send
+        # number is read from the project like the analog one.
+        for index in range(self.layout.channel_count):
+            channel = self.layout.channel(index)
+            self.assertEqual(self._reaches(self.layout.master.track_stems, channel.stems_send),
                              channel.track_input)
 
 

@@ -43,6 +43,7 @@ CHANNEL_FIELDS = (
     "enc_main_elevation",
     "enc_phones_solo",
     "analog_send",
+    "stems_send",
 )
 
 

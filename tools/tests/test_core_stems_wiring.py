@@ -31,6 +31,13 @@ class TheStateFile(unittest.TestCase):
         self.assertEqual(apply_stems({}).cursors, [8] * 4)
         self.assertEqual(apply_stems({"stems": "garbage"}).masks, [0] * 8)
 
+    def test_the_channel_sources_survive_the_round_trip(self):
+        # Core's own since 2026-10-14, kept in state.json beside the return's
+        # mode: a restart or a reboot plays the same inputs.
+        s = Stems()
+        s.sources = [1, 0, 1, 0]
+        self.assertEqual(apply_stems(state_of([], _Master(), s)).sources, [1, 0, 1, 0])
+
     def test_the_cursors_survive_the_round_trip(self):
         s = Stems()
         s.cursors[3] = 4
@@ -95,6 +102,17 @@ class StemDeckIsWired(unittest.TestCase):
 
     def test_the_analog_sends_go_to_reaper(self):
         self.assertIn("analog_messages(", _source_of("speak_stems"))
+
+    def test_the_stems_sends_go_to_reaper(self):
+        # A channel's two sends together, by its source (2026-10-14).
+        self.assertIn("stems_messages(", _source_of("speak_stems"))
+
+    def test_silence_leaves_the_channel_sources_alone(self):
+        # The source is the desk's choice; StemDeck going quiet empties the
+        # buses but does not choose analog for anybody (2026-10-14).
+        source = _source_of("notice_stemdeck_silence")
+        self.assertNotIn("sources", source)
+        self.assertNotIn("back to analog", source)
 
     def test_the_returns_source_goes_to_reaper(self):
         # speak_stems runs after every return push, at recall and at start-up.
@@ -235,6 +253,14 @@ class TheTidyIsWired(unittest.TestCase):
         handler = _source_of("osc_handler_stemdeck")
         self.assertIn("_tidy_settle.poke(", handler)
         self.assertNotIn(".tidy(", handler)
+
+    def test_the_settled_report_decides_the_undecided_sources(self):
+        # After the tidy, so the masks obey the rules; before speaking, so
+        # REAPER and the desk hear the decision, and the state keeps it.
+        source = _source_of("tidy_when_settled")
+        self.assertLess(source.index("_stems.tidy()"), source.index("_stems.adopt_sources()"))
+        self.assertLess(source.index("_stems.adopt_sources()"), source.index("speak_stems()"))
+        self.assertIn("remember_state()", source)
 
     def test_the_loop_ticks_the_tidy(self):
         self.assertIn("tick=on_tick", CORE)
