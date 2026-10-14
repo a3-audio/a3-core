@@ -33,5 +33,18 @@ class VncIsAlwaysOn(unittest.TestCase):
         self.assertIn("Restart=always", UNIT.read_text())
 
 
+class VncStopsAtOnce(unittest.TestCase):
+    """Since X runs in the tty1 login session (getty and startx, no display
+    manager, 2026-10-14), the session and its X server stop before this
+    system unit at shutdown. x11vnc then hangs on the vanished display and
+    ignores SIGTERM: every reboot waited the full 90 s for it. It keeps no
+    state, so it is killed after a few seconds."""
+
+    def test_its_stop_is_bounded(self):
+        line = next((l for l in UNIT.read_text().splitlines()
+                     if l.startswith("TimeoutStopSec=")), None)
+        self.assertIsNotNone(line, "x11vnc.service has no TimeoutStopSec")
+        self.assertLessEqual(int(line.split("=", 1)[1].rstrip("s")), 10)
+
 if __name__ == "__main__":
     unittest.main()
