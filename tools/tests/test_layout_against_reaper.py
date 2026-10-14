@@ -197,6 +197,15 @@ class TheReturnsReceivesAreTheTemplates(unittest.TestCase):
             self.assertEqual(self._reaches(self.layout.master.track_analog, channel.analog_send),
                              channel.track_input)
 
+    def test_the_channel_stems_sends_reach_the_inputs(self):
+        # A on the desk shuts the stems track's send to the channel's input
+        # and opens the analog one (maintainer, 2026-10-14): the stems send
+        # number is read from the project like the analog one.
+        for index in range(self.layout.channel_count):
+            channel = self.layout.channel(index)
+            self.assertEqual(self._reaches(self.layout.master.track_stems, channel.stems_send),
+                             channel.track_input)
+
 
 class TheGateIsTheTemplatesOutputs(unittest.TestCase):
     """The gated tracks are the template's speaker feeds and the main meter's

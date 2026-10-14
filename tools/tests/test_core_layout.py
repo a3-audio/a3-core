@@ -37,7 +37,8 @@ MINIMAL = json.dumps({
     "channels": [
         {"track_input": 12, "track_multi_enc": 11, "track_stereo_enc": 10,
          "track_channelbus": 9, "enc_main_azimuth": 8,
-         "enc_main_elevation": 9, "enc_phones_solo": 12, "analog_send": 1}
+         "enc_main_elevation": 9, "enc_phones_solo": 12, "analog_send": 1,
+         "stems_send": 1}
     ],
     # Master is required: defaulting those would drive tracks 0 and 0, on the
     # master bus of all places.
@@ -111,7 +112,8 @@ FULL = json.dumps({
     "channels": [
         {"track_input": 12, "track_multi_enc": 11, "track_stereo_enc": 10,
          "track_channelbus": 9, "enc_main_azimuth": 8,
-         "enc_main_elevation": 9, "enc_phones_solo": 12, "analog_send": 1}
+         "enc_main_elevation": 9, "enc_phones_solo": 12, "analog_send": 1,
+         "stems_send": 1}
     ],
     "master": {"track_masterbus": 1, "track_booth": 2, "track_phones": 3,
                "aux_return": 25, "track_stems": 31, "track_analog": 30},
@@ -227,11 +229,13 @@ class TheMapRunsBothWays(unittest.TestCase):
                 {"track_input": 12, "track_multi_enc": 11,
                  "track_stereo_enc": 10, "track_channelbus": 9,
                  "enc_main_azimuth": 8,
-                 "enc_main_elevation": 9, "enc_phones_solo": 12, "analog_send": 1},
+                 "enc_main_elevation": 9, "enc_phones_solo": 12, "analog_send": 1,
+         "stems_send": 1},
                 {"track_input": 16, "track_multi_enc": 15,
                  "track_stereo_enc": 14, "track_channelbus": 13,
                  "enc_main_azimuth": 13,
-                 "enc_main_elevation": 14, "enc_phones_solo": 17, "analog_send": 1},
+                 "enc_main_elevation": 14, "enc_phones_solo": 17, "analog_send": 1,
+         "stems_send": 1},
             ],
             "master": {"track_masterbus": 1, "track_booth": 2,
                        "track_phones": 3, "aux_return": 25, "track_stems": 31, "track_analog": 30},
@@ -263,7 +267,8 @@ SENDS = json.dumps({
     "channels": [{"track_input": 12, "track_multi_enc": 11,
                   "track_stereo_enc": 10, "track_channelbus": 9,
                   "enc_main_azimuth": 8,
-                  "enc_main_elevation": 9, "enc_phones_solo": 12, "analog_send": 1}],
+                  "enc_main_elevation": 9, "enc_phones_solo": 12, "analog_send": 1,
+         "stems_send": 1}],
     "master": {"track_masterbus": 1, "track_booth": 2, "track_phones": 3,
                "aux_return": 25, "track_stems": 31, "track_analog": 30},
     "sends": {"aux": 3},

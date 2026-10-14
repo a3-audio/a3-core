@@ -144,6 +144,11 @@ class TheRestOfTheMap(unittest.TestCase):
         self.assertEqual(self.layout.master.track_analog, 27)
         self.assertEqual([self.layout.channel(i).analog_send for i in range(4)], [1, 2, 3, 4])
 
+    def test_the_stems_track_and_its_sends(self):
+        """stems (28) sends 1-4 to 1-input ... 4-input, in the template's order."""
+        self.assertEqual(self.layout.master.track_stems, 28)
+        self.assertEqual([self.layout.channel(i).stems_send for i in range(4)], [1, 2, 3, 4])
+
     def test_the_returns_two_receives_are_named(self):
         """The return mode chooses aux_return's source by send volume
         (return-sources, 2026-10-07): send 5 of analog (after 1-4 to the
