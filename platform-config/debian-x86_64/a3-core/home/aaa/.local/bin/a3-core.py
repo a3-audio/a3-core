@@ -88,6 +88,7 @@ from a3_core_send_failures import SendFailures   # noqa: E402
 from a3_core_startup import (filter_bypass_messages,   # noqa: E402
                              remembered_reaper_messages)
 from a3_core_evening import evening_state, replayable   # noqa: E402
+from a3_core_desk_first import DeskFirst   # noqa: E402
 from a3_core_web import default_bind, start_window, window_address   # noqa: E402
 from a3_core_devices import Devices   # noqa: E402
 from a3_core_gate import Gate, StartupRecall, open_after_recall   # noqa: E402
@@ -421,6 +422,10 @@ _startup_recall = StartupRecall()
 #: a3_core_recall for why this is not a file.
 _relayed = Relayed()
 
+#: What the desk sent this run, laid over the evening in every replay: the
+#: desk is in front (a3_core_desk_first).
+_desk_first = DeskFirst()
+
 
 #: Everything that speaks the A3 protocol, in the order it is told.
 #:
@@ -519,6 +524,7 @@ def relay(address, raw, origin):
     except (TypeError, ValueError):
         return
 
+    _desk_first.heard(address, number, origin == "mixer")
     if _relayed.holds(address, number):
         return
 
@@ -1308,6 +1314,14 @@ def replay_evening(evening, send_to_self) -> int:
     return replayed
 
 
+def the_evening_to_replay():
+    """The evening the next replay sends, with what the desk sent this run
+    laid over it: the desk is in front, whether its values came before the
+    replay or after (a3_core_desk_first)."""
+    return list(replayable(_truth, {"values": dict(
+        _desk_first.over(_project.evening()))}))
+
+
 OSC_ADDRESS_RECALL: str = _truth.address("state.recall")
 
 
@@ -1649,6 +1663,10 @@ if __name__ == "__main__":
                   "motion": args.motion.rpartition(":")[0],
                   "reaper": args.reaper.rpartition(":")[0]}
 
+    # The desk is in front: its values count from its first message, hello
+    # or not (a3_core_hello_gate). Every other host still says hello first.
+    _hello_gate.trust_host(PEER_HOSTS["mixer"])
+
     # Pointed somewhere else for a bench run. Rebound at module scope, which
     # is where the handlers read them -- there is no main() here, the argument
     # parsing runs under `if __name__` at the top level. (A `global`
@@ -1960,7 +1978,7 @@ if __name__ == "__main__":
         # A close during the wait makes this round's replay not count.
         round_started = _project.round
         wait_until_quiet(reaper_arrivals, lambda: replay_evening(
-            _project.evening(), send_to_self))
+            the_evening_to_replay(), send_to_self))
         _startup_recall.rearm()
         send_to_self(OSC_ADDRESS_RECALL, _startup_recall.token)
         if _project.replayed(round_started):

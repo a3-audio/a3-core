@@ -8,9 +8,12 @@ Core run, with the fingerprint of Core's own a3-osc.json (a device on a stale
 truth speaks words Core may not mean); what it sent before is ignored, and said once in the journal.
 
 Keyed by host, because a value carries no device name, only a source
-address. The one exception is Core's own replay of the evening, which comes
-from a socket of its own: trusted by (host, port). Pure, no OSC: the caller
-passes the address and does the logging.
+address. Two exceptions. Core's own replay of the evening comes from a
+socket of its own: trusted by (host, port). And the desk at the truth's
+hosts.mixer is trusted by host: it is in front, its values count from its
+first message (2026-10-14) -- it says hello only every 30 s, and a reboot
+locked it out for that long. Pure, no OSC: the caller passes the address and
+does the logging.
 """
 
 ADMIT = "admit"
@@ -24,6 +27,7 @@ class HelloGate:
         self._greeted = set()
         self._told = set()
         self._trusted = set()
+        self._trusted_hosts = set()
         self._differs = set()
         self._told_differs = set()
 
@@ -42,10 +46,16 @@ class HelloGate:
         """Admit this exact (host, port) -- Core's own replay socket."""
         self._trusted.add(tuple(source))
 
+    def trust_host(self, host):
+        """Admit every value from `host`, hello or not, whatever its
+        fingerprint -- the desk at its configured address."""
+        self._trusted_hosts.add(host)
+
     def check(self, host, port=None):
         """ADMIT, REFUSE, or REFUSE_FIRST -- the first refusal of a host, the
         one worth a line in the journal."""
-        if (host, port) in self._trusted or host in self._greeted:
+        if (host in self._trusted_hosts or (host, port) in self._trusted
+                or host in self._greeted):
             return ADMIT
         if host in self._differs:
             if host in self._told_differs:

@@ -56,3 +56,9 @@ class TheHandlersAsk(unittest.TestCase):
 
     def test_a_differing_truth_is_said_once(self):
         self.assertIn("its a3-osc.json differs", _source_of("values_refused"))
+
+    def test_the_desk_is_trusted_by_host_after_the_arguments(self):
+        """--mixer can point the desk elsewhere; the host trusted is the one
+        PEER_HOSTS holds once the arguments are read."""
+        trusted = CORE.index('_hello_gate.trust_host(PEER_HOSTS["mixer"])')
+        self.assertGreater(trusted, CORE.index('PEER_HOSTS = {"mixer": args.mixer'))

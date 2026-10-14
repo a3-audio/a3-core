@@ -89,7 +89,10 @@ class TheReplayRunsForEveryStart(unittest.TestCase):
                         self.replay.find("wait_until_quiet("))
 
     def test_it_replays_what_the_project_holds(self):
-        self.assertIn("_project.evening()", self.replay)
+        """Through the_evening_to_replay, which lays the desk over it
+        (test_core_desk_first_wiring)."""
+        self.assertIn("the_evening_to_replay()", self.replay)
+        self.assertIn("_project.evening()", _source_of("the_evening_to_replay"))
 
     def test_each_replay_carries_a_fresh_token(self):
         self.assertLess(self.replay.find("_startup_recall.rearm()"),
