@@ -15,6 +15,9 @@ EnvironmentFile=/home/aaa/.config/a3/osc.env
 ExecStart=/usr/bin/x11vnc -reopen -shared -forever -rfbport ${A3_VNC_PORT} -display :0 -ncache 0 -auth /home/aaa/.Xauthority
 Restart=always
 RestartSec=5
+# X runs in the tty1 login session, which stops first at shutdown; x11vnc then
+# hangs on the vanished display and ignores SIGTERM. It keeps no state.
+TimeoutStopSec=5
 
 [Install]
 WantedBy=graphical.target
