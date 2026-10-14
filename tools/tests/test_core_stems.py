@@ -9,8 +9,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local/lib"))
 
-from a3_core_stems import (ANALOG_INPUT, ANALOG_MODE, AUX, CHANNELS, CUE_FIELD,  # noqa: E402
-                           INPUTS, PAIRS, RETURN, STEM_MODE, Stems)
+from a3_core_stems import (ANALOG_INPUT, ANALOG_MODE, ANALOG_SOURCE, AUX,  # noqa: E402
+                           CHANNELS, CUE_FIELD, INPUTS, PAIRS, RETURN,
+                           STEM_MODE, STEM_SOURCE, Stems)
 
 MODES = (ANALOG_MODE, STEM_MODE)
 
@@ -91,6 +92,7 @@ class TheSelector(unittest.TestCase):
         self.assertIn((2, 1, False), commands)
         self.assertIn((6, 1, False), commands)
         self.assertEqual(s.channel_mask(0), 1 << 2)
+        self.assertEqual(s.sources[0], STEM_SOURCE)
 
     def test_deck_2_stems_are_inputs_4_to_7(self):
         s = Stems()
@@ -99,23 +101,22 @@ class TheSelector(unittest.TestCase):
         s.push(1)
         self.assertEqual(s.place_of(5), 1)
 
-    def test_push_on_what_plays_sends_it_to_the_return(self):
-        # A push on the stem that plays here takes it off the channel, which
-        # plays its analog input again; in STEM mode the stem lands on the
-        # return (maintainer, 2026-10-04).
-        s = stems_with(p3=bit(1))
+    def test_push_on_what_plays_changes_nothing(self):
+        # Until 2026-10-14 it released the stem to AUX; analog is A's now,
+        # and A leaves StemDeck alone.
+        s = tidied(STEM_MODE, p3=bit(1))
+        s.sources[0] = STEM_SOURCE
         s.cursors[0] = 2
-        commands = s.push(0)
-        self.assertIn((3, 1, False), commands)
-        self.assertIn((3, AUX, True), commands)
-        self.assertEqual((s.channel_mask(0), s.place_of(3)), (0, RETURN))
+        self.assertEqual(s.push(0), [])
+        self.assertEqual((s.channel_mask(0), s.sources[0]), (1 << 2, STEM_SOURCE))
 
-    def test_a_second_push_brings_it_back_from_the_return(self):
-        s = stems_with(p3=bit(1))
+    def test_push_on_the_stem_on_the_bus_while_analog_plays_hears_it(self):
+        # The stem stayed on bus 1 while A played: a push only opens the
+        # stems send, StemDeck has nothing to do.
+        s = tidied(STEM_MODE, p3=bit(1))
         s.cursors[0] = 2
-        s.push(0)
-        s.push(0)
-        self.assertEqual((s.channel_mask(0), s.place_of(3)), (1 << 2, 0))
+        self.assertEqual(s.push(0), [])
+        self.assertEqual(s.sources[0], STEM_SOURCE)
 
     def test_a_stem_on_another_channel_moves_here(self):
         s = stems_with(p3=bit(2))
@@ -134,10 +135,10 @@ class TheSelector(unittest.TestCase):
 
 
 class TheAnalogInput(unittest.TestCase):
-    """Position 8 is A, the channel's analog input (maintainer, 2026-10-07;
-    until then a STEM toggle that brought the last stem back). A push on A
-    only ever selects analog: a playing stem leaves the channel, and while
-    analog already plays nothing changes."""
+    """Position 8 is A, the channel's analog input. Since 2026-10-14 A
+    switches in REAPER only (maintainer: "A should switch to the analog
+    input in REAPER, not touch StemDeck"): the channel's source becomes
+    ANALOG, and whatever StemDeck has on its bus stays there, unheard."""
 
     def push_a(self, s, index=0, connected=True):
         s.cursors[index] = ANALOG_INPUT
@@ -147,57 +148,64 @@ class TheAnalogInput(unittest.TestCase):
         s.cursors[index] = pair - 1
         return s.push(index)
 
-    def test_a_push_on_a_while_a_stem_plays_selects_analog(self):
-        # The released stem goes to AUX in either mode (one stem per bus,
-        # 2026-10-07): in ANALOG mode AUX is not heard on the return.
+    def test_every_channel_starts_on_analog(self):
+        self.assertEqual(Stems().sources, [ANALOG_SOURCE] * CHANNELS)
+
+    def test_a_push_on_a_sends_nothing_to_stemdeck(self):
         for mode in MODES:
             s = tidied(mode, p3=bit(1))
-            self.assertEqual(self.push_a(s), [(3, 1, False), (3, AUX, True)], mode)
-            self.assertEqual(s.channel_mask(0), 0)
+            s.sources[0] = STEM_SOURCE
+            masks = list(s.masks)
+            self.assertEqual(self.push_a(s), [], mode)
+            self.assertEqual(s.masks, masks, mode)
+            self.assertEqual(s.sources[0], ANALOG_SOURCE, mode)
 
-    def test_a_push_on_a_while_analog_plays_changes_nothing(self):
-        s = Stems()
-        s.return_mode = ANALOG_MODE
-        self.assertEqual(self.push_a(s), [])
-        self.assertEqual(s.channel_mask(0), 0)
-
-    def test_a_second_push_on_a_does_not_bring_the_stem_back(self):
-        s = stems_with(p3=bit(1))
-        s.return_mode = ANALOG_MODE
+    def test_the_stem_stays_on_its_bus_and_off_aux(self):
+        s = tidied(STEM_MODE, p3=bit(1))
+        self.select(s, 0, 3)
         self.push_a(s)
-        self.assertEqual(self.push_a(s), [])
-        self.assertEqual((s.channel_mask(0), s.place_of(3)), (0, RETURN))
+        self.assertEqual((s.place_of(3), s.plays_on_return(3)), (0, False))
 
-    def test_a_after_a_selected_stem_does_not_bring_it_back(self):
+    def test_a_switches_without_stemdeck_too(self):
+        # REAPER's sends are Core's; StemDeck is not asked.
+        s = stems_with(p3=bit(1))
+        s.sources[0] = STEM_SOURCE
+        self.assertEqual(self.push_a(s, connected=False), [])
+        self.assertEqual(s.sources[0], ANALOG_SOURCE)
+
+    def test_a_on_one_channel_leaves_the_others_alone(self):
+        s = tidied(ANALOG_MODE, p3=bit(1), p6=bit(2))
+        s.sources = [STEM_SOURCE] * CHANNELS
+        self.push_a(s)
+        self.assertEqual(s.sources, [ANALOG_SOURCE] + [STEM_SOURCE] * 3)
+        self.assertEqual(s.place_of(6), 1)
+
+    def test_a_stem_after_a_is_heard_again(self):
         s = Stems()
         s.return_mode = ANALOG_MODE
         self.select(s, 0, 3)
         self.push_a(s)
-        self.assertEqual(self.push_a(s), [])
-        self.assertEqual(s.place_of(3), RETURN)
+        self.assertEqual(self.select(s, 0, 3), [])
+        self.assertEqual((s.sources[0], s.place_of(3)), (STEM_SOURCE, 0))
 
-    def test_in_stem_mode_the_released_stem_goes_to_the_return(self):
-        s = stems_with(p3=bit(1))
+    def test_a_stem_moved_here_leaves_its_old_channel_its_source(self):
+        s = tidied(ANALOG_MODE, p3=bit(2))
+        s.sources[1] = STEM_SOURCE
+        self.select(s, 0, 3)
+        self.assertEqual(s.sources[:2], [STEM_SOURCE, STEM_SOURCE])
+        self.assertEqual((s.place_of(3), s.channel_mask(1)), (0, 0))
+
+    def test_stemdecks_reports_never_change_the_source(self):
+        # Auto-DJ or a click in StemDeck moves stems on and off bus N;
+        # channel N keeps what the desk chose.
+        s = Stems()
+        s.sources = [STEM_SOURCE, ANALOG_SOURCE, STEM_SOURCE, ANALOG_SOURCE]
+        s.report(1, bit(2))
+        s.report(2, bit(3))
         s.tidy()
-        commands = self.push_a(s)
-        self.assertIn((3, 1, False), commands)
-        self.assertIn((3, AUX, True), commands)
-        self.assertEqual(s.place_of(3), RETURN)
-
-    def test_a_on_one_channel_leaves_the_others_alone(self):
-        s = stems_with(p3=bit(1), p6=bit(2))
-        s.return_mode = ANALOG_MODE
-        self.push_a(s)
-        self.assertEqual((s.channel_mask(0), s.place_of(6)), (0, 1))
-
-    def test_a_push_on_what_plays_releases_it(self):
-        s = tidied(ANALOG_MODE, p4=bit(1))               # put there by StemDeck
-        self.assertEqual(self.select(s, 0, 4), [(4, 1, False), (4, AUX, True)])
-
-    def test_disconnected_a_switches_nothing(self):
-        s = stems_with(p3=bit(1))
-        self.assertEqual(self.push_a(s, connected=False), [])
-        self.assertEqual(s.channel_mask(0), 1 << 2)
+        s.report(1, 0)
+        s.forget()
+        self.assertEqual(s.sources, [STEM_SOURCE, ANALOG_SOURCE, STEM_SOURCE, ANALOG_SOURCE])
 
     def test_no_stem_is_remembered(self):
         s = Stems()
@@ -215,6 +223,12 @@ class WithoutStemDeck(unittest.TestCase):
         s.turn(0, -6)
         self.assertEqual(s.push(0, connected=False), [])
         self.assertEqual((s.cursors[0], s.channel_mask(0)), (2, 0))
+
+    def test_a_stem_nobody_plays_does_not_shut_the_analog_input(self):
+        s = Stems()
+        s.cursors[0] = 2
+        s.push(0, connected=False)
+        self.assertEqual(s.sources[0], ANALOG_SOURCE)
 
     def test_a_does_not_touch_the_mirror_either(self):
         s = stems_with(p3=bit(1))
@@ -340,11 +354,12 @@ class ReturnModes(unittest.TestCase):
             self.assertEqual(s.push(RETURN), [])
             self.assertEqual((s.return_mode, s.masks), (target, masks))
 
-    def test_a_released_stem_returns_to_aux_in_stem_mode(self):
-        s = stems_with(p3=bit(1))
-        s.tidy()
+    def test_a_puts_nothing_on_aux(self):
+        # Until 2026-10-14 A released the stem onto AUX.
+        s = tidied(STEM_MODE, p3=bit(1))
         s.cursors[0] = ANALOG_INPUT
-        self.assertIn((3, AUX, True), s.push(0))
+        self.assertEqual(s.push(0), [])
+        self.assertFalse(s.plays_on_return(3))
 
     def test_analog_mode_leaves_the_stems_on_no_bus_off(self):
         s = stems_with(**{f"p{p}": bit(p) for p in range(1, 5)})   # 1-4 on channels 1-4
@@ -383,6 +398,20 @@ class TheCueLeavesStemDeckAlone(unittest.TestCase):
 
 
 class StateOnDisk(unittest.TestCase):
+    def test_the_sources_are_kept(self):
+        s = Stems()
+        s.sources = [STEM_SOURCE, ANALOG_SOURCE, STEM_SOURCE, STEM_SOURCE]
+        self.assertEqual(Stems.from_data(s.as_data()).sources, s.sources)
+
+    def test_a_file_without_sources_starts_on_analog(self):
+        self.assertEqual(Stems.from_data({"cursors": [1, 2, 3, 4]}).sources,
+                         [ANALOG_SOURCE] * CHANNELS)
+
+    def test_garbled_sources_start_on_analog(self):
+        for sources in ("x", [1, 1, 1], [1, 1, 1, 2], [True, 1, 1, 1], None):
+            self.assertEqual(Stems.from_data({"sources": sources}).sources,
+                             [ANALOG_SOURCE] * CHANNELS, sources)
+
     def test_cursors_and_mode_are_kept(self):
         s = Stems()
         s.cursors = [ANALOG_INPUT, 3, 0, 7]

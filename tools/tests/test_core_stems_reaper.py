@@ -11,27 +11,57 @@ sys.path.insert(0, str(PACKAGE / "home/aaa/.local/lib"))
 
 import a3_osc                                         # noqa: E402
 from a3_core_layout import load_layout                # noqa: E402
-from a3_core_stems import ANALOG_MODE, STEM_MODE, Stems   # noqa: E402
+from a3_core_stems import (ANALOG_MODE, ANALOG_SOURCE, STEM_MODE,  # noqa: E402
+                           STEM_SOURCE, Stems)
 from a3_core_stems_reaper import (analog_messages, announcements,  # noqa: E402
                                   changed_messages, command_messages,
                                   deck_and_stem, pair_of,
-                                  return_source_messages)
+                                  return_source_messages, stems_messages)
 
 TRUTH = a3_osc.load(PACKAGE / "usr/share/a3/a3-osc.json")
 LAYOUT = load_layout(PACKAGE / "home/aaa/.local/share/a3-core/layout.json")
 
 
-class TheAnalogInput(unittest.TestCase):
-    def test_analog_plays_on_a_channel_without_stems(self):
-        msgs = dict(analog_messages(Stems(), LAYOUT, 1.0))
-        self.assertEqual(msgs["/track/27/send/1/volume"], 1.0)
+class TheChannelsSource(unittest.TestCase):
+    """Channel N's input in REAPER: the analog track's send or the stems
+    track's send, by the channel's source -- Core's own, not StemDeck's bus
+    masks (maintainer, 2026-10-14). Send volume, as REAPER's OSC has no
+    send mute."""
 
-    def test_a_stem_on_the_channel_shuts_its_analog(self):
+    def _sends(self, sources, **reports):
         s = Stems()
-        s.report(5, 1 << 1)                                # pair 5 on bus 2
-        msgs = dict(analog_messages(s, LAYOUT, 1.0))
+        s.sources = list(sources)
+        for name, mask in reports.items():
+            s.report(int(name[1:]), mask)
+        return dict(analog_messages(s, LAYOUT, 0.7) + stems_messages(s, LAYOUT, 0.7))
+
+    def test_analog_opens_the_analog_send_and_shuts_the_stems_send(self):
+        msgs = self._sends([ANALOG_SOURCE] * 4)
+        for n in range(1, 5):
+            self.assertEqual(msgs[f"/track/27/send/{n}/volume"], 0.7)
+            self.assertEqual(msgs[f"/track/28/send/{n}/volume"], 0.0)
+
+    def test_stem_opens_the_stems_send_and_shuts_the_analog_send(self):
+        msgs = self._sends([ANALOG_SOURCE, STEM_SOURCE, ANALOG_SOURCE, ANALOG_SOURCE])
         self.assertEqual(msgs["/track/27/send/2/volume"], 0.0)
-        self.assertEqual(msgs["/track/27/send/1/volume"], 1.0)
+        self.assertEqual(msgs["/track/28/send/2/volume"], 0.7)
+        self.assertEqual(msgs["/track/27/send/1/volume"], 0.7)
+
+    def test_a_stem_on_the_bus_does_not_shut_analog(self):
+        # Until 2026-10-14 a stem on bus N shut channel N's analog send.
+        msgs = self._sends([ANALOG_SOURCE] * 4, p5=1 << 1)
+        self.assertEqual(msgs["/track/27/send/2/volume"], 0.7)
+        self.assertEqual(msgs["/track/28/send/2/volume"], 0.0)
+
+    def test_an_empty_bus_does_not_open_analog(self):
+        msgs = self._sends([STEM_SOURCE] * 4)
+        self.assertEqual(msgs["/track/27/send/1/volume"], 0.0)
+        self.assertEqual(msgs["/track/28/send/1/volume"], 0.7)
+
+    def test_the_return_sends_are_not_among_them(self):
+        msgs = self._sends([STEM_SOURCE] * 4)
+        self.assertNotIn("/track/27/send/5/volume", msgs)
+        self.assertNotIn("/track/28/send/5/volume", msgs)
 
 
 class TheReturnsSource(unittest.TestCase):
@@ -63,12 +93,20 @@ class TheReturnsSource(unittest.TestCase):
 
 
 class WhatTheDeskHears(unittest.TestCase):
-    def test_a_channel_is_announced_as_a_mask(self):
+    def test_a_channel_on_stem_is_announced_as_its_bus_mask(self):
         s = Stems()
+        s.sources[0] = STEM_SOURCE
         s.report(1, 1)
         s.report(6, 1)
         msgs = dict(announcements(s, TRUTH))
         self.assertEqual(msgs["/channel/1/stem"], 0b100001)
+
+    def test_a_channel_on_analog_shows_a_whatever_is_on_its_bus(self):
+        # 0 = the analog input (a3-osc.json); the stem on bus 1 is unheard.
+        s = Stems()
+        s.report(3, 1)
+        msgs = dict(announcements(s, TRUTH))
+        self.assertEqual(msgs["/channel/1/stem"], 0)
 
     def test_the_return_is_cursor_then_aux_flags(self):
         s = Stems()

@@ -1,12 +1,13 @@
-"""The stem mirror as messages: the analog sends and the return's source to
-REAPER, the desk's announcements, and switch commands to StemDeck (spec
+"""The stem mirror as messages: each channel's input (its analog or its
+stems send) and the return's source to REAPER, the desk's announcements, and switch commands to StemDeck (spec
 stemdeck-remote).
 
 Send volume, not send mute: REAPER's OSC has no send mute
 (Default.ReaperOSC, 2026-10-01).
 """
 
-from a3_core_stems import ANALOG_MODE, CHANNELS, PAIRS, STEMS_PER_DECK
+from a3_core_stems import (ANALOG_MODE, ANALOG_SOURCE, CHANNELS, PAIRS,
+                           STEMS_PER_DECK, STEM_SOURCE)
 
 
 
@@ -18,13 +19,26 @@ def pair_of(deck, stem):
     return (deck - 1) * STEMS_PER_DECK + stem
 
 
-def analog_messages(stems, layout, unity):
-    """Channel N's analog input: the analog track's send to N-input, shut
-    while StemDeck has a stem on bus N."""
-    track = layout.master.track_analog
-    return [(layout.address("track_send", track=track, send=layout.channel(i).analog_send),
-             0.0 if stems.channel_mask(i) else unity)
+def _source_sends(stems, layout, unity, track, field, source):
+    return [(layout.address("track_send", track=track,
+                            send=getattr(layout.channel(i), field)),
+             unity if stems.sources[i] == source else 0.0)
             for i in range(CHANNELS)]
+
+
+def analog_messages(stems, layout, unity):
+    """Channel N's analog input: the analog track's send to N-input, open
+    while the channel's source is ANALOG -- Core's own, whatever StemDeck
+    has on bus N (2026-10-14)."""
+    return _source_sends(stems, layout, unity, layout.master.track_analog,
+                         "analog_send", ANALOG_SOURCE)
+
+
+def stems_messages(stems, layout, unity):
+    """Channel N's stem input: the stems track's send to N-input, open
+    while the channel's source is STEM (2026-10-14)."""
+    return _source_sends(stems, layout, unity, layout.master.track_stems,
+                         "stems_send", STEM_SOURCE)
 
 
 def return_source_messages(stems, layout, unity):
@@ -42,10 +56,14 @@ def return_source_messages(stems, layout, unity):
 
 def announcements(stems, truth):
     """Per channel what plays there and where its selector's cursor stands,
-    then the return's cursor and what plays on it, and its mode."""
+    then the return's cursor and what plays on it, and its mode. A channel
+    on ANALOG says 0, the analog input, whatever is on its bus; one on STEM
+    says its bus mask -- 0 too while the bus is empty, which the desk then
+    shows as A although the channel is silent (2026-10-14)."""
     out = []
     for c in range(CHANNELS):
-        out.append((truth.address("channel.stem", ch=c + 1), stems.channel_mask(c)))
+        plays = stems.channel_mask(c) if stems.sources[c] == STEM_SOURCE else 0
+        out.append((truth.address("channel.stem", ch=c + 1), plays))
         out.append((truth.address("channel.stem.cursor", ch=c + 1), stems.cursors[c]))
     plays = [int(stems.plays_on_return(p)) for p in range(1, PAIRS + 1)]
     out.append((truth.address("aux-return.stem"), [stems.return_cursor] + plays))
