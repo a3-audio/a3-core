@@ -63,6 +63,22 @@ class ASwitch(unittest.TestCase):
         self.assertIn("point_motion_at(", _source_of("notice_motion_silence"))
 
 
+class TwoMotions(unittest.TestCase):
+    """One Motion at a time (2026-10-14): a second is said once, not followed."""
+
+    def test_a_rival_is_said_in_the_journal(self):
+        source = _source_of("motion_said_hello")
+        self.assertIn("take_rivals()", source)
+        self.assertIn("a second Motion", source)
+        self.assertIn("only one may run", source)
+        self.assertIn("_motion.followed", source)
+
+    def test_the_rival_is_named_before_the_early_return(self):
+        source = _source_of("motion_said_hello")
+        self.assertLess(source.index("_motion.hello("), source.index("take_rivals()"))
+        self.assertLess(source.index("take_rivals()"), source.index("point_motion_at("))
+
+
 class TheTruth(unittest.TestCase):
     def test_motion_says_hello(self):
         truth = a3_osc.load(TRUTH)

@@ -86,14 +86,15 @@ class ARemoteMotion(unittest.TestCase):
         self.assertFalse(t.remote)
         self.assertIsNone(t.silence(90.0))
 
-    def test_the_rigs_running_motion_does_not_take_it_back(self):
-        """Its hello every 30 s is not an arrival; a remote that arrived
-        later keeps the link until it falls silent."""
+    def test_a_remote_beside_the_rigs_running_motion_does_not_take_it(self):
+        """One Motion at a time (2026-10-14): the rig's own is followed, the
+        remote that arrives beside it is a rival. This replaces the
+        2026-10-05 rule that a remote Motion takes over from the rig's own."""
         t = target()
         t.hello("127.0.0.1", 0.0)
-        t.hello(A3NUC2, 10.0)
-        self.assertIsNone(t.hello("127.0.0.1", 30.0))
-        self.assertTrue(t.remote)
+        self.assertIsNone(t.hello(A3NUC2, 10.0))
+        self.assertEqual(t.current, DEFAULT)
+        self.assertFalse(t.remote)
 
     def test_the_rigs_motion_started_again_does_not_take_over(self):
         """A remote Motion keeps the lead while it says hello (2026-10-06):
@@ -110,10 +111,22 @@ class ARemoteMotion(unittest.TestCase):
         self.assertEqual(t.silence(61.0), DEFAULT)
         self.assertFalse(t.remote)
 
-    def test_the_newest_remote_wins(self):
+    def test_a_second_remote_does_not_take_the_lead(self):
+        """Replaces "the newest remote wins" (2026-10-14): the first is
+        followed while it is alive."""
         t = target()
         t.hello(A3NUC2, 0.0)
-        self.assertEqual(t.hello(NOTEBOOK, 10.0), (NOTEBOOK, 7771))
+        self.assertIsNone(t.hello(NOTEBOOK, 10.0))
+        self.assertEqual(t.current, (A3NUC2, 7771))
+        self.assertEqual(t.vu_destination(), (A3NUC2, 7772))
+
+    def test_the_second_remote_takes_over_when_the_first_is_quiet(self):
+        t = target()
+        t.hello(A3NUC2, 0.0)
+        t.hello(NOTEBOOK, 10.0)
+        t.hello(NOTEBOOK, 40.0)
+        self.assertEqual(t.silence(65.0), DEFAULT)
+        self.assertEqual(t.hello(NOTEBOOK, 70.0), (NOTEBOOK, 7771))
 
     def test_after_the_fallback_the_remote_can_arrive_again(self):
         t = target()
@@ -143,3 +156,36 @@ class TheMetersForARemoteMotion(unittest.TestCase):
         t.hello(A3NUC2, 0.0)
         t.silence(61.0)
         self.assertIsNone(t.vu_destination())
+
+
+class TwoMotions(unittest.TestCase):
+    """The rival is named by its address and reported once; the followed one
+    by the address too, the rig's own as it was heard."""
+
+    def test_a_rival_is_reported_once_with_the_one_followed(self):
+        t = target()
+        t.hello(A3NUC2, 0.0)
+        t.hello(NOTEBOOK, 10.0)
+        self.assertEqual(t.take_rivals(), [NOTEBOOK])
+        t.hello(NOTEBOOK, 40.0)
+        self.assertEqual(t.take_rivals(), [])
+        self.assertEqual(t.followed, A3NUC2)
+
+    def test_the_rigs_own_is_named_by_the_address_it_sent_from(self):
+        t = target()
+        t.hello("127.0.0.1", 0.0)
+        t.hello(A3NUC2, 10.0)
+        self.assertEqual(t.followed, "127.0.0.1")
+        self.assertEqual(t.take_rivals(), [A3NUC2])
+
+    def test_the_rig_beside_a_remote_is_a_rival_named_by_its_address(self):
+        t = target()
+        t.hello(A3NUC2, 0.0)
+        t.hello("127.0.0.1", 10.0)
+        self.assertEqual(t.take_rivals(), ["127.0.0.1"])
+
+    def test_a_single_motion_has_no_rivals(self):
+        t = target()
+        t.hello(A3NUC2, 0.0)
+        t.hello(A3NUC2, 30.0)
+        self.assertEqual(t.take_rivals(), [])

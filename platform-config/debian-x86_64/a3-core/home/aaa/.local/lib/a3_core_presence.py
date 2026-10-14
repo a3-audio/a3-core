@@ -35,7 +35,7 @@ class Presence:
 
 class HelloWatch:
     """What a device's hello means for Core's link to it -- StemDeck's and
-    Motion's alike, one of each at a time.
+    Motion's alike, one of each at a time (Motion since 2026-10-14).
 
     A hello that is news -- the first, one after silence, or one from a host
     that has just arrived -- means: send to that host from now on (and ask it
@@ -46,7 +46,7 @@ class HelloWatch:
     saying hello every 30 s is not an arrival: two running at once would
     otherwise take the link from each other on every hello.
 
-    `one_at_a_time` is for a device of which only one may run (StemDeck):
+    `one_at_a_time` is for a device of which only one may run (StemDeck, Motion):
     while the host followed is alive, a hello from another host never takes
     the link -- it is kept as a rival for `take_rivals`, so the caller can
     say so once. Following only changes once the followed host has gone quiet.
@@ -65,9 +65,9 @@ class HelloWatch:
     def hello(self, host, now):
         """True when Core should (re)connect to `host` and send a recall.
 
-        A remote host keeps the lead over the rig's own while it says hello
-        (2026-10-06): a restart on the rig makes its own an arrival, which
-        used to take the link from a3nuc2 without anyone seeing it."""
+        Without `one_at_a_time` a remote host keeps the lead over the rig's
+        own while it says hello (2026-10-06); with it, whoever is followed
+        keeps the lead while alive, remote or local (2026-10-14)."""
         self._forget_the_silent(now)
         presence = self._heard.setdefault(host, Presence(self._silence_after))
         arrived = presence.heard(now)
