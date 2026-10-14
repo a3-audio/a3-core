@@ -243,7 +243,7 @@ osc_a3motion = WatchedClient(SimpleUDPClient(A3MOTION_HOST, A3MOTION_PORT),
 MOTION_OWN_HOSTS = frozenset((_truth.host("core"),
                               _truth.network()["address"].partition("/")[0]))
 
-#: Which Motion hears Core: the rig's own until another one says hello --
+#: Which Motion hears Core: the first one that said hello (2026-10-14) --
 #: see a3_core_motion. Rebuilt from --motion below.
 _motion = MotionTarget((A3MOTION_HOST, A3MOTION_PORT), A3MOTION_PORT,
                        MOTION_OWN_HOSTS, _truth.port("motion", "vu"))
@@ -1373,8 +1373,16 @@ def stemdeck_said_hello(host, now):
 
 def motion_said_hello(host, now):
     """Motion is there. If it is a Motion that has just arrived somewhere
-    else, Core talks to that one from now on (a3_core_motion.MotionTarget)."""
+    else, Core talks to that one from now on (a3_core_motion.MotionTarget).
+
+    Only one Motion may run (2026-10-14, replacing "a remote Motion takes over
+    from the rig's own"): a hello from a second one while the first is alive
+    is said once in the journal and not followed."""
     moved = _motion.hello(host, now)
+    for rival in _motion.take_rivals():
+        print(f"motion: a second Motion at {rival} while following "
+              f"{_motion.followed} -- only one may run; "
+              f"still following {_motion.followed}")
     if moved is not None:
         point_motion_at(moved, "said hello")
 
@@ -1390,7 +1398,7 @@ def point_motion_at(endpoint, why):
     """Send Motion's traffic to `endpoint` from now on, and say everything.
 
     Motion's slot among the subscribers, not a second entry: one Motion at a
-    time (maintainer, 2026-10-05). The whole state follows at once, because a
+    time (maintainer, 2026-10-05; the first one followed, 2026-10-14). The whole state follows at once, because a
     Motion that has just come up knows nothing -- and its own /state/recall
     may have reached Core before its hello and gone to the old target."""
     global osc_a3motion
