@@ -64,3 +64,26 @@ class OnlyOnCoresOwnTruth(unittest.TestCase):
         gate.greet("h", True)
         gate.greet("h", False)
         self.assertEqual(gate.check("h"), REFUSE_DIFFERS_FIRST)
+
+
+class TheDeskIsTrusted(unittest.TestCase):
+    """The desk at the truth's hosts.mixer is in front: its values count
+    from its first message, without a hello (2026-10-14)."""
+
+    def test_the_desk_is_admitted_without_a_hello(self):
+        gate = HelloGate()
+        gate.trust_host("192.168.8.11")
+        self.assertEqual(gate.check("192.168.8.11", 50000), ADMIT)
+
+    def test_a_differing_hello_does_not_close_the_desk(self):
+        gate = HelloGate()
+        gate.trust_host("192.168.8.11")
+        gate.greet("192.168.8.11", False)
+        self.assertEqual(gate.check("192.168.8.11"), ADMIT)
+
+    def test_every_other_host_still_needs_its_hello(self):
+        gate = HelloGate()
+        gate.trust_host("192.168.8.11")
+        self.assertEqual(gate.check("192.168.8.20"), REFUSE_FIRST)
+        gate.greet("192.168.8.20", False)
+        self.assertEqual(gate.check("192.168.8.20"), REFUSE_DIFFERS_FIRST)

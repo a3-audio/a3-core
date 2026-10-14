@@ -1649,6 +1649,10 @@ if __name__ == "__main__":
                   "motion": args.motion.rpartition(":")[0],
                   "reaper": args.reaper.rpartition(":")[0]}
 
+    # The desk is in front: its values count from its first message, hello
+    # or not (a3_core_hello_gate). Every other host still says hello first.
+    _hello_gate.trust_host(PEER_HOSTS["mixer"])
+
     # Pointed somewhere else for a bench run. Rebound at module scope, which
     # is where the handlers read them -- there is no main() here, the argument
     # parsing runs under `if __name__` at the top level. (A `global`
