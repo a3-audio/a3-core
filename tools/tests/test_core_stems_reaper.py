@@ -38,24 +38,24 @@ class TheChannelsSource(unittest.TestCase):
     def test_analog_opens_the_analog_send_and_shuts_the_stems_send(self):
         msgs = self._sends([ANALOG_SOURCE] * 4)
         for n in range(1, 5):
-            self.assertEqual(msgs[f"/track/27/send/{n}/volume"], 0.7)
+            self.assertEqual(msgs[f"/track/27/send/{n + 2}/volume"], 0.7)
             self.assertEqual(msgs[f"/track/28/send/{n}/volume"], 0.0)
 
     def test_stem_opens_the_stems_send_and_shuts_the_analog_send(self):
         msgs = self._sends([ANALOG_SOURCE, STEM_SOURCE, ANALOG_SOURCE, ANALOG_SOURCE])
-        self.assertEqual(msgs["/track/27/send/2/volume"], 0.0)
+        self.assertEqual(msgs["/track/27/send/4/volume"], 0.0)
         self.assertEqual(msgs["/track/28/send/2/volume"], 0.7)
-        self.assertEqual(msgs["/track/27/send/1/volume"], 0.7)
+        self.assertEqual(msgs["/track/27/send/3/volume"], 0.7)
 
     def test_a_stem_on_the_bus_does_not_shut_analog(self):
         # Until 2026-10-14 a stem on bus N shut channel N's analog send.
         msgs = self._sends([ANALOG_SOURCE] * 4, p5=1 << 1)
-        self.assertEqual(msgs["/track/27/send/2/volume"], 0.7)
+        self.assertEqual(msgs["/track/27/send/4/volume"], 0.7)
         self.assertEqual(msgs["/track/28/send/2/volume"], 0.0)
 
     def test_an_empty_bus_does_not_open_analog(self):
         msgs = self._sends([STEM_SOURCE] * 4)
-        self.assertEqual(msgs["/track/27/send/1/volume"], 0.0)
+        self.assertEqual(msgs["/track/27/send/3/volume"], 0.0)
         self.assertEqual(msgs["/track/28/send/1/volume"], 0.7)
 
     def test_an_undecided_channel_leaves_its_sends_as_they_are(self):
@@ -63,14 +63,14 @@ class TheChannelsSource(unittest.TestCase):
         # REAPER keeps what it has for that channel.
         msgs = self._sends([UNDECIDED, ANALOG_SOURCE, UNDECIDED, STEM_SOURCE])
         for n in (1, 3):
-            self.assertNotIn(f"/track/27/send/{n}/volume", msgs)
+            self.assertNotIn(f"/track/27/send/{n + 2}/volume", msgs)
             self.assertNotIn(f"/track/28/send/{n}/volume", msgs)
-        self.assertEqual(msgs["/track/27/send/2/volume"], 0.7)
+        self.assertEqual(msgs["/track/27/send/4/volume"], 0.7)
         self.assertEqual(msgs["/track/28/send/4/volume"], 0.7)
 
     def test_the_return_sends_are_not_among_them(self):
         msgs = self._sends([STEM_SOURCE] * 4)
-        self.assertNotIn("/track/27/send/5/volume", msgs)
+        self.assertNotIn("/track/27/send/7/volume", msgs)
         self.assertNotIn("/track/28/send/5/volume", msgs)
 
 
@@ -78,7 +78,7 @@ class TheReturnsSource(unittest.TestCase):
     """The return plays analog 11/12 or StemDeck's AUX, never both: its
     mode opens one receive and shuts the other (return-sources, 2026-10-07)."""
 
-    ANALOG = "/track/27/send/5/volume"
+    ANALOG = "/track/27/send/7/volume"
     STEMS = "/track/28/send/5/volume"
 
     def _mode(self, mode):

@@ -140,9 +140,12 @@ class TheRestOfTheMap(unittest.TestCase):
             self.layout.send("stems_cue")
 
     def test_the_analog_track_and_its_sends(self):
-        """Template of 2026-10-01 23:11: analog (27) sends 1-4 to 1-input ... 4-input."""
+        """analog (27) reaches 1-input ... 4-input with sends 3-6: REAPER's OSC
+        numbers a track's hardware outputs first, and analog has two (the
+        analog meters' outputs) -- 1-4 switched the meters and the wrong
+        inputs (2026-10-14)."""
         self.assertEqual(self.layout.master.track_analog, 27)
-        self.assertEqual([self.layout.channel(i).analog_send for i in range(4)], [1, 2, 3, 4])
+        self.assertEqual([self.layout.channel(i).analog_send for i in range(4)], [3, 4, 5, 6])
 
     def test_the_stems_track_and_its_sends(self):
         """stems (28) sends 1-4 to 1-input ... 4-input, in the template's order."""
@@ -151,9 +154,10 @@ class TheRestOfTheMap(unittest.TestCase):
 
     def test_the_returns_two_receives_are_named(self):
         """The return mode chooses aux_return's source by send volume
-        (return-sources, 2026-10-07): send 5 of analog (after 1-4 to the
-        n-inputs) and send 5 of stems (the same)."""
-        self.assertEqual(self.layout.send("analog_to_return"), 5)
+        (return-sources, 2026-10-07): send 7 of analog (after its two hardware
+        outputs and 3-6 to the n-inputs) and send 5 of stems (no hardware
+        outputs)."""
+        self.assertEqual(self.layout.send("analog_to_return"), 7)
         self.assertEqual(self.layout.send("stems_to_return"), 5)
 
     def test_every_gain_list_a3_core_asks_for_is_there(self):
