@@ -13,7 +13,7 @@ from pythonosc.osc_message import OscMessage   # noqa: E402
 
 import a3_osc                                    # noqa: E402
 from a3_core_announce import (announce, announcement,   # noqa: E402
-                              broadcast_address, truth_url)
+                              broadcast_address, new_boot_id, truth_url)
 
 TRUTH = a3_osc.load(PACKAGE / "usr/share/a3/a3-osc.json")
 
@@ -36,10 +36,18 @@ class WhatIsSaid(unittest.TestCase):
         self.assertEqual(truth_url(TRUTH),
                          f"http://{TRUTH.host('core')}:{TRUTH.port('core', 'web')}/api/truth")
 
-    def test_the_message_says_url_and_fingerprint(self):
-        message = OscMessage(announcement(TRUTH))
+    def test_the_message_says_url_fingerprint_and_boot_id(self):
+        message = OscMessage(announcement(TRUTH, "abc123"))
         self.assertEqual(message.address, TRUTH.address("core.here"))
-        self.assertEqual(message.params, [truth_url(TRUTH), TRUTH.fingerprint()])
+        self.assertEqual(message.params, [truth_url(TRUTH), TRUTH.fingerprint(), "abc123"])
+
+    def test_the_truth_defines_three_strings(self):
+        self.assertEqual(TRUTH.addresses()["core.here"]["args"], "sss")
+
+    def test_every_start_has_its_own_boot_id(self):
+        first, second = new_boot_id(), new_boot_id()
+        self.assertTrue(first)
+        self.assertNotEqual(first, second)
 
 
 class TheLoop(unittest.TestCase):

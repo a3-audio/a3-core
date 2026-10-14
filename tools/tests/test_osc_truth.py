@@ -440,7 +440,7 @@ class CoreAnnouncesItself(unittest.TestCase):
 
     def test_core_says_where_its_truth_is(self):
         self.assertEqual(self.truth.address("core.here"), "/core/here")
-        self.assertEqual(self.truth.addresses()["core.here"]["args"], "ss")
+        self.assertEqual(self.truth.addresses()["core.here"]["args"], "sss")
         self.assertEqual(self.truth.addresses()["core.here"]["from"], ["core"])
 
 

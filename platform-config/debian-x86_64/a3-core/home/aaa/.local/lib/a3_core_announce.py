@@ -1,9 +1,12 @@
 """Core says where the truth is (spec truth-from-core, 2026-10-02): every
 2 s, by UDP broadcast on the LAN, /core/here with the URL of the joined
-truth and its fingerprint. A device that hears a fingerprint it does not
+truth, its fingerprint and a boot id that is new with every Core start, so a
+Core restarted within the devices' silence window is still told from the old
+one. A device that hears a fingerprint it does not
 have fetches the truth and restarts with it."""
 
 import ipaddress
+import secrets
 
 from pythonosc.osc_message_builder import OscMessageBuilder
 
@@ -30,10 +33,16 @@ def truth_url(truth):
     return f"http://{truth.host('core')}:{truth.port('core', 'web')}/api/truth"
 
 
-def announcement(truth):
+def new_boot_id():
+    """Random, not a clock or a host name: only 'same as before or not'."""
+    return secrets.token_hex(8)
+
+
+def announcement(truth, boot_id):
     builder = OscMessageBuilder(address=truth.address("core.here"))
     builder.add_arg(truth_url(truth))
     builder.add_arg(truth.fingerprint())
+    builder.add_arg(boot_id)
     return builder.build().dgram
 
 
