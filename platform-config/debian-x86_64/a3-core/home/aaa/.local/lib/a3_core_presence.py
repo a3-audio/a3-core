@@ -45,12 +45,21 @@ class HelloWatch:
     Each host is watched on its own, so a host already there that keeps
     saying hello every 30 s is not an arrival: two running at once would
     otherwise take the link from each other on every hello.
+
+    `one_at_a_time` is for a device of which only one may run (StemDeck):
+    while the host followed is alive, a hello from another host never takes
+    the link -- it is kept as a rival for `take_rivals`, so the caller can
+    say so once. Following only changes once the followed host has gone quiet.
     """
 
-    def __init__(self, silence_after, is_local=lambda host: False):
+    def __init__(self, silence_after, is_local=lambda host: False,
+                 one_at_a_time=False):
         self._silence_after = silence_after
         self._is_local = is_local
+        self._one_at_a_time = one_at_a_time
         self._heard = {}
+        self._rivals = set()
+        self._unreported = []
         self.host = None
 
     def hello(self, host, now):
@@ -67,6 +76,9 @@ class HelloWatch:
             return True
         if self.host == host:
             return arrived
+        if self._one_at_a_time and self._heard[self.host].present(now):
+            self._note_rival(host)
+            return False
         if self._is_local(host) and not self._is_local(self.host):
             return False
         if not self._is_local(host) and self._is_local(self.host):
@@ -84,7 +96,20 @@ class HelloWatch:
         self.host = None
         return True
 
+    def take_rivals(self):
+        """The hosts that turned up beside the one followed since the last
+        call, each once; empty unless `one_at_a_time`."""
+        rivals, self._unreported = self._unreported, []
+        return rivals
+
+    def _note_rival(self, host):
+        if host in self._rivals:
+            return
+        self._rivals.add(host)
+        self._unreported.append(host)
+
     def _forget_the_silent(self, now):
         for host in [h for h, p in self._heard.items()
                      if h != self.host and not p.present(now)]:
             del self._heard[host]
+            self._rivals.discard(host)

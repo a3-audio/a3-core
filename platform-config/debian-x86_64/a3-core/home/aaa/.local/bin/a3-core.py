@@ -600,7 +600,8 @@ def speak_stems(full=False):
 #: Where StemDeck listens: learnt from its hello, None while it is silent.
 _stemdeck_client = None
 _stemdeck_watch = HelloWatch(
-    STEMDECK_SILENCE, is_local=lambda host: is_this_machine(host, MOTION_OWN_HOSTS))
+    STEMDECK_SILENCE, is_local=lambda host: is_this_machine(host, MOTION_OWN_HOSTS),
+    one_at_a_time=True)
 
 #: Where zita-j2n sends the return: the active StemDeck's machine, or radla
 #: (a3_core_return). Re-read from the file at start-up below.
@@ -1332,9 +1333,17 @@ def osc_handler_device_hello(client_address: Tuple[str, int], address: str,
 def stemdeck_said_hello(host, now):
     """StemDeck is there. When that is news (a3_core_presence.HelloWatch),
     learn where it listens and ask it for every stem's switches -- it may have
-    restarted with others."""
+    restarted with others.
+
+    Only one StemDeck may run: a hello from a second host while the first is
+    alive is said once in the journal and not followed."""
     global _stemdeck_client
-    if not _stemdeck_watch.hello(host, now):
+    news = _stemdeck_watch.hello(host, now)
+    for rival in _stemdeck_watch.take_rivals():
+        print(f"stemdeck: a second StemDeck at {rival} while following "
+              f"{_stemdeck_watch.host} -- only one may run; "
+              f"still following {_stemdeck_watch.host}")
+    if not news:
         return
     _stemdeck_client = WatchedClient(
         SimpleUDPClient(host, _truth.endpoint("stemdeck", "osc")[1]), "stemdeck")
