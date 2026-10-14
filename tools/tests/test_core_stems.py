@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.l
 
 from a3_core_stems import (ANALOG_INPUT, ANALOG_MODE, ANALOG_SOURCE, AUX,  # noqa: E402
                            CHANNELS, CUE_FIELD, INPUTS, PAIRS, RETURN,
-                           STEM_MODE, STEM_SOURCE, Stems)
+                           STEM_MODE, STEM_SOURCE, UNDECIDED, Stems)
 
 MODES = (ANALOG_MODE, STEM_MODE)
 
@@ -148,8 +148,14 @@ class TheAnalogInput(unittest.TestCase):
         s.cursors[index] = pair - 1
         return s.push(index)
 
-    def test_every_channel_starts_on_analog(self):
-        self.assertEqual(Stems().sources, [ANALOG_SOURCE] * CHANNELS)
+    def test_without_a_stored_source_a_channel_is_undecided(self):
+        # Decided by StemDeck's first settled report (maintainer, 2026-10-14).
+        self.assertEqual(Stems().sources, [UNDECIDED] * CHANNELS)
+
+    def test_a_on_an_undecided_channel_decides_analog(self):
+        s = Stems()
+        self.push_a(s, connected=False)
+        self.assertEqual(s.sources[0], ANALOG_SOURCE)
 
     def test_a_push_on_a_sends_nothing_to_stemdeck(self):
         for mode in MODES:
@@ -226,9 +232,16 @@ class WithoutStemDeck(unittest.TestCase):
 
     def test_a_stem_nobody_plays_does_not_shut_the_analog_input(self):
         s = Stems()
+        s.sources[0] = ANALOG_SOURCE
         s.cursors[0] = 2
         s.push(0, connected=False)
         self.assertEqual(s.sources[0], ANALOG_SOURCE)
+
+    def test_a_stem_push_without_stemdeck_decides_nothing(self):
+        s = Stems()
+        s.cursors[0] = 2
+        s.push(0, connected=False)
+        self.assertEqual(s.sources[0], UNDECIDED)
 
     def test_a_does_not_touch_the_mirror_either(self):
         s = stems_with(p3=bit(1))
@@ -397,20 +410,51 @@ class TheCueLeavesStemDeckAlone(unittest.TestCase):
         self.assertEqual(s.masks[0], bit(1))
 
 
+class TheFirstReportDecides(unittest.TestCase):
+    """Maintainer, 2026-10-14: a channel with no stored source takes it from
+    StemDeck's buses the first time Core learns them -- STEM where its bus
+    has a stem, ANALOG where it has none. A stored source always wins."""
+
+    def test_a_bus_with_a_stem_starts_on_stem(self):
+        s = stems_with(p1=bit(1), p6=bit(3), p2=bit(AUX))
+        s.adopt_sources()
+        self.assertEqual(s.sources, [STEM_SOURCE, ANALOG_SOURCE, STEM_SOURCE, ANALOG_SOURCE])
+
+    def test_a_stored_source_wins(self):
+        s = stems_with(p1=bit(1))
+        s.sources = [ANALOG_SOURCE, STEM_SOURCE, UNDECIDED, UNDECIDED]
+        s.report(2, bit(3))
+        s.adopt_sources()
+        self.assertEqual(s.sources, [ANALOG_SOURCE, STEM_SOURCE, STEM_SOURCE, ANALOG_SOURCE])
+
+    def test_only_the_first_report_decides(self):
+        s = Stems()
+        s.adopt_sources()
+        s.report(1, bit(1))
+        s.adopt_sources()
+        self.assertEqual(s.sources, [ANALOG_SOURCE] * CHANNELS)
+
+    def test_an_undecided_channel_is_written_down_undecided(self):
+        s = Stems()
+        s.sources[1] = STEM_SOURCE
+        self.assertEqual(Stems.from_data(s.as_data()).sources,
+                         [UNDECIDED, STEM_SOURCE, UNDECIDED, UNDECIDED])
+
+
 class StateOnDisk(unittest.TestCase):
     def test_the_sources_are_kept(self):
         s = Stems()
         s.sources = [STEM_SOURCE, ANALOG_SOURCE, STEM_SOURCE, STEM_SOURCE]
         self.assertEqual(Stems.from_data(s.as_data()).sources, s.sources)
 
-    def test_a_file_without_sources_starts_on_analog(self):
+    def test_a_file_without_sources_leaves_them_undecided(self):
         self.assertEqual(Stems.from_data({"cursors": [1, 2, 3, 4]}).sources,
-                         [ANALOG_SOURCE] * CHANNELS)
+                         [UNDECIDED] * CHANNELS)
 
-    def test_garbled_sources_start_on_analog(self):
+    def test_garbled_sources_are_undecided(self):
         for sources in ("x", [1, 1, 1], [1, 1, 1, 2], [True, 1, 1, 1], None):
             self.assertEqual(Stems.from_data({"sources": sources}).sources,
-                             [ANALOG_SOURCE] * CHANNELS, sources)
+                             [UNDECIDED] * CHANNELS, sources)
 
     def test_cursors_and_mode_are_kept(self):
         s = Stems()

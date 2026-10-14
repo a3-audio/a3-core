@@ -12,7 +12,7 @@ sys.path.insert(0, str(PACKAGE / "home/aaa/.local/lib"))
 import a3_osc                                         # noqa: E402
 from a3_core_layout import load_layout                # noqa: E402
 from a3_core_stems import (ANALOG_MODE, ANALOG_SOURCE, STEM_MODE,  # noqa: E402
-                           STEM_SOURCE, Stems)
+                           STEM_SOURCE, UNDECIDED, Stems)
 from a3_core_stems_reaper import (analog_messages, announcements,  # noqa: E402
                                   changed_messages, command_messages,
                                   deck_and_stem, pair_of,
@@ -58,6 +58,16 @@ class TheChannelsSource(unittest.TestCase):
         self.assertEqual(msgs["/track/27/send/1/volume"], 0.0)
         self.assertEqual(msgs["/track/28/send/1/volume"], 0.7)
 
+    def test_an_undecided_channel_leaves_its_sends_as_they_are(self):
+        # No guess before StemDeck's first report (maintainer, 2026-10-14):
+        # REAPER keeps what it has for that channel.
+        msgs = self._sends([UNDECIDED, ANALOG_SOURCE, UNDECIDED, STEM_SOURCE])
+        for n in (1, 3):
+            self.assertNotIn(f"/track/27/send/{n}/volume", msgs)
+            self.assertNotIn(f"/track/28/send/{n}/volume", msgs)
+        self.assertEqual(msgs["/track/27/send/2/volume"], 0.7)
+        self.assertEqual(msgs["/track/28/send/4/volume"], 0.7)
+
     def test_the_return_sends_are_not_among_them(self):
         msgs = self._sends([STEM_SOURCE] * 4)
         self.assertNotIn("/track/27/send/5/volume", msgs)
@@ -101,9 +111,15 @@ class WhatTheDeskHears(unittest.TestCase):
         msgs = dict(announcements(s, TRUTH))
         self.assertEqual(msgs["/channel/1/stem"], 0b100001)
 
+    def test_an_undecided_channel_shows_its_bus(self):
+        s = Stems()
+        s.report(3, 1)
+        self.assertEqual(dict(announcements(s, TRUTH))["/channel/1/stem"], 0b100)
+
     def test_a_channel_on_analog_shows_a_whatever_is_on_its_bus(self):
         # 0 = the analog input (a3-osc.json); the stem on bus 1 is unheard.
         s = Stems()
+        s.sources[0] = ANALOG_SOURCE
         s.report(3, 1)
         msgs = dict(announcements(s, TRUTH))
         self.assertEqual(msgs["/channel/1/stem"], 0)

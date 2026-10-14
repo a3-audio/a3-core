@@ -16,6 +16,12 @@ StemDeck reports -- an Auto-DJ switch, a click in StemDeck -- changes it.
 On ANALOG the channel simply does not hear bus N. The source is written
 down with the cursors and replayed into REAPER after any restart.
 
+A channel with no stored source is UNDECIDED: Core leaves its two sends in
+REAPER as they are and does not guess. StemDeck's first settled report
+decides it (adopt_sources, maintainer 2026-10-14): STEM where bus N has a
+stem, ANALOG where it has none. A stored source always wins, and only that
+first report decides; later ones never change a source.
+
 - A push on A makes the source ANALOG and sends StemDeck nothing: the stem
   on bus N stays there and nothing moves to AUX ("A should switch to the
   analog input in REAPER, not touch StemDeck"). Until 2026-10-14 A took
@@ -29,8 +35,8 @@ down with the cursors and replayed into REAPER after any restart.
   Without StemDeck a stem push changes nothing: a stem nobody plays must
   not shut a channel's analog input.
 - The desk shows A while the source is ANALOG, whatever is on bus N, and
-  the stem on bus N while it is STEM (A as well while that bus is empty --
-  the announcement has no "nothing").
+  the stem on bus N while it is STEM or UNDECIDED (A as well while that
+  bus is empty -- the announcement has no "nothing").
 
 Core remembers no stem. A channel
 plays one stem at most, and a stem plays on one channel at most; every stem
@@ -60,7 +66,8 @@ INPUTS = PAIRS + 1
 ANALOG_INPUT = PAIRS
 
 #: A channel's source (2026-10-14): which of its two sends in REAPER is open.
-ANALOG_SOURCE, STEM_SOURCE = 0, 1
+#: UNDECIDED (None, null on disk) until a push or StemDeck's first report.
+ANALOG_SOURCE, STEM_SOURCE, UNDECIDED = 0, 1, None
 SOURCES = (ANALOG_SOURCE, STEM_SOURCE)
 
 #: The aux return's two modes; its encoder's cursor runs over both and the
@@ -82,7 +89,7 @@ class Stems:
     def __init__(self):
         self.masks = [0] * PAIRS
         self.cursors = [ANALOG_INPUT] * CHANNELS
-        self.sources = [ANALOG_SOURCE] * CHANNELS
+        self.sources = [UNDECIDED] * CHANNELS
         self.return_cursor = STEM_MODE
         self.return_mode = STEM_MODE
 
@@ -118,6 +125,16 @@ class Stems:
             if self._on(pair, index + 1):
                 return index
         return RETURN if self._on(pair, AUX) else None
+
+    def adopt_sources(self):
+        """Decide every UNDECIDED channel from the buses as they are now:
+        STEM where its bus has a stem, ANALOG where it has none. Called on
+        StemDeck's settled report; a decided source is never touched, so
+        only the first report after a start without one decides."""
+        for index in range(CHANNELS):
+            if self.sources[index] is UNDECIDED:
+                self.sources[index] = (STEM_SOURCE if self.channel_mask(index)
+                                       else ANALOG_SOURCE)
 
     # -- turn and push --------------------------------------------------------
 
@@ -228,7 +245,7 @@ class Stems:
     def from_data(cls, data):
         """The remembered cursors, sources and return mode, or the defaults --
         never raises; an older file's "last_stems" is ignored, and one
-        without "sources" starts every channel on ANALOG. The switches are
+        without "sources" leaves every channel UNDECIDED. The switches are
         StemDeck's and come back with its report."""
         s = cls()
         if not isinstance(data, dict):
@@ -249,7 +266,7 @@ class Stems:
 def _sources(data):
     if not isinstance(data, list) or len(data) != CHANNELS:
         return None
-    if not all(_is_int(s) and s in SOURCES for s in data):
+    if not all(s is UNDECIDED or (_is_int(s) and s in SOURCES) for s in data):
         return None
     return list(data)
 

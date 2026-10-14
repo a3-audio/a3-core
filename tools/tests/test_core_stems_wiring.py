@@ -254,6 +254,14 @@ class TheTidyIsWired(unittest.TestCase):
         self.assertIn("_tidy_settle.poke(", handler)
         self.assertNotIn(".tidy(", handler)
 
+    def test_the_settled_report_decides_the_undecided_sources(self):
+        # After the tidy, so the masks obey the rules; before speaking, so
+        # REAPER and the desk hear the decision, and the state keeps it.
+        source = _source_of("tidy_when_settled")
+        self.assertLess(source.index("_stems.tidy()"), source.index("_stems.adopt_sources()"))
+        self.assertLess(source.index("_stems.adopt_sources()"), source.index("speak_stems()"))
+        self.assertIn("remember_state()", source)
+
     def test_the_loop_ticks_the_tidy(self):
         self.assertIn("tick=on_tick", CORE)
         self.assertIn("tidy_when_settled()", _source_of("on_tick"))

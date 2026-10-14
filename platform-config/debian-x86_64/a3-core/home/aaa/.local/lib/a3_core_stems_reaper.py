@@ -7,7 +7,7 @@ Send volume, not send mute: REAPER's OSC has no send mute
 """
 
 from a3_core_stems import (ANALOG_MODE, ANALOG_SOURCE, CHANNELS, PAIRS,
-                           STEMS_PER_DECK, STEM_SOURCE)
+                           STEMS_PER_DECK, STEM_SOURCE, UNDECIDED)
 
 
 
@@ -20,10 +20,12 @@ def pair_of(deck, stem):
 
 
 def _source_sends(stems, layout, unity, track, field, source):
+    """An UNDECIDED channel is left out: REAPER keeps what it has until
+    StemDeck's first report decides (2026-10-14)."""
     return [(layout.address("track_send", track=track,
                             send=getattr(layout.channel(i), field)),
              unity if stems.sources[i] == source else 0.0)
-            for i in range(CHANNELS)]
+            for i in range(CHANNELS) if stems.sources[i] is not UNDECIDED]
 
 
 def analog_messages(stems, layout, unity):
@@ -58,11 +60,11 @@ def announcements(stems, truth):
     """Per channel what plays there and where its selector's cursor stands,
     then the return's cursor and what plays on it, and its mode. A channel
     on ANALOG says 0, the analog input, whatever is on its bus; one on STEM
-    says its bus mask -- 0 too while the bus is empty, which the desk then
+    or UNDECIDED says its bus mask -- 0 too while the bus is empty, which the desk then
     shows as A although the channel is silent (2026-10-14)."""
     out = []
     for c in range(CHANNELS):
-        plays = stems.channel_mask(c) if stems.sources[c] == STEM_SOURCE else 0
+        plays = 0 if stems.sources[c] == ANALOG_SOURCE else stems.channel_mask(c)
         out.append((truth.address("channel.stem", ch=c + 1), plays))
         out.append((truth.address("channel.stem.cursor", ch=c + 1), stems.cursors[c]))
     plays = [int(stems.plays_on_return(p)) for p in range(1, PAIRS + 1)]

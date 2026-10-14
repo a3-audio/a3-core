@@ -1146,10 +1146,12 @@ def on_tick():
 def tidy_when_settled():
     """Every tick: once StemDeck's reports have settled, make the
     mirror obey the rules -- one stem per channel, the return's mode -- and
-    tell StemDeck. Runs on the serve thread, as every handler does."""
+    tell StemDeck; then let the buses decide any channel that has no source
+    yet (2026-10-14). Runs on the serve thread, as every handler does."""
     if not _tidy_settle.due(time.monotonic()) or _stemdeck_client is None:
         return
     send_to_stemdeck(_stems.tidy())
+    _stems.adopt_sources()
     speak_stems()
     remember_state()
 
