@@ -62,6 +62,8 @@ from a3_core_stems_reaper import (Settle, analog_messages,   # noqa: E402
                                   return_source_messages)
 from a3_core_presence import STEMDECK_SILENCE, HelloWatch   # noqa: E402
 from a3_core_motion import MotionTarget, is_this_machine   # noqa: E402
+from a3_core_hello_gate import (ADMIT, REFUSE_DIFFERS_FIRST,   # noqa: E402
+                               REFUSE_FIRST, HelloGate)   # noqa: E402
 from a3_core_return import (ReturnTarget, point_zita_at,   # noqa: E402
                             start_at_radla)
 from a3_core_vu_relay import relay as relay_vu   # noqa: E402
@@ -764,6 +766,31 @@ def unrouted_handler(client_address: Tuple[str, int], address: str,
     traffic.unknown(address, osc_arguments[0] if osc_arguments else None, peer)
 
 
+#: Whose mixer values count: only a host that has said hello this run.
+_hello_gate = HelloGate()
+
+
+def values_refused(client_address: Tuple[str, int], address: str) -> bool:
+    """True when `address` is a mixer value from a host that has not said
+    hello to this Core yet: ignored, not relayed, not remembered. The truth
+    comes from Core; a device that speaks before Core's replay may know
+    nothing (a Motion once sent every value as 0.0, 2026-10-14). Buttons and
+    other edges are not values (relay_on_arrival) and pass."""
+    if not relay_on_arrival(_truth, address):
+        return False
+    host, port = client_address[0], client_address[1]
+    verdict = _hello_gate.check(host, port)
+    if verdict == ADMIT:
+        return False
+    who = peer_name(host, PEER_HOSTS, only=COMMANDERS)
+    if verdict == REFUSE_FIRST:
+        print(f"{who} ({host}): values before its hello ignored")
+    if verdict == REFUSE_DIFFERS_FIRST:
+        print(f"{who} ({host}): values ignored, its a3-osc.json differs "
+              f"from Core's")
+    return True
+
+
 def known_address(client_address: Tuple[str, int], address: str,
                   osc_arguments) -> Optional[Tuple[str, dict]]:
     """The address taken apart against the one truth, or None.
@@ -783,6 +810,8 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
 
     found = known_address(client_address, address, osc_arguments)
     if found is None:
+        return
+    if values_refused(client_address, address):
         return
     key, fields = found
 
@@ -968,6 +997,8 @@ def osc_handler_master(client_address: Tuple[str, int], address: str,
     found = known_address(client_address, address, osc_arguments)
     if found is None:
         return
+    if values_refused(client_address, address):
+        return
     key, _ = found
 
     #  mypy 0.920 reports a false positive, retest!
@@ -1106,6 +1137,8 @@ def osc_handler_filter(client_address: Tuple[str, int], address: str,
 
     found = known_address(client_address, address, osc_arguments)
     if found is None:
+        return
+    if values_refused(client_address, address):
         return
     key, _ = found
 
@@ -1273,6 +1306,7 @@ def osc_handler_device_hello(client_address: Tuple[str, int], address: str,
         stemdeck_said_hello(client_address[0], now)
     if device == "motion":
         motion_said_hello(client_address[0], now)
+    _hello_gate.greet(client_address[0], their_hash == _devices.own_hash)
     notice_stemdeck_silence(now)
     if _devices.heard(device, their_hash, now):
         verdict = ("is Core's" if their_hash == _devices.own_hash
@@ -1867,9 +1901,15 @@ if __name__ == "__main__":
     # The recall carries Core's start-up token: handling it opens the gate
     # (a3_core_gate).
     def replay_once_reaper_is_quiet():
+        # One socket, bound before the first send, so the hello gate can
+        # trust this port and no other: the replay is Core's own word, but it
+        # arrives from loopback like a local Motion does.
+        self_client = SimpleUDPClient(_truth.host("local"), args.port)
+        self_client._sock.bind((_truth.host("local"), 0))
+        _hello_gate.trust(self_client._sock.getsockname())
+
         def send_to_self(address, value):
-            SimpleUDPClient(_truth.host("local"), args.port).send_message(
-                address, value)
+            self_client.send_message(address, value)
 
         wait_until_quiet(reaper_arrivals, lambda: replay_evening(
             evening, send_to_self))
