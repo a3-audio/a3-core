@@ -192,8 +192,10 @@ class CoreIsWiredThatWay(unittest.TestCase):
     def test_the_replay_waits_in_a_thread_of_its_own(self):
         start = self.source.find("server = osc_server.BlockingOSCUDPServer(")
         tail = self.source[start:]
-        self.assertIn("target=when_reaper_listens", tail)
-        self.assertLess(tail.find("target=when_reaper_listens"),
+        # replay_after_every_start runs when_reaper_listens once per start of
+        # REAPER, Core's own first (test_core_reaper_restart).
+        self.assertIn("target=replay_after_every_start", tail)
+        self.assertLess(tail.find("target=replay_after_every_start"),
                         tail.rfind("serve(server.socket,"))
         # No second, unconditional replay or refresh left beside it.
         self.assertNotIn("\n    replay_evening(", tail)
