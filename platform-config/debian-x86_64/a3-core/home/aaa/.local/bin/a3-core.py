@@ -67,7 +67,7 @@ from a3_core_hello_gate import (ADMIT, REFUSE_DIFFERS_FIRST,   # noqa: E402
 from a3_core_vu_relay import relay as relay_vu   # noqa: E402
 from a3_core_ahead import ahead_arguments, from_the_followed   # noqa: E402
 from a3_core_latest import position_key, serve   # noqa: E402
-from a3_core_announce import (EVERY_SECONDS, announce, announcement,   # noqa: E402
+from a3_core_announce import (EVERY_SECONDS, announce, announcement, new_boot_id,   # noqa: E402
                               broadcast_address)
 from a3_osc_render import write_user_files   # noqa: E402
 from a3_core_recall import (FX_MODE_NUMBERS, FX_MODE_WORDS,   # noqa: E402
@@ -1944,7 +1944,7 @@ if __name__ == "__main__":
                    _truth.port("devices", "announce"))
     threading.Thread(
         target=announce, daemon=True, name="a3-announce",
-        args=(announce_socket, announce_to, announcement(_truth), EVERY_SECONDS,
+        args=(announce_socket, announce_to, announcement(_truth, new_boot_id()), EVERY_SECONDS,
               time.sleep, lambda: True,
               lambda text: print(text, file=sys.stderr))).start()
     print(f"announcing the truth to {announce_to[0]}:{announce_to[1]}")
