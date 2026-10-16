@@ -120,7 +120,6 @@ std::optional<Truth> parseTruth (const juce::String& jsonText)
         truth.listeners.emplace_back (all[i]["name"].toString(), (int) all[i]["port"]);
     truth.enginePort = portOfListener (root["listeners"], "engine.osc");
     truth.engineBindAddress = hostAddressOfListener (root, "engine.osc");
-    truth.motionVuPort = portOfListener (root["listeners"], "motion.vu");
     truth.vuPattern = addresses["vu"]["pattern"].toString();
     const auto meters = root["vu_meters"];
     for (int i = 0; i < meters.size(); ++i)

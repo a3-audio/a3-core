@@ -16,7 +16,8 @@ namespace a3
 // by takePeakLinear), so a reader polling at its own rate misses no transient;
 // no hold, no fall (the displays apply those).
 //
-// push() runs on the audio thread; takePeak() and rms() may be called from any thread.
+// push() runs on the audio thread; rms() may be read from any thread, takePeak()
+// is destructive (it resets the peak) and so has a single reader.
 class Meters
 {
 public:

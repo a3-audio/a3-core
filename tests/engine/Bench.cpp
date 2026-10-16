@@ -125,7 +125,6 @@ TEST (BenchOsc, TheTruthNamesTheEnginePortAndTheMeterNumbers)
     ASSERT_TRUE (truth.has_value());
     EXPECT_EQ (truth->enginePort, 9004);
     EXPECT_EQ (truth->engineBindAddress, "127.0.0.1");
-    EXPECT_EQ (truth->motionVuPort, 7772);
     EXPECT_EQ (truth->vuAddressFor ("in1_pre_L"), "/vu/51");
     EXPECT_EQ (truth->vuAddressFor ("in4_post_R"), "/vu/66");
     EXPECT_EQ (truth->vuAddressFor ("no_such_meter"), "");

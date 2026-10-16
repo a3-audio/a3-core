@@ -36,7 +36,6 @@ struct Truth
     ControlMap controls;
     int enginePort = -1;                  // listener "engine.osc"
     juce::String engineBindAddress;       // its host name resolved through the truth's hosts ("local" is loopback)
-    int motionVuPort = -1;                // listener "motion.vu": where --meters-osc sends by default
     juce::String vuPattern;               // "/vu/{n}"
     std::vector<juce::String> vuMeters;   // meter n is the entry n-1
 
