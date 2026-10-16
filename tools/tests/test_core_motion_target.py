@@ -158,6 +158,30 @@ class TheMetersForARemoteMotion(unittest.TestCase):
         self.assertIsNone(t.vu_destination())
 
 
+class TheBeatForARemoteMotion(unittest.TestCase):
+    """The analyzer sends /beat to the rig's own Motion only (its targets are
+    rendered as this machine). A Motion elsewhere stood still in EXT and PIO
+    until Core passed the beat on -- and only to a remote one, or the rig's
+    own would count every beat twice."""
+
+    def test_the_rigs_own_gets_no_beat_from_core(self):
+        t = target()
+        self.assertFalse(t.forwards_beat())
+        t.hello("127.0.0.1", 0.0)
+        self.assertFalse(t.forwards_beat())
+
+    def test_a_remote_one_gets_the_beat(self):
+        t = target()
+        t.hello(A3NUC2, 0.0)
+        self.assertTrue(t.forwards_beat())
+
+    def test_after_the_fallback_the_beat_stops(self):
+        t = target()
+        t.hello(A3NUC2, 0.0)
+        t.silence(61.0)
+        self.assertFalse(t.forwards_beat())
+
+
 class TwoMotions(unittest.TestCase):
     """The rival is named by its address and reported once; the followed one
     by the address too, the rig's own as it was heard."""

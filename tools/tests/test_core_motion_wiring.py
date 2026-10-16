@@ -95,3 +95,17 @@ class StemDeckKeepsARemoteLead(unittest.TestCase):
                   / "platform-config/debian-x86_64/a3-core/home/aaa/.local/bin/a3-core.py").read_text()
         self.assertIn("_stemdeck_watch = HelloWatch(\n    STEMDECK_SILENCE, "
                       "is_local=lambda host: is_this_machine(host, MOTION_OWN_HOSTS),", source)
+
+
+class TheBeat(unittest.TestCase):
+    def test_goes_on_to_the_followed_motion_when_it_is_remote(self):
+        handler = _source_of("osc_handler_beat")
+        self.assertIn("_motion.forwards_beat()", handler)
+        self.assertIn("osc_a3motion.send_message(address", handler)
+
+    def test_goes_on_before_the_tempo_filter_can_return(self):
+        # The delay only wants a moved tempo; Motion wants every beat.
+        handler = _source_of("osc_handler_beat")
+        self.assertLess(handler.index("_motion.forwards_beat()"),
+                        handler.index("_tempo.wanted("))
+

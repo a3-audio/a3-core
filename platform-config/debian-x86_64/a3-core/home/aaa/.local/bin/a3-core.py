@@ -1231,8 +1231,10 @@ def osc_handler_beat(client_address: Tuple[str, int], address: str,
 
     Three arguments: beat within the bar, bar, and the tempo. Only the third
     is used here -- Core does not play anything, so where in the bar the
-    clock stands is nobody's business at this end. Motion and the mixer get
-    the same message directly from the analyzer and do their own counting.
+    clock stands is nobody's business at this end. The rig's own Motion and
+    the mixer get the same message directly from the analyzer and do their
+    own counting; a remote Motion does not (the analyzer's targets are this
+    machine), so Core passes it on to that one unchanged.
 
     Passed on only when it has moved; a delay line rewritten on every beat is
     a delay line whose pitch wobbles. See a3_core_tempo.
@@ -1245,6 +1247,9 @@ def osc_handler_beat(client_address: Tuple[str, int], address: str,
                  osc_arguments[2] if len(osc_arguments) > 2 else None,
                  peer_name(client_address[0], PEER_HOSTS,
                            only=COMMANDERS))
+
+    if _motion.forwards_beat():
+        osc_a3motion.send_message(address, list(osc_arguments))
 
     if len(osc_arguments) < 3:
         return

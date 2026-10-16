@@ -83,6 +83,11 @@ class MotionTarget:
             return None
         return self.current[0], self._vu_port
 
+    def forwards_beat(self):
+        """Whether Core passes the analyzer's /beat on to the Motion followed:
+        only a remote one -- the analyzer reaches the rig's own directly."""
+        return self.remote
+
     def _point_at(self, endpoint):
         if endpoint == self.current:
             return None
