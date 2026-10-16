@@ -3,9 +3,15 @@ Upstream-Name: a3-engine
 Upstream-Contact: A³ Audio
 Source: https://github.com/a3-audio/a3-engine
 
-Files: src/* tests/* host/* CMakeLists.txt build.sh test.sh .gitignore
+Files: src/* tests/* host/* CMakeLists.txt build.sh test.sh .gitignore bench/*
 Copyright: 2023-2026 A³ Audio contributors
 License: GPL-3.0-or-later
+
+Files: src/a3-engine/PurestGain.* src/a3-engine/SmoothEQ3.* src/a3-engine/Isolator3.*
+Copyright: 2018 Chris Johnson
+ 2023-2026 A³ Audio contributors
+License: GPL-3.0-or-later AND MIT
+Comment: Rebuilds of the Airwindows PurestGain, SmoothEQ3 and Isolator3 algorithms.
 
 Files: tests/engine/reference/airwindows/*
 Copyright: 2018 Chris Johnson

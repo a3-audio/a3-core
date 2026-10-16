@@ -1,3 +1,4 @@
+// SPDX-FileCopyrightText: 2018 Chris Johnson
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later AND MIT
 // Algorithm: Airwindows Isolator3 by Chris Johnson (MIT, 2018)

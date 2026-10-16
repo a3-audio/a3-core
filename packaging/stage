@@ -27,8 +27,15 @@ files() {
     [[ $# -eq 3 ]] || usage
     local src=$1 build=$2 stage=$3
     install -D -m 755 "$build/bench/a3-engine-bench" "$stage/usr/bin/a3-engine-bench"
-    # .reuse/dep5 is already in Debian's machine-readable copyright format.
-    install -D -m 644 "$src/.reuse/dep5" "$stage/usr/share/doc/a3-engine-bench/copyright"
+    # .reuse/dep5 is already in Debian's machine-readable copyright format; the MIT
+    # stanzas name "MIT", so the copyright file must carry its text as a License
+    # paragraph (copyright-format 1.0: text indented one space, blank lines as " .").
+    local copyright="$stage/usr/share/doc/a3-engine-bench/copyright"
+    install -D -m 644 "$src/.reuse/dep5" "$copyright"
+    {
+        printf '\nLicense: MIT\n'
+        sed -e 's/^$/./' -e 's/^/ /' "$src/LICENSES/MIT.txt"
+    } >> "$copyright"
 }
 
 case "${1:-}" in

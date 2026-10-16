@@ -35,6 +35,20 @@ class StageTest(unittest.TestCase):
             self.assertTrue(installed.is_file())
             self.assertTrue(os.access(installed, os.X_OK))
 
+    def test_the_shipped_copyright_carries_the_mit_text(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            build = Path(tmp, "build")
+            (build / "bench").mkdir(parents=True)
+            (build / "bench" / "a3-engine-bench").write_text("#!/bin/sh\n")
+            stage = Path(tmp, "stage")
+            subprocess.run([str(STAGE), "files", str(ROOT), str(build), str(stage)], check=True)
+            copyright = (stage / "usr/share/doc/a3-engine-bench/copyright").read_text()
+        self.assertIn("\nLicense: MIT\n", copyright)
+        self.assertIn("Copyright (c) 2018 Chris Johnson", copyright)
+        # the licence body, line for line (blank lines are " ." in this format)
+        for line in (ROOT / "LICENSES" / "MIT.txt").read_text().splitlines():
+            self.assertIn(" " + (line or "."), copyright.splitlines())
+
     def test_unknown_mode_is_refused(self):
         result = subprocess.run([str(STAGE), "nonsense"], capture_output=True)
         self.assertEqual(result.returncode, 2)
