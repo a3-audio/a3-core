@@ -224,3 +224,26 @@ TEST (ChannelStrip, PreAndPostMetersAgreeAtUnityVolume)
         EXPECT_NEAR (m.postRms[ch], m.preRms[ch], 1e-5f);
     }
 }
+
+// The bench's ch{n}_pre outputs: process() can also write the post-TRIM+EQ
+// signal, across chunk and block boundaries, and writing it changes nothing else.
+TEST (ChannelStrip, TheOptionalPreOutputIsTrimAndEqAndChangesNothingElse)
+{
+    const auto in = a3test::noise (3000, 0.25f, 4);
+    const auto expected = trimmedAndEqd (in);
+    auto withPre = made (0.7f, 0.5f, 0.3f);
+    auto without = made (0.7f, 0.5f, 0.3f);
+    withPre->prepare (44100.0, 512);                  // 3000 frames in one call: several chunks
+    without->prepare (44100.0, 512);
+    a3test::Stereo pre { std::vector<float> (3000), std::vector<float> (3000) };
+    a3test::Stereo m = in, s = in;
+    const float* i[2] { in.l.data(), in.r.data() };
+    float* mp[2] { m.l.data(), m.r.data() };
+    float* sp[2] { s.l.data(), s.r.data() };
+    float* pp[2] { pre.l.data(), pre.r.data() };
+    withPre->process (i, mp, sp, 3000, pp);
+    const auto reference = run (*without, in, { 3000 });
+    EXPECT_LE (a3test::maxAbsDiff (pre, expected), 1e-6);
+    EXPECT_EQ (a3test::maxAbsDiff (m, reference.moving), 0.0);
+    EXPECT_EQ (a3test::maxAbsDiff (s, reference.steady), 0.0);
+}

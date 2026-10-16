@@ -38,7 +38,8 @@ void ChannelStrip::latchControls()
     volumeSteady.setParameters (volume, 1.0f);
 }
 
-void ChannelStrip::process (const float* const* in, float* const* moving, float* const* steady, int numSamples)
+void ChannelStrip::process (const float* const* in, float* const* moving, float* const* steady, int numSamples,
+                           float* const* preOut)
 {
     juce::ScopedNoDenormals noDenormals;
     if (maxBlock == 0)
@@ -54,14 +55,18 @@ void ChannelStrip::process (const float* const* in, float* const* moving, float*
                           const float* i[2] { in[0] + at, in[1] + at };
                           float* m[2] { moving[0] + at, moving[1] + at };
                           float* s[2] { steady[0] + at, steady[1] + at };
-                          processStretch (i, m, s, count);
+                          float* p[2] { nullptr, nullptr };
+                          if (preOut != nullptr)
+                              p[0] = preOut[0] + at, p[1] = preOut[1] + at;
+                          processStretch (i, m, s, preOut != nullptr ? p : nullptr, count);
                       });
     }
 }
 
 // One stretch inside one grid block: every unit's own grid lines up with the
 // strip's, so the parameters latched above take effect at this boundary.
-void ChannelStrip::processStretch (const float* const* in, float* const* moving, float* const* steady, int count)
+void ChannelStrip::processStretch (const float* const* in, float* const* moving, float* const* steady, float* const* preOut,
+                                 int count)
 {
     float* xs[2] { x[0].data(), x[1].data() };
     for (int ch = 0; ch < 2; ++ch)
@@ -69,6 +74,9 @@ void ChannelStrip::processStretch (const float* const* in, float* const* moving,
     trim.process (xs, count);
     eq.process (xs, count);
     pre.push (xs, count);
+    if (preOut != nullptr)
+        for (int ch = 0; ch < 2; ++ch)
+            std::copy (xs[ch], xs[ch] + count, preOut[ch]);
 
     for (int ch = 0; ch < 2; ++ch)
         std::copy (xs[ch], xs[ch] + count, moving[ch]);

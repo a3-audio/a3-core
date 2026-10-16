@@ -8,6 +8,8 @@ this engine yet, and REAPER remains the audio engine of A³ Core.
 Build and test (CMake, JUCE 9.0.3 in `~/local/juce`, GoogleTest): `./test.sh`. The tests compare the
 rebuilds against the unchanged upstream Airwindows plugins in `tests/engine/reference/` (MIT, test-only).
 `tests/engine/data/curves-golden.json` is a copy from a3-core (commit 50e7997).
+`tests/engine/data/a3-osc.json` is a copy of the OSC truth from a3-core's branch `feat/engine-osc-endpoint` (commit 4014d27: the `engine.osc` listener, port 9004).
+`bench/` is `a3-engine-bench`, a headless JACK client with four strips (ports `ch{n}_*`, `gen_L/R`; never connects anything); it reads the truth at runtime from `--truth FILE` (default `/usr/share/a3/a3-osc.json`).
 
 # Plan 1, parked 2026-10-06
 

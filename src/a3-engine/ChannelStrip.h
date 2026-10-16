@@ -42,13 +42,16 @@ class ChannelStrip
 public:
     void prepare (double sampleRate, int maxBlock);      // allocates; the only call that may
     // in: stereo input (selected source); moving/steady: stereo outputs. Any numSamples >= 0.
-    void process (const float* const* in, float* const* moving, float* const* steady, int numSamples);
+    // preOut (optional): also receives x, the signal after TRIM and EQ (the pre meter's tap).
+    void process (const float* const* in, float* const* moving, float* const* steady, int numSamples,
+                  float* const* preOut = nullptr);
     StripControls& controls() { return state; }
     StripMeters meters();   // from another thread: RMS now, peaks since the last call (the call takes them)
 
 private:
     void latchControls();
-    void processStretch (const float* const* in, float* const* moving, float* const* steady, int count);
+    void processStretch (const float* const* in, float* const* moving, float* const* steady, float* const* preOut,
+                         int count);
 
     StripControls state;
     PurestGain trim, bandGain, volumeMoving, volumeSteady;
