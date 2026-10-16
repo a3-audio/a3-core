@@ -4,6 +4,8 @@
 #include <array>
 #include <atomic>
 #include <optional>
+#include <string>
+#include <utility>
 #include <vector>
 #include <juce_core/juce_core.h>
 #include "ChannelStrip.h"
@@ -23,6 +25,11 @@ struct ControlMap
     std::vector<Entry> entries;
 };
 
+// --meters-osc=HOST:PORT. There is no default target: the /vu/51-66 addresses are
+// the analyzer's live ones, so the destination is always the caller's choice.
+struct MetersTarget { juce::String host; int port = 0; };
+bool parseMetersTarget (const std::string& argument, MetersTarget& out);
+
 // What the bench takes from a3-osc.json.
 struct Truth
 {
@@ -33,6 +40,10 @@ struct Truth
     juce::String vuPattern;               // "/vu/{n}"
     std::vector<juce::String> vuMeters;   // meter n is the entry n-1
 
+    std::vector<std::pair<juce::String, int>> listeners;   // every listener of the truth: name, port
+
+    // The names of the listeners on that port, ", "-joined; "" if none.
+    juce::String listenerOnPort (int port) const;
     juce::String vuAddressFor (const juce::String& meterName) const;   // "" if the truth has no such meter
 };
 

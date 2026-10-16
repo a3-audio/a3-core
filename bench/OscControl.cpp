@@ -63,6 +63,34 @@ bool channelNumber (const juce::String& text, int& out)
 }
 }
 
+juce::String Truth::listenerOnPort (int port) const
+{
+    juce::StringArray names;
+    for (const auto& l : listeners)
+        if (l.second == port)
+            names.add (l.first);
+    return names.joinIntoString (", ");
+}
+
+bool parseMetersTarget (const std::string& argument, MetersTarget& out)
+{
+    const std::string prefix = "--meters-osc=";
+    if (argument.rfind (prefix, 0) != 0)
+        return false;
+    const auto target = argument.substr (prefix.size());
+    const auto colon = target.rfind (':');
+    if (colon == std::string::npos || colon == 0)
+        return false;
+    const juce::String portText (target.substr (colon + 1));
+    if (portText.isEmpty() || portText.length() > 5 || ! portText.containsOnly ("0123456789"))
+        return false;
+    const int port = portText.getIntValue();
+    if (port < 1 || port > 65535)
+        return false;
+    out = { juce::String (target.substr (0, colon)), port };
+    return true;
+}
+
 juce::String Truth::vuAddressFor (const juce::String& meterName) const
 {
     for (size_t i = 0; i < vuMeters.size(); ++i)
@@ -87,6 +115,9 @@ std::optional<Truth> parseTruth (const juce::String& jsonText)
         truth.controls.entries.push_back (*entry);
     }
 
+    const auto all = root["listeners"];
+    for (int i = 0; i < all.size(); ++i)
+        truth.listeners.emplace_back (all[i]["name"].toString(), (int) all[i]["port"]);
     truth.enginePort = portOfListener (root["listeners"], "engine.osc");
     truth.engineBindAddress = hostAddressOfListener (root, "engine.osc");
     truth.motionVuPort = portOfListener (root["listeners"], "motion.vu");

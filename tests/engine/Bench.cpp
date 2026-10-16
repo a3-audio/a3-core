@@ -223,3 +223,25 @@ TEST (BenchBlockTimer, AnEmptyTimerReadsZeroAndClearEmptiesIt)
     t.clear();
     EXPECT_EQ (t.worst(), 0.0);
 }
+
+TEST (BenchMetersTarget, NeedsAnExplicitHostAndPort)
+{
+    a3bench::MetersTarget t;
+    for (const char* bad : { "--meters-osc", "--meters-osc=", "--meters-osc=host", "--meters-osc=host:x",
+                             "--meters-osc=host:70000", "--meters-osc=host:0", "--meters-osc=:9100",
+                             "--meters-osc=host:-1", "--meters-osc=host:91 00", "--timing" })
+        EXPECT_FALSE (a3bench::parseMetersTarget (bad, t)) << bad;
+    ASSERT_TRUE (a3bench::parseMetersTarget ("--meters-osc=127.0.0.1:9100", t));
+    EXPECT_EQ (t.host, "127.0.0.1");
+    EXPECT_EQ (t.port, 9100);
+    ASSERT_TRUE (a3bench::parseMetersTarget ("--meters-osc=localhost:65535", t));
+    EXPECT_EQ (t.port, 65535);
+}
+
+TEST (BenchMetersTarget, AListenersPortIsFlaggedByName)
+{
+    const auto truth = a3bench::parseTruth (truthText());
+    ASSERT_TRUE (truth.has_value());
+    EXPECT_TRUE (truth->listenerOnPort (7772).contains ("motion.vu"));
+    EXPECT_TRUE (truth->listenerOnPort (9100).isEmpty());
+}

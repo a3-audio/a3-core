@@ -158,14 +158,15 @@ void printTiming (a3bench::BlockTimer& t)
 void usage()
 {
     std::fprintf (stderr, "usage: a3-engine-bench [--truth FILE] [--gen sine:HZ:DB|pink:DB|sweep:DB]\n"
-                          "                       [--meters-osc[=HOST:PORT]] [--timing]\n");
+                          "                       [--meters-osc=HOST:PORT] [--timing]\n");
 }
 }
 
 int main (int argc, char** argv)
 {
-    std::string truthPath = "/usr/share/a3/a3-osc.json", metersTarget;
+    std::string truthPath = "/usr/share/a3/a3-osc.json";
     a3bench::GenSpec gen;
+    a3bench::MetersTarget metersTarget;
     bool metersOsc = false, timing = false;
     for (int i = 1; i < argc; ++i)
     {
@@ -174,8 +175,8 @@ int main (int argc, char** argv)
             truthPath = argv[++i];
         else if (a == "--gen" && i + 1 < argc && a3bench::parseGenSpec (argv[++i], gen))
             continue;
-        else if (a == "--meters-osc" || a.rfind ("--meters-osc=", 0) == 0)
-            metersOsc = true, metersTarget = a.size() > 13 ? a.substr (13) : "";
+        else if (a3bench::parseMetersTarget (a, metersTarget))
+            metersOsc = true;
         else if (a == "--timing")
             timing = true;
         else
@@ -224,10 +225,12 @@ int main (int argc, char** argv)
     juce::OSCSender sender;
     if (metersOsc)
     {
-        juce::String host = "127.0.0.1";
-        int port = truth->motionVuPort;
-        if (metersTarget.find (':') != std::string::npos)
-            host = metersTarget.substr (0, metersTarget.find (':')), port = std::atoi (metersTarget.c_str() + metersTarget.find (':') + 1);
+        const auto& host = metersTarget.host;
+        const int port = metersTarget.port;
+        const auto clash = truth->listenerOnPort (port);
+        if (clash.isNotEmpty())
+            std::fprintf (stderr, "warning: --meters-osc port %d is a listener of the truth (%s); /vu/51-66 may overwrite live meters\n",
+                          port, clash.toRawUTF8());
         if (! sender.connect (host, port))
             return std::fprintf (stderr, "cannot send meters to %s:%d\n", host.toRawUTF8(), port), 1;
     }
