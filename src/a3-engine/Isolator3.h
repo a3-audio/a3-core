@@ -19,7 +19,7 @@ namespace a3
 class Isolator3
 {
 public:
-    static constexpr int latencySamples = 1;   // ClipOnly2 at 44.1/48 kHz
+    static constexpr int latencySamples = 1;   // ClipOnly2, at every sample rate
 
     void prepare (double sampleRate);
     void setParameters (float iso, float q);   // each 0..1 (the desk: 0.05..0.9)
@@ -33,7 +33,10 @@ private:
         BiquadCoeffs from[sections], to[sections];
     };
 
-    // Direct port of Airwindows ClipOnly2 (MIT, Chris Johnson): latency = spacing samples.
+    // Direct port of Airwindows ClipOnly2 (MIT, Chris Johnson). Latency is one
+    // frame at every rate: the shift loop copies intermediate[spacing] all the
+    // way down to [0] in one call, so the buffer collapses and `spacing` only
+    // selects which slot is written.
     struct ClipOnly2
     {
         double lastSample = 0;

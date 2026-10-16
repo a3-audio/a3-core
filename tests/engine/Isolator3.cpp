@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <gtest/gtest.h>
 #include <algorithm>
+#include <cmath>
 #include <functional>
 #include <vector>
 #include "TestSignals.h"
@@ -114,4 +115,24 @@ TEST (Isolator3, SplitCallsMatchWholeBlocks)
     EXPECT_EQ (a3test::maxAbsDiff (splitOut, wholeOut), 0.0);
 }
 
-TEST (Isolator3, ReportsOneSampleOfLatency) { EXPECT_EQ (a3::Isolator3::latencySamples, 1); }
+// The output stage delays by exactly latencySamples (1) at every rate: the
+// original's ClipOnly2 shift loop collapses its buffer, so `spacing` (2 at
+// 96 kHz) does not lengthen it. An impulse after silence: nothing comes out
+// before frame k + 1, and frame k + 1 carries the band's first sample.
+TEST (Isolator3, DelaysByExactlyOneFrameAtEveryRate)
+{
+    ASSERT_EQ (a3::Isolator3::latencySamples, 1);
+    for (double sr : { 44100.0, 48000.0, 96000.0 })
+    {
+        const size_t k = 1000;   // past the first block's glide up from zero coefficients
+        a3test::Stereo in { std::vector<float> (2048, 0.0f), std::vector<float> (2048, 0.0f) };
+        in.l[k] = in.r[k] = 0.5f;   // below the clipper's threshold
+        a3::Isolator3 iso;
+        iso.prepare (sr);
+        iso.setParameters (0.5f, 0.05f);   // a wide band: the impulse's first sample passes
+        const auto out = a3test::runInBlocks (iso, in, 128);
+        for (size_t i = 0; i < k + a3::Isolator3::latencySamples; ++i)
+            ASSERT_EQ (out.l[i], 0.0f) << sr << " frame " << i;
+        EXPECT_GT (std::abs (out.l[k + a3::Isolator3::latencySamples]), 0.1f) << sr;
+    }
+}
