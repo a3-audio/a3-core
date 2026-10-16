@@ -21,7 +21,7 @@ target_include_directories(a3-engine-reference PUBLIC
 target_compile_options(a3-engine-reference PRIVATE -w)   # upstream code, unchanged
 
 add_executable(a3-engine-tests ReferenceSmoke.cpp Laws.cpp PurestGain.cpp SmoothEQ3.cpp
-    Isolator3.cpp)
+    Isolator3.cpp Meters.cpp ChannelStrip.cpp StripTiming.cpp)
 target_include_directories(a3-engine-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(a3-engine-tests PRIVATE a3-engine a3-engine-reference
     GTest::gtest GTest::gtest_main)

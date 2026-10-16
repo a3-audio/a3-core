@@ -25,7 +25,8 @@ target_compile_definitions(a3-engine-juce INTERFACE $<TARGET_PROPERTY:a3-engine-
 target_include_directories(a3-engine-juce INTERFACE $<TARGET_PROPERTY:a3-engine-juce,INCLUDE_DIRECTORIES>)
 
 add_library(a3-engine STATIC src/a3-engine/Laws.cpp src/a3-engine/PurestGain.cpp
-    src/a3-engine/SmoothEQ3.cpp src/a3-engine/Isolator3.cpp)
+    src/a3-engine/SmoothEQ3.cpp src/a3-engine/Isolator3.cpp src/a3-engine/Meters.cpp
+    src/a3-engine/ChannelStrip.cpp)
 target_include_directories(a3-engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/a3-engine)
 target_link_libraries(a3-engine PUBLIC a3-engine-juce)
 target_compile_options(a3-engine PRIVATE -Wall -Wextra -Werror=switch)
