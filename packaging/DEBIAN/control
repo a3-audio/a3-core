@@ -1,0 +1,12 @@
+Package: a3-engine-bench
+Version: 0
+Architecture: amd64
+Maintainer: Rafjagger
+Section: sound
+Priority: optional
+Depends: ${shlibs:Depends}
+Recommends: a3-core, pipewire-jack
+Description: A3 engine bench: four channel strips on JACK, for parity runs against REAPER
+ A headless JACK host for the four A3 channel strips. It reads the OSC
+ address truth from /usr/share/a3/a3-osc.json (installed by a3-core, or
+ pass --truth FILE) and is meant for parity and load runs next to REAPER.

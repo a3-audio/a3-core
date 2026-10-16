@@ -14,3 +14,7 @@ License: MIT
 Files: *.md
 Copyright: 2026 A³ Audio contributors
 License: CC-BY-SA-4.0
+
+Files: packaging/*
+Copyright: 2026 A³ Audio contributors
+License: GPL-3.0-or-later
