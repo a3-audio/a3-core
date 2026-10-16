@@ -31,8 +31,9 @@ struct StripMeters { float prePeak[2], preRms[2], postPeak[2], postRms[2]; };
 // gain container. The bed is not delayed for Isolator3's frame: the template
 // has no delay there (Airwindows reports no latency), so moving + steady is x
 // itself; whether the cut should be latency-aligned waits on the rig's
-// bed-leak measurement. 3D below the law's -40 dB floor (bandGain 0) makes the
-// moving pair exact silence; REAPER keeps -40 dB of band there.
+// bed-leak measurement. 3D at or below the law's floor gives BAND A 0 = -40 dB,
+// not a mute: the moving pair keeps the band at -40 dB, as in REAPER, and a
+// closing band glides with PurestGain instead of being cut.
 //
 // Controls are read at a fixed 128-frame grid counted across calls, so the
 // output does not depend on the period the host picks.
@@ -43,7 +44,7 @@ public:
     // in: stereo input (selected source); moving/steady: stereo outputs. Any numSamples >= 0.
     void process (const float* const* in, float* const* moving, float* const* steady, int numSamples);
     StripControls& controls() { return state; }
-    StripMeters meters() const;                           // read from another thread: copies atomics
+    StripMeters meters();   // from another thread: RMS now, peaks since the last call (the call takes them)
 
 private:
     void latchControls();
@@ -55,7 +56,6 @@ private:
     Isolator3 isolator;
     Meters pre, post;
     ControlGrid grid;
-    bool bandOpen = false;
     int maxBlock = 0;
     std::vector<float> x[2], sum[2];
 };

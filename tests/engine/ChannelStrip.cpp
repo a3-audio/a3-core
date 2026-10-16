@@ -1,10 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include "TestSignals.h"
 #include "ChannelStrip.h"
+#include "Isolator3.h"
 #include "Laws.h"
 #include "PurestGain.h"
 #include "SmoothEQ3.h"
@@ -40,6 +42,33 @@ std::unique_ptr<a3::ChannelStrip> made (float threeD, float freq, float q)
     return strip;
 }
 
+// TRIM and EQ as made() sets them, built from the units directly.
+a3test::Stereo trimmedAndEqd (const a3test::Stereo& in)
+{
+    a3::PurestGain trim;
+    a3::SmoothEQ3 eq;
+    trim.prepare (44100.0);
+    eq.prepare (44100.0);
+    trim.setParameters ((float) a3::laws::slopeVolume (1.0), 1.0f);
+    const float top = (float) a3::laws::slopeEq (1.0);
+    eq.setParameters (top, top, top);
+    return a3test::runInBlocks (eq, a3test::runInBlocks (trim, in, 128), 128);
+}
+
+// Largest change between neighbouring samples of `changed - unchanged`: the
+// step a control change adds on top of the signal's own slope.
+double largestStep (const a3test::Stereo& changed, const a3test::Stereo& unchanged)
+{
+    double worst = 0.0;
+    for (size_t i = 1; i < changed.l.size(); ++i)
+    {
+        const double now = (double) changed.l[i] - unchanged.l[i];
+        const double before = (double) changed.l[i - 1] - unchanged.l[i - 1];
+        worst = std::max (worst, std::abs (now - before));
+    }
+    return worst;
+}
+
 a3test::Stereo sum (const StripRun& r)
 {
     a3test::Stereo s = r.moving;
@@ -48,45 +77,74 @@ a3test::Stereo sum (const StripRun& r)
 }
 }
 
-// moving + steady = the EQ'd input, at every 3D/freq/Q.
+// moving + steady = the EQ'd input, at every 3D/freq/Q, checked against TRIM
+// and EQ built independently.
 TEST (ChannelStrip, MovingPlusSteadyIsTheInputAtEveryPosition)
 {
     const auto in = a3test::noise (22050, 0.25f, 9);
+    const auto expected = trimmedAndEqd (in);
     for (float threeD : { 0.0f, 0.3f, 1.0f })
         for (float f : { 0.0f, 0.5f, 1.0f })
             for (float q : { 0.0f, 1.0f })
             {
                 auto strip = made (threeD, f, q);
-                auto reference = made (0.0f, f, q);           // 3D 0: nothing moves, steady = the input
                 const auto r = run (*strip, in, { 128 });
-                const auto ref = run (*reference, in, { 128 });
-                EXPECT_LE (a3test::maxAbsDiff (sum (r), ref.steady), 1e-5) << threeD << " " << f << " " << q;
+                EXPECT_LE (a3test::maxAbsDiff (sum (r), expected), 1e-6) << threeD << " " << f << " " << q;
             }
 }
 
 // The template's bed (n-multi-enc) takes the input straight, with no delay for
-// Isolator3's frame: moving + steady is TRIM + EQ with nothing in between, and
-// at 3D 0 the moving pair is exact silence.
-TEST (ChannelStrip, TheBedIsTheUndelayedInputAtThreeDZero)
+// Isolator3's frame: moving + steady is TRIM + EQ with nothing in between. At
+// 3D 0 the band gain is A 0 = -40 dB, not a mute, as in REAPER: moving is
+// 0.01 x Isolator3 (x).
+TEST (ChannelStrip, TheBedIsTheUndelayedInputAndThreeDZeroIsMinusFortyDb)
 {
     const auto in = a3test::noise (22050, 0.25f, 3);
     auto strip = made (0.0f, 0.5f, 0.05f);
     const auto r = run (*strip, in, { 128 });
 
-    a3::PurestGain trim;
-    a3::SmoothEQ3 eq;
-    trim.prepare (44100.0);
-    eq.prepare (44100.0);
-    trim.setParameters ((float) a3::laws::slopeVolume (1.0), 1.0f);
-    const float top = (float) a3::laws::slopeEq (1.0);
-    eq.setParameters (top, top, top);
-    auto expected = a3test::runInBlocks (trim, in, 128);
-    expected = a3test::runInBlocks (eq, expected, 128);
-
-    EXPECT_LE (a3test::maxAbsDiff (r.steady, expected), 1e-6);
+    const auto expected = trimmedAndEqd (in);
     EXPECT_LE (a3test::maxAbsDiff (sum (r), expected), 1e-6);
-    for (size_t i = 0; i < r.moving.l.size(); ++i)
-        ASSERT_EQ (r.moving.l[i], 0.0f) << i;
+
+    a3::Isolator3 iso;
+    iso.prepare (44100.0);
+    iso.setParameters ((float) a3::laws::isolatorParam (0.5), (float) a3::laws::isolatorParam (0.05));
+    auto band = a3test::runInBlocks (iso, expected, 128);
+    for (auto* side : { &band.l, &band.r })
+        for (auto& v : *side)
+            v = (float) (0.01 * v);
+    EXPECT_GT (*std::max_element (r.moving.l.begin(), r.moving.l.end()), 1e-4f);   // the band is there
+    EXPECT_LE (a3test::maxAbsDiff (r.moving, band), 1e-7);
+}
+
+// Closing the band (3D 0.9 -> 0) glides with PurestGain, as REAPER does; no
+// cut. Measured on a 1 kHz sine at -6 dBFS inside the band: the change adds at
+// most ~0.064 between neighbouring samples (0.9 -> 0.011 probe; the band's own
+// slope at 1 kHz is 0.071 per sample, times the gain still to travel), where a
+// cut at the latch adds ~0.40. 0.1 sits between the two.
+TEST (ChannelStrip, ClosingTheBandGlidesWithoutAStep)
+{
+    const float level = std::pow (10.0f, -6.0f / 20.0f);
+    const auto in = a3test::sine (44100, 1000.0, 44100.0, level);
+    auto runWith = [&] (bool close) {
+        auto strip = made (0.9f, 0.5f, 0.05f);
+        StripRun r { in, in };
+        for (size_t s = 0; s < in.l.size(); s += 128)
+        {
+            if (close && s == 128 * 100)
+                strip->controls().threeD = 0.0f;
+            const int n = (int) std::min<size_t> (128, in.l.size() - s);
+            const float* i[2] { in.l.data() + s, in.r.data() + s };
+            float* m[2] { r.moving.l.data() + s, r.moving.r.data() + s };
+            float* st[2] { r.steady.l.data() + s, r.steady.r.data() + s };
+            strip->process (i, m, st, n);
+        }
+        return r;
+    };
+    const auto open = runWith (false), closing = runWith (true);
+    EXPECT_GT (*std::max_element (open.moving.l.begin(), open.moving.l.end()), 0.3f);   // 1 kHz is in the band
+    EXPECT_LE (largestStep (closing.moving, open.moving), 0.1);
+    EXPECT_LE (largestStep (closing.steady, open.steady), 0.1);
 }
 
 // Review focus 1: block sizes that change between calls and exceed maxBlock.
@@ -111,8 +169,7 @@ TEST (ChannelStrip, OddAndChangingBlockSizesNeitherCrashNorDiffer)
 TEST (ChannelStrip, ControlsTakeEffectOnTheGrid)
 {
     const auto in = a3test::noise (128 * 40, 0.25f, 6);
-    // 3D from 0 (band closed, moving exact silence) to 0.9: the strip's own
-    // open/closed switch must follow the grid as the units' parameters do.
+    // 3D from 0 (-40 dB) to 0.9 and VOLUME, set mid-block in the odd run.
     auto a = made (0.0f, 0.4f, 0.2f), b = made (0.0f, 0.4f, 0.2f);
     auto runChanging = [&] (a3::ChannelStrip& strip, const std::vector<int>& sizes) {
         StripRun r { in, in };

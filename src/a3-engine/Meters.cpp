@@ -6,12 +6,26 @@
 
 namespace a3
 {
+namespace
+{
+// Raise the maximum unless a reader took it meanwhile; then retry against
+// zero, so a take never brings back the peak it just took (as the analyzer).
+void notePeak (std::atomic<float>& peakSinceTake, float windowPeak)
+{
+    float current = peakSinceTake.load (std::memory_order_relaxed);
+    while (windowPeak > current
+           && ! peakSinceTake.compare_exchange_weak (current, windowPeak, std::memory_order_acq_rel))
+    {
+    }
+}
+}
+
 void Meters::prepare (double)
 {
     for (auto& s : sides)
     {
         s.sumSquares = s.windowPeak = s.rms = 0.0;
-        s.peakOut.store (0.0f, std::memory_order_relaxed);
+        s.peakSinceTake.store (0.0f, std::memory_order_relaxed);
         s.rmsOut.store (0.0f, std::memory_order_relaxed);
     }
     framesInWindow = 0;
@@ -47,7 +61,7 @@ void Meters::closeWindow()
         const double windowRms = std::sqrt (s.sumSquares / window);
         const double coeff = windowRms > s.rms ? rmsAttack : rmsRelease;
         s.rms = coeff * windowRms + (1.0 - coeff) * s.rms;
-        s.peakOut.store ((float) s.windowPeak, std::memory_order_relaxed);
+        notePeak (s.peakSinceTake, (float) s.windowPeak);
         s.rmsOut.store ((float) s.rms, std::memory_order_relaxed);
         s.sumSquares = 0.0;
         s.windowPeak = 0.0;
@@ -55,6 +69,6 @@ void Meters::closeWindow()
     framesInWindow = 0;
 }
 
-float Meters::peak (int ch) const { return sides[ch].peakOut.load (std::memory_order_relaxed); }
+float Meters::takePeak (int ch) { return sides[ch].peakSinceTake.exchange (0.0f, std::memory_order_acq_rel); }
 float Meters::rms (int ch) const { return sides[ch].rmsOut.load (std::memory_order_relaxed); }
 }

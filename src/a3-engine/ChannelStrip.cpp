@@ -32,9 +32,7 @@ void ChannelStrip::latchControls()
                       (float) laws::slopeEq (load (state.eqLow)));
     isolator.setParameters ((float) laws::isolatorParam (load (state.frequency)),
                             (float) laws::isolatorParam (load (state.q)));
-    const double band = laws::bandGain (load (state.threeD));
-    bandOpen = band > 0.0;
-    bandGain.setParameters ((float) band, 1.0f);
+    bandGain.setParameters ((float) laws::bandGain (load (state.threeD)), 1.0f);
     const auto volume = (float) laws::slopeVolume (load (state.volume));
     volumeMoving.setParameters (volume, 1.0f);
     volumeSteady.setParameters (volume, 1.0f);
@@ -76,9 +74,6 @@ void ChannelStrip::processStretch (const float* const* in, float* const* moving,
         std::copy (xs[ch], xs[ch] + count, moving[ch]);
     bandGain.process (moving, count);
     isolator.process (moving, count);
-    if (! bandOpen)
-        for (int ch = 0; ch < 2; ++ch)
-            std::fill (moving[ch], moving[ch] + count, 0.0f);
 
     for (int ch = 0; ch < 2; ++ch)
         for (int i = 0; i < count; ++i)
@@ -94,14 +89,14 @@ void ChannelStrip::processStretch (const float* const* in, float* const* moving,
     post.push (sums, count);
 }
 
-StripMeters ChannelStrip::meters() const
+StripMeters ChannelStrip::meters()
 {
     StripMeters m {};
     for (int ch = 0; ch < 2; ++ch)
     {
-        m.prePeak[ch] = pre.peak (ch);
+        m.prePeak[ch] = pre.takePeak (ch);
         m.preRms[ch] = pre.rms (ch);
-        m.postPeak[ch] = post.peak (ch);
+        m.postPeak[ch] = post.takePeak (ch);
         m.postRms[ch] = post.rms (ch);
     }
     return m;

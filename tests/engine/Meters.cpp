@@ -39,33 +39,33 @@ TEST (Meters, SineAtMinusSixDb)
     double rmsSum = 0;
     int readings = 0;
     push (meters, in, { 128 }, [&] (size_t s) {
-        if (s < 4410)
-            return;   // after the window and the attack
+        if (s < 4410 || s % a3::Meters::window != 0)
+            return;   // after the attack, and only where a window closed (a peak was noted)
         for (int ch = 0; ch < 2; ++ch)
         {
-            EXPECT_NEAR (meters.peak (ch), minusSixDb, 0.01 * minusSixDb) << s;
+            EXPECT_NEAR (meters.takePeak (ch), minusSixDb, 0.01 * minusSixDb) << s;
             EXPECT_NEAR (meters.rms (ch), rmsExpected, 0.02 * rmsExpected) << s;
         }
         rmsSum += meters.rms (0);
         ++readings;
     });
-    EXPECT_NEAR (meters.peak (0), 0.501, 0.005);
     EXPECT_NEAR (rmsSum / readings, 0.354, 0.00354);
 }
 
 // Silence: the RMS falls by the analyzer's release (VU_RMS_RELEASE 0.2) per
-// window, the peak reads the window's own maximum, 0.
+// window; a peak taken after silent windows only is 0.
 TEST (Meters, SilenceDecaysWithTheAnalyzersRelease)
 {
     a3::Meters meters;
     meters.prepare (44100.0);
     push (meters, a3test::sine (128 * 35, 1000.0, 44100.0, minusSixDb), { 128 }, [] (size_t) {});
     const a3test::Stereo zeros { std::vector<float> (128 * 10, 0.0f), std::vector<float> (128 * 10, 0.0f) };
+    meters.takePeak (0);
     float last = meters.rms (0);
     ASSERT_GT (last, 0.3f);
     push (meters, zeros, { 128 }, [&] (size_t) {
         EXPECT_NEAR (meters.rms (0), last * 0.8f, 1e-6f);
-        EXPECT_EQ (meters.peak (0), 0.0f);
+        EXPECT_EQ (meters.takePeak (0), 0.0f);
         last = meters.rms (0);
     });
 }
@@ -83,6 +83,26 @@ TEST (Meters, WindowIsCarriedAcrossCalls)
     for (int ch = 0; ch < 2; ++ch)
     {
         EXPECT_EQ (whole.rms (ch), split.rms (ch));
-        EXPECT_EQ (whole.peak (ch), split.peak (ch));
+        EXPECT_EQ (whole.takePeak (ch), split.takePeak (ch));
     }
+}
+
+// As the analyzer's notePeak/takePeakLinear: the peak is the maximum since the
+// last take, so a reader at 25 Hz sees every transient between its reads.
+TEST (Meters, TakePeakHoldsTheMaximumSinceTheLastTake)
+{
+    a3::Meters meters;
+    meters.prepare (44100.0);
+    a3test::Stereo in { std::vector<float> (128 * 20, 0.0f), std::vector<float> (128 * 20, 0.0f) };
+    in.l[128 * 3 + 5] = 0.7f;    // two transients, windows apart, then quiet
+    in.l[128 * 9 + 50] = -0.4f;
+    push (meters, in, { 128 }, [] (size_t) {});
+    EXPECT_FLOAT_EQ (meters.takePeak (0), 0.7f);
+    EXPECT_EQ (meters.takePeak (0), 0.0f);
+    EXPECT_EQ (meters.takePeak (1), 0.0f);
+
+    a3test::Stereo next { std::vector<float> (128, 0.0f), std::vector<float> (128, 0.0f) };
+    next.l[10] = 0.25f;
+    push (meters, next, { 128 }, [] (size_t) {});
+    EXPECT_FLOAT_EQ (meters.takePeak (0), 0.25f);
 }
