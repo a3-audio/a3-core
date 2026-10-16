@@ -207,7 +207,14 @@ TEST (ChannelStrip, SilenceStaysSilent)
     const auto r = run (*strip, zeros, { 128 });
     const size_t tail = 44100;   // the filters' ring-out is over after the first second
     for (size_t i = zeros.l.size() - tail; i < zeros.l.size(); ++i)
+    {
+        // each path on its own: a sum of two could hide +x and -x
+        ASSERT_EQ (r.moving.l[i], 0.0f) << "moving.l " << i;
+        ASSERT_EQ (r.moving.r[i], 0.0f) << "moving.r " << i;
+        ASSERT_EQ (r.steady.l[i], 0.0f) << "steady.l " << i;
+        ASSERT_EQ (r.steady.r[i], 0.0f) << "steady.r " << i;
         ASSERT_EQ (r.moving.l[i] + r.steady.l[i], 0.0f) << i;
+    }
 }
 
 // Pre taps after TRIM + EQ, post sums moving + steady after VOLUME: the split
