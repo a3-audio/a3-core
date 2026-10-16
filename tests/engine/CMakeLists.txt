@@ -9,7 +9,8 @@ add_library(a3-engine-reference STATIC
     reference/Isolator3Reference.cpp ${REFERENCE_SOURCES})
 target_include_directories(a3-engine-reference PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/reference
-    ${CMAKE_CURRENT_SOURCE_DIR}/reference/airwindows)
+    ${CMAKE_CURRENT_SOURCE_DIR}/reference/airwindows
+    ${CMAKE_CURRENT_SOURCE_DIR}/reference/shim)
 target_compile_options(a3-engine-reference PRIVATE -w)   # upstream code, unchanged
 
 add_executable(a3-engine-tests ReferenceSmoke.cpp)

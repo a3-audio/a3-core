@@ -1,6 +1,6 @@
-// THROWAWAY SPIKE CODE (plan-2 Airwindows spike, 2026-10-16). Not for any repo.
-// Minimal stand-in for the VST2 SDK's AudioEffectX so the upstream Airwindows
-// LinuxVST sources compile into a plain test binary. Only what they touch.
+// SPDX-FileCopyrightText: 2026 Raphael Eismann
+// SPDX-License-Identifier: GPL-3.0-or-later
+// A minimal stand-in for the VST2 SDK's audioeffectx.h, so the unchanged Airwindows sources compile in the test runner.
 #pragma once
 #define __audioeffect__
 #include <cstdint>
