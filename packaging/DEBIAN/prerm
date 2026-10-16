@@ -1,0 +1,4 @@
+#!/bin/sh
+# The bench keeps no state and starts no service: nothing to do.
+set -e
+exit 0
