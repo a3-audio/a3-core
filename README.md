@@ -1,6 +1,15 @@
-# a3-engine — the A³ audio engine, parked
+# a3-engine — the A³ audio engine
 
-**Parked 2026-10-06. Not built, not packaged, not run.** No A³ device builds or runs it. REAPER remains the audio engine of A³ Core.
+**Status 2026-10-16.** Plan 2 (the channel strip, level-identical to REAPER) is being built on branch
+`feat/plan-2-channel-strip`, in `src/a3-engine/`, tested in `tests/engine/`. The Plan 1 code described
+below (`src/a3-audio-engine/`, `tests/unit/`, `host/`) stays **parked and unbuilt**; no A³ device runs
+this engine yet, and REAPER remains the audio engine of A³ Core.
+
+Build and test (CMake, JUCE 9.0.3 in `~/local/juce`, GoogleTest): `./test.sh`. The tests compare the
+rebuilds against the unchanged upstream Airwindows plugins in `tests/engine/reference/` (MIT, test-only).
+`tests/engine/data/curves-golden.json` is a copy from a3-core (commit 50e7997).
+
+# Plan 1, parked 2026-10-06
 
 ## What this is
 
