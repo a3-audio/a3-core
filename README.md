@@ -1,19 +1,33 @@
 # a3-engine — the A³ audio engine
 
-**Status 2026-10-16.** Plan 2 (the channel strip, level-identical to REAPER) is being built on branch
-`feat/plan-2-channel-strip`, in `src/a3-engine/`, tested in `tests/engine/`. The Plan 1 code described
-below (`src/a3-audio-engine/`, `tests/unit/`, `host/`) stays **parked and unbuilt**; no A³ device runs
-this engine yet, and REAPER remains the audio engine of A³ Core.
+**Status 2026-10-16.** Plan 2 is the code that is built here: the channel strip
+(`src/a3-engine/`: TRIM, 3-band EQ, VOLUME, isolator, level-identical to REAPER's chain, tested in
+`tests/engine/`) and `a3-engine-bench` (`bench/`), a headless JACK client with four strips. The Plan 1
+code described below (`src/a3-audio-engine/`, `tests/unit/`, `host/`) stays **parked and unbuilt**.
+No A³ device runs this engine yet; REAPER remains the audio engine of A³ Core.
 
-Build and test (CMake, JUCE 9.0.3 in `~/local/juce`, GoogleTest): `./test.sh`. The tests compare the
-rebuilds against the unchanged upstream Airwindows plugins in `tests/engine/reference/` (MIT, test-only).
-`tests/engine/data/curves-golden.json` is a copy from a3-core (commit 50e7997).
-`tests/engine/data/a3-osc.json` is a copy of the OSC truth from a3-core's branch `feat/engine-osc-endpoint` (commit 4014d27: the `engine.osc` listener, port 9004).
-`bench/` is `a3-engine-bench`, a headless JACK client with four strips (ports `ch{n}_*`, `gen_L/R`; never connects anything); it reads the truth at runtime from `--truth FILE` (default `/usr/share/a3/a3-osc.json`).
+## Build and test
 
-# Plan 1, parked 2026-10-06
+Prerequisites: CMake 3.16 or newer, a C++17 compiler, JUCE 9.0.3 installed as a CMake package
+(`JUCE_PREFIX_PATH`, default `~/local/juce`), `libgtest-dev`, and the JACK development files
+(`libjack-jackd2-dev`, found through pkg-config). Without JACK, configure with
+`-DA3_ENGINE_BENCH=OFF` to build only the strip and its tests.
 
-## What this is
+`./test.sh` builds (at `nice -n 19`) and runs the tests, which compare the rebuilds against the
+unchanged upstream Airwindows plugins in `tests/engine/reference/` (MIT, test-only). Packaging tests:
+`python3 -m unittest discover -s tests/packaging`.
+
+- `tests/engine/data/curves-golden.json` is a copy from a3-core (commit 50e7997).
+- `tests/engine/data/a3-osc.json` is a copy of the OSC truth from a3-core's branch
+  `feat/engine-osc-endpoint` (commit 4014d27: the `engine.osc` listener, port 9004). That branch moves
+  to a3-core's `main` on merge; this reference then changes with it.
+- `a3-engine-bench` never connects anything. It reads the truth at runtime from `--truth FILE`
+  (default `/usr/share/a3/a3-osc.json`).
+
+
+## Plan 1, parked 2026-10-06
+
+### What this is
 
 The C++/JUCE audio-engine foundation written as "Plan 1" (2026-09-21/22) of the A³ app: the first
 pieces of an engine that could one day render what REAPER renders today. It was developed inside
@@ -35,7 +49,7 @@ File headers are kept as they were in a3-motion-ui (GPL-3.0-or-later). The commi
 a3-motion-ui: `db8e8a2` (ControlSurface) … `53efd30` (speaker test at −40 dBFS), merged in `0fd6623`,
 review fixes `4ef5d80`.
 
-## Why it is here and why it is parked
+### Why it is here and why it is parked
 
 - **2026-10-06, decided by the maintainer:** a3-motion-ui is a pure OSC interface and contains no
   audio functions. Core does the audio processing, StemDeck plays. So the engine library, the
@@ -52,14 +66,15 @@ The plans and their reasoning (workspace notes, not part of this repository):
 - `.claude/notes/2026-10-06-a3-app-plan-2-channel-strip.md` — Plan 2 (channel strip,
   level-identical to REAPER), "Decided 2026-10-06" and "Parked 2026-10-06".
 
-## What it would need to build
+### What it would need to build
 
 Nothing of this is wired up, on purpose. Whoever takes it up needs:
 
 1. **CMake (3.16 or newer while the precompiled header is kept) and JUCE 9.0.3** (the one JUCE every A³ product builds against; installed as a
    CMake package, `find_package(JUCE CONFIG REQUIRED)`), plus GoogleTest (`libgtest-dev`) for the
    tests. The units use `juce_audio_basics` only.
-2. **A top-level `CMakeLists.txt`** in this repository: `src/a3-audio-engine/CMakeLists.txt` calls
+2. **To be wired into the top-level `CMakeLists.txt`**, which today builds only `src/a3-engine/`,
+   `bench/` and the tests: `src/a3-audio-engine/CMakeLists.txt` calls
    `a3_precompile_juce_header()` (defined in a3-motion-ui's top-level CMake) and links
    `a3-motion-engine`. Either drop the precompiled header or bring the helper along.
 3. **The Motion coupling decided anew.** `SpatBackendInternal` implements
@@ -74,4 +89,4 @@ Nothing of this is wired up, on purpose. Whoever takes it up needs:
    non-throwing `deviceChannelFor()`, >31-channel buffers, `ScopedNoDenormals`, an end-to-end test
    replacing `TheEngineCanSendThroughIt`) — listed in the first note above.
 
-Until then: do not add it to the package, the installer or CI.
+Until then the Plan 1 code is not built by the top-level CMake and not part of the package.
