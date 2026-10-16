@@ -47,6 +47,12 @@ class ControlTest(unittest.TestCase):
         self.assertIn("${shlibs:Depends}", fields["Depends"])
         self.assertEqual(fields["Architecture"], "amd64")
 
+    def test_maintainer_scripts_exist_and_are_executable(self):
+        # installer/package.py refuses a package without all three.
+        for name in ("postinst", "prerm", "postrm"):
+            script = CONTROL.parent / name
+            self.assertTrue(os.access(script, os.X_OK), name)
+
     def test_the_truth_file_comes_with_a_recommended_a3_core(self):
         self.assertIn("a3-core", control_fields().get("Recommends", ""))
 
