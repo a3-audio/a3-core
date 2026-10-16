@@ -78,6 +78,15 @@ class ThePorts(unittest.TestCase):
         self.assertEqual(t.port("dualdelay", "osc"), 1340)
         self.assertEqual(t.port("prolink", "announce"), 50000)
 
+    def test_the_engine_bench_listens_on_the_first_free_port_above_core(self):
+        """9004: the lowest port above 9000 that no listener holds (2026-10-16)."""
+        t = truth()
+        self.assertEqual(t.port("engine", "osc"), 9004)
+        self.assertIn("engine", t.programs())
+        others = [l["port"] for l in t.listeners() if l["name"] != "engine.osc"]
+        self.assertNotIn(9004, others)
+        self.assertEqual([p for p in range(9001, 9004) if p not in others], [])
+
     def test_no_two_listeners_on_one_host_and_port(self):
         # "any", "local" and "core" are one machine: a port bound on all of
         # its interfaces collides with the same port bound on loopback.

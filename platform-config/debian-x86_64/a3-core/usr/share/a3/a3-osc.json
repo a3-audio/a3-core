@@ -75,6 +75,8 @@
    "carries": "/MultiEncoder/... (receiver set inside the plug-in, in the REAPER project)"},
   {"name": "dualdelay.osc", "program": "dualdelay", "role": "osc", "host": "local", "port": 1340,
    "carries": "/DualDelay/delayBPML|R (receiver set inside the plug-in, in the REAPER project)"},
+  {"name": "engine.osc", "program": "engine", "role": "osc", "host": "local", "port": 9004,
+   "carries": "a3-engine-bench: the /channel/{ch}/... controls of the four engine strips (not yet routed by Core)"},
   {"name": "x11vnc.vnc", "program": "x11vnc", "role": "vnc", "host": "any", "port": 5901,
    "carries": "the Core's screen (VNC, not OSC)"},
   {"name": "radla.osc", "program": "radla", "role": "osc", "host": "radla", "port": 9000,
@@ -199,5 +201,5 @@
    "/EnergyVisualizer/RMS", "/DualDelay/delayBPML", "/DualDelay/delayBPMR"]}
  },
  "programs": ["core", "motion", "mixer", "beat-analyzer", "stemdeck", "reaper", "devices",
-              "iem", "dualdelay", "x11vnc", "radla", "prolink", "aes67", "ptp4l"]
+              "iem", "dualdelay", "engine", "x11vnc", "radla", "prolink", "aes67", "ptp4l"]
 }
