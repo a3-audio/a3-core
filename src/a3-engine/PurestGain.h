@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later AND MIT
 // Algorithm: Airwindows PurestGain by Chris Johnson (MIT, 2018)
 #pragma once
+#include "ControlBlock.h"
 
 namespace a3
 {
@@ -17,7 +18,6 @@ namespace a3
 class PurestGain
 {
 public:
-    static constexpr int controlBlock = 128;
     // The original starts its remembered setting at -90 dB, so its first block
     // always counts as "a new value arrived" (speed 700); kept for sample-exact match.
     static constexpr double unsetDb = -90.0;
@@ -33,7 +33,7 @@ private:
     float latchedB = 1.0f;
     double target = 1.0, lastDb = unsetDb;
     double speed = 350.0, gain = 1.0, gainB = 1.0;
-    int framesIntoBlock = 0;
+    ControlGrid grid;
     bool started = false;
 };
 }

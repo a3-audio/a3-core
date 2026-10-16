@@ -4,6 +4,13 @@ find_package(GTest REQUIRED)
 
 file(GLOB REFERENCE_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/reference/airwindows/*/*.cpp)
+# Every plugin defines the VST entry point of the same name; rename it per
+# plugin (in the compile, not in the unchanged sources) so they can share a binary.
+foreach(src IN LISTS REFERENCE_SOURCES)
+    get_filename_component(plugin "${src}" NAME_WE)
+    set_source_files_properties("${src}" PROPERTIES
+        COMPILE_DEFINITIONS "createEffectInstance=createEffectInstance_${plugin}")
+endforeach()
 add_library(a3-engine-reference STATIC
     reference/PurestGainReference.cpp reference/SmoothEQ3Reference.cpp
     reference/Isolator3Reference.cpp ${REFERENCE_SOURCES})
@@ -13,7 +20,7 @@ target_include_directories(a3-engine-reference PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/reference/shim)
 target_compile_options(a3-engine-reference PRIVATE -w)   # upstream code, unchanged
 
-add_executable(a3-engine-tests ReferenceSmoke.cpp Laws.cpp PurestGain.cpp)
+add_executable(a3-engine-tests ReferenceSmoke.cpp Laws.cpp PurestGain.cpp SmoothEQ3.cpp)
 target_include_directories(a3-engine-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(a3-engine-tests PRIVATE a3-engine a3-engine-reference
     GTest::gtest GTest::gtest_main)
