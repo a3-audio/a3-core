@@ -1,8 +1,13 @@
 """The screencast for OBS: a listener on a port from the truth, never a hog.
 
-The encoder runs on the machine that plays live, so it takes only what the
-programs do not want (idle scheduling, one core), and it never uses the GPU:
-an encoder hung in a GPU reset on the rig's amdgpu on 2026-09-29."""
+The encoder runs on the machine that plays live, so it stays niced on the one
+core the audio units leave free, and it never uses the GPU: an encoder hung in
+a GPU reset on the rig's amdgpu on 2026-09-29.
+
+Picture only, and as fresh as possible: on 2026-10-17 OBS showed it 0.73 s to
+1.4 s late at ~11 fps. The mpegts muxer held PCR 0.73 s behind the picture,
+idle scheduling on an audio core left the encoder waiting longer than it ran,
+and the JACK input stalled with xruns. OBS takes the sound from AES67."""
 
 import os
 import re
@@ -22,6 +27,11 @@ import a3_osc          # noqa: E402
 import a3_osc_render   # noqa: E402
 
 TRUTH = a3_osc.load(PACKAGE / "usr/share/a3/a3-osc.json")
+
+
+def code(path):
+    """The script without its comments."""
+    return "\n".join(l.split("#", 1)[0] for l in path.read_text().splitlines())
 
 
 class ThePortComesFromTheTruth(unittest.TestCase):
@@ -73,15 +83,49 @@ class TheScript(unittest.TestCase):
 
     def test_it_yields_to_everything_else(self):
         text = SCRIPT.read_text()
-        for part in ("nice -n 19", "chrt --idle 0", "taskset -c", "-draw_mouse 0",
-                     "xdpyinfo", "-f jack", "mpegts"):
+        for part in ("nice -n 19", "taskset -c", "-draw_mouse 0", "xdpyinfo", "mpegts"):
             self.assertIn(part, text)
 
-    def test_it_connects_no_jack_port(self):
-        self.assertNotIn("jack_connect", SCRIPT.read_text())
+    def test_it_is_not_starved_by_idle_scheduling(self):
+        self.assertNotIn("chrt", code(SCRIPT))
 
-    def test_it_defaults_to_the_highest_core(self):
-        self.assertIn("$(( $(nproc) - 1 ))", SCRIPT.read_text())
+    def test_it_defaults_to_a_core_the_audio_units_leave_free(self):
+        default = re.search(r"A3_SCREENCAST_CPUS:-([^}]+)\}", SCRIPT.read_text()).group(1)
+        reaper = UNIT.with_name("a3-reaper.service").read_text()
+        audio = re.search(r"^CPUAffinity=(.*)$", reaper, re.M).group(1).split()
+        self.assertEqual("0", default)
+        self.assertNotIn(default, audio)
+
+
+class PictureOnly(unittest.TestCase):
+    """OBS takes the sound from AES67; a JACK input only stalled the picture."""
+
+    def test_it_takes_no_sound(self):
+        text = code(SCRIPT)
+        for part in ("-f jack", "-c:a", "aac"):
+            self.assertNotIn(part, text)
+        self.assertIn("-an", text.split())
+
+    def test_nothing_promises_sound(self):
+        row = TRUTH.listener("screencast", "stream")["carries"]
+        description = re.search(r"^Description=(.*)$", UNIT.read_text(), re.M).group(1)
+        for text in (row, description, SCRIPT.read_text().splitlines()[1]):
+            self.assertNotIn("sound", text.lower())
+
+
+class AsFreshAsPossible(unittest.TestCase):
+    def test_the_grab_queue_is_short(self):
+        sizes = [int(n) for n in re.findall(r"-thread_queue_size (\d+)", code(SCRIPT))]
+        self.assertTrue(sizes)
+        self.assertLessEqual(max(sizes), 8)
+
+    def test_the_muxer_adds_no_delay(self):
+        args = code(SCRIPT).split()
+        for flag, value in (("-muxdelay", "0"), ("-muxpreload", "0"),
+                            ("-flush_packets", "1"), ("-fflags", "nobuffer"),
+                            ("-fps_mode", "vfr")):
+            self.assertIn(flag, args)
+            self.assertEqual(value, args[args.index(flag) + 1], flag)
 
 
 class TheDependencies(unittest.TestCase):

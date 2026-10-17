@@ -53,19 +53,20 @@ skips.
 
 ## Screencast for OBS
 
-`a3-screencast` streams this machine's screen and sound (x264 on the CPU, AAC,
-MPEG-TS) as a listener on the port `screencast.stream` of `a3-osc.json` (9930).
-It runs at idle priority on the highest core only, so it never takes time from
-the live programs. The package does not enable it; per machine:
+`a3-screencast` streams the picture of this machine's screen (x264 on the CPU,
+MPEG-TS, no sound) as a listener on the port `screencast.stream` of
+`a3-osc.json` (9930). It runs niced on core 0, which the audio units
+(`CPUAffinity=1 2 3`) leave free, with no muxer delay and a short grab queue, so
+the picture arrives within a frame or two. OBS takes the sound from AES67. The
+package does not enable it; per machine:
 
 ```sh
 systemctl --user enable --now a3-screencast
 ```
 
-The sound is a JACK client `screencast`; connect `screencast:input_1/2` yourself
-(it is never connected for you, unconnected it is silent). Optional settings in
-`~/.config/a3/screencast.env`: `A3_SCREENCAST_CPUS` (default: the highest core),
-`A3_SCREENCAST_FPS` (30), `A3_SCREENCAST_CRF` (23, lower is better).
+Optional settings in `~/.config/a3/screencast.env`: `A3_SCREENCAST_CPUS`
+(default: 0), `A3_SCREENCAST_FPS` (30), `A3_SCREENCAST_CRF` (23, lower is
+better).
 
 On the viewing machine, tunnel to the rigs and add a Media Source in OBS:
 

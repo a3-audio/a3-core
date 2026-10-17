@@ -1,5 +1,5 @@
 [Unit]
-Description=Screen and sound of this machine for OBS (MPEG-TS listener)
+Description=The picture of this machine's screen for OBS (MPEG-TS listener)
 After=graphical.target
 StartLimitIntervalSec=0
 
