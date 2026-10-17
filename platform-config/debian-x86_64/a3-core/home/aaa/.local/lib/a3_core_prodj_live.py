@@ -81,8 +81,13 @@ def _kind(kind_or_name):
     return kind_of(kind_or_name) or kind_or_name if kind_or_name else kind_or_name
 
 
-def may_switch(origin_kind_or_name, wanted):
+def may_switch(origin_kind_or_name, wanted, prodj_followed):
+    """Whether `origin` may switch LIVE to `wanted`. On only while a pro-DJ
+    app is followed: with none, LIVE lets nobody in and would repeat forever.
+    Off is always taken, from whoever may switch."""
     kind = _kind(origin_kind_or_name)
+    if wanted and not prodj_followed:
+        return False
     if kind == "motion":
         return not wanted
     return kind in SWITCHERS

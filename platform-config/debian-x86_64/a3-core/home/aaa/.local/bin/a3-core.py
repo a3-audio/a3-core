@@ -1617,7 +1617,8 @@ def asker_client(client_address):
 
 def osc_handler_prodj_live(client_address: Tuple[str, int], address: str,
                            *osc_arguments: List[Any]) -> None:
-    """A desk, a pro-DJ app or Motion switches LIVE; Motion only off."""
+    """A desk, a pro-DJ app or Motion switches LIVE; Motion only off, and on
+    only while a pro-DJ app is followed."""
     origin = origin_of(client_address)
     raw = osc_arguments[0] if osc_arguments else None
     traffic.seen(IN, address, raw, origin)
@@ -1626,7 +1627,7 @@ def osc_handler_prodj_live(client_address: Tuple[str, int], address: str,
     except (TypeError, ValueError):
         traffic.unknown(address, raw, origin)
         return
-    if not may_switch(origin, wanted):
+    if not may_switch(origin, wanted, prodj_followed=bool(_desks.hosts_of_kind(PRODJ))):
         return
     if _prodj_live.set(wanted, time.monotonic()):
         print(f"prodj: LIVE {'on' if wanted else 'off'} (by {origin})")

@@ -130,7 +130,7 @@ class Live(unittest.TestCase):
     def test_live_is_switched_only_by_who_may(self):
         source = _source_of("osc_handler_prodj_live")
         self.assertIn("origin = origin_of(client_address)", source)
-        self.assertIn("may_switch(origin,", source)
+        self.assertIn("may_switch(origin, wanted, prodj_followed=bool(_desks.hosts_of_kind(PRODJ)))", source)
         self.assertIn("_prodj_live.set(", source)
         self.assertIn("announce_live(", source)
 

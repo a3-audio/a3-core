@@ -104,21 +104,38 @@ class Admission(unittest.TestCase):
 
 class WhoSwitches(unittest.TestCase):
     def test_motion_may_only_switch_off(self):
-        self.assertTrue(may_switch("motion", False))
-        self.assertFalse(may_switch("motion", True))
-        self.assertTrue(may_switch("prodj", True))
-        self.assertTrue(may_switch("desk", True))
-        self.assertFalse(may_switch("mixer", True))
-        self.assertFalse(may_switch("mixer", False))
+        self.assertTrue(may_switch("motion", False, prodj_followed=True))
+        self.assertFalse(may_switch("motion", True, prodj_followed=True))
+        self.assertTrue(may_switch("prodj", True, prodj_followed=True))
+        self.assertTrue(may_switch("desk", True, prodj_followed=True))
+        self.assertFalse(may_switch("mixer", True, prodj_followed=True))
+        self.assertFalse(may_switch("mixer", False, prodj_followed=True))
 
     def test_a_full_origin_name_counts_by_its_kind(self):
         # C3 hands over origin names such as "prodj@10.0.0.5".
-        self.assertTrue(may_switch("prodj@h", True))
-        self.assertTrue(may_switch("desk@h", False))
-        self.assertTrue(may_switch("motion", False))
-        self.assertFalse(may_switch("motion", True))
-        self.assertFalse(may_switch("mixer@h", True))
+        self.assertTrue(may_switch("prodj@h", True, prodj_followed=True))
+        self.assertTrue(may_switch("desk@h", False, prodj_followed=True))
+        self.assertTrue(may_switch("motion", False, prodj_followed=True))
+        self.assertFalse(may_switch("motion", True, prodj_followed=True))
+        self.assertFalse(may_switch("mixer@h", True, prodj_followed=True))
 
+
+class OnlyWithAProdj(unittest.TestCase):
+    """LIVE lets a pro-DJ app move the room: with none followed, switching
+    it on lets nobody in and would repeat forever. Off is always taken."""
+
+    def test_on_is_refused_while_no_prodj_is_followed(self):
+        for origin in ("desk@h", "prodj@h", "desk", "prodj"):
+            with self.subTest(origin=origin):
+                self.assertFalse(may_switch(origin, True, prodj_followed=False))
+
+    def test_off_is_always_taken(self):
+        for origin in ("desk@h", "prodj@h", "motion"):
+            with self.subTest(origin=origin):
+                self.assertTrue(may_switch(origin, False, prodj_followed=False))
+
+    def test_on_is_taken_while_one_is_followed(self):
+        self.assertTrue(may_switch("desk@h", True, prodj_followed=True))
 
 if __name__ == "__main__":
     unittest.main()
