@@ -1,8 +1,8 @@
-"""PipeWire runs the Core at 44.1 kHz and a block of 128 samples (2026-10-14).
+"""PipeWire runs the Core at 44.1 kHz and a block of 64 samples (2026-10-17; 128 from 2026-10-14).
 
 The rig runs at 44.1 kHz end to end -- REAPER, the stems, the AES67 streams --
 and a driver at 48 kHz would resample every packet. The block never goes below
-128 samples: the AES67 nodes share their PTP clock with every node connected
+64 samples: the AES67 nodes share their PTP clock with every node connected
 to them, and their 0.5 ms packets would otherwise pull the whole graph down to
 32 samples, more than REAPER and the Scarlett keep up with. Both PipeWire
 instances -- the session's and the AES67 one -- get the same settings.
@@ -23,7 +23,7 @@ RATE_FILES = (PIPEWIRE / "pipewire.conf.d/10-a3-rate.conf",
 JACK_FILE = PIPEWIRE / "jack.conf.d/10-a3.conf"
 
 RATE = 44100
-BLOCK = 128
+BLOCK = 64
 
 
 def setting(path, key):
@@ -43,7 +43,7 @@ class BothInstancesRunTheRigsClock(unittest.TestCase):
                 self.assertEqual(int(setting(path, "default.clock.rate")), RATE)
                 self.assertEqual(setting(path, "default.clock.allowed-rates"), f"[ {RATE} ]")
 
-    def test_the_block_is_128_and_never_smaller(self):
+    def test_the_block_is_64_and_never_smaller(self):
         for path in RATE_FILES:
             with self.subTest(config=str(path.relative_to(PIPEWIRE))):
                 self.assertEqual(int(setting(path, "default.clock.quantum")), BLOCK)
