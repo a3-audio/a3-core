@@ -1,10 +1,44 @@
 # a3-engine — the A³ audio engine
 
-**Status 2026-10-16.** Plan 2 is the code that is built here: the channel strip
+**Status 2026-10-17.** Plan 2 and Plan 3 are the code that is built here. Plan 2: the channel strip
 (`src/a3-engine/`: TRIM, 3-band EQ, VOLUME, isolator, level-identical to REAPER's chain, tested in
 `tests/engine/`) and `a3-engine-bench` (`bench/`), a headless JACK client with four strips. The Plan 1
 code described below (`src/a3-audio-engine/`, `tests/unit/`, `host/`) stays **parked and unbuilt**.
 No A³ device runs this engine yet; REAPER remains the audio engine of A³ Core.
+
+## Plan 3: the spatial half
+
+Built: IEM's MultiEncoder and SimpleDecoder/BinauralDecoder compiled from the submodule as nodes
+(`src/iem-adapter/`, `src/iem-nodes/`), the `SpatialBus` (order 3, SN3D, 16 channels: encoder, then
+the rec, main and booth decoders), and the bench's twelve spatial ports next to Plan 2's: `rec_L`,
+`rec_R`, `<zone>_sub` (only when the zone has a sub) and `<zone>_top_1…N` for main and booth. Channel
+positions arrive on the `engine.osc` listener (port 9004) and are clamped like Core. The bench
+registers ports and never connects them.
+
+**Spatial data** (`data/spatial/`, installed to `/usr/share/a3-engine/spatial/`): per zone the speaker
+layout, the decoder and its parameters, plus the encoder inputs. The default is 4.1 for main and
+booth. `data/spatial-reaper-booth-6.1/` (installed beside it) is REAPER's 6.1 booth, for the parity
+run: `--spatial /usr/share/a3-engine/spatial-reaper-booth-6.1`. The bench takes `--spatial DIR`, else
+`~/.config/a3/engine/spatial/` if it exists, else `/usr/share/a3-engine/spatial/`; the package never
+writes `~/.config`. To change the speakers of a zone, copy `/usr/share/a3-engine/spatial/` (or the 6.1
+variant) to `~/.config/a3/engine/spatial/`, edit the decoder JSON and parameters, and restart the
+bench; the ports follow the files.
+
+**Initialise the submodule** (non-recursive; its nested submodules are never used):
+`git submodule update --init third_party/IEMPluginSuite`. In a worktree without network, take it from
+the main checkout:
+`git -C <worktree> -c protocol.file.allow=always -c url./home/aaa/a3-system/a3-engine/third_party/IEMPluginSuite.insteadOf=https://git.iem.at/audioplugins/IEMPluginSuite.git submodule update --init third_party/IEMPluginSuite`.
+
+**Null tests** (opt-in, they need IEM's installed 1.15 VST3s): configure with
+`-DA3_ENGINE_IEM_NULLTESTS=ON` in `build-nulltests/`. Result of 2026-10-17: MultiEncoder
+bit-identical, SimpleDecoder at most 9.6e-6 (about −92 dB re RMS) against the installed 1.15 VST3s,
+BinauralDecoder about −134 dB.
+
+**Package.** `packaging/stage` installs the bench, both data directories and a copyright file that
+carries the MIT, CC BY 3.0 and Apache-2.0 texts (the GPL texts are Debian's
+`/usr/share/common-licenses`). Library dependencies come from `dpkg-shlibdeps`; the bench links only
+libjack, freetype and fontconfig. IEM's editors are compiled in but never opened, so the X11
+libraries JUCE would `dlopen` for a window are not needed.
 
 ## Build and test
 
@@ -35,6 +69,9 @@ unchanged upstream Airwindows plugins in `tests/engine/reference/` (MIT, test-on
   GPL-3.0-or-later AND CC BY 3.0: HRIR data: Benjamin Bernschütz, TH Köln, "A Spherical Far Field HRIR/HRTF Compilation of the Neumann KU 100", Proceedings of the 40th Italian (AIA) Annual Conference on Acoustics and the 39th German Annual Conference on Acoustics (DAGA), Merano 2013; dataset https://zenodo.org/records/3928297, licensed CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/). Binaural IRs rendered from it by IEM (MagLS); headphone EQs by Benjamin Bernschütz.
 - **Roboto** fonts (Google, Apache-2.0), embedded with IEM's editors, never shown.
 - **JUCE** 9.0.3, AGPLv3, as before.
+
+The package copyright (`/usr/share/doc/a3-engine-bench/copyright`) carries the CC BY 3.0 and Apache-2.0
+licence texts and the attribution above.
 
 ## Plan 1, parked 2026-10-06
 
