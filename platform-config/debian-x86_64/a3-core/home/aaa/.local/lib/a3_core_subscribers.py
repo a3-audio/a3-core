@@ -161,3 +161,18 @@ def replace_named(subscribers, client):
             subscribers[index] = client
             return
     raise KeyError(client.name)
+
+
+def add_subscriber(subscribers, client):
+    """Append `client` in place, after the ones that ship, so a recall replays
+    them first as it always has. A desk is added once, when it joins: a second
+    entry under one name would double every message to it."""
+    if any(existing.name == client.name for existing in subscribers):
+        raise ValueError(f"there is already a {client.name}")
+    subscribers.append(client)
+
+
+def drop_named(subscribers, name):
+    """Take the subscriber called `name` out, in place -- every handler holds
+    this one list. Nothing if none is called that."""
+    subscribers[:] = [client for client in subscribers if client.name != name]

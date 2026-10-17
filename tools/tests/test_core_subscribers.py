@@ -18,6 +18,7 @@ TRUTH = ROOT / "platform-config/debian-x86_64/a3-core/usr/share/a3/a3-osc.json"
 
 import a3_osc   # noqa: E402
 from a3_core_subscribers import (SHIPPED, SubscriberError,   # noqa: E402
+                                 add_subscriber, drop_named,
                                  everyone_but, replace_named,
                                  parse_subscriber,
                                  parse_subscribers,
@@ -237,6 +238,34 @@ class TheTwoThatShip(unittest.TestCase):
         """Only so that a replay is reproducible; nothing depends on which
         hears first."""
         self.assertEqual(SHIPPED, ("mixer", "motion"))
+
+
+class GrowingAndShrinking(unittest.TestCase):
+    """A desk joins and leaves while Core runs (a3_core_desks); the list
+    every handler holds changes in place."""
+
+    def test_a_desk_is_added_after_the_ones_that_ship(self):
+        subscribers = [Named("mixer"), Named("motion")]
+        add_subscriber(subscribers, Named("desk@192.168.8.20"))
+        self.assertEqual([c.name for c in subscribers],
+                         ["mixer", "motion", "desk@192.168.8.20"])
+
+    def test_a_name_is_added_once(self):
+        subscribers = [Named("desk@192.168.8.20")]
+        with self.assertRaises(ValueError):
+            add_subscriber(subscribers, Named("desk@192.168.8.20"))
+
+    def test_dropping_keeps_the_same_list(self):
+        subscribers = [Named("mixer"), Named("desk@192.168.8.20")]
+        held = subscribers
+        drop_named(subscribers, "desk@192.168.8.20")
+        self.assertIs(held, subscribers)
+        self.assertEqual([c.name for c in subscribers], ["mixer"])
+
+    def test_dropping_a_name_not_there_is_nothing(self):
+        subscribers = [Named("mixer")]
+        drop_named(subscribers, "desk@192.168.8.99")
+        self.assertEqual([c.name for c in subscribers], ["mixer"])
 
 
 if __name__ == "__main__":

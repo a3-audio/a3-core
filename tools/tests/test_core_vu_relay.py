@@ -33,25 +33,40 @@ def _times(n):
 
 
 class EveryPacket(unittest.TestCase):
-    def run_with(self, packets, destination):
+    def run_with(self, packets, destinations, send=None):
         sent = []
         incoming = iter(packets)
-        forward(lambda: next(incoming), lambda data, to: sent.append((data, to)),
-                destination, running=_times(len(packets)))
+        forward(lambda: next(incoming), send or (lambda data, to: sent.append((data, to))),
+                destinations, running=_times(len(packets)))
         return sent
 
     def test_goes_on_unchanged_to_a_remote_motion(self):
-        sent = self.run_with([BUNDLE, b"x"], lambda: ("192.168.8.20", 7772))
+        sent = self.run_with([BUNDLE, b"x"], lambda: [("192.168.8.20", 7772)])
         self.assertEqual(sent, [(BUNDLE, ("192.168.8.20", 7772)),
                                 (b"x", ("192.168.8.20", 7772))])
 
-    def test_is_dropped_with_the_rigs_own(self):
-        self.assertEqual(self.run_with([BUNDLE], lambda: None), [])
+    def test_is_dropped_with_nobody_to_tell(self):
+        self.assertEqual(self.run_with([BUNDLE], lambda: []), [])
 
-    def test_follows_the_target_as_it_moves(self):
-        targets = iter([None, ("192.168.8.20", 7772), None])
+    def test_follows_the_targets_as_they_move(self):
+        targets = iter([[], [("192.168.8.20", 7772)], []])
         sent = self.run_with([b"1", b"2", b"3"], lambda: next(targets))
         self.assertEqual(sent, [(b"2", ("192.168.8.20", 7772))])
+
+    def test_every_desk_and_the_motion_get_each_packet(self):
+        to = [("192.168.8.20", 7772), ("192.168.8.20", 7774), ("192.168.8.30", 7774)]
+        sent = self.run_with([BUNDLE], lambda: to)
+        self.assertEqual([where for _, where in sent], to)
+
+    def test_one_gone_desk_does_not_starve_the_others(self):
+        sent = []
+
+        def send(data, to):
+            if to[0] == "192.168.8.30":
+                raise OSError("unreachable")
+            sent.append(to)
+        self.run_with([BUNDLE], lambda: [("192.168.8.30", 7774), ("192.168.8.20", 7774)], send)
+        self.assertEqual(sent, [("192.168.8.20", 7774)])
 
     def test_a_failed_send_does_not_stop_the_relay(self):
         """A remote Motion that went away is an ICMP error on the next send;
@@ -64,7 +79,7 @@ class EveryPacket(unittest.TestCase):
             sent.append(data)
 
         incoming = iter([b"1", b"2"])
-        forward(lambda: next(incoming), send, lambda: ("10.0.0.5", 1),
+        forward(lambda: next(incoming), send, lambda: [("10.0.0.5", 1)],
                 running=_times(2))
         self.assertEqual(sent, [b"2"])
 
@@ -78,7 +93,7 @@ class OnARealSocket(unittest.TestCase):
         motion.settimeout(2)
         sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sender.sendto(BUNDLE, inbox.getsockname())
-        relay(inbox, lambda: motion.getsockname(), running=_times(1))
+        relay(inbox, lambda: [motion.getsockname()], running=_times(1))
         self.assertEqual(motion.recv(1024), BUNDLE)
         for s in (inbox, motion, sender):
             s.close()
