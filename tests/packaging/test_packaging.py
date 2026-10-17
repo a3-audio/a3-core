@@ -23,6 +23,12 @@ def control_fields():
     return fields
 
 
+class BenchRulesTest(unittest.TestCase):
+    def test_bench_never_connects_ports(self):
+        for source in (ROOT / "bench").glob("*.cpp"):
+            self.assertNotIn("jack_connect", source.read_text(), source.name)
+
+
 class StageTest(unittest.TestCase):
     def test_files_installs_the_bench_executable(self):
         with tempfile.TemporaryDirectory() as tmp:

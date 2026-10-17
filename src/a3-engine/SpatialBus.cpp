@@ -50,6 +50,19 @@ SpatialBus::SpatialBus (const SpatialConfig& config) : sources (config.sources)
 
 SpatialBus::~SpatialBus() = default;
 
+std::unique_ptr<SpatialBus> SpatialBus::create (const SpatialConfig& config, juce::String& error)
+{
+    try
+    {
+        return std::make_unique<SpatialBus> (config);
+    }
+    catch (const std::exception& e)
+    {
+        error = e.what();
+        return nullptr;
+    }
+}
+
 void SpatialBus::buildEncoder (const SpatialConfig& config)
 {
     encoder = createNode (IemKind::multiEncoder, numEncoderSources, busChannels, "encoder");

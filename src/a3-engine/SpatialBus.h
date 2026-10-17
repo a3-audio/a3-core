@@ -30,6 +30,9 @@ public:
     explicit SpatialBus (const SpatialConfig&);    // builds and configures the four nodes (allocates); throws std::runtime_error when IEM refuses
     ~SpatialBus();
 
+    // The constructor without the exception: nullptr and the reason in `error` when IEM refuses the config.
+    static std::unique_ptr<SpatialBus> create (const SpatialConfig&, juce::String& error);
+
     void prepare (double sampleRate, int blockSize);   // allocates; warm-up
     int preparedBlockSize() const;
 

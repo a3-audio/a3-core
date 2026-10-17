@@ -9,6 +9,7 @@
 #include <vector>
 #include <juce_core/juce_core.h>
 #include "ChannelStrip.h"
+#include "SpatialBus.h"
 
 namespace a3bench
 {
@@ -25,6 +26,18 @@ struct ControlMap
     std::vector<Entry> entries;
 };
 
+// The channel positions (channel.azimuth / channel.elevation), degrees.
+struct PositionMap
+{
+    struct Entry
+    {
+        juce::String prefix, suffix;
+        int firstChannel = 1, lastChannel = 1;
+        bool elevation = false;
+    };
+    std::vector<Entry> entries;
+};
+
 // --meters-osc=HOST:PORT. There is no default target: the /vu/51-66 addresses are
 // the analyzer's live ones, so the destination is always the caller's choice.
 struct MetersTarget { juce::String host; int port = 0; };
@@ -34,6 +47,7 @@ bool parseMetersTarget (const std::string& argument, MetersTarget& out);
 struct Truth
 {
     ControlMap controls;
+    PositionMap positions;
     int enginePort = -1;                  // listener "engine.osc"
     juce::String engineBindAddress;       // its host name resolved through the truth's hosts ("local" is loopback)
     juce::String vuPattern;               // "/vu/{n}"
@@ -47,7 +61,7 @@ struct Truth
 };
 
 // nullopt for text that is not the truth or lacks what the bench needs (the
-// engine listener, any of the eight control keys, the vu pattern).
+// engine listener, any of the eight control keys, channel.azimuth or channel.elevation, the vu pattern).
 std::optional<Truth> parseTruth (const juce::String& jsonText);
 
 // "/channel/3/volume" 0.7 sets strip 2's volume; false (and nothing changed)
@@ -55,4 +69,9 @@ std::optional<Truth> parseTruth (const juce::String& jsonText);
 // non-finite value. Finite values are clamped to the wire's 0..1.
 bool applyChannelMessage (const ControlMap& map, const juce::String& address, float value,
                           std::array<a3::StripControls*, 4>& strips);
+
+// "/channel/2/azimuth" 200 sets azimuth[1] to 180: clamped to +-180 (azimuth) or
+// +-90 (elevation) like Core. false (nothing changed) for a non-finite value, an
+// address the map does not own, or a channel outside the truth's range or 1..4.
+bool applyPositionMessage (const PositionMap&, const juce::String& address, float value, a3::SpatialControls&);
 }

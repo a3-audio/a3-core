@@ -10,6 +10,9 @@
 #include "ChannelStrip.h"
 #include "Generator.h"
 #include "OscControl.h"
+#include "SpatialBus.h"
+#include "SpatialBusFixture.h"
+#include "SpatialPorts.h"
 
 namespace
 {
@@ -243,4 +246,153 @@ TEST (BenchMetersTarget, AListenersPortIsFlaggedByName)
     ASSERT_TRUE (truth.has_value());
     EXPECT_TRUE (truth->listenerOnPort (7772).contains ("motion.vu"));
     EXPECT_TRUE (truth->listenerOnPort (9100).isEmpty());
+}
+
+TEST (BenchOsc, TheTruthNamesThePositionKeys)
+{
+    const auto truth = a3bench::parseTruth (truthText());
+    ASSERT_TRUE (truth.has_value());
+    ASSERT_EQ (truth->positions.entries.size(), 2u);
+    for (const auto& e : truth->positions.entries)
+    {
+        EXPECT_EQ (e.firstChannel, 1);
+        EXPECT_EQ (e.lastChannel, 4);
+    }
+    EXPECT_NE (truth->positions.entries[0].elevation, truth->positions.entries[1].elevation);
+}
+
+TEST (BenchOsc, ATruthWithoutPositionsIsRefused)
+{
+    for (const char* key : { "channel.azimuth", "channel.elevation" })
+    {
+        auto text = juce::String (truthText());
+        ASSERT_TRUE (text.contains (juce::String ("\"") + key + "\""));
+        EXPECT_FALSE (a3bench::parseTruth (text.replace (juce::String ("\"") + key + "\"", "\"channel.other\"")).has_value()) << key;
+    }
+}
+
+namespace
+{
+struct Positions
+{
+    a3bench::Truth truth;
+    a3::SpatialControls controls;
+    Positions() : truth (*a3bench::parseTruth (truthText())) {}
+    bool apply (const char* address, float value) { return a3bench::applyPositionMessage (truth.positions, address, value, controls); }
+};
+}
+
+TEST (BenchOsc, PositionsAreClampedLikeCore)
+{
+    Positions p;
+    EXPECT_TRUE (p.apply ("/channel/2/azimuth", 37.5f));
+    EXPECT_EQ (p.controls.azimuth[1].load(), 37.5f);
+    EXPECT_TRUE (p.apply ("/channel/2/azimuth", 200.0f));
+    EXPECT_EQ (p.controls.azimuth[1].load(), 180.0f);
+    EXPECT_TRUE (p.apply ("/channel/2/azimuth", -200.0f));
+    EXPECT_EQ (p.controls.azimuth[1].load(), -180.0f);
+    EXPECT_TRUE (p.apply ("/channel/4/elevation", 100.0f));
+    EXPECT_EQ (p.controls.elevation[3].load(), 90.0f);
+    EXPECT_TRUE (p.apply ("/channel/4/elevation", -95.0f));
+    EXPECT_EQ (p.controls.elevation[3].load(), -90.0f);
+}
+
+TEST (BenchOsc, NonFinitePositionsAreRefused)
+{
+    Positions p;
+    p.apply ("/channel/1/azimuth", 12.0f);
+    for (float bad : { std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
+                       -std::numeric_limits<float>::infinity() })
+    {
+        EXPECT_FALSE (p.apply ("/channel/1/azimuth", bad));
+        EXPECT_FALSE (p.apply ("/channel/1/elevation", bad));
+    }
+    EXPECT_EQ (p.controls.azimuth[0].load(), 12.0f);
+    EXPECT_EQ (p.controls.elevation[0].load(), 0.0f);
+}
+
+TEST (BenchOsc, PositionsOutsideTheChannelsAreRefused)
+{
+    Positions p;
+    EXPECT_FALSE (p.apply ("/channel/5/azimuth", 10.0f));
+    EXPECT_FALSE (p.apply ("/channel/0/azimuth", 10.0f));
+    EXPECT_FALSE (p.apply ("/channel/1/azimuthx", 10.0f));
+    EXPECT_FALSE (p.apply ("/channel//azimuth", 10.0f));
+    EXPECT_FALSE (p.apply ("/master/azimuth", 10.0f));
+    for (int i = 0; i < 4; ++i)
+        EXPECT_EQ (p.controls.azimuth[i].load(), 0.0f);
+}
+
+TEST (BenchOsc, StripKeysAndPositionKeysDoNotCatchEachOther)
+{
+    Positions p;
+    Strips strips;
+    auto pointers = strips.pointers();
+    EXPECT_FALSE (p.apply ("/channel/1/volume", 0.5f));
+    EXPECT_FALSE (a3bench::applyChannelMessage (p.truth.controls, "/channel/1/azimuth", 0.5f, pointers));
+    EXPECT_FALSE (a3bench::applyChannelMessage (p.truth.controls, "/channel/1/elevation", 0.5f, pointers));
+}
+
+TEST (BenchPorts, TheTwelveNamesInOrder)
+{
+    const auto config = a3test::loadedSpatialConfig (a3test::shippedSpatialDirectory);
+    const std::vector<std::string> expected { "rec_L", "rec_R", "main_sub", "main_top_1", "main_top_2", "main_top_3",
+                                              "main_top_4", "booth_sub", "booth_top_1", "booth_top_2", "booth_top_3",
+                                              "booth_top_4" };
+    EXPECT_EQ (a3bench::spatialPortNames (config), expected);
+}
+
+TEST (BenchPorts, TheReaperBoothGivesFourteen)
+{
+    const auto config = a3test::loadedSpatialConfig (a3test::reaperBoothSpatialDirectory);
+    const std::vector<std::string> expected { "rec_L", "rec_R", "main_sub", "main_top_1", "main_top_2", "main_top_3",
+                                              "main_top_4", "booth_sub", "booth_top_1", "booth_top_2", "booth_top_3",
+                                              "booth_top_4", "booth_top_5", "booth_top_6" };
+    EXPECT_EQ (a3bench::spatialPortNames (config), expected);
+}
+
+TEST (BenchPorts, CountsFollowTheLayout)
+{
+    auto config = a3test::loadedSpatialConfig (a3test::shippedSpatialDirectory);
+    config.booth.layout.topChannels.resize (2);
+    const auto names = a3bench::spatialPortNames (config);
+    EXPECT_EQ (names.size(), 10u);
+    EXPECT_EQ (names[names.size() - 2], "booth_top_1");
+    EXPECT_EQ (names.back(), "booth_top_2");
+}
+
+TEST (BenchPorts, AZoneWithoutSubHasNoSubPort)
+{
+    auto config = a3test::loadedSpatialConfig (a3test::shippedSpatialDirectory);
+    config.main.layout.subChannel = 0;
+    const auto names = a3bench::spatialPortNames (config);
+    EXPECT_EQ (names.size(), 11u);
+    EXPECT_EQ (std::count (names.begin(), names.end(), "main_sub"), 0);
+    EXPECT_EQ (std::count (names.begin(), names.end(), "booth_sub"), 1);
+}
+
+TEST (BenchSpatialDirectory, TheArgumentWinsThenTheUserConfigThenThePackage)
+{
+    const auto everythingExists = [] (const std::string&) { return true; };
+    const auto nothingExists = [] (const std::string&) { return false; };
+    EXPECT_EQ (a3bench::chooseSpatialDirectory ("/x/data", "/home/u", everythingExists), "/x/data");
+    EXPECT_EQ (a3bench::chooseSpatialDirectory ("", "/home/u", everythingExists), "/home/u/.config/a3/engine/spatial");
+    EXPECT_EQ (a3bench::chooseSpatialDirectory ("", "/home/u", nothingExists), "/usr/share/a3-engine/spatial");
+    EXPECT_EQ (a3bench::chooseSpatialDirectory ("", "", everythingExists), "/usr/share/a3-engine/spatial");
+}
+
+TEST (BenchSpatialBus, ABadConfigEndsInAnErrorNotAnException)
+{
+    auto config = a3test::loadedSpatialConfig (a3test::shippedSpatialDirectory);
+    juce::String error;
+    EXPECT_NE (a3::SpatialBus::create (config, error), nullptr);
+    EXPECT_TRUE (error.isEmpty());
+
+    config.encoderParameters = juce::var (new juce::DynamicObject());
+    config.encoderParameters.getDynamicObject()->setProperty ("noSuchParameter", 1.0);
+    error = {};
+    std::unique_ptr<a3::SpatialBus> bus;
+    EXPECT_NO_THROW (bus = a3::SpatialBus::create (config, error));
+    EXPECT_EQ (bus, nullptr);
+    EXPECT_TRUE (error.isNotEmpty());
 }

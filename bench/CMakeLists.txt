@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 # The pure parts (generator, OSC mapping, block timer): always built, the tests link them.
-add_library(a3-engine-bench-lib STATIC Generator.cpp OscControl.cpp)
+add_library(a3-engine-bench-lib STATIC Generator.cpp OscControl.cpp SpatialPorts.cpp)
 target_include_directories(a3-engine-bench-lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(a3-engine-bench-lib PUBLIC a3-engine)
 target_compile_options(a3-engine-bench-lib PRIVATE -Wall -Wextra -Werror=switch)

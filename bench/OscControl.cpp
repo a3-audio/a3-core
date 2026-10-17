@@ -36,6 +36,14 @@ std::optional<ControlMap::Entry> entryFrom (const juce::var& address, std::atomi
     return e;
 }
 
+std::optional<PositionMap::Entry> positionEntryFrom (const juce::var& address, bool elevation)
+{
+    const auto entry = entryFrom (address, nullptr);
+    if (! entry)
+        return std::nullopt;
+    return PositionMap::Entry { entry->prefix, entry->suffix, entry->firstChannel, entry->lastChannel, elevation };
+}
+
 int portOfListener (const juce::var& listeners, const juce::String& name)
 {
     for (int i = 0; i < listeners.size(); ++i)
@@ -115,6 +123,14 @@ std::optional<Truth> parseTruth (const juce::String& jsonText)
         truth.controls.entries.push_back (*entry);
     }
 
+    for (const bool elevation : { false, true })
+    {
+        auto entry = positionEntryFrom (addresses[elevation ? "channel.elevation" : "channel.azimuth"], elevation);
+        if (! entry)
+            return std::nullopt;
+        truth.positions.entries.push_back (*entry);
+    }
+
     const auto all = root["listeners"];
     for (int i = 0; i < all.size(); ++i)
         truth.listeners.emplace_back (all[i]["name"].toString(), (int) all[i]["port"]);
@@ -129,6 +145,24 @@ std::optional<Truth> parseTruth (const juce::String& jsonText)
     return truth;
 }
 
+namespace
+{
+// The strip (1..4) an entry's pattern names in the address, 0 if the address is not the entry's.
+template <typename Entry>
+int stripOfAddress (const Entry& entry, const juce::String& address, int numStrips)
+{
+    if (! address.startsWith (entry.prefix) || ! address.endsWith (entry.suffix)
+        || address.length() <= entry.prefix.length() + entry.suffix.length())
+        return 0;
+    int channel = 0;
+    const auto middle = address.substring (entry.prefix.length(), address.length() - entry.suffix.length());
+    if (! channelNumber (middle, channel) || channel < entry.firstChannel || channel > entry.lastChannel
+        || channel < 1 || channel > numStrips)
+        return 0;
+    return channel;
+}
+}
+
 bool applyChannelMessage (const ControlMap& map, const juce::String& address, float value,
                           std::array<a3::StripControls*, 4>& strips)
 {
@@ -136,15 +170,28 @@ bool applyChannelMessage (const ControlMap& map, const juce::String& address, fl
         return false;
     for (const auto& entry : map.entries)
     {
-        if (! address.startsWith (entry.prefix) || ! address.endsWith (entry.suffix)
-            || address.length() <= entry.prefix.length() + entry.suffix.length())
-            continue;
-        int channel = 0;
-        const auto middle = address.substring (entry.prefix.length(), address.length() - entry.suffix.length());
-        if (! channelNumber (middle, channel) || channel < entry.firstChannel || channel > entry.lastChannel
-            || channel < 1 || channel > (int) strips.size())
+        const int channel = stripOfAddress (entry, address, (int) strips.size());
+        if (channel == 0)
             continue;
         (strips[(size_t) channel - 1]->*entry.member).store (std::clamp (value, 0.0f, 1.0f));
+        return true;
+    }
+    return false;
+}
+
+bool applyPositionMessage (const PositionMap& map, const juce::String& address, float value,
+                           a3::SpatialControls& controls)
+{
+    if (! std::isfinite (value))
+        return false;
+    for (const auto& entry : map.entries)
+    {
+        const int channel = stripOfAddress (entry, address, a3::numSpatialStrips);
+        if (channel == 0)
+            continue;
+        const float limit = entry.elevation ? 90.0f : 180.0f;
+        auto& target = entry.elevation ? controls.elevation[channel - 1] : controls.azimuth[channel - 1];
+        target.store (std::clamp (value, -limit, limit));
         return true;
     }
     return false;
