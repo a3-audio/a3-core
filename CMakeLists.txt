@@ -19,10 +19,12 @@ if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/IEMPluginSuite/MultiEncode
 endif()
 
 # JUCE's way for module code outside an app: a library of its own that carries
-# the modules and their definitions, as StemDeck's tests do.
+# the modules and their definitions, as StemDeck's tests do. The modules are
+# PRIVATE: a juce:: target hands its module .cpp files to every target that
+# links it publicly, so each consumer would compile its own copy of JUCE.
 add_library(a3-engine-juce STATIC)
 target_link_libraries(a3-engine-juce
-    PUBLIC juce::juce_audio_basics juce::juce_core juce::juce_osc juce::juce_recommended_config_flags
+    PRIVATE juce::juce_audio_basics juce::juce_core juce::juce_osc juce::juce_recommended_config_flags
     juce::juce_audio_processors juce::juce_dsp juce::juce_opengl)
 # JUCE_MODAL_LOOPS_PERMITTED is IEM's global definition; it changes module code,
 # so it has to be on the library that compiles the modules.

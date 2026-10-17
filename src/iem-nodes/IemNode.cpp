@@ -71,10 +71,13 @@ void IemNode::prepare (double sampleRate, int newBlockSize)
     parts.processor->prepareToPlay (sampleRate, blockSize);
 
     // IEM allocates lazily on the first block after an I/O change; the warm-up
-    // takes that allocation here, so the first audio callback does not.
+    // takes that allocation here, so the first audio callback does not. Off the
+    // audio thread the lock may block: the warm-up must never be skipped.
     juce::AudioBuffer<float> silence (ioChannels(), blockSize);
     silence.clear();
-    process (silence);
+    juce::ScopedNoDenormals noDenormals;
+    const juce::ScopedLock lock (parts.processor->getCallbackLock());
+    parts.processor->processBlock (silence, noMidi);
 }
 
 int IemNode::preparedBlockSize() const
@@ -84,6 +87,8 @@ int IemNode::preparedBlockSize() const
 
 void IemNode::process (juce::AudioBuffer<float>& io)
 {
+    jassert (io.getNumChannels() >= ioChannels());
+    jassert (io.getNumSamples() <= blockSize);
     juce::ScopedNoDenormals noDenormals;
     // IEM swaps its I/O buffers under the callback lock when a setting changes
     // on the message thread; never wait for it on the audio thread.
