@@ -24,6 +24,17 @@ unchanged upstream Airwindows plugins in `tests/engine/reference/` (MIT, test-on
 - `a3-engine-bench` never connects anything. It reads the truth at runtime from `--truth FILE`
   (default `/usr/share/a3/a3-osc.json`).
 
+## Third-party code and data
+
+- **IEM Plug-in Suite** (Institute of Electronic Music and Acoustics, Graz), GPL-3.0-or-later,
+  v1.16.0, a git submodule at `third_party/IEMPluginSuite`, compiled from source, unchanged (no file
+  in it is edited; its own nested submodules are not used). Initialise it with
+  `git submodule update --init third_party/IEMPluginSuite` (not `--recursive`); CMake stops with that
+  message when it is missing.
+- **KU100 HRIR data** in IEM's BinauralDecoder (`BinauralDecoder/Source/IRs/*.wav`, `EQ/*.wav`),
+  GPL-3.0-or-later AND CC BY 3.0: HRIR data: Benjamin Bernschütz, TH Köln, "A Spherical Far Field HRIR/HRTF Compilation of the Neumann KU 100", Proceedings of the 40th Italian (AIA) Annual Conference on Acoustics and the 39th German Annual Conference on Acoustics (DAGA), Merano 2013; dataset https://zenodo.org/records/3928297, licensed CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/). Binaural IRs rendered from it by IEM (MagLS); headphone EQs by Benjamin Bernschütz.
+- **Roboto** fonts (Google, Apache-2.0), embedded with IEM's editors, never shown.
+- **JUCE** 9.0.3, AGPLv3, as before.
 
 ## Plan 1, parked 2026-10-06
 

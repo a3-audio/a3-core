@@ -14,21 +14,32 @@ endif()
 
 find_package(JUCE CONFIG REQUIRED)
 
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/IEMPluginSuite/MultiEncoder/Source/PluginProcessor.cpp)
+    message(FATAL_ERROR "third_party/IEMPluginSuite is not initialised: git submodule update --init third_party/IEMPluginSuite (not --recursive)")
+endif()
+
 # JUCE's way for module code outside an app: a library of its own that carries
 # the modules and their definitions, as StemDeck's tests do.
 add_library(a3-engine-juce STATIC)
 target_link_libraries(a3-engine-juce
-    PUBLIC juce::juce_audio_basics juce::juce_core juce::juce_osc juce::juce_recommended_config_flags)
+    PUBLIC juce::juce_audio_basics juce::juce_core juce::juce_osc juce::juce_recommended_config_flags
+    juce::juce_audio_processors juce::juce_dsp juce::juce_opengl)
+# JUCE_MODAL_LOOPS_PERMITTED is IEM's global definition; it changes module code,
+# so it has to be on the library that compiles the modules.
 target_compile_definitions(a3-engine-juce PUBLIC JUCE_STANDALONE_APPLICATION=1
-    JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0)
+    JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_MODAL_LOOPS_PERMITTED=1)
 target_compile_definitions(a3-engine-juce INTERFACE $<TARGET_PROPERTY:a3-engine-juce,COMPILE_DEFINITIONS>)
 target_include_directories(a3-engine-juce INTERFACE $<TARGET_PROPERTY:a3-engine-juce,INCLUDE_DIRECTORIES>)
+
+include(cmake/A3IemNodes.cmake)
+include(third_party/IEMPluginSuite/Versions.cmake)   # only set()s the plug-in versions
+a3_add_iem_nodes("" a3-engine-juce)
 
 add_library(a3-engine STATIC src/a3-engine/Laws.cpp src/a3-engine/PurestGain.cpp
     src/a3-engine/SmoothEQ3.cpp src/a3-engine/Isolator3.cpp src/a3-engine/Meters.cpp
     src/a3-engine/ChannelStrip.cpp)
 target_include_directories(a3-engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/a3-engine)
-target_link_libraries(a3-engine PUBLIC a3-engine-juce)
+target_link_libraries(a3-engine PUBLIC a3-engine-juce a3-iem)
 target_compile_options(a3-engine PRIVATE -Wall -Wextra -Werror=switch)
 
 add_subdirectory(bench)

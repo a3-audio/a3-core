@@ -3,7 +3,8 @@ Upstream-Name: a3-engine
 Upstream-Contact: A³ Audio
 Source: https://github.com/a3-audio/a3-engine
 
-Files: src/* tests/* host/* CMakeLists.txt build.sh test.sh .gitignore bench/*
+Files: src/* tests/* host/* CMakeLists.txt build.sh test.sh .gitignore bench/* cmake/* data/*
+ src/iem-adapter/* src/iem-nodes/*
 Copyright: 2023-2026 A³ Audio contributors
 License: GPL-3.0-or-later
 
@@ -24,3 +25,18 @@ License: CC-BY-SA-4.0
 Files: packaging/*
 Copyright: 2026 A³ Audio contributors
 License: GPL-3.0-or-later
+
+Files: third_party/IEMPluginSuite/*
+Copyright: 2017-2026 Institute of Electronic Music and Acoustics (IEM), Graz
+License: GPL-3.0-or-later
+
+Files: third_party/IEMPluginSuite/BinauralDecoder/Source/IRs/*.wav
+ third_party/IEMPluginSuite/BinauralDecoder/Source/EQ/*.wav
+Copyright: 2013 Benjamin Bernschütz, TH Köln
+ 2017-2026 Institute of Electronic Music and Acoustics (IEM), Graz
+License: GPL-3.0-or-later AND CC-BY-3.0
+Comment: HRIR data: Benjamin Bernschütz, TH Köln, "A Spherical Far Field HRIR/HRTF Compilation of the Neumann KU 100", Proceedings of the 40th Italian (AIA) Annual Conference on Acoustics and the 39th German Annual Conference on Acoustics (DAGA), Merano 2013; dataset https://zenodo.org/records/3928297, licensed CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/). Binaural IRs rendered from it by IEM (MagLS); headphone EQs by Benjamin Bernschütz.
+
+Files: third_party/IEMPluginSuite/resources/lookAndFeel/Roboto-*.ttf
+Copyright: 2012 Google
+License: Apache-2.0
