@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local/lib"))
 
 from a3_core_desks import (JOINED, KNOWN, MAX_DESKS, REFUSED, REFUSED_FIRST,  # noqa: E402
-                           DeskFollowers, desk_name)
+                           DESK, PRODJ, DeskFollowers, desk_name, kind_of)
 
 PORT, VU = 7773, 7774
 
@@ -101,3 +101,35 @@ class Meters(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Kinds(unittest.TestCase):
+    def test_a_prodj_is_named_by_its_kind(self):
+        desks = followers()
+        desks.hello("h", 0.0, kind=PRODJ)
+        self.assertEqual(desks.name_of("h", PORT), "prodj@h")
+
+    def test_the_default_kind_is_desk(self):
+        desks = followers()
+        desks.hello("h", 0.0)
+        self.assertEqual(desks.name_of("h", PORT), desk_name("h"))
+        self.assertEqual(desk_name("h"), "desk@h")
+
+    def test_hosts_of_kind(self):
+        desks = followers()
+        desks.hello("a", 0.0)
+        desks.hello("b", 0.0, kind=PRODJ)
+        self.assertEqual(desks.hosts_of_kind(PRODJ), ["b"])
+        self.assertEqual(desks.hosts_of_kind(DESK), ["a"])
+
+    def test_kind_of_a_name(self):
+        self.assertEqual(kind_of("prodj@h"), "prodj")
+        self.assertEqual(kind_of("desk@h"), "desk")
+        self.assertIsNone(kind_of("motion"))
+
+    def test_a_known_host_saying_another_kind_takes_it_and_stays_known(self):
+        desks = followers()
+        desks.hello("h", 0.0)
+        self.assertEqual(desks.hello("h", 1.0, kind=PRODJ), KNOWN)
+        self.assertEqual(desks.name_of("h", PORT), "prodj@h")
+        self.assertEqual(desks.hosts_of_kind(DESK), [])
