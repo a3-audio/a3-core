@@ -1579,15 +1579,10 @@ def tell_prodj_where(device, host):
 
 
 def tell_prodj(client):
-    """A pro-DJ app that has just joined or recalled: the positions Core
-    knows (a position is not replayed to anyone else), where Motion and
-    StemDeck run, and LIVE."""
-    for channel_index, info in enumerate(channel_infos):
-        for key, position in (("channel.azimuth", info.azimuth),
-                              ("channel.elevation", info.elevation)):
-            if position is not None:
-                client.send_message(
-                    _truth.address(key, ch=channel_index + 1), position)
+    """A pro-DJ app that has just joined or recalled: where Motion and
+    StemDeck run, and LIVE. Not the positions: the replay just before this
+    (say_the_whole_state, which remembers them) has reached it as a
+    subscriber already."""
     places = (("motion", _motion.followed),
               ("stemdeck", _stemdeck_watch.host if _stemdeck_client is not None else None))
     for device, host in places:

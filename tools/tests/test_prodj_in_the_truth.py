@@ -38,10 +38,35 @@ class TheProdjIsAProgram(unittest.TestCase):
         self.assertIn("prodj", addresses["core.here"]["to"])
 
 
+class TheAppSendsWhatTheDeskSends(unittest.TestCase):
+    """The app carries the desk's own panel (a3-desk's DeskComponent): every
+    word the desk sends, the app sends too -- the panel's TAP among them."""
+
+    def test_every_desk_word_is_a_prodj_word(self):
+        for key, entry in TRUTH.addresses().items():
+            if "desk" in entry.get("from", []):
+                with self.subTest(key=key):
+                    self.assertIn("prodj", entry["from"])
+
+    def test_the_tap_reaches_the_analyzer(self):
+        routes = {(r["from"], r["to"], r.get("carries")) for r in TRUTH.routes()}
+        self.assertIn(("prodj", "beat-analyzer.clock", None), routes)
+
+
 class ThePositionsGoToTheProdjOnly(unittest.TestCase):
     def test_only_the_prodj_hears_positions(self):
         for key in ("channel.azimuth", "channel.elevation"):
             self.assertEqual(TRUTH.addresses()[key]["relayed_to"], ["prodj"], key)
+
+    def test_the_meaning_says_a_recall_replays_them_to_everyone(self):
+        """Live positions go to the pro-DJ apps only; a recall replays the
+        last one to every subscriber, as before (a3_core_recall)."""
+        for key in ("channel.azimuth", "channel.elevation"):
+            meaning = TRUTH.addresses()[key]["meaning"]
+            with self.subTest(key=key):
+                self.assertIn("live only to the pro-DJ apps followed", meaning)
+                self.assertIn("a recall replays the last one to everyone, as before", meaning)
+                self.assertNotIn("no one else", meaning)
 
 
 class TheLiveState(unittest.TestCase):

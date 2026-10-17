@@ -56,13 +56,25 @@ class Joining(unittest.TestCase):
 
 
 class WhatAProdjIsTold(unittest.TestCase):
-    def test_tell_prodj_sends_positions_places_and_live(self):
+    def test_tell_prodj_sends_places_and_live(self):
         source = _source_of("tell_prodj")
-        self.assertIn("channel.azimuth", source)
-        self.assertIn("channel.elevation", source)
         self.assertIn("is not None", source)
         self.assertIn("core.device-at", source)
         self.assertIn("prodj.live", source)
+
+    def test_the_positions_reach_a_joining_or_recalling_prodj_once(self):
+        """The replay already carries them (a3_core_recall remembers the
+        positions) and reaches the pro-DJ as a subscriber: tell_prodj sending
+        them again was a second copy."""
+        self.assertNotIn("channel.azimuth", _source_of("tell_prodj"))
+        self.assertNotIn("channel.elevation", _source_of("tell_prodj"))
+        joining = _source_of("desk_said_hello")
+        self.assertLess(joining.index("add_subscriber(subscribers, client)"),
+                        joining.index("say_the_whole_state()"))
+        self.assertLess(joining.index("say_the_whole_state()"), joining.index("tell_prodj(client)"))
+        recall = _source_of("osc_handler_recall")
+        self.assertLess(recall.index("say_the_whole_state()"), recall.index("tell_prodj(asker)"))
+        self.assertIn("for client in subscribers:", _source_of("say_the_whole_state"))
 
     def test_positions_reach_the_prodj_after_iem(self):
         for branch in ("azimuth", "elevation"):
