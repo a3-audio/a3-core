@@ -14,6 +14,7 @@ byte-for-byte copy of this file.
 """
 
 import argparse
+import collections
 import os
 import selectors
 import signal
@@ -28,6 +29,37 @@ KILL_AFTER = 2.0
 TICK = 0.1
 
 
+class _Backlog:
+    """Chunks not yet written, shared with every other viewer's backlog.
+
+    The chunk objects are never copied or resized: a slow viewer costs a
+    deque slot per chunk, not a memmove of megabytes per loop pass.
+    """
+
+    def __init__(self):
+        self.chunks = collections.deque()
+        self.offset = 0  # bytes of chunks[0] already sent
+        self.size = 0
+
+    def append(self, chunk):
+        self.chunks.append(chunk)
+        self.size += len(chunk)
+
+    def head(self):
+        return memoryview(self.chunks[0])[self.offset:]
+
+    def advance(self, n):
+        self.size -= n
+        while n:
+            left = len(self.chunks[0]) - self.offset
+            if n < left:
+                self.offset += n
+                return
+            n -= left
+            self.chunks.popleft()
+            self.offset = 0
+
+
 class Fanout:
     """Per-viewer backlog of bytes not yet written."""
 
@@ -39,24 +71,29 @@ class Fanout:
     def add(self, viewer):
         if len(self._backlog) >= self._max:
             return False
-        self._backlog[viewer] = bytearray()
+        self._backlog[viewer] = _Backlog()
         return True
 
     def feed(self, chunk):
         """Queue the chunk for everyone; return the viewers dropped for lagging."""
         dropped = []
         for viewer, backlog in list(self._backlog.items()):
-            backlog += chunk
-            if len(backlog) > self._limit:
+            backlog.append(chunk)
+            if backlog.size > self._limit:
                 del self._backlog[viewer]
                 dropped.append(viewer)
         return dropped
 
+    def has_pending(self, viewer):
+        return self._backlog[viewer].size > 0
+
     def pending(self, viewer):
-        return bytes(self._backlog[viewer])
+        """The unsent rest of the oldest chunk, as a view (empty if nothing waits)."""
+        backlog = self._backlog[viewer]
+        return backlog.head() if backlog.size else memoryview(b"")
 
     def sent(self, viewer, n):
-        del self._backlog[viewer][:n]
+        self._backlog[viewer].advance(n)
 
     def remove(self, viewer):
         self._backlog.pop(viewer, None)
@@ -104,7 +141,7 @@ class _Encoder:
         process, self.process = self.process, None
         if process is None:
             return
-        selector.unregister(process.stdout)
+        _unwatch(selector, process.stdout)
         process.terminate()
         try:
             process.wait(KILL_AFTER)
@@ -115,6 +152,13 @@ class _Encoder:
 
     def exited(self):
         return self.process is not None and self.process.poll() is not None
+
+
+def _unwatch(selector, fileobj):
+    try:
+        selector.unregister(fileobj)
+    except (KeyError, ValueError):
+        pass
 
 
 def _close(selector, fanout, viewer):
@@ -144,7 +188,9 @@ def _read_encoder(selector, fanout, encoder):
     except BlockingIOError:
         return
     if not chunk:
-        return  # EOF: exited() notices it on this tick
+        # EOF stays readable forever; exited() reaps the child on a later tick.
+        _unwatch(selector, encoder.process.stdout)
+        return
     for viewer in fanout.feed(chunk):
         _close(selector, fanout, viewer)
 
@@ -173,7 +219,7 @@ def _viewer_gone(viewer):
 def _watch_writes(selector, fanout):
     for viewer in fanout.viewers():
         events = selectors.EVENT_READ
-        if fanout.pending(viewer):
+        if fanout.has_pending(viewer):
             events |= selectors.EVENT_WRITE
         selector.modify(viewer, events, "viewer")
 

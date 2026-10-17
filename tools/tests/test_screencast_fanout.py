@@ -30,6 +30,10 @@ DEAF_ENCODER = ("import signal, sys, time\n"
 FIREHOSE_ENCODER = ("import sys, time\n"
                     "while True:\n"
                     "    sys.stdout.buffer.write(b'x' * 65536); sys.stdout.buffer.flush(); time.sleep(0.001)\n")
+EOF_ENCODER = ("import os, sys, time\n"
+               "sys.stdout.buffer.write(b'TS'); sys.stdout.buffer.flush()\n"
+               "os.close(1)\n"
+               "time.sleep(1.5)\n")
 DEADLINE = 5.0
 
 
@@ -70,6 +74,49 @@ class TheFanout(unittest.TestCase):
         dropped = f.feed(b"x" * 6)
         self.assertEqual([slow], dropped)
         self.assertEqual([quick], f.viewers())
+
+    def test_the_chunk_is_shared_between_viewers_not_copied(self):
+        f = fanout.Fanout()
+        a, b = object(), object()
+        f.add(a)
+        f.add(b)
+        chunk = b"ab" * 100
+        f.feed(chunk)
+        self.assertIs(chunk, f.pending(a).obj)
+        self.assertIs(chunk, f.pending(b).obj)
+
+    def test_has_pending_follows_the_backlog(self):
+        f = fanout.Fanout()
+        a = object()
+        f.add(a)
+        self.assertFalse(f.has_pending(a))
+        f.feed(b"abc")
+        self.assertTrue(f.has_pending(a))
+        f.sent(a, 2)
+        self.assertTrue(f.has_pending(a))
+        f.sent(a, 1)
+        self.assertFalse(f.has_pending(a))
+
+    def test_partial_sends_walk_across_chunks(self):
+        f = fanout.Fanout()
+        a = object()
+        f.add(a)
+        f.feed(b"abc")
+        f.feed(b"def")
+        f.sent(a, 2)
+        self.assertEqual(b"c", f.pending(a))
+        f.sent(a, 1)
+        self.assertEqual(b"def", f.pending(a))
+
+    def test_the_drop_threshold_is_exact(self):
+        f = fanout.Fanout(limit_bytes=10)
+        a = object()
+        f.add(a)
+        self.assertEqual([], f.feed(b"x" * 10))
+        self.assertEqual([a], f.feed(b"x"))
+        f2 = fanout.Fanout(limit_bytes=10)
+        f2.add(a)
+        self.assertEqual([a], f2.feed(b"x" * 11))
 
     def test_a_ninth_viewer_is_refused(self):
         f = fanout.Fanout(max_viewers=8)
@@ -158,6 +205,24 @@ class Serving(unittest.TestCase):
         self.assertEqual(b"TS", viewer.recv(2))
         self.assertTrue(wait_until(lambda: len(self.started) >= 2))
         self.assertEqual(b"TS", viewer.recv(2))
+
+    def test_an_encoder_at_eof_is_not_polled_in_a_busy_loop(self):
+        self.script = EOF_ENCODER
+        reads = []
+        original = fanout._read_encoder
+
+        def counting(*args):
+            reads.append(1)
+            return original(*args)
+
+        patcher = mock.patch.object(fanout, "_read_encoder", counting)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.run_serve()
+        viewer = self.connect()
+        self.assertEqual(b"TS", viewer.recv(2))
+        time.sleep(0.8)
+        self.assertLess(len(reads), 20)
 
     def test_an_encoder_that_ignores_terminate_is_killed(self):
         self.script = DEAF_ENCODER
