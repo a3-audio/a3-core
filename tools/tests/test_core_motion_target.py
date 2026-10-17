@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local/lib"))
 
-from a3_core_motion import MotionTarget, is_this_machine  # noqa: E402
+from a3_core_motion import MotionTarget, host_to_tell_of, is_this_machine  # noqa: E402
 
 DEFAULT = ("127.0.0.1", 7771)
 OWN = {"192.168.8.10"}
@@ -213,3 +213,17 @@ class TwoMotions(unittest.TestCase):
         t.hello(A3NUC2, 0.0)
         t.hello(A3NUC2, 30.0)
         self.assertEqual(t.take_rivals(), [])
+
+class AHostToTellAnotherMachine(unittest.TestCase):
+    """core.device-at: a device on this machine is at Core's address, as seen
+    from the pro-DJ app on another one -- never at loopback."""
+
+    def test_loopback_is_the_core_host(self):
+        self.assertEqual(host_to_tell_of("127.0.0.1", "192.168.8.10", OWN), "192.168.8.10")
+
+    def test_one_of_cores_own_addresses_is_the_core_host(self):
+        self.assertEqual(host_to_tell_of("192.168.8.10", "192.168.8.99", OWN | {"192.168.8.10"}),
+                         "192.168.8.99")
+
+    def test_another_machine_is_unchanged(self):
+        self.assertEqual(host_to_tell_of(A3NUC2, "192.168.8.10", OWN), A3NUC2)

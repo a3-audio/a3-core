@@ -35,6 +35,12 @@ def is_this_machine(host, own_hosts):
     return host in own_hosts
 
 
+def host_to_tell_of(host, core_host, own_hosts):
+    """Where a device runs, as told to an app on another machine: a device on
+    this machine is at Core's address there, not at loopback."""
+    return core_host if is_this_machine(host, own_hosts) else host
+
+
 class MotionTarget:
     def __init__(self, default, remote_port, own_hosts, vu_port,
                  silence_after=MOTION_SILENCE):

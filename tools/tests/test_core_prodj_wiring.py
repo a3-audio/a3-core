@@ -80,8 +80,32 @@ class WhatAProdjIsTold(unittest.TestCase):
         self.assertIn("core.device-at", where)
         self.assertIn("prodj_clients()", where)
 
+    def test_a_place_on_this_machine_is_told_as_the_core_host(self):
+        helper = _source_of("device_host")
+        self.assertIn("host_to_tell_of(", helper)
+        self.assertIn('_truth.host("core")', helper)
+        self.assertIn("MOTION_OWN_HOSTS", helper)
+        self.assertIn("device_host(host)", _source_of("tell_prodj_where"))
+        self.assertIn("device_host(host)", _source_of("tell_prodj"))
+
 
 class Live(unittest.TestCase):
+    def test_a_known_desk_saying_hello_again_is_answered_with_live(self):
+        source = _source_of("desk_said_hello")
+        self.assertIn("KNOWN", source)
+        self.assertLess(source.index("KNOWN"), source.index("JOINED"))
+        self.assertIn("prodj.live", source[source.index("KNOWN"):source.index("JOINED")])
+
+    def test_motions_hello_is_answered_with_live(self):
+        source = _source_of("motion_said_hello")
+        self.assertIn("prodj.live", source)
+        self.assertIn("osc_a3motion", source)
+
+    def test_refused_pointers_are_seen_by_the_traffic_table(self):
+        source = _source_of("osc_handler_pointer")
+        self.assertNotIn("_pointers_refused", CORE)
+        self.assertLess(source.index("traffic.seen("), source.index("_prodj_live.admits("))
+
     def test_live_is_switched_only_by_who_may(self):
         source = _source_of("osc_handler_prodj_live")
         self.assertIn("origin = origin_of(client_address)", source)
@@ -138,9 +162,11 @@ class Pointers(unittest.TestCase):
 
     def test_values_refused_asks_the_live_gate(self):
         source = _source_of("values_refused")
-        self.assertIn("not _prodj_live.admits(origin_of(client_address), key)", source)
+        self.assertIn("who = origin_of(client_address)", source)
+        self.assertIn("not _prodj_live.admits(who, key)", source)
         self.assertLess(source.index("_prodj_live.admits("),
                         source.index("relay_on_arrival("))
+        self.assertEqual(source.count("origin_of(client_address)"), 1)
 
 
 if __name__ == "__main__":

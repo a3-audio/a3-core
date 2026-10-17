@@ -61,7 +61,7 @@ from a3_core_stems_reaper import (Settle, analog_messages,   # noqa: E402
                                   changed_messages, command_messages, pair_of,
                                   return_source_messages, stems_messages)
 from a3_core_presence import STEMDECK_SILENCE, HelloWatch   # noqa: E402
-from a3_core_motion import MotionTarget, is_this_machine   # noqa: E402
+from a3_core_motion import MotionTarget, host_to_tell_of, is_this_machine   # noqa: E402
 from a3_core_hello_gate import (ADMIT, REFUSE_DIFFERS_FIRST,   # noqa: E402
                                REFUSE_FIRST, HelloGate)   # noqa: E402
 from a3_core_vu_relay import relay as relay_vu   # noqa: E402
@@ -73,7 +73,8 @@ from a3_osc_render import write_user_files   # noqa: E402
 from a3_core_recall import (FX_MODE_NUMBERS, FX_MODE_WORDS,   # noqa: E402
                             Relayed, STATE_OF, led_message,
                             recall_messages, return_cue_lamp)   # noqa: E402
-from a3_core_desks import (DESK, JOINED, MAX_DESKS, PRODJ, REFUSED_FIRST,   # noqa: E402
+from a3_core_desks import (DESK, JOINED, KNOWN, MAX_DESKS, PRODJ,   # noqa: E402
+                           REFUSED_FIRST,
                            DeskFollowers, desk_name, kind_of)
 from a3_core_prodj_live import ProdjLive, may_switch   # noqa: E402
 from a3_core_subscribers import (SHIPPED, OwningThread,   # noqa: E402
@@ -261,9 +262,6 @@ _desk_clients = {}
 #: The pro-DJ LIVE lease (a3_core_prodj_live): off at start, never switched on
 #: by Core itself.
 _prodj_live = ProdjLive()
-#: Pointers refused while LIVE is off or from a sender that may not point:
-#: counted, not printed -- a stale app would fill the journal at 60 Hz.
-_pointers_refused = 0
 #: The serve thread, which alone lets a desk join or leave the subscribers
 #: (claimed just before serve(), checked in
 #: desk_said_hello and notice_desk_silence).
@@ -826,7 +824,8 @@ def values_refused(client_address: Tuple[str, int], address: str) -> bool:
     nothing while LIVE is off, whatever it sends (a3_core_prodj_live)."""
     found = _truth.match(address)
     key = found[0] if found is not None else None
-    if not _prodj_live.admits(origin_of(client_address), key):
+    who = origin_of(client_address)
+    if not _prodj_live.admits(who, key):
         return True
     if not relay_on_arrival(_truth, address):
         return False
@@ -834,7 +833,6 @@ def values_refused(client_address: Tuple[str, int], address: str) -> bool:
     verdict = _hello_gate.check(host, port)
     if verdict == ADMIT:
         return False
-    who = origin_of(client_address)
     if verdict == REFUSE_FIRST:
         print(f"{who} ({host}): values before its hello ignored")
     if verdict == REFUSE_DIFFERS_FIRST:
@@ -1431,6 +1429,7 @@ def motion_said_hello(host, now):
               f"still following {_motion.followed}")
     if moved is not None:
         point_motion_at(moved, "said hello")
+    osc_a3motion.send_message(_truth.address("prodj.live"), live_value())
 
 
 def notice_motion_silence(now):
@@ -1474,6 +1473,8 @@ def desk_said_hello(host, now, kind=DESK):
     fifth is refused and said once."""
     _subscribers_owner.check("a desk joining")
     verdict = _desks.hello(host, now, kind=kind)
+    if verdict == KNOWN and host in _desk_clients:
+        _desk_clients[host].send_message(_truth.address("prodj.live"), live_value())
     if verdict == REFUSED_FIRST:
         print(f"desk: {host} said hello, but {MAX_DESKS} desks are followed "
               f"already ({', '.join(_desks.hosts())}) -- not followed")
@@ -1529,10 +1530,16 @@ def send_position_to_prodj(key, channel_index, value):
         client.send_message(address, value)
 
 
+def device_host(host):
+    """A device's host as the app on another machine can reach it."""
+    return host_to_tell_of(host, _truth.host("core"), MOTION_OWN_HOSTS)
+
+
 def tell_prodj_where(device, host):
     """A device runs at `host`, to every pro-DJ app."""
     for client in prodj_clients():
-        client.send_message(_truth.address("core.device-at"), [device, host])
+        client.send_message(_truth.address("core.device-at"),
+                            [device, device_host(host)])
 
 
 def tell_prodj(client):
@@ -1549,7 +1556,8 @@ def tell_prodj(client):
               ("stemdeck", _stemdeck_watch.host if _stemdeck_client is not None else None))
     for device, host in places:
         if host is not None:
-            client.send_message(_truth.address("core.device-at"), [device, host])
+            client.send_message(_truth.address("core.device-at"),
+                                [device, device_host(host)])
     client.send_message(_truth.address("prodj.live"), live_value())
 
 
@@ -1595,16 +1603,16 @@ def osc_handler_pointer(client_address: Tuple[str, int], address: str,
     that device -- only while LIVE is on, and only from a pro-DJ app. Sent
     straight to the device, through neither of the two doors: no other screen
     has a use for it."""
-    global _pointers_refused
     found = known_address(client_address, address, osc_arguments)
     if found is None:
         return
     key = found[0]
     origin = origin_of(client_address)
-    if not _prodj_live.admits(origin, key):
-        _pointers_refused += 1
-        return
+    # Seen before the gate: a refused pointer shows in the window as an
+    # arrival with no matching send to the device, and is not journalled.
     traffic.seen(IN, address, list(osc_arguments), origin)
+    if not _prodj_live.admits(origin, key):
+        return
     target = _stemdeck_client if key == "stemdeck.pointer" else osc_a3motion
     if target is not None:
         target.send_message(address, list(osc_arguments))
