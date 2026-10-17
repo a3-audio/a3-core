@@ -77,9 +77,53 @@ function(a3_add_iem_nodes SUFFIX JUCE_TARGET)
         TARGET_DIRECTORY ${MultiEncoder_TARGET}
         APPEND PROPERTY COMPILE_DEFINITIONS Presets=MultiEncoderPresets)
 
+    juce_add_binary_data(a3-iem-SimpleDecoderPresets${SUFFIX}
+        HEADER_NAME Presets.h
+        NAMESPACE Presets
+        SOURCES
+        ${A3_IEM_DIR}/SimpleDecoder/Source/Presets/5point1.json
+        ${A3_IEM_DIR}/SimpleDecoder/Source/Presets/5point1point4.json
+        ${A3_IEM_DIR}/SimpleDecoder/Source/Presets/7point1.json
+        ${A3_IEM_DIR}/SimpleDecoder/Source/Presets/7point1point4.json
+        ${A3_IEM_DIR}/SimpleDecoder/Source/Presets/22_2_NHK.json
+        ${A3_IEM_DIR}/SimpleDecoder/Source/Presets/Cube_8ch.json
+        ${A3_IEM_DIR}/SimpleDecoder/Source/Presets/CUBE.json
+        ${A3_IEM_DIR}/SimpleDecoder/Source/Presets/MSDecoder.json
+        ${A3_IEM_DIR}/SimpleDecoder/Source/Presets/Produktionsstudio.json
+        ${A3_IEM_DIR}/SimpleDecoder/Source/Presets/Quadraphonic.json
+        ${A3_IEM_DIR}/SimpleDecoder/Source/Presets/t_design_12ch.json
+        ${A3_IEM_DIR}/SimpleDecoder/Source/Presets/t_design_24ch.json
+        ${A3_IEM_DIR}/SimpleDecoder/Source/Presets/t_design_36ch.json
+        ${A3_IEM_DIR}/SimpleDecoder/Source/Presets/t_design_48ch.json
+        ${A3_IEM_DIR}/SimpleDecoder/Source/Presets/t_design_60ch.json)
+    a3_iem_add_plugin("${SUFFIX}" ${JUCE_TARGET} SimpleDecoder ${A3_IEM_NODES_DIR}/SimpleDecoderNode.cpp)
+    target_link_libraries(${SimpleDecoder_TARGET} PRIVATE a3-iem-SimpleDecoderPresets${SUFFIX})
+
+    # The IEM sources include these as <IRData.h> and <EQData.h>.
+    file(GLOB A3_IEM_BINAURAL_EQS ${A3_IEM_DIR}/BinauralDecoder/Source/EQ/*.wav)
+    list(SORT A3_IEM_BINAURAL_EQS)
+    juce_add_binary_data(a3-iem-BinauralEQs${SUFFIX}
+        HEADER_NAME EQData.h
+        NAMESPACE EQData
+        SOURCES ${A3_IEM_BINAURAL_EQS})
+    juce_add_binary_data(a3-iem-BinauralIRs${SUFFIX}
+        HEADER_NAME IRData.h
+        NAMESPACE IRData
+        SOURCES
+        ${A3_IEM_DIR}/BinauralDecoder/Source/IRs/irsOrd1.wav
+        ${A3_IEM_DIR}/BinauralDecoder/Source/IRs/irsOrd2.wav
+        ${A3_IEM_DIR}/BinauralDecoder/Source/IRs/irsOrd3.wav
+        ${A3_IEM_DIR}/BinauralDecoder/Source/IRs/irsOrd4.wav
+        ${A3_IEM_DIR}/BinauralDecoder/Source/IRs/irsOrd5.wav
+        ${A3_IEM_DIR}/BinauralDecoder/Source/IRs/irsOrd6.wav
+        ${A3_IEM_DIR}/BinauralDecoder/Source/IRs/irsOrd7.wav)
+    a3_iem_add_plugin("${SUFFIX}" ${JUCE_TARGET} BinauralDecoder ${A3_IEM_NODES_DIR}/BinauralDecoderNode.cpp)
+    target_link_libraries(${BinauralDecoder_TARGET} PRIVATE
+        a3-iem-BinauralEQs${SUFFIX} a3-iem-BinauralIRs${SUFFIX})
+
     add_library(a3-iem${SUFFIX} STATIC ${A3_IEM_NODES_DIR}/IemNode.cpp)
     target_include_directories(a3-iem${SUFFIX} PUBLIC ${A3_IEM_PUBLIC_INCLUDE_DIR})
     target_include_directories(a3-iem${SUFFIX} PRIVATE ${A3_IEM_NODES_DIR})
-    target_link_libraries(a3-iem${SUFFIX} PUBLIC ${JUCE_TARGET} PRIVATE ${MultiEncoder_TARGET})
+    target_link_libraries(a3-iem${SUFFIX} PUBLIC ${JUCE_TARGET} PRIVATE ${MultiEncoder_TARGET} ${SimpleDecoder_TARGET} ${BinauralDecoder_TARGET})
     target_compile_options(a3-iem${SUFFIX} PRIVATE -Wall -Wextra -Werror=switch)
 endfunction()

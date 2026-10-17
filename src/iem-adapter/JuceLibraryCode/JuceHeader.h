@@ -6,6 +6,7 @@
 // "../JuceLibraryCode/JuceHeader.h", so the IEM sources compile unchanged.
 #pragma once
 
+#include <juce_audio_formats/juce_audio_formats.h>   // BinauralDecoder reads its IRs as WAV
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_dsp/juce_dsp.h>
 #include <juce_gui_extra/juce_gui_extra.h>

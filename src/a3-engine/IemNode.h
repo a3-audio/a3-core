@@ -29,6 +29,7 @@ public:
     std::atomic<float>* rawParameter (const juce::String& id);   // APVTS raw value, for audio-thread writes
     float legalValue (const juce::String& id, float value) const; // clamp + snap to the parameter's range
     bool listensForOsc() const;                       // IEM's own OSC receiver connected?
+    juce::Result loadDecoderConfig (const juce::String& json);   // SimpleDecoder only; IEM's own config format
     juce::MemoryBlock state();                        // getStateInformation (null tests)
     juce::AudioProcessor& processor();
 
@@ -38,12 +39,15 @@ public:
         std::unique_ptr<juce::AudioProcessor> processor;
         juce::AudioProcessorValueTreeState* parameters = nullptr;
         std::function<bool()> listensForOsc;
+        std::function<juce::Result (const juce::String&)> loadDecoderConfig;   // SimpleDecoder only
     };
 
 private:
     explicit IemNode (Parts);
     juce::RangedAudioParameter* findParameter (const juce::String& id) const;
     int ioChannels() const;
+    void warmUp();
+    juce::Result validateParameters (const juce::DynamicObject& idToValue) const;
 
     Parts parts;
     juce::MidiBuffer noMidi;
