@@ -29,13 +29,13 @@ def entries_for(address):
 
 class WhatCoreHearsAndSays(unittest.TestCase):
     def test_a_fader_comes_in_from_both_desks_and_goes_back_out(self):
-        # mixer and motion send it to Core, Core relays it to both
+        # mixer, desk and motion send it to Core, Core relays it to all
         self.assertEqual(entries_for("/channel/{ch}/volume"),
-                         {("mixer", "both"), ("motion", "both")})
+                         {("mixer", "both"), ("desk", "both"), ("motion", "both")})
 
     def test_a_lamp_only_goes_out(self):
         self.assertEqual(entries_for("/channel/{ch}/cue/led"),
-                         {("mixer", "out"), ("motion", "out")})
+                         {("mixer", "out"), ("desk", "out"), ("motion", "out")})
 
     def test_the_position_only_comes_in(self):
         self.assertEqual(entries_for("/channel/{ch}/azimuth"), {("motion", "in")})
