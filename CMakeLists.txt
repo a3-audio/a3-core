@@ -51,3 +51,20 @@ if(A3_ENGINE_TESTS)
     enable_testing()
     add_subdirectory(tests/engine)
 endif()
+
+# Opt-in: null tests of our compiled IEM nodes against the IEM VST3s installed on
+# the machine. Needs its own JUCE module library, built with VST3 hosting, and a
+# second set of IEM libraries on top of it (the suffix keeps the targets apart).
+option(A3_ENGINE_IEM_NULLTESTS "Build the IEM-vs-installed-VST3 null tests (not part of ctest)" OFF)
+if(A3_ENGINE_IEM_NULLTESTS)
+    add_library(a3-engine-juce-vst3host STATIC)
+    target_link_libraries(a3-engine-juce-vst3host
+        PRIVATE juce::juce_audio_basics juce::juce_core juce::juce_osc juce::juce_recommended_config_flags
+        juce::juce_audio_formats juce::juce_audio_processors juce::juce_dsp juce::juce_opengl)
+    target_compile_definitions(a3-engine-juce-vst3host PUBLIC JUCE_STANDALONE_APPLICATION=1
+        JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_MODAL_LOOPS_PERMITTED=1 JUCE_PLUGINHOST_VST3=1)
+    target_compile_definitions(a3-engine-juce-vst3host INTERFACE $<TARGET_PROPERTY:a3-engine-juce-vst3host,COMPILE_DEFINITIONS>)
+    target_include_directories(a3-engine-juce-vst3host INTERFACE $<TARGET_PROPERTY:a3-engine-juce-vst3host,INCLUDE_DIRECTORIES>)
+    a3_add_iem_nodes("-vst3host" a3-engine-juce-vst3host)
+    add_subdirectory(tests/iem-null)
+endif()
