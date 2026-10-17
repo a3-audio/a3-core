@@ -117,6 +117,40 @@ juce::MemoryBlock vst3HostState (const juce::MemoryBlock& pluginState)
     return wrapped;
 }
 
+// The plug-in's own state inside a hosted VST3's wrapped state (see vst3HostState).
+std::unique_ptr<juce::XmlElement> pluginStateOf (const juce::MemoryBlock& hostState)
+{
+    const auto wrapper = juce::AudioProcessor::getXmlFromBinary (hostState.getData(), (int) hostState.getSize());
+    if (wrapper == nullptr || wrapper->getChildByName ("IComponent") == nullptr)
+        return nullptr;
+    juce::MemoryBlock inner;
+    inner.fromBase64Encoding (wrapper->getChildByName ("IComponent")->getAllSubText());
+    return juce::AudioProcessor::getXmlFromBinary (inner.getData(), (int) inner.getSize());
+}
+
+// Every parameter and the decoder config the VST3 reports back must be what we sent.
+void expectVst3TookTheState (const juce::MemoryBlock& ours, juce::AudioProcessor& vst3, const juce::String& label)
+{
+    juce::MemoryBlock theirsHost;
+    vst3.getStateInformation (theirsHost);
+    const auto theirs = pluginStateOf (theirsHost);
+    const auto sent = juce::AudioProcessor::getXmlFromBinary (ours.getData(), (int) ours.getSize());
+    ASSERT_TRUE (sent != nullptr);
+    ASSERT_TRUE (theirs != nullptr) << label << ": the VST3 returned no readable state (state rejected?)";
+
+    int compared = 0;
+    for (auto* param : sent->getChildWithTagNameIterator ("PARAM"))
+    {
+        const auto id = param->getStringAttribute ("id");
+        const auto* back = theirs->getChildByAttribute ("id", id);
+        ASSERT_TRUE (back != nullptr) << label << ": " << id << " missing in the VST3 state";
+        EXPECT_NEAR (back->getDoubleAttribute ("value"), param->getDoubleAttribute ("value"), 1e-6) << label << ": " << id;
+        ++compared;
+    }
+    EXPECT_GT (compared, 0) << label << ": our state holds no parameters";
+    EXPECT_EQ (theirs->getStringAttribute ("configString"), sent->getStringAttribute ("configString")) << label;
+}
+
 // Runs a processor over `input` in blocks of blockSize; io has max(in, out) channels.
 Channels render (juce::AudioProcessor& processor, const Channels& input, int outChannels)
 {
@@ -145,6 +179,11 @@ double rmsOf (const std::vector<float>& x)
     return std::sqrt (sum / (double) x.size());
 }
 
+// A null of two silent signals proves nothing. The input is -12 dBFS noise; the quietest
+// real channel measured is the sub at about 1.6e-2 RMS, so 1e-3 is 16x below it and
+// 1e4x above a silent channel's float noise.
+constexpr double silenceFloorRms = 1e-3;
+
 // Prints one line per output channel; returns the worst max |difference|.
 double reportDifference (const juce::String& label, const Channels& ours, const Channels& theirs,
                          const std::vector<juce::String>& roles)
@@ -161,6 +200,11 @@ double reportDifference (const juce::String& label, const Channels& ours, const 
         }
         const double diffRms = std::sqrt (diffSquares / (double) ours[c].size());
         const double channelRms = rmsOf (theirs[c]);
+        if (roles[c] != "unused")
+        {
+            EXPECT_GT (channelRms, silenceFloorRms) << label << " out " << c + 1 << ": the VST3 is silent";
+            EXPECT_GT (rmsOf (ours[c]), silenceFloorRms) << label << " out " << c + 1 << ": our node is silent";
+        }
         const double relativeDb = channelRms > 0.0 ? 20.0 * std::log10 (std::max (diffRms, 1e-30) / channelRms) : 0.0;
         std::printf ("[null] %s out %zu (%s): max|diff| = %.3e  diff %.1f dB re channel RMS (%.3e)  %s\n",
                      label.toRawUTF8(), c + 1, roles[c].toRawUTF8(), maxDiff, relativeDb, channelRms,
@@ -190,6 +234,7 @@ void compareToVst3 (const juce::String& label, const juce::String& vst3Name, a3:
 
     const auto state = vst3HostState (node.state());
     vst3.plugin->setStateInformation (state.getData(), (int) state.getSize());
+    expectVst3TookTheState (node.state(), *vst3.plugin, label);
     node.prepare (sampleRate, blockSize);
     vst3.plugin->prepareToPlay (sampleRate, blockSize);
 
