@@ -106,11 +106,13 @@ def parse_subscribers(texts, reserved=()):
     return found
 
 
-#: Words with a `relayed_to` that this relay must not pass on: the positions
-#: go to the pro-DJ apps only (60 Hz x 4 channels, no screen has a use for
-#: them), the pointers to one device each and only while pro-DJ LIVE.
-NOT_PASSED_ON_HERE = frozenset(("channel.azimuth", "channel.elevation",
-                                "stemdeck.pointer", "motion.pointer"))
+#: Words with a `relayed_to` that Core neither passes on here nor replays
+#: from the evening: the positions go to the pro-DJ apps only (60 Hz x 4
+#: channels, no screen has a use for them), the pointers to one device each
+#: and only while pro-DJ LIVE -- a hand on a screen right now, no value REAPER
+#: holds. One decision, so one list: a3_core_evening imports it too.
+NOT_PASSED_ON_NOR_REPLAYED = frozenset(("channel.azimuth", "channel.elevation",
+                                        "stemdeck.pointer", "motion.pointer"))
 
 
 def relay_on_arrival(truth, address):
@@ -140,7 +142,7 @@ def relay_on_arrival(truth, address):
     if found is None:
         return False
     key, _ = found
-    return "relayed_to" in truth.addresses()[key] and key not in NOT_PASSED_ON_HERE
+    return "relayed_to" in truth.addresses()[key] and key not in NOT_PASSED_ON_NOR_REPLAYED
 
 
 def everyone_but(subscribers, origin):

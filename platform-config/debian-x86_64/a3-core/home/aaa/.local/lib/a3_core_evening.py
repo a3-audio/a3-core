@@ -25,6 +25,7 @@ wieder REAPER-Nachrichten macht.
 """
 
 import re
+from a3_core_subscribers import NOT_PASSED_ON_NOR_REPLAYED
 from a3_osc import TruthError
 
 #: Was Core zwar weitergibt, aber nicht zurückspielt: der Crossfade steht in
@@ -37,11 +38,9 @@ from a3_osc import TruthError
 #: still verloren und den Kanalschalter als Wert zurückgespielt hätte.
 #: A music preview is about the next bars: replayed, it would tell Motion
 #: about bars long gone (a3_core_ahead).
-#: The positions go to the pro-DJ apps only, and the pointers are a hand on
-#: a screen right now: none of them is a value REAPER holds.
-NOT_REPLAYED = frozenset(("channel.3d", "stemdeck.ahead",
-                          "channel.azimuth", "channel.elevation",
-                          "stemdeck.pointer", "motion.pointer"))
+#: The positions and pointers are no value REAPER holds: the one list they
+#: share with the relay, NOT_PASSED_ON_NOR_REPLAYED.
+NOT_REPLAYED = frozenset(("channel.3d", "stemdeck.ahead")) | NOT_PASSED_ON_NOR_REPLAYED
 
 #: Addresses renamed since an evening may have been written: FX send / FX
 #: return became aux send / aux return on 2026-10-01, wire included. An old

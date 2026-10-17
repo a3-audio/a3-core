@@ -208,7 +208,8 @@ class WhatIsPassedOnWhenItArrives(unittest.TestCase):
         it arrives tens of thousands of times per channel. Motion asks for it
         at start-up instead; see
         smoke-test/smoke-test-motion-hoert-die-position.md."""
-        for address in ("/channel/1/azimuth", "/channel/2/elevation"):
+        for address in ("/channel/1/azimuth", "/channel/2/elevation",
+                        "/stemdeck/pointer", "/motion/pointer"):
             with self.subTest(address=address):
                 self.assertFalse(self.relayed(address))
 
