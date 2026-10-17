@@ -609,8 +609,24 @@ build_jack_rt_shim() {
 
 build_jack_rt_shim "${USER_HOME}/.local/share/a3-core/src/jack-rt-priority.c" "${USER_HOME}/.local/lib/a3/libjack-rt-priority.so"
 
+# startx runs ~/.xserverrc as the X server: Xorg alone goes to CPU 0 (see the
+# shipped file). A ~/.xserverrc that is not ours is somebody's own: kept, named.
+install_xserverrc() {
+  shipped="$1"; target="$2"
+  if [ -e "$target" ] && ! cmp -s "$shipped" "$target" \
+     && ! grep -q '^# a3-core: X server for startx' "$target"; then
+    echo "a3-core: kept the local $target -- Xorg is not pinned to CPU 0"
+    return 0
+  fi
+  cp "$shipped" "$target" && chmod 755 "$target" \
+    || echo "a3-core: could not install $target -- Xorg is not pinned to CPU 0" >&2
+}
+
+install_xserverrc "${USER_HOME}/.local/share/a3-core/xserverrc" "${USER_HOME}/.xserverrc"
+
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.local" || true
 chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.config" || true
+[ -f "${USER_HOME}/.xserverrc" ] && chown "${APPUSER}:${APPUSER}" "${USER_HOME}/.xserverrc" || true
 [ -d "${USER_HOME}/.ssh" ] && chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.ssh" || true
 
 # x11vnc's port and the beat-analyzer's targets, from a3-osc.json. A failure
