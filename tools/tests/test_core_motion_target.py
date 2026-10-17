@@ -214,6 +214,44 @@ class TwoMotions(unittest.TestCase):
         t.hello(A3NUC2, 30.0)
         self.assertEqual(t.take_rivals(), [])
 
+class WhereMotionIsSaidToRun(unittest.TestCase):
+    """core.device-at for Motion: only a Motion heard this run has a place.
+    Before any hello and after a silence there is none -- the default target
+    is where Core sends, not where a Motion is known to run (a3nuc2 runs it
+    on the rig, so "Core's machine" would be StemDeck's picture)."""
+
+    def test_no_place_before_any_hello(self):
+        t = target()
+        self.assertIsNone(t.followed)
+        self.assertFalse(t.follows("127.0.0.1"))
+
+    def test_the_motion_followed_has_a_place(self):
+        t = target()
+        t.hello(A3NUC2, 0.0)
+        self.assertEqual(t.followed, A3NUC2)
+        self.assertTrue(t.follows(A3NUC2))
+
+    def test_the_rigs_own_has_a_place_too(self):
+        t = target()
+        t.hello("127.0.0.1", 0.0)
+        self.assertTrue(t.follows("127.0.0.1"))
+
+    def test_a_rival_has_none(self):
+        t = target()
+        t.hello(A3NUC2, 0.0)
+        t.hello(NOTEBOOK, 10.0)
+        self.assertFalse(t.follows(NOTEBOOK))
+
+    def test_a_silence_takes_the_place_away_until_the_next_hello(self):
+        t = target()
+        t.hello(A3NUC2, 0.0)
+        t.silence(61.0)
+        self.assertIsNone(t.followed)
+        self.assertFalse(t.follows(A3NUC2))
+        t.hello(A3NUC2, 70.0)
+        self.assertTrue(t.follows(A3NUC2))
+
+
 class AHostToTellAnotherMachine(unittest.TestCase):
     """core.device-at: a device on this machine is at Core's address, as seen
     from the pro-DJ app on another one -- never at loopback."""

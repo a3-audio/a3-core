@@ -76,7 +76,7 @@ class WhatAProdjIsTold(unittest.TestCase):
         self.assertIn("prodj_clients()", _source_of("send_position_to_prodj"))
 
     def test_motion_and_stemdeck_moving_tell_the_prodj(self):
-        for function in ("point_motion_at", "stemdeck_said_hello"):
+        for function in ("motion_said_hello", "stemdeck_said_hello"):
             source = _source_of(function)
             self.assertIn("tell_prodj_where(", source, function)
         where = _source_of("tell_prodj_where")
@@ -90,6 +90,24 @@ class WhatAProdjIsTold(unittest.TestCase):
         self.assertIn("MOTION_OWN_HOSTS", helper)
         self.assertIn("device_host(host)", _source_of("tell_prodj_where"))
         self.assertIn("device_host(host)", _source_of("tell_prodj"))
+
+    def test_motions_place_is_told_only_from_a_motion_heard(self):
+        """Not the default target: before a hello, or after a silence, no
+        Motion is known to run anywhere (a3_core_motion follows/followed)."""
+        told = _source_of("tell_prodj")
+        self.assertNotIn('PEER_HOSTS.get("motion")', told)
+        self.assertIn("_motion.followed", told)
+        hello = _source_of("motion_said_hello")
+        self.assertIn("if _motion.follows(host):", hello)
+        self.assertIn('tell_prodj_where("motion", host)', hello)
+        self.assertNotIn("tell_prodj_where(", _source_of("point_motion_at"))
+
+    def test_stemdecks_place_is_told_only_from_a_stemdeck_heard(self):
+        told = _source_of("tell_prodj")
+        self.assertIn("_stemdeck_watch.host if _stemdeck_client is not None else None", told)
+        silence = _source_of("notice_stemdeck_silence")
+        self.assertIn("_stemdeck_client = None", silence)
+        self.assertNotIn("tell_prodj_where(", silence)
 
 
 class Live(unittest.TestCase):

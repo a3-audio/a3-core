@@ -1440,6 +1440,11 @@ def motion_said_hello(host, now):
               f"still following {_motion.followed}")
     if moved is not None:
         point_motion_at(moved, "said hello")
+    # Every hello of the Motion followed, not only one that moves it: the
+    # rig's own moves nothing, and a pro-DJ app that missed it hears it again.
+    # Never on a silence: no Motion is known to run then.
+    if _motion.follows(host):
+        tell_prodj_where("motion", host)
     osc_a3motion.send_message(_truth.address("prodj.live"), live_value())
 
 
@@ -1463,7 +1468,6 @@ def point_motion_at(endpoint, why):
     replace_named(subscribers, osc_a3motion)
     PEER_HOSTS["motion"] = host
     told = say_the_whole_state()
-    tell_prodj_where("motion", host)
     print(f"motion: {why}, now {host}:{port}; replayed {told} messages")
 
 
@@ -1563,7 +1567,7 @@ def tell_prodj(client):
             if position is not None:
                 client.send_message(
                     _truth.address(key, ch=channel_index + 1), position)
-    places = (("motion", PEER_HOSTS.get("motion")),
+    places = (("motion", _motion.followed),
               ("stemdeck", _stemdeck_watch.host if _stemdeck_client is not None else None))
     for device, host in places:
         if host is not None:

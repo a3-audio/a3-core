@@ -72,6 +72,13 @@ class MotionTarget:
         """The address of the Motion followed, as it was heard; None if none."""
         return self._seen_as.get(self._watch.host)
 
+    def follows(self, host):
+        """Whether `host` is the Motion followed -- heard this run and not
+        silent since. The default target is no such Motion: it is where Core
+        sends, not where a Motion is known to run."""
+        key = LOCAL if is_this_machine(host, self._own_hosts) else host
+        return self._watch.host is not None and self._watch.host == key
+
     def take_rivals(self):
         """Addresses of Motions that turned up beside the one followed, each once."""
         return [self._seen_as.get(key, key) for key in self._watch.take_rivals()]
