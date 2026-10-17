@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local/lib"))
 
-from a3_core_motion import MotionTarget, is_this_machine  # noqa: E402
+from a3_core_motion import MotionTarget, host_to_tell_of, is_this_machine  # noqa: E402
 
 DEFAULT = ("127.0.0.1", 7771)
 OWN = {"192.168.8.10"}
@@ -213,3 +213,55 @@ class TwoMotions(unittest.TestCase):
         t.hello(A3NUC2, 0.0)
         t.hello(A3NUC2, 30.0)
         self.assertEqual(t.take_rivals(), [])
+
+class WhereMotionIsSaidToRun(unittest.TestCase):
+    """core.device-at for Motion: only a Motion heard this run has a place.
+    Before any hello and after a silence there is none -- the default target
+    is where Core sends, not where a Motion is known to run (a3nuc2 runs it
+    on the rig, so "Core's machine" would be StemDeck's picture)."""
+
+    def test_no_place_before_any_hello(self):
+        t = target()
+        self.assertIsNone(t.followed)
+        self.assertFalse(t.follows("127.0.0.1"))
+
+    def test_the_motion_followed_has_a_place(self):
+        t = target()
+        t.hello(A3NUC2, 0.0)
+        self.assertEqual(t.followed, A3NUC2)
+        self.assertTrue(t.follows(A3NUC2))
+
+    def test_the_rigs_own_has_a_place_too(self):
+        t = target()
+        t.hello("127.0.0.1", 0.0)
+        self.assertTrue(t.follows("127.0.0.1"))
+
+    def test_a_rival_has_none(self):
+        t = target()
+        t.hello(A3NUC2, 0.0)
+        t.hello(NOTEBOOK, 10.0)
+        self.assertFalse(t.follows(NOTEBOOK))
+
+    def test_a_silence_takes_the_place_away_until_the_next_hello(self):
+        t = target()
+        t.hello(A3NUC2, 0.0)
+        t.silence(61.0)
+        self.assertIsNone(t.followed)
+        self.assertFalse(t.follows(A3NUC2))
+        t.hello(A3NUC2, 70.0)
+        self.assertTrue(t.follows(A3NUC2))
+
+
+class AHostToTellAnotherMachine(unittest.TestCase):
+    """core.device-at: a device on this machine is at Core's address, as seen
+    from the pro-DJ app on another one -- never at loopback."""
+
+    def test_loopback_is_the_core_host(self):
+        self.assertEqual(host_to_tell_of("127.0.0.1", "192.168.8.10", OWN), "192.168.8.10")
+
+    def test_one_of_cores_own_addresses_is_the_core_host(self):
+        self.assertEqual(host_to_tell_of("192.168.8.10", "192.168.8.99", OWN | {"192.168.8.10"}),
+                         "192.168.8.99")
+
+    def test_another_machine_is_unchanged(self):
+        self.assertEqual(host_to_tell_of(A3NUC2, "192.168.8.10", OWN), A3NUC2)

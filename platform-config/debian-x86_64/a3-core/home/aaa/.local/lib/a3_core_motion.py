@@ -35,6 +35,12 @@ def is_this_machine(host, own_hosts):
     return host in own_hosts
 
 
+def host_to_tell_of(host, core_host, own_hosts):
+    """Where a device runs, as told to an app on another machine: a device on
+    this machine is at Core's address there, not at loopback."""
+    return core_host if is_this_machine(host, own_hosts) else host
+
+
 class MotionTarget:
     def __init__(self, default, remote_port, own_hosts, vu_port,
                  silence_after=MOTION_SILENCE):
@@ -65,6 +71,13 @@ class MotionTarget:
     def followed(self):
         """The address of the Motion followed, as it was heard; None if none."""
         return self._seen_as.get(self._watch.host)
+
+    def follows(self, host):
+        """Whether `host` is the Motion followed -- heard this run and not
+        silent since. The default target is no such Motion: it is where Core
+        sends, not where a Motion is known to run."""
+        key = LOCAL if is_this_machine(host, self._own_hosts) else host
+        return self._watch.host is not None and self._watch.host == key
 
     def take_rivals(self):
         """Addresses of Motions that turned up beside the one followed, each once."""

@@ -88,9 +88,10 @@ class WhatIsPlayedBack(unittest.TestCase):
     def test_a_position_is_never_played_back(self):
         # It moves without a hand: a trajectory writes it continuously. Put
         # back at startup it would place the sound somewhere nobody chose.
-        played = self.replay({"/channel/1/azimuth": 90.0,
-                              "/channel/1/elevation": 10.0})
-        self.assertEqual(played, {})
+        for address in ("/channel/1/azimuth", "/channel/1/elevation",
+                        "/stemdeck/pointer", "/motion/pointer"):
+            with self.subTest(address=address):
+                self.assertEqual(self.replay({address: 90.0}), {})
 
     def test_a_music_preview_is_never_played_back(self):
         # It is about the next bars; replayed at start-up it would tell Motion

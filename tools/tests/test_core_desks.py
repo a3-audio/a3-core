@@ -12,8 +12,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local/lib"))
 
-from a3_core_desks import (JOINED, KNOWN, MAX_DESKS, REFUSED, REFUSED_FIRST,  # noqa: E402
-                           DeskFollowers, desk_name)
+from a3_core_desks import (JOINED, KNOWN, KIND_CHANGED, MAX_DESKS, REFUSED,  # noqa: E402
+                           REFUSED_FIRST, DESK, PRODJ, DeskFollowers, SaidKinds, desk_name, kind_of)
+from a3_core_prodj_live import ProdjLive   # noqa: E402
 
 PORT, VU = 7773, 7774
 
@@ -97,6 +98,102 @@ class Meters(unittest.TestCase):
         desks.hello("192.168.8.20", 0.0)
         desks.hello("192.168.8.30", 0.0)
         self.assertEqual(desks.vu_destinations(), [("192.168.8.20", VU), ("192.168.8.30", VU)])
+
+
+class Kinds(unittest.TestCase):
+    def test_a_prodj_is_named_by_its_kind(self):
+        desks = followers()
+        desks.hello("h", 0.0, kind=PRODJ)
+        self.assertEqual(desks.name_of("h", PORT), "prodj@h")
+
+    def test_the_default_kind_is_desk(self):
+        desks = followers()
+        desks.hello("h", 0.0)
+        self.assertEqual(desks.name_of("h", PORT), desk_name("h"))
+        self.assertEqual(desk_name("h"), "desk@h")
+
+    def test_hosts_of_kind(self):
+        desks = followers()
+        desks.hello("a", 0.0)
+        desks.hello("b", 0.0, kind=PRODJ)
+        self.assertEqual(desks.hosts_of_kind(PRODJ), ["b"])
+        self.assertEqual(desks.hosts_of_kind(DESK), ["a"])
+
+    def test_kind_of_a_name(self):
+        self.assertEqual(kind_of("prodj@h"), "prodj")
+        self.assertEqual(kind_of("desk@h"), "desk")
+        self.assertIsNone(kind_of("motion"))
+
+    def test_a_known_host_saying_another_kind_takes_it_as_a_change(self):
+        """Core drops the old client and joins the new one: its name is its
+        kind, and relay() and the silence read the name."""
+        desks = followers()
+        desks.hello("h", 0.0)
+        self.assertEqual(desks.hello("h", 1.0, kind=PRODJ), KIND_CHANGED)
+        self.assertEqual(desks.name_of("h", PORT), "prodj@h")
+        self.assertEqual(desks.hosts_of_kind(DESK), [])
+        self.assertEqual(desks.hello("h", 2.0, kind=PRODJ), KNOWN)
+
+    def test_the_same_kind_again_is_known(self):
+        desks = followers()
+        desks.hello("h", 0.0, kind=PRODJ)
+        self.assertEqual(desks.hello("h", 1.0, kind=PRODJ), KNOWN)
+
+
+class AnUnfollowedProdj(unittest.TestCase):
+    """A pro-DJ app without a slot -- the fifth, or one forgotten after a
+    minute's silence -- is still a pro-DJ app to the LIVE gate: it is named
+    by the kind its host last said in a desk hello, from its desk.osc socket."""
+
+    def full_house(self):
+        desks = followers()
+        for i in range(MAX_DESKS):
+            desks.hello(f"10.0.0.{i}", 0.0)
+        return desks
+
+    def gate_name(self, desks, said, host, port):
+        return said.gate_name(desks.name_of(host, port) or host, host, port)
+
+    def test_a_fifth_prodjs_volume_is_refused_while_live_is_off(self):
+        desks, said = self.full_house(), SaidKinds(PORT)
+        self.assertEqual(desks.hello("10.0.0.9", 0.0, kind=PRODJ), REFUSED_FIRST)
+        said.said("10.0.0.9", PRODJ)
+        who = self.gate_name(desks, said, "10.0.0.9", PORT)
+        self.assertEqual(who, "prodj@10.0.0.9")
+        self.assertFalse(ProdjLive().admits(who, "channel.volume"))
+
+    def test_a_forgotten_prodj_stays_a_prodj(self):
+        desks, said = followers(), SaidKinds(PORT)
+        desks.hello("h", 0.0, kind=PRODJ)
+        said.said("h", PRODJ)
+        desks.silence(1000.0)
+        self.assertEqual(self.gate_name(desks, said, "h", PORT), "prodj@h")
+
+    def test_the_last_desk_hello_counts(self):
+        said = SaidKinds(PORT)
+        said.said("h", PRODJ)
+        said.said("h", DESK)
+        self.assertEqual(said.gate_name("h", "h", PORT), "desk@h")
+
+    def test_other_hellos_do_not_count(self):
+        """a3nuc2 runs Motion beside the app: Motion's hello leaves the kind."""
+        said = SaidKinds(PORT)
+        said.said("h", PRODJ)
+        said.said("h", "motion")
+        self.assertEqual(said.gate_name("h", "h", PORT), "prodj@h")
+
+    def test_another_socket_on_that_host_keeps_its_name(self):
+        said = SaidKinds(PORT)
+        said.said("h", PRODJ)
+        self.assertEqual(said.gate_name("motion", "h", 51234), "motion")
+
+    def test_a_host_that_never_said_a_desk_hello_keeps_its_name(self):
+        self.assertEqual(SaidKinds(PORT).gate_name("mixer", "h", PORT), "mixer")
+
+    def test_a_followed_desk_keeps_its_name(self):
+        said = SaidKinds(PORT)
+        said.said("h", PRODJ)
+        self.assertEqual(said.gate_name("desk@h", "h", PORT), "desk@h")
 
 
 if __name__ == "__main__":

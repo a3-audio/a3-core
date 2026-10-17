@@ -348,7 +348,7 @@ class TheStemWords(unittest.TestCase):
     def test_who_speaks_and_who_hears(self):
         a = self.t.addresses()
         for key in ("channel.stem.turn", "aux-return.stem.turn", "aux-return.stem.push"):
-            self.assertEqual((a[key]["from"], a[key]["to"]), (["mixer", "desk"], ["core"]), key)
+            self.assertEqual((a[key]["from"], a[key]["to"]), (["mixer", "desk", "prodj"], ["core"]), key)
         for key in ("channel.stem", "aux-return.stem"):
             self.assertEqual((a[key]["from"], a[key]["to"]), (["core"], ["mixer", "desk", "motion"]), key)
 
