@@ -46,7 +46,8 @@ class Silence(unittest.TestCase):
     def test_a_silent_desk_leaves_the_subscribers(self):
         source = _source_of("notice_desk_silence")
         self.assertIn("_desks.silence(", source)
-        self.assertIn("drop_named(subscribers,", source)
+        self.assertIn("desk_leaves(host)", source)
+        self.assertIn("drop_named(subscribers,", _source_of("desk_leaves"))
 
 
 class WhoSaidIt(unittest.TestCase):

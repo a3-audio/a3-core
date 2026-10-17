@@ -73,7 +73,8 @@ from a3_osc_render import write_user_files   # noqa: E402
 from a3_core_recall import (FX_MODE_NUMBERS, FX_MODE_WORDS,   # noqa: E402
                             Relayed, STATE_OF, led_message,
                             recall_messages, return_cue_lamp)   # noqa: E402
-from a3_core_desks import (DESK, JOINED, KNOWN, MAX_DESKS, PRODJ, SaidKinds,   # noqa: E402
+from a3_core_desks import (DESK, JOINED, KIND_CHANGED, KNOWN, MAX_DESKS,   # noqa: E402
+                           PRODJ, SaidKinds,
                            REFUSED_FIRST,
                            DeskFollowers, desk_name, kind_of)
 from a3_core_prodj_live import ProdjLive, may_switch   # noqa: E402
@@ -1488,6 +1489,13 @@ def desk_said_hello(host, now, kind=DESK):
     fifth is refused and said once."""
     _subscribers_owner.check("a desk joining")
     verdict = _desks.hello(host, now, kind=kind)
+    if verdict == KIND_CHANGED:
+        # Its client is named by its kind: kept, relay() would not leave the
+        # sender out and the silence would read the old kind.
+        print(f"desk: {host} now says {kind}, joins again as {desk_name(host, kind)}")
+        if desk_leaves(host):
+            live_off_when_no_prodj_is_left()
+        verdict = JOINED
     if verdict == KNOWN and host in _desk_clients:
         _desk_clients[host].send_message(_truth.address("prodj.live"), live_value())
     if verdict == REFUSED_FIRST:
@@ -1513,12 +1521,25 @@ def notice_desk_silence(now):
     _subscribers_owner.check("a desk leaving")
     prodj_left = False
     for host in _desks.silence(now):
-        client = _desk_clients.pop(host, None)
-        if client is not None:
-            drop_named(subscribers, client.name)
-            prodj_left = prodj_left or kind_of(client.name) == PRODJ
+        prodj_left = desk_leaves(host) or prodj_left
         print(f"desk: {host} silent for a minute, no longer followed")
-    if prodj_left and not _desks.hosts_of_kind(PRODJ) and _prodj_live.nobody_left():
+    if prodj_left:
+        live_off_when_no_prodj_is_left()
+
+
+def desk_leaves(host):
+    """Take a desk's client out of the subscribers; True when it was a
+    pro-DJ app."""
+    client = _desk_clients.pop(host, None)
+    if client is None:
+        return False
+    drop_named(subscribers, client.name)
+    return kind_of(client.name) == PRODJ
+
+
+def live_off_when_no_prodj_is_left():
+    """LIVE off once no pro-DJ app is followed any more, and said to all."""
+    if not _desks.hosts_of_kind(PRODJ) and _prodj_live.nobody_left():
         print("prodj: LIVE off, no pro-DJ app left")
         announce_live()
 

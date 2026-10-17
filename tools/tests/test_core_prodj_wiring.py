@@ -113,9 +113,9 @@ class WhatAProdjIsTold(unittest.TestCase):
 class Live(unittest.TestCase):
     def test_a_known_desk_saying_hello_again_is_answered_with_live(self):
         source = _source_of("desk_said_hello")
-        self.assertIn("KNOWN", source)
-        self.assertLess(source.index("KNOWN"), source.index("JOINED"))
-        self.assertIn("prodj.live", source[source.index("KNOWN"):source.index("JOINED")])
+        known, joined = source.index("if verdict == KNOWN"), source.index("if verdict != JOINED")
+        self.assertLess(known, joined)
+        self.assertIn("prodj.live", source[known:joined])
 
     def test_motions_hello_is_answered_with_live(self):
         source = _source_of("motion_said_hello")
@@ -146,11 +146,27 @@ class Live(unittest.TestCase):
         self.assertEqual(_source_of("on_tick").count("_prodj_live.due("), 1)
 
     def test_the_last_prodj_leaving_switches_live_off(self):
-        source = _source_of("notice_desk_silence")
+        self.assertIn("live_off_when_no_prodj_is_left()", _source_of("notice_desk_silence"))
+        source = _source_of("live_off_when_no_prodj_is_left")
         self.assertIn("_desks.hosts_of_kind(PRODJ)", source)
         self.assertIn("_prodj_live.nobody_left(", source)
         self.assertIn("announce_live(", source)
         self.assertIn("prodj: LIVE off, no pro-DJ app left", source)
+
+    def test_a_kind_change_is_a_leave_and_a_join(self):
+        """The client is named by its kind: kept, relay() would miss the
+        sender and the silence would read the old kind."""
+        source = _source_of("desk_said_hello")
+        changed = source.index("if verdict == KIND_CHANGED:")
+        self.assertLess(changed, source.index("if verdict != JOINED:"))
+        branch = source[changed:source.index("if verdict != JOINED:")]
+        self.assertIn("if desk_leaves(host):", branch)
+        self.assertIn("live_off_when_no_prodj_is_left()", branch)
+        self.assertIn("verdict = JOINED", branch)
+        leaves = _source_of("desk_leaves")
+        self.assertIn("_desk_clients.pop(host, None)", leaves)
+        self.assertIn("drop_named(subscribers, client.name)", leaves)
+        self.assertIn("desk_leaves(host)", _source_of("notice_desk_silence"))
 
     def test_announce_live_never_broadcasts(self):
         source = _source_of("announce_live")

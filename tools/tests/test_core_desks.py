@@ -12,8 +12,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local/lib"))
 
-from a3_core_desks import (JOINED, KNOWN, MAX_DESKS, REFUSED, REFUSED_FIRST,  # noqa: E402
-                           DESK, PRODJ, DeskFollowers, SaidKinds, desk_name, kind_of)
+from a3_core_desks import (JOINED, KNOWN, KIND_CHANGED, MAX_DESKS, REFUSED,  # noqa: E402
+                           REFUSED_FIRST, DESK, PRODJ, DeskFollowers, SaidKinds, desk_name, kind_of)
 from a3_core_prodj_live import ProdjLive   # noqa: E402
 
 PORT, VU = 7773, 7774
@@ -124,12 +124,20 @@ class Kinds(unittest.TestCase):
         self.assertEqual(kind_of("desk@h"), "desk")
         self.assertIsNone(kind_of("motion"))
 
-    def test_a_known_host_saying_another_kind_takes_it_and_stays_known(self):
+    def test_a_known_host_saying_another_kind_takes_it_as_a_change(self):
+        """Core drops the old client and joins the new one: its name is its
+        kind, and relay() and the silence read the name."""
         desks = followers()
         desks.hello("h", 0.0)
-        self.assertEqual(desks.hello("h", 1.0, kind=PRODJ), KNOWN)
+        self.assertEqual(desks.hello("h", 1.0, kind=PRODJ), KIND_CHANGED)
         self.assertEqual(desks.name_of("h", PORT), "prodj@h")
         self.assertEqual(desks.hosts_of_kind(DESK), [])
+        self.assertEqual(desks.hello("h", 2.0, kind=PRODJ), KNOWN)
+
+    def test_the_same_kind_again_is_known(self):
+        desks = followers()
+        desks.hello("h", 0.0, kind=PRODJ)
+        self.assertEqual(desks.hello("h", 1.0, kind=PRODJ), KNOWN)
 
 
 class AnUnfollowedProdj(unittest.TestCase):

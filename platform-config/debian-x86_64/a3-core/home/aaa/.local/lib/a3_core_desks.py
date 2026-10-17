@@ -35,6 +35,7 @@ DESK = "desk"
 PRODJ = "prodj"
 
 JOINED = "joined"
+KIND_CHANGED = "kind-changed"
 KNOWN = "known"
 REFUSED_FIRST = "refused-first"
 REFUSED = "refused"
@@ -66,14 +67,17 @@ class DeskFollowers:
     def hello(self, host, now, kind=DESK):
         """JOINED for a desk that has just arrived (or come back after a
         silence), KNOWN for one already followed, REFUSED_FIRST and then
-        REFUSED for one that would be one too many. A known host saying another kind
-        takes the new kind."""
+        REFUSED for one that would be one too many. A known host saying
+        another kind takes the new kind and is KIND_CHANGED: the caller
+        lets the old one leave and the new one join."""
         with self._lock:
             presence = self._followed.get(host)
             if presence is not None:
                 presence.heard(now)
+                if self._kinds[host] == kind:
+                    return KNOWN
                 self._kinds[host] = kind
-                return KNOWN
+                return KIND_CHANGED
             if len(self._followed) >= self._limit:
                 if host in self._told_refused:
                     return REFUSED
