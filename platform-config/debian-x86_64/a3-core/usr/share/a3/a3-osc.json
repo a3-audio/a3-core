@@ -79,6 +79,8 @@
    "carries": "a3-engine-bench: the /channel/{ch}/... controls of the four engine strips (not yet routed by Core)"},
   {"name": "x11vnc.vnc", "program": "x11vnc", "role": "vnc", "host": "any", "port": 5901,
    "carries": "the Core's screen (VNC, not OSC)"},
+  {"name": "screencast.stream", "program": "screencast", "role": "stream", "host": "any", "port": 9930,
+   "protocol": "tcp", "carries": "the screen's picture as MPEG-TS for OBS (listener, not OSC)"},
   {"name": "radla.osc", "program": "radla", "role": "osc", "host": "radla", "port": 9000,
    "carries": "/beat"},
   {"name": "radla.vu", "program": "radla", "role": "vu", "host": "radla", "port": 9001,
@@ -201,5 +203,5 @@
    "/EnergyVisualizer/RMS", "/DualDelay/delayBPML", "/DualDelay/delayBPMR"]}
  },
  "programs": ["core", "motion", "mixer", "beat-analyzer", "stemdeck", "reaper", "devices",
-              "iem", "dualdelay", "engine", "x11vnc", "radla", "prolink", "aes67", "ptp4l"]
+              "iem", "dualdelay", "engine", "x11vnc", "screencast", "radla", "prolink", "aes67", "ptp4l"]
 }

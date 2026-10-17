@@ -10,8 +10,8 @@ import os
 import socket
 from pathlib import Path
 
-#: Where x11vnc finds its port (a system unit: it names the home in full;
-#: %h would be root's).
+#: Where x11vnc and the screencast find their ports (x11vnc is a system unit: it
+#: names the home in full; %h would be root's).
 ENV_FILE = Path(".config/a3/osc.env")
 
 #: The analyzer's file of ours. The beat-analyzer package reads conf.d/*.env
@@ -43,9 +43,13 @@ def vnc_env(truth):
     return lines([("A3_VNC_PORT", truth.port("x11vnc", "vnc"))])
 
 
+def screencast_env(truth):
+    return lines([("A3_SCREENCAST_PORT", truth.port("screencast", "stream"))])
+
+
 def osc_env(truth):
-    """osc.env: x11vnc's port."""
-    return vnc_env(truth)
+    """osc.env: the ports of x11vnc and the screencast."""
+    return vnc_env(truth) + screencast_env(truth)
 
 
 def network_defaults(truth):
