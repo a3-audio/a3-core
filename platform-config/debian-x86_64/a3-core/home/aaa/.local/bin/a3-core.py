@@ -73,8 +73,11 @@ from a3_osc_render import write_user_files   # noqa: E402
 from a3_core_recall import (FX_MODE_NUMBERS, FX_MODE_WORDS,   # noqa: E402
                             Relayed, STATE_OF, led_message,
                             recall_messages, return_cue_lamp)   # noqa: E402
-from a3_core_subscribers import (SHIPPED, SubscriberError,   # noqa: E402
-                                 everyone_but, parse_subscribers,
+from a3_core_desks import (JOINED, MAX_DESKS, REFUSED_FIRST,   # noqa: E402
+                           DeskFollowers, desk_name)
+from a3_core_subscribers import (SHIPPED, OwningThread,   # noqa: E402
+                                 SubscriberError, add_subscriber,
+                                 drop_named, everyone_but, parse_subscribers,
                                  relay_on_arrival, replace_named)
 from a3_core_traffic import (ANSWERERS, COMMANDERS, IN,   # noqa: E402
                              OUT, Traffic, peer_name)   # noqa: E402
@@ -247,6 +250,17 @@ MOTION_OWN_HOSTS = frozenset((_truth.host("core"),
 #: see a3_core_motion. Rebuilt from --motion below.
 _motion = MotionTarget((A3MOTION_HOST, A3MOTION_PORT), A3MOTION_PORT,
                        MOTION_OWN_HOSTS, _truth.port("motion", "vu"))
+#: The virtual desks Core talks to: every one that said hello with Core's own
+#: truth, four at most (a3_core_desks). Not rebuilt from the arguments: a desk
+#: is found by its hello, never configured.
+_desks = DeskFollowers(_truth.port("desk", "osc"), _truth.port("desk", "vu"))
+#: Their clients, by host: a desk's slot among the subscribers, and where the
+#: analyzer's /beat goes on to.
+_desk_clients = {}
+#: The serve thread, which alone lets a desk join or leave the subscribers
+#: (claimed just before serve(), checked in
+#: desk_said_hello and notice_desk_silence).
+_subscribers_owner = OwningThread()
 osc_reaper = WatchedClient(SimpleUDPClient(REAPER_HOST, REAPER_PORT),
                            "reaper")
 
@@ -479,7 +493,7 @@ def broadcast(address, value):
         return
 
     note_passed_on(address, value)
-    for client in subscribers:
+    for client in tuple(subscribers):
         client.send_message(address, value)
 
 
@@ -808,7 +822,7 @@ def values_refused(client_address: Tuple[str, int], address: str) -> bool:
     verdict = _hello_gate.check(host, port)
     if verdict == ADMIT:
         return False
-    who = peer_name(host, PEER_HOSTS, only=COMMANDERS)
+    who = origin_of(client_address)
     if verdict == REFUSE_FIRST:
         print(f"{who} ({host}): values before its hello ignored")
     if verdict == REFUSE_DIFFERS_FIRST:
@@ -851,7 +865,7 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
     value: float = float(raw)  # type: ignore
     assert type(value) == float
 
-    origin = peer_name(client_address[0], PEER_HOSTS, only=COMMANDERS)
+    origin = origin_of(client_address)
     traffic.seen(IN, address, raw, origin)
     if _print_osc:
         print(address + " : " + str(value))
@@ -1032,7 +1046,7 @@ def osc_handler_master(client_address: Tuple[str, int], address: str,
     value: float = float(osc_arguments[0])  # type: ignore
     assert type(value) == float
 
-    origin = peer_name(client_address[0], PEER_HOSTS, only=COMMANDERS)
+    origin = origin_of(client_address)
     traffic.seen(IN, address, osc_arguments[0], origin)
     if _print_osc:
         print(address + " : " + str(value))
@@ -1087,7 +1101,7 @@ def osc_handler_aux_return(client_address: Tuple[str, int], address: str,
     key, _ = found
 
     value = osc_arguments[0] if osc_arguments else None
-    origin = peer_name(client_address[0], PEER_HOSTS, only=COMMANDERS)
+    origin = origin_of(client_address)
     traffic.seen(IN, address, value, origin)
     if key == "aux-return.stem.turn":
         _stems.turn(RETURN, int(float(osc_arguments[0])))
@@ -1146,6 +1160,7 @@ def on_tick():
     """The serve loop's tick, on the serve thread as every handler is."""
     tidy_when_settled()
     notice_motion_silence(time.monotonic())
+    notice_desk_silence(time.monotonic())
 
 
 def tidy_when_settled():
@@ -1173,7 +1188,7 @@ def osc_handler_filter(client_address: Tuple[str, int], address: str,
 
     value = osc_arguments[0]
 
-    origin = peer_name(client_address[0], PEER_HOSTS, only=COMMANDERS)
+    origin = origin_of(client_address)
     traffic.seen(IN, address, value, origin)
     if _print_osc:
         print(address + " : " + str(value))
@@ -1250,6 +1265,9 @@ def osc_handler_beat(client_address: Tuple[str, int], address: str,
 
     if _motion.forwards_beat():
         osc_a3motion.send_message(address, list(osc_arguments))
+
+    for client in list(_desk_clients.values()):
+        client.send_message(address, list(osc_arguments))
 
     if len(osc_arguments) < 3:
         return
@@ -1338,7 +1356,7 @@ def osc_handler_device_hello(client_address: Tuple[str, int], address: str,
     is news: a copy that is not Core's own is a second truth, and OSC would
     never say so -- the device would speak old words to nobody."""
     traffic.seen(IN, address, osc_arguments[0] if osc_arguments else None,
-                 peer_name(client_address[0], PEER_HOSTS))
+                 origin_of(client_address))
     if len(osc_arguments) < 2:
         return
 
@@ -1348,12 +1366,15 @@ def osc_handler_device_hello(client_address: Tuple[str, int], address: str,
         stemdeck_said_hello(client_address[0], now)
     if device == "motion":
         motion_said_hello(client_address[0], now)
+    if device == "desk" and their_hash == _devices.own_hash:
+        desk_said_hello(client_address[0], now)
     _hello_gate.greet(client_address[0], their_hash == _devices.own_hash)
     notice_stemdeck_silence(now)
-    if _devices.heard(device, their_hash, now):
+    label = desk_name(client_address[0]) if device == "desk" else device
+    if _devices.heard(label, their_hash, now):
         verdict = ("is Core's" if their_hash == _devices.own_hash
                    else "DIFFERS from Core's")
-        print(f"{device}: its a3-osc.json {verdict} ({their_hash[:12]})")
+        print(f"{label}: its a3-osc.json {verdict} ({their_hash[:12]})")
 
 
 def stemdeck_said_hello(host, now):
@@ -1415,6 +1436,54 @@ def point_motion_at(endpoint, why):
     print(f"motion: {why}, now {host}:{port}; replayed {told} messages")
 
 
+def origin_of(client_address):
+    """Who sent a message, as relay() leaves them out and the window names
+    them: a followed desk by its listening socket, everyone else by host --
+    a desk beside a Motion on one machine must not take Motion's name, or the
+    desk's moves would never reach Motion (a3_core_desks)."""
+    host, port = client_address[0], client_address[1]
+    return (_desks.name_of(host, port)
+            or peer_name(host, PEER_HOSTS, only=COMMANDERS))
+
+
+def desk_said_hello(host, now):
+    """A desk with Core's own truth is there. One that has just arrived gets
+    a slot among the subscribers and the whole state at once; a fifth is
+    refused and said once."""
+    _subscribers_owner.check("a desk joining")
+    verdict = _desks.hello(host, now)
+    if verdict == REFUSED_FIRST:
+        print(f"desk: {host} said hello, but {MAX_DESKS} desks are followed "
+              f"already ({', '.join(_desks.hosts())}) -- not followed")
+    if verdict != JOINED:
+        return
+    client = WatchedClient(SimpleUDPClient(host, _desks.port), desk_name(host))
+    _desk_clients[host] = client
+    add_subscriber(subscribers, client)
+    told = say_the_whole_state()
+    print(f"desk: {host} joined, {len(_desk_clients)} of {MAX_DESKS}; "
+          f"replayed {told} messages")
+
+
+def notice_desk_silence(now):
+    """A minute without a desk's hello: it is closed or gone, and is told
+    nothing more."""
+    _subscribers_owner.check("a desk leaving")
+    for host in _desks.silence(now):
+        client = _desk_clients.pop(host, None)
+        if client is not None:
+            drop_named(subscribers, client.name)
+        print(f"desk: {host} silent for a minute, no longer followed")
+
+
+def vu_destinations():
+    """Where the analyzer's and StemDeck's meters go on to: the remote Motion
+    followed (none for the rig's own, which the analyzer reaches directly)
+    and every desk followed."""
+    motion = _motion.vu_destination()
+    return ([motion] if motion is not None else []) + _desks.vu_destinations()
+
+
 #: The words whose older values are worth nothing once a newer one waits.
 POSITION_WORDS = frozenset(("channel.azimuth", "channel.elevation"))
 
@@ -1441,8 +1510,7 @@ def osc_handler_recall(client_address: Tuple[str, int], address: str,
     # -- if this is not tapped, a device returning after a drop is invisible
     # in the window, which is exactly the case the window exists to show.
     traffic.seen(IN, address, osc_arguments[0] if osc_arguments else None,
-                 peer_name(client_address[0], PEER_HOSTS,
-                           only=COMMANDERS))
+                 origin_of(client_address))
 
     told = say_the_whole_state()
     print(f"{address}: replayed {told} messages "
@@ -1813,7 +1881,7 @@ if __name__ == "__main__":
           f"{args.ip}:{args.feedback_port}, "
           f"buffer {feedback_buffer // 1024} KB")
 
-    # The analyzer's meters, for a remote Motion only (a3_core_vu_relay). They
+    # The analyzer's meters, for a remote Motion and the desks (a3_core_vu_relay). They
     # arrive only if the analyzer's config has OSC_VU_core=<this port>: Core
     # renders that line into its conf.d file from the truth below
     # (write_user_files), and the analyzer reads it at its next start.
@@ -1822,12 +1890,14 @@ if __name__ == "__main__":
     try:
         vu_inbox.bind(_truth.endpoint("core", "vu-relay"))
     except OSError as problem:
-        print(f"no meters for a remote Motion: {problem}", file=sys.stderr)
+        print(f"no meters for a remote Motion or the desks: {problem}",
+              file=sys.stderr)
     else:
         threading.Thread(target=relay_vu, daemon=True, name="a3-vu-relay",
-                         args=(vu_inbox, lambda: _motion.vu_destination())).start()
+                         args=(vu_inbox, vu_destinations)).start()
         print(f"forwarding the analyzer's meters from "
-              f"{vu_inbox.getsockname()} to a remote Motion")
+              f"{vu_inbox.getsockname()} to a remote Motion and every desk "
+              f"followed")
 
     # Zwischendurch sichern. The project is what a power cut costs: Core's own
     # state file is written two seconds after a change, REAPER's project only
@@ -2008,6 +2078,7 @@ if __name__ == "__main__":
     # Not serve_forever: the newest position wins (a3_core_latest). Motion
     # sends a position on every clock tick; under load the queue filled and
     # a desk command waited behind thousands of stale ones (2026-10-02).
+    _subscribers_owner.claim()
     serve(server.socket,
           lambda data, client: dispatcher.call_handlers_for_packet(data, client),
           lambda data: position_key(data, is_position),

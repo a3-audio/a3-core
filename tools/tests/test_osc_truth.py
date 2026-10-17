@@ -348,9 +348,9 @@ class TheStemWords(unittest.TestCase):
     def test_who_speaks_and_who_hears(self):
         a = self.t.addresses()
         for key in ("channel.stem.turn", "aux-return.stem.turn", "aux-return.stem.push"):
-            self.assertEqual((a[key]["from"], a[key]["to"]), (["mixer"], ["core"]), key)
+            self.assertEqual((a[key]["from"], a[key]["to"]), (["mixer", "desk"], ["core"]), key)
         for key in ("channel.stem", "aux-return.stem"):
-            self.assertEqual((a[key]["from"], a[key]["to"]), (["core"], ["mixer", "motion"]), key)
+            self.assertEqual((a[key]["from"], a[key]["to"]), (["core"], ["mixer", "desk", "motion"]), key)
 
     def test_the_return_carries_its_cursor_and_all_eight_pairs(self):
         self.assertEqual(self.t.addresses()["aux-return.stem"]["args"], "i" * 9)
@@ -373,7 +373,7 @@ class TheReturnCue(unittest.TestCase):
     def test_core_tells_the_desk_and_motion(self):
         entry = self.t.addresses()["aux-return.cue.led"]
         self.assertEqual((entry["args"], entry["from"], entry["to"]),
-                         ("f", ["core"], ["mixer", "motion"]))
+                         ("f", ["core"], ["mixer", "desk", "motion"]))
 
     def test_the_cursor_names_its_third_field(self):
         self.assertIn("2 = cue", self.t.addresses()["aux-return.stem"]["meaning"])

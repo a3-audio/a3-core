@@ -28,7 +28,7 @@ class TheTables(unittest.TestCase):
     def test_a_row_says_who_sends_it_and_who_hears_it(self):
         row = next(line for line in render_docs.addresses_table(TRUTH).splitlines()
                    if "`/master/aux-return`" in line)
-        self.assertIn("mixer, motion", row)
+        self.assertIn("mixer, desk, motion", row)
         self.assertIn("core", row)
 
     def test_a_pipe_in_a_cell_does_not_split_the_row(self):
