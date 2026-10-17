@@ -41,10 +41,10 @@ class X11vncStaysOnCpu0(unittest.TestCase):
     def test_the_drop_in_sets_no_scheduling(self):
         self.assertNotIn("CPUScheduling", VNC_DROP_IN.read_text())
 
-    def test_the_drop_in_is_not_a_conffile(self):
-        """A conffile prompts on upgrade; the rig already holds a .dpkg-dist."""
+    def test_the_drop_in_is_a_conffile(self):
+        """Every file shipped under etc/ is one (test_package_keeps_local_config)."""
         conffiles = (PACKAGE / "DEBIAN/conffiles").read_text()
-        self.assertNotIn("x11vnc.service.d", conffiles)
+        self.assertIn("/etc/systemd/system/x11vnc.service.d/cpu.conf", conffiles)
 
 
 class XorgStaysOnCpu0(unittest.TestCase):
