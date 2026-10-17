@@ -14,7 +14,7 @@ Pure: the caller passes the clock and does the sending. Read on the serve
 thread only, so no lock.
 """
 
-from a3_core_desks import PRODJ
+from a3_core_desks import PRODJ, kind_of
 
 REPEAT_EVERY = 5.0
 
@@ -24,6 +24,8 @@ SWITCHERS = ("desk", "prodj", "motion")
 
 # A prodj that is off may still say hello, ask for the recall and switch on.
 ALWAYS_ADMITTED_FROM_A_PRODJ = frozenset(("device.hello", "state.recall", "prodj.live"))
+# Who may send -- not the same decision as a3_core_subscribers.NOT_PASSED_ON_NOR_REPLAYED
+# (what Core relays or replays), so the two stay apart.
 POINTERS = frozenset(("stemdeck.pointer", "motion.pointer"))
 
 
@@ -65,7 +67,9 @@ class ProdjLive:
         origin without a kind, such as Motion) may act.
 
         Only a prodj is held back, and only while off. The pointers are a
-        prodj's alone, and only while on."""
+        prodj's alone, and only while on. A full name ("prodj@h") is read
+        by its kind."""
+        kind = _kind(kind)
         if key in POINTERS:
             return kind == PRODJ and self._on
         if kind != PRODJ:
@@ -73,7 +77,12 @@ class ProdjLive:
         return self._on or key in ALWAYS_ADMITTED_FROM_A_PRODJ
 
 
+def _kind(kind_or_name):
+    return kind_of(kind_or_name) or kind_or_name if kind_or_name else kind_or_name
+
+
 def may_switch(origin_kind_or_name, wanted):
-    if origin_kind_or_name == "motion":
+    kind = _kind(origin_kind_or_name)
+    if kind == "motion":
         return not wanted
-    return origin_kind_or_name in SWITCHERS
+    return kind in SWITCHERS

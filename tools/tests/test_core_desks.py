@@ -99,10 +99,6 @@ class Meters(unittest.TestCase):
         self.assertEqual(desks.vu_destinations(), [("192.168.8.20", VU), ("192.168.8.30", VU)])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class Kinds(unittest.TestCase):
     def test_a_prodj_is_named_by_its_kind(self):
         desks = followers()
@@ -133,3 +129,7 @@ class Kinds(unittest.TestCase):
         self.assertEqual(desks.hello("h", 1.0, kind=PRODJ), KNOWN)
         self.assertEqual(desks.name_of("h", PORT), "prodj@h")
         self.assertEqual(desks.hosts_of_kind(DESK), [])
+
+
+if __name__ == "__main__":
+    unittest.main()

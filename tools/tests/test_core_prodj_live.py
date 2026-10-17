@@ -86,6 +86,14 @@ class Admission(unittest.TestCase):
         for live in (ProdjLive(), live_on()):
             self.assertTrue(live.admits(None, "channel.volume"))
 
+    def test_a_full_name_is_read_by_its_kind(self):
+        live = ProdjLive()
+        self.assertFalse(live.admits("prodj@h", "channel.volume"))
+        self.assertTrue(live.admits("desk@h", "channel.volume"))
+        live.set(True, 0.0)
+        self.assertTrue(live.admits("prodj@h", "motion.pointer"))
+        self.assertFalse(live.admits("desk@h", "motion.pointer"))
+
     def test_pointers_pass_only_from_a_prodj_while_on(self):
         for live in (ProdjLive(), live_on()):
             for kind in ("desk", "motion", None):
@@ -102,6 +110,14 @@ class WhoSwitches(unittest.TestCase):
         self.assertTrue(may_switch("desk", True))
         self.assertFalse(may_switch("mixer", True))
         self.assertFalse(may_switch("mixer", False))
+
+    def test_a_full_origin_name_counts_by_its_kind(self):
+        # C3 hands over origin names such as "prodj@10.0.0.5".
+        self.assertTrue(may_switch("prodj@h", True))
+        self.assertTrue(may_switch("desk@h", False))
+        self.assertTrue(may_switch("motion", False))
+        self.assertFalse(may_switch("motion", True))
+        self.assertFalse(may_switch("mixer@h", True))
 
 
 if __name__ == "__main__":
