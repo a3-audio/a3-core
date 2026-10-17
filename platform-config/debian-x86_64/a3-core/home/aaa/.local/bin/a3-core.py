@@ -73,7 +73,7 @@ from a3_osc_render import write_user_files   # noqa: E402
 from a3_core_recall import (FX_MODE_NUMBERS, FX_MODE_WORDS,   # noqa: E402
                             Relayed, STATE_OF, led_message,
                             recall_messages, return_cue_lamp)   # noqa: E402
-from a3_core_desks import (DESK, JOINED, KNOWN, MAX_DESKS, PRODJ,   # noqa: E402
+from a3_core_desks import (DESK, JOINED, KNOWN, MAX_DESKS, PRODJ, SaidKinds,   # noqa: E402
                            REFUSED_FIRST,
                            DeskFollowers, desk_name, kind_of)
 from a3_core_prodj_live import ProdjLive, may_switch   # noqa: E402
@@ -259,6 +259,9 @@ _desks = DeskFollowers(_truth.port("desk", "osc"), _truth.port("desk", "vu"))
 #: Their clients, by host: a desk's slot among the subscribers, and where the
 #: analyzer's /beat goes on to.
 _desk_clients = {}
+#: The kind each host last said in a desk hello, slot or not: the LIVE gate
+#: reads a pro-DJ app without a slot by it (a3_core_desks.SaidKinds).
+_said_kinds = SaidKinds(_truth.port("desk", "osc"))
 #: The pro-DJ LIVE lease (a3_core_prodj_live): off at start, never switched on
 #: by Core itself.
 _prodj_live = ProdjLive()
@@ -815,21 +818,26 @@ def unrouted_handler(client_address: Tuple[str, int], address: str,
 _hello_gate = HelloGate()
 
 
-def values_refused(client_address: Tuple[str, int], address: str) -> bool:
+def values_refused(client_address: Tuple[str, int], address: str,
+                   osc_arguments) -> bool:
     """True when `address` is a mixer value from a host that has not said
     hello to this Core yet: ignored, not relayed, not remembered. The truth
     comes from Core; a device that speaks before Core's replay may know
     nothing (a Motion once sent every value as 0.0, 2026-10-14). Buttons and
     other edges are not values (relay_on_arrival) and pass. A pro-DJ app moves
-    nothing while LIVE is off, whatever it sends (a3_core_prodj_live)."""
+    nothing while LIVE is off, whatever it sends (a3_core_prodj_live) -- one
+    without a slot too, by the kind its host last said (_said_kinds)."""
     found = _truth.match(address)
     key = found[0] if found is not None else None
     who = origin_of(client_address)
-    if not _prodj_live.admits(who, key):
+    host, port = client_address[0], client_address[1]
+    if not _prodj_live.admits(_said_kinds.gate_name(who, host, port), key):
+        # Seen as an arrival with nothing after it, as a refused pointer is:
+        # the window shows the app is talking while LIVE is off.
+        traffic.seen(IN, address, osc_arguments[0] if osc_arguments else None, who)
         return True
     if not relay_on_arrival(_truth, address):
         return False
-    host, port = client_address[0], client_address[1]
     verdict = _hello_gate.check(host, port)
     if verdict == ADMIT:
         return False
@@ -861,7 +869,7 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
     found = known_address(client_address, address, osc_arguments)
     if found is None:
         return
-    if values_refused(client_address, address):
+    if values_refused(client_address, address, osc_arguments):
         return
     key, fields = found
 
@@ -1050,7 +1058,7 @@ def osc_handler_master(client_address: Tuple[str, int], address: str,
     found = known_address(client_address, address, osc_arguments)
     if found is None:
         return
-    if values_refused(client_address, address):
+    if values_refused(client_address, address, osc_arguments):
         return
     key, _ = found
 
@@ -1109,6 +1117,8 @@ def osc_handler_aux_return(client_address: Tuple[str, int], address: str,
     CUE; push switches the mode, or on CUE toggles the return's cue."""
     found = known_address(client_address, address, osc_arguments)
     if found is None:
+        return
+    if values_refused(client_address, address, osc_arguments):
         return
     key, _ = found
 
@@ -1198,7 +1208,7 @@ def osc_handler_filter(client_address: Tuple[str, int], address: str,
     found = known_address(client_address, address, osc_arguments)
     if found is None:
         return
-    if values_refused(client_address, address):
+    if values_refused(client_address, address, osc_arguments):
         return
     key, _ = found
 
@@ -1378,6 +1388,7 @@ def osc_handler_device_hello(client_address: Tuple[str, int], address: str,
 
     device, their_hash = str(osc_arguments[0]), str(osc_arguments[1])
     now = time.monotonic()
+    _said_kinds.said(client_address[0], device)
     if device == "stemdeck":
         stemdeck_said_hello(client_address[0], now)
     if device == "motion":
@@ -1611,7 +1622,7 @@ def osc_handler_pointer(client_address: Tuple[str, int], address: str,
     # Seen before the gate: a refused pointer shows in the window as an
     # arrival with no matching send to the device, and is not journalled.
     traffic.seen(IN, address, list(osc_arguments), origin)
-    if not _prodj_live.admits(origin, key):
+    if not _prodj_live.admits(_said_kinds.gate_name(origin, client_address[0], client_address[1]), key):
         return
     target = _stemdeck_client if key == "stemdeck.pointer" else osc_a3motion
     if target is not None:

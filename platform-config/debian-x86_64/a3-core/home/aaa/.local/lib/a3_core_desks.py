@@ -115,3 +115,32 @@ class DeskFollowers:
     def vu_destinations(self):
         with self._lock:
             return [(host, self._vu_port) for host in self._followed]
+
+
+
+class SaidKinds:
+    """The kind each host last said in a desk hello, followed or not.
+
+    The LIVE gate needs it for a pro-DJ app that has no slot -- a fifth one,
+    or one forgotten after a minute's silence: without a slot it has no desk
+    name, and named by its host it would move the room while LIVE is off.
+    Only desk hellos count: Motion on the same host says hello too.
+
+    Read and written on the serve thread only, so no lock."""
+
+    def __init__(self, port):
+        self._port = port
+        self._kinds = {}
+
+    def said(self, host, device):
+        if device in (DESK, PRODJ):
+            self._kinds[host] = device
+
+    def gate_name(self, origin, host, port):
+        """`origin` as the LIVE gate reads it: a followed desk's name stands;
+        a message from the desk.osc socket of a host that last said a desk
+        hello is named by that kind; anyone else keeps `origin`."""
+        if kind_of(origin) is not None or port != self._port:
+            return origin
+        kind = self._kinds.get(host)
+        return desk_name(host, kind) if kind is not None else origin

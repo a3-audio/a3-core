@@ -8,11 +8,14 @@ test_core_desks; this holds that a3-core.py asks them and acts on the answer.
 Read off the source: Core itself cannot be started in a test."""
 
 import ast
+import json
+import re
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CORE = (ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local/bin/a3-core.py").read_text()
+TRUTH = ROOT / "platform-config/debian-x86_64/a3-core/usr/share/a3/a3-osc.json"
 
 
 def _source_of(function_name):
@@ -146,7 +149,7 @@ class Live(unittest.TestCase):
 class Pointers(unittest.TestCase):
     def test_pointers_are_forwarded_only_through_the_gate(self):
         source = _source_of("osc_handler_pointer")
-        self.assertIn("_prodj_live.admits(origin, key)", source)
+        self.assertIn("_prodj_live.admits(_said_kinds.gate_name(origin, client_address[0], client_address[1]), key)", source)
         self.assertIn("_stemdeck_client", source)
         self.assertIn("osc_a3motion", source)
         self.assertNotIn("relay(", source)
@@ -163,10 +166,49 @@ class Pointers(unittest.TestCase):
     def test_values_refused_asks_the_live_gate(self):
         source = _source_of("values_refused")
         self.assertIn("who = origin_of(client_address)", source)
-        self.assertIn("not _prodj_live.admits(who, key)", source)
+        self.assertIn("not _prodj_live.admits(_said_kinds.gate_name(who, host, port), key)", source)
         self.assertLess(source.index("_prodj_live.admits("),
                         source.index("relay_on_arrival("))
         self.assertEqual(source.count("origin_of(client_address)"), 1)
+
+
+
+def _desk_word_handlers():
+    """The handler of every family a desk word arrives in, read off the
+    dispatcher's family table: a desk word is one with "desk" in `from` and
+    Core in `to`, mapped by its first part."""
+    addresses = json.loads(TRUTH.read_text())["addresses"]
+    families = {entry["pattern"].split("/")[1] for entry in addresses.values()
+                if "desk" in entry.get("from", []) and "core" in entry.get("to", [])}
+    mapped = dict(re.findall(r'\("([a-z-]+)", (osc_handler_\w+)\)', CORE))
+    return {family: mapped[family] for family in families if family in mapped}
+
+
+class TheLiveGate(unittest.TestCase):
+    def test_every_desk_word_family_handler_asks_the_gate(self):
+        handlers = _desk_word_handlers()
+        self.assertIn("aux-return", handlers)
+        for family, handler in handlers.items():
+            source = _source_of(handler)
+            with self.subTest(family=family, handler=handler):
+                self.assertIn("values_refused(client_address, address, osc_arguments)", source)
+                self.assertLess(source.index("values_refused("), source.index("traffic.seen("))
+
+    def test_every_desk_hello_leaves_its_kind_slot_or_not(self):
+        source = _source_of("osc_handler_device_hello")
+        said = source.index("_said_kinds.said(client_address[0], device)")
+        self.assertLess(said, source.index("desk_said_hello("))
+        self.assertIn("_said_kinds = SaidKinds(_truth.port(\"desk\", \"osc\"))", CORE)
+
+    def test_the_pointer_gate_reads_the_kind_said_too(self):
+        source = _source_of("osc_handler_pointer")
+        self.assertIn("_said_kinds.gate_name(origin, client_address[0], client_address[1])", source)
+
+    def test_a_refused_value_is_seen_as_an_arrival(self):
+        source = _source_of("values_refused")
+        gate = source.index("_prodj_live.admits(")
+        refusal = source[gate:source.index("return True", gate)]
+        self.assertIn("traffic.seen(IN, address,", refusal)
 
 
 if __name__ == "__main__":
