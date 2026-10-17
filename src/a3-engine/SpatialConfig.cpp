@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "SpatialConfig.h"
+#include <cmath>
 
 namespace a3
 {
@@ -27,6 +28,9 @@ public:
             return std::nullopt;
         config.main = std::move (*main);
         config.booth = std::move (*booth);
+
+        if (! readEncoderInputs ("encoder.inputs.json", config.sources))
+            return std::nullopt;
         return config;
     }
 
@@ -114,6 +118,50 @@ private:
             if (! pair.isArray() || pair.size() != 2)
                 return fail (name, "every \"topDirections\" entry must be [azimuth, elevation]");
             out.emplace_back ((float) (double) pair[0], (float) (double) pair[1]);
+        }
+        return true;
+    }
+
+    bool readEncoderInput (const juce::String& name, const juce::var& entry, int source, EncoderInput& out)
+    {
+        const auto where = "source " + juce::String (source) + ": ";
+        const auto strip = entry.getProperty ("strip", {});
+        if (! strip.isInt() || (int) strip < 1 || (int) strip > 4)
+            return fail (name, where + "\"strip\" must be 1..4, not " + strip.toString());
+        const auto tap = entry.getProperty ("tap", {}).toString();
+        if (tap != "moving" && tap != "steady")
+            return fail (name, where + "unknown tap \"" + tap + "\" (moving or steady)");
+        const auto side = entry.getProperty ("side", {}).toString();
+        if (side != "L" && side != "R")
+            return fail (name, where + "unknown side \"" + side + "\" (L or R)");
+        const auto gain = entry.getProperty ("gain", {});
+        if (! (gain.isInt() || gain.isDouble()) || ! std::isfinite ((double) gain))
+            return fail (name, where + "\"gain\" must be a finite number, not " + gain.toString());
+
+        out = { (int) strip - 1, tap == "moving" ? Tap::moving : Tap::steady, side == "L" ? 0 : 1, (float) (double) gain };
+        return true;
+    }
+
+    bool readEncoderInputs (const juce::String& name, std::array<std::vector<EncoderInput>, numEncoderSources>& sources)
+    {
+        const auto parsed = readJson (name);
+        if (! parsed)
+            return false;
+        const auto lists = parsed->getProperty ("sources", {});
+        if (! lists.isArray() || lists.size() != numEncoderSources)
+            return fail (name, "\"sources\" must be an array of " + juce::String (numEncoderSources) + " lists");
+        for (int source = 0; source < numEncoderSources; ++source)
+        {
+            const auto& entries = lists[source];
+            if (! entries.isArray())
+                return fail (name, "source " + juce::String (source) + " must be a list of taps");
+            for (const auto& entry : *entries.getArray())
+            {
+                EncoderInput input {};
+                if (! readEncoderInput (name, entry, source, input))
+                    return false;
+                sources[(size_t) source].push_back (input);
+            }
         }
         return true;
     }

@@ -5,13 +5,16 @@
 #include <random>
 #include "IemNode.h"
 #include "SpatialConfig.h"
+#include "SpatialTestData.h"
+#include "TestSignals.h"
 
 namespace
 {
 using Channels = std::vector<std::vector<float>>;
 
-const juce::File shippedDirectory { A3_SPATIAL_DATA };
-const juce::File reaperBoothDirectory { A3_SPATIAL_REAPER_BOOTH_DATA };
+const juce::File& shippedDirectory = a3test::shippedSpatialDirectory;
+const juce::File& reaperBoothDirectory = a3test::reaperBoothSpatialDirectory;
+using a3test::ScratchDirectory;
 
 juce::String shippedFile (const char* name) { return shippedDirectory.getChildFile (name).loadFileAsString(); }
 
@@ -49,19 +52,6 @@ std::optional<a3::Layout> parseMain (const juce::String& decoder, const juce::va
 {
     return a3::parseLayout (decoder, parameters, error);
 }
-
-// A scratch copy of a spatial directory the test may break.
-struct ScratchDirectory
-{
-    ScratchDirectory()
-    {
-        directory = juce::File::createTempFile ("a3-spatial");
-        shippedDirectory.copyDirectoryTo (directory);
-    }
-    ~ScratchDirectory() { directory.deleteRecursively(); }
-    juce::File root() const { return directory; }
-    juce::File directory;
-};
 }
 
 TEST (Layout, TheShippedMainIsSubOnOneAndFourTops)
@@ -196,7 +186,7 @@ TEST (SpatialConfig, TheVariantSharesEverythingButTheBoothWithTheDefault)
         EXPECT_EQ (file.loadFileAsString(), twin.loadFileAsString()) << file.getFileName();
         ++compared;
     }
-    EXPECT_GE (compared, 5);
+    EXPECT_GE (compared, 6);
     EXPECT_EQ (reaperBoothDirectory.findChildFiles (juce::File::findFiles, false, "*.json").size(),
                shippedDirectory.findChildFiles (juce::File::findFiles, false, "*.json").size());
 }
@@ -343,29 +333,6 @@ protected:
     std::unique_ptr<a3::IemNode> encoder, decoder;
 };
 
-// Paul Kellet's economy pink filter on uniform noise, scaled to the given RMS.
-std::vector<float> pinkNoise (size_t frames, float rmsLevel)
-{
-    std::mt19937 rng (7);
-    std::uniform_real_distribution<float> dist (-1.0f, 1.0f);
-    float b0 = 0, b1 = 0, b2 = 0;
-    std::vector<float> x (frames);
-    double sum = 0.0;
-    for (auto& v : x)
-    {
-        const float white = dist (rng);
-        b0 = 0.99765f * b0 + white * 0.0990460f;
-        b1 = 0.96300f * b1 + white * 0.2965164f;
-        b2 = 0.57000f * b2 + white * 1.0526913f;
-        v = b0 + b1 + b2 + white * 0.1848f;
-        sum += (double) v * v;
-    }
-    const float gain = rmsLevel / (float) std::sqrt (sum / (double) frames);
-    for (auto& v : x)
-        v *= gain;
-    return x;
-}
-
 std::vector<float> sineWave (size_t frames, double hz, double rate, float level)
 {
     std::vector<float> x (frames);
@@ -380,7 +347,7 @@ float minus12dBFs() { return std::pow (10.0f, -12.0f / 20.0f); }
 TEST_P (Zone, ASourceTowardEachTopIsLoudestThere)
 {
     const size_t frames = (size_t) GetParam().sampleRate;
-    const auto source = pinkNoise (frames, minus12dBFs());
+    const auto source = a3test::pink (frames, minus12dBFs(), 7);
     double worstMargin = 1e9;
     for (size_t k = 0; k < zone->topDirections.size(); ++k)
     {

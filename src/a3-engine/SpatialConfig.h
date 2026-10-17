@@ -3,6 +3,7 @@
 #pragma once
 #include "Layout.h"
 #include <juce_core/juce_core.h>
+#include <array>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -11,6 +12,19 @@ namespace a3
 {
 // IEM's value for "3rd order" in the Ambisonic Order choice (0 = auto, 1 = 0th ... 4 = 3rd).
 constexpr float iemOrderThree = 4.0f;
+
+enum class Tap { moving, steady };
+
+// One strip tap summed into an encoder input: strip 0..3, side 0 = L, 1 = R, gain linear incl. sign.
+struct EncoderInput
+{
+    int strip;
+    Tap tap;
+    int side;
+    float gain;
+};
+
+constexpr int numEncoderSources = 8;
 
 struct ZoneConfig
 {
@@ -25,12 +39,13 @@ struct ZoneConfig
 //   encoder.parameters.json, rec.parameters.json    {id: value}
 //   <zone>.decoder.json                             IEM decoder configuration, verbatim
 //   <zone>.parameters.json                          SimpleDecoder {id: value}
+//   encoder.inputs.json                             {"sources":[[{strip 1..4, tap moving|steady, side L|R, gain}, ...] x 8]}
 //   <zone>.zone.json                                {"stages":[{name, db, kind: fixed|plan4}], "topDirections":[[az, el], ...]}
 struct SpatialConfig
 {
     juce::var encoderParameters, recParameters;
     ZoneConfig main, booth;
-    // Task 5: std::array<std::vector<EncoderInput>, 8> sources;
+    std::array<std::vector<EncoderInput>, numEncoderSources> sources;   // encoder input i = sum of its entries
 };
 
 // The files keep the template's values; here the Ambisonic order is set to 3

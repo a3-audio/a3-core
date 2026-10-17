@@ -26,6 +26,29 @@ inline Stereo noise (size_t frames, float level, uint32_t seed)
     return s;
 }
 
+// Paul Kellet's economy pink filter on uniform noise, scaled to the given RMS.
+inline std::vector<float> pink (size_t frames, float rmsLevel, uint32_t seed)
+{
+    std::mt19937 rng (seed);
+    std::uniform_real_distribution<float> dist (-1.0f, 1.0f);
+    float b0 = 0, b1 = 0, b2 = 0;
+    std::vector<float> x (frames);
+    double sum = 0.0;
+    for (auto& v : x)
+    {
+        const float white = dist (rng);
+        b0 = 0.99765f * b0 + white * 0.0990460f;
+        b1 = 0.96300f * b1 + white * 0.2965164f;
+        b2 = 0.57000f * b2 + white * 1.0526913f;
+        v = b0 + b1 + b2 + white * 0.1848f;
+        sum += (double) v * v;
+    }
+    const float gain = rmsLevel / (float) std::sqrt (sum / (double) frames);
+    for (auto& v : x)
+        v *= gain;
+    return x;
+}
+
 inline Stereo sine (size_t frames, double hz, double sampleRate, float level)
 {
     const double twoPi = 6.283185307179586;
