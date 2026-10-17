@@ -4,12 +4,14 @@ A second viewer (the pro-DJ app beside OBS) must cost no second encode, and a
 viewer that falls behind (Wi-Fi) is dropped, never waited for.
 """
 
+import signal
 import socket
 import subprocess
 import sys
 import threading
 import time
 import unittest
+from unittest import mock
 from pathlib import Path
 
 HOME = Path(__file__).resolve().parents[2] / "platform-config/debian-x86_64/a3-core/home/aaa/.local"
@@ -19,6 +21,25 @@ import a3_screencast_fanout as fanout  # noqa: E402
 FAKE_ENCODER = ("import sys, time\n"
                 "while True:\n"
                 "    sys.stdout.buffer.write(b'TS'); sys.stdout.buffer.flush(); time.sleep(0.01)\n")
+SHORT_ENCODER = ("import sys, time\n"
+                 "sys.stdout.buffer.write(b'TS'); sys.stdout.buffer.flush(); time.sleep(0.1)\n")
+DEAF_ENCODER = ("import signal, sys, time\n"
+                "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+                "while True:\n"
+                "    sys.stdout.buffer.write(b'TS'); sys.stdout.buffer.flush(); time.sleep(0.01)\n")
+FIREHOSE_ENCODER = ("import sys, time\n"
+                    "while True:\n"
+                    "    sys.stdout.buffer.write(b'x' * 65536); sys.stdout.buffer.flush(); time.sleep(0.001)\n")
+DEADLINE = 5.0
+
+
+def wait_until(condition, timeout=DEADLINE):
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        if condition():
+            return True
+        time.sleep(0.02)
+    return condition()
 
 
 class TheFanout(unittest.TestCase):
@@ -74,10 +95,17 @@ class Serving(unittest.TestCase):
         self.stop = threading.Event()
         self.started = []
         self.clients = []
+        self.thread = None
+        self.script = FAKE_ENCODER
+        for name, value in (("RESTART_AFTER", 0.1), ("KILL_AFTER", 0.2)):
+            patcher = mock.patch.object(fanout, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def tearDown(self):
         self.stop.set()
-        self.thread.join(5)
+        if self.thread:
+            self.thread.join(DEADLINE)
         for c in self.clients:
             c.close()
         for p in self.started:
@@ -87,23 +115,27 @@ class Serving(unittest.TestCase):
         self.listener.close()
 
     def start_encoder(self):
-        p = subprocess.Popen([sys.executable, "-c", FAKE_ENCODER], stdout=subprocess.PIPE)
+        p = subprocess.Popen([sys.executable, "-c", self.script], stdout=subprocess.PIPE)
         self.started.append(p)
         return p
 
-    def run_serve(self, linger):
+    def run_serve(self, linger=10, **kwargs):
         self.thread = threading.Thread(
             target=fanout.serve, args=(self.listener, self.start_encoder),
-            kwargs={"stop": self.stop, "linger": linger}, daemon=True)
+            kwargs={"stop": self.stop, "linger": linger, **kwargs}, daemon=True)
         self.thread.start()
 
-    def connect(self):
-        c = socket.create_connection(("127.0.0.1", self.port), timeout=5)
+    def connect(self, rcvbuf=None):
+        c = socket.socket()
+        if rcvbuf:
+            c.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, rcvbuf)
+        c.settimeout(DEADLINE)
+        c.connect(("127.0.0.1", self.port))
         self.clients.append(c)
         return c
 
     def test_a_second_viewer_costs_no_second_encoder(self):
-        self.run_serve(linger=10)
+        self.run_serve()
         a, b = self.connect(), self.connect()
         self.assertEqual(b"TS", a.recv(2))
         self.assertEqual(b"TS", b.recv(2))
@@ -116,9 +148,68 @@ class Serving(unittest.TestCase):
         b.recv(2)
         a.close()
         b.close()
-        time.sleep(0.5)
+        self.assertTrue(wait_until(lambda: self.started[0].poll() is not None))
         self.assertEqual(1, len(self.started))
-        self.assertIsNotNone(self.started[0].poll())
+
+    def test_an_encoder_that_exits_is_started_again_while_a_viewer_waits(self):
+        self.script = SHORT_ENCODER
+        self.run_serve()
+        viewer = self.connect()
+        self.assertEqual(b"TS", viewer.recv(2))
+        self.assertTrue(wait_until(lambda: len(self.started) >= 2))
+        self.assertEqual(b"TS", viewer.recv(2))
+
+    def test_an_encoder_that_ignores_terminate_is_killed(self):
+        self.script = DEAF_ENCODER
+        self.run_serve(linger=0.1)
+        viewer = self.connect()
+        viewer.recv(2)
+        viewer.close()
+        self.assertTrue(wait_until(lambda: self.started[0].poll() is not None))
+        self.assertEqual(-signal.SIGKILL, self.started[0].returncode)
+
+    def test_a_viewer_that_never_reads_is_dropped_and_the_other_keeps_receiving(self):
+        self.script = FIREHOSE_ENCODER
+        self.run_serve(limit_bytes=256 * 1024)
+        slow = self.connect(rcvbuf=4096)
+        quick = self.connect()
+        received = [0]
+
+        def drain():
+            try:
+                while True:
+                    chunk = quick.recv(65536)
+                    if not chunk:
+                        return
+                    received[0] += len(chunk)
+            except OSError:
+                return
+
+        threading.Thread(target=drain, daemon=True).start()
+
+        def closed_by_server():
+            slow.settimeout(0.05)
+            try:
+                return slow.recv(1 << 20) == b""
+            except socket.timeout:
+                return False
+            except ConnectionResetError:
+                return True
+
+        self.assertTrue(wait_until(closed_by_server, timeout=15))
+        before = received[0]
+        self.assertTrue(wait_until(lambda: received[0] > before + 65536))
+
+    def test_a_ninth_viewer_is_closed_and_the_eight_stay(self):
+        self.run_serve()
+        eight = [self.connect() for _ in range(8)]
+        for c in eight:
+            self.assertEqual(b"TS", c.recv(2))
+        ninth = self.connect()
+        self.assertEqual(b"", ninth.recv(2))
+        for c in eight:
+            self.assertEqual(b"TS", c.recv(2))
+        self.assertEqual(1, len(self.started))
 
 
 if __name__ == "__main__":

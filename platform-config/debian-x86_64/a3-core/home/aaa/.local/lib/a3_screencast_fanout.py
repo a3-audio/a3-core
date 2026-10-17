@@ -203,12 +203,13 @@ def _steer_encoder(selector, fanout, gate, encoder, clock):
         encoder.stop(selector)
 
 
-def serve(listen_socket, start_encoder, clock=time.monotonic, stop=None, linger=10.0):
+def serve(listen_socket, start_encoder, clock=time.monotonic, stop=None, linger=10.0,
+          limit_bytes=4 * 2**20, max_viewers=8):
     """Run until `stop` (a threading.Event) is set, or forever."""
     listen_socket.setblocking(False)
     selector = selectors.DefaultSelector()
     selector.register(listen_socket, selectors.EVENT_READ, "listener")
-    fanout = Fanout()
+    fanout = Fanout(limit_bytes, max_viewers)
     gate = EncoderGate(linger)
     encoder = _Encoder(start_encoder)
     try:
