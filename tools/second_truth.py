@@ -20,7 +20,7 @@ from pathlib import Path
 
 #: The repos, by name, and where each sits in the a3-system umbrella's
 #: checkout (~/a3-system since 2026-10-04), relative to it.
-REPOS = ("a3-core", "a3-motion-ui", "a3-mixer", "beat-analyzer", "stemdeck")
+REPOS = ("a3-core", "a3-motion-ui", "a3-mixer", "beat-analyzer", "stemdeck", "a3-prodj")
 CHECKOUT_PATHS = {"a3-motion-ui": "a3-motion/ui"}
 
 
@@ -40,7 +40,7 @@ SKIPPED_DIRS = {"tests", "test", "a3-motion-tests", "build", "build-make",
 #: The families of our words. Not `fx`: that family became `filter` on
 #: 2026-09-30, and `/fx/` in code is REAPER's (`/track/N/fx/...`).
 OUR_WORDS = re.compile(
-    r"^/(channel|master|filter|aux-return|stemdeck|vu|beat|tap|clockmode|state|device|core)(/|$)")
+    r"^/(channel|master|filter|aux-return|stemdeck|motion|prodj|vu|beat|tap|clockmode|state|device|core)(/|$)")
 IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 
 

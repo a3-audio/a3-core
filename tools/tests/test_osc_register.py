@@ -37,8 +37,8 @@ class WhatCoreHearsAndSays(unittest.TestCase):
         self.assertEqual(entries_for("/channel/{ch}/cue/led"),
                          {("mixer", "out"), ("desk", "out"), ("motion", "out")})
 
-    def test_the_position_only_comes_in(self):
-        self.assertEqual(entries_for("/channel/{ch}/azimuth"), {("motion", "in")})
+    def test_the_position_comes_in_and_goes_to_the_prodj(self):
+        self.assertEqual(entries_for("/channel/{ch}/azimuth"), {("motion", "in"), ("prodj", "out")})
 
     def test_what_passes_core_by_is_aside(self):
         self.assertIn(("motion", "aside"), entries_for("/vu/{n}"))
