@@ -63,6 +63,15 @@ class WhoSaidIt(unittest.TestCase):
             source = _source_of(handler)
             self.assertIn("origin = origin_of(client_address)", source, handler)
 
+    def test_the_taps_and_journal_name_a_desk_by_its_socket(self):
+        """On a3nuc2 a desk beside a followed Motion would otherwise read
+        "motion" in the window and the journal (final review, Minor 1)."""
+        for function in ("osc_handler_recall", "osc_handler_device_hello",
+                         "values_refused"):
+            source = _source_of(function)
+            self.assertIn("origin_of(client_address)", source, function)
+            self.assertNotIn("peer_name(", source, function)
+
 
 class BeatAndMeters(unittest.TestCase):
     def test_every_desk_gets_the_beat(self):

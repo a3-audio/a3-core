@@ -822,7 +822,7 @@ def values_refused(client_address: Tuple[str, int], address: str) -> bool:
     verdict = _hello_gate.check(host, port)
     if verdict == ADMIT:
         return False
-    who = peer_name(host, PEER_HOSTS, only=COMMANDERS)
+    who = origin_of(client_address)
     if verdict == REFUSE_FIRST:
         print(f"{who} ({host}): values before its hello ignored")
     if verdict == REFUSE_DIFFERS_FIRST:
@@ -1356,7 +1356,7 @@ def osc_handler_device_hello(client_address: Tuple[str, int], address: str,
     is news: a copy that is not Core's own is a second truth, and OSC would
     never say so -- the device would speak old words to nobody."""
     traffic.seen(IN, address, osc_arguments[0] if osc_arguments else None,
-                 peer_name(client_address[0], PEER_HOSTS))
+                 origin_of(client_address))
     if len(osc_arguments) < 2:
         return
 
@@ -1510,8 +1510,7 @@ def osc_handler_recall(client_address: Tuple[str, int], address: str,
     # -- if this is not tapped, a device returning after a drop is invisible
     # in the window, which is exactly the case the window exists to show.
     traffic.seen(IN, address, osc_arguments[0] if osc_arguments else None,
-                 peer_name(client_address[0], PEER_HOSTS,
-                           only=COMMANDERS))
+                 origin_of(client_address))
 
     told = say_the_whole_state()
     print(f"{address}: replayed {told} messages "
