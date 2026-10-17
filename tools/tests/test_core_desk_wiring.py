@@ -23,7 +23,7 @@ def _source_of(function_name):
 class AHelloFromADesk(unittest.TestCase):
     def test_is_followed_only_with_cores_own_truth(self):
         source = _source_of("osc_handler_device_hello")
-        self.assertIn('device == "desk" and their_hash == _devices.own_hash', source)
+        self.assertIn('device in ("desk", "prodj") and their_hash == _devices.own_hash', source)
         self.assertIn("desk_said_hello(", source)
 
     def test_a_joining_desk_becomes_a_subscriber_and_hears_everything(self):

@@ -73,8 +73,9 @@ from a3_osc_render import write_user_files   # noqa: E402
 from a3_core_recall import (FX_MODE_NUMBERS, FX_MODE_WORDS,   # noqa: E402
                             Relayed, STATE_OF, led_message,
                             recall_messages, return_cue_lamp)   # noqa: E402
-from a3_core_desks import (JOINED, MAX_DESKS, REFUSED_FIRST,   # noqa: E402
-                           DeskFollowers, desk_name)
+from a3_core_desks import (DESK, JOINED, MAX_DESKS, PRODJ, REFUSED_FIRST,   # noqa: E402
+                           DeskFollowers, desk_name, kind_of)
+from a3_core_prodj_live import ProdjLive, may_switch   # noqa: E402
 from a3_core_subscribers import (SHIPPED, OwningThread,   # noqa: E402
                                  SubscriberError, add_subscriber,
                                  drop_named, everyone_but, parse_subscribers,
@@ -257,6 +258,12 @@ _desks = DeskFollowers(_truth.port("desk", "osc"), _truth.port("desk", "vu"))
 #: Their clients, by host: a desk's slot among the subscribers, and where the
 #: analyzer's /beat goes on to.
 _desk_clients = {}
+#: The pro-DJ LIVE lease (a3_core_prodj_live): off at start, never switched on
+#: by Core itself.
+_prodj_live = ProdjLive()
+#: Pointers refused while LIVE is off or from a sender that may not point:
+#: counted, not printed -- a stale app would fill the journal at 60 Hz.
+_pointers_refused = 0
 #: The serve thread, which alone lets a desk join or leave the subscribers
 #: (claimed just before serve(), checked in
 #: desk_said_hello and notice_desk_silence).
@@ -815,7 +822,12 @@ def values_refused(client_address: Tuple[str, int], address: str) -> bool:
     hello to this Core yet: ignored, not relayed, not remembered. The truth
     comes from Core; a device that speaks before Core's replay may know
     nothing (a Motion once sent every value as 0.0, 2026-10-14). Buttons and
-    other edges are not values (relay_on_arrival) and pass."""
+    other edges are not values (relay_on_arrival) and pass. A pro-DJ app moves
+    nothing while LIVE is off, whatever it sends (a3_core_prodj_live)."""
+    found = _truth.match(address)
+    key = found[0] if found is not None else None
+    if not _prodj_live.admits(origin_of(client_address), key):
+        return True
     if not relay_on_arrival(_truth, address):
         return False
     host, port = client_address[0], client_address[1]
@@ -982,6 +994,7 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
         addr = f"/MultiEncoder/azimuth{channel_index}"
         for client in udp_clients_iem:
             client.send_message(addr, az)
+        send_position_to_prodj(key, channel_index, az)
 
     elif parameter == "elevation":
         # clamp -90..90 und sende als float an alle IEM-Empfänger
@@ -990,6 +1003,7 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
         addr = f"/MultiEncoder/elevation{channel_index}"
         for client in udp_clients_iem:
             client.send_message(addr, el)
+        send_position_to_prodj(key, channel_index, el)
 
     elif parameter == "filter.frequency":
         val = np.interp(value, [0, 1], [0.05, 0.9])
@@ -1129,6 +1143,8 @@ def osc_handler_stemdeck(client_address: Tuple[str, int], address: str,
     if found is None:
         return
     key, fields = found
+    if key == "stemdeck.pointer":
+        return      # osc_handler_pointer's, mapped beside this family
     value = osc_arguments[0] if osc_arguments else None
     origin = peer_name(client_address[0], PEER_HOSTS)
     traffic.seen(IN, address, value, origin)
@@ -1161,6 +1177,8 @@ def on_tick():
     tidy_when_settled()
     notice_motion_silence(time.monotonic())
     notice_desk_silence(time.monotonic())
+    if _prodj_live.due(time.monotonic()):
+        announce_live()
 
 
 def tidy_when_settled():
@@ -1366,11 +1384,11 @@ def osc_handler_device_hello(client_address: Tuple[str, int], address: str,
         stemdeck_said_hello(client_address[0], now)
     if device == "motion":
         motion_said_hello(client_address[0], now)
-    if device == "desk" and their_hash == _devices.own_hash:
-        desk_said_hello(client_address[0], now)
+    if device in ("desk", "prodj") and their_hash == _devices.own_hash:
+        desk_said_hello(client_address[0], now, kind=device)
     _hello_gate.greet(client_address[0], their_hash == _devices.own_hash)
     notice_stemdeck_silence(now)
-    label = desk_name(client_address[0]) if device == "desk" else device
+    label = desk_name(client_address[0], device) if device in ("desk", "prodj") else device
     if _devices.heard(label, their_hash, now):
         verdict = ("is Core's" if their_hash == _devices.own_hash
                    else "DIFFERS from Core's")
@@ -1395,6 +1413,8 @@ def stemdeck_said_hello(host, now):
     _stemdeck_client = WatchedClient(
         SimpleUDPClient(host, _truth.endpoint("stemdeck", "osc")[1]), "stemdeck")
     _stemdeck_client.send_message(_truth.address("stemdeck.recall"), 1)
+    _stemdeck_client.send_message(_truth.address("prodj.live"), live_value())
+    tell_prodj_where("stemdeck", host)
 
 
 def motion_said_hello(host, now):
@@ -1433,6 +1453,7 @@ def point_motion_at(endpoint, why):
     replace_named(subscribers, osc_a3motion)
     PEER_HOSTS["motion"] = host
     told = say_the_whole_state()
+    tell_prodj_where("motion", host)
     print(f"motion: {why}, now {host}:{port}; replayed {told} messages")
 
 
@@ -1446,21 +1467,26 @@ def origin_of(client_address):
             or peer_name(host, PEER_HOSTS, only=COMMANDERS))
 
 
-def desk_said_hello(host, now):
+def desk_said_hello(host, now, kind=DESK):
     """A desk with Core's own truth is there. One that has just arrived gets
-    a slot among the subscribers and the whole state at once; a fifth is
-    refused and said once."""
+    a slot among the subscribers and the whole state at once -- and LIVE; a
+    pro-DJ app (kind PRODJ) also the positions and where the devices run. A
+    fifth is refused and said once."""
     _subscribers_owner.check("a desk joining")
-    verdict = _desks.hello(host, now)
+    verdict = _desks.hello(host, now, kind=kind)
     if verdict == REFUSED_FIRST:
         print(f"desk: {host} said hello, but {MAX_DESKS} desks are followed "
               f"already ({', '.join(_desks.hosts())}) -- not followed")
     if verdict != JOINED:
         return
-    client = WatchedClient(SimpleUDPClient(host, _desks.port), desk_name(host))
+    client = WatchedClient(SimpleUDPClient(host, _desks.port), desk_name(host, kind))
     _desk_clients[host] = client
     add_subscriber(subscribers, client)
     told = say_the_whole_state()
+    if kind == PRODJ:
+        tell_prodj(client)
+    else:
+        client.send_message(_truth.address("prodj.live"), live_value())
     print(f"desk: {host} joined, {len(_desk_clients)} of {MAX_DESKS}; "
           f"replayed {told} messages")
 
@@ -1469,11 +1495,119 @@ def notice_desk_silence(now):
     """A minute without a desk's hello: it is closed or gone, and is told
     nothing more."""
     _subscribers_owner.check("a desk leaving")
+    prodj_left = False
     for host in _desks.silence(now):
         client = _desk_clients.pop(host, None)
         if client is not None:
             drop_named(subscribers, client.name)
+            prodj_left = prodj_left or kind_of(client.name) == PRODJ
         print(f"desk: {host} silent for a minute, no longer followed")
+    if prodj_left and not _desks.hosts_of_kind(PRODJ) and _prodj_live.nobody_left():
+        print("prodj: LIVE off, no pro-DJ app left")
+        announce_live()
+
+
+def prodj_clients():
+    """The clients of the desks of kind prodj -- the only ones the positions
+    and the places go to."""
+    return [_desk_clients[host] for host in _desks.hosts_of_kind(PRODJ)
+            if host in _desk_clients]
+
+
+def live_value():
+    return 1 if _prodj_live.on else 0
+
+
+def send_position_to_prodj(key, channel_index, value):
+    """One clamped position, to the pro-DJ apps only: at 60 Hz a plain desk
+    has no use for it, and it is not relayed (a3_core_subscribers)."""
+    clients = prodj_clients()
+    if not clients:
+        return
+    address = _truth.address(key, ch=channel_index + 1)
+    for client in clients:
+        client.send_message(address, value)
+
+
+def tell_prodj_where(device, host):
+    """A device runs at `host`, to every pro-DJ app."""
+    for client in prodj_clients():
+        client.send_message(_truth.address("core.device-at"), [device, host])
+
+
+def tell_prodj(client):
+    """A pro-DJ app that has just joined or recalled: the positions Core
+    knows (a position is not replayed to anyone else), where Motion and
+    StemDeck run, and LIVE."""
+    for channel_index, info in enumerate(channel_infos):
+        for key, position in (("channel.azimuth", info.azimuth),
+                              ("channel.elevation", info.elevation)):
+            if position is not None:
+                client.send_message(
+                    _truth.address(key, ch=channel_index + 1), position)
+    places = (("motion", PEER_HOSTS.get("motion")),
+              ("stemdeck", _stemdeck_watch.host if _stemdeck_client is not None else None))
+    for device, host in places:
+        if host is not None:
+            client.send_message(_truth.address("core.device-at"), [device, host])
+    client.send_message(_truth.address("prodj.live"), live_value())
+
+
+def announce_live():
+    """LIVE to every desk, Motion and StemDeck. Not through the subscribers'
+    door: the hardware mixer is not told."""
+    listeners = list(_desk_clients.values()) + [osc_a3motion]
+    if _stemdeck_client is not None:
+        listeners.append(_stemdeck_client)
+    for client in listeners:
+        client.send_message(_truth.address("prodj.live"), live_value())
+
+
+def asker_client(client_address):
+    """The client of whoever sent this: a followed desk, or Motion; else None."""
+    origin = origin_of(client_address)
+    if kind_of(origin) is not None:
+        return _desk_clients.get(client_address[0])
+    return osc_a3motion if origin == "motion" else None
+
+
+def osc_handler_prodj_live(client_address: Tuple[str, int], address: str,
+                           *osc_arguments: List[Any]) -> None:
+    """A desk, a pro-DJ app or Motion switches LIVE; Motion only off."""
+    origin = origin_of(client_address)
+    raw = osc_arguments[0] if osc_arguments else None
+    traffic.seen(IN, address, raw, origin)
+    try:
+        wanted = bool(int(raw))
+    except (TypeError, ValueError):
+        traffic.unknown(address, raw, origin)
+        return
+    if not may_switch(origin, wanted):
+        return
+    if _prodj_live.set(wanted, time.monotonic()):
+        print(f"prodj: LIVE {'on' if wanted else 'off'} (by {origin})")
+        announce_live()
+
+
+def osc_handler_pointer(client_address: Tuple[str, int], address: str,
+                        *osc_arguments: List[Any]) -> None:
+    """A pro-DJ app's click on StemDeck's or Motion's screen picture, on to
+    that device -- only while LIVE is on, and only from a pro-DJ app. Sent
+    straight to the device, through neither of the two doors: no other screen
+    has a use for it."""
+    global _pointers_refused
+    found = known_address(client_address, address, osc_arguments)
+    if found is None:
+        return
+    key = found[0]
+    origin = origin_of(client_address)
+    if not _prodj_live.admits(origin, key):
+        _pointers_refused += 1
+        return
+    traffic.seen(IN, address, list(osc_arguments), origin)
+    target = _stemdeck_client if key == "stemdeck.pointer" else osc_a3motion
+    if target is not None:
+        target.send_message(address, list(osc_arguments))
 
 
 def vu_destinations():
@@ -1520,6 +1654,13 @@ def osc_handler_recall(client_address: Tuple[str, int], address: str,
     # has been handled before it on this serial loop, so the recall is
     # applied -- open REAPER's outputs (a3_core_gate). In a thread: the fade
     # takes a second, and this loop never waits.
+    asker = asker_client(client_address)
+    if asker is not None:
+        if kind_of(origin_of(client_address)) == PRODJ:
+            tell_prodj(asker)
+        else:
+            asker.send_message(_truth.address("prodj.live"), live_value())
+
     if _startup_recall.is_it(osc_arguments):
         threading.Thread(
             target=open_after_recall, daemon=True, name="a3-gate",
@@ -1828,6 +1969,11 @@ if __name__ == "__main__":
                    needs_reply_address=True)
     dispatcher.map(_truth.address("device.hello"), osc_handler_device_hello,
                    needs_reply_address=True)
+    dispatcher.map(_truth.address("prodj.live"), osc_handler_prodj_live,
+                   needs_reply_address=True)
+    for pointer in ("stemdeck.pointer", "motion.pointer"):
+        dispatcher.map(_truth.address(pointer), osc_handler_pointer,
+                       needs_reply_address=True)
 
     # Und ein Auffang fuer alles Uebrige.
     #
