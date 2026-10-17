@@ -28,6 +28,9 @@ testable anywhere. Same door as a3_core_layout.
 """
 
 
+import threading
+
+
 class SubscriberError(Exception):
     """The subscriber cannot be understood, so Core will not start.
 
@@ -176,3 +179,25 @@ def drop_named(subscribers, name):
     """Take the subscriber called `name` out, in place -- every handler holds
     this one list. Nothing if none is called that."""
     subscribers[:] = [client for client in subscribers if client.name != name]
+
+
+class OwningThread:
+    """The one thread allowed to change the subscriber list.
+
+    REAPER's feedback thread and the vu thread read the list while they
+    broadcast; only the serve thread may add or remove a desk. Refused
+    rather than marshalled: a desk that joins from another thread is a bug
+    to see at once, not a race to survive."""
+
+    def __init__(self):
+        self._owner = None
+
+    def claim(self):
+        self._owner = threading.get_ident()
+
+    def check(self, what):
+        if self._owner is None:
+            raise RuntimeError(f"{what}: no thread owns the subscribers yet")
+        if threading.get_ident() != self._owner:
+            raise RuntimeError(
+                f"{what} on a thread that does not own the subscribers")

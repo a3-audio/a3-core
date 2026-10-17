@@ -8,6 +8,7 @@ the same failure, in the same place, that cost three days in September.
 """
 
 import sys
+import threading
 import unittest
 from pathlib import Path
 
@@ -17,7 +18,7 @@ sys.path.insert(0, str(PACKAGE / "lib"))
 TRUTH = ROOT / "platform-config/debian-x86_64/a3-core/usr/share/a3/a3-osc.json"
 
 import a3_osc   # noqa: E402
-from a3_core_subscribers import (SHIPPED, SubscriberError,   # noqa: E402
+from a3_core_subscribers import (SHIPPED, OwningThread, SubscriberError,   # noqa: E402
                                  add_subscriber, drop_named,
                                  everyone_but, replace_named,
                                  parse_subscriber,
@@ -266,6 +267,35 @@ class GrowingAndShrinking(unittest.TestCase):
         subscribers = [Named("mixer")]
         drop_named(subscribers, "desk@192.168.8.99")
         self.assertEqual([c.name for c in subscribers], ["mixer"])
+
+
+class TheOwningThread(unittest.TestCase):
+    def test_the_claiming_thread_passes(self):
+        owner = OwningThread()
+        owner.claim()
+        owner.check("a desk joining")
+
+    def test_another_thread_is_refused_and_named(self):
+        owner = OwningThread()
+        owner.claim()
+        caught = []
+
+        def other():
+            try:
+                owner.check("a desk joining")
+            except RuntimeError as problem:
+                caught.append(problem)
+
+        thread = threading.Thread(target=other)
+        thread.start()
+        thread.join()
+        self.assertEqual(len(caught), 1)
+        self.assertIn("a desk joining", str(caught[0]))
+
+    def test_nothing_claimed_is_refused(self):
+        with self.assertRaises(RuntimeError) as caught:
+            OwningThread().check("a desk leaving")
+        self.assertIn("a desk leaving", str(caught.exception))
 
 
 if __name__ == "__main__":
