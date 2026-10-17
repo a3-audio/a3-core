@@ -12,6 +12,7 @@ constexpr int busOrder = 3;
 // loadConfigFromString is private in IEM and the public loadConfiguration takes
 // a file; an explicit instantiation is the one place C++ lets us name it
 // without editing the submodule and without touching the disk.
+// (The public alternative, setStateInformation with a configString attribute, would also restore every parameter in the state, so it is no fallback for a config alone.)
 using LoadConfigFromString = void (SimpleDecoderAudioProcessor::*) (juce::String, bool);
 LoadConfigFromString privateLoadConfigFromString();
 

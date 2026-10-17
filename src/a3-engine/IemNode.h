@@ -29,7 +29,10 @@ public:
     std::atomic<float>* rawParameter (const juce::String& id);   // APVTS raw value, for audio-thread writes
     float legalValue (const juce::String& id, float value) const; // clamp + snap to the parameter's range
     bool listensForOsc() const;                       // IEM's own OSC receiver connected?
-    juce::Result loadDecoderConfig (const juce::String& json);   // SimpleDecoder only; IEM's own config format
+    // SimpleDecoder only; IEM's own config format. The zone's parameters own the sub:
+    // swMode/swChannel set before a load survive it, even when the loaded config
+    // has its own SubwooferChannel (IEM would otherwise overwrite them on pickup).
+    juce::Result loadDecoderConfig (const juce::String& json);
     juce::MemoryBlock state();                        // getStateInformation (null tests)
     juce::AudioProcessor& processor();
 

@@ -121,9 +121,18 @@ function(a3_add_iem_nodes SUFFIX JUCE_TARGET)
     target_link_libraries(${BinauralDecoder_TARGET} PRIVATE
         a3-iem-BinauralEQs${SUFFIX} a3-iem-BinauralIRs${SUFFIX})
 
+    # parseLayout reads decoder files through IEM's ConfigurationHelper, so it
+    # lives beside the IEM sources and sees IEM's environment.
+    add_library(a3-iem-layout${SUFFIX} STATIC ${A3_IEM_NODES_DIR}/Layout.cpp)
+    a3_iem_use_iem_environment(a3-iem-layout${SUFFIX} "${SUFFIX}" ${JUCE_TARGET})
+    target_include_directories(a3-iem-layout${SUFFIX} PUBLIC ${A3_IEM_PUBLIC_INCLUDE_DIR})
+    # Two warnings only IEM's headers raise; the rest stays on for our file.
+    target_compile_options(a3-iem-layout${SUFFIX} PRIVATE -Wall -Wextra -Werror=switch
+        -Wno-ignored-qualifiers -Wno-sign-compare)
+
     add_library(a3-iem${SUFFIX} STATIC ${A3_IEM_NODES_DIR}/IemNode.cpp)
     target_include_directories(a3-iem${SUFFIX} PUBLIC ${A3_IEM_PUBLIC_INCLUDE_DIR})
     target_include_directories(a3-iem${SUFFIX} PRIVATE ${A3_IEM_NODES_DIR})
-    target_link_libraries(a3-iem${SUFFIX} PUBLIC ${JUCE_TARGET} PRIVATE ${MultiEncoder_TARGET} ${SimpleDecoder_TARGET} ${BinauralDecoder_TARGET})
+    target_link_libraries(a3-iem${SUFFIX} PUBLIC ${JUCE_TARGET} a3-iem-layout${SUFFIX} PRIVATE ${MultiEncoder_TARGET} ${SimpleDecoder_TARGET} ${BinauralDecoder_TARGET})
     target_compile_options(a3-iem${SUFFIX} PRIVATE -Wall -Wextra -Werror=switch)
 endfunction()
