@@ -1,5 +1,5 @@
 [Unit]
-Description=The picture of this machine's screen for OBS (MPEG-TS listener)
+Description=The picture of this machine's screen for OBS and the pro-DJ (MPEG-TS, several viewers)
 After=graphical.target
 StartLimitIntervalSec=0
 
@@ -10,7 +10,7 @@ EnvironmentFile=%h/.config/a3/osc.env
 EnvironmentFile=-%h/.config/a3/screencast.env
 ExecStartPre=%h/.local/bin/a3-wait-for-the-screen
 ExecStart=%h/.local/bin/a3-screencast
-# ffmpeg ends when the viewer disconnects; listen again for the next one.
+# The fan-out keeps listening; if it or the encoder dies, start again.
 Restart=always
 RestartSec=2
 
