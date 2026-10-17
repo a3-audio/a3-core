@@ -258,7 +258,8 @@ _desks = DeskFollowers(_truth.port("desk", "osc"), _truth.port("desk", "vu"))
 #: analyzer's /beat goes on to.
 _desk_clients = {}
 #: The serve thread, which alone lets a desk join or leave the subscribers
-#: (claimed in main, checked in desk_said_hello and notice_desk_silence).
+#: (claimed just before serve(), checked in
+#: desk_said_hello and notice_desk_silence).
 _subscribers_owner = OwningThread()
 osc_reaper = WatchedClient(SimpleUDPClient(REAPER_HOST, REAPER_PORT),
                            "reaper")
@@ -1449,13 +1450,13 @@ def desk_said_hello(host, now):
     """A desk with Core's own truth is there. One that has just arrived gets
     a slot among the subscribers and the whole state at once; a fifth is
     refused and said once."""
+    _subscribers_owner.check("a desk joining")
     verdict = _desks.hello(host, now)
     if verdict == REFUSED_FIRST:
         print(f"desk: {host} said hello, but {MAX_DESKS} desks are followed "
               f"already ({', '.join(_desks.hosts())}) -- not followed")
     if verdict != JOINED:
         return
-    _subscribers_owner.check("a desk joining")
     client = WatchedClient(SimpleUDPClient(host, _desks.port), desk_name(host))
     _desk_clients[host] = client
     add_subscriber(subscribers, client)
@@ -1467,8 +1468,8 @@ def desk_said_hello(host, now):
 def notice_desk_silence(now):
     """A minute without a desk's hello: it is closed or gone, and is told
     nothing more."""
+    _subscribers_owner.check("a desk leaving")
     for host in _desks.silence(now):
-        _subscribers_owner.check("a desk leaving")
         client = _desk_clients.pop(host, None)
         if client is not None:
             drop_named(subscribers, client.name)
@@ -1890,12 +1891,14 @@ if __name__ == "__main__":
     try:
         vu_inbox.bind(_truth.endpoint("core", "vu-relay"))
     except OSError as problem:
-        print(f"no meters for a remote Motion: {problem}", file=sys.stderr)
+        print(f"no meters for a remote Motion or the desks: {problem}",
+              file=sys.stderr)
     else:
         threading.Thread(target=relay_vu, daemon=True, name="a3-vu-relay",
                          args=(vu_inbox, vu_destinations)).start()
         print(f"forwarding the analyzer's meters from "
-              f"{vu_inbox.getsockname()} to a remote Motion and every desk followed")
+              f"{vu_inbox.getsockname()} to a remote Motion and every desk "
+              f"followed")
 
     # Zwischendurch sichern. The project is what a power cut costs: Core's own
     # state file is written two seconds after a change, REAPER's project only

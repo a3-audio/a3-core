@@ -184,9 +184,8 @@ def drop_named(subscribers, name):
 class OwningThread:
     """The one thread allowed to change the subscriber list.
 
-    REAPER's feedback thread and the vu thread read the list while they
-    broadcast; only the serve thread may add or remove a desk. Refused
-    rather than marshalled: a desk that joins from another thread is a bug
+    REAPER's feedback thread reads the list while it broadcasts; only the
+    serve thread may add or remove a desk. Refused rather than marshalled: a desk that joins from another thread is a bug
     to see at once, not a race to survive."""
 
     def __init__(self):

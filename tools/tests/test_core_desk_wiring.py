@@ -86,17 +86,17 @@ class AnotherThreadReadsTheList(unittest.TestCase):
 class OnlyTheServeThreadChangesTheList(unittest.TestCase):
     """A desk joins and leaves on the serve thread, enforced by refusal."""
 
-    def test_joining_checks_the_owner_before_adding(self):
+    def test_joining_checks_the_owner_before_asking_the_desks(self):
         source = _source_of("desk_said_hello")
         self.assertIn('_subscribers_owner.check("a desk joining")', source)
         self.assertLess(source.index("_subscribers_owner.check("),
-                        source.index("add_subscriber("))
+                        source.index("_desks.hello("))
 
-    def test_leaving_checks_the_owner_before_dropping(self):
+    def test_leaving_checks_the_owner_before_asking_the_silence(self):
         source = _source_of("notice_desk_silence")
         self.assertIn('_subscribers_owner.check("a desk leaving")', source)
         self.assertLess(source.index("_subscribers_owner.check("),
-                        source.index("drop_named("))
+                        source.index("_desks.silence("))
 
     def test_the_serve_thread_claims_the_list_just_before_serving(self):
         main = CORE[CORE.index('if __name__ == "__main__":'):]
