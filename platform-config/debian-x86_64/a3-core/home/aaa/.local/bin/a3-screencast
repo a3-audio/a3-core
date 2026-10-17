@@ -15,6 +15,8 @@ set -euo pipefail
 CPUS="${A3_SCREENCAST_CPUS:-0}"
 FPS="${A3_SCREENCAST_FPS:-30}"
 CRF="${A3_SCREENCAST_CRF:-23}"
+# Overridable so a package that installs the fan-out elsewhere can reuse this script.
+FANOUT="${A3_SCREENCAST_FANOUT:-$HOME/.local/lib/a3_screencast_fanout.py}"
 export DISPLAY="${DISPLAY:-:0}"
 
 SIZE="$(xdpyinfo | awk '/dimensions:/ { print $2 }')"
@@ -27,7 +29,7 @@ SIZE="$(xdpyinfo | awk '/dimensions:/ { print $2 }')"
 # Latency: a short grab queue (a late grab is a fresh frame, not a queued one),
 # no muxer delay (the default held PCR 0.73 s behind the picture), every packet
 # written at once.
-exec nice -n 19 taskset -c "$CPUS" python3 -I "$HOME/.local/lib/a3_screencast_fanout.py" --port "$A3_SCREENCAST_PORT" -- \
+exec nice -n 19 taskset -c "$CPUS" python3 -I "$FANOUT" --port "$A3_SCREENCAST_PORT" -- \
     ffmpeg -hide_banner -loglevel warning -nostdin \
     -fflags nobuffer -thread_queue_size 4 \
     -f x11grab -framerate "$FPS" -video_size "$SIZE" -draw_mouse 0 -i "$DISPLAY" \

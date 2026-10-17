@@ -47,7 +47,7 @@ class ThePortComesFromTheTruth(unittest.TestCase):
         self.assertIn("EnvironmentFile=%h/" + str(a3_osc_render.ENV_FILE), UNIT.read_text())
 
     def test_the_script_has_no_port_number_of_its_own(self):
-        fanout = next(l for l in code(SCRIPT).splitlines() if "a3_screencast_fanout" in l)
+        fanout = next(l for l in code(SCRIPT).splitlines() if 'python3 -I "$FANOUT"' in l)
         self.assertIn('--port "$A3_SCREENCAST_PORT"', fanout)
         self.assertNotRegex(fanout, r"\b\d{4,5}\b")
         self.assertNotIn("listen=1", code(SCRIPT))
@@ -62,8 +62,9 @@ class OneEncoderSeveralViewers(unittest.TestCase):
     def test_the_fanout_runs_niced_on_the_free_core(self):
         text = code(SCRIPT)
         self.assertRegex(
-            text, r'nice -n 19 taskset -c "\$CPUS" python3 -I "\$HOME/\.local/lib/a3_screencast_fanout\.py"')
-        self.assertLess(text.index("a3_screencast_fanout"), text.index("ffmpeg -hide_banner"))
+            text, r'nice -n 19 taskset -c "\$CPUS" python3 -I "\$FANOUT"')
+        self.assertIn('FANOUT="${A3_SCREENCAST_FANOUT:-$HOME/.local/lib/a3_screencast_fanout.py}"', text)
+        self.assertLess(text.index('python3 -I "$FANOUT"'), text.index("ffmpeg -hide_banner"))
 
     def test_the_unit_says_several_viewers(self):
         description = re.search(r"^Description=(.*)$", UNIT.read_text(), re.M).group(1)
