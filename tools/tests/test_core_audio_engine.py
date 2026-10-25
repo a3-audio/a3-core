@@ -86,6 +86,13 @@ class Probe(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(why, "bad rate")
 
+    def test_probe_check_with_non_utf8_output_still_reports(self):
+        _, check = probe(self.script(r"printf 'bad \377 rate\n' >&2; exit 2"))
+        ok, why = check()
+        self.assertFalse(ok)
+        self.assertIn("bad", why)
+        self.assertIn("rate", why)
+
     def test_probe_check_times_out(self):
         _, check = probe(self.script("sleep 5"), timeout=0.2)
         ok, why = check()

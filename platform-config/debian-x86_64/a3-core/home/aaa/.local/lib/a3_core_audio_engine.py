@@ -48,7 +48,8 @@ def probe(engine_path: Path = ENGINE_PATH,
 def _check_config(engine_path: Path, timeout: float) -> "tuple[bool, str]":
     try:
         done = subprocess.run([str(engine_path), "--check-config"],
-                              capture_output=True, text=True, timeout=timeout)
+                              capture_output=True, text=True, errors="replace",
+                              timeout=timeout)
     except subprocess.TimeoutExpired:
         return False, f"check timed out after {timeout:g} s"
     except OSError as error:
