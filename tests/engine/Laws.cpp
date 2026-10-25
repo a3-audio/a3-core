@@ -159,3 +159,28 @@ TEST (Laws, GarbageIsClampedForNewLaws)
     EXPECT_EQ (a3::laws::sendGain (-inf), 0.0);
     EXPECT_DOUBLE_EQ (a3::laws::filterCutoffHz (true, inf), a3::laws::filterCutoffHz (true, 1.0));
 }
+
+// R18 / D23: every gain control at 0 is silence; the law above 0 is today's.
+TEST (Laws, MasterStageLawIsSilentAtZero)
+{
+    EXPECT_EQ (a3::laws::stageGain (0.0), 0.0);
+    EXPECT_EQ (a3::laws::stageGain (1e-10), 0.0);
+    EXPECT_EQ (a3::laws::stageGain (-1.0), 0.0);
+    EXPECT_EQ (a3::laws::stageGain (std::nan ("")), 0.0);
+    EXPECT_TRUE (a3::laws::isSilent (0.0));
+    EXPECT_TRUE (a3::laws::isSilent (1e-10));
+    EXPECT_FALSE (a3::laws::isSilent (1e-3));
+    // the smallest step above the threshold is today's value (PurestGain A = 0.5 c, -40 dB at the bottom)
+    EXPECT_NEAR (a3::laws::stageGain (1e-9), 0.01, 1e-9);
+    EXPECT_GT (a3::laws::stageGain (1e-9), 0.0);
+}
+
+TEST (Laws, ShapeAboveZeroIsUnchanged)
+{
+    for (double c : { 0.01, 0.1, 0.25, 0.5, 0.75, 1.0 })
+        EXPECT_DOUBLE_EQ (a3::laws::stageGain (c), std::pow (10.0, (40.0 * c - 40.0) / 20.0)) << c;
+    EXPECT_DOUBLE_EQ (a3::laws::stageGain (1.0), 1.0);
+    EXPECT_NEAR (a3::laws::stageGain (0.5), 0.1, 1e-12);   // -20 dB
+    EXPECT_GT (a3::laws::bandGain (0.01), -1.0);            // bandGain keeps its shape (A 0 at and below 0.01)
+    EXPECT_FALSE (a3::laws::isSilent (0.01));
+}

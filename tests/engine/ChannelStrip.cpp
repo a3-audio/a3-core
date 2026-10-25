@@ -96,12 +96,12 @@ TEST (ChannelStrip, MovingPlusSteadyIsTheInputAtEveryPosition)
 
 // The template's bed (n-multi-enc) takes the input straight, with no delay for
 // Isolator3's frame: moving + steady is TRIM + EQ with nothing in between. At
-// 3D 0 the band gain is A 0 = -40 dB, not a mute, as in REAPER: moving is
-// 0.01 x Isolator3 (x).
-TEST (ChannelStrip, TheBedIsTheUndelayedInputAndThreeDZeroIsMinusFortyDb)
+// 3D just above 0 the band gain is A 0 = -40 dB (the law's floor): moving is
+// 0.01 x Isolator3 (x). Exactly 0 is silence (ChannelStrip.ThreeDZeroSilencesTheMovingShare).
+TEST (ChannelStrip, TheBedIsTheUndelayedInputAndTheBandFloorIsMinusFortyDb)
 {
     const auto in = a3test::noise (22050, 0.25f, 3);
-    auto strip = made (0.0f, 0.5f, 0.05f);
+    auto strip = made (0.001f, 0.5f, 0.05f);
     const auto r = run (*strip, in, { 128 });
 
     const auto expected = trimmedAndEqd (in);
@@ -352,11 +352,109 @@ TEST (ChannelStrip, PreVolumeTapsAreMovingAndSteadyBeforeVolume)
     const auto r = runWithTaps (*rig.strip, in, 128);
 
     const auto peak = [] (const std::vector<float>& v) { return *std::max_element (v.begin() + 11025, v.end()); };
-    // VOLUME 0 is PurestGain's -40 dB floor (REAPER's law), not a mute: post is 1/100 of the pre-VOLUME taps.
-    EXPECT_NEAR (peak (r.moving.l), 0.01f * peak (r.movingPre.l), 1e-4f);
-    EXPECT_NEAR (peak (r.steady.l), 0.01f * peak (r.steadyPre.l), 1e-4f);
+    // VOLUME 0 is silence (R18), not PurestGain's -40 dB floor.
+    EXPECT_EQ (peak (r.moving.l), 0.0f);
+    EXPECT_EQ (peak (r.steady.l), 0.0f);
     EXPECT_GT (peak (r.movingPre.l) + peak (r.steadyPre.l), 0.05f);
 
     const auto filtered = filteredLikeTheRig (trimmedAndEqd (in), rig.shared);
     EXPECT_LE (a3test::maxAbsDiff (sum ({ r.movingPre, r.steadyPre }), filtered), 1e-6);
+}
+
+// R18 / D23: every gain control at 0 is exact silence, reached through a 10 ms ramp.
+namespace
+{
+a3test::Stereo noiseThenRun (a3::ChannelStrip& strip, size_t frames, unsigned seed, TapRun& taps)
+{
+    const auto in = a3test::noise (frames, 0.25f, seed);
+    taps = runWithTaps (strip, in, 128);
+    return in;
+}
+bool allZero (const std::vector<float>& v, size_t from)
+{
+    for (size_t i = from; i < v.size(); ++i)
+        if (v[i] != 0.0f)
+            return false;
+    return true;
+}
+}
+
+TEST (ChannelStrip, VolumeZeroIsSilence)
+{
+    auto strip = made (0.7f, 0.5f, 0.3f);
+    strip->controls().volume = 0.0f;
+    TapRun r;
+    noiseThenRun (*strip, 22050, 5, r);
+    for (auto* v : { &r.moving.l, &r.moving.r, &r.steady.l, &r.steady.r })
+        EXPECT_TRUE (allZero (*v, 11025));
+    const auto peak = [] (const std::vector<float>& v) { return *std::max_element (v.begin() + 11025, v.end()); };
+    EXPECT_GT (peak (r.movingPre.l), 1e-3f);    // the pre-VOLUME taps carry signal
+    EXPECT_GT (peak (r.steadyPre.l), 1e-3f);
+    EXPECT_GT (peak (r.pre.l), 1e-3f);
+}
+
+TEST (ChannelStrip, GainZeroIsSilence)
+{
+    auto strip = made (0.7f, 0.5f, 0.3f);
+    strip->controls().gain = 0.0f;
+    TapRun r;
+    noiseThenRun (*strip, 22050, 6, r);
+    for (auto* v : { &r.moving.l, &r.moving.r, &r.steady.l, &r.steady.r, &r.pre.l, &r.pre.r })
+        EXPECT_TRUE (allZero (*v, 11025));
+}
+
+TEST (ChannelStrip, GainZeroIsSilenceBehindTheFilterToo)
+{
+    FilterRig rig (true);
+    rig.strip->controls().gain = 0.0f;
+    TapRun r;
+    noiseThenRun (*rig.strip, 22050, 7, r);
+    for (auto* v : { &r.moving.l, &r.steady.l, &r.pre.l, &r.movingPre.l, &r.steadyPre.l })
+        EXPECT_TRUE (allZero (*v, 11025));
+}
+
+TEST (ChannelStrip, ThreeDZeroSilencesTheMovingShare)
+{
+    auto strip = made (0.0f, 0.5f, 0.05f);
+    TapRun r;
+    const auto in = noiseThenRun (*strip, 22050, 8, r);
+    EXPECT_TRUE (allZero (r.moving.l, 11025));
+    EXPECT_TRUE (allZero (r.moving.r, 11025));
+    EXPECT_TRUE (allZero (r.movingPre.l, 11025));
+    // the steady share carries everything: it is the EQ'd input
+    EXPECT_LE (a3test::maxAbsDiff (r.steady, trimmedAndEqd (in)), 1e-6);
+}
+
+// A control jumped 1 -> 0 under a sine adds no step beyond 2x the dry signal's own slope.
+TEST (ChannelStrip, ReachingZeroDoesNotClick)
+{
+    const auto in = a3test::sine (44100, 440.0, 44100.0, 0.5f);
+    double dry = 0.0;
+    for (size_t i = 1; i < in.l.size(); ++i)
+        dry = std::max (dry, (double) std::abs (in.l[i] - in.l[i - 1]));
+    enum Which { Volume, Gain, ThreeD };
+    for (Which which : { Volume, Gain, ThreeD })
+    {
+        auto strip = made (1.0f, 0.5f, 0.05f);
+        a3test::Stereo mv = in, st = in;
+        for (size_t s = 0; s < in.l.size(); s += 128)
+        {
+            if (s == 128 * 100)
+            {
+                auto& c = strip->controls();
+                (which == Volume ? c.volume : which == Gain ? c.gain : c.threeD) = 0.0f;
+            }
+            const int n = (int) std::min<size_t> (128, in.l.size() - s);
+            const float* i[2] { in.l.data() + s, in.r.data() + s };
+            float* m[2] { mv.l.data() + s, mv.r.data() + s };
+            float* t[2] { st.l.data() + s, st.r.data() + s };
+            strip->process (i, m, t, n);
+        }
+        double worst = 0.0;
+        for (size_t i = 1; i < in.l.size(); ++i)
+            worst = std::max ({ worst, (double) std::abs (mv.l[i] - mv.l[i - 1]), (double) std::abs (st.l[i] - st.l[i - 1]) });
+        EXPECT_LE (worst, 2.0 * dry) << which;
+        if (which != ThreeD)
+            EXPECT_TRUE (allZero (mv.l, 128 * 100 + 4410)) << which;
+    }
 }

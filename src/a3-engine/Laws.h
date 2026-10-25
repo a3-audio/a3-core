@@ -41,5 +41,14 @@ double filterCutoffHz (bool highPass, double control);
 // Core's slope_fx_res (identity) -> 0..1; the filter maps it to its own Q.
 double filterResonance (double control);
 
+// Silence at the bottom of a gain control (ruling R18, decision D23): a control
+// below this is exactly 0, not PurestGain's -40 dB floor. Applies to VOLUME,
+// TRIM/GAIN, the moving share of 3D, and the MASTER/BOOTH/RETURN/PHONES stages.
+bool isSilent (double control);
+
+// Linear gain of a PurestGain-law stage (slopeVolume through A*80-40 dB), 0 when
+// isSilent (control). The MASTER, BOOTH, RETURN and PHONES stages use this.
+double stageGain (double control);
+
 constexpr double purestGainUnity = 0.5;   // A for 0 dB
 }

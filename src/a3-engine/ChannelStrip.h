@@ -8,6 +8,7 @@
 #include "Isolator3.h"
 #include "Meters.h"
 #include "PurestGain.h"
+#include "SilenceFade.h"
 #include "SmoothEQ3.h"
 
 namespace a3
@@ -45,9 +46,16 @@ struct StripMeters { float prePeak[2], preRms[2], postPeak[2], postRms[2]; };
 // gain container. The bed is not delayed for Isolator3's frame: the template
 // has no delay there (Airwindows reports no latency), so moving + steady is x
 // itself; whether the cut should be latency-aligned waits on the rig's
-// bed-leak measurement. 3D at or below the law's floor gives BAND A 0 = -40 dB,
-// not a mute: the moving pair keeps the band at -40 dB, as in REAPER, and a
-// closing band glides with PurestGain instead of being cut.
+// bed-leak measurement. 3D from just above 0 to the law's floor gives BAND A 0 =
+// -40 dB, as in REAPER, and a closing band glides with PurestGain instead of
+// being cut.
+//
+// Silence (R18, D23): TRIM/GAIN, VOLUME and 3D at exactly 0 are true zero, not
+// the -40 dB floor. Each is a SilenceFade (10 ms ramp) behind the control's
+// PurestGain: GAIN after EQ (and again after the filter) so the pre tap and the
+// DJ filter see zero, 3D on the moving share after Isolator3 (steady = x - moving
+// then carries everything), VOLUME on both paths (also closed while GAIN is 0, which
+// stops the Isolator3 ring-out).
 //
 // With a shared filter attached (setSharedFilter) the DJ filter sits after EQ
 // and the pre tap, before the band split, so moving + steady is the filtered x.
@@ -74,6 +82,7 @@ private:
 
     StripControls state;
     PurestGain trim, bandGain, volumeMoving, volumeSteady;
+    SilenceFade gainSilence, gainSilenceAfterFilter, movingSilence, volumeMovingSilence, volumeSteadySilence;
     SmoothEQ3 eq;
     Isolator3 isolator;
     DjFilter filter;

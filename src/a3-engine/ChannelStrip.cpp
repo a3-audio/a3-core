@@ -18,6 +18,8 @@ void ChannelStrip::prepare (double sampleRate, int maxBlockSize)
     }
     for (auto* gain : { &trim, &bandGain, &volumeMoving, &volumeSteady })
         gain->prepare (sampleRate);
+    for (auto* silence : { &gainSilence, &gainSilenceAfterFilter, &movingSilence, &volumeMovingSilence, &volumeSteadySilence })
+        silence->prepare (sampleRate);
     eq.prepare (sampleRate);
     isolator.prepare (sampleRate);
     pre.prepare (sampleRate);
@@ -39,6 +41,14 @@ void ChannelStrip::latchControls()
     const auto volume = (float) laws::slopeVolume (load (state.volume));
     volumeMoving.setParameters (volume, 1.0f);
     volumeSteady.setParameters (volume, 1.0f);
+
+    const bool gainOpen = ! laws::isSilent (load (state.gain));
+    const bool volumeOpen = gainOpen && ! laws::isSilent (load (state.volume));
+    gainSilence.setOpen (gainOpen);
+    gainSilenceAfterFilter.setOpen (gainOpen);
+    movingSilence.setOpen (! laws::isSilent (load (state.threeD)));
+    volumeMovingSilence.setOpen (volumeOpen);
+    volumeSteadySilence.setOpen (volumeOpen);
 }
 
 void ChannelStrip::process (const float* const* in, float* const* moving, float* const* steady, int numSamples,
@@ -93,6 +103,7 @@ void ChannelStrip::processStretch (const float* const* in, const StripBuffers& o
         std::copy (in[ch], in[ch] + count, xs[ch]);
     trim.process (xs, count);
     eq.process (xs, count);
+    gainSilence.process (xs, count);
     pre.push (xs, count);
     if (out.pre[0] != nullptr)
         for (int ch = 0; ch < 2; ++ch)
@@ -100,6 +111,7 @@ void ChannelStrip::processStretch (const float* const* in, const StripBuffers& o
 
     if (sharedFilter != nullptr)
         filter.process (xs, 2, count, state.filterOn.load (std::memory_order_relaxed) >= 0.5f, *sharedFilter);
+    gainSilenceAfterFilter.process (xs, count);
 
     float* const* moving = out.moving;
     float* const* steady = out.steady;
@@ -107,6 +119,7 @@ void ChannelStrip::processStretch (const float* const* in, const StripBuffers& o
         std::copy (xs[ch], xs[ch] + count, moving[ch]);
     bandGain.process (moving, count);
     isolator.process (moving, count);
+    movingSilence.process (moving, count);
 
     for (int ch = 0; ch < 2; ++ch)
         for (int i = 0; i < count; ++i)
@@ -121,6 +134,8 @@ void ChannelStrip::processStretch (const float* const* in, const StripBuffers& o
 
     volumeMoving.process (moving, count);
     volumeSteady.process (steady, count);
+    volumeMovingSilence.process (moving, count);
+    volumeSteadySilence.process (steady, count);
 
     float* sums[2] { sum[0].data(), sum[1].data() };
     for (int ch = 0; ch < 2; ++ch)

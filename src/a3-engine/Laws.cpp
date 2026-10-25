@@ -11,7 +11,7 @@ namespace
 {
 constexpr double filterLowestHz = 20.0;
 constexpr double filterSpan = 1000.0;   // 20 Hz .. 20 kHz
-constexpr double sendSilenceBelow = 1e-9;   // cos(pi/2) in floating point is 6e-17, not 0
+constexpr double silenceBelow = 1e-9;   // cos(pi/2) in floating point is 6e-17, not 0
 constexpr double halfPi = 1.57079632679489661923;
 
 double clamp01 (double x)
@@ -56,7 +56,7 @@ double slopeConstantPower (double control)
 double sendGain (double sendValue)
 {
     const double value = clamp01 (sendValue);
-    if (value < sendSilenceBelow)
+    if (value < silenceBelow)
         return 0.0;
 
     return std::pow (10.0, (-40.0 + 40.0 * value) / 20.0);
@@ -87,6 +87,19 @@ double filterCutoffHz (bool highPass, double control)
 double filterResonance (double control)
 {
     return clamp01 (control);
+}
+
+bool isSilent (double control)
+{
+    return clamp01 (control) < silenceBelow;
+}
+
+double stageGain (double control)
+{
+    if (isSilent (control))
+        return 0.0;
+
+    return std::pow (10.0, (slopeVolume (control) * 80.0 - 40.0) / 20.0);
 }
 
 double bandGain (double threeD)
