@@ -8,7 +8,13 @@
 
 namespace a3
 {
-enum class IemKind { multiEncoder, simpleDecoder, binauralDecoder };
+enum class IemKind { multiEncoder, simpleDecoder, binauralDecoder, stereoEncoder };
+
+// Where a StereoEncoder puts its stereo source, in degrees.
+struct StereoPose
+{
+    float azimuth = 0, elevation = 0, roll = 0, width = 60;
+};
 
 // One IEM plug-in, compiled unchanged from third_party/IEMPluginSuite, hosted
 // directly: no plug-in format, no host negotiation, IEM's OSC receiver closed.
@@ -16,7 +22,8 @@ class IemNode
 {
 public:
     // Builds the processor and sets its bus layout explicitly (no host negotiation):
-    // multiEncoder: numInputs discrete in, ambisonic order-3 out (16); decoders: 16 in, numOutputs out.
+    // multiEncoder: numInputs discrete in, ambisonic order-3 out (16); decoders: 16 in, numOutputs out;
+    // stereoEncoder: 2 in, ambisonic order-3 SN3D out (16), high quality.
     // Returns nullptr when the processor refuses that layout.
     static std::unique_ptr<IemNode> create (IemKind, int numInputs, int numOutputs);
     virtual ~IemNode();
@@ -26,6 +33,9 @@ public:
     void prepare (double sampleRate, int blockSize);  // allocates; then one silent warm-up block
     int preparedBlockSize() const;
     void process (juce::AudioBuffer<float>& io);      // io has max(in, out) channels, numSamples <= preparedBlockSize()
+    // stereoEncoder only, on the audio thread: takes effect from the next process();
+    // a pose equal to the current one changes nothing. A no-op on the other kinds.
+    void setStereoPose (const StereoPose&);
     std::atomic<float>* rawParameter (const juce::String& id);   // APVTS raw value, for audio-thread writes
     float legalValue (const juce::String& id, float value) const; // clamp + snap to the parameter's range
     bool listensForOsc() const;                       // IEM's own OSC receiver connected?
@@ -43,6 +53,7 @@ public:
         juce::AudioProcessorValueTreeState* parameters = nullptr;
         std::function<bool()> listensForOsc;
         std::function<juce::Result (const juce::String&)> loadDecoderConfig;   // SimpleDecoder only
+        std::function<void (const StereoPose&)> setStereoPose;                // StereoEncoder only
     };
 
 private:

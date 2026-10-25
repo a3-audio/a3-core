@@ -261,3 +261,79 @@ TEST (IemNode, AnyCallSizeUpToThePreparedBlock)
                 ASSERT_NEAR (a[c][i], b[c][i], 1e-6f) << "channel " << c << " frame " << i;
     }
 }
+
+namespace
+{
+constexpr int acnW = 0, acnY = 1, acnX = 3;
+
+std::unique_ptr<a3::IemNode> makeStereoEncoder (const a3::StereoPose& pose)
+{
+    auto node = a3::IemNode::create (a3::IemKind::stereoEncoder, 2, busChannels);
+    EXPECT_TRUE (node != nullptr);
+    if (node == nullptr)
+        return node;
+    node->prepare (44100.0, 64);
+    node->setStereoPose (pose);
+    return node;
+}
+
+Channels stereoDc (float left, float right, size_t frames)
+{
+    return { std::vector<float> (frames, left), std::vector<float> (frames, right) };
+}
+
+// The last frame of a channel: past IEM's one-block position ramp.
+float settled (const Channels& out, int channel)
+{
+    return out[(size_t) channel].back();
+}
+}
+
+TEST (IemNode, StereoEncoderBuildsForStereoToOrderThree)
+{
+    EXPECT_TRUE (a3::IemNode::create (a3::IemKind::stereoEncoder, 2, 16) != nullptr);
+    EXPECT_TRUE (a3::IemNode::create (a3::IemKind::stereoEncoder, 1, 16) == nullptr);
+    EXPECT_TRUE (a3::IemNode::create (a3::IemKind::stereoEncoder, 2, 9) == nullptr);
+}
+
+TEST (IemNode, StereoEncoderAtFrontPutsBothSidesInW)
+{
+    auto node = makeStereoEncoder ({ 0.0f, 0.0f, 0.0f, 0.0f });
+    ASSERT_TRUE (node != nullptr);
+    const auto out = render (*node, stereoDc (0.5f, 0.5f, 512), busChannels, { 64 });
+    EXPECT_NEAR (settled (out, acnW), 1.0f, 1e-4f);   // SN3D: W carries each side at unity
+    EXPECT_NEAR (settled (out, acnY), 0.0f, 1e-4f);
+    EXPECT_NEAR (settled (out, acnX), 1.0f, 1e-4f);
+}
+
+TEST (IemNode, StereoEncoderPoseMovesTheSource)
+{
+    auto left = makeStereoEncoder ({ 90.0f, 0.0f, 0.0f, 0.0f });
+    auto right = makeStereoEncoder ({ -90.0f, 0.0f, 0.0f, 0.0f });
+    ASSERT_TRUE (left != nullptr && right != nullptr);
+    const auto atLeft = render (*left, stereoDc (0.5f, 0.5f, 512), busChannels, { 64 });
+    const auto atRight = render (*right, stereoDc (0.5f, 0.5f, 512), busChannels, { 64 });
+    EXPECT_GT (settled (atLeft, acnY), 0.9f);
+    EXPECT_LT (std::abs (settled (atLeft, acnX)), 1e-3f);
+    EXPECT_LT (settled (atRight, acnY), -0.9f);
+}
+
+TEST (IemNode, StereoEncoderWidthSplitsLeftAndRight)
+{
+    auto node = makeStereoEncoder ({ 0.0f, 0.0f, 0.0f, 180.0f });
+    ASSERT_TRUE (node != nullptr);
+    const auto out = render (*node, stereoDc (0.5f, 0.0f, 512), busChannels, { 64 });
+    EXPECT_GT (settled (out, acnY), 0.4f);   // the left input sits at +90 degrees
+}
+
+TEST (IemNode, StereoEncoderPoseChangeTakesEffectWithoutAMessageThread)
+{
+    auto node = makeStereoEncoder ({ 0.0f, 0.0f, 0.0f, 0.0f });
+    ASSERT_TRUE (node != nullptr);
+    const auto front = render (*node, stereoDc (0.5f, 0.5f, 256), busChannels, { 64 });
+    EXPECT_NEAR (settled (front, acnY), 0.0f, 1e-4f);
+
+    node->setStereoPose ({ 90.0f, 0.0f, 0.0f, 0.0f });   // no message loop runs in this test
+    const auto moved = render (*node, stereoDc (0.5f, 0.5f, 256), busChannels, { 64 });
+    EXPECT_GT (settled (moved, acnY), 0.9f);
+}
