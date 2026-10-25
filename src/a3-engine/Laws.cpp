@@ -9,6 +9,9 @@ namespace a3::laws
 {
 namespace
 {
+constexpr double filterLowestHz = 20.0;
+constexpr double filterSpan = 1000.0;   // 20 Hz .. 20 kHz
+constexpr double sendSilenceBelow = 1e-9;   // cos(pi/2) in floating point is 6e-17, not 0
 constexpr double halfPi = 1.57079632679489661923;
 
 double clamp01 (double x)
@@ -53,7 +56,7 @@ double slopeConstantPower (double control)
 double sendGain (double sendValue)
 {
     const double value = clamp01 (sendValue);
-    if (value <= 0.0)
+    if (value < sendSilenceBelow)
         return 0.0;
 
     return std::pow (10.0, (-40.0 + 40.0 * value) / 20.0);
@@ -78,7 +81,7 @@ double filterCutoffHz (bool highPass, double control)
 {
     const double x = clamp01 (control);
     const double normalised = highPass ? 0.2 + 0.6 * x : 0.8 - 0.6 * x;
-    return 20.0 * std::pow (1000.0, normalised);
+    return filterLowestHz * std::pow (filterSpan, normalised);
 }
 
 double filterResonance (double control)

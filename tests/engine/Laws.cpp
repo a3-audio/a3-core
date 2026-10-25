@@ -85,6 +85,7 @@ TEST (Laws, AuxSendGainIsSendOfConstantPower)
 
 // Source: a3-core .../.local/lib/a3_core_cue.py send_levels([True], mix, 1.0, False)["decks"][0],
 // {mix, pre (cue side), post (mix side)}. Unity 1.0 is REAPER's send scale.
+// At mix 1.0 Core's float is cos(pi/2) = 6.1e-17; the engine reads that as silence (R2), so the row expects exactly 0.
 TEST (Laws, CueAndMixMatchCoreSendLevels)
 {
     struct Row { double mix, pre, post; };
@@ -97,7 +98,8 @@ TEST (Laws, CueAndMixMatchCoreSendLevels)
     };
     for (const auto& r : rows)
     {
-        EXPECT_NEAR (a3::laws::cueWeight (r.mix), a3::laws::sendGain (r.pre), 1e-9) << r.mix;
+        const double expectedPre = r.pre < 1e-9 ? 0.0 : a3::laws::sendGain (r.pre);
+        EXPECT_NEAR (a3::laws::cueWeight (r.mix), expectedPre, 1e-9) << r.mix;
         EXPECT_NEAR (a3::laws::mixWeight (r.mix), a3::laws::sendGain (r.post), 1e-9) << r.mix;
     }
 }
@@ -134,4 +136,26 @@ TEST (Laws, NaNIsZero)
     EXPECT_DOUBLE_EQ (a3::laws::mixWeight (nan), a3::laws::mixWeight (0.0));
     EXPECT_DOUBLE_EQ (a3::laws::filterCutoffHz (true, nan), a3::laws::filterCutoffHz (true, 0.0));
     EXPECT_DOUBLE_EQ (a3::laws::filterCutoffHz (false, nan), a3::laws::filterCutoffHz (false, 0.0));
+}
+
+TEST (Laws, CueIsSilentAtMixEndAndMixAtCueEnd)
+{
+    EXPECT_EQ (a3::laws::cueWeight (1.0), 0.0);
+    EXPECT_EQ (a3::laws::mixWeight (0.0), 0.0);
+    EXPECT_EQ (a3::laws::sendGain (1e-10), 0.0);
+}
+
+TEST (Laws, GarbageIsClampedForNewLaws)
+{
+    const double inf = std::numeric_limits<double>::infinity();
+    for (double bad : { -1.0, 7.0, std::nan (""), inf, -inf })
+    {
+        for (double v : { a3::laws::slopeConstantPower (bad), a3::laws::sendGain (bad), a3::laws::auxSendGain (bad),
+                          a3::laws::cueWeight (bad), a3::laws::mixWeight (bad), a3::laws::filterResonance (bad),
+                          a3::laws::filterCutoffHz (true, bad), a3::laws::filterCutoffHz (false, bad) })
+            EXPECT_TRUE (std::isfinite (v)) << bad;
+    }
+    EXPECT_EQ (a3::laws::sendGain (inf), 1.0);
+    EXPECT_EQ (a3::laws::sendGain (-inf), 0.0);
+    EXPECT_DOUBLE_EQ (a3::laws::filterCutoffHz (true, inf), a3::laws::filterCutoffHz (true, 1.0));
 }
