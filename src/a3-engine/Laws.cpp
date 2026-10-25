@@ -9,6 +9,8 @@ namespace a3::laws
 {
 namespace
 {
+constexpr double halfPi = 1.57079632679489661923;
+
 double clamp01 (double x)
 {
     return std::isnan (x) ? 0.0 : std::clamp (x, 0.0, 1.0);
@@ -40,6 +42,48 @@ double slopeEq (double control)
 {
     static constexpr std::array<double, 10> table { 0.0, 0.1, 0.2, 0.3, 0.5, 0.52, 0.54, 0.56, 0.58, 0.6 };
     return interpTable (clamp01 (control), table);
+}
+
+double slopeConstantPower (double control)
+{
+    static constexpr std::array<double, 10> table { 0.0, 0.4, 0.6, 0.7, 0.75, 0.77, 0.8, 0.85, 0.9, 1.0 };
+    return interpTable (clamp01 (control), table);
+}
+
+double sendGain (double sendValue)
+{
+    const double value = clamp01 (sendValue);
+    if (value <= 0.0)
+        return 0.0;
+
+    return std::pow (10.0, (-40.0 + 40.0 * value) / 20.0);
+}
+
+double auxSendGain (double control)
+{
+    return sendGain (slopeConstantPower (control));
+}
+
+double cueWeight (double phonesMix)
+{
+    return sendGain (std::cos (clamp01 (phonesMix) * halfPi));
+}
+
+double mixWeight (double phonesMix)
+{
+    return sendGain (std::sin (clamp01 (phonesMix) * halfPi));
+}
+
+double filterCutoffHz (bool highPass, double control)
+{
+    const double x = clamp01 (control);
+    const double normalised = highPass ? 0.2 + 0.6 * x : 0.8 - 0.6 * x;
+    return 20.0 * std::pow (1000.0, normalised);
+}
+
+double filterResonance (double control)
+{
+    return clamp01 (control);
 }
 
 double bandGain (double threeD)
