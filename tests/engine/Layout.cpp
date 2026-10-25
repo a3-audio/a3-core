@@ -142,6 +142,23 @@ TEST (Layout, OrderOtherThanThreeIsRefused)
     EXPECT_TRUE (error.contains ("order 3")) << error;
 }
 
+// SpatialBus refuses decoders wider than 31 outputs (JUCE's preallocated channel
+// table); the data rule refuses them first, so a file the loader accepts runs.
+TEST (Layout, MoreOutputsThanTheEngineRunsAreRefused)
+{
+    const auto decoder = editedMainDecoder ([] (juce::DynamicObject& d) { d.setProperty ("Routing", routing ({ 2, 3, 4, 32 })); });
+    juce::String error;
+    EXPECT_FALSE (parseMain (decoder, shippedMainParameters(), error).has_value());
+    EXPECT_TRUE (error.contains ("31")) << error;
+
+    error = {};
+    EXPECT_FALSE (parseMain (shippedFile ("main.decoder.json"), parametersWith ("swChannel", 32), error).has_value());
+    EXPECT_TRUE (error.contains ("31")) << error;
+
+    const auto widest = editedMainDecoder ([] (juce::DynamicObject& d) { d.setProperty ("Routing", routing ({ 2, 3, 4, 31 })); });
+    EXPECT_TRUE (parseMain (widest, shippedMainParameters(), error).has_value()) << error;
+}
+
 TEST (Layout, BadJsonIsRefused)
 {
     juce::String error;

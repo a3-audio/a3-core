@@ -24,7 +24,8 @@ struct Layout
 // swMode 0 = none), because the rig's decoder files carry no SubwooferChannel.
 // Refuses, with the rule in the error: bad JSON or an IEM parse failure, not
 // order 3 (16 matrix columns), no tops, a duplicate Routing channel, a sub on a
-// top's channel, a channel outside 1..64, a swMode other than 0 or 1.
+// top's channel, a channel outside 1..64, more than 31 output channels (the
+// engine's limit), a swMode other than 0 or 1.
 // Gaps in the routing are allowed.
 std::optional<Layout> parseLayout (const juce::String& decoderJson, const juce::var& parameters, juce::String& error);
 }

@@ -14,6 +14,9 @@ namespace
 {
 constexpr size_t order3Columns = 16;
 constexpr int highestOutputChannel = 64;   // swChannel's range in IEM's SimpleDecoder
+// SpatialBus's limit (JUCE's preallocated channel table, see SpatialBus.cpp):
+// refused here too, so a layout the loader accepts is one the engine runs.
+constexpr int engineOutputLimit = 31;
 constexpr int swModeOff = 0;
 constexpr int swModeDiscrete = 1;
 
@@ -132,6 +135,12 @@ std::optional<Layout> parseLayout (const juce::String& decoderJson, const juce::
     }
     if (! channelsAreLegal (layout.topChannels, layout.subChannel, error))
         return std::nullopt;
+    if (layout.numOutputs() > engineOutputLimit)
+    {
+        error = "the decoder needs " + juce::String (layout.numOutputs()) + " output channels; the engine runs at most "
+                + juce::String (engineOutputLimit);
+        return std::nullopt;
+    }
     return layout;
 }
 }
