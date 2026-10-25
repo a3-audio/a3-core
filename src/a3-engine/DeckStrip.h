@@ -19,7 +19,9 @@ struct StripMeter { float peak, rms; };
 // same units and laws as ChannelStrip's analog path (PurestGain, SmoothEQ3,
 // DjFilter, SilenceFade), every control acting identically on all 16 channels
 // (one gain, one set of EQ and filter coefficients), so a plane wave keeps its
-// direction. No Isolator3, no 3D, no positions. The controls are a
+// direction. The filter is always the SVF, whatever FilterControls::kind says: the
+// ladder saturates its input, so W and the weaker channels would get different gain
+// and the directions would bend (kind switches do nothing on a deck). No Isolator3, no 3D, no positions. The controls are a
 // StripControls per channel, owned by the caller and read on the 128-frame grid.
 //
 // Silence (R18): GAIN 0 closes the strip after EQ (the pre meter and the filter

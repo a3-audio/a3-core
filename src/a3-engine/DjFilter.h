@@ -31,6 +31,9 @@ struct FilterControls   // desk/Motion values, as on the wire
 class DjFilter
 {
 public:
+    // Ignores FilterControls::kind and always filters with the SVF. For B-format: the ladder
+    // saturates its input, so channels of different amplitude would get different gain.
+    void setSvfOnly (bool only) { svfOnly = only; }
     void prepare (double sampleRate, int maxBlock, int numChannels);   // allocates
     void reset();   // clears the filter state, no allocation; the controls are re-latched
     void process (float* const* io, int numChannels, int numSamples, bool on, const FilterControls& controls);
@@ -47,7 +50,7 @@ private:
 
     double sampleRate = 44100.0;
     int maxBlock = 0, channels = 0;
-    bool initialised = false, highPass = true, requestedHighPass = true;
+    bool svfOnly = false, initialised = false, highPass = true, requestedHighPass = true;
     float lastResonance = -1.0f, lastCutoff = -1.0f;
     ControlGrid grid;
     int ladderPhase = 0;

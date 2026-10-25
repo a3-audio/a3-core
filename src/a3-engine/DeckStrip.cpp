@@ -20,6 +20,7 @@ void DeckStrip::prepare (double newRate, int maxBlockSize)
     eq.prepare (sampleRate);
     pre.prepare (sampleRate);
     post.prepare (sampleRate);
+    filter.setSvfOnly (true);
     if (sharedFilter != nullptr)
         filter.prepare (sampleRate, maxBlock, channels);
     grid.reset();
@@ -51,7 +52,13 @@ void DeckStrip::process (const float* const* in16, const DeckTaps& taps, int num
 {
     juce::ScopedNoDenormals noDenormals;
     if (maxBlock == 0)
+    {
+        for (int ch = 0; ch < channels; ++ch)
+            for (float* tap : { taps.preVolume[ch], taps.postVolume[ch] })
+                if (tap != nullptr)
+                    std::fill (tap, tap + numSamples, 0.0f);
         return;   // not prepared
+    }
     for (int offset = 0; offset < numSamples; offset += maxBlock)
     {
         const int chunk = std::min (maxBlock, numSamples - offset);

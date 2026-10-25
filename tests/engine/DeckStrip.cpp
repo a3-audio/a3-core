@@ -140,7 +140,9 @@ TEST (DeckStrip, ControlsActIdenticallyOnAllSixteen)
             EXPECT_EQ (peakAfter (outB.post[c], 0), 0.0f) << "leak into " << c;
 }
 
-TEST (DeckStrip, PlaneWaveKeepsItsDirection)
+class DeckStripKind : public ::testing::TestWithParam<a3::FilterKind> {};
+
+TEST_P (DeckStripKind, PlaneWaveKeepsItsDirection)
 {
     // First order is the exact SN3D encoding of az 60 / el 20 (ACN 1 = Y, 2 = Z, 3 = X);
     // the higher orders are a fixed table: the strip is linear and identical per channel,
@@ -159,7 +161,7 @@ TEST (DeckStrip, PlaneWaveKeepsItsDirection)
     f.controls.filterOn = 1.0f;
     f.filter.mode = 1;
     f.filter.frequency = 0.5f;
-    f.filter.kind = (int) a3::FilterKind::svf;
+    f.filter.kind = (int) GetParam();   // the deck filters with the SVF either way
     const size_t frames = 44100;
     std::mt19937 rng (5);
     std::uniform_real_distribution<float> dist (-0.1f, 0.1f);
@@ -176,6 +178,41 @@ TEST (DeckStrip, PlaneWaveKeepsItsDirection)
     for (size_t c = 1; c < ch16; ++c)
         for (size_t i = settled; i < frames; ++i)
             ASSERT_NEAR (out.post[c][i], coeff[c] * out.post[0][i], 1e-5) << "channel " << c << " frame " << i;
+}
+
+INSTANTIATE_TEST_SUITE_P (DeckStrip, DeckStripKind, ::testing::Values (a3::FilterKind::svf, a3::FilterKind::ladder));
+
+TEST (DeckStrip, FilterKindChangesNothing)
+{
+    const auto in = noise16 (20000, 0.3f, 8);
+    const auto outFor = [&] (a3::FilterKind kind, bool toggleMidway)
+    {
+        Fixture f;
+        f.controls.filterOn = 1.0f;
+        f.filter.kind = (int) kind;
+        auto first = run (f.strip, in, f.controls);
+        if (toggleMidway)
+            f.filter.kind = (int) (kind == a3::FilterKind::svf ? a3::FilterKind::ladder : a3::FilterKind::svf);
+        return run (f.strip, in, f.controls);
+    };
+    const auto svf = outFor (a3::FilterKind::svf, false);
+    const auto ladder = outFor (a3::FilterKind::ladder, false);
+    const auto toggled = outFor (a3::FilterKind::svf, true);
+    for (size_t c = 0; c < ch16; ++c)
+    {
+        EXPECT_EQ (maxAbsDiff (svf.post[c], ladder.post[c]), 0.0f) << "channel " << c;
+        EXPECT_EQ (maxAbsDiff (svf.post[c], toggled.post[c]), 0.0f) << "channel " << c;
+    }
+}
+
+TEST (DeckStrip, UnpreparedZeroFillsTheTaps)
+{
+    a3::StripControls controls;
+    a3::DeckStrip strip;
+    const auto in = noise16 (64, 0.5f, 9);
+    auto out = run (strip, in, controls);
+    for (auto& plane : out.post)
+        EXPECT_TRUE (allZero (plane, 0));
 }
 
 TEST (DeckStrip, VolumeZeroIsSilenceOnAllSixteen)

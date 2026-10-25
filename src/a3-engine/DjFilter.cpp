@@ -58,7 +58,7 @@ void DjFilter::latch (bool on, const FilterControls& controls)
     const double hz = std::min (laws::filterCutoffHz (hp, (double) controls.frequency.load (std::memory_order_relaxed)),
                                 maxCutoffOfRate * sampleRate);
     const float r = (float) laws::filterResonance ((double) controls.resonance.load (std::memory_order_relaxed));
-    const bool useLadder = controls.kind.load (std::memory_order_relaxed) == (int) FilterKind::ladder;
+    const bool useLadder = ! svfOnly && controls.kind.load (std::memory_order_relaxed) == (int) FilterKind::ladder;
 
     requestedHighPass = hp;
     if (! initialised)
