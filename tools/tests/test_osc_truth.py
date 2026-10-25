@@ -444,6 +444,74 @@ class TheStemSelector(unittest.TestCase):
         self.assertNotIn("channel.stem.selected", self.truth.addresses())
 
 
+class TheEngineSpeaks(unittest.TestCase):
+    """Plan 4b (2026-10-26): the words only the engine mode needs. Existing
+    keys are sent to the engine unchanged; only engine-only words are new."""
+
+    ENGINE_WORDS = {
+        "channel.source": ("/channel/{ch}/source", "i", ["core"], ["engine", "desk", "motion"]),
+        "aux-return.source": ("/aux-return/source", "i", ["core"], ["engine"]),
+        "aux-return.cue": ("/aux-return/cue", "i", ["core"], ["engine"]),
+        "delay.bpm": ("/delay/bpm", "f", ["core"], ["engine"]),
+        "engine.open": ("/engine/open", "i", ["core"], ["engine"]),
+        "engine.hello": ("/engine/hello", "s", ["engine"], ["core"]),
+    }
+
+    def setUp(self):
+        self.truth = a3_osc.load(TRUTH)
+
+    def test_the_engine_words_are_in_the_truth(self):
+        words = self.truth.addresses()
+        for key, (pattern, args, sender, receivers) in self.ENGINE_WORDS.items():
+            with self.subTest(key=key):
+                self.assertIn(key, words)
+                self.assertEqual((words[key]["pattern"], words[key]["args"],
+                                  words[key]["from"], words[key]["to"]),
+                                 (pattern, args, sender, receivers))
+        self.assertEqual(words["channel.source"]["ch"], [1, 4])
+
+    def test_core_hears_the_engines_hello_on_its_own_port(self):
+        routes = self.truth.routes()
+        self.assertIn({"from": "engine", "to": "core.osc"}, routes)
+        self.assertIn({"from": "core", "to": "engine.osc"}, routes)
+        self.assertEqual(self.truth.address("engine.hello"), "/engine/hello")
+        self.assertEqual(self.truth.endpoint("core", "osc")[1], 9000)
+
+    def test_the_engine_lists_what_core_sends_it(self):
+        carries = self.truth.listener("engine", "osc")["carries"]
+        for word in ("source", "aux-return.source/cue", "delay.bpm", "engine.open",
+                     "master.*"):
+            with self.subTest(word=word):
+                self.assertIn(word, carries)
+        self.assertNotIn("bench", carries)
+
+    def test_core_sends_the_deck_3d_to_stemdeck(self):
+        entry = self.truth.addresses()["stemdeck.3d"]
+        self.assertEqual((entry["args"], entry["deck"], entry["from"], entry["to"]),
+                         ("f", [1, 2], ["core"], ["stemdeck"]))
+        self.assertEqual(self.truth.address("stemdeck.3d", deck=2), "/stemdeck/2/3d")
+        self.assertEqual(self.truth.match("/stemdeck/1/3d"), ("stemdeck.3d", {"deck": 1}))
+
+    def test_desk_and_motion_hear_the_channel_source_and_deck_presence(self):
+        words = self.truth.addresses()
+        for receiver in ("desk", "motion"):
+            self.assertIn(receiver, words["channel.source"]["to"])
+            self.assertIn(receiver, words["stemdeck.present"]["to"])
+        self.assertEqual((words["stemdeck.present"]["args"], words["stemdeck.present"]["from"],
+                          words["stemdeck.present"]["deck"]), ("i", ["core"], [1, 2]))
+        self.assertEqual(self.truth.address("stemdeck.present", deck=1),
+                         "/stemdeck/1/present")
+
+    def test_a_stemdeck_hello_names_its_deck(self):
+        # device.hello is "ss" (device, truth hash): no deck number, so the
+        # deck gets a word of its own.
+        self.assertEqual(self.truth.addresses()["device.hello"]["args"], "ss")
+        entry = self.truth.addresses()["stemdeck.deck-hello"]
+        self.assertEqual((entry["pattern"], entry["args"], entry["deck"],
+                          entry["from"], entry["to"]),
+                         ("/stemdeck/{deck}/hello", "s", [1, 2], ["stemdeck"], ["core"]))
+
+
 class CoreAnnouncesItself(unittest.TestCase):
     """Spec truth-from-core (2026-10-02): devices find Core by its broadcast."""
 
