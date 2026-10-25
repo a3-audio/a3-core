@@ -181,7 +181,7 @@ class TheHelloReplays(unittest.TestCase):
     def test_the_engine_recall_sends_state_then_open_and_no_reaper_gate(self):
         recall = _source_of("osc_handler_recall")
         branch = recall.split("if _engine_mode:", 1)[1]
-        branch = branch.split("return", 1)[0]
+        branch = branch.split("\n        return\n", 1)[0]
         self.assertIn("_startup_recall.is_it(osc_arguments)", branch)
         state = branch.find("send_to_engine(state_messages(")
         opened = branch.find("send_to_engine([open_message(_truth)])")
@@ -280,6 +280,29 @@ class Decks(unittest.TestCase):
     def test_deck_words_go_to_the_decks_own_host(self):
         sender = _source_of("send_to_deck")
         self.assertIn("_deck_clients.get(", sender)
+
+
+
+class EngineModeKeepsTheDesksReturnWord(unittest.TestCase):
+    def test_the_return_source_comes_from_the_desks_mode(self):
+        self.assertNotIn("ENGINE_RETURN_SOURCE", CORE)
+        for name in ("speak_stems", "osc_handler_recall"):
+            with self.subTest(name):
+                self.assertIn("engine_return_source(_stems.return_mode)",
+                              _source_of(name))
+
+
+class EngineModeSendsNoStemBusCommands(unittest.TestCase):
+    def test_the_one_route_to_stemdecks_buses_is_shut(self):
+        body = _source_of("send_to_stemdeck").split('"""', 2)[2]
+        self.assertTrue(body.lstrip().startswith("if _engine_mode:\n"), body)
+        self.assertIn("return", body.split("\n", 3)[2])
+
+    def test_the_tidy_does_not_run(self):
+        body = _source_of("tidy_when_settled").split('"""', 2)[2]
+        first = body.lstrip().split("\n", 2)
+        self.assertEqual(first[0], "if _engine_mode:")
+        self.assertTrue(first[1].strip().startswith("return"), first[1])
 
 
 if __name__ == "__main__":

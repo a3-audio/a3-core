@@ -101,6 +101,7 @@ from a3_core_gate import Gate, StartupRecall, open_after_recall   # noqa: E402
 from a3_core_audio_engine import ENGINE, REAPER, engine_runs, probe   # noqa: E402
 from a3_core_decks import ANALOG, NEUTRAL_3D, DeckSelector   # noqa: E402
 from a3_core_engine import (EngineSession, engine_channel_messages,   # noqa: E402
+                            engine_return_source,
                             filter_mode_message, flag_message,
                             forward_messages, open_message, position_message,
                             return_cue_message, source_messages,
@@ -332,10 +333,6 @@ osc_engine = WatchedClient(
 
 #: The tempo the engine's delay was last told, for its state after a recall.
 _engine_bpm = None
-
-#: The aux return's source in engine mode. Analog until the desk has a way to
-#: choose a deck's AUX pair there (not wired by plan 4's B4).
-ENGINE_RETURN_SOURCE = ANALOG
 
 #: Core's deck selector -- engine mode only; None while REAPER runs, whose
 #: stems stay with a3_core_stems.
@@ -733,7 +730,8 @@ def speak_stems(full=False):
         if full:
             _sources_sent_to_engine.clear()
         send_to_engine(changed_messages(
-            source_messages(_truth, _decks, ENGINE_RETURN_SOURCE),
+            source_messages(_truth, _decks,
+                            engine_return_source(_stems.return_mode)),
             _sources_sent_to_engine))
         report_decks(full)
 
@@ -820,6 +818,8 @@ _tidy_settle = Settle(TIDY_AFTER_SECONDS)
 
 def send_to_stemdeck(commands):
     """Switch commands to StemDeck; the desk changes when StemDeck reports."""
+    if _engine_mode:
+        return      # the deck selector replaces the stem buses (spec Scope 13)
     if _stemdeck_client is None:
         return
     for address, value in command_messages(commands, _truth):
@@ -1387,6 +1387,8 @@ def tidy_when_settled():
     mirror obey the rules -- one stem per channel, the return's mode -- and
     tell StemDeck; then let the buses decide any channel that has no source
     yet (2026-10-14). Runs on the serve thread, as every handler does."""
+    if _engine_mode:
+        return      # REAPER mode's stem mirror; engine mode has the decks
     if not _tidy_settle.due(time.monotonic()) or _stemdeck_client is None:
         return
     send_to_stemdeck(_stems.tidy())
@@ -1972,7 +1974,8 @@ def osc_handler_recall(client_address: Tuple[str, int], address: str,
         # evening does not carry, then open. No REAPER gate in engine mode.
         if _startup_recall.is_it(osc_arguments):
             send_to_engine(state_messages(_truth, channel_infos, master_info,
-                                          _decks, ENGINE_RETURN_SOURCE,
+                                          _decks,
+                                          engine_return_source(_stems.return_mode),
                                           _engine_bpm))
             send_to_engine([open_message(_truth)])
         return
@@ -2547,6 +2550,8 @@ if __name__ == "__main__":
     self_client._sock.bind((_truth.host("local"), 0))
     _hello_gate.trust(self_client._sock.getsockname())
 
+    # Its nested send_to_self twins the module-level one; kept so this REAPER
+    # path stays byte-identical to main (REAPER frozen, D22).
     def replay_once_reaper_is_quiet():
         def send_to_self(address, value):
             self_client.send_message(address, value)

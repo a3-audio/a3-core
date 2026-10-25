@@ -214,5 +214,21 @@ class Session(unittest.TestCase):
         self.assertEqual(s.evening(), ["file"])
 
 
+
+class TheReturnSourceFollowsTheDesksMode(unittest.TestCase):
+    """Engine mode keeps the desk's return word (fix round 1 of B4): STEM
+    plays deck A's AUX pair, ANALOG plays analog 11/12."""
+
+    def test_stem_mode_is_deck_a(self):
+        from a3_core_engine import engine_return_source
+        from a3_core_stems import STEM_MODE
+        self.assertEqual(engine_return_source(STEM_MODE), 1)
+
+    def test_analog_mode_is_analog(self):
+        from a3_core_engine import engine_return_source
+        from a3_core_stems import ANALOG_MODE
+        self.assertEqual(engine_return_source(ANALOG_MODE), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -8,6 +8,18 @@ Pure: no sockets, no globals. Channel arguments are 0-based indexes as in
 Core's channel_infos; the addresses carry the 1-based wire number.
 """
 
+from a3_core_stems import STEM_MODE
+
+#: The deck whose AUX pair the return plays in STEM mode.
+RETURN_DECK = 1
+
+
+def engine_return_source(return_mode):
+    """The aux return's source from the desk's own return word (a3_core_stems'
+    mode): STEM plays deck A's AUX pair, ANALOG analog 11/12."""
+    return RETURN_DECK if return_mode == STEM_MODE else 0
+
+
 #: Sent as they arrived, by truth name.
 FORWARDED = frozenset({
     "channel.gain", "channel.eq.high", "channel.eq.mid", "channel.eq.low",
