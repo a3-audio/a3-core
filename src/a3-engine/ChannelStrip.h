@@ -53,9 +53,10 @@ struct StripMeters { float prePeak[2], preRms[2], postPeak[2], postRms[2]; };
 // Silence (R18, D23): TRIM/GAIN, VOLUME and 3D at exactly 0 are true zero, not
 // the -40 dB floor. Each is a SilenceFade (10 ms ramp) behind the control's
 // PurestGain: GAIN after EQ (and again after the filter) so the pre tap and the
-// DJ filter see zero, 3D on the moving share after Isolator3 (steady = x - moving
-// then carries everything), VOLUME on both paths (also closed while GAIN is 0, which
-// stops the Isolator3 ring-out).
+// DJ filter see zero, the moving share after Isolator3, closed by 3D 0 or GAIN 0
+// (steady = x - moving then carries everything, or exactly 0 with GAIN 0, so
+// the Isolator3 ring-out never reaches a tap), VOLUME on both paths (also
+// closed while GAIN is 0).
 //
 // With a shared filter attached (setSharedFilter) the DJ filter sits after EQ
 // and the pre tap, before the band split, so moving + steady is the filtered x.

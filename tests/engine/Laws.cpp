@@ -3,8 +3,10 @@
 #include <gtest/gtest.h>
 #include <cmath>
 #include <limits>
+#include <vector>
 #include <juce_core/juce_core.h>
 #include "Laws.h"
+#include "PurestGain.h"
 
 namespace
 {
@@ -181,6 +183,22 @@ TEST (Laws, ShapeAboveZeroIsUnchanged)
         EXPECT_DOUBLE_EQ (a3::laws::stageGain (c), std::pow (10.0, (40.0 * c - 40.0) / 20.0)) << c;
     EXPECT_DOUBLE_EQ (a3::laws::stageGain (1.0), 1.0);
     EXPECT_NEAR (a3::laws::stageGain (0.5), 0.1, 1e-12);   // -20 dB
-    EXPECT_GT (a3::laws::bandGain (0.01), -1.0);            // bandGain keeps its shape (A 0 at and below 0.01)
+    EXPECT_DOUBLE_EQ (a3::laws::bandGain (0.01), 0.0);      // bandGain keeps its floor: A 0 at and below 0.01
+    EXPECT_GT (a3::laws::bandGain (0.011), 0.0);
     EXPECT_FALSE (a3::laws::isSilent (0.01));
+}
+
+// stageGain is what a PurestGain at A = slopeVolume(c) settles on above 0.
+TEST (Laws, StageGainIsWhatPurestGainSettlesOn)
+{
+    for (double c : { 0.05, 0.3, 0.5, 0.8, 1.0 })
+    {
+        a3::PurestGain g;
+        g.prepare (44100.0);
+        g.setParameters ((float) a3::laws::slopeVolume (c), 1.0f);
+        std::vector<float> l (44100, 1.0f), r (44100, 1.0f);
+        float* io[2] { l.data(), r.data() };
+        g.process (io, (int) l.size());
+        EXPECT_NEAR (l.back(), a3::laws::stageGain (c), 1e-5) << c;
+    }
 }

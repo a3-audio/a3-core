@@ -413,6 +413,20 @@ TEST (ChannelStrip, GainZeroIsSilenceBehindTheFilterToo)
         EXPECT_TRUE (allZero (*v, 11025));
 }
 
+// Isolator3 rings on after its input is zeroed; GAIN 0 must still silence every tap.
+TEST (ChannelStrip, GainZeroSilencesThePreVolumeTapsDespiteTheIsolatorRingOut)
+{
+    auto strip = made (0.7f, 0.9f, 0.8f);
+    const auto in = a3test::noise (44100, 0.25f, 11);
+    TapRun r = runWithTaps (*strip, in, 128);   // GAIN 1 under signal: the isolator is ringing
+    EXPECT_GT (*std::max_element (r.movingPre.l.begin() + 22050, r.movingPre.l.end()), 1e-3f);
+    strip->controls().gain = 0.0f;
+    r = runWithTaps (*strip, in, 128);
+    for (auto* v : { &r.movingPre.l, &r.movingPre.r, &r.steadyPre.l, &r.steadyPre.r, &r.pre.l, &r.pre.r,
+                     &r.moving.l, &r.steady.l })
+        EXPECT_TRUE (allZero (*v, 4410));
+}
+
 TEST (ChannelStrip, ThreeDZeroSilencesTheMovingShare)
 {
     auto strip = made (0.0f, 0.5f, 0.05f);
@@ -436,7 +450,7 @@ TEST (ChannelStrip, ReachingZeroDoesNotClick)
     for (Which which : { Volume, Gain, ThreeD })
     {
         auto strip = made (1.0f, 0.5f, 0.05f);
-        a3test::Stereo mv = in, st = in;
+        a3test::Stereo mv = in, st = in, mpre = in, spre = in;
         for (size_t s = 0; s < in.l.size(); s += 128)
         {
             if (s == 128 * 100)
@@ -448,13 +462,21 @@ TEST (ChannelStrip, ReachingZeroDoesNotClick)
             const float* i[2] { in.l.data() + s, in.r.data() + s };
             float* m[2] { mv.l.data() + s, mv.r.data() + s };
             float* t[2] { st.l.data() + s, st.r.data() + s };
-            strip->process (i, m, t, n);
+            a3::StripBuffers b;
+            b.moving[0] = m[0]; b.moving[1] = m[1]; b.steady[0] = t[0]; b.steady[1] = t[1];
+            b.movingPreVolume[0] = mpre.l.data() + s; b.movingPreVolume[1] = mpre.r.data() + s;
+            b.steadyPreVolume[0] = spre.l.data() + s; b.steadyPreVolume[1] = spre.r.data() + s;
+            strip->process (i, b, n);
         }
         double worst = 0.0;
         for (size_t i = 1; i < in.l.size(); ++i)
-            worst = std::max ({ worst, (double) std::abs (mv.l[i] - mv.l[i - 1]), (double) std::abs (st.l[i] - st.l[i - 1]) });
+            for (auto* v : { &mv.l, &st.l, &mpre.l, &spre.l })
+                worst = std::max (worst, (double) std::abs ((*v)[i] - (*v)[i - 1]));
         EXPECT_LE (worst, 2.0 * dry) << which;
         if (which != ThreeD)
             EXPECT_TRUE (allZero (mv.l, 128 * 100 + 4410)) << which;
+        if (which == Gain)
+            for (auto* v : { &mpre.l, &spre.l })
+                EXPECT_TRUE (allZero (*v, 128 * 100 + 4410));
     }
 }

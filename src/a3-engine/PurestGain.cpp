@@ -8,6 +8,11 @@
 
 namespace a3
 {
+double PurestGain::gainForA (double a)
+{
+    return std::pow (10.0, (a * 80.0 - 40.0) / 20.0);
+}
+
 void PurestGain::prepare (double)
 {
     started = false;
@@ -25,7 +30,7 @@ void PurestGain::setParameters (float a, float slowFade)
 void PurestGain::latchControlBlock()
 {
     const double targetDb = double (pendingA) * 80.0 - 40.0;
-    target = std::pow (10.0, targetDb / 20.0);
+    target = gainForA (double (pendingA));
     latchedB = pendingB;
     if (! started)
     {

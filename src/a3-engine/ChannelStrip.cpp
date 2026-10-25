@@ -46,7 +46,7 @@ void ChannelStrip::latchControls()
     const bool volumeOpen = gainOpen && ! laws::isSilent (load (state.volume));
     gainSilence.setOpen (gainOpen);
     gainSilenceAfterFilter.setOpen (gainOpen);
-    movingSilence.setOpen (! laws::isSilent (load (state.threeD)));
+    movingSilence.setOpen (gainOpen && ! laws::isSilent (load (state.threeD)));   // GAIN 0 also stops Isolator3's ring-out in the pre-VOLUME taps
     volumeMovingSilence.setOpen (volumeOpen);
     volumeSteadySilence.setOpen (volumeOpen);
 }

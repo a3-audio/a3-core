@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "Laws.h"
+#include "PurestGain.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -99,7 +100,7 @@ double stageGain (double control)
     if (isSilent (control))
         return 0.0;
 
-    return std::pow (10.0, (slopeVolume (control) * 80.0 - 40.0) / 20.0);
+    return PurestGain::gainForA (slopeVolume (control));
 }
 
 double bandGain (double threeD)
