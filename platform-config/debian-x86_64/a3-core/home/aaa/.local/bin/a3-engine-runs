@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Raphael Eismann
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Internal helper for the units: does the a3-engine run, or does REAPER?
+
+  a3-engine-runs           exit 0 when the engine runs, else 1 (reason on stderr)
+  a3-engine-runs --reaper  the inverse: exit 0 when REAPER runs
+
+The rule is a3_core_audio_engine.engine_runs(): the engine is installed and
+`a3-engine --check-config` passes. A3_ENGINE_BINARY points the probe at
+another binary (tests).
+"""
+
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+
+import a3_core_audio_engine as audio_engine  # noqa: E402
+
+USAGE = "usage: a3-engine-runs [--reaper]\n"
+
+
+def main(argv):
+    if argv not in ([], ["--reaper"]):
+        sys.stderr.write(USAGE)
+        return 2
+    override = os.environ.get("A3_ENGINE_BINARY")
+    probed = audio_engine.probe(Path(override)) if override else audio_engine.probe()
+    runs, reason = audio_engine.engine_runs(*probed)
+    if not runs:
+        sys.stderr.write(f"a3-engine-runs: REAPER runs: {reason}\n")
+    want_engine = not argv
+    return 0 if runs == want_engine else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
