@@ -177,6 +177,29 @@ class EngineModeInProcess(unittest.TestCase):
         self.assertEqual(self.engine.sent, [])
         self.assertEqual(deck.sent, [("/stemdeck/1/3d", 0.9)])
 
+    def test_a_turn_reports_the_cursor_and_a_push_the_source(self):
+        self.hello("boot-1")
+        self.core["say_the_whole_state"]()
+        self.engine.sent.clear()
+        self.motion.sent.clear()
+        self.channel("/channel/2/stem/turn", 1)
+        self.assertIn(("/channel/2/source/cursor", 1), self.motion.sent)
+        self.assertNotIn(("/channel/2/source", 1), self.motion.sent)
+        self.assertEqual(self.engine.sent, [])
+        self.motion.sent.clear()
+        self.channel("/channel/2/stem/push", 1)
+        self.assertIn(("/channel/2/source", 1), self.motion.sent)
+        # The cursor already stood there: nothing new to say about it.
+        self.assertNotIn(("/channel/2/source/cursor", 1), self.motion.sent)
+        # Deck A moves to channel 3: channel 2 falls back, its cursor with it.
+        self.channel("/channel/3/stem/turn", 1)
+        self.channel("/channel/3/stem/push", 1)
+        self.assertIn(("/channel/2/source/cursor", 0), self.motion.sent)
+        self.motion.sent.clear()
+        self.core["say_the_whole_state"]()
+        self.assertIn(("/channel/3/source/cursor", 1), self.motion.sent)
+        self.assertIn(("/channel/1/source/cursor", 0), self.motion.sent)
+
 
 if __name__ == "__main__":
     unittest.main()

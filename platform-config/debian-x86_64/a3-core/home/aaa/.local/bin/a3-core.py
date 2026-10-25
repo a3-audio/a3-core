@@ -743,11 +743,14 @@ _sources_sent_to_engine = {}
 
 
 def report_decks(full=False):
-    """Each channel's source and each deck's presence, to the desk and
-    Motion: to everybody when `full`, else only what changed."""
+    """Each channel's source and selector cursor and each deck's presence, to
+    the desk and Motion: to everybody when `full`, else only what changed."""
     now = time.monotonic()
     messages = [(_truth.address("channel.source", ch=channel), _decks.source(channel))
                 for channel in range(1, _decks.channels + 1)]
+    messages += [(_truth.address("channel.source.cursor", ch=channel),
+                  _decks.ring(channel)[_decks.cursor(channel)])
+                 for channel in range(1, _decks.channels + 1)]
     messages += [(_truth.address("stemdeck.present", deck=deck),
                   1 if _decks.present(deck, now) else 0)
                  for deck in range(1, _decks.decks + 1)]
@@ -790,6 +793,7 @@ def select_deck(word, channel, value):
     whose 3D changes with it, and to the desk and Motion as the source."""
     if word == "stem.turn":
         _decks.turn(channel, int(value))
+        report_decks()
         return
     changes = _decks.push(channel)
     leaving = _decks.leave_messages(_truth, changes)

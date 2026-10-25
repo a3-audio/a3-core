@@ -502,6 +502,17 @@ class TheEngineSpeaks(unittest.TestCase):
         self.assertEqual(self.truth.address("stemdeck.present", deck=1),
                          "/stemdeck/1/present")
 
+    def test_desk_and_motion_hear_the_engine_selector_cursor(self):
+        words = self.truth.addresses()
+        entry = words["channel.source.cursor"]
+        self.assertEqual((entry["pattern"], entry["args"], entry["ch"], entry["from"]),
+                         ("/channel/{ch}/source/cursor", "i", [1, 4], ["core"]))
+        self.assertEqual(entry["to"], words["channel.stem.cursor"]["to"])
+        for receiver in ("desk", "motion"):
+            self.assertIn(receiver, entry["to"])
+        self.assertEqual(self.truth.address("channel.source.cursor", ch=2),
+                         "/channel/2/source/cursor")
+
     def test_a_stemdeck_hello_names_its_deck(self):
         # device.hello is "ss" (device, truth hash): no deck number, so the
         # deck gets a word of its own.
