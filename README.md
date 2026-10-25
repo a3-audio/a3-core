@@ -10,10 +10,16 @@ No A³ device runs this engine yet; REAPER remains the audio engine of A³ Core.
 
 Built: IEM's MultiEncoder and SimpleDecoder/BinauralDecoder compiled from the submodule as nodes
 (`src/iem-adapter/`, `src/iem-nodes/`), the `SpatialBus` (order 3, SN3D, 16 channels: encoder, then
-the rec, main and booth decoders), and the bench's twelve spatial ports next to Plan 2's: `rec_L`,
-`rec_R`, `<zone>_sub` (only when the zone has a sub) and `<zone>_top_1…N` for main and booth. Channel
+the rec, main and booth decoders), and the bench's spatial ports next to Plan 2's (12 with the
+default data, 14 with the REAPER 6.1 booth variant; the count follows the files): `rec_L`, `rec_R`,
+`<zone>_sub` (only when the zone has a sub) and `<zone>_top_1…N` for main and booth. Channel
 positions arrive on the `engine.osc` listener (port 9004) and are clamped like Core. The bench
 registers ports and never connects them.
+
+**Timing target** (four strips plus the bus, worst block on the rig): the rig runs PipeWire at
+quantum 128 (a3-core 03.0+510), so the acceptance is worst < 0.6 ms per 128-frame block. That is the
+same share of the cycle as the stretch goal, worst < 0.3 ms per 64-frame block. `SpatialTiming` only
+guards against regressions; the bench's run on the rig decides.
 
 **Spatial data** (`data/spatial/`, installed to `/usr/share/a3-engine/spatial/`): per zone the speaker
 layout, the decoder and its parameters, plus the encoder inputs. The default is 4.1 for main and
@@ -49,7 +55,8 @@ Prerequisites: CMake 3.16 or newer, a C++17 compiler, JUCE 9.0.3 installed as a 
 
 `./test.sh` builds (at `nice -n 19`) and runs the tests, which compare the rebuilds against the
 unchanged upstream Airwindows plugins in `tests/engine/reference/` (MIT, test-only). Packaging tests:
-`python3 -m unittest discover -s tests/packaging`.
+`python3 -m unittest discover -s tests/packaging` (set `A3_SCRATCH` to a roomy directory if `/tmp`
+is small).
 
 - `tests/engine/data/curves-golden.json` is a copy from a3-core (commit 50e7997).
 - `tests/engine/data/a3-osc.json` is a copy of the OSC truth from a3-core's branch

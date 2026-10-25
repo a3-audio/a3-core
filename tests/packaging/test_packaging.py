@@ -15,8 +15,9 @@ STAGE = ROOT / "packaging" / "stage"
 CONTROL = ROOT / "packaging" / "DEBIAN" / "control"
 
 
-# /tmp is a small tmpfs: scratch copies live next to the worktrees.
-SCRATCH_ROOT = ROOT.parents[1]
+# The staging tests copy the whole package; where /tmp is a small tmpfs,
+# point A3_SCRATCH at a roomier directory.
+SCRATCH_ROOT = os.environ.get("A3_SCRATCH") or tempfile.gettempdir()
 
 CC_BY_ATTRIBUTION = (
     'HRIR data: Benjamin Bernsch\u00fctz, TH K\u00f6ln, "A Spherical Far Field HRIR/HRTF Compilation '
