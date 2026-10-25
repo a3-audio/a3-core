@@ -10,8 +10,9 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local/lib"))
 
 from a3_core_stems import (ANALOG_INPUT, ANALOG_MODE, ANALOG_SOURCE, AUX,  # noqa: E402
-                           CHANNELS, CUE_FIELD, INPUTS, PAIRS, RETURN,
-                           STEM_MODE, STEM_SOURCE, UNDECIDED, Stems)
+                           CHANNELS, CUE_FIELD, PAIRS, RETURN,
+                           STEM_MODE, STEM_SOURCE, UNDECIDED, Stems,
+                           own_channel, ring)
 
 MODES = (ANALOG_MODE, STEM_MODE)
 
@@ -52,31 +53,43 @@ class TheMirror(unittest.TestCase):
 
 
 class TheSelector(unittest.TestCase):
-    """Each channel encoder is an input selector (2026-10-04): one cursor
-    over nine inputs -- D1's stems, D2's stems, A, the analog input -- and a
-    push on a stem makes it the channel's only input."""
+    """Each channel encoder is an input selector over three positions on
+    channel n: deck 1's stem n, deck 2's stem n, A. A push on a stem makes it
+    the channel's only input."""
 
-    def test_nine_inputs_the_last_is_a(self):
-        self.assertEqual((INPUTS, ANALOG_INPUT), (9, 8))
+    def test_the_ring_of_channel_two_is_its_stems_and_a(self):
+        self.assertEqual(ring(1), (1, 5, 8))
+        self.assertEqual(ANALOG_INPUT, 8)
+
+    def test_a_stem_has_its_own_channel(self):
+        self.assertEqual([own_channel(p) for p in range(1, PAIRS + 1)],
+                         [0, 1, 2, 3, 0, 1, 2, 3])
 
     def test_the_cursor_starts_on_a(self):
         self.assertEqual(Stems().cursors, [ANALOG_INPUT] * 4)
 
-    def test_the_cursor_runs_over_all_nine_and_wraps_around(self):
-        # Left from stem 1 lands on A, right from A
-        # on stem 1 (maintainer, 2026-10-04): A is one turn away.
+    def test_the_cursor_runs_over_three_and_wraps_around(self):
         s = Stems()
-        s.turn(0, -1)
-        self.assertEqual(s.cursors[0], 7)
-        s.cursors[0] = 0
-        s.turn(0, -1)
-        self.assertEqual(s.cursors[0], ANALOG_INPUT)
-        s.turn(0, +1)
-        self.assertEqual(s.cursors[0], 0)
-        s.turn(0, +3)
-        self.assertEqual(s.cursors[0], 3)
-        s.turn(0, -5)
-        self.assertEqual(s.cursors[0], 7)
+        s.cursors[2] = ANALOG_INPUT
+        seen = []
+        for _ in range(4):
+            s.turn(2, +1)
+            seen.append(s.cursors[2])
+        self.assertEqual(seen, [2, 6, 8, 2])
+        s.turn(2, -1)
+        self.assertEqual(s.cursors[2], ANALOG_INPUT)
+
+    def test_a_fast_turn_counts_every_click_in_the_ring(self):
+        s = Stems()
+        s.cursors[2] = 2
+        s.turn(2, +7)
+        self.assertEqual(s.cursors[2], 6)
+
+    def test_a_turn_from_outside_the_ring_lands_in_it(self):
+        s = Stems()
+        s.cursors[1] = 0
+        s.turn(1, 1)
+        self.assertEqual(s.cursors[1], 1)
 
     def test_turning_switches_nothing(self):
         s = stems_with(p3=bit(1))
@@ -84,48 +97,55 @@ class TheSelector(unittest.TestCase):
         self.assertEqual(s.channel_mask(0), 1 << 2)
 
     def test_push_on_a_stem_makes_it_the_only_input(self):
-        s = stems_with(p2=bit(1), p6=bit(1))
+        s = stems_with(p5=bit(1))
         s.return_mode = ANALOG_MODE
-        s.cursors[0] = 2                                   # D1, stem 3 = pair 3
+        s.cursors[0] = 0                                   # D1, stem 1 = pair 1
         commands = s.push(0)
-        self.assertEqual(commands[:2], [(3, 1, True), (3, AUX, False)])
-        self.assertIn((2, 1, False), commands)
-        self.assertIn((6, 1, False), commands)
-        self.assertEqual(s.channel_mask(0), 1 << 2)
+        self.assertEqual(commands[:2], [(1, 1, True), (1, AUX, False)])
+        self.assertIn((5, 1, False), commands)
+        self.assertEqual(s.channel_mask(0), 1)
         self.assertEqual(s.sources[0], STEM_SOURCE)
 
-    def test_deck_2_stems_are_inputs_4_to_7(self):
+    def test_channel_ones_second_stem_is_cursor_4(self):
         s = Stems()
         s.return_mode = ANALOG_MODE
-        s.cursors[1] = 4
-        s.push(1)
-        self.assertEqual(s.place_of(5), 1)
+        s.cursors[0] = 4                                   # D2, stem 1 = pair 5
+        s.push(0)
+        self.assertEqual(s.place_of(5), 0)
 
     def test_push_on_what_plays_changes_nothing(self):
         # Until 2026-10-14 it released the stem to AUX; analog is A's now,
         # and A leaves StemDeck alone.
-        s = tidied(STEM_MODE, p3=bit(1))
+        s = tidied(STEM_MODE, p1=bit(1))
         s.sources[0] = STEM_SOURCE
-        s.cursors[0] = 2
+        s.cursors[0] = 0
         self.assertEqual(s.push(0), [])
-        self.assertEqual((s.channel_mask(0), s.sources[0]), (1 << 2, STEM_SOURCE))
+        self.assertEqual((s.channel_mask(0), s.sources[0]), (1, STEM_SOURCE))
 
     def test_push_on_the_stem_on_the_bus_while_analog_plays_hears_it(self):
         # The stem stayed on bus 1 while A played: a push only opens the
         # stems send, StemDeck has nothing to do.
-        s = tidied(STEM_MODE, p3=bit(1))
-        s.cursors[0] = 2
+        s = tidied(STEM_MODE, p1=bit(1))
+        s.cursors[0] = 0
         self.assertEqual(s.push(0), [])
         self.assertEqual(s.sources[0], STEM_SOURCE)
 
-    def test_a_stem_on_another_channel_moves_here(self):
-        s = stems_with(p3=bit(2))
+    def test_the_other_decks_stem_n_moves_to_aux(self):
+        s = stems_with(p1=bit(1))
         s.return_mode = ANALOG_MODE
-        s.cursors[0] = 2
+        s.cursors[0] = 4                                   # pair 5
         commands = s.push(0)
-        self.assertIn((3, 2, False), commands)
-        self.assertIn((3, 1, True), commands)
-        self.assertEqual((s.place_of(3), s.channel_mask(1)), (0, 0))
+        self.assertEqual(sorted(commands),
+                         sorted([(5, 1, True), (5, AUX, False), (1, 1, False), (1, AUX, True)]))
+        self.assertEqual((s.place_of(5), s.place_of(1)), (0, RETURN))
+
+    def test_a_push_on_a_foreign_stem_is_refused(self):
+        s = stems_with(p1=bit(1))
+        s.cursors[0] = 1                                   # pair 2, own channel 2
+        s.sources[0] = ANALOG_SOURCE
+        masks = list(s.masks)
+        self.assertEqual(s.push(0), [])
+        self.assertEqual((s.masks, s.sources[0]), (masks, ANALOG_SOURCE))
 
     def test_a_report_does_not_move_the_cursor(self):
         s = Stems()
@@ -167,20 +187,20 @@ class TheAnalogInput(unittest.TestCase):
             self.assertEqual(s.sources[0], ANALOG_SOURCE, mode)
 
     def test_the_stem_stays_on_its_bus_and_off_aux(self):
-        s = tidied(STEM_MODE, p3=bit(1))
-        self.select(s, 0, 3)
+        s = tidied(STEM_MODE, p1=bit(1))
+        self.select(s, 0, 1)
         self.push_a(s)
-        self.assertEqual((s.place_of(3), s.plays_on_return(3)), (0, False))
+        self.assertEqual((s.place_of(1), s.plays_on_return(1)), (0, False))
 
     def test_a_switches_without_stemdeck_too(self):
         # REAPER's sends are Core's; StemDeck is not asked.
-        s = stems_with(p3=bit(1))
+        s = stems_with(p1=bit(1))
         s.sources[0] = STEM_SOURCE
         self.assertEqual(self.push_a(s, connected=False), [])
         self.assertEqual(s.sources[0], ANALOG_SOURCE)
 
     def test_a_on_one_channel_leaves_the_others_alone(self):
-        s = tidied(ANALOG_MODE, p3=bit(1), p6=bit(2))
+        s = tidied(ANALOG_MODE, p1=bit(1), p6=bit(2))
         s.sources = [STEM_SOURCE] * CHANNELS
         self.push_a(s)
         self.assertEqual(s.sources, [ANALOG_SOURCE] + [STEM_SOURCE] * 3)
@@ -189,17 +209,10 @@ class TheAnalogInput(unittest.TestCase):
     def test_a_stem_after_a_is_heard_again(self):
         s = Stems()
         s.return_mode = ANALOG_MODE
-        self.select(s, 0, 3)
+        self.select(s, 0, 1)
         self.push_a(s)
-        self.assertEqual(self.select(s, 0, 3), [])
-        self.assertEqual((s.sources[0], s.place_of(3)), (STEM_SOURCE, 0))
-
-    def test_a_stem_moved_here_leaves_its_old_channel_its_source(self):
-        s = tidied(ANALOG_MODE, p3=bit(2))
-        s.sources[1] = STEM_SOURCE
-        self.select(s, 0, 3)
-        self.assertEqual(s.sources[:2], [STEM_SOURCE, STEM_SOURCE])
-        self.assertEqual((s.place_of(3), s.channel_mask(1)), (0, 0))
+        self.assertEqual(self.select(s, 0, 1), [])
+        self.assertEqual((s.sources[0], s.place_of(1)), (STEM_SOURCE, 0))
 
     def test_stemdecks_reports_never_change_the_source(self):
         # Auto-DJ or a click in StemDeck moves stems on and off bus N;
@@ -215,7 +228,7 @@ class TheAnalogInput(unittest.TestCase):
 
     def test_no_stem_is_remembered(self):
         s = Stems()
-        self.select(s, 0, 3)
+        self.select(s, 0, 1)
         self.assertFalse(hasattr(s, "last_stems"))
         self.assertNotIn("last_stems", s.as_data())
 
@@ -226,27 +239,27 @@ class WithoutStemDeck(unittest.TestCase):
 
     def test_the_cursor_moves_the_switches_do_not(self):
         s = Stems()
-        s.turn(0, -6)
+        s.turn(0, -1)
         self.assertEqual(s.push(0, connected=False), [])
-        self.assertEqual((s.cursors[0], s.channel_mask(0)), (2, 0))
+        self.assertEqual((s.cursors[0], s.channel_mask(0)), (4, 0))
 
     def test_a_stem_nobody_plays_does_not_shut_the_analog_input(self):
         s = Stems()
         s.sources[0] = ANALOG_SOURCE
-        s.cursors[0] = 2
+        s.cursors[0] = 0
         s.push(0, connected=False)
         self.assertEqual(s.sources[0], ANALOG_SOURCE)
 
     def test_a_stem_push_without_stemdeck_decides_nothing(self):
         s = Stems()
-        s.cursors[0] = 2
+        s.cursors[0] = 0
         s.push(0, connected=False)
         self.assertEqual(s.sources[0], UNDECIDED)
 
     def test_a_does_not_touch_the_mirror_either(self):
-        s = stems_with(p3=bit(1))
+        s = stems_with(p1=bit(1))
         self.assertEqual(s.push(0, connected=False), [])
-        self.assertEqual(s.channel_mask(0), 1 << 2)
+        self.assertEqual(s.channel_mask(0), 1)
 
     def test_the_return_mode_switches_without_commands(self):
         s = stems_with(p2=bit(AUX))
@@ -257,23 +270,21 @@ class WithoutStemDeck(unittest.TestCase):
 
 
 class OnePerChannel(unittest.TestCase):
-    def test_a_stem_on_two_channels_keeps_the_one_it_alone_obeys(self):
-        """Final review: pair 3 on channels 1 and 2, pair 1 on channel 1 --
-        pair 3 leaves channel 1 (pair 1 is lower) and must stay on 2."""
-        s = stems_with(p1=bit(1), p3=bit(1) | bit(2))
-        s.return_mode = ANALOG_MODE
-        commands = s.tidy()
-        self.assertEqual(s.channel_mask(0), 1)
-        self.assertEqual(s.channel_mask(1), 1 << 2)
-        self.assertEqual(len(commands), len(set(commands)))
-
     def test_two_stems_on_a_bus_keep_the_lowest_whatever_their_deck(self):
-        s = stems_with(p6=bit(1), p3=bit(1))
+        s = stems_with(p5=bit(1), p1=bit(1))
         s.return_mode = ANALOG_MODE
         commands = s.tidy()
-        self.assertEqual([c for c in commands if c[1] != AUX], [(6, 1, False)])
-        self.assertIn((6, AUX, True), commands)
-        self.assertEqual(s.channel_mask(0), 1 << 2)
+        self.assertEqual([c for c in commands if c[1] != AUX], [(5, 1, False)])
+        self.assertIn((5, AUX, True), commands)
+        self.assertEqual(s.channel_mask(0), 1)
+
+    def test_a_stem_reported_on_another_channel_goes_to_aux(self):
+        s = stems_with(p2=bit(1))
+        commands = s.tidy()
+        self.assertIn((2, 1, False), commands)
+        self.assertIn((2, AUX, True), commands)
+        self.assertEqual(s.place_of(2), RETURN)
+        self.assertEqual(s.tidy(), [])
 
     def test_tidy_twice_is_nothing(self):
         s = stems_with(p3=bit(1), p6=bit(1), p4=bit(4), p8=bit(4))
@@ -369,10 +380,10 @@ class ReturnModes(unittest.TestCase):
 
     def test_a_puts_nothing_on_aux(self):
         # Until 2026-10-14 A released the stem onto AUX.
-        s = tidied(STEM_MODE, p3=bit(1))
+        s = tidied(STEM_MODE, p1=bit(1))
         s.cursors[0] = ANALOG_INPUT
         self.assertEqual(s.push(0), [])
-        self.assertFalse(s.plays_on_return(3))
+        self.assertFalse(s.plays_on_return(1))
 
     def test_analog_mode_leaves_the_stems_on_no_bus_off(self):
         s = stems_with(**{f"p{p}": bit(p) for p in range(1, 5)})   # 1-4 on channels 1-4
@@ -380,14 +391,6 @@ class ReturnModes(unittest.TestCase):
         self.assertEqual(s.tidy(), [])
         s.return_cursor = STEM_MODE
         self.assertEqual(s.push(RETURN), [])
-
-    def test_a_stem_a_push_takes_off_its_channel_goes_to_aux(self):
-        s = stems_with(p3=bit(1), p5=bit(AUX))
-        s.cursors[0] = 4                    # pair 5 onto channel 1
-        commands = s.push(0)
-        self.assertIn((3, 1, False), commands)
-        self.assertIn((3, AUX, True), commands)
-        self.assertTrue(s.plays_on_return(3))
 
 
 class TheCueLeavesStemDeckAlone(unittest.TestCase):
@@ -458,11 +461,15 @@ class StateOnDisk(unittest.TestCase):
 
     def test_cursors_and_mode_are_kept(self):
         s = Stems()
-        s.cursors = [ANALOG_INPUT, 3, 0, 7]
+        s.cursors = [ANALOG_INPUT, 1, 2, 7]
         s.return_cursor, s.return_mode = ANALOG_MODE, ANALOG_MODE
         back = Stems.from_data(s.as_data())
         self.assertEqual(back.cursors, s.cursors)
         self.assertEqual((back.return_cursor, back.return_mode), (ANALOG_MODE, ANALOG_MODE))
+
+    def test_a_stored_cursor_outside_the_ring_falls_back_to_a(self):
+        self.assertEqual(Stems.from_data({"cursors": [0, 0, 6, 7]}).cursors,
+                         [0, ANALOG_INPUT, 6, 7])
 
     def test_the_cursor_on_cue_is_kept(self):
         s = Stems()
@@ -474,8 +481,8 @@ class StateOnDisk(unittest.TestCase):
         self.assertEqual(Stems.from_data({"return_cursor": 3}).return_cursor, STEM_MODE)
 
     def test_an_old_file_with_last_stems_still_loads(self):
-        s = Stems.from_data({"last_stems": [3, None, 8, 1], "cursors": [1, 2, 3, 4]})
-        self.assertEqual(s.cursors, [1, 2, 3, 4])
+        s = Stems.from_data({"last_stems": [3, None, 8, 1], "cursors": [4, 5, 2, 3]})
+        self.assertEqual(s.cursors, [4, 5, 2, 3])
         self.assertFalse(hasattr(s, "last_stems"))
 
     def test_an_old_or_garbled_file_never_raises(self):
