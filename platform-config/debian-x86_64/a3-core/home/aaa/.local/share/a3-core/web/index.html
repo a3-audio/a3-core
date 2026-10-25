@@ -824,8 +824,16 @@ $("refreshreaper").onclick = () => post("/api/refresh-reaper", {});
 async function fetchDevices() {
   try {
     const payload = await (await fetch("/api/devices")).json();
+    const status = await (await fetch("/api/status")).json();
     const line = $("truths");
     line.textContent = "";
+    if (status.audio_engine) {
+      const engine = document.createElement("span");
+      engine.textContent = "audio engine: " + status.audio_engine
+        + (status.reason ? ": " + status.reason : "");
+      engine.className = status.audio_engine === "engine" ? "muted" : "differs";
+      line.appendChild(engine);
+    }
     for (const row of payload.rows) {
       const said = document.createElement("span");
       said.textContent = row.matches

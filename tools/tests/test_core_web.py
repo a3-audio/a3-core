@@ -274,6 +274,23 @@ class TheTruthIsServed(unittest.TestCase):
             self.assertEqual(reply.headers["X-A3-Truth"], "f" * 64)
             self.assertEqual(reply.headers["Content-Type"], "application/json")
 
+    def test_the_status_is_served(self):
+        status = {"audio_engine": "reaper", "reason": "a3-engine not installed"}
+        self.assertTrue(start_window(Traffic(), "127.0.0.1:0",
+                                     status=lambda: status))
+        with urllib.request.urlopen(self.url("/api/status"), timeout=5) as reply:
+            self.assertEqual(json.loads(reply.read()), status)
+
+    def test_without_a_status_it_is_empty(self):
+        self.assertTrue(start_window(Traffic(), "127.0.0.1:0"))
+        with urllib.request.urlopen(self.url("/api/status"), timeout=5) as reply:
+            self.assertEqual(json.loads(reply.read()), {})
+
+    def test_the_page_shows_the_audio_engine(self):
+        page = (PACKAGE / "share/a3-core/web/index.html").read_text()
+        self.assertIn('fetch("/api/status")', page)
+        self.assertIn("audio engine: ", page)
+
     def test_without_a_truth_there_is_none_to_serve(self):
         import urllib.error
         self.assertTrue(start_window(Traffic(), "127.0.0.1:0"))
