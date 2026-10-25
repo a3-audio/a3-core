@@ -40,8 +40,8 @@ class TheStateFile(unittest.TestCase):
 
     def test_the_cursors_survive_the_round_trip(self):
         s = Stems()
-        s.cursors[3] = 4
-        self.assertEqual(apply_stems(state_of([], _Master(), s)).cursors[3], 4)
+        s.cursors[3] = 7
+        self.assertEqual(apply_stems(state_of([], _Master(), s)).cursors[3], 7)
 
 
 class _Master:

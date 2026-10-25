@@ -5,9 +5,10 @@ what it last reported, one mask per stem pair (bit b-1 = bus b: 1-4 the desk
 channels, 5 AUX). Core applies its commands to the mirror at once;
 StemDeck's report overwrites whatever Core expected.
 
-The desk (2026-10-04): each channel encoder is an input selector -- one
-cursor over nine positions, deck 1's stems 1-4, deck 2's stems 1-4 and A,
-the channel's analog input.
+The desk (2026-10-04): each channel encoder is an input selector over three
+positions on channel n: deck 1's stem n, deck 2's stem n, A (the channel's
+analog input). Stem n plays only on channel n or on AUX; any other switch is
+refused, and one StemDeck still reports is taken off by tidy() onto AUX.
 
 Each channel has a source, STEM or ANALOG, and it is Core's own
 (maintainer, 2026-10-14): REAPER plays the channel's input from the stems
@@ -28,9 +29,8 @@ first report decides; later ones never change a source.
   every stem off the bus, StemDeck parked it on AUX, and the analog send
   opened because the bus was empty.
 - A push on a stem makes the source STEM and, as before, the stem the
-  channel's only input on bus N (a stem playing on another channel moves
-  here; that channel keeps its source and, on STEM, plays its now empty
-  bus: silence). A push on the stem that already
+  channel's only input on bus N (the other deck's stem n, if it plays here,
+  goes to AUX). A push on the stem that already
   plays here changes nothing (until 2026-10-14 it released it to AUX).
   Without StemDeck a stem push changes nothing: a stem nobody plays must
   not shut a channel's analog input.
@@ -61,8 +61,8 @@ ALL_BUSES = (1 << AUX) - 1
 REPORT_BUSES = (1 << (AUX + 1)) - 1
 STEMS_PER_DECK = 4
 
-#: A channel selector's positions: 0-7 the stem pairs 1-8, then A.
-INPUTS = PAIRS + 1
+#: A channel selector's cursor: 0-7 the stem pairs 1-8 (cursor = pair - 1),
+#: then A. Channel n only visits its ring(n).
 ANALOG_INPUT = PAIRS
 
 #: A channel's source (2026-10-14): which of its two sends in REAPER is open.
@@ -76,6 +76,17 @@ ANALOG_MODE, STEM_MODE, CUE_FIELD = 0, 1, 2
 
 #: The return cursor's ring, in the display's order left to right.
 RETURN_RING = (STEM_MODE, ANALOG_MODE, CUE_FIELD)
+
+def ring(index):
+    """Channel `index`'s selector positions, in turn order: D1 stem n, D2
+    stem n, A."""
+    return (index, STEMS_PER_DECK + index, ANALOG_INPUT)
+
+
+def own_channel(pair):
+    """The channel index 0-3 a stem (pair 1-8) may play on."""
+    return (pair - 1) % STEMS_PER_DECK
+
 
 def _bit(bus):
     return 1 << (bus - 1)
@@ -143,8 +154,10 @@ class Stems:
             place = RETURN_RING.index(self.return_cursor)
             self.return_cursor = RETURN_RING[(place + steps) % len(RETURN_RING)]
             return
-        # Round in a ring: left from stem 1 is A, one turn away.
-        self.cursors[index] = (self.cursors[index] + steps) % INPUTS
+        positions = ring(index)
+        place = positions.index(self.cursors[index]) if self.cursors[index] in positions \
+            else positions.index(ANALOG_INPUT)
+        self.cursors[index] = positions[(place + steps) % len(positions)]
 
     def push(self, index, connected=True):
         """The commands to StemDeck a push on place `index` means. A on a
@@ -159,6 +172,8 @@ class Stems:
             self.return_mode = self.return_cursor
             return self.tidy() if connected else []
         cursor = self.cursors[index]
+        if cursor not in ring(index):
+            return []
         if cursor == ANALOG_INPUT:
             self.sources[index] = ANALOG_SOURCE
             return []
@@ -168,15 +183,13 @@ class Stems:
         return self._select(index, cursor + 1)
 
     def _select(self, index, pair):
-        """`pair` as the channel's only input; from another channel it moves."""
+        """`pair` as the channel's only input; a foreign stem is refused."""
         bus = index + 1
-        if self._on(pair, bus):
+        if own_channel(pair) != index or self._on(pair, bus):
             return []
         displaced = [p for p in range(1, PAIRS + 1) if p != pair and self._on(p, bus)]
         commands = [(pair, bus, True), (pair, AUX, False)]
         commands += [(p, bus, False) for p in displaced]
-        commands += [(pair, c + 1, False) for c in range(CHANNELS)
-                     if c != index and self._on(pair, c + 1)]
         self._apply_all(commands)
         for p in displaced:
             if self.place_of(p) is None:
@@ -187,14 +200,17 @@ class Stems:
 
     def tidy(self):
         """The commands that make the mirror obey the rules -- one stem per
-        channel bus (the lowest stays), a stem on one channel at most, a
+        channel bus (the lowest stays), a stem only on its own channel, a
         stem on a channel not also on AUX, and a stem this takes off its
         last channel onto AUX, whatever the return's mode -- applied at
         once. A stem StemDeck reports on no bus at all stays there: its
         Auto-DJ holds the incoming deck's stems off until their switch. A
         second call returns []."""
         before = [self.place_of(p) for p in range(1, PAIRS + 1)]
-        commands = []
+        commands = [(p, c + 1, False) for p in range(1, PAIRS + 1)
+                    for c in range(CHANNELS)
+                    if c != own_channel(p) and self._on(p, c + 1)]
+        self._apply_all(commands)
         for index in range(CHANNELS):
             bus = index + 1
             on = [p for p in range(1, PAIRS + 1) if self._on(p, bus)]
@@ -252,7 +268,8 @@ class Stems:
             return s
         cursors = _cursors(data.get("cursors"))
         if cursors is not None:
-            s.cursors = cursors
+            s.cursors = [c if c in ring(i) else ANALOG_INPUT
+                         for i, c in enumerate(cursors)]
         sources = _sources(data.get("sources"))
         if sources is not None:
             s.sources = sources

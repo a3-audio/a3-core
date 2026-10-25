@@ -144,6 +144,12 @@ class TheVocabulary(unittest.TestCase):
         self.assertEqual(t.address("master.phones-volume"), "/master/phones-volume")
         self.assertEqual(t.address("master.aux-return"), "/master/aux-return")
 
+    def test_stem_n_reaches_only_channel_n(self):
+        entries = truth().addresses()
+        self.assertIn("three positions", entries["channel.stem.turn"]["meaning"])
+        self.assertIn("bus N and 5", entries["stemdeck.bus"]["meaning"])
+        self.assertIn("N+3", entries["channel.stem.cursor"]["meaning"])
+
     def test_the_old_names_are_gone(self):
         patterns = {entry["pattern"] for entry in truth().addresses().values()}
         for old in ("/fx/frequency", "/fx/resonance", "/fx/mode", "/fx/led",
