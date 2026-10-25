@@ -132,9 +132,20 @@ TEST (DjFilter, OffIsTransparent)
 namespace
 {
 // A 200 Hz sine through a 1 kHz filter that changes it strongly (high-pass: about
-// -28 dB; low-pass: passes). `change` flips one thing at frame 22050; returns the
+// -28 dB; low-pass: passes). `change` flips one thing at changeFrame; returns the
 // largest sample-to-sample step after the start-up, in units of the dry sine's own.
-double largestStepRelativeToDry (bool startOn, int startKind, bool startHighPass,
+// Controls take effect on the 128-frame grid: the change is applied at frame 22016, 0.85 of a 200 Hz period
+// in (sin = -0.8), where a hard step is large.
+constexpr size_t changeFrame = 22000;
+constexpr size_t stepBlock = 100;
+
+struct FilterSetting { bool highPass; double cutoffHz; float resonance; };
+const FilterSetting strongHighPass { true, 1000.0, 0.0f };
+// A low-pass just above the sine: 12 dB (SVF) and 24 dB (ladder) differ clearly in phase there, and with
+// a little resonance in level, yet neither amplifies the sine much.
+const FilterSetting nearLowPass { false, 400.0, 0.2f };
+
+double largestStepRelativeToDry (bool startOn, int startKind, const FilterSetting& start,
                                  const std::function<void (a3::FilterControls&, bool&)>& change)
 {
     const size_t frames = 44100, settled = 8000;
@@ -144,17 +155,16 @@ double largestStepRelativeToDry (bool startOn, int startKind, bool startHighPass
         dryStep = std::max (dryStep, (double) std::abs (dry.ch[0][i] - dry.ch[0][i - 1]));
 
     a3::FilterControls c;
-    setUp (c, startKind, startHighPass, 1000.0);
+    setUp (c, startKind, start.highPass, start.cutoffHz, start.resonance);
     bool on = startOn;
     a3::DjFilter f;
     f.prepare (rate, 512, 2);
     auto buf = dry;
-    const size_t block = 100;
-    for (size_t s = 0; s < frames; s += block)
+    for (size_t s = 0; s < frames; s += stepBlock)
     {
-        if (s == 22050 - 22050 % block + (22050 % block ? block : 0))
+        if (s == changeFrame)
             change (c, on);
-        const int n = (int) std::min (block, frames - s);
+        const int n = (int) std::min (stepBlock, frames - s);
         auto p = buf.ptr (s);
         f.process (p.data(), 2, n, on, c);
     }
@@ -173,25 +183,38 @@ TEST (DjFilter, SwitchingIsClickFree)
         SCOPED_TRACE (startKind);
         {
             SCOPED_TRACE ("off -> on");
-            EXPECT_LE (largestStepRelativeToDry (false, startKind, true, [] (a3::FilterControls&, bool& on) { on = true; }), limit);
+            EXPECT_LE (largestStepRelativeToDry (false, startKind, strongHighPass, [] (a3::FilterControls&, bool& on) { on = true; }), limit);
         }
         {
             SCOPED_TRACE ("on -> off");
-            EXPECT_LE (largestStepRelativeToDry (true, startKind, true, [] (a3::FilterControls&, bool& on) { on = false; }), limit);
+            EXPECT_LE (largestStepRelativeToDry (true, startKind, strongHighPass, [] (a3::FilterControls&, bool& on) { on = false; }), limit);
         }
         {
             SCOPED_TRACE ("kind");
-            EXPECT_LE (largestStepRelativeToDry (true, startKind, true,
+            EXPECT_LE (largestStepRelativeToDry (true, startKind, strongHighPass,
+                                                 [&] (a3::FilterControls& c, bool&) { c.kind = 1 - startKind; }), limit);
+        }
+        {
+            SCOPED_TRACE ("off -> on, near low-pass");
+            EXPECT_LE (largestStepRelativeToDry (false, startKind, nearLowPass, [] (a3::FilterControls&, bool& on) { on = true; }), limit);
+        }
+        {
+            SCOPED_TRACE ("on -> off, near low-pass");
+            EXPECT_LE (largestStepRelativeToDry (true, startKind, nearLowPass, [] (a3::FilterControls&, bool& on) { on = false; }), limit);
+        }
+        {
+            SCOPED_TRACE ("kind, near low-pass");
+            EXPECT_LE (largestStepRelativeToDry (true, startKind, nearLowPass,
                                                  [&] (a3::FilterControls& c, bool&) { c.kind = 1 - startKind; }), limit);
         }
         {
             SCOPED_TRACE ("mode high-pass -> low-pass");
-            EXPECT_LE (largestStepRelativeToDry (true, startKind, true,
+            EXPECT_LE (largestStepRelativeToDry (true, startKind, strongHighPass,
                                                  [] (a3::FilterControls& c, bool&) { setUp (c, c.kind, false, 1000.0); }), limit);
         }
         {
             SCOPED_TRACE ("mode low-pass -> high-pass");
-            EXPECT_LE (largestStepRelativeToDry (true, startKind, false,
+            EXPECT_LE (largestStepRelativeToDry (true, startKind, FilterSetting { false, 1000.0, 0.0f },
                                                  [] (a3::FilterControls& c, bool&) { setUp (c, c.kind, true, 1000.0); }), limit);
         }
     }
