@@ -1,21 +1,26 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
-// a3-engine-bench: a headless JACK client that runs four ChannelStrips.
+// a3-engine-bench: a headless JACK client that runs four ChannelStrips and the SpatialBus.
 // Ports are created and never connected (the patching is done by hand).
 #include <jack/jack.h>
 #include <atomic>
 #include <chrono>
 #include <csignal>
 #include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <string>
 #include <thread>
+#include <vector>
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <juce_osc/juce_osc.h>
 #include "BlockTimer.h"
 #include "ChannelStrip.h"
 #include "Generator.h"
 #include "OscControl.h"
+#include "SpatialBus.h"
+#include "SpatialConfig.h"
+#include "SpatialPorts.h"
 
 namespace
 {
@@ -48,6 +53,8 @@ private:
     std::atomic<size_t> write { 0 }, read { 0 };
 };
 
+struct ZonePorts { jack_port_t* sub = nullptr; std::vector<jack_port_t*> tops; };
+
 struct Bench
 {
     jack_client_t* client = nullptr;
@@ -60,7 +67,44 @@ struct Bench
     jack_port_t* gen[2] {};
     TimingRing timing;
     bool measure = false;
+
+    // The spatial bus. The callback uses whichever bus `bus` holds and writes it
+    // to `acknowledged` first; the main thread frees a replaced bus only after
+    // the callback has acknowledged its successor.
+    a3::SpatialControls positions;
+    std::atomic<a3::SpatialBus*> bus { nullptr };
+    std::atomic<a3::SpatialBus*> acknowledged { nullptr };
+    jack_port_t* rec[2] {};
+    ZonePorts mainPorts, boothPorts;
+    a3::SpatialOutputs outputs;   // tops vectors sized once, so the callback never allocates
 };
+
+float* bufferOf (jack_port_t* port, jack_nframes_t frames)
+{
+    return port == nullptr ? nullptr : static_cast<float*> (jack_port_get_buffer (port, frames));
+}
+
+void fillZone (a3::ZoneOutputs& out, const ZonePorts& ports, jack_nframes_t frames)
+{
+    out.sub = bufferOf (ports.sub, frames);
+    for (size_t k = 0; k < ports.tops.size(); ++k)
+        out.tops[k] = bufferOf (ports.tops[k], frames);
+}
+
+void runSpatialBus (Bench& b, jack_nframes_t frames)
+{
+    auto* bus = b.bus.load (std::memory_order_acquire);
+    b.acknowledged.store (bus, std::memory_order_release);
+    std::array<a3::StripTaps, a3::numSpatialStrips> taps {};
+    for (int n = 0; n < strips; ++n)
+        taps[(size_t) n] = { { bufferOf (b.moving[n][0], frames), bufferOf (b.moving[n][1], frames) },
+                             { bufferOf (b.steady[n][0], frames), bufferOf (b.steady[n][1], frames) } };
+    b.outputs.rec[0] = bufferOf (b.rec[0], frames);
+    b.outputs.rec[1] = bufferOf (b.rec[1], frames);
+    fillZone (b.outputs.main, b.mainPorts, frames);
+    fillZone (b.outputs.booth, b.boothPorts, frames);
+    bus->process (taps, b.outputs, (int) frames, b.positions);
+}
 
 int process (jack_nframes_t frames, void* arg)
 {
@@ -78,6 +122,7 @@ int process (jack_nframes_t frames, void* arg)
         b.strip[n].process (i, m, s, (int) frames, p);
     }
     b.generator.render (buffer (b.gen[0]), buffer (b.gen[1]), (int) frames);
+    runSpatialBus (b, frames);
 
     if (b.measure)
         b.timing.push ((float) std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - started).count());
@@ -91,7 +136,32 @@ jack_port_t* makePort (jack_client_t* c, const std::string& name, unsigned long 
     return jack_port_register (c, name.c_str(), JACK_DEFAULT_AUDIO_TYPE, flags, 0);
 }
 
-bool registerPorts (Bench& b)
+bool registerSpatialPorts (Bench& b, const a3::SpatialConfig& config)
+{
+    // The same order as spatialPortNames, which the tests pin.
+    const auto names = a3bench::spatialPortNames (config);
+    size_t next = 0;
+    const auto add = [&] { return makePort (b.client, names[next++], JackPortIsOutput); };
+    b.rec[0] = add();
+    b.rec[1] = add();
+    bool ok = b.rec[0] && b.rec[1];
+    for (auto* zone : { &b.mainPorts, &b.boothPorts })
+    {
+        const auto& layout = zone == &b.mainPorts ? config.main.layout : config.booth.layout;
+        if (layout.hasSub())
+            ok = ((zone->sub = add()) != nullptr) && ok;
+        for (size_t k = 0; k < layout.topChannels.size(); ++k)
+        {
+            zone->tops.push_back (add());
+            ok = zone->tops.back() != nullptr && ok;
+        }
+    }
+    b.outputs.main.tops.assign (b.mainPorts.tops.size(), nullptr);
+    b.outputs.booth.tops.assign (b.boothPorts.tops.size(), nullptr);
+    return ok;
+}
+
+bool registerPorts (Bench& b, const a3::SpatialConfig& config)
 {
     for (int n = 0; n < strips; ++n)
         for (int side = 0; side < 2; ++side)
@@ -106,26 +176,34 @@ bool registerPorts (Bench& b)
         }
     b.gen[0] = makePort (b.client, "gen_L", JackPortIsOutput);
     b.gen[1] = makePort (b.client, "gen_R", JackPortIsOutput);
-    return b.gen[0] && b.gen[1];
+    return b.gen[0] && b.gen[1] && registerSpatialPorts (b, config);
 }
 
 class ControlListener : public juce::OSCReceiver::Listener<juce::OSCReceiver::RealtimeCallback>
 {
 public:
-    ControlListener (const a3bench::ControlMap& m, std::array<a3::StripControls*, 4> s) : map (m), controls (s) {}
+    ControlListener (const a3bench::Truth& t, std::array<a3::StripControls*, 4> s, a3::SpatialControls& p)
+        : truth (t), controls (s), positions (p) {}
     void oscMessageReceived (const juce::OSCMessage& message) override
     {
         if (message.size() < 1)
             return;
         const auto& arg = message[0];
         if (arg.isFloat32())
-            a3bench::applyChannelMessage (map, message.getAddressPattern().toString(), arg.getFloat32(), controls);
+            apply (message.getAddressPattern().toString(), arg.getFloat32());
         else if (arg.isInt32())
-            a3bench::applyChannelMessage (map, message.getAddressPattern().toString(), (float) arg.getInt32(), controls);
+            apply (message.getAddressPattern().toString(), (float) arg.getInt32());
     }
 private:
-    const a3bench::ControlMap& map;
+    void apply (const juce::String& address, float value)
+    {
+        if (! a3bench::applyChannelMessage (truth.controls, address, value, controls))
+            a3bench::applyPositionMessage (truth.positions, address, value, positions);
+    }
+
+    const a3bench::Truth& truth;
     std::array<a3::StripControls*, 4> controls;
+    a3::SpatialControls& positions;
 };
 
 // The only caller of ChannelStrip::meters(): it takes the peaks.
@@ -155,16 +233,63 @@ void printTiming (a3bench::BlockTimer& t)
     t.clear();
 }
 
+// The JACK quantum changed: build and prepare a new bus off the audio thread and
+// publish it. Until the callback has taken it, the old bus chunks the longer calls.
+// A replaced bus is freed only once the callback has acknowledged its successor.
+class BusSwapper
+{
+public:
+    BusSwapper (Bench& bench, const a3::SpatialConfig& c, double rate) : b (bench), config (c), sampleRate (rate) {}
+
+    void service (int quantum)
+    {
+        retireAcknowledged();
+        auto* current = b.bus.load();
+        if (retired != nullptr || quantum == current->preparedBlockSize())
+            return;
+        juce::String error;
+        auto next = a3::SpatialBus::create (config, error);
+        if (next == nullptr)
+            return std::fprintf (stderr, "cannot rebuild the spatial bus for %d frames: %s\n", quantum, error.toRawUTF8()), void();
+        next->prepare (sampleRate, quantum);
+        retired = b.bus.exchange (next.release());
+    }
+
+    void freeAll()
+    {
+        delete retired;
+        retired = nullptr;
+        delete b.bus.exchange (nullptr);
+    }
+
+private:
+    void retireAcknowledged()
+    {
+        if (retired == nullptr || b.acknowledged.load (std::memory_order_acquire) != b.bus.load())
+            return;
+        delete retired;
+        retired = nullptr;
+    }
+
+    Bench& b;
+    const a3::SpatialConfig& config;
+    double sampleRate;
+    a3::SpatialBus* retired = nullptr;
+};
+
 void usage()
 {
     std::fprintf (stderr, "usage: a3-engine-bench [--truth FILE] [--gen sine:HZ:DB|pink:DB|sweep:DB]\n"
-                          "                       [--meters-osc=HOST:PORT] [--timing]\n");
+                          "                       [--meters-osc=HOST:PORT] [--timing] [--spatial DIR]\n"
+                          "  --spatial DIR: the speaker layouts and encoder/decoder data. Default: the first\n"
+                          "  that exists of ~/.config/a3/engine/spatial and /usr/share/a3-engine/spatial.\n");
 }
 }
 
 int main (int argc, char** argv)
 {
     std::string truthPath = "/usr/share/a3/a3-osc.json";
+    std::string spatialArgument;
     a3bench::GenSpec gen;
     a3bench::MetersTarget metersTarget;
     bool metersOsc = false, timing = false;
@@ -177,6 +302,8 @@ int main (int argc, char** argv)
             continue;
         else if (a3bench::parseMetersTarget (a, metersTarget))
             metersOsc = true;
+        else if (a == "--spatial" && i + 1 < argc)
+            spatialArgument = argv[++i];
         else if (a == "--timing")
             timing = true;
         else
@@ -187,6 +314,14 @@ int main (int argc, char** argv)
     const auto truth = a3bench::parseTruth (text);
     if (! truth)
         return std::fprintf (stderr, "cannot use the truth at %s (missing, or no engine.osc entry)\n", truthPath.c_str()), 1;
+
+    const char* home = std::getenv ("HOME");
+    const auto spatialDirectory = a3bench::chooseSpatialDirectory (spatialArgument, home ? home : "",
+        [] (const std::string& path) { return juce::File (path).isDirectory(); });
+    juce::String spatialError;
+    const auto spatialConfig = a3::loadSpatialConfig (juce::File (spatialDirectory), spatialError);
+    if (! spatialConfig)
+        return std::fprintf (stderr, "cannot use the spatial data in %s: %s\n", spatialDirectory.c_str(), spatialError.toRawUTF8()), 1;
 
     if (metersOsc)
         for (int n = 1; n <= strips; ++n)
@@ -208,14 +343,22 @@ int main (int argc, char** argv)
     bench->generator.prepare (rate);
     bench->generator.set (gen.shape, gen.hz, gen.levelDb);
     bench->measure = timing;
-    if (! registerPorts (*bench))
+    const int quantum = (int) jack_get_buffer_size (bench->client);
+    juce::String busError;
+    auto firstBus = a3::SpatialBus::create (*spatialConfig, busError);
+    if (firstBus == nullptr)
+        return std::fprintf (stderr, "cannot use the spatial data in %s: %s\n", spatialDirectory.c_str(), busError.toRawUTF8()), 1;
+    firstBus->prepare (rate, quantum);
+    bench->bus = firstBus.release();
+    BusSwapper swapper (*bench, *spatialConfig, rate);
+    if (! registerPorts (*bench, *spatialConfig))
         return std::fprintf (stderr, "cannot register the JACK ports\n"), 1;
     jack_set_process_callback (bench->client, process, bench.get());
     jack_set_buffer_size_callback (bench->client, bufferSizeChanged, nullptr);
 
     std::array<a3::StripControls*, 4> controls { &bench->strip[0].controls(), &bench->strip[1].controls(),
                                                  &bench->strip[2].controls(), &bench->strip[3].controls() };
-    ControlListener listener (truth->controls, controls);
+    ControlListener listener (*truth, controls, bench->positions);
     juce::DatagramSocket socket (false);
     juce::OSCReceiver receiver;
     if (! socket.bindToPort (truth->enginePort, truth->engineBindAddress) || ! receiver.connectToSocket (socket))
@@ -246,6 +389,7 @@ int main (int argc, char** argv)
     while (! stopRequested)
     {
         std::this_thread::sleep_for (std::chrono::milliseconds (20));
+        swapper.service ((int) jack_get_buffer_size (bench->client));
         if (metersOsc)
             sendMeters (*bench, *truth, sender);
         bench->timing.drain ([&timer] (double ms) { timer.add (ms); });
@@ -261,5 +405,6 @@ int main (int argc, char** argv)
         printTiming (timer);
     receiver.removeListener (&listener);
     jack_client_close (bench->client);
+    swapper.freeAll();
     return 0;
 }
