@@ -17,10 +17,14 @@ public:
         SpatialConfig config;
         auto encoder = readParameters ("encoder.parameters.json");
         auto rec = readParameters ("rec.parameters.json");
-        if (! encoder || ! rec)
+        auto fx = readParameters ("fx.parameters.json");
+        auto phones = readParameters ("phones.parameters.json");
+        if (! encoder || ! rec || ! fx || ! phones)
             return std::nullopt;
         config.encoderParameters = withOrder (*encoder, "orderSetting");
         config.recParameters = withOrder (*rec, "inputOrderSetting");
+        config.fxParameters = withOrder (*fx, "orderSetting");
+        config.phonesParameters = withOrder (*phones, "inputOrderSetting");
 
         auto main = readZone ("main");
         auto booth = readZone ("booth");
