@@ -107,7 +107,7 @@ set $ws3 "3:REAPER"
 set $ws4 "4:QJACKCTL"
 set $ws5 "5:SCARLETT"
 set $ws6 "6"
-set $ws7 "7"
+set $ws7 "7:DESK"
 set $ws8 "8"
 set $ws9 "9"
 set $ws10 "10"
@@ -210,6 +210,9 @@ for_window [class="A3 Motion UI"] move container to workspace number $ws1
 for_window [class="REAPER"] move container to workspace number $ws3
 for_window [class="QjackCtl"] move container to workspace number $ws4
 for_window [title="Scarlett 18i20 USB"] move container to workspace number $ws5
+# The virtual desk (a3-desk), on its own workspace (2026-10-25); the bar shows
+# there, since the desk has no way back to the other workspaces itself.
+for_window [class="A3 Desk"] move container to workspace number $ws7
 # StemDeck, always running (stemdeck.service), alone on workspace 2 and
 # filling it: tiled without a border rather than i3's full screen, which every
 # dialog it opens ended (2026-09-30). Its start takes the screen for a moment
