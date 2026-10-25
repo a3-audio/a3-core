@@ -323,3 +323,94 @@ TEST (SpatialBus, TheZonesFixedGainIsApplied)
         for (const auto c : indices)
             EXPECT_EQ (maxAbsDiff (quieterOut.channels[c], unityOut.channels[c], 0), 0.0) << "output " << c;
 }
+
+// The bus's own routing, against the data: the decoders are judged in
+// Layout.cpp (Zone); here the question is whether decoder channel n reaches
+// the port the data names. Strip 1's moving pair carries the signal straight
+// into the bus (source 0); every other tap is silent, so source 0 is the
+// only thing in the field and sits exactly where azimuth0/elevation0 say.
+namespace
+{
+constexpr size_t routingFrames = 32768;
+constexpr size_t routingSettle = 12000;   // IEM's smoothing and the 150 Hz crossover have settled
+
+TapSignals onlyStripOneMoving (const Stereo& signal)
+{
+    TapSignals taps;
+    for (size_t s = 0; s < taps.moving.size(); ++s)
+        taps.moving[s] = taps.steady[s] = silentStereo (signal.l.size());
+    taps.moving[0] = signal;
+    return taps;
+}
+
+OutputSignals renderAt (const a3::SpatialConfig& config, const TapSignals& taps, float azimuth, float elevation)
+{
+    a3::SpatialBus bus (config);
+    bus.prepare (spatialRate, spatialQuantum);
+    a3::SpatialControls positions;
+    place (positions, { { { azimuth, elevation }, { 0.0f, 0.0f }, { 0.0f, 0.0f }, { 0.0f, 0.0f } } });
+    OutputSignals out (config, taps.frames());
+    runBus (bus, taps, out, { spatialQuantum }, positions);
+    return out;
+}
+
+struct ZoneRoute
+{
+    const char* name;
+    const a3::ZoneConfig& zone;
+    const std::vector<size_t>& indices;   // into OutputSignals::channels: [sub,] top 1..N
+};
+
+std::vector<ZoneRoute> zoneRoutes (const a3::SpatialConfig& config, const OutputSignals& out)
+{
+    return { { "main", config.main, out.mainIndices }, { "booth", config.booth, out.boothIndices } };
+}
+
+size_t topIndex (const ZoneRoute& route, size_t k) { return route.indices[(route.zone.layout.hasSub() ? 1 : 0) + k]; }
+}
+
+TEST_P (SpatialBusData, ASourceAtATopsDirectionIsLoudestOnThatTopsPort)
+{
+    const auto config = loadedSpatialConfig (dataDirectory (GetParam()));
+    const auto taps = onlyStripOneMoving (pinkStereo (routingFrames, 7));
+    OutputSignals layoutOnly (config, 1);
+    for (const auto& routeOfLayout : zoneRoutes (config, layoutOnly))
+    {
+        ASSERT_EQ (routeOfLayout.zone.topDirections.size(), routeOfLayout.zone.layout.topChannels.size());
+        for (size_t k = 0; k < routeOfLayout.zone.topDirections.size(); ++k)
+        {
+            const auto [azimuth, elevation] = routeOfLayout.zone.topDirections[k];
+            const auto out = renderAt (config, taps, azimuth, elevation);
+            const auto route = zoneRoutes (config, out)[routeOfLayout.name == std::string ("main") ? 0 : 1];
+            const double aimed = rmsDb (out.channels[topIndex (route, k)], routingSettle);
+            for (size_t other = 0; other < route.zone.topDirections.size(); ++other)
+                if (other != k)
+                    EXPECT_GE (aimed - rmsDb (out.channels[topIndex (route, other)], routingSettle), 3.0)
+                        << route.name << ": source at top " << k + 1 << ", louder top " << other + 1;
+        }
+    }
+}
+
+TEST_P (SpatialBusData, ALowToneReachesEachZonesSubPort)
+{
+    const auto config = loadedSpatialConfig (dataDirectory (GetParam()));
+    const auto out = renderAt (config, onlyStripOneMoving (sine (routingFrames, 50.0, spatialRate, 0.25f)), 0.0f, 0.0f);
+    for (const auto& route : zoneRoutes (config, out))
+    {
+        ASSERT_TRUE (route.zone.layout.hasSub()) << route.name;
+        const double sub = rmsDb (out.channels[route.indices[0]], routingSettle);
+        EXPECT_GT (sub, -40.0) << route.name;
+        for (size_t k = 0; k < route.zone.layout.topChannels.size(); ++k)
+            EXPECT_GE (sub - rmsDb (out.channels[topIndex (route, k)], routingSettle), 10.0)
+                << route.name << ": top " << k + 1;
+    }
+}
+
+TEST_P (SpatialBusData, ASourceOnTheLeftIsLouderOnRecL)
+{
+    const auto config = loadedSpatialConfig (dataDirectory (GetParam()));
+    const auto out = renderAt (config, onlyStripOneMoving (pinkStereo (routingFrames, 7)), 90.0f, 0.0f);
+    const double recL = rmsDb (out.channels[out.recIndices[0]], routingSettle);
+    const double recR = rmsDb (out.channels[out.recIndices[1]], routingSettle);
+    EXPECT_GE (recL - recR, 3.0) << "rec_L " << recL << " dB, rec_R " << recR << " dB";
+}
