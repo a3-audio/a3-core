@@ -21,7 +21,7 @@ target_include_directories(a3-engine-reference PUBLIC
 target_compile_options(a3-engine-reference PRIVATE -w)   # upstream code, unchanged
 
 add_executable(a3-engine-tests ReferenceSmoke.cpp Laws.cpp PurestGain.cpp SmoothEQ3.cpp
-    Isolator3.cpp Meters.cpp DjFilter.cpp ChannelStrip.cpp DeckStrip.cpp StripTiming.cpp Bench.cpp
+    Isolator3.cpp Meters.cpp DjFilter.cpp ChannelStrip.cpp DeckStrip.cpp ChannelSelect.cpp StripTiming.cpp Bench.cpp
     JuceEnvironment.cpp IemCompileTrial.cpp IemNode.cpp Layout.cpp SpatialBus.cpp SpatialTiming.cpp
     SpatialAllocation.cpp)
 target_include_directories(a3-engine-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
