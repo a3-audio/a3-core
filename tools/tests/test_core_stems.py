@@ -286,6 +286,19 @@ class OnePerChannel(unittest.TestCase):
         self.assertEqual(s.place_of(2), RETURN)
         self.assertEqual(s.tidy(), [])
 
+    def test_a_foreign_stem_never_displaces_a_channels_own(self):
+        # Pair 2 (stem 2) and pair 5 (stem 1 of deck 2) both on bus 1: the
+        # foreign one goes first, so the one-per-bus rule cannot keep it.
+        s = stems_with(p2=bit(1), p5=bit(1))
+        commands = s.tidy()
+        self.assertEqual(s.channel_mask(0), 1 << 4)
+        self.assertEqual(s.place_of(5), 0)
+        self.assertEqual(s.place_of(2), RETURN)
+        self.assertIn((2, 1, False), commands)
+        self.assertIn((2, AUX, True), commands)
+        self.assertNotIn((5, 1, False), commands)
+        self.assertEqual(s.tidy(), [])
+
     def test_tidy_twice_is_nothing(self):
         s = stems_with(p3=bit(1), p6=bit(1), p4=bit(4), p8=bit(4))
         s.tidy()
