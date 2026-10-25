@@ -18,15 +18,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 
-import a3_core_audio_engine as audio_engine  # noqa: E402
-
 USAGE = "usage: a3-engine-runs [--reaper]\n"
 
 
-def main(argv):
-    if argv not in ([], ["--reaper"]):
-        sys.stderr.write(USAGE)
-        return 2
+def decide(argv):
+    # Imported here so that a missing or broken module is caught by main().
+    import a3_core_audio_engine as audio_engine
+
     override = os.environ.get("A3_ENGINE_BINARY")
     probed = audio_engine.probe(Path(override)) if override else audio_engine.probe()
     runs, reason = audio_engine.engine_runs(*probed)
@@ -34,6 +32,18 @@ def main(argv):
         sys.stderr.write(f"a3-engine-runs: REAPER runs: {reason}\n")
     want_engine = not argv
     return 0 if runs == want_engine else 1
+
+
+def main(argv):
+    if argv not in ([], ["--reaper"]):
+        sys.stderr.write(USAGE)
+        return 2
+    try:
+        return decide(argv)
+    except BaseException as error:  # ExecCondition: 1 skips, so never skip both
+        sys.stderr.write(f"a3-engine-runs: internal error, falling back to "
+                         f"REAPER: {error!r}\n")
+        return 0 if argv else 1
 
 
 if __name__ == "__main__":

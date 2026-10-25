@@ -63,5 +63,30 @@ class EngineRuns(unittest.TestCase):
         self.assertIn("usage", done.stderr.lower())
 
 
+class BrokenCheckFallsBackToReaper(unittest.TestCase):
+    """For ExecCondition, 1 means skip: a crash must never skip both."""
+
+    def run_without_lib(self, args):
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_dir = Path(tmp) / "bin"
+            bin_dir.mkdir()
+            copy = bin_dir / "a3-engine-runs"
+            copy.write_text(TOOL.read_text())
+            return subprocess.run([sys.executable, str(copy), *args],
+                                  capture_output=True, text=True)
+
+    def test_reaper_flag_exits_0_when_the_module_is_missing(self):
+        done = self.run_without_lib(["--reaper"])
+        self.assertEqual(0, done.returncode)
+        self.assertIn("a3-engine-runs: internal error, falling back to REAPER:",
+                      done.stderr)
+
+    def test_engine_form_exits_1_when_the_module_is_missing(self):
+        done = self.run_without_lib([])
+        self.assertEqual(1, done.returncode)
+        self.assertIn("a3-engine-runs: internal error, falling back to REAPER:",
+                      done.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

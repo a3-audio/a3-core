@@ -9,6 +9,7 @@ and with exclusive="on" it disconnects everything else -- which would cut the
 links the engine makes. So: no socket is exclusive, and none names the engine.
 """
 
+import re
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -31,8 +32,10 @@ class PatchbayAndEngine(unittest.TestCase):
         self.assertEqual([], exclusive)
 
     def test_no_socket_client_matches_the_engine(self):
+        # qjackctl reads the client as a regular expression
         clients = [s.get("client") for s in sockets()
-                   if "a3-engine" in s.get("client", "").lower()]
+                   if re.fullmatch(s.get("client", ""), "a3-engine")
+                   or "a3-engine" in s.get("client", "").lower()]
         self.assertEqual([], clients)
 
 
