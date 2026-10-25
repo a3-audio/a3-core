@@ -23,9 +23,11 @@ struct FilterControls   // desk/Motion values, as on the wire
 // Both kinds always run. On/off and kind move through a 10 ms linear weight
 // crossfade (dry, SVF, ladder); the cutoff is smoothed per sample over 20 ms
 // toward the value latched on the 128-frame control grid. The ladder takes
-// that cutoff every kSubBlock frames (its own smoothing covers the rest). A
-// change of high/low-pass mode switches the filter type at the latch, with no
-// crossfade.
+// that cutoff every ladderSubBlock frames (its own smoothing covers the rest).
+// A change of high/low-pass mode dips through dry: the filtered weight fades to
+// 0 over 10 ms, the type switches there with the filter state reset, and the
+// weight fades back over 10 ms. A mode request during the dip only retargets.
+// At most maxChannels (64) channels.
 class DjFilter
 {
 public:
@@ -33,20 +35,24 @@ public:
     void process (float* const* io, int numChannels, int numSamples, bool on, const FilterControls& controls);
 
 private:
+    static constexpr int maxChannels = 64;
     static constexpr int ladderSubBlock = 32;
 
     void latch (bool on, const FilterControls& controls);
     void processChunk (float* const* io, int count);
+    void render (float* const* io, int count);
+    void switchMode();
+    void applyMode();
 
     double sampleRate = 44100.0;
     int maxBlock = 0, channels = 0;
-    bool initialised = false, highPass = true;
+    bool initialised = false, highPass = true, requestedHighPass = true;
     float lastResonance = -1.0f, lastCutoff = -1.0f;
     ControlGrid grid;
     int ladderPhase = 0;
-    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> cutoff, resonance, dryWeight, svfWeight, ladderWeight;
+    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> cutoff, resonance, svfWeight, ladderWeight, dipGain;
     juce::dsp::StateVariableTPTFilter<float> svf;
     juce::dsp::LadderFilter<float> ladder;
-    std::vector<float> ladderOut, cutoffs, resonances;   // channel-major scratch (ladderOut), per-sample curves
+    std::vector<float> ladderOut, cutoffs, resonances, dips;   // channel-major scratch (ladderOut), per-sample curves
 };
 }

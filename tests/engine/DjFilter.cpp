@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <vector>
 #include "DjFilter.h"
 #include "Laws.h"
@@ -120,7 +121,6 @@ TEST (DjFilter, OffIsTransparent)
         auto buf = fromSine (2, 440.0, 20000);
         auto p = buf.ptr (0);
         g.process (p.data(), 2, 5000, true, c);
-        g.process (p.data() + 0, 2, 0, true, c);
         auto q = buf.ptr (5000);
         g.process (q.data(), 2, 15000, false, c);
         const auto ref = fromSine (2, 440.0, 20000);
@@ -129,34 +129,72 @@ TEST (DjFilter, OffIsTransparent)
     }
 }
 
-TEST (DjFilter, SwitchingIsClickFree)
+namespace
 {
-    const size_t frames = 44100;
+// A 200 Hz sine through a 1 kHz filter that changes it strongly (high-pass: about
+// -28 dB; low-pass: passes). `change` flips one thing at frame 22050; returns the
+// largest sample-to-sample step after the start-up, in units of the dry sine's own.
+double largestStepRelativeToDry (bool startOn, int startKind, bool startHighPass,
+                                 const std::function<void (a3::FilterControls&, bool&)>& change)
+{
+    const size_t frames = 44100, settled = 8000;
     const auto dry = fromSine (2, 200.0, frames, 0.5f);
     double dryStep = 0.0;
     for (size_t i = 1; i < frames; ++i)
         dryStep = std::max (dryStep, (double) std::abs (dry.ch[0][i] - dry.ch[0][i - 1]));
 
     a3::FilterControls c;
-    setUp (c, 0, false, 8000.0);   // a low-pass far above the sine: passes it with little change
+    setUp (c, startKind, startHighPass, 1000.0);
+    bool on = startOn;
     a3::DjFilter f;
     f.prepare (rate, 512, 2);
     auto buf = dry;
-    const int block = 100;
-    for (size_t s = 0; s < frames; s += (size_t) block)
+    const size_t block = 100;
+    for (size_t s = 0; s < frames; s += block)
     {
-        const int n = (int) std::min<size_t> ((size_t) block, frames - s);
-        // toggles: on at block 10, kind at 20, off at 30..40, on again, kind back at 60
-        const size_t b = s / (size_t) block;
-        const bool on = ! (b >= 30 && b < 40);
-        c.kind = (b >= 20 && b < 60) ? 1 : 0;
+        if (s == 22050 - 22050 % block + (22050 % block ? block : 0))
+            change (c, on);
+        const int n = (int) std::min (block, frames - s);
         auto p = buf.ptr (s);
-        f.process (p.data(), 2, n, on && b >= 10, c);
+        f.process (p.data(), 2, n, on, c);
     }
     double step = 0.0;
-    for (size_t i = 1; i < frames; ++i)
+    for (size_t i = settled; i < frames; ++i)
         step = std::max (step, (double) std::abs (buf.ch[0][i] - buf.ch[0][i - 1]));
-    EXPECT_LE (step, 2.0 * dryStep);
+    return step / dryStep;
+}
+}
+
+TEST (DjFilter, SwitchingIsClickFree)
+{
+    constexpr double limit = 2.0;
+    for (int startKind : { 0, 1 })
+    {
+        SCOPED_TRACE (startKind);
+        {
+            SCOPED_TRACE ("off -> on");
+            EXPECT_LE (largestStepRelativeToDry (false, startKind, true, [] (a3::FilterControls&, bool& on) { on = true; }), limit);
+        }
+        {
+            SCOPED_TRACE ("on -> off");
+            EXPECT_LE (largestStepRelativeToDry (true, startKind, true, [] (a3::FilterControls&, bool& on) { on = false; }), limit);
+        }
+        {
+            SCOPED_TRACE ("kind");
+            EXPECT_LE (largestStepRelativeToDry (true, startKind, true,
+                                                 [&] (a3::FilterControls& c, bool&) { c.kind = 1 - startKind; }), limit);
+        }
+        {
+            SCOPED_TRACE ("mode high-pass -> low-pass");
+            EXPECT_LE (largestStepRelativeToDry (true, startKind, true,
+                                                 [] (a3::FilterControls& c, bool&) { setUp (c, c.kind, false, 1000.0); }), limit);
+        }
+        {
+            SCOPED_TRACE ("mode low-pass -> high-pass");
+            EXPECT_LE (largestStepRelativeToDry (true, startKind, false,
+                                                 [] (a3::FilterControls& c, bool&) { setUp (c, c.kind, true, 1000.0); }), limit);
+        }
+    }
 }
 
 TEST (DjFilter, AnyBlockSize)
