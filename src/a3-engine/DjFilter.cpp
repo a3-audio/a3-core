@@ -36,6 +36,13 @@ void DjFilter::prepare (double newRate, int newMaxBlock, int numChannels)
         s->reset (sampleRate, cutoffSeconds);
     for (auto* s : { &svfWeight, &ladderWeight, &dipGain })
         s->reset (sampleRate, weightSeconds);
+    reset();
+}
+
+void DjFilter::reset()
+{
+    svf.reset();
+    ladder.reset();
     dipGain.setCurrentAndTargetValue (1.0f);
     svfWeight.setCurrentAndTargetValue (0.0f);
     ladderWeight.setCurrentAndTargetValue (0.0f);

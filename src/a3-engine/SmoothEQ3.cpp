@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later AND MIT
 // Algorithm: Airwindows SmoothEQ3 by Chris Johnson (MIT, 2018)
 #include "SmoothEQ3.h"
+#include <algorithm>
 #include <cmath>
 
 namespace a3
@@ -64,14 +65,14 @@ void SmoothEQ3::processChannel (Channel& st, float* io, int begin, int count) co
     }
 }
 
-void SmoothEQ3::process (float* const* io, int numSamples)
+void SmoothEQ3::process (float* const* io, int numSamples, int numChannels)
 {
     grid.advance (numSamples,
                   [this] { latchControlBlock(); },
-                  [this, io] (int begin, int count)
+                  [this, io, numChannels] (int begin, int count)
                   {
-                      processChannel (channels[0], io[0], begin, count);
-                      processChannel (channels[1], io[1], begin, count);
+                      for (int ch = 0; ch < std::min (numChannels, maxChannels); ++ch)
+                          processChannel (channels[ch], io[ch], begin, count);
                   });
 }
 }

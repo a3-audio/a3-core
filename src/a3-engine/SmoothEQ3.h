@@ -18,9 +18,11 @@ namespace a3
 class SmoothEQ3
 {
 public:
+    static constexpr int maxChannels = 16;   // the deck strip
+
     void prepare (double sampleRate);
     void setParameters (float treble, float mid, float bass);   // each 0..1, 0.5 = flat
-    void process (float* const* io, int numSamples);            // stereo, in place, any n >= 0
+    void process (float* const* io, int numSamples, int numChannels = 2);   // in place, any n >= 0, up to maxChannels
 
 private:
     struct Channel
@@ -37,6 +39,6 @@ private:
     double highPoleCoeff = 0, lowPoleCoeff = 0;
     float pendingTreble = 0.5f, pendingMid = 0.5f, pendingBass = 0.5f;
     double gainTreble = 1.0, gainMid = 1.0, gainBass = 1.0;
-    Channel channels[2];
+    Channel channels[maxChannels];
 };
 }

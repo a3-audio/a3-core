@@ -46,11 +46,11 @@ void PurestGain::latchControlBlock()
     speed = std::min (speed, 2500.0);
 }
 
-void PurestGain::process (float* const* io, int numSamples)
+void PurestGain::process (float* const* io, int numSamples, int numChannels)
 {
     grid.advance (numSamples,
                   [this] { latchControlBlock(); },
-                  [this, io] (int begin, int count)
+                  [this, io, numChannels] (int begin, int count)
                   {
                       for (int i = begin; i < begin + count; ++i)
                       {
@@ -58,8 +58,8 @@ void PurestGain::process (float* const* io, int numSamples)
                           gain = (gain * speed + target) / (speed + 1.0);
                           gainB = (gainB * 4000.0 + latchedB) / 4001.0;
                           const double g = gain * gainB;
-                          io[0][i] = float (io[0][i] * g);
-                          io[1][i] = float (io[1][i] * g);
+                          for (int ch = 0; ch < numChannels; ++ch)
+                              io[ch][i] = float (io[ch][i] * g);
                       }
                   });
 }

@@ -28,7 +28,7 @@ public:
 
     void prepare (double sampleRate);
     void setParameters (float a, float slowFade);   // A: 0..1 (dB = A*80-40), B: 0..1
-    void process (float* const* io, int numSamples); // stereo, in place, any n >= 0
+    void process (float* const* io, int numSamples, int numChannels = 2); // in place (one gain for all channels), any n >= 0
 
 private:
     void latchControlBlock();

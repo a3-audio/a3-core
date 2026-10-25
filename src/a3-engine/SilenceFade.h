@@ -34,19 +34,19 @@ public:
         }
     }
 
-    void process (float* const* io, int numSamples)
+    void process (float* const* io, int numSamples, int numChannels = 2)
     {
         const float target = open ? 1.0f : 0.0f;
         int i = 0;
         for (; i < numSamples && level != target; ++i)
         {
             level = open ? std::min (1.0f, level + step) : std::max (0.0f, level - step);
-            io[0][i] *= level;
-            io[1][i] *= level;
+            for (int ch = 0; ch < numChannels; ++ch)
+                io[ch][i] *= level;
         }
         if (level != 0.0f)
             return;   // open and settled: untouched
-        for (int ch = 0; ch < 2; ++ch)
+        for (int ch = 0; ch < numChannels; ++ch)
             std::fill (io[ch] + i, io[ch] + numSamples, 0.0f);
     }
 

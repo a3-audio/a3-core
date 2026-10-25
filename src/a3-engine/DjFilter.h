@@ -32,6 +32,7 @@ class DjFilter
 {
 public:
     void prepare (double sampleRate, int maxBlock, int numChannels);   // allocates
+    void reset();   // clears the filter state, no allocation; the controls are re-latched
     void process (float* const* io, int numChannels, int numSamples, bool on, const FilterControls& controls);
 
 private:
