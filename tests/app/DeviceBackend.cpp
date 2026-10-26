@@ -73,3 +73,13 @@ TEST (DeviceBackend, UnmappedPortsAreSilentNotShifted)
         EXPECT_EQ (deviceOut2[i], 0.0f);
     }
 }
+
+TEST (DeviceBackend, LoadIsTheLargerOfBackendAndEngineShare)
+{
+    // 128 frames at 48 kHz is a 2.667 ms period: 1.333 ms of engine time is 50 %.
+    EXPECT_NEAR (a3app::combinedLoadPercent (20.0f, 1.3333f, 128, 48000.0), 50.0f, 0.01f);
+    EXPECT_NEAR (a3app::combinedLoadPercent (70.0f, 1.3333f, 128, 48000.0), 70.0f, 0.01f);
+    // Before the first block there is no period: only the backend's own figure counts.
+    EXPECT_EQ (a3app::combinedLoadPercent (12.0f, 0.0f, 0, 48000.0), 12.0f);
+    EXPECT_EQ (a3app::combinedLoadPercent (12.0f, 5.0f, 128, 0.0), 12.0f);
+}

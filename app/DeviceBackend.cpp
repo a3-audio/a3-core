@@ -135,6 +135,13 @@ void DeviceBackend::close()
     slots = {};
 }
 
+float combinedLoadPercent (float backendPercent, float engineBlockMs, int frames, double sampleRate)
+{
+    const double periodMs = frames > 0 && sampleRate > 0 ? 1000.0 * frames / sampleRate : 0.0;
+    const float own = periodMs > 0 ? (float) (100.0 * engineBlockMs / periodMs) : 0.0f;
+    return std::max (backendPercent, own);
+}
+
 BackendStatus DeviceBackend::status() const
 {
     BackendStatus s;
@@ -147,7 +154,8 @@ BackendStatus DeviceBackend::status() const
         s.bitDepth = device->getCurrentBitDepth();   // AudioDeviceSetup has no bit-depth field: read only
         s.xruns = device->getXRunCount();
     }
-    s.dspLoadPercent = (float) (manager.getCpuUsage() * 100.0);
+    s.dspLoadPercent = combinedLoadPercent ((float) (manager.getCpuUsage() * 100.0), engineBlockMs.load(),
+                                            lastBlockFrames.load(), s.sampleRate);
     return s;
 }
 
@@ -178,6 +186,7 @@ void DeviceBackend::audioDeviceIOCallbackWithContext (const float* const* device
     host->audioCallback (inputs, outputs, numSamples);
     engineBlockMs.store ((float) std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - started).count(),
                          std::memory_order_relaxed);
+    lastBlockFrames.store (numSamples, std::memory_order_relaxed);
 }
 
 void DeviceBackend::audioDeviceAboutToStart (juce::AudioIODevice* device)

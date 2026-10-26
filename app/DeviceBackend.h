@@ -56,6 +56,7 @@ private:
 
     std::atomic<int> pendingBlockSize { 0 };
     std::atomic<int> pendingSampleRate { 0 };
-    std::atomic<float> engineBlockMs { 0 };
+    std::atomic<float> engineBlockMs { 0 };   // the engine's own time for the last block
+    std::atomic<int> lastBlockFrames { 0 };
 };
 }

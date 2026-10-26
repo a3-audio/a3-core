@@ -114,10 +114,7 @@ BackendStatus JackBackend::status() const
     s.blockSize = (int) jack_get_buffer_size (client);
     // jack_cpu_load is the whole graph's load and already holds the engine's time; the engine's
     // own block time against the period shows when the engine alone is the heavy part.
-    const auto frames = lastBlockFrames.load();
-    const double periodMs = frames > 0 && s.sampleRate > 0 ? 1000.0 * frames / s.sampleRate : 0.0;
-    const float own = periodMs > 0 ? (float) (100.0 * engineBlockMs.load() / periodMs) : 0.0f;
-    s.dspLoadPercent = std::max (jack_cpu_load (client), own);
+    s.dspLoadPercent = combinedLoadPercent (jack_cpu_load (client), engineBlockMs.load(), (int) lastBlockFrames.load(), s.sampleRate);
     return s;
 }
 

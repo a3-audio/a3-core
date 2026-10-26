@@ -22,6 +22,10 @@ struct BackendStatus
     bool connecting = false;                 // false with --no-connect: the engine makes no link
 };
 
+// The load STATUS shows: the larger of the backend's own figure (JACK: the whole graph; a device:
+// JUCE's callback load) and the engine's own time for the last block against its period.
+float combinedLoadPercent (float backendPercent, float engineBlockMs, int frames, double sampleRate);
+
 // Where the engine's audio comes from and goes to (JACK on the rig, a JUCE device elsewhere).
 // Every call except the audio callbacks it drives runs on the message thread.
 class AudioBackend
