@@ -8,3 +8,5 @@ target_include_directories(a3-core-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(a3-core-tests PRIVATE a3-core-lib GTest::gtest GTest::gtest_main)
 include(GoogleTest)
 gtest_discover_tests(a3-core-tests)
+target_compile_definitions(a3-core-tests PRIVATE
+    A3_CORE_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data")
