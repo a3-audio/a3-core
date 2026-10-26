@@ -58,7 +58,7 @@
   {"name": "motion.energy", "program": "motion", "role": "energy", "host": "any", "port": 7777,
    "carries": "the IEM EnergyVisualizer's /EnergyVisualizer/RMS"},
   {"name": "stemdeck.osc", "program": "stemdeck", "role": "osc", "host": "any", "port": 7780,
-   "carries": "Core's bus switches and its request for all of them"},
+   "carries": "Core's bus switches and its request for all of them; a one-deck instance k (--deck A..D) listens on this port + (k - 1): A 7780, B 7781, C 7782, D 7783 (Core's deck relay sends deck k there); the two-deck StemDeck keeps 7780"},
   {"name": "devices.announce", "program": "devices", "role": "announce", "host": "any", "port": 7790,
    "carries": "Core's /core/here broadcast: where every device fetches the truth"},
   {"name": "mixer.osc", "program": "mixer", "role": "osc", "host": "mixer", "port": 7772,
