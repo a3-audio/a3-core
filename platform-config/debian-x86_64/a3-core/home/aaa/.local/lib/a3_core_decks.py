@@ -24,6 +24,12 @@ NEUTRAL_3D = 1.0
 KEY = "channel.source"
 
 
+def deck_port(truth, deck):
+    """Where deck k listens: stemdeck.osc + (k - 1). Two one-deck StemDeck
+    instances on one host cannot share a port; the base is the truth's."""
+    return truth.endpoint("stemdeck", "osc")[1] + deck - 1
+
+
 def _is_int(value):
     return isinstance(value, int) and not isinstance(value, bool)
 

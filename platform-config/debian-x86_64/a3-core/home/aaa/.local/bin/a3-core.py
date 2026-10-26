@@ -99,7 +99,7 @@ from a3_core_web import default_bind, start_window, window_address   # noqa: E40
 from a3_core_devices import Devices   # noqa: E402
 from a3_core_gate import Gate, StartupRecall, open_after_recall   # noqa: E402
 from a3_core_audio_engine import ENGINE, REAPER, engine_runs, probe   # noqa: E402
-from a3_core_decks import ANALOG, NEUTRAL_3D, DeckSelector   # noqa: E402
+from a3_core_decks import ANALOG, NEUTRAL_3D, DeckSelector, deck_port   # noqa: E402
 from a3_core_engine import (EngineSession, engine_channel_messages,   # noqa: E402
                             engine_return_source,
                             filter_mode_message, flag_message,
@@ -1666,7 +1666,7 @@ def osc_handler_deck_hello(client_address: Tuple[str, int], address: str,
     if _deck_hosts.get(deck) != host:
         _deck_hosts[deck] = host
         _deck_clients[deck] = WatchedClient(
-            SimpleUDPClient(host, _truth.endpoint("stemdeck", "osc")[1]),
+            SimpleUDPClient(host, deck_port(_truth, deck)),
             f"stemdeck-{chr(ord('A') + deck - 1)}")
         print(f"stemdeck: deck {deck} at {host}")
     _decks.heard(deck, now)
