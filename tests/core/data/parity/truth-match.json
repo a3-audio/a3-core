@@ -1,0 +1,1628 @@
+{
+ "matches": [
+  {
+   "address": "/channel/1/gain",
+   "match": [
+    "channel.gain",
+    {
+     "ch": 1
+    }
+   ]
+  },
+  {
+   "address": "/channel/4/gain",
+   "match": [
+    "channel.gain",
+    {
+     "ch": 4
+    }
+   ]
+  },
+  {
+   "address": "/channel/5/gain",
+   "match": null
+  },
+  {
+   "address": "/channel/1/eq/high",
+   "match": [
+    "channel.eq.high",
+    {
+     "ch": 1
+    }
+   ]
+  },
+  {
+   "address": "/channel/4/eq/high",
+   "match": [
+    "channel.eq.high",
+    {
+     "ch": 4
+    }
+   ]
+  },
+  {
+   "address": "/channel/5/eq/high",
+   "match": null
+  },
+  {
+   "address": "/channel/1/eq/mid",
+   "match": [
+    "channel.eq.mid",
+    {
+     "ch": 1
+    }
+   ]
+  },
+  {
+   "address": "/channel/4/eq/mid",
+   "match": [
+    "channel.eq.mid",
+    {
+     "ch": 4
+    }
+   ]
+  },
+  {
+   "address": "/channel/5/eq/mid",
+   "match": null
+  },
+  {
+   "address": "/channel/1/eq/low",
+   "match": [
+    "channel.eq.low",
+    {
+     "ch": 1
+    }
+   ]
+  },
+  {
+   "address": "/channel/4/eq/low",
+   "match": [
+    "channel.eq.low",
+    {
+     "ch": 4
+    }
+   ]
+  },
+  {
+   "address": "/channel/5/eq/low",
+   "match": null
+  },
+  {
+   "address": "/channel/1/volume",
+   "match": [
+    "channel.volume",
+    {
+     "ch": 1
+    }
+   ]
+  },
+  {
+   "address": "/channel/4/volume",
+   "match": [
+    "channel.volume",
+    {
+     "ch": 4
+    }
+   ]
+  },
+  {
+   "address": "/channel/5/volume",
+   "match": null
+  },
+  {
+   "address": "/channel/1/aux-send",
+   "match": [
+    "channel.aux-send",
+    {
+     "ch": 1
+    }
+   ]
+  },
+  {
+   "address": "/channel/4/aux-send",
+   "match": [
+    "channel.aux-send",
+    {
+     "ch": 4
+    }
+   ]
+  },
+  {
+   "address": "/channel/5/aux-send",
+   "match": null
+  },
+  {
+   "address": "/channel/1/cue",
+   "match": [
+    "channel.cue",
+    {
+     "ch": 1
+    }
+   ]
+  },
+  {
+   "address": "/channel/4/cue",
+   "match": [
+    "channel.cue",
+    {
+     "ch": 4
+    }
+   ]
+  },
+  {
+   "address": "/channel/5/cue",
+   "match": null
+  },
+  {
+   "address": "/channel/1/cue/led",
+   "match": [
+    "channel.cue.led",
+    {
+     "ch": 1
+    }
+   ]
+  },
+  {
+   "address": "/channel/4/cue/led",
+   "match": [
+    "channel.cue.led",
+    {
+     "ch": 4
+    }
+   ]
+  },
+  {
+   "address": "/channel/5/cue/led",
+   "match": null
+  },
+  {
+   "address": "/channel/1/filter",
+   "match": [
+    "channel.filter",
+    {
+     "ch": 1
+    }
+   ]
+  },
+  {
+   "address": "/channel/4/filter",
+   "match": [
+    "channel.filter",
+    {
+     "ch": 4
+    }
+   ]
+  },
+  {
+   "address": "/channel/5/filter",
+   "match": null
+  },
+  {
+   "address": "/channel/1/filter/led",
+   "match": [
+    "channel.filter.led",
+    {
+     "ch": 1
+    }
+   ]
+  },
+  {
+   "address": "/channel/4/filter/led",
+   "match": [
+    "channel.filter.led",
+    {
+     "ch": 4
+    }
+   ]
+  },
+  {
+   "address": "/channel/5/filter/led",
+   "match": null
+  },
+  {
+   "address": "/channel/1/filter/frequency",
+   "match": [
+    "channel.filter.frequency",
+    {
+     "ch": 1
+    }
+   ]
+  },
+  {
+   "address": "/channel/4/filter/frequency",
+   "match": [
+    "channel.filter.frequency",
+    {
+     "ch": 4
+    }
+   ]
+  },
+  {
+   "address": "/channel/5/filter/frequency",
+   "match": null
+  },
+  {
+   "address": "/channel/1/filter/q",
+   "match": [
+    "channel.filter.q",
+    {
+     "ch": 1
+    }
+   ]
+  },
+  {
+   "address": "/channel/4/filter/q",
+   "match": [
+    "channel.filter.q",
+    {
+     "ch": 4
+    }
+   ]
+  },
+  {
+   "address": "/channel/5/filter/q",
+   "match": null
+  },
+  {
+   "address": "/channel/1/3d",
+   "match": [
+    "channel.3d",
+    {
+     "ch": 1
+    }
+   ]
+  },
+  {
+   "address": "/channel/4/3d",
+   "match": [
+    "channel.3d",
+    {
+     "ch": 4
+    }
+   ]
+  },
+  {
+   "address": "/channel/5/3d",
+   "match": null
+  },
+  {
+   "address": "/channel/1/azimuth",
+   "match": [
+    "channel.azimuth",
+    {
+     "ch": 1
+    }
+   ]
+  },
+  {
+   "address": "/channel/4/azimuth",
+   "match": [
+    "channel.azimuth",
+    {
+     "ch": 4
+    }
+   ]
+  },
+  {
+   "address": "/channel/5/azimuth",
+   "match": null
+  },
+  {
+   "address": "/channel/1/elevation",
+   "match": [
+    "channel.elevation",
+    {
+     "ch": 1
+    }
+   ]
+  },
+  {
+   "address": "/channel/4/elevation",
+   "match": [
+    "channel.elevation",
+    {
+     "ch": 4
+    }
+   ]
+  },
+  {
+   "address": "/channel/5/elevation",
+   "match": null
+  },
+  {
+   "address": "/channel/1/stem/turn",
+   "match": [
+    "channel.stem.turn",
+    {
+     "ch": 1
+    }
+   ]
+  },
+  {
+   "address": "/channel/4/stem/turn",
+   "match": [
+    "channel.stem.turn",
+    {
+     "ch": 4
+    }
+   ]
+  },
+  {
+   "address": "/channel/5/stem/turn",
+   "match": null
+  },
+  {
+   "address": "/channel/1/stem",
+   "match": [
+    "channel.stem",
+    {
+     "ch": 1
+    }
+   ]
+  },
+  {
+   "address": "/channel/4/stem",
+   "match": [
+    "channel.stem",
+    {
+     "ch": 4
+    }
+   ]
+  },
+  {
+   "address": "/channel/5/stem",
+   "match": null
+  },
+  {
+   "address": "/channel/1/stem/push",
+   "match": [
+    "channel.stem.push",
+    {
+     "ch": 1
+    }
+   ]
+  },
+  {
+   "address": "/channel/4/stem/push",
+   "match": [
+    "channel.stem.push",
+    {
+     "ch": 4
+    }
+   ]
+  },
+  {
+   "address": "/channel/5/stem/push",
+   "match": null
+  },
+  {
+   "address": "/channel/1/stem/cursor",
+   "match": [
+    "channel.stem.cursor",
+    {
+     "ch": 1
+    }
+   ]
+  },
+  {
+   "address": "/channel/4/stem/cursor",
+   "match": [
+    "channel.stem.cursor",
+    {
+     "ch": 4
+    }
+   ]
+  },
+  {
+   "address": "/channel/5/stem/cursor",
+   "match": null
+  },
+  {
+   "address": "/filter/frequency",
+   "match": [
+    "filter.frequency",
+    {}
+   ]
+  },
+  {
+   "address": "/filter/resonance",
+   "match": [
+    "filter.resonance",
+    {}
+   ]
+  },
+  {
+   "address": "/filter/mode",
+   "match": [
+    "filter.mode",
+    {}
+   ]
+  },
+  {
+   "address": "/filter/led",
+   "match": [
+    "filter.led",
+    {}
+   ]
+  },
+  {
+   "address": "/master/volume",
+   "match": [
+    "master.volume",
+    {}
+   ]
+  },
+  {
+   "address": "/master/booth",
+   "match": [
+    "master.booth",
+    {}
+   ]
+  },
+  {
+   "address": "/master/phones-mix",
+   "match": [
+    "master.phones-mix",
+    {}
+   ]
+  },
+  {
+   "address": "/master/phones-volume",
+   "match": [
+    "master.phones-volume",
+    {}
+   ]
+  },
+  {
+   "address": "/master/aux-return",
+   "match": [
+    "master.aux-return",
+    {}
+   ]
+  },
+  {
+   "address": "/aux-return/stem/turn",
+   "match": [
+    "aux-return.stem.turn",
+    {}
+   ]
+  },
+  {
+   "address": "/aux-return/stem/push",
+   "match": [
+    "aux-return.stem.push",
+    {}
+   ]
+  },
+  {
+   "address": "/aux-return/stem",
+   "match": [
+    "aux-return.stem",
+    {}
+   ]
+  },
+  {
+   "address": "/aux-return/stem/mode",
+   "match": [
+    "aux-return.stem.mode",
+    {}
+   ]
+  },
+  {
+   "address": "/aux-return/cue/led",
+   "match": [
+    "aux-return.cue.led",
+    {}
+   ]
+  },
+  {
+   "address": "/stemdeck/1/1/bus/1",
+   "match": [
+    "stemdeck.bus",
+    {
+     "deck": 1,
+     "stem": 1,
+     "bus": 1
+    }
+   ]
+  },
+  {
+   "address": "/stemdeck/1/1/bus/5",
+   "match": [
+    "stemdeck.bus",
+    {
+     "deck": 1,
+     "stem": 1,
+     "bus": 5
+    }
+   ]
+  },
+  {
+   "address": "/stemdeck/1/1/bus/6",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/1/4/bus/1",
+   "match": [
+    "stemdeck.bus",
+    {
+     "deck": 1,
+     "stem": 4,
+     "bus": 1
+    }
+   ]
+  },
+  {
+   "address": "/stemdeck/1/4/bus/5",
+   "match": [
+    "stemdeck.bus",
+    {
+     "deck": 1,
+     "stem": 4,
+     "bus": 5
+    }
+   ]
+  },
+  {
+   "address": "/stemdeck/1/4/bus/6",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/1/5/bus/1",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/1/5/bus/5",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/1/5/bus/6",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/2/1/bus/1",
+   "match": [
+    "stemdeck.bus",
+    {
+     "deck": 2,
+     "stem": 1,
+     "bus": 1
+    }
+   ]
+  },
+  {
+   "address": "/stemdeck/2/1/bus/5",
+   "match": [
+    "stemdeck.bus",
+    {
+     "deck": 2,
+     "stem": 1,
+     "bus": 5
+    }
+   ]
+  },
+  {
+   "address": "/stemdeck/2/1/bus/6",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/2/4/bus/1",
+   "match": [
+    "stemdeck.bus",
+    {
+     "deck": 2,
+     "stem": 4,
+     "bus": 1
+    }
+   ]
+  },
+  {
+   "address": "/stemdeck/2/4/bus/5",
+   "match": [
+    "stemdeck.bus",
+    {
+     "deck": 2,
+     "stem": 4,
+     "bus": 5
+    }
+   ]
+  },
+  {
+   "address": "/stemdeck/2/4/bus/6",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/2/5/bus/1",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/2/5/bus/5",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/2/5/bus/6",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/3/1/bus/1",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/3/1/bus/5",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/3/1/bus/6",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/3/4/bus/1",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/3/4/bus/5",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/3/4/bus/6",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/3/5/bus/1",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/3/5/bus/5",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/3/5/bus/6",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/1/1/buses",
+   "match": [
+    "stemdeck.buses",
+    {
+     "deck": 1,
+     "stem": 1
+    }
+   ]
+  },
+  {
+   "address": "/stemdeck/1/4/buses",
+   "match": [
+    "stemdeck.buses",
+    {
+     "deck": 1,
+     "stem": 4
+    }
+   ]
+  },
+  {
+   "address": "/stemdeck/1/5/buses",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/2/1/buses",
+   "match": [
+    "stemdeck.buses",
+    {
+     "deck": 2,
+     "stem": 1
+    }
+   ]
+  },
+  {
+   "address": "/stemdeck/2/4/buses",
+   "match": [
+    "stemdeck.buses",
+    {
+     "deck": 2,
+     "stem": 4
+    }
+   ]
+  },
+  {
+   "address": "/stemdeck/2/5/buses",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/3/1/buses",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/3/4/buses",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/3/5/buses",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/recall",
+   "match": [
+    "stemdeck.recall",
+    {}
+   ]
+  },
+  {
+   "address": "/stemdeck/ahead",
+   "match": [
+    "stemdeck.ahead",
+    {}
+   ]
+  },
+  {
+   "address": "/device/hello",
+   "match": [
+    "device.hello",
+    {}
+   ]
+  },
+  {
+   "address": "/core/here",
+   "match": [
+    "core.here",
+    {}
+   ]
+  },
+  {
+   "address": "/state/recall",
+   "match": [
+    "state.recall",
+    {}
+   ]
+  },
+  {
+   "address": "/prodj/live",
+   "match": [
+    "prodj.live",
+    {}
+   ]
+  },
+  {
+   "address": "/stemdeck/pointer",
+   "match": [
+    "stemdeck.pointer",
+    {}
+   ]
+  },
+  {
+   "address": "/motion/pointer",
+   "match": [
+    "motion.pointer",
+    {}
+   ]
+  },
+  {
+   "address": "/core/device/at",
+   "match": [
+    "core.device-at",
+    {}
+   ]
+  },
+  {
+   "address": "/beat",
+   "match": [
+    "beat",
+    {}
+   ]
+  },
+  {
+   "address": "/tap",
+   "match": [
+    "tap",
+    {}
+   ]
+  },
+  {
+   "address": "/clockmode",
+   "match": [
+    "clockmode",
+    {}
+   ]
+  },
+  {
+   "address": "/vu/1",
+   "match": [
+    "vu",
+    {
+     "n": 1
+    }
+   ]
+  },
+  {
+   "address": "/vu/66",
+   "match": [
+    "vu",
+    {
+     "n": 66
+    }
+   ]
+  },
+  {
+   "address": "/vu/67",
+   "match": null
+  },
+  {
+   "address": "",
+   "match": null
+  },
+  {
+   "address": "/",
+   "match": null
+  },
+  {
+   "address": "vu/4",
+   "match": null
+  },
+  {
+   "address": "/vu",
+   "match": null
+  },
+  {
+   "address": "/vu/",
+   "match": null
+  },
+  {
+   "address": "/vu/4/",
+   "match": null
+  },
+  {
+   "address": "/vu/ 4",
+   "match": null
+  },
+  {
+   "address": "/vu/4 ",
+   "match": null
+  },
+  {
+   "address": "/vu/04",
+   "match": [
+    "vu",
+    {
+     "n": 4
+    }
+   ]
+  },
+  {
+   "address": "/vu/+4",
+   "match": null
+  },
+  {
+   "address": "/vu/-4",
+   "match": null
+  },
+  {
+   "address": "/vu/4.0",
+   "match": null
+  },
+  {
+   "address": "/vu/1e1",
+   "match": null
+  },
+  {
+   "address": "/vu/\u0664",
+   "match": [
+    "vu",
+    {
+     "n": 4
+    }
+   ]
+  },
+  {
+   "address": "/vu/\uff14",
+   "match": [
+    "vu",
+    {
+     "n": 4
+    }
+   ]
+  },
+  {
+   "address": "/vu/\ud835\udfd6",
+   "match": [
+    "vu",
+    {
+     "n": 8
+    }
+   ]
+  },
+  {
+   "address": "/vu/\u0966\u0967",
+   "match": [
+    "vu",
+    {
+     "n": 1
+    }
+   ]
+  },
+  {
+   "address": "/channel/\uff11/volume",
+   "match": [
+    "channel.volume",
+    {
+     "ch": 1
+    }
+   ]
+  },
+  {
+   "address": "/channel/1//volume",
+   "match": null
+  },
+  {
+   "address": "/channel//volume",
+   "match": null
+  },
+  {
+   "address": "/channel/1/volume/",
+   "match": null
+  },
+  {
+   "address": "/Channel/1/volume",
+   "match": null
+  },
+  {
+   "address": "/channel/1/Volume",
+   "match": null
+  },
+  {
+   "address": "/channel/1/volume\n",
+   "match": null
+  },
+  {
+   "address": "/channel/00001/volume",
+   "match": [
+    "channel.volume",
+    {
+     "ch": 1
+    }
+   ]
+  },
+  {
+   "address": "/channel/99999999999999999999/volume",
+   "match": null
+  },
+  {
+   "address": "/nothing",
+   "match": null
+  },
+  {
+   "address": "/master",
+   "match": null
+  },
+  {
+   "address": "//vu/1",
+   "match": null
+  },
+  {
+   "address": "/vu/1/vu/1",
+   "match": null
+  },
+  {
+   "address": "/channel/1/\u00fc",
+   "match": null
+  }
+ ],
+ "endpoints": [
+  {
+   "program": "core",
+   "role": "osc",
+   "host": "127.0.0.1",
+   "port": 9000
+  },
+  {
+   "program": "core",
+   "role": "reaper-feedback",
+   "host": "127.0.0.1",
+   "port": 9002
+  },
+  {
+   "program": "core",
+   "role": "vu-relay",
+   "host": "127.0.0.1",
+   "port": 9003
+  },
+  {
+   "program": "core",
+   "role": "web",
+   "host": "127.0.0.1",
+   "port": 9080
+  },
+  {
+   "program": "motion",
+   "role": "osc",
+   "host": "127.0.0.1",
+   "port": 7771
+  },
+  {
+   "program": "motion",
+   "role": "vu",
+   "host": "127.0.0.1",
+   "port": 7772
+  },
+  {
+   "program": "motion",
+   "role": "energy",
+   "host": "127.0.0.1",
+   "port": 7777
+  },
+  {
+   "program": "stemdeck",
+   "role": "osc",
+   "host": "127.0.0.1",
+   "port": 7780
+  },
+  {
+   "program": "devices",
+   "role": "announce",
+   "host": "127.0.0.1",
+   "port": 7790
+  },
+  {
+   "program": "mixer",
+   "role": "osc",
+   "host": "192.168.8.11",
+   "port": 7772
+  },
+  {
+   "program": "desk",
+   "role": "osc",
+   "host": "127.0.0.1",
+   "port": 7773
+  },
+  {
+   "program": "desk",
+   "role": "vu",
+   "host": "127.0.0.1",
+   "port": 7774
+  },
+  {
+   "program": "beat-analyzer",
+   "role": "clock",
+   "host": "127.0.0.1",
+   "port": 7775
+  },
+  {
+   "program": "reaper",
+   "role": "osc",
+   "host": "127.0.0.1",
+   "port": 9001
+  },
+  {
+   "program": "iem",
+   "role": "multiencoder-1",
+   "host": "127.0.0.1",
+   "port": 1337
+  },
+  {
+   "program": "iem",
+   "role": "multiencoder-2",
+   "host": "127.0.0.1",
+   "port": 1338
+  },
+  {
+   "program": "iem",
+   "role": "multiencoder-3",
+   "host": "127.0.0.1",
+   "port": 1339
+  },
+  {
+   "program": "dualdelay",
+   "role": "osc",
+   "host": "127.0.0.1",
+   "port": 1340
+  },
+  {
+   "program": "engine",
+   "role": "osc",
+   "host": "127.0.0.1",
+   "port": 9004
+  },
+  {
+   "program": "x11vnc",
+   "role": "vnc",
+   "host": "127.0.0.1",
+   "port": 5901
+  },
+  {
+   "program": "screencast",
+   "role": "stream",
+   "host": "127.0.0.1",
+   "port": 9930
+  },
+  {
+   "program": "radla",
+   "role": "osc",
+   "host": "192.168.43.96",
+   "port": 9000
+  },
+  {
+   "program": "radla",
+   "role": "vu",
+   "host": "192.168.43.96",
+   "port": 9001
+  },
+  {
+   "program": "prolink",
+   "role": "announce",
+   "host": "127.0.0.1",
+   "port": 50000
+  },
+  {
+   "program": "prolink",
+   "role": "beat",
+   "host": "127.0.0.1",
+   "port": 50001
+  },
+  {
+   "program": "prolink",
+   "role": "status",
+   "host": "127.0.0.1",
+   "port": 50002
+  },
+  {
+   "program": "aes67",
+   "role": "stream",
+   "host": "239.69.150.243",
+   "port": 5004
+  },
+  {
+   "program": "aes67",
+   "role": "sap",
+   "host": "239.255.255.255",
+   "port": 9875
+  },
+  {
+   "program": "ptp4l",
+   "role": "event",
+   "host": "224.0.1.129",
+   "port": 319
+  },
+  {
+   "program": "ptp4l",
+   "role": "general",
+   "host": "224.0.1.129",
+   "port": 320
+  }
+ ],
+ "built": [
+  {
+   "key": "channel.gain",
+   "address": "/channel/1/gain",
+   "ranges": {
+    "ch": [
+     1,
+     4
+    ]
+   }
+  },
+  {
+   "key": "channel.eq.high",
+   "address": "/channel/1/eq/high",
+   "ranges": {
+    "ch": [
+     1,
+     4
+    ]
+   }
+  },
+  {
+   "key": "channel.eq.mid",
+   "address": "/channel/1/eq/mid",
+   "ranges": {
+    "ch": [
+     1,
+     4
+    ]
+   }
+  },
+  {
+   "key": "channel.eq.low",
+   "address": "/channel/1/eq/low",
+   "ranges": {
+    "ch": [
+     1,
+     4
+    ]
+   }
+  },
+  {
+   "key": "channel.volume",
+   "address": "/channel/1/volume",
+   "ranges": {
+    "ch": [
+     1,
+     4
+    ]
+   }
+  },
+  {
+   "key": "channel.aux-send",
+   "address": "/channel/1/aux-send",
+   "ranges": {
+    "ch": [
+     1,
+     4
+    ]
+   }
+  },
+  {
+   "key": "channel.cue",
+   "address": "/channel/1/cue",
+   "ranges": {
+    "ch": [
+     1,
+     4
+    ]
+   }
+  },
+  {
+   "key": "channel.cue.led",
+   "address": "/channel/1/cue/led",
+   "ranges": {
+    "ch": [
+     1,
+     4
+    ]
+   }
+  },
+  {
+   "key": "channel.filter",
+   "address": "/channel/1/filter",
+   "ranges": {
+    "ch": [
+     1,
+     4
+    ]
+   }
+  },
+  {
+   "key": "channel.filter.led",
+   "address": "/channel/1/filter/led",
+   "ranges": {
+    "ch": [
+     1,
+     4
+    ]
+   }
+  },
+  {
+   "key": "channel.filter.frequency",
+   "address": "/channel/1/filter/frequency",
+   "ranges": {
+    "ch": [
+     1,
+     4
+    ]
+   }
+  },
+  {
+   "key": "channel.filter.q",
+   "address": "/channel/1/filter/q",
+   "ranges": {
+    "ch": [
+     1,
+     4
+    ]
+   }
+  },
+  {
+   "key": "channel.3d",
+   "address": "/channel/1/3d",
+   "ranges": {
+    "ch": [
+     1,
+     4
+    ]
+   }
+  },
+  {
+   "key": "channel.azimuth",
+   "address": "/channel/1/azimuth",
+   "ranges": {
+    "ch": [
+     1,
+     4
+    ]
+   }
+  },
+  {
+   "key": "channel.elevation",
+   "address": "/channel/1/elevation",
+   "ranges": {
+    "ch": [
+     1,
+     4
+    ]
+   }
+  },
+  {
+   "key": "channel.stem.turn",
+   "address": "/channel/1/stem/turn",
+   "ranges": {
+    "ch": [
+     1,
+     4
+    ]
+   }
+  },
+  {
+   "key": "channel.stem",
+   "address": "/channel/1/stem",
+   "ranges": {
+    "ch": [
+     1,
+     4
+    ]
+   }
+  },
+  {
+   "key": "channel.stem.push",
+   "address": "/channel/1/stem/push",
+   "ranges": {
+    "ch": [
+     1,
+     4
+    ]
+   }
+  },
+  {
+   "key": "channel.stem.cursor",
+   "address": "/channel/1/stem/cursor",
+   "ranges": {
+    "ch": [
+     1,
+     4
+    ]
+   }
+  },
+  {
+   "key": "filter.frequency",
+   "address": "/filter/frequency",
+   "ranges": {}
+  },
+  {
+   "key": "filter.resonance",
+   "address": "/filter/resonance",
+   "ranges": {}
+  },
+  {
+   "key": "filter.mode",
+   "address": "/filter/mode",
+   "ranges": {}
+  },
+  {
+   "key": "filter.led",
+   "address": "/filter/led",
+   "ranges": {}
+  },
+  {
+   "key": "master.volume",
+   "address": "/master/volume",
+   "ranges": {}
+  },
+  {
+   "key": "master.booth",
+   "address": "/master/booth",
+   "ranges": {}
+  },
+  {
+   "key": "master.phones-mix",
+   "address": "/master/phones-mix",
+   "ranges": {}
+  },
+  {
+   "key": "master.phones-volume",
+   "address": "/master/phones-volume",
+   "ranges": {}
+  },
+  {
+   "key": "master.aux-return",
+   "address": "/master/aux-return",
+   "ranges": {}
+  },
+  {
+   "key": "aux-return.stem.turn",
+   "address": "/aux-return/stem/turn",
+   "ranges": {}
+  },
+  {
+   "key": "aux-return.stem.push",
+   "address": "/aux-return/stem/push",
+   "ranges": {}
+  },
+  {
+   "key": "aux-return.stem",
+   "address": "/aux-return/stem",
+   "ranges": {}
+  },
+  {
+   "key": "aux-return.stem.mode",
+   "address": "/aux-return/stem/mode",
+   "ranges": {}
+  },
+  {
+   "key": "aux-return.cue.led",
+   "address": "/aux-return/cue/led",
+   "ranges": {}
+  },
+  {
+   "key": "stemdeck.bus",
+   "address": "/stemdeck/1/1/bus/1",
+   "ranges": {
+    "deck": [
+     1,
+     2
+    ],
+    "stem": [
+     1,
+     4
+    ],
+    "bus": [
+     1,
+     5
+    ]
+   }
+  },
+  {
+   "key": "stemdeck.buses",
+   "address": "/stemdeck/1/1/buses",
+   "ranges": {
+    "deck": [
+     1,
+     2
+    ],
+    "stem": [
+     1,
+     4
+    ]
+   }
+  },
+  {
+   "key": "stemdeck.recall",
+   "address": "/stemdeck/recall",
+   "ranges": {}
+  },
+  {
+   "key": "stemdeck.ahead",
+   "address": "/stemdeck/ahead",
+   "ranges": {}
+  },
+  {
+   "key": "device.hello",
+   "address": "/device/hello",
+   "ranges": {}
+  },
+  {
+   "key": "core.here",
+   "address": "/core/here",
+   "ranges": {}
+  },
+  {
+   "key": "state.recall",
+   "address": "/state/recall",
+   "ranges": {}
+  },
+  {
+   "key": "prodj.live",
+   "address": "/prodj/live",
+   "ranges": {}
+  },
+  {
+   "key": "stemdeck.pointer",
+   "address": "/stemdeck/pointer",
+   "ranges": {}
+  },
+  {
+   "key": "motion.pointer",
+   "address": "/motion/pointer",
+   "ranges": {}
+  },
+  {
+   "key": "core.device-at",
+   "address": "/core/device/at",
+   "ranges": {}
+  },
+  {
+   "key": "beat",
+   "address": "/beat",
+   "ranges": {}
+  },
+  {
+   "key": "tap",
+   "address": "/tap",
+   "ranges": {}
+  },
+  {
+   "key": "clockmode",
+   "address": "/clockmode",
+   "ranges": {}
+  },
+  {
+   "key": "vu",
+   "address": "/vu/1",
+   "ranges": {
+    "n": [
+     1,
+     66
+    ]
+   }
+  }
+ ],
+ "vu_meters": [
+  "analog1_L",
+  "analog1_R",
+  "analog2_L",
+  "analog2_R",
+  "analog3_L",
+  "analog3_R",
+  "analog4_L",
+  "analog4_R",
+  "free39",
+  "free40",
+  "main_sub",
+  "main_top1",
+  "main_top2",
+  "main_top3",
+  "main_top4",
+  "main_top5",
+  "main_top6",
+  "main_top7",
+  "main_top8",
+  "main_top9",
+  "booth_sub",
+  "booth_top1",
+  "booth_top2",
+  "booth_top3",
+  "booth_top4",
+  "booth_top5",
+  "booth_top6",
+  "booth_top7",
+  "booth_top8",
+  "booth_top9",
+  "phones_L",
+  "phones_R",
+  "rec_L",
+  "rec_R",
+  "aux_L",
+  "aux_R",
+  "free67",
+  "free68",
+  "free69",
+  "free70",
+  "stem_a1",
+  "stem_a2",
+  "stem_a3",
+  "stem_a4",
+  "stem_b1",
+  "stem_b2",
+  "stem_b3",
+  "stem_b4",
+  "stem_aux_L",
+  "stem_aux_R",
+  "in1_pre_L",
+  "in1_pre_R",
+  "in2_pre_L",
+  "in2_pre_R",
+  "in3_pre_L",
+  "in3_pre_R",
+  "in4_pre_L",
+  "in4_pre_R",
+  "in1_post_L",
+  "in1_post_R",
+  "in2_post_L",
+  "in2_post_R",
+  "in3_post_L",
+  "in3_post_R",
+  "in4_post_L",
+  "in4_post_R"
+ ],
+ "meters": [
+  0,
+  20,
+  1.5
+ ]
+}
