@@ -277,7 +277,8 @@ void Traffic::seen (Direction direction, const std::string& address, const OscAr
 
     if (historyLimit == 0)
         return;
-    history.push_back ({ at, direction, address, row->lastValue, row->lastType, peer });
+    // Built from what was handed in: with a row cap of zero the row is already gone.
+    history.push_back ({ at, direction, address, value != nullptr ? std::optional<OscArg> (*value) : std::nullopt, typeName, peer });
     if (history.size() > historyLimit)
         history.pop_front();
 }

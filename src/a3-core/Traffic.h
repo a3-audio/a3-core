@@ -155,7 +155,6 @@ private:
     void dropUnknown (const std::string& address);
     void trimRows();
     void trimUnknown();
-    Rows::iterator makeRow (Direction direction, const std::string& address);
 
     mutable std::mutex lock;
     Rows rows;

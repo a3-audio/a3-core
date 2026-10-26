@@ -559,3 +559,17 @@ TEST (Traffic, SnapshotAsPython)
     const auto unknown = traffic.unknownSnapshot (static_cast<double> (recorded["unknown_look"]["t"]));
     expectJsonEqual (recorded["unknown_look"]["json"], unknownAsJson (unknown), "the unknown table");
 }
+
+TEST (Traffic, ARowCapOfZeroKeepsTheHistory)
+{
+    // The row is evicted the moment it is made; the history entry must not be read back from it.
+    Traffic traffic (Traffic::historyCap, 0);
+    const auto value = pyStr ("a string long enough to live on the heap, not in the string's buffer");
+    traffic.seen (Direction::in, "/a/long/enough/to/live/on/the/heap/too", &value, "motion", tick());
+    const auto snapshot = look (traffic);
+    EXPECT_TRUE (snapshot.rows.empty());
+    ASSERT_EQ (snapshot.history.size(), 1u);
+    EXPECT_EQ (snapshot.history[0].type, "str");
+    ASSERT_TRUE (snapshot.history[0].value);
+    EXPECT_EQ (std::get<std::string> (snapshot.history[0].value->value), std::get<std::string> (value.value));
+}
