@@ -45,7 +45,9 @@ public:
     bool bound() const;
     int boundPort() const;
 
-    void start();
+    // False, and nothing runs, if the inbox could not be bound.
+    bool start();
+    bool isRunning() const;
     // Stops the thread and waits for it; harmless to call twice.
     void stop();
 

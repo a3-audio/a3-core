@@ -33,7 +33,7 @@ public:
     Loop (const Endpoint& listenOn, std::function<std::vector<Endpoint>()> destinationsToUse)
         : juce::Thread ("a3-vu-relay"), destinations (std::move (destinationsToUse)), inbox (false), out (false)
     {
-        const auto address = listenOn.host == "local" ? juce::String ("127.0.0.1")
+        const auto address = listenOn.host == "local" ? juce::String (loopbackAddress())
                            : listenOn.host == "any"   ? juce::String()
                                                       : juce::String (listenOn.host);
         isBound = inbox.bindToPort (listenOn.port, address);
@@ -43,19 +43,24 @@ public:
 
     bool bound() const { return isBound; }
     int boundPort() { return inbox.getBoundPort(); }
+    bool running() { return isThreadRunning(); }
 
     void run() override
     {
         // Waits in slices, so that stop() is heard within one.
         const auto receive = [this]() -> std::optional<Datagram> {
-            if (inbox.waitUntilReady (true, 100) != 1)
+            const auto ready = inbox.waitUntilReady (true, 100);
+            if (ready < 0)
+            {
+                wait (100);   // an error returns at once: do not spin until stop()
                 return std::nullopt;
-            Datagram data (maxDatagram);
-            const auto count = inbox.read (data.data(), maxDatagram, false);
+            }
+            if (ready == 0)
+                return std::nullopt;
+            const auto count = inbox.read (buffer.data(), maxDatagram, false);
             if (count <= 0)
                 return std::nullopt;
-            data.resize (static_cast<size_t> (count));
-            return data;
+            return Datagram (buffer.begin(), buffer.begin() + count);
         };
         const auto send = [this] (const Datagram& data, const Endpoint& to) {
             if (out.write (juce::String (to.host), to.port, data.data(), static_cast<int> (data.size())) < 0)
@@ -68,6 +73,7 @@ private:
     std::function<std::vector<Endpoint>()> destinations;
     juce::DatagramSocket inbox, out;
     bool isBound = false;
+    Datagram buffer = Datagram (maxDatagram);
 };
 
 VuRelayThread::VuRelayThread (const Endpoint& listenOn, std::function<std::vector<Endpoint>()> destinations)
@@ -80,11 +86,15 @@ VuRelayThread::~VuRelayThread() { stop(); }
 bool VuRelayThread::bound() const { return loop->bound(); }
 int VuRelayThread::boundPort() const { return loop->boundPort(); }
 
-void VuRelayThread::start()
+bool VuRelayThread::start()
 {
-    if (loop->bound())
-        loop->startThread();
+    if (! loop->bound())
+        return false;
+    loop->startThread();
+    return true;
 }
+
+bool VuRelayThread::isRunning() const { return loop->running(); }
 
 void VuRelayThread::stop() { loop->stopThread (2000); }
 }

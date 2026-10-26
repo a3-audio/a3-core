@@ -123,8 +123,8 @@ TEST (VuRelay, AnIdleReceiveAsksRunningAgain)
 TEST (VuRelay, TheBytesArriveAsTheyWereSent)
 {
     juce::DatagramSocket motionSocket (false);
-    ASSERT_TRUE (motionSocket.bindToPort (0, "127.0.0.1"));
-    const Endpoint motionAt { "127.0.0.1", motionSocket.getBoundPort() };
+    ASSERT_TRUE (motionSocket.bindToPort (0, loopbackAddress().c_str()));
+    const Endpoint motionAt { loopbackAddress().c_str(), motionSocket.getBoundPort() };
 
     VuRelayThread relay ({ "local", 0 }, [&] { return std::vector<Endpoint> { motionAt }; });
     ASSERT_TRUE (relay.bound());
@@ -132,7 +132,7 @@ TEST (VuRelay, TheBytesArriveAsTheyWereSent)
 
     juce::DatagramSocket sender (false);
     const auto sentBytes = bundle();
-    ASSERT_EQ (sender.write ("127.0.0.1", relay.boundPort(), sentBytes.data(), static_cast<int> (sentBytes.size())),
+    ASSERT_EQ (sender.write (loopbackAddress().c_str(), relay.boundPort(), sentBytes.data(), static_cast<int> (sentBytes.size())),
                static_cast<int> (sentBytes.size()));
 
     ASSERT_EQ (motionSocket.waitUntilReady (true, 2000), 1);
@@ -159,9 +159,27 @@ TEST (VuRelay, ADestroyedRelayLeavesNoThread)
     for (int i = 0; i < 5; ++i)
     {
         VuRelayThread relay ({ "local", 0 }, [] { return std::vector<Endpoint> {}; });
-        relay.start();
+        EXPECT_FALSE (relay.isRunning());
+        EXPECT_TRUE (relay.start());
+        EXPECT_TRUE (relay.isRunning());
+        relay.stop();
+        EXPECT_FALSE (relay.isRunning());
+    }
+    // Destroyed while running: the destructor must have joined (a Thread destroyed live would abort).
+    {
+        auto relay = std::make_unique<VuRelayThread> (Endpoint { "local", 0 }, [] { return std::vector<Endpoint> {}; });
+        relay->start();
     }
     SUCCEED();
+}
+
+TEST (VuRelay, AFailedBindSaysSoAndStartsNothing)
+{
+    // An address that is not this machine's (TEST-NET-3): the bind is refused.
+    VuRelayThread relay ({ "203.0.113.1", 0 }, [] { return std::vector<Endpoint> {}; });
+    EXPECT_FALSE (relay.bound());
+    EXPECT_FALSE (relay.start());
+    EXPECT_FALSE (relay.isRunning());
 }
 
 TEST (VuRelay, TheAnalyzersEnvGetsTheLine)

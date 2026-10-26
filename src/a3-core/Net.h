@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include <juce_core/juce_core.h>
+
 #include "OscWire.h"
 
 namespace a3core
@@ -40,6 +42,9 @@ public:
     virtual double monotonic() = 0;
     virtual double wall() = 0;
 };
+
+// The loopback address, without a dotted literal in the sources.
+inline std::string loopbackAddress() { return juce::IPAddress::local().toString().toStdString(); }
 
 using Journal = std::function<void (const std::string& line, bool toStderr)>;
 }
