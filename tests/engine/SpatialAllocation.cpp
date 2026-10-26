@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cstdlib>
 #include <new>
+#include "AmbiEncoderBus.h"
 #include "SpatialBusFixture.h"
 
 // Every form of the global operator new/delete is replaced for the whole test
@@ -168,4 +169,35 @@ TEST_P (SpatialAllocation, AFreshlyPreparedBusAllocatesNothingOnItsFirstCall)
     const auto count = countDuring ([&] { bus->process (in, out, spatialQuantum, run.positions); });
     EXPECT_EQ (count.allocated, 0);
     EXPECT_EQ (count.released, 0);
+}
+
+// Sixty-one analog sources: encoder 0 has 64 inputs, more than JUCE's
+// preallocated channel table, so its per-chunk view must not be rebuilt.
+TEST (AmbiEncoderBus, ProcessAllocatesNothingForAnyCallSize)
+{
+    constexpr int count = 61;
+    juce::String error;
+    auto bus = a3::AmbiEncoderBus::create (count, loadedSpatialConfig (shippedSpatialDirectory), error);
+    ASSERT_TRUE (bus != nullptr) << error;
+    bus->prepare (spatialRate, spatialQuantum);
+
+    std::vector<Stereo> signals;
+    for (int c = 0; c < count; ++c)
+        signals.push_back (pinkStereo (longestCall, (uint32_t) (c + 1)));
+    std::vector<a3::StereoIn> moving, steady;
+    for (const auto& s : signals)
+    {
+        moving.push_back ({ s.l.data(), s.r.data() });
+        steady.push_back ({ s.r.data(), s.l.data() });
+    }
+    const a3::StereoIn ret { signals[0].l.data(), signals[1].r.data() };
+    std::vector<std::atomic<float>> azimuth (count), elevation (count);
+    juce::AudioBuffer<float> bus16 (16, (int) longestCall);
+
+    for (const int calls : { 64, 1, 7, 65, 300, 4096 })
+    {
+        const auto allocations = countDuring ([&] { bus->process (moving, steady, ret, bus16, calls, azimuth.data(), elevation.data()); });
+        EXPECT_EQ (allocations.allocated, 0) << calls << " frames";
+        EXPECT_EQ (allocations.released, 0) << calls << " frames";
+    }
 }

@@ -209,4 +209,20 @@ std::optional<SpatialConfig> loadSpatialConfig (const juce::File& directory, juc
 {
     return SpatialConfigReader (directory, error).read();
 }
+
+std::array<BedSource, numBedSources> bedFrom (const SpatialConfig& config)
+{
+    const auto parameter = [&] (const char* name, int source)
+    { return (float) config.encoderParameters.getProperty (juce::Identifier (name + juce::String (source)), 0.0f); };
+
+    std::array<BedSource, numBedSources> bed {};
+    for (int k = 0; k < numBedSources; ++k)
+    {
+        const int source = firstBedSourceInFile + k;
+        const auto& inputs = config.sources[(size_t) source];
+        bed[(size_t) k] = { parameter ("azimuth", source), parameter ("elevation", source), parameter ("gain", source),
+                            inputs.empty() ? 0 : inputs.front().side };
+    }
+    return bed;
+}
 }

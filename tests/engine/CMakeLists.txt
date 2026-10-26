@@ -23,7 +23,7 @@ target_compile_options(a3-engine-reference PRIVATE -w)   # upstream code, unchan
 add_executable(a3-engine-tests ReferenceSmoke.cpp Laws.cpp PurestGain.cpp SmoothEQ3.cpp
     Isolator3.cpp Meters.cpp DjFilter.cpp ChannelStrip.cpp DeckStrip.cpp ChannelSelect.cpp StripTiming.cpp Bench.cpp
     JuceEnvironment.cpp IemCompileTrial.cpp IemNode.cpp Layout.cpp SpatialBus.cpp SpatialTiming.cpp
-    SpatialAllocation.cpp EngineConfig.cpp DualDelay.cpp DelayModulation.cpp)
+    SpatialAllocation.cpp EngineConfig.cpp DualDelay.cpp DelayModulation.cpp AmbiEncoderBus.cpp)
 target_include_directories(a3-engine-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(a3-engine-tests PRIVATE a3-engine a3-engine-bench-lib a3-engine-reference
     GTest::gtest GTest::gtest_main)
