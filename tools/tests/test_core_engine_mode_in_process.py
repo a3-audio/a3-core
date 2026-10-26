@@ -177,6 +177,48 @@ class EngineModeInProcess(unittest.TestCase):
         self.assertEqual(self.engine.sent, [])
         self.assertEqual(deck.sent, [("/stemdeck/1/3d", 0.9)])
 
+    def put_deck_on_channel_3(self):
+        self.hello("boot-1")
+        self.core["say_the_whole_state"]()
+        self.core["osc_handler_deck_hello"](DECK_A, "/stemdeck/1/hello", "x")
+        self.core["_deck_clients"][1] = Recorder("stemdeck-A")
+        self.channel("/channel/3/azimuth", 40.0)
+        self.channel("/channel/3/elevation", -10.0)
+        self.channel("/channel/3/filter/frequency", 0.25)
+        self.channel("/channel/3/filter/q", 0.75)
+        self.engine.sent.clear()
+        self.channel("/channel/3/stem/turn", 1)
+        self.channel("/channel/3/stem/push", 1)
+
+    def test_a_channel_back_on_analog_gets_its_current_3d_filter_and_position(self):
+        self.put_deck_on_channel_3()
+        self.channel("/channel/3/3d", 0.0)        # the desk's 3D while on the deck
+        self.channel("/channel/3/filter/frequency", 0.5)
+        self.engine.sent.clear()
+        self.channel("/channel/3/stem/turn", -1)  # cursor to analog
+        self.channel("/channel/3/stem/push", 1)
+        self.assertEqual(self.engine.sent, [
+            ("/channel/3/source", 0),
+            ("/channel/3/3d", 0.0),
+            ("/channel/3/filter/frequency", 0.5),
+            ("/channel/3/filter/q", 0.75),
+            ("/channel/3/azimuth", 40.0),
+            ("/channel/3/elevation", -10.0)])
+
+    def test_a_deck_arriving_sends_the_engine_no_analog_state(self):
+        self.put_deck_on_channel_3()
+        sent = [m for m in self.engine.sent if m[0] != "/channel/3/source"]
+        self.assertEqual([m for m in sent if m[0].startswith("/channel/3/")
+                          and m[0].split("/")[-1] in ("3d", "frequency", "q")], [])
+
+    def test_reaper_mode_sends_the_engine_nothing_on_leaving_a_deck(self):
+        self.put_deck_on_channel_3()
+        self.core["_engine_mode"] = False
+        self.engine.sent.clear()
+        self.channel("/channel/3/stem/turn", 1)
+        self.channel("/channel/3/stem/push", 1)
+        self.assertEqual(self.engine.sent, [])
+
     def test_a_turn_reports_the_cursor_and_a_push_the_source(self):
         self.hello("boot-1")
         self.core["say_the_whole_state"]()

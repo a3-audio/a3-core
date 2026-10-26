@@ -100,8 +100,8 @@ from a3_core_devices import Devices   # noqa: E402
 from a3_core_gate import Gate, StartupRecall, open_after_recall   # noqa: E402
 from a3_core_audio_engine import ENGINE, REAPER, engine_runs, probe   # noqa: E402
 from a3_core_decks import ANALOG, NEUTRAL_3D, DeckSelector, deck_port   # noqa: E402
-from a3_core_engine import (EngineSession, engine_channel_messages,   # noqa: E402
-                            engine_return_source,
+from a3_core_engine import (EngineSession, analog_again_messages,   # noqa: E402
+                            engine_channel_messages, engine_return_source,
                             filter_mode_message, flag_message,
                             forward_messages, open_message, position_message,
                             return_cue_message, source_messages,
@@ -806,6 +806,12 @@ def select_deck(word, channel, value):
             arriving += _decks.three_d_messages(_truth, on_channel, three_d)
     speak_stems()
     send_to_deck(leaving + arriving)
+    # The engine's analog path kept the values from before the deck came;
+    # the source word is out, so these follow it.
+    for on_channel, source in changes:
+        if source == ANALOG:
+            send_to_engine(analog_again_messages(
+                _truth, on_channel - 1, channel_infos[on_channel - 1], _relayed))
 
 
 #: Where StemDeck listens: learnt from its hello, None while it is silent.

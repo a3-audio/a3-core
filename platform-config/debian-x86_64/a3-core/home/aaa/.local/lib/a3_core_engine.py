@@ -57,6 +57,27 @@ def engine_channel_messages(truth, selector, key, fields, value):
     return forward_messages(truth, key, fields, value)
 
 
+def analog_again_messages(truth, channel_index, info, relayed):
+    """What the engine's analog path missed while a deck held the channel: its
+    3D, FREQ, Q and position, from Core's own state. `relayed` is the Relayed
+    store; unknown values are left unsaid."""
+    wire = _wire(channel_index)
+    messages = []
+    three_d = info.three_d
+    if three_d is not None:
+        messages.append((truth.address("channel.3d", ch=wire), float(three_d)))
+    for key in ("channel.filter.frequency", "channel.filter.q"):
+        address = truth.address(key, ch=wire)
+        value = relayed.value(address)
+        if value is not None:
+            messages.append((address, float(value)))
+    for word in ("azimuth", "elevation"):
+        degrees = getattr(info, word)
+        if degrees is not None:
+            messages.append(position_message(truth, word, channel_index, degrees))
+    return messages
+
+
 def flag_message(truth, flag, channel_index, on):
     address = truth.address(_FLAG_KEYS[flag], ch=_wire(channel_index))
     return (address, 1.0 if on else 0.0)
