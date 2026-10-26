@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "EngineConfig.h"
+#include "JsonParse.h"
 #include <cmath>
 #include <set>
 
@@ -26,10 +27,10 @@ bool operator== (const EngineConfig& a, const EngineConfig& b)
 
 namespace
 {
-// Thrown inside this file only, never across it; parsing is off the audio thread.
-struct Refusal { juce::String reason; };
-
-[[noreturn]] void refuse (const juce::String& reason) { throw Refusal { reason }; }
+using jsonparse::Refusal;
+using jsonparse::refuse;
+using jsonparse::objectOf;
+using jsonparse::rejectUnknownKeys;
 
 bool isNumber (const juce::var& v) { return v.isInt() || v.isInt64() || v.isDouble(); }
 
@@ -49,26 +50,6 @@ int wholeNumber (const juce::var& v, const juce::String& what, int minimum)
     if (d != std::floor (d) || d < minimum || d > 1.0e6)
         refuse (what + " must be a whole number >= " + juce::String (minimum));
     return (int) d;
-}
-
-void rejectUnknownKeys (const juce::DynamicObject& object, std::initializer_list<const char*> known, const juce::String& where)
-{
-    for (const auto& property : object.getProperties())
-    {
-        bool found = false;
-        for (const char* key : known)
-            found = found || property.name.toString() == key;
-        if (! found)
-            refuse ("unknown key '" + property.name.toString() + "' in " + where);
-    }
-}
-
-juce::DynamicObject& objectOf (const juce::var& v, const juce::String& what)
-{
-    auto* object = v.getDynamicObject();
-    if (object == nullptr)
-        refuse (what + " must be an object");
-    return *object;
 }
 
 std::optional<float> optionalTrim (const juce::DynamicObject& trims, const char* key)

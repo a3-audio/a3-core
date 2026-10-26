@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "IoMap.h"
+#include "JsonParse.h"
 #include <algorithm>
 #include <cmath>
 #include <set>
@@ -9,16 +10,9 @@ namespace a3app
 {
 namespace
 {
-struct Refusal { juce::String reason; };
-[[noreturn]] void refuse (const juce::String& reason) { throw Refusal { reason }; }
-
-juce::DynamicObject& objectOf (const juce::var& v, const juce::String& what)
-{
-    auto* object = v.getDynamicObject();
-    if (object == nullptr)
-        refuse (what + " must be an object");
-    return *object;
-}
+using a3::jsonparse::Refusal;
+using a3::jsonparse::refuse;
+using a3::jsonparse::objectOf;
 
 const juce::Array<juce::var>& listOf (const juce::var& v, const juce::String& what)
 {

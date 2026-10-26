@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "ConfigFile.h"
+#include "JsonParse.h"
 #include "SpatialConfig.h"
 #include <cmath>
 
@@ -11,28 +12,10 @@ namespace
 constexpr int minBlock = 64, maxBlock = 2048;
 const juce::File packageConfig { "/usr/share/a3-engine/engine.json" };
 
-struct Refusal { juce::String reason; };
-[[noreturn]] void refuse (const juce::String& reason) { throw Refusal { reason }; }
-
-juce::DynamicObject& objectOf (const juce::var& v, const juce::String& what)
-{
-    auto* object = v.getDynamicObject();
-    if (object == nullptr)
-        refuse (what + " must be an object");
-    return *object;
-}
-
-void rejectUnknownKeys (const juce::DynamicObject& object, std::initializer_list<const char*> known, const juce::String& where)
-{
-    for (const auto& property : object.getProperties())
-    {
-        bool found = false;
-        for (const char* key : known)
-            found = found || property.name.toString() == key;
-        if (! found)
-            refuse ("unknown key '" + property.name.toString() + "' in " + where);
-    }
-}
+using a3::jsonparse::Refusal;
+using a3::jsonparse::refuse;
+using a3::jsonparse::objectOf;
+using a3::jsonparse::rejectUnknownKeys;
 
 juce::String stringProperty (const juce::DynamicObject& object, const char* key)
 {

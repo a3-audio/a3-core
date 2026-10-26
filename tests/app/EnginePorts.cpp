@@ -93,6 +93,19 @@ TEST (EnginePorts, OutputsMatchTheEnginesMeterOrderAndCount)
             engine->prepare (a3test::engineRate, 64);
             const auto ports = a3app::enginePortNames (config, spatial);
             EXPECT_EQ (ports.outputs.size(), engine->outputMeters().size()) << directory.getFileName() << " N=" << n;
+            // The head is the zones' port order as Engine::buildMeters walks it: sub first, then tops.
+            const auto zoneNames = [] (const char* zone, const a3::Layout& layout)
+            {
+                Names names;
+                if (layout.hasSub())
+                    names.push_back (std::string (zone) + "_sub");
+                for (size_t k = 1; k <= layout.topChannels.size(); ++k)
+                    names.push_back (std::string (zone) + "_top_" + std::to_string (k));
+                return names;
+            };
+            const auto head = concat ({ zoneNames ("main", spatial.main.layout), zoneNames ("booth", spatial.booth.layout) });
+            ASSERT_EQ (ports.outputs.size(), head.size() + 4u + 4u * (size_t) n);
+            EXPECT_EQ (Names (ports.outputs.begin(), ports.outputs.begin() + (long) head.size()), head);
             // The order tail is the engine's: pre L/R, post L/R per channel, after rec and phones.
             ASSERT_GE (ports.outputs.size(), 4u + 4u * (size_t) n);
             const Names tail (ports.outputs.end() - 4 * n - 4, ports.outputs.end());
