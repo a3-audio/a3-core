@@ -11,6 +11,8 @@
 
 #include <juce_core/juce_core.h>
 
+#include "Net.h"
+
 namespace a3core
 {
 // A fact the file does not have, or a file that cannot be read (a3_osc.TruthError).
@@ -27,12 +29,6 @@ struct Meters
         return attackMs == other.attackMs && releaseDbPerSecond == other.releaseDbPerSecond
             && peakHoldSeconds == other.peakHoldSeconds;
     }
-};
-
-struct Endpoint
-{
-    std::string host;
-    int port;
 };
 
 // The maintainer's network file as a3_osc_join.read_network reads it: the blocks, or absent

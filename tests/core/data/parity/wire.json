@@ -1,0 +1,2025 @@
+{
+ "python_osc": "1.10.2",
+ "python": "3.14.8",
+ "a3_core_4b": "b1be0fa26fe0884f44e88e588c7e43f630d50066",
+ "encode": [
+  {
+   "address": "/int",
+   "value": {
+    "py": "int",
+    "value": "1"
+   },
+   "hex": "2f696e74000000002c69000000000001"
+  },
+  {
+   "address": "/int/negative",
+   "value": {
+    "py": "int",
+    "value": "-7"
+   },
+   "hex": "2f696e742f6e656761746976650000002c690000fffffff9"
+  },
+  {
+   "address": "/int/edge-i",
+   "value": {
+    "py": "int",
+    "value": "2147483647"
+   },
+   "hex": "2f696e742f656467652d69002c6900007fffffff"
+  },
+  {
+   "address": "/int/edge-i-neg",
+   "value": {
+    "py": "int",
+    "value": "-2147483647"
+   },
+   "hex": "2f696e742f656467652d692d6e6567002c69000080000001"
+  },
+  {
+   "address": "/int/big",
+   "value": {
+    "py": "int",
+    "value": "2147483648"
+   },
+   "hex": "2f696e742f626967000000002c6800000000000080000000"
+  },
+  {
+   "address": "/int/big-neg",
+   "value": {
+    "py": "int",
+    "value": "-2147483648"
+   },
+   "hex": "2f696e742f6269672d6e6567000000002c680000ffffffff80000000"
+  },
+  {
+   "address": "/int/huge",
+   "value": {
+    "py": "int",
+    "value": "1099511627776"
+   },
+   "hex": "2f696e742f687567650000002c6800000000010000000000"
+  },
+  {
+   "address": "/float",
+   "value": {
+    "py": "float",
+    "hex": "0x1.0000000000000p-1"
+   },
+   "hex": "2f666c6f617400002c6600003f000000"
+  },
+  {
+   "address": "/float/round",
+   "value": {
+    "py": "float",
+    "hex": "0x1.b333333333333p+0"
+   },
+   "hex": "2f666c6f61742f726f756e64000000002c6600003fd9999a"
+  },
+  {
+   "address": "/float/tiny",
+   "value": {
+    "py": "float",
+    "hex": "0x1.6d601ad376ab9p-150"
+   },
+   "hex": "2f666c6f61742f74696e79002c66000000000001"
+  },
+  {
+   "address": "/float/nan",
+   "value": {
+    "py": "float",
+    "hex": "nan"
+   },
+   "hex": "2f666c6f61742f6e616e00002c6600007fc00000"
+  },
+  {
+   "address": "/float/inf",
+   "value": {
+    "py": "float",
+    "hex": "-inf"
+   },
+   "hex": "2f666c6f61742f696e6600002c660000ff800000"
+  },
+  {
+   "address": "/float/too-large",
+   "value": {
+    "py": "float",
+    "hex": "0x1.7e43c8800759cp+996"
+   },
+   "raises": "OverflowError"
+  },
+  {
+   "address": "/str",
+   "value": {
+    "py": "str",
+    "utf8_b64": "dGV4dA=="
+   },
+   "hex": "2f737472000000002c7300007465787400000000"
+  },
+  {
+   "address": "/str/empty",
+   "value": {
+    "py": "str",
+    "utf8_b64": ""
+   },
+   "hex": "2f7374722f656d70747900002c73000000000000"
+  },
+  {
+   "address": "/str/four",
+   "value": {
+    "py": "str",
+    "utf8_b64": "YWJjZA=="
+   },
+   "hex": "2f7374722f666f75720000002c7300006162636400000000"
+  },
+  {
+   "address": "/str/utf8",
+   "value": {
+    "py": "str",
+    "utf8_b64": "w7w="
+   },
+   "hex": "2f7374722f757466380000002c730000c3bc0000"
+  },
+  {
+   "address": "/bool/true",
+   "value": {
+    "py": "bool",
+    "value": true
+   },
+   "hex": "2f626f6f6c2f7472756500002c540000"
+  },
+  {
+   "address": "/bool/false",
+   "value": {
+    "py": "bool",
+    "value": false
+   },
+   "hex": "2f626f6f6c2f66616c7365002c460000"
+  },
+  {
+   "address": "/none",
+   "value": {
+    "py": "None"
+   },
+   "hex": "2f6e6f6e650000002c000000"
+  },
+  {
+   "address": "/blob",
+   "value": {
+    "py": "bytes",
+    "b64": "AQID"
+   },
+   "hex": "2f626c6f620000002c6200000000000301020300"
+  },
+  {
+   "address": "/blob/empty",
+   "value": {
+    "py": "bytes",
+    "b64": ""
+   },
+   "raises": "BuildError"
+  },
+  {
+   "address": "/list",
+   "value": {
+    "py": "list",
+    "items": [
+     {
+      "py": "int",
+      "value": "1"
+     },
+     {
+      "py": "float",
+      "hex": "0x1.4000000000000p+1"
+     },
+     {
+      "py": "str",
+      "utf8_b64": "eA=="
+     },
+     {
+      "py": "bool",
+      "value": true
+     },
+     {
+      "py": "bool",
+      "value": false
+     }
+    ]
+   },
+   "hex": "2f6c6973740000002c69667354460000000000014020000078000000"
+  },
+  {
+   "address": "/list/empty",
+   "value": {
+    "py": "list",
+    "items": []
+   },
+   "hex": "2f6c6973742f656d707479002c000000"
+  }
+ ],
+ "decode": [
+  {
+   "name": "int",
+   "hex": "2f6100002c690000fffffffb",
+   "messages": [
+    {
+     "address": "/a",
+     "args": [
+      {
+       "py": "int",
+       "value": "-5"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "int64",
+   "hex": "2f6100002c680000ffffff0000000000",
+   "messages": [
+    {
+     "address": "/a",
+     "args": [
+      {
+       "py": "int",
+       "value": "-1099511627776"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "float",
+   "hex": "2f6100002c6600003f4ccccd",
+   "messages": [
+    {
+     "address": "/a",
+     "args": [
+      {
+       "py": "float",
+       "hex": "0x1.99999a0000000p-1"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "double",
+   "hex": "2f6100002c6400003ffb333333333333",
+   "messages": [
+    {
+     "address": "/a",
+     "args": [
+      {
+       "py": "float",
+       "hex": "0x1.b333333333333p+0"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "string",
+   "hex": "2f6100002c73000068656c6c6f000000",
+   "messages": [
+    {
+     "address": "/a",
+     "args": [
+      {
+       "py": "str",
+       "utf8_b64": "aGVsbG8="
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "string-four",
+   "hex": "2f6100002c7300006162636400000000",
+   "messages": [
+    {
+     "address": "/a",
+     "args": [
+      {
+       "py": "str",
+       "utf8_b64": "YWJjZA=="
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "string-empty",
+   "hex": "2f6100002c73000000000000",
+   "messages": [
+    {
+     "address": "/a",
+     "args": [
+      {
+       "py": "str",
+       "utf8_b64": ""
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "string-utf8",
+   "hex": "2f6100002c730000c3bc0000",
+   "messages": [
+    {
+     "address": "/a",
+     "args": [
+      {
+       "py": "str",
+       "utf8_b64": "w7w="
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "symbol-skipped",
+   "hex": "2f6100002c536900fffffffb",
+   "messages": [
+    {
+     "address": "/a",
+     "args": [
+      {
+       "py": "int",
+       "value": "-5"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "true-false-nil",
+   "hex": "2f6100002c54464e00000000",
+   "messages": [
+    {
+     "address": "/a",
+     "args": [
+      {
+       "py": "bool",
+       "value": true
+      },
+      {
+       "py": "bool",
+       "value": false
+      },
+      {
+       "py": "None"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "blob",
+   "hex": "2f6100002c6200000000000301020300",
+   "messages": [
+    {
+     "address": "/a",
+     "args": [
+      {
+       "py": "bytes",
+       "b64": "AQID"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "rgba",
+   "hex": "2f6100002c720000ff000080",
+   "messages": [
+    {
+     "address": "/a",
+     "args": [
+      {
+       "py": "int",
+       "value": "4278190208"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "midi",
+   "hex": "2f6100002c6d000001903c7f",
+   "messages": [
+    {
+     "address": "/a",
+     "args": [
+      {
+       "py": "tuple",
+       "items": [
+        {
+         "py": "int",
+         "value": "1"
+        },
+        {
+         "py": "int",
+         "value": "144"
+        },
+        {
+         "py": "int",
+         "value": "60"
+        },
+        {
+         "py": "int",
+         "value": "127"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "mixed",
+   "hex": "2f6368616e6e656c2f312f766f6c756d650000002c69667354620000fffffffb3f4ccccd780000000000000301020300",
+   "messages": [
+    {
+     "address": "/channel/1/volume",
+     "args": [
+      {
+       "py": "int",
+       "value": "-5"
+      },
+      {
+       "py": "float",
+       "hex": "0x1.99999a0000000p-1"
+      },
+      {
+       "py": "str",
+       "utf8_b64": "eA=="
+      },
+      {
+       "py": "bool",
+       "value": true
+      },
+      {
+       "py": "bytes",
+       "b64": "AQID"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "unknown-tag-skipped",
+   "hex": "2f6100002c636900fffffffb",
+   "messages": [
+    {
+     "address": "/a",
+     "args": [
+      {
+       "py": "int",
+       "value": "-5"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "no-type-tag",
+   "hex": "2f610000",
+   "messages": [
+    {
+     "address": "/a",
+     "args": []
+    }
+   ]
+  },
+  {
+   "name": "empty-type-tag",
+   "hex": "2f6100002c000000",
+   "messages": [
+    {
+     "address": "/a",
+     "args": []
+    }
+   ]
+  },
+  {
+   "name": "type-tag-without-comma",
+   "hex": "2f61000069000000fffffffb",
+   "raises": "ParseError"
+  },
+  {
+   "name": "no-args-after-tags",
+   "hex": "2f6100002c690000",
+   "raises": "ParseError"
+  },
+  {
+   "name": "bundle",
+   "hex": "2362756e646c650000000000000000010000001c2f6368616e6e656c2f312f617a696d75746800002c6600003f4ccccd000000202f6368616e6e656c2f312f656c65766174696f6e000000002c6600003f4ccccd",
+   "messages": [
+    {
+     "address": "/channel/1/azimuth",
+     "args": [
+      {
+       "py": "float",
+       "hex": "0x1.99999a0000000p-1"
+      }
+     ]
+    },
+    {
+     "address": "/channel/1/elevation",
+     "args": [
+      {
+       "py": "float",
+       "hex": "0x1.99999a0000000p-1"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "bundle-nested",
+   "hex": "2362756e646c650000000000000000010000000c2f7800002c690000fffffffb000000202362756e646c650000000000000000010000000c2f7900002c690000fffffffb0000000c2f7a00002c690000fffffffb",
+   "messages": [
+    {
+     "address": "/x",
+     "args": [
+      {
+       "py": "int",
+       "value": "-5"
+      }
+     ]
+    },
+    {
+     "address": "/y",
+     "args": [
+      {
+       "py": "int",
+       "value": "-5"
+      }
+     ]
+    },
+    {
+     "address": "/z",
+     "args": [
+      {
+       "py": "int",
+       "value": "-5"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "bundle-empty",
+   "hex": "2362756e646c65000000000000000001",
+   "messages": []
+  },
+  {
+   "name": "bundle-with-garbage-content",
+   "hex": "2362756e646c65000000000000000001000000047a7a7a7a0000000c2f6200002c690000fffffffb",
+   "messages": [
+    {
+     "address": "/b",
+     "args": [
+      {
+       "py": "int",
+       "value": "-5"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "bundle-future-timetag",
+   "hex": "2362756e646c6500ffffffff000000000000000c2f6600002c690000fffffffb",
+   "messages": [
+    {
+     "address": "/f",
+     "args": [
+      {
+       "py": "int",
+       "value": "-5"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "truncated-int",
+   "hex": "2f6100002c690000ffff",
+   "raises": "ParseError"
+  },
+  {
+   "name": "truncated-float-padded",
+   "hex": "2f6100002c6600003f4c",
+   "messages": [
+    {
+     "address": "/a",
+     "args": [
+      {
+       "py": "float",
+       "hex": "0x1.9800000000000p-1"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "truncated-double",
+   "hex": "2f6100002c6400003ffb3333",
+   "raises": "ParseError"
+  },
+  {
+   "name": "truncated-string",
+   "hex": "2f6100002c73000068656c",
+   "raises": "ParseError"
+  },
+  {
+   "name": "truncated-string-unpadded",
+   "hex": "2f6100002c73000068656c6c00",
+   "raises": "ParseError"
+  },
+  {
+   "name": "truncated-blob",
+   "hex": "2f6100002c620000000000080102",
+   "raises": "ParseError"
+  },
+  {
+   "name": "truncated-address",
+   "hex": "2f616263",
+   "raises": "ParseError"
+  },
+  {
+   "name": "truncated-bundle-content",
+   "hex": "2362756e646c650000000000000000010000001c2f6368616e6e656c2f312f617a696d75746800002c6600003f4c",
+   "messages": [
+    {
+     "address": "/channel/1/azimuth",
+     "args": [
+      {
+       "py": "float",
+       "hex": "0x1.9800000000000p-1"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "truncated-bundle-size",
+   "hex": "2362756e646c650000000000000000010000001c2f6368616e6e656c2f312f617a696d75746800002c6600003f4ccccd0000",
+   "raises": "ParseError"
+  },
+  {
+   "name": "truncated-bundle-timetag",
+   "hex": "2362756e646c65000000",
+   "raises": "ParseError"
+  },
+  {
+   "name": "bad-utf8",
+   "hex": "2f6100002c730000fffe0000",
+   "raises": "UnicodeDecodeError"
+  },
+  {
+   "name": "not-osc",
+   "hex": "000167617262616765",
+   "raises": "ParseError"
+  },
+  {
+   "name": "no-slash",
+   "hex": "610000002c690000fffffffb",
+   "raises": "ParseError"
+  },
+  {
+   "name": "empty",
+   "hex": "",
+   "raises": "ParseError"
+  },
+  {
+   "name": "array",
+   "hex": "2f6100002c5b69695d000000fffffffbfffffffb",
+   "messages": [
+    {
+     "address": "/a",
+     "args": [
+      {
+       "py": "list",
+       "items": [
+        {
+         "py": "int",
+         "value": "-5"
+        },
+        {
+         "py": "int",
+         "value": "-5"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "maps": [
+  {
+   "pattern": "/channel/*",
+   "from": "B0"
+  },
+  {
+   "pattern": "/master/*",
+   "from": "B0"
+  },
+  {
+   "pattern": "/filter/*",
+   "from": "B0"
+  },
+  {
+   "pattern": "/aux-return/*",
+   "from": "B0"
+  },
+  {
+   "pattern": "/stemdeck/*",
+   "from": "B0"
+  },
+  {
+   "pattern": "/state/recall",
+   "from": "B0"
+  },
+  {
+   "pattern": "/beat",
+   "from": "B0"
+  },
+  {
+   "pattern": "/device/hello",
+   "from": "B0"
+  },
+  {
+   "pattern": "/engine/hello",
+   "from": "4b b1be0fa26fe0884f44e88e588c7e43f630d50066"
+  },
+  {
+   "pattern": "/stemdeck/1/hello",
+   "from": "4b b1be0fa26fe0884f44e88e588c7e43f630d50066"
+  },
+  {
+   "pattern": "/stemdeck/2/hello",
+   "from": "4b b1be0fa26fe0884f44e88e588c7e43f630d50066"
+  },
+  {
+   "pattern": "/prodj/live",
+   "from": "B0"
+  },
+  {
+   "pattern": "/stemdeck/pointer",
+   "from": "B0"
+  },
+  {
+   "pattern": "/motion/pointer",
+   "from": "B0"
+  }
+ ],
+ "dispatch": [
+  {
+   "address": "/channel/1/volume",
+   "calls": [
+    0
+   ]
+  },
+  {
+   "address": "/channel/4/azimuth",
+   "calls": [
+    0
+   ]
+  },
+  {
+   "address": "/channel/1/enc",
+   "calls": [
+    0
+   ]
+  },
+  {
+   "address": "/channel/",
+   "calls": [
+    0
+   ]
+  },
+  {
+   "address": "/channel",
+   "calls": [
+    "default"
+   ]
+  },
+  {
+   "address": "/channels/1",
+   "calls": [
+    "default"
+   ]
+  },
+  {
+   "address": "/master/volume",
+   "calls": [
+    1
+   ]
+  },
+  {
+   "address": "/master",
+   "calls": [
+    "default"
+   ]
+  },
+  {
+   "address": "/filter/1/freq",
+   "calls": [
+    2
+   ]
+  },
+  {
+   "address": "/aux-return/1/volume",
+   "calls": [
+    3
+   ]
+  },
+  {
+   "address": "/aux-return",
+   "calls": [
+    "default"
+   ]
+  },
+  {
+   "address": "/stemdeck/1/hello",
+   "calls": [
+    4,
+    9
+   ]
+  },
+  {
+   "address": "/stemdeck/2/hello",
+   "calls": [
+    4,
+    10
+   ]
+  },
+  {
+   "address": "/stemdeck/3/hello",
+   "calls": [
+    4
+   ]
+  },
+  {
+   "address": "/stemdeck/pointer",
+   "calls": [
+    4,
+    12
+   ]
+  },
+  {
+   "address": "/motion/pointer",
+   "calls": [
+    13
+   ]
+  },
+  {
+   "address": "/state/recall",
+   "calls": [
+    5
+   ]
+  },
+  {
+   "address": "/state/recall/",
+   "calls": [
+    "default"
+   ]
+  },
+  {
+   "address": "/beat",
+   "calls": [
+    6
+   ]
+  },
+  {
+   "address": "/beat/",
+   "calls": [
+    "default"
+   ]
+  },
+  {
+   "address": "/beats",
+   "calls": [
+    "default"
+   ]
+  },
+  {
+   "address": "/BEAT",
+   "calls": [
+    "default"
+   ]
+  },
+  {
+   "address": "/device/hello",
+   "calls": [
+    7
+   ]
+  },
+  {
+   "address": "/engine/hello",
+   "calls": [
+    8
+   ]
+  },
+  {
+   "address": "/prodj/live",
+   "calls": [
+    11
+   ]
+  },
+  {
+   "address": "/nothing",
+   "calls": [
+    "default"
+   ]
+  },
+  {
+   "address": "/",
+   "calls": [
+    "default"
+   ]
+  },
+  {
+   "address": "",
+   "calls": [
+    "default"
+   ]
+  },
+  {
+   "address": "/channel/1/volume\n",
+   "calls": [
+    0
+   ]
+  },
+  {
+   "address": "/beat\n",
+   "calls": [
+    "default"
+   ]
+  },
+  {
+   "address": "/channel/?/volume",
+   "calls": [
+    0
+   ]
+  },
+  {
+   "address": "/b?at",
+   "calls": [
+    6
+   ]
+  },
+  {
+   "address": "/channel/*",
+   "calls": [
+    0
+   ]
+  },
+  {
+   "address": "/*",
+   "calls": [
+    6
+   ]
+  },
+  {
+   "address": "/*/hello",
+   "calls": [
+    7,
+    8
+   ]
+  },
+  {
+   "address": "/stemdeck/{1,2}/hello",
+   "calls": [
+    4,
+    9,
+    10
+   ]
+  },
+  {
+   "address": "/stemdeck/{1,9}/hello",
+   "calls": [
+    4,
+    9
+   ]
+  },
+  {
+   "address": "/stemdeck/[12]/hello",
+   "calls": [
+    4,
+    9,
+    10
+   ]
+  },
+  {
+   "address": "/stemdeck/[!1]/hello",
+   "calls": [
+    4,
+    10
+   ]
+  },
+  {
+   "address": "/stemdeck/[2-9]/hello",
+   "calls": [
+    4,
+    10
+   ]
+  },
+  {
+   "address": "/stemdeck/[]/hello",
+   "calls": []
+  },
+  {
+   "address": "/stemdeck/[9-2]/hello",
+   "calls": []
+  },
+  {
+   "address": "/st[a-e]mdeck/pointer",
+   "calls": [
+    12
+   ]
+  },
+  {
+   "address": "/channel/1/\u00fc",
+   "calls": [
+    0
+   ]
+  },
+  {
+   "address": "/b.at",
+   "calls": [
+    "default"
+   ]
+  },
+  {
+   "address": "/be(at",
+   "calls": [
+    "default"
+   ]
+  },
+  {
+   "address": "/[",
+   "calls": []
+  },
+  {
+   "address": "/{beat",
+   "calls": [
+    6
+   ]
+  },
+  {
+   "address": "/beat{,}",
+   "calls": [
+    6
+   ]
+  },
+  {
+   "address": "/de\\vice/hello",
+   "calls": [
+    "default"
+   ]
+  }
+ ],
+ "numbers": [
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "MC44MDc0Mjk="
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.9d675579af188p-1"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "IDFlMyA="
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.f400000000000p+9"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "MV8w"
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.4000000000000p+3"
+   },
+   "int": {
+    "py": "int",
+    "value": "10"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "bmFu"
+   },
+   "float": {
+    "py": "float",
+    "hex": "nan"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "LWluZg=="
+   },
+   "float": {
+    "py": "float",
+    "hex": "-inf"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "SW5maW5pdHk="
+   },
+   "float": {
+    "py": "float",
+    "hex": "inf"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "MS4w"
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.0000000000000p+0"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "MHgxMA=="
+   },
+   "float": {
+    "raises": "ValueError"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": ""
+   },
+   "float": {
+    "raises": "ValueError"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "ICA="
+   },
+   "float": {
+    "raises": "ValueError"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "MQ=="
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.0000000000000p+0"
+   },
+   "int": {
+    "py": "int",
+    "value": "1"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "LTc="
+   },
+   "float": {
+    "py": "float",
+    "hex": "-0x1.c000000000000p+2"
+   },
+   "int": {
+    "py": "int",
+    "value": "-7"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "KzM="
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.8000000000000p+1"
+   },
+   "int": {
+    "py": "int",
+    "value": "3"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "MDA3"
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.c000000000000p+2"
+   },
+   "int": {
+    "py": "int",
+    "value": "7"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "MV9fMA=="
+   },
+   "float": {
+    "raises": "ValueError"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "XzE="
+   },
+   "float": {
+    "raises": "ValueError"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "MV8="
+   },
+   "float": {
+    "raises": "ValueError"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "MWU0MDA="
+   },
+   "float": {
+    "py": "float",
+    "hex": "inf"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "LTFlNDAw"
+   },
+   "float": {
+    "py": "float",
+    "hex": "-inf"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "MWUtNDAw"
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x0.0p+0"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "LTA="
+   },
+   "float": {
+    "py": "float",
+    "hex": "-0x0.0p+0"
+   },
+   "int": {
+    "py": "int",
+    "value": "0"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "LjU="
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.0000000000000p-1"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "NS4="
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.4000000000000p+2"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "Lg=="
+   },
+   "float": {
+    "raises": "ValueError"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "MWU="
+   },
+   "float": {
+    "raises": "ValueError"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "ZTU="
+   },
+   "float": {
+    "raises": "ValueError"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "aW5mIA=="
+   },
+   "float": {
+    "py": "float",
+    "hex": "inf"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "aW5maW5pdHk="
+   },
+   "float": {
+    "py": "float",
+    "hex": "inf"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "LU5hTg=="
+   },
+   "float": {
+    "py": "float",
+    "hex": "nan"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "K25hbg=="
+   },
+   "float": {
+    "py": "float",
+    "hex": "nan"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "bmFuKDEp"
+   },
+   "float": {
+    "raises": "ValueError"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "aW5maW5pdA=="
+   },
+   "float": {
+    "raises": "ValueError"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "MSw1"
+   },
+   "float": {
+    "raises": "ValueError"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "MSAy"
+   },
+   "float": {
+    "raises": "ValueError"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "KyAx"
+   },
+   "float": {
+    "raises": "ValueError"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "LS0x"
+   },
+   "float": {
+    "raises": "ValueError"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "MV8wMDAuMDAwXzE="
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.f4000346dc5d6p+9"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "MWUxXzA="
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.2a05f20000000p+33"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "MV9lNQ=="
+   },
+   "float": {
+    "raises": "ValueError"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "MS5fNQ=="
+   },
+   "float": {
+    "raises": "ValueError"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "wqAxLjXigIM="
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.8000000000000p+0"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "2aHZog=="
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.8000000000000p+3"
+   },
+   "int": {
+    "py": "int",
+    "value": "12"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "77yR77yS"
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.8000000000000p+3"
+   },
+   "int": {
+    "py": "int",
+    "value": "12"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "2aEu2aU="
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.8000000000000p+0"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "MS41Cg=="
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.8000000000000p+0"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "CS0yDQ=="
+   },
+   "float": {
+    "py": "float",
+    "hex": "-0x1.0000000000000p+1"
+   },
+   "int": {
+    "py": "int",
+    "value": "-2"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "HDMf"
+   },
+   "float": {
+    "raises": "ValueError"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "MQA="
+   },
+   "float": {
+    "raises": "ValueError"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "4oCLMQ=="
+   },
+   "float": {
+    "raises": "ValueError"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "MTIzNDU2Nzg5MDEyMzQ1Njc4OTA="
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.56a95319d63e1p+63"
+   },
+   "int": {
+    "py": "int",
+    "value": "12345678901234567890"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "LTkyMjMzNzIwMzY4NTQ3NzU4MDg="
+   },
+   "float": {
+    "py": "float",
+    "hex": "-0x1.0000000000000p+63"
+   },
+   "int": {
+    "py": "int",
+    "value": "-9223372036854775808"
+   }
+  },
+  {
+   "value": {
+    "py": "str",
+    "utf8_b64": "OTIyMzM3MjAzNjg1NDc3NTgwOA=="
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.0000000000000p+63"
+   },
+   "int": {
+    "py": "int",
+    "value": "9223372036854775808"
+   }
+  },
+  {
+   "value": {
+    "py": "bool",
+    "value": true
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.0000000000000p+0"
+   },
+   "int": {
+    "py": "int",
+    "value": "1"
+   }
+  },
+  {
+   "value": {
+    "py": "bool",
+    "value": false
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x0.0p+0"
+   },
+   "int": {
+    "py": "int",
+    "value": "0"
+   }
+  },
+  {
+   "value": {
+    "py": "float",
+    "hex": "0x1.b333333333333p+0"
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.b333333333333p+0"
+   },
+   "int": {
+    "py": "int",
+    "value": "1"
+   }
+  },
+  {
+   "value": {
+    "py": "float",
+    "hex": "-0x1.b333333333333p+0"
+   },
+   "float": {
+    "py": "float",
+    "hex": "-0x1.b333333333333p+0"
+   },
+   "int": {
+    "py": "int",
+    "value": "-1"
+   }
+  },
+  {
+   "value": {
+    "py": "float",
+    "hex": "0x1.0000000000000p-1"
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.0000000000000p-1"
+   },
+   "int": {
+    "py": "int",
+    "value": "0"
+   }
+  },
+  {
+   "value": {
+    "py": "float",
+    "hex": "-0x0.0p+0"
+   },
+   "float": {
+    "py": "float",
+    "hex": "-0x0.0p+0"
+   },
+   "int": {
+    "py": "int",
+    "value": "0"
+   }
+  },
+  {
+   "value": {
+    "py": "float",
+    "hex": "0x1.93e5939a08ceap+99"
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.93e5939a08ceap+99"
+   },
+   "int": {
+    "py": "int",
+    "value": "1000000000000000019884624838656"
+   }
+  },
+  {
+   "value": {
+    "py": "float",
+    "hex": "nan"
+   },
+   "float": {
+    "py": "float",
+    "hex": "nan"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "float",
+    "hex": "inf"
+   },
+   "float": {
+    "py": "float",
+    "hex": "inf"
+   },
+   "int": {
+    "raises": "OverflowError"
+   }
+  },
+  {
+   "value": {
+    "py": "int",
+    "value": "1099511627776"
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.0000000000000p+40"
+   },
+   "int": {
+    "py": "int",
+    "value": "1099511627776"
+   }
+  },
+  {
+   "value": {
+    "py": "int",
+    "value": "-2147483648"
+   },
+   "float": {
+    "py": "float",
+    "hex": "-0x1.0000000000000p+31"
+   },
+   "int": {
+    "py": "int",
+    "value": "-2147483648"
+   }
+  },
+  {
+   "value": {
+    "py": "int",
+    "value": "0"
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x0.0p+0"
+   },
+   "int": {
+    "py": "int",
+    "value": "0"
+   }
+  },
+  {
+   "value": {
+    "py": "None"
+   },
+   "float": {
+    "raises": "TypeError"
+   },
+   "int": {
+    "raises": "TypeError"
+   }
+  },
+  {
+   "value": {
+    "py": "bytes",
+    "b64": "MTI="
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.8000000000000p+3"
+   },
+   "int": {
+    "py": "int",
+    "value": "12"
+   }
+  },
+  {
+   "value": {
+    "py": "bytes",
+    "b64": "IDEuNSA="
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.8000000000000p+0"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "bytes",
+    "b64": "MV8w"
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.4000000000000p+3"
+   },
+   "int": {
+    "py": "int",
+    "value": "10"
+   }
+  },
+  {
+   "value": {
+    "py": "bytes",
+    "b64": "oDE="
+   },
+   "float": {
+    "raises": "ValueError"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "bytes",
+    "b64": ""
+   },
+   "float": {
+    "raises": "ValueError"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "bytes",
+    "b64": "bmFu"
+   },
+   "float": {
+    "py": "float",
+    "hex": "nan"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  },
+  {
+   "value": {
+    "py": "bytes",
+    "b64": "MS4w"
+   },
+   "float": {
+    "py": "float",
+    "hex": "0x1.0000000000000p+0"
+   },
+   "int": {
+    "raises": "ValueError"
+   }
+  }
+ ]
+}
