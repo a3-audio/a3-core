@@ -26,7 +26,8 @@ add_library(a3-engine-juce STATIC)
 target_link_libraries(a3-engine-juce
     PRIVATE juce::juce_audio_basics juce::juce_core juce::juce_osc juce::juce_recommended_config_flags
     juce::juce_audio_formats juce::juce_audio_processors juce::juce_dsp juce::juce_opengl
-    juce::juce_audio_devices juce::juce_audio_utils juce::juce_gui_basics juce::juce_gui_extra)
+    juce::juce_audio_devices juce::juce_audio_utils juce::juce_gui_basics juce::juce_gui_extra
+    juce::juce_cryptography)
 # JUCE_MODAL_LOOPS_PERMITTED is IEM's global definition; it changes module code,
 # so it has to be on the library that compiles the modules.
 target_compile_definitions(a3-engine-juce PUBLIC JUCE_STANDALONE_APPLICATION=1
@@ -50,11 +51,13 @@ target_compile_options(a3-engine PRIVATE -Wall -Wextra -Werror=switch)
 
 add_subdirectory(bench)
 add_subdirectory(app)
+add_subdirectory(src/a3-core)
 
 option(A3_ENGINE_TESTS "Build the engine tests" ON)
 if(A3_ENGINE_TESTS)
     enable_testing()
     add_subdirectory(tests/engine)
+    add_subdirectory(tests/core)
 endif()
 
 # Opt-in: null tests of our compiled IEM nodes against the IEM VST3s installed on
