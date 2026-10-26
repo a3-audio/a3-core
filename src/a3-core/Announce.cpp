@@ -53,8 +53,14 @@ std::optional<int> prefixOfMask (uint32_t mask)
 std::optional<int> prefixOf (const std::string& text)
 {
     const bool digits = ! text.empty() && text.find_first_not_of ("0123456789") == std::string::npos;
-    if (digits && text.size() <= 3 && std::stoi (text) <= 32)
-        return std::stoi (text);
+    if (digits)
+    {
+        // int(text) <= 32, leading zeros and all, without overflowing on a long run of digits.
+        const auto significant = text.find_first_not_of ('0');
+        const auto number = significant == std::string::npos ? std::string ("0") : text.substr (significant);
+        if (number.size() <= 2 && std::stoi (number) <= 32)
+            return std::stoi (number);
+    }
 
     const auto asAddress = ipv4Int (text);
     if (! asAddress)
@@ -70,6 +76,10 @@ std::string dotted (uint32_t address)
          + std::to_string ((address >> 8) & 255u) + "." + std::to_string (address & 255u);
 }
 
+// IPv4's limited broadcast, all ones: a constant of the protocol rather than a fact about the
+// rig, computed (as Python does) so no address is written into the code.
+std::string limitedBroadcast() { return dotted (~uint32_t (0)); }
+
 std::string pythonHostRepr (const std::string& host) { return "'" + host + "'"; }
 }
 
@@ -77,20 +87,20 @@ std::string broadcastAddress (const juce::var& network)
 {
     auto* object = network.getDynamicObject();
     if (object == nullptr || ! object->hasProperty ("address") || ! object->getProperty ("address").isString())
-        return limitedBroadcast;
+        return limitedBroadcast();
 
     const auto text = object->getProperty ("address").toString().toStdString();
     const auto slash = text.find ('/');
     if (slash != std::string::npos && text.find ('/', slash + 1) != std::string::npos)
-        return limitedBroadcast;
+        return limitedBroadcast();
 
     const auto address = ipv4Int (text.substr (0, slash));
     const auto prefix = slash == std::string::npos ? std::optional<int> (32) : prefixOf (text.substr (slash + 1));
     if (! address || ! prefix)
-        return limitedBroadcast;
+        return limitedBroadcast();
 
     if (*prefix >= 31)
-        return limitedBroadcast;
+        return limitedBroadcast();
 
     const uint32_t mask = *prefix == 0 ? 0u : ~0u << (32 - *prefix);
     return dotted ((*address & mask) | ~mask);

@@ -142,12 +142,16 @@ TEST (Tempo, JustOutsideIsOut)
 
 TEST (Tempo, ItRefusesToBeReadAsANumber)
 {
-    // Python's NO_CHANGE raises when truth-tested so that "nothing to send" cannot collapse into a
-    // tempo of nothing. Here the answer is an optional: nothing to send is an empty one, and a
-    // tempo of 0.0 would still be an engaged one -- the two cannot be confused.
-    static_assert (std::is_same_v<decltype (TempoFollower().wanted (pyFloat (0.0))), std::optional<double>>);
-    EXPECT_FALSE (TempoFollower().wanted (pyFloat (0.0)).has_value());
-    EXPECT_TRUE (std::optional<double> (0.0).has_value());
+    // Python's NO_CHANGE raises when truth-tested, so "nothing to send" cannot collapse into a
+    // tempo of nothing. Here the answer is an optional: a refusal is empty, a tempo -- even the
+    // lowest one the follower accepts -- is engaged, and has_value() tells them apart.
+    TempoFollower follower;
+    const auto refused = follower.wanted (pyFloat (0.0));
+    EXPECT_FALSE (refused.has_value());
+    const auto accepted = settled (follower, bpmMin);
+    ASSERT_TRUE (accepted.has_value());
+    EXPECT_EQ (*accepted, bpmMin);
+    EXPECT_FALSE (wanted (follower, bpmMin).has_value());   // quiet again: empty, not a zero
 }
 
 // ATempoOnTheMoveIsNotATempoYet

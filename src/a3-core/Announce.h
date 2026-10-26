@@ -21,8 +21,6 @@ namespace a3core
 {
 inline constexpr double everySeconds = 2.0;
 
-// IPv4's limited broadcast: a constant of the protocol rather than a fact about the rig.
-inline const std::string limitedBroadcast = "255.255.255.255";
 
 // The broadcast address of Core's subnet (the network block's "address", an IPv4 interface as
 // Python's ipaddress reads it); the limited broadcast for a host route, a bare address or
