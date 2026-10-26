@@ -269,8 +269,11 @@ std::vector<Link> JackBackend::graphLinks() const
     return links;
 }
 
+// Against the graph as it is now, as connect() does: a link of ours that died since the last pass is
+// forgotten, not disconnected. (One that died and was made again by someone else still looks like ours.)
 void JackBackend::removeOwnedLinks()
 {
+    madeByUs = stillOwned (madeByUs, graphLinks());
     for (const auto& link : madeByUs)
         jack_disconnect (client, link.from.c_str(), link.to.c_str());
     madeByUs.clear();
