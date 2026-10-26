@@ -126,6 +126,33 @@ holds for every change (N, layout, backend, trims, I/O map) and also works while
 stopped. If the new session does not open, the previous setting is opened again and the error
 is shown.
 
+## Plan 4d: the package and the unit
+
+The Debian package is now `a3-engine` (it `Replaces`/`Conflicts`/`Provides` `a3-engine-bench`). It
+ships `/usr/bin/a3-engine` (the app), `/usr/bin/a3-engine-bench` (kept as a tool), both spatial
+directories, `/usr/share/a3-engine/engine.json` (the default config) and the user unit
+`/usr/lib/systemd/user/a3-engine.service`. The postinst enables the unit for every user and reloads
+the running user managers; nothing is written under a home and nothing is restarted.
+
+**The unit.** `PartOf=a3-main.service`, `Conflicts=a3-reaper.service`, `ExecCondition` is a3-core's
+`a3-engine-runs`: the engine runs when it is installed and `a3-engine --check-config` passes,
+otherwise the unit is skipped and REAPER runs as before. `Restart=on-failure` with a start limit of
+5 in 60 s: a failure `--check-config` cannot see (JACK absent, a port taken) restarts a few times and
+then stops visibly; there is no automatic fallback to REAPER (it is frozen). The unit's
+`LD_PRELOAD` (the JACK realtime-priority library) also reaches the condition command; it is harmless
+there.
+
+**The default config** (`data/engine.json`): four channels on analog pairs 1-4, return pair 6, two
+decks, trims main/booth -30.88 dB (REAPER's output faders), phones 0, rec 0, SVF filter, Step 0's delay
+modulation, the JACK backend, and the rig's connections: what `a3-patchbay.xml` connected for REAPER,
+moved to the engine's ports (analog capture, Scarlett playback, the beat-analyzer's meters, StemDeck's
+rec input), the analyzer's raw analog and aux meters as direct links, and every deck port to
+`StemDeck-A`/`StemDeck-B` (`bformat_k`, `cue_L/R`, `aux_L/R`; they exist once StemDeck's S4 is
+installed, until then they are reported as missing, not an error). Left out on purpose: REAPER's inputs
+13-24 (StemDeck's stems and AES67's cue have no engine counterpart) and the AES67 sender, whose client
+name carries the machine's host name. The engine reads the file from `~/.config/a3/engine/engine.json`
+first; the package never writes there.
+
 ## Build and test
 
 Prerequisites: CMake 3.16 or newer, a C++17 compiler, JUCE 9.0.3 installed as a CMake package
@@ -159,7 +186,7 @@ is small).
 - **Roboto** fonts (Google, Apache-2.0), embedded with IEM's editors, never shown.
 - **JUCE** 9.0.3, AGPLv3, as before.
 
-The package copyright (`/usr/share/doc/a3-engine-bench/copyright`) carries the CC BY 3.0 and Apache-2.0
+The package copyright (`/usr/share/doc/a3-engine/copyright`) carries the CC BY 3.0 and Apache-2.0
 licence texts and the attribution above.
 
 ## Plan 1, parked 2026-10-06

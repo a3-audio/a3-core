@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# a3-engine's recipe for its Debian package (a3-engine-bench), called by
+# a3-engine's recipe for its Debian package (a3-engine), called by
 # a3-system's installer/package.py from an exported tree (git archive):
 #
 #   packaging/stage build <src> <build> <juce-prefix> <jobs> [--test]
@@ -26,12 +26,15 @@ build() {
 files() {
     [[ $# -eq 3 ]] || usage
     local src=$1 build=$2 stage=$3
+    install -D -m 755 "$build/app/a3-engine" "$stage/usr/bin/a3-engine"
     install -D -m 755 "$build/bench/a3-engine-bench" "$stage/usr/bin/a3-engine-bench"
+    install -D -m 644 "$src/packaging/a3-engine.service" "$stage/usr/lib/systemd/user/a3-engine.service"
+    install -D -m 644 "$src/data/engine.json" "$stage/usr/share/a3-engine/engine.json"
     install_spatial_data "$src" "$stage"
     install_copyright "$src" "$stage"
 }
 
-# The bench's package default is spatial/; the 6.1 booth is REAPER's, for the parity run (--spatial).
+# The app's and the bench's package default is spatial/ (engine.json names it relative to itself); the 6.1 booth is REAPER's, for the parity run (--spatial).
 install_spatial_data() {
     local src=$1 stage=$2 directory file
     for directory in spatial spatial-reaper-booth-6.1; do
@@ -47,7 +50,7 @@ install_spatial_data() {
 # referenced through /usr/share/common-licenses, as Debian does.
 install_copyright() {
     local src=$1 stage=$2 license
-    local copyright="$stage/usr/share/doc/a3-engine-bench/copyright"
+    local copyright="$stage/usr/share/doc/a3-engine/copyright"
     install -D -m 644 "$src/.reuse/dep5" "$copyright"
     for license in MIT CC-BY-3.0 Apache-2.0; do
         {
