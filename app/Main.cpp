@@ -1,128 +1,190 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
-// a3-engine: the engine app. For now headless only (--no-window): the host, the JACK
-// backend and the message loop with the 50 Hz control timer. The window, the OSC link
-// to Core and the device backend come with the tasks that build them.
-#include "ConfigFile.h"
+// a3-engine: the engine app. Loads the truth, engine.json and the spatial data, builds the
+// host on the chosen backend (JACK on the rig, a JUCE device elsewhere), listens for Core on
+// engine.osc, says hello to core.osc and drives the host from a 50 Hz message-thread timer.
+// The window comes with its own task: until then the app always runs windowless.
+#include "AppArgs.h"
+#include "DeviceBackend.h"
 #include "EngineHost.h"
 #include "JackBackend.h"
-#include "OscVocabulary.h"
 #include <csignal>
 #include <cstdio>
-#include <optional>
 
 namespace
 {
 volatile std::sig_atomic_t stopRequested = 0;
 void onSignal (int) { stopRequested = 1; }
 
-struct Args
-{
-    juce::String config, truth = "/usr/share/a3/a3-osc.json";
-    bool noConnect = false, noWindow = false;
-};
-
-std::optional<Args> parseArgs (int argc, char** argv)
-{
-    Args args;
-    for (int i = 1; i < argc; ++i)
-    {
-        const juce::String a (argv[i]);
-        if (a == "--config" && i + 1 < argc)
-            args.config = argv[++i];
-        else if (a == "--truth" && i + 1 < argc)
-            args.truth = argv[++i];
-        else if (a == "--no-connect")
-            args.noConnect = true;
-        else if (a == "--no-window")
-            args.noWindow = true;
-        else
-            return std::nullopt;
-    }
-    return args;
-}
-
-int fail (const juce::String& message)
-{
-    std::fprintf (stderr, "a3-engine: %s\n", message.toRawUTF8());
-    return 1;
-}
+constexpr const char* usage =
+    "usage: a3-engine [--config FILE] [--spatial DIR] [--truth FILE] [--no-connect] [--no-window]\n"
+    "                 [--service] [--timing] [--check-config]\n"
+    "  --config: default ~/.config/a3/engine/engine.json, else /usr/share/a3-engine/engine.json\n"
+    "  --no-connect: make no JACK link (a run beside REAPER)\n"
+    "  --no-window: no window (this build has none yet, so it is always on)\n"
+    "  --service: the window hides on close; only SIGTERM ends the app\n"
+    "  --timing: print the backend's load and xruns at exit\n"
+    "  --check-config: read truth, config and spatial data, print \"ok\" or \"<file>: <reason>\", exit 0/1\n";
 
 double nowSeconds() { return juce::Time::getMillisecondCounterHiRes() * 0.001; }
 
-// The message thread's beat: the host's control tick (modulation, meters, swaps, hello)
-// and the backend's share (rebuilds, connections). Ends the loop on SIGINT/SIGTERM or
-// when the audio server is gone.
-class ControlTimer final : public juce::Timer
+// Core's words on engine.osc go straight into the host's controls (atomics, as the bench does).
+class ControlListener final : public juce::OSCReceiver::Listener<juce::OSCReceiver::RealtimeCallback>
 {
 public:
-    ControlTimer (a3app::EngineHost& h, a3app::JackBackend& b) : host (h), backend (b) {}
-
-    void timerCallback() override
+    ControlListener (const a3app::StartupData& s, a3app::EngineHost& h) : data (s), host (h) {}
+    void oscMessageReceived (const juce::OSCMessage& message) override
     {
-        const auto now = nowSeconds();
-        host.controlTick (now);
-        backend.service (now);
-        if (stopRequested == 0 && ! backend.lost())
-            return;
-        stopTimer();
-        juce::MessageManager::getInstance()->stopDispatchLoop();
+        a3app::applyEngineMessage (data.truth, host.engineConfig(), message, host.controls());
     }
 
 private:
+    const a3app::StartupData& data;
     a3app::EngineHost& host;
-    a3app::JackBackend& backend;
 };
 
-int run (const Args& args)
+// Everything that exists only while the engine runs. A change of N (the window's Save) drops
+// the session and builds a new one: new host, new boot id, new ports.
+class Session
 {
-    juce::String error;
-    const auto truth = a3app::parseEngineTruth (juce::File (args.truth).loadFileAsString(), error);
-    if (! truth)
-        return fail (args.truth + ": " + error);
+public:
+    explicit Session (const a3app::StartupData& startup) : data (startup) {}
+    ~Session() { close(); }
 
-    const auto home = juce::File::getSpecialLocation (juce::File::userHomeDirectory);
-    const auto configFile = a3app::chooseConfigFile (args.config, home, [] (const juce::File& f) { return f.existsAsFile(); });
-    const auto config = a3app::loadAppConfig (configFile, error);
-    if (! config)
-        return fail (error);
-    if (config->backend.type != a3app::BackendSettings::Type::jack)
-        return fail (configFile.getFullPathName() + ": this build has only the JACK backend");
-    const auto spatial = a3::loadSpatialConfig (config->spatialDirectory, error);
-    if (! spatial)
-        return fail (config->spatialDirectory.getFullPathName() + ": " + error);
-
-    a3app::EngineHost host (config->engine, *spatial, *truth);
-    a3app::JackBackend backend (! args.noConnect);
-    const auto opened = backend.open (host, *config);
-    if (opened.failed())
-        return fail (opened.getErrorMessage());
-    const auto status = backend.status();
-    std::fprintf (stderr, "a3-engine: %s, %.0f Hz, %d frames, %s\n", configFile.getFullPathName().toRawUTF8(),
-                  status.sampleRate, status.blockSize, status.connecting ? "connecting" : "--no-connect: no links");
-
-    ControlTimer timer (host, backend);
-    timer.startTimerHz (50);
-    juce::MessageManager::getInstance()->runDispatchLoop();
-    const bool lost = backend.lost();
-    backend.close();
-    return lost ? fail ("the JACK server went away") : 0;
-}
-}
-
-int main (int argc, char** argv)
-{
-    const auto args = parseArgs (argc, argv);
-    if (! args)
+    juce::Result open (bool connecting)
     {
-        std::fprintf (stderr, "usage: a3-engine [--config FILE] [--truth FILE] [--no-connect] [--no-window]\n"
-                              "  --config: default ~/.config/a3/engine/engine.json, else /usr/share/a3-engine/engine.json\n"
-                              "  --no-connect: make no JACK link (a run beside REAPER)\n"
-                              "  --no-window: run headless (the only mode of this build)\n");
-        return 2;
+        if (! coreSender.connect (data.truth.coreHost, data.truth.corePort))
+            return juce::Result::fail ("cannot send to " + data.truth.coreHost + ":" + juce::String (data.truth.corePort));
+        host = std::make_unique<a3app::EngineHost> (data.config.engine, data.spatial, data.truth,
+                                                    [this] (const juce::OSCMessage& m) { coreSender.send (m); });
+        listener = std::make_unique<ControlListener> (data, *host);
+        if (! socket.bindToPort (data.truth.enginePort, data.truth.engineBindAddress) || ! receiver.connectToSocket (socket))
+            return juce::Result::fail ("cannot listen on " + data.truth.engineBindAddress + ":" + juce::String (data.truth.enginePort));
+        receiver.addListener (listener.get());
+
+        if (data.config.backend.type == a3app::BackendSettings::Type::jack)
+            backend = std::make_unique<a3app::JackBackend> (connecting);
+        else
+            backend = std::make_unique<a3app::DeviceBackend>();
+        return backend->open (*host, data.config);
     }
-    std::signal (SIGINT, onSignal);
-    std::signal (SIGTERM, onSignal);
-    juce::ScopedJuceInitialiser_GUI messageLoop;   // juce_events' message thread; no window
-    return run (*args);
+
+    void close()
+    {
+        if (backend != nullptr)
+            backend->close();   // no audio callback after this
+        receiver.removeListener (listener.get());
+        receiver.disconnect();
+        backend.reset();
+        listener.reset();
+        host.reset();
+    }
+
+    void tick()
+    {
+        const auto now = nowSeconds();
+        host->controlTick (now);
+        backend->service (now);
+    }
+
+    bool lost() const
+    {
+        const auto* jack = dynamic_cast<const a3app::JackBackend*> (backend.get());
+        return jack != nullptr && jack->lost();
+    }
+
+    a3app::BackendStatus status() const { return backend->status(); }
+
+private:
+    const a3app::StartupData& data;
+    juce::OSCSender coreSender;
+    juce::DatagramSocket socket { false };
+    juce::OSCReceiver receiver;
+    std::unique_ptr<a3app::EngineHost> host;
+    std::unique_ptr<ControlListener> listener;
+    std::unique_ptr<a3app::AudioBackend> backend;
+};
+
+class EngineApp final : public juce::JUCEApplication, private juce::Timer
+{
+public:
+    const juce::String getApplicationName() override { return "a3-engine"; }
+    const juce::String getApplicationVersion() override { return "0.1"; }
+    bool moreThanOneInstanceAllowed() override { return true; }
+
+    void initialise (const juce::String&) override
+    {
+        juce::String error;
+        const auto parsed = a3app::parseAppArgs (getCommandLineParameterArray(), error);
+        if (! parsed)
+            return finish (2, error + "\n" + usage);
+        args = *parsed;
+
+        if (args.checkConfig)
+        {
+            juce::String message;
+            const bool good = a3app::checkConfig (args, home(), message);
+            std::printf ("%s\n", message.toRawUTF8());
+            return finish (good ? 0 : 1, {});
+        }
+
+        auto loaded = a3app::loadStartupData (args, home(), error);
+        if (! loaded)
+            return finish (1, error);
+        startup = std::move (*loaded);
+
+        std::signal (SIGINT, onSignal);
+        std::signal (SIGTERM, onSignal);
+        session = std::make_unique<Session> (startup);
+        const auto opened = session->open (! args.noConnect);
+        if (opened.failed())
+            return finish (1, opened.getErrorMessage());
+
+        const auto status = session->status();
+        std::fprintf (stderr, "a3-engine: %s, %.0f Hz, %d frames, %s, no window\n", startup.configFile.getFullPathName().toRawUTF8(),
+                      status.sampleRate, status.blockSize, status.connecting ? "connecting" : "no links");
+        startTimerHz (50);
+    }
+
+    void shutdown() override
+    {
+        stopTimer();
+        if (session != nullptr && args.timing)
+        {
+            const auto status = session->status();
+            std::fprintf (stderr, "a3-engine: dsp load %.1f %%, %d xruns\n", status.dspLoadPercent, status.xruns);
+        }
+        session.reset();
+    }
+
+    void systemRequestedQuit() override { quit(); }   // with a window, --service hides it instead
+
+    void anotherInstanceStarted (const juce::String&) override {}
+
+private:
+    static juce::File home() { return juce::File::getSpecialLocation (juce::File::userHomeDirectory); }
+
+    void finish (int code, const juce::String& message)
+    {
+        if (message.isNotEmpty())
+            std::fprintf (stderr, "a3-engine: %s\n", message.toRawUTF8());
+        setApplicationReturnValue (code);
+        quit();
+    }
+
+    void timerCallback() override
+    {
+        session->tick();
+        if (stopRequested == 0 && ! session->lost())
+            return;
+        stopTimer();
+        finish (session->lost() ? 1 : 0, session->lost() ? "the JACK server went away" : juce::String());
+    }
+
+    a3app::AppArgs args;
+    a3app::StartupData startup;
+    std::unique_ptr<Session> session;
+};
 }
+
+START_JUCE_APPLICATION (EngineApp)
