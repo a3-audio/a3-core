@@ -86,7 +86,8 @@ MainWindow::~MainWindow()
 void MainWindow::open()
 {
     centreWithSize (getWidth(), getHeight());   // asks the desktop for its displays
-    setUsingNativeTitleBar (true);   // puts the window on the desktop: needs a display
+    setUsingNativeTitleBar (true);
+    addToDesktop();   // the constructor leaves the window off the desktop; this creates the peer and needs a display
     setVisible (true);
 }
 

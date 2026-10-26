@@ -229,6 +229,22 @@ TEST_F (Pages, ServiceWindowHidesOnCloseOtherwiseQuits)
     expectPainted (snapshot (*window.getContentComponent(), "window"));
 }
 
+// open() must give the window a native peer: the constructor is peer-less on purpose (headless
+// tests), and setUsingNativeTitleBar alone does not put a window on the desktop.
+TEST_F (Pages, OpenPutsTheWindowOnTheDesktop)
+{
+    const char* display = std::getenv ("DISPLAY");
+    if (display == nullptr || *display == '\0')
+        GTEST_SKIP() << "needs an X display (e.g. DISPLAY=:2)";
+
+    FakeView view;
+    a3app::MainWindow window (view, manager, {}, true, [] {});
+    EXPECT_FALSE (window.isOnDesktop());
+    window.open();
+    EXPECT_TRUE (window.isOnDesktop());
+    EXPECT_NE (window.getPeer(), nullptr);
+}
+
 // An edit is not the engine: clicking "Device" on a running JACK engine changes the AUDIO page's
 // layout and says "not saved", but STATUS and the read-only values keep describing what runs.
 TEST_F (Pages, PendingEditDoesNotChangeWhatRuns)
