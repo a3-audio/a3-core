@@ -1,0 +1,41 @@
+{
+  "channels": [
+    {
+      "toggle_fx": true,
+      "toggle_cue": false,
+      "three_d": 0.62
+    },
+    {
+      "toggle_fx": false,
+      "toggle_cue": true,
+      "three_d": null
+    },
+    {
+      "toggle_fx": false,
+      "toggle_cue": false,
+      "three_d": 0.0
+    },
+    {
+      "toggle_fx": true,
+      "toggle_cue": true,
+      "three_d": 1.0
+    }
+  ],
+  "fx_mode": 1,
+  "phones_mix": 0.3,
+  "return_cue": true,
+  "stems": {
+    "cursors": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "sources": [
+      "stem",
+      "analog"
+    ],
+    "return": "aux",
+    "note": "Grüße 🎵"
+  }
+}

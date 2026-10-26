@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include <optional>
 #include <string>
 
 #include <juce_core/juce_core.h>
@@ -22,4 +23,14 @@ std::string pythonRepr (double value);
 
 // json.dumps(indent=n): insertion order, ensure_ascii=True (state files use 2, network.json 1).
 std::string dumpIndented (const juce::var& value, int indent);
+
+// bool(x) of a value read from JSON.
+bool pythonTruthy (const juce::var& value);
+
+// x == y as Python compares what json.loads made: numbers by value (1 == 1.0 == True), objects
+// regardless of key order, arrays element by element.
+bool pythonEquals (const juce::var& a, const juce::var& b);
+
+// float(x) for a JSON number or boolean; nullopt for anything else (a text is not read as a number).
+std::optional<double> numberOf (const juce::var& value);
 }

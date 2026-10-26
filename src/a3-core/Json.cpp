@@ -556,4 +556,87 @@ std::string dumpIndented (const juce::var& value, int indent)
 {
     return Writer ({ indent, false, true }).write (value);
 }
+
+bool pythonTruthy (const juce::var& value)
+{
+    if (value.isVoid() || value.isUndefined())
+        return false;
+    if (value.isBool())
+        return static_cast<bool> (value);
+    if (value.isInt() || value.isInt64())
+        return static_cast<juce::int64> (value) != 0;
+    if (value.isDouble())
+        return static_cast<double> (value) != 0.0;   // NaN is truthy, as in Python
+    if (value.isString())
+        return value.toString().isNotEmpty();
+    if (auto* array = value.getArray())
+        return ! array->isEmpty();
+    if (auto* object = value.getDynamicObject())
+        return object->getProperties().size() > 0;
+    return true;
+}
+
+std::optional<double> numberOf (const juce::var& value)
+{
+    if (value.isBool())
+        return static_cast<bool> (value) ? 1.0 : 0.0;
+    if (value.isInt() || value.isInt64())
+        return static_cast<double> (static_cast<juce::int64> (value));
+    if (value.isDouble())
+        return static_cast<double> (value);
+    return std::nullopt;
+}
+
+namespace
+{
+std::optional<juce::int64> wholeOf (const juce::var& value)
+{
+    if (value.isBool())
+        return static_cast<bool> (value) ? 1 : 0;
+    if (value.isInt() || value.isInt64())
+        return static_cast<juce::int64> (value);
+    return std::nullopt;
+}
+}
+
+bool pythonEquals (const juce::var& a, const juce::var& b)
+{
+    const auto left = numberOf (a);
+    const auto right = numberOf (b);
+    if (left || right)
+    {
+        if (! (left && right))
+            return false;
+        const auto wholeA = wholeOf (a);
+        const auto wholeB = wholeOf (b);
+        if (wholeA && wholeB)
+            return *wholeA == *wholeB;
+        return static_cast<long double> (*left) == static_cast<long double> (*right);
+    }
+    if (a.isVoid() || a.isUndefined() || b.isVoid() || b.isUndefined())
+        return (a.isVoid() || a.isUndefined()) && (b.isVoid() || b.isUndefined());
+    if (a.isString() || b.isString())
+        return a.isString() && b.isString() && a.toString() == b.toString();
+    if (auto* x = a.getArray())
+    {
+        auto* y = b.getArray();
+        if (y == nullptr || x->size() != y->size())
+            return false;
+        for (int i = 0; i < x->size(); ++i)
+            if (! pythonEquals (x->getReference (i), y->getReference (i)))
+                return false;
+        return true;
+    }
+    if (auto* x = a.getDynamicObject())
+    {
+        auto* y = b.getDynamicObject();
+        if (y == nullptr || x->getProperties().size() != y->getProperties().size())
+            return false;
+        for (const auto& property : x->getProperties())
+            if (! y->hasProperty (property.name) || ! pythonEquals (property.value, y->getProperty (property.name)))
+                return false;
+        return true;
+    }
+    return false;
+}
 }

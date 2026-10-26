@@ -442,6 +442,13 @@ bool Truth::addressHas (const std::string& key, const std::string& property) con
     return object != nullptr && object->hasProperty (property.c_str());
 }
 
+bool Truth::addressTruthy (const std::string& key, const std::string& property) const
+{
+    const auto found = entry (key);
+    auto* object = found.getDynamicObject();
+    return object != nullptr && object->hasProperty (property.c_str()) && pythonTruthy (object->getProperty (property.c_str()));
+}
+
 std::string Truth::pattern (const std::string& key) const
 {
     return utf8 (member (entry (key), "pattern", key + " has no pattern").toString());

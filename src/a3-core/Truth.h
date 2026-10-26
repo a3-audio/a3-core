@@ -70,6 +70,8 @@ public:
     std::string pattern (const std::string& key) const;
     // Whether the file's entry for an address key has `property` (e.g. "relayed_to"); throws if the key has no entry.
     bool addressHas (const std::string& key, const std::string& property) const;
+    // bool(entry.get(property)): present and not empty/zero/null. Throws if the key has no entry.
+    bool addressTruthy (const std::string& key, const std::string& property) const;
     // Range-checked against the file's range for each field given; a placeholder without a field throws.
     std::string address (const std::string& key, const std::map<std::string, int>& fields = {}) const;
     // address() backwards; the first key in file order whose pattern and ranges fit.

@@ -1,0 +1,181 @@
+{
+ "files": {
+  "evening-current": {
+   "text": "{\n  \"values\": {\n    \"/channel/1/gain\": 0.5,\n    \"/channel/3/eq/high\": 0.25,\n    \"/channel/2/volume\": 0.7,\n    \"/channel/2/filter/frequency\": 0.4,\n    \"/channel/1/fx-send\": 0.3,\n    \"/channel/4/aux-send\": 0.6,\n    \"/channel/4/3d\": 0.5,\n    \"/channel/1/azimuth\": 90.0,\n    \"/channel/1/cue\": 1.0,\n    \"/channel/1/cue/led\": 1.0,\n    \"/filter/led\": \"low_pass\",\n    \"/filter/mode\": 1,\n    \"/filter/frequency\": 0.33,\n    \"/master/volume\": 0.8,\n    \"/master/fx-return\": 0.1,\n    \"/master/aux-return\": 0.2,\n    \"/stemdeck/ahead\": \"drop\",\n    \"/stemdeck/pointer\": 3,\n    \"/vu/3\": 0.2,\n    \"/beat\": 1,\n    \"/channel/0/gain\": 0.5,\n    \"/channel/99/fx-send\": 0.3,\n    \"/fx/frequency\": 0.33,\n    \"\": 1,\n    \"/channel/2/fx-send\\n\": 0.9,\n    \"/master/phones-volume\": 1,\n    \"/master/booth\": \"0.5\",\n    \"/master/phones-mix\": true,\n    \"/channel/2/gain\": null,\n    \"/channel/3/gain\": [0.1, 0.2]\n  }\n}\n",
+   "replay": [
+    [
+     "/channel/1/gain",
+     "float",
+     0.5
+    ],
+    [
+     "/channel/3/eq/high",
+     "float",
+     0.25
+    ],
+    [
+     "/channel/2/volume",
+     "float",
+     0.7
+    ],
+    [
+     "/channel/2/filter/frequency",
+     "float",
+     0.4
+    ],
+    [
+     "/channel/1/aux-send",
+     "float",
+     0.3
+    ],
+    [
+     "/channel/4/aux-send",
+     "float",
+     0.6
+    ],
+    [
+     "/filter/frequency",
+     "float",
+     0.33
+    ],
+    [
+     "/master/volume",
+     "float",
+     0.8
+    ],
+    [
+     "/master/aux-return",
+     "float",
+     0.1
+    ],
+    [
+     "/master/aux-return",
+     "float",
+     0.2
+    ],
+    [
+     "/channel/2/aux-send",
+     "float",
+     0.9
+    ],
+    [
+     "/master/phones-volume",
+     "int",
+     1
+    ],
+    [
+     "/master/booth",
+     "str",
+     "0.5"
+    ],
+    [
+     "/master/phones-mix",
+     "bool",
+     true
+    ],
+    [
+     "/channel/2/gain",
+     "NoneType",
+     null
+    ],
+    [
+     "/channel/3/gain",
+     "list",
+     [
+      0.1,
+      0.2
+     ]
+    ]
+   ]
+  },
+  "evening-empty": {
+   "text": "{}",
+   "replay": []
+  },
+  "evening-half": {
+   "text": "{\"values\": {\"/channel/1/gain\": 0.",
+   "replay": []
+  },
+  "evening-list": {
+   "text": "[]",
+   "replay": []
+  },
+  "evening-null": {
+   "text": "{\"values\": null}",
+   "replay": []
+  },
+  "evening-old": {
+   "text": "{\"values\": {\"/channel/2/fx-send\": 0.3, \"/master/fx-return\": 0.1, \"/channel/1/fx-send\": 0.25, \"/channel/01/fx-send\": 0.5}}\n",
+   "replay": [
+    [
+     "/channel/2/aux-send",
+     "float",
+     0.3
+    ],
+    [
+     "/master/aux-return",
+     "float",
+     0.1
+    ],
+    [
+     "/channel/1/aux-send",
+     "float",
+     0.25
+    ],
+    [
+     "/channel/1/aux-send",
+     "float",
+     0.5
+    ]
+   ]
+  },
+  "evening-text": {
+   "text": "\"text\"",
+   "raises": "AttributeError"
+  },
+  "evening-values-list": {
+   "text": "{\"values\": [1, 2]}",
+   "replay": []
+  }
+ },
+ "written": {
+  "notes": [
+   [
+    "/channel/1/gain",
+    "float",
+    0.5
+   ],
+   [
+    "/master/volume",
+    "float",
+    0.8
+   ],
+   [
+    "/channel/2/volume",
+    "int",
+    1
+   ],
+   [
+    "/filter/frequency",
+    "float",
+    0.1
+   ],
+   [
+    "/channel/3/aux-send",
+    "bool",
+    true
+   ],
+   [
+    "/master/aux-return",
+    "str",
+    "x\u00fc"
+   ],
+   [
+    "/channel/1/gain",
+    "float",
+    1e-05
+   ]
+  ],
+  "text": "{\n  \"values\": {\n    \"/channel/1/gain\": 1e-05,\n    \"/master/volume\": 0.8,\n    \"/channel/2/volume\": 1,\n    \"/filter/frequency\": 0.1,\n    \"/channel/3/aux-send\": true,\n    \"/master/aux-return\": \"x\\u00fc\"\n  }\n}\n"
+ }
+}

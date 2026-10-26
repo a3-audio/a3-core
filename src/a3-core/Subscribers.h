@@ -41,6 +41,10 @@ Subscriber parseSubscriber (const std::string& text);
 // for something else.
 std::vector<Subscriber> parseSubscribers (const std::vector<std::string>& texts, const std::vector<std::string>& reserved = {});
 
+// The words with a `relayed_to` that Core neither passes on nor replays from the evening: the
+// positions go to the pro-DJ apps only, the pointers to one device each and only while LIVE.
+bool notPassedOnNorReplayed (const std::string& key);
+
 // Whether a value that just arrived should go on to the other screens: the truth's addresses
 // marked `relayed_to`, except those that go elsewhere (the positions, the pointers).
 bool relayOnArrival (const Truth& truth, const std::string& address);

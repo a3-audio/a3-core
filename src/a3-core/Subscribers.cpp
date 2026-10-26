@@ -14,8 +14,8 @@ namespace
 {
 // Words with a `relayed_to` that Core neither passes on here nor replays from the evening: the
 // positions go to the pro-DJ apps only, the pointers to one device each and only while LIVE.
-const std::set<std::string> notPassedOnNorReplayed { "channel.azimuth", "channel.elevation", "stemdeck.pointer",
-                                                     "motion.pointer" };
+const std::set<std::string> notPassedOnNorReplayedKeys { "channel.azimuth", "channel.elevation", "stemdeck.pointer",
+                                                         "motion.pointer" };
 
 // str.strip(): the whitespace Python knows in ASCII.
 std::string stripped (const std::string& text)
@@ -126,6 +126,11 @@ std::vector<Subscriber> parseSubscribers (const std::vector<std::string>& texts,
     return found;
 }
 
+bool notPassedOnNorReplayed (const std::string& key)
+{
+    return notPassedOnNorReplayedKeys.count (key) > 0;
+}
+
 bool relayOnArrival (const Truth& truth, const std::string& address)
 {
     const auto found = truth.match (address);
@@ -133,7 +138,7 @@ bool relayOnArrival (const Truth& truth, const std::string& address)
         return false;
 
     const auto& key = found->first;
-    return truth.addressHas (key, "relayed_to") && notPassedOnNorReplayed.count (key) == 0;
+    return truth.addressHas (key, "relayed_to") && ! notPassedOnNorReplayed (key);
 }
 
 std::vector<Client> everyoneBut (const std::vector<Client>& subscribers, const std::optional<std::string>& origin)
