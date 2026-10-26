@@ -5,7 +5,8 @@ header name: `id` (`module.Class.test`), `verdict`, `group` (`stable` or `G`), `
 it was ported from), `task`.
 
 Verdicts: `port:<Suite>.<Name>` (must exist as `TEST`/`TEST_F` in `tests/core/*.cpp` or
-`tests/engine/*.cpp`), `retired:<reason>`, `stays:<reason>` (a reason is required).
+`tests/engine/*.cpp`; only `TEST` and `TEST_F` count, `TEST_P` does not; commented-out, `#if 0` and
+`DISABLED_` tests do not count either), `retired:<reason>`, `stays:<reason>` (a reason is required).
 
 Run from the repo root with a Python that has `unittest` (the dev venv):
 

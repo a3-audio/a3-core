@@ -22,13 +22,41 @@ TEST_DIRS = [ROOT / "tests/core", ROOT / "tests/engine"]
 TEST_MACRO = re.compile(r"^\s*TEST(?:_F)?\s*\(\s*(\w+)\s*,\s*(\w+)\s*\)", re.M)
 
 
+COMMENTS = re.compile(r"/\*.*?\*/|//[^\n]*", re.S)
+DISABLED = "DISABLED_"
+
+
+def strip_inactive(text):
+    """Drop comments and `#if 0` blocks (nesting-aware) so they cannot count."""
+    text = COMMENTS.sub(lambda m: "\n" * m.group(0).count("\n"), text)
+    out, depth_off, depth = [], 0, 0
+    for line in text.split("\n"):
+        word = line.strip()
+        if depth_off:
+            if re.match(r"#\s*if", word):
+                depth_off += 1
+            elif re.match(r"#\s*endif", word):
+                depth_off -= 1
+            continue
+        if re.match(r"#\s*if\s+0\b", word):
+            depth_off = 1
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
 def collect_cpp_tests(dirs):
-    found = set()
+    """Return (enabled, disabled) sets of 'Suite.Name'; disabled lose DISABLED_."""
+    enabled, disabled = set(), set()
     for d in dirs:
         for path in sorted(Path(d).glob("*.cpp")):
-            for suite, name in TEST_MACRO.findall(path.read_text(encoding="utf-8")):
-                found.add(f"{suite}.{name}")
-    return found
+            text = strip_inactive(path.read_text(encoding="utf-8"))
+            for suite, name in TEST_MACRO.findall(text):
+                if name.startswith(DISABLED):
+                    disabled.add(f"{suite}.{name[len(DISABLED):]}")
+                else:
+                    enabled.add(f"{suite}.{name}")
+    return enabled, disabled
 
 
 def read_cases(tsv, only=None, group=None):
@@ -43,13 +71,15 @@ def read_cases(tsv, only=None, group=None):
 
 def check_parity(tsv, test_dirs, only=None, group=None):
     """Return (missing_ports, bad_verdicts) as lists of strings."""
-    cpp = collect_cpp_tests(test_dirs)
+    cpp, disabled = collect_cpp_tests(test_dirs)
     missing, bad = [], []
     for row in read_cases(tsv, only, group):
         kind, _, rest = row["verdict"].partition(":")
         rest = rest.strip()
         if kind == "port":
-            if rest not in cpp:
+            if rest in disabled and rest not in cpp:
+                missing.append(f"{row['id']} -> {rest} (disabled in C++)")
+            elif rest not in cpp:
                 missing.append(f"{row['id']} -> {rest or '(no target)'}")
         elif kind in ("retired", "stays"):
             if not rest:
@@ -97,6 +127,24 @@ class GuardSelfTests(unittest.TestCase):
         self.assertEqual(len(bad), 2)
         self.assertIn("m.A.a", bad[0])
         self.assertIn("m.A.b", bad[1])
+
+    def test_a_commented_out_test_is_not_ported(self):
+        tsv = self.tsv(("m.A.a", "port:S.Block", "stable", "", "3"),
+                       ("m.A.b", "port:S.Line", "stable", "", "3"),
+                       ("m.A.c", "port:S.Off", "stable", "", "3"),
+                       ("m.A.d", "port:S.Live", "stable", "", "3"))
+        dirs = self.cpp("/* TEST(S, Block) {}\n*/\n// TEST(S, Line) {}\n"
+                        "#if 0\n#if X\nTEST(S, Off) {}\n#endif\nTEST(S, Off) {}\n#endif\n"
+                        "TEST(S, Live) {}\n")
+        missing, _ = check_parity(tsv, dirs)
+        self.assertEqual(missing, ["m.A.a -> S.Block", "m.A.b -> S.Line", "m.A.c -> S.Off"])
+
+    def test_a_disabled_test_is_not_ported(self):
+        tsv = self.tsv(("m.A.a", "port:S.Name", "stable", "", "3"))
+        missing, _ = check_parity(tsv, self.cpp("TEST(S, DISABLED_Name) {}\n"))
+        self.assertEqual(len(missing), 1)
+        self.assertIn("m.A.a -> S.Name", missing[0])
+        self.assertIn("disabled", missing[0])
 
     def test_group_filter(self):
         tsv = self.tsv(("m1.A.a", "port:S.One", "stable", "", "3"),
