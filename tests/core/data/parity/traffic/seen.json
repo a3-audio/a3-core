@@ -1,0 +1,188 @@
+{
+ "restored": {
+  "created": 5,
+  "mono_at_restore": 50.0,
+  "put": 5,
+  "rows": [
+   [
+    "in",
+    "/channel/0/gain",
+    2,
+    "mixer",
+    -3559.5,
+    0
+   ],
+   [
+    "out",
+    "/track/12/volume",
+    1,
+    "reaper",
+    -3559.0,
+    0
+   ],
+   [
+    "in",
+    "/caf\u00e9/\u266a",
+    1,
+    "mixer",
+    -3558.5,
+    0
+   ]
+  ],
+  "snapshot_at": 60.0,
+  "unknown": [
+   [
+    "/track/3/name",
+    2,
+    "reaper",
+    -3557.75
+   ],
+   [
+    "/track/4/name",
+    1,
+    "reaper",
+    -3557.5
+   ]
+  ],
+  "unknown_messages": 3,
+  "wall": 1800003600.0
+ },
+ "shapes": {
+  "a-known-address-is-not-unknown": {
+   "put": 3,
+   "rows": [
+    [
+     "in",
+     "/k",
+     4,
+     "m",
+     -1799999925.0
+    ],
+    [
+     "out",
+     "/o",
+     4,
+     "m",
+     -1799999925.0
+    ]
+   ],
+   "text": "{\"version\": 1, \"rows\": [[\"in\", \"/k\", 4, \"m\", 5.0], [\"out\", \"/o\", 4, \"m\", 5.0]], \"unknown\": [[\"/k\", 9, \"r\", 5.0], [\"/o\", 9, \"r\", 5.0]]}",
+   "unknown": [
+    [
+     "/o",
+     9,
+     "r",
+     -1799999925.0
+    ]
+   ],
+   "unknown_messages": 9
+  },
+  "another-version": {
+   "put": 0,
+   "rows": [],
+   "text": "{\"version\": 2, \"at\": 1.0, \"rows\": [[\"in\", \"/a\", 1, \"m\", 1.0]], \"unknown\": []}",
+   "unknown": [],
+   "unknown_messages": 0
+  },
+  "bad-rows": {
+   "put": 4,
+   "rows": [
+    [
+     "in",
+     "/a",
+     1,
+     "m",
+     -1799999929.0
+    ],
+    [
+     "out",
+     "/e",
+     true,
+     "m",
+     -1799999928.0
+    ],
+    [
+     "in",
+     "/h",
+     3,
+     "m",
+     -1799999929.0
+    ]
+   ],
+   "text": "{\"version\": 1, \"rows\": [[\"in\", \"/a\", 1, \"m\", 1.0], [\"in\"], \"no\", [\"in\", \"\", 1, \"m\", 1.0], [\"in\", \"/b\", \"x\", \"m\", 1.0], [\"in\", \"/c\", 1, \"m\", \"late\"], [\"in\", \"/d\", 1, \"m\", null], [\"out\", \"/e\", true, \"m\", 2], [\"in\", \"/f\", 1.5, \"m\", 1.0], [\"in\", \"/g\", 1, \"m\", 1.0, 9], [\"in\", 7, 1, \"m\", 1.0], [\"in\", \"/h\", 3, \"m\", true]], \"unknown\": [[\"/u1\", 2, \"r\", 5.0], [\"/u2\"], [\"\", 1, \"r\", 1.0], [\"/u3\", \"x\", \"r\", 1.0], [\"/u4\", 4, \"r\", 1.0, 1], [\"/a\", 9, \"r\", 1.0], [\"/u5\", 1, \"r\", null]]}",
+   "unknown": [
+    [
+     "/u1",
+     2,
+     "r",
+     -1799999925.0
+    ]
+   ],
+   "unknown_messages": 2
+  },
+  "from-the-future": {
+   "put": 1,
+   "rows": [
+    [
+     "in",
+     "/a",
+     1,
+     "m",
+     70.0
+    ]
+   ],
+   "text": "{\"version\": 1, \"rows\": [[\"in\", \"/a\", 1, \"m\", 1800086400.0]], \"unknown\": []}",
+   "unknown": [],
+   "unknown_messages": 0
+  },
+  "no-version": {
+   "put": 0,
+   "rows": [],
+   "text": "{\"rows\": [[\"in\", \"/a\", 1, \"m\", 1.0]], \"unknown\": []}",
+   "unknown": [],
+   "unknown_messages": 0
+  },
+  "rows-not-a-list": {
+   "put": 0,
+   "rows": [],
+   "text": "{\"version\": 1, \"rows\": {\"in\": 1}, \"unknown\": \"x\"}",
+   "unknown": [],
+   "unknown_messages": 0
+  },
+  "version-as-float": {
+   "put": 1,
+   "rows": [
+    [
+     "in",
+     "/a",
+     1,
+     "m",
+     -1799999929.0
+    ]
+   ],
+   "text": "{\"version\": 1.0, \"rows\": [[\"in\", \"/a\", 1, \"m\", 1.0]], \"unknown\": []}",
+   "unknown": [],
+   "unknown_messages": 0
+  },
+  "version-as-true": {
+   "put": 1,
+   "rows": [
+    [
+     "in",
+     "/a",
+     1,
+     "m",
+     -1799999929.0
+    ]
+   ],
+   "text": "{\"version\": true, \"rows\": [[\"in\", \"/a\", 1, \"m\", 1.0]], \"unknown\": []}",
+   "unknown": [],
+   "unknown_messages": 0
+  }
+ },
+ "written_by_python": {
+  "mono": 110.0,
+  "text": "{\"version\": 1, \"at\": 1800000000.0, \"rows\": [[\"in\", \"/channel/0/gain\", 2, \"mixer\", 1799999990.5], [\"out\", \"/track/12/volume\", 1, \"reaper\", 1799999991.0], [\"in\", \"/caf\\u00e9/\\u266a\", 1, \"mixer\", 1799999991.5]], \"unknown\": [[\"/track/3/name\", 2, \"reaper\", 1799999992.25], [\"/track/4/name\", 1, \"reaper\", 1799999992.5]]}",
+  "wall": 1800000000.0
+ }
+}
