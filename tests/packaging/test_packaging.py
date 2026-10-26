@@ -146,12 +146,17 @@ class StageTest(unittest.TestCase):
 
 
 class UnitTest(unittest.TestCase):
-    def test_the_unit_conflicts_with_reaper_and_restarts_on_failure(self):
+    def test_the_unit_leaves_exclusivity_to_the_conditions_and_restarts_on_failure(self):
         lines = unit_lines()
-        for line in ("PartOf=a3-main.service", "Conflicts=a3-reaper.service",
+        for line in ("PartOf=a3-main.service",
                      "After=pipewire.service wireplumber.service",
                      "Restart=on-failure", "RestartSec=1"):
             self.assertIn(line, lines)
+        # a3-main Wants both units in one transaction; a Conflicts= between them lets systemd stop
+        # or drop REAPER even when this unit's condition skips it. The two ExecConditions
+        # (a3-engine-runs here, a3-engine-runs --reaper in REAPER's drop-in) keep them apart.
+        for line in lines:
+            self.assertFalse(line.startswith("Conflicts="), line)
         self.assertIn("WantedBy=default.target", lines)
         # A broken open (JACK absent, a port taken) must stop visibly, not restart for ever.
         self.assertIn("StartLimitIntervalSec=60", lines)
@@ -205,13 +210,25 @@ class ControlTest(unittest.TestCase):
         self.assertEqual(fields["Architecture"], "amd64")
 
     @unittest.skipUnless(shutil.which("dpkg-shlibdeps") and shutil.which("objdump")
-                         and (ROOT / "build/bench/a3-engine-bench").is_file(),
-                         "needs dpkg-shlibdeps and a built bench")
+                         and (ROOT / "build/bench/a3-engine-bench").is_file()
+                         and (ROOT / "build/app/a3-engine").is_file(),
+                         "needs dpkg-shlibdeps and a built bench and app")
     def test_every_needed_library_is_covered_by_shlibs(self):
         # Depends comes from dpkg-shlibdeps, so it cannot miss a NEEDED library; this pins that
-        # each one resolves to a package. The X11 libraries JUCE only dlopens for a window system
-        # are not NEEDED: the headless bench never loads them.
-        binary = ROOT / "build/bench/a3-engine-bench"
+        # each one resolves to a package, for both shipped executables. The X11 libraries JUCE
+        # only dlopens for a window system are not NEEDED by either. The app also links ALSA.
+        packages = {
+            "build/bench/a3-engine-bench": ("libjack-jackd2-0", "libfreetype6", "libfontconfig1"),
+            "build/app/a3-engine": ("libjack-jackd2-0", "libfreetype6", "libfontconfig1",
+                                    "libasound2"),
+        }
+        for relative, expected in packages.items():
+            with self.subTest(binary=relative):
+                result = self.shlibdeps(ROOT / relative)
+                for package in expected:
+                    self.assertIn(package, result.stdout)
+
+    def shlibdeps(self, binary):
         needed = [line.split()[1] for line in subprocess.run(
             ["objdump", "-p", str(binary)], capture_output=True, text=True, check=True
         ).stdout.splitlines() if line.strip().startswith("NEEDED")]
@@ -225,8 +242,7 @@ class ControlTest(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
         self.assertNotIn("no dependency information", result.stderr)
-        for package in ("libjack-jackd2-0", "libfreetype6", "libfontconfig1"):
-            self.assertIn(package, result.stdout)
+        return result
 
     def test_maintainer_scripts_exist_and_are_executable(self):
         # installer/package.py refuses a package without all three.

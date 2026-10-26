@@ -134,9 +134,10 @@ directories, `/usr/share/a3-engine/engine.json` (the default config) and the use
 `/usr/lib/systemd/user/a3-engine.service`. The postinst enables the unit for every user and reloads
 the running user managers; nothing is written under a home and nothing is restarted.
 
-**The unit.** `PartOf=a3-main.service`, `Conflicts=a3-reaper.service`, `ExecCondition` is a3-core's
-`a3-engine-runs`: the engine runs when it is installed and `a3-engine --check-config` passes,
-otherwise the unit is skipped and REAPER runs as before. `Restart=on-failure` with a start limit of
+**The unit.** `PartOf=a3-main.service`, `ExecCondition` is a3-core's `a3-engine-runs`: the engine
+runs when it is installed and `a3-engine --check-config` passes, otherwise the unit is skipped and
+REAPER runs as before. REAPER's drop-in asks the same helper (`a3-engine-runs --reaper`), so the two
+conditions keep exactly one of them on the PA. `Restart=on-failure` with a start limit of
 5 in 60 s: a failure `--check-config` cannot see (JACK absent, a port taken) restarts a few times and
 then stops visibly; there is no automatic fallback to REAPER (it is frozen). The unit's
 `LD_PRELOAD` (the JACK realtime-priority library) also reaches the condition command; it is harmless

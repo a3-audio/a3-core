@@ -4,8 +4,6 @@
 Description=a3-engine, the A3 audio engine
 PartOf=a3-main.service
 After=pipewire.service wireplumber.service
-# One engine on the PA: REAPER (a3-reaper.service) stays off while this one runs.
-Conflicts=a3-reaper.service
 # A failed open (JACK absent, a port taken) restarts five times in a minute and then stops,
 # visibly, instead of looping while REAPER is off. There is no automatic fallback (REAPER is frozen).
 StartLimitIntervalSec=60
