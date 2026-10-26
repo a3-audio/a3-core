@@ -22,13 +22,20 @@ TEST_DIRS = [ROOT / "tests/core", ROOT / "tests/engine"]
 TEST_MACRO = re.compile(r"^\s*TEST(?:_F)?\s*\(\s*(\w+)\s*,\s*(\w+)\s*\)", re.M)
 
 
-COMMENTS = re.compile(r"/\*.*?\*/|//[^\n]*", re.S)
+# One token at a time, leftmost first: a literal is matched whole, so a comment marker inside one is
+# text; a comment is replaced by its newlines. A quote after an alphanumeric is a digit separator
+# (1'000), not a character literal.
+TOKENS = re.compile(
+    r"""R"(?P<delim>[^()\\\s]{0,16})\(.*?\)(?P=delim)"          # raw string
+    |"(?:\\.|[^"\\\n])*"                                   # string
+    |(?<![0-9A-Za-z_])'(?:\\.|[^'\\\n])*'                    # character
+    |(?P<comment>/\*.*?\*/|//[^\n]*)""", re.S | re.X)
 DISABLED = "DISABLED_"
 
 
 def strip_inactive(text):
     """Drop comments and `#if 0` blocks (nesting-aware) so they cannot count."""
-    text = COMMENTS.sub(lambda m: "\n" * m.group(0).count("\n"), text)
+    text = TOKENS.sub(lambda m: "\n" * m.group(0).count("\n") if m.group("comment") else m.group(0), text)
     out, depth_off, depth = [], 0, 0
     for line in text.split("\n"):
         word = line.strip()
@@ -138,6 +145,20 @@ class GuardSelfTests(unittest.TestCase):
                         "TEST(S, Live) {}\n")
         missing, _ = check_parity(tsv, dirs)
         self.assertEqual(missing, ["m.A.a -> S.Block", "m.A.b -> S.Line", "m.A.c -> S.Off"])
+
+    def test_a_comment_marker_inside_a_string_is_not_a_comment(self):
+        tsv = self.tsv(("m.A.a", "port:S.After", "stable", "", "3"),
+                       ("m.A.b", "port:S.Escaped", "stable", "", "3"),
+                       ("m.A.c", "port:S.Raw", "stable", "", "3"),
+                       ("m.A.d", "port:S.Char", "stable", "", "3"),
+                       ("m.A.e", "port:S.Hidden", "stable", "", "3"))
+        dirs = self.cpp('const char* a = "/channel/*/led/*";\nTEST(S, After) {}\n'
+                        'const char* b = "quote \\" /* still a string";\nTEST(S, Escaped) {}\n'
+                        'const char* c = R"x(a /* raw )" string)x";\nTEST(S, Raw) {}\n'
+                        "char d = '\"'; int e = 1'000; const char* f = \"/*\";\nTEST(S, Char) {}\n"
+                        "/* a real comment with \"a quote TEST(S, Hidden) {} */\n")
+        missing, _ = check_parity(tsv, dirs)
+        self.assertEqual(missing, ["m.A.e -> S.Hidden"])
 
     def test_a_disabled_test_is_not_ported(self):
         tsv = self.tsv(("m.A.a", "port:S.Name", "stable", "", "3"))
