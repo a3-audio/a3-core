@@ -3,11 +3,13 @@
 // a3-engine: the engine app. Loads the truth, engine.json and the spatial data, builds the
 // host on the chosen backend (JACK on the rig, a JUCE device elsewhere), listens for Core on
 // engine.osc, says hello to core.osc and drives the host from a 50 Hz message-thread timer.
-// The window comes with its own task: until then the app always runs windowless.
+// Without --no-window it opens the audio and status pages; --service hides the window on close.
 #include "AppArgs.h"
 #include "DeviceBackend.h"
 #include "EngineHost.h"
 #include "JackBackend.h"
+#include "ui/HostView.h"
+#include "ui/MainWindow.h"
 #include <csignal>
 #include <cstdio>
 
@@ -21,7 +23,7 @@ constexpr const char* usage =
     "                 [--service] [--timing] [--check-config]\n"
     "  --config: default ~/.config/a3/engine/engine.json, else /usr/share/a3-engine/engine.json\n"
     "  --no-connect: make no JACK link (a run beside REAPER)\n"
-    "  --no-window: no window (this build has none yet, so it is always on)\n"
+    "  --no-window: no window (a unit without a screen)\n"
     "  --service: the window hides on close; only SIGTERM ends the app\n"
     "  --timing: print the backend's load and xruns at exit\n"
     "  --check-config: read truth, config and spatial data, print \"ok\" or \"<file>: <reason>\", exit 0/1\n";
@@ -32,15 +34,18 @@ double nowSeconds() { return juce::Time::getMillisecondCounterHiRes() * 0.001; }
 class ControlListener final : public juce::OSCReceiver::Listener<juce::OSCReceiver::RealtimeCallback>
 {
 public:
-    ControlListener (const a3app::StartupData& s, a3app::EngineHost& h) : data (s), host (h) {}
+    ControlListener (const a3app::StartupData& s, a3app::EngineHost& h, std::atomic<double>& lastCore)
+        : data (s), host (h), lastMessage (lastCore) {}
     void oscMessageReceived (const juce::OSCMessage& message) override
     {
+        lastMessage.store (nowSeconds());
         a3app::applyEngineMessage (data.truth, host.engineConfig(), message, host.controls());
     }
 
 private:
     const a3app::StartupData& data;
     a3app::EngineHost& host;
+    std::atomic<double>& lastMessage;
 };
 
 // Everything that exists only while the engine runs. A change of N (the window's Save) drops
@@ -57,7 +62,7 @@ public:
             return juce::Result::fail ("cannot send to " + data.truth.coreHost + ":" + juce::String (data.truth.corePort));
         host = std::make_unique<a3app::EngineHost> (data.config.engine, data.spatial, data.truth,
                                                     [this] (const juce::OSCMessage& m) { coreSender.send (m); });
-        listener = std::make_unique<ControlListener> (data, *host);
+        listener = std::make_unique<ControlListener> (data, *host, lastCoreMessage);
         if (! socket.bindToPort (data.truth.enginePort, data.truth.engineBindAddress) || ! receiver.connectToSocket (socket))
             return juce::Result::fail ("cannot listen on " + data.truth.engineBindAddress + ":" + juce::String (data.truth.enginePort));
         receiver.addListener (listener.get());
@@ -94,8 +99,12 @@ public:
     }
 
     a3app::BackendStatus status() const { return backend->status(); }
+    a3app::EngineHost& engineHost() { return *host; }
+    // Seconds on the app clock of Core's last message, or a negative number before the first.
+    double lastCoreSeconds() const { return lastCoreMessage.load(); }
 
 private:
+    std::atomic<double> lastCoreMessage { -1.0 };
     const a3app::StartupData& data;
     juce::OSCSender coreSender;
     juce::DatagramSocket socket { false };
@@ -103,6 +112,34 @@ private:
     std::unique_ptr<a3app::EngineHost> host;
     std::unique_ptr<ControlListener> listener;
     std::unique_ptr<a3app::AudioBackend> backend;
+};
+
+// What the pages see of the running Session. An edit (apply) is kept here for the pages to show;
+// writing it out and rebuilding the Session is the window's Save, which comes with its own task.
+class SessionView final : public a3app::HostView
+{
+public:
+    SessionView (std::unique_ptr<Session>& s, const a3app::StartupData& startup) : session (s), edited (startup.config), names (portNames (startup)) {}
+
+    a3app::BackendStatus status() const override { return session->status(); }
+    std::vector<a3::Engine::OutputMeter> meters() override { return session->engineHost().meters(); }
+    std::vector<std::string> outputNames() const override { return names; }
+    bool coreHeard() const override { return session->lastCoreSeconds() >= 0.0; }
+    double secondsSinceCore() const override { return nowSeconds() - session->lastCoreSeconds(); }
+    bool gateOpen() const override { return session->engineHost().controls().global().gateOpen.load(); }
+    a3::GateLevels gateLevels() const override { return session->engineHost().gateLevels(); }
+    a3app::AppConfig config() const override { return edited; }
+    juce::Result apply (const a3app::AppConfig& config) override { edited = config; return juce::Result::ok(); }
+
+private:
+    static std::vector<std::string> portNames (const a3app::StartupData& startup)
+    {
+        return a3app::enginePortNames (startup.config.engine, startup.spatial).outputs;
+    }
+
+    std::unique_ptr<Session>& session;
+    a3app::AppConfig edited;
+    std::vector<std::string> names;
 };
 
 class EngineApp final : public juce::JUCEApplication, private juce::Timer
@@ -141,14 +178,22 @@ public:
             return finish (1, opened.getErrorMessage());
 
         const auto status = session->status();
-        std::fprintf (stderr, "a3-engine: %s, %.0f Hz, %d frames, %s, no window\n", startup.configFile.getFullPathName().toRawUTF8(),
-                      status.sampleRate, status.blockSize, status.connecting ? "connecting" : "no links");
+        std::fprintf (stderr, "a3-engine: %s, %.0f Hz, %d frames, %s%s\n", startup.configFile.getFullPathName().toRawUTF8(),
+                      status.sampleRate, status.blockSize, status.connecting ? "connecting" : "no links", args.noWindow ? ", no window" : "");
+        if (! args.noWindow)
+        {
+            view = std::make_unique<SessionView> (session, startup);
+            window = std::make_unique<a3app::MainWindow> (*view, pageDevices, args.service, [this] { quit(); });
+            window->open();
+        }
         startTimerHz (50);
     }
 
     void shutdown() override
     {
         stopTimer();
+        window.reset();   // before the session its pages read
+        view.reset();
         if (session != nullptr && args.timing)
         {
             const auto status = session->status();
@@ -157,7 +202,7 @@ public:
         session.reset();
     }
 
-    void systemRequestedQuit() override { quit(); }   // with a window, --service hides it instead
+    void systemRequestedQuit() override { quit(); }   // SIGTERM and a desktop's logout; the service window's close button only hides
 
     void anotherInstanceStarted (const juce::String&) override {}
 
@@ -184,6 +229,9 @@ private:
     a3app::AppArgs args;
     a3app::StartupData startup;
     std::unique_ptr<Session> session;
+    juce::AudioDeviceManager pageDevices;   // the audio page's selector; never opened by the app itself
+    std::unique_ptr<SessionView> view;
+    std::unique_ptr<a3app::MainWindow> window;
 };
 }
 

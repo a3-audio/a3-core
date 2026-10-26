@@ -26,7 +26,7 @@ add_library(a3-engine-juce STATIC)
 target_link_libraries(a3-engine-juce
     PRIVATE juce::juce_audio_basics juce::juce_core juce::juce_osc juce::juce_recommended_config_flags
     juce::juce_audio_formats juce::juce_audio_processors juce::juce_dsp juce::juce_opengl
-    juce::juce_audio_devices)
+    juce::juce_audio_devices juce::juce_audio_utils juce::juce_gui_basics juce::juce_gui_extra)
 # JUCE_MODAL_LOOPS_PERMITTED is IEM's global definition; it changes module code,
 # so it has to be on the library that compiles the modules.
 target_compile_definitions(a3-engine-juce PUBLIC JUCE_STANDALONE_APPLICATION=1
