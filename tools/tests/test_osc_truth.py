@@ -449,7 +449,7 @@ class TheEngineSpeaks(unittest.TestCase):
     keys are sent to the engine unchanged; only engine-only words are new."""
 
     ENGINE_WORDS = {
-        "channel.source": ("/channel/{ch}/source", "i", ["core"], ["engine", "desk", "motion"]),
+        "channel.source": ("/channel/{ch}/source", "i", ["core"], ["engine", "mixer", "desk", "motion"]),
         "aux-return.source": ("/aux-return/source", "i", ["core"], ["engine"]),
         "aux-return.cue": ("/aux-return/cue", "i", ["core"], ["engine"]),
         "delay.bpm": ("/delay/bpm", "f", ["core"], ["engine"]),
@@ -492,9 +492,9 @@ class TheEngineSpeaks(unittest.TestCase):
         self.assertEqual(self.truth.address("stemdeck.3d", deck=2), "/stemdeck/2/3d")
         self.assertEqual(self.truth.match("/stemdeck/1/3d"), ("stemdeck.3d", {"deck": 1}))
 
-    def test_desk_and_motion_hear_the_channel_source_and_deck_presence(self):
+    def test_mixer_desk_and_motion_hear_the_channel_source_and_deck_presence(self):
         words = self.truth.addresses()
-        for receiver in ("desk", "motion"):
+        for receiver in ("mixer", "desk", "motion"):
             self.assertIn(receiver, words["channel.source"]["to"])
             self.assertIn(receiver, words["stemdeck.present"]["to"])
         self.assertEqual((words["stemdeck.present"]["args"], words["stemdeck.present"]["from"],
