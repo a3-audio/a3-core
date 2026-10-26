@@ -70,6 +70,9 @@ public:
     // startGateAt after prepare and before the first process.
     GateLevels gateLevels() const;
     void startGateAt (const GateLevels&);
+    // Any thread: closes main, booth and phones (10 ms) whatever gateOpen says, until released.
+    // The host's fade-out before it swaps in a rebuilt Engine.
+    void holdGateClosed (bool held);
 
     // One meter per output port, in port order: main (sub when the layout has one, then
     // tops 1..N), booth (the same), rec L/R, phones L/R, then per channel pre L/R, post L/R.

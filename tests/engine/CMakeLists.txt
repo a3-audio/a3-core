@@ -24,9 +24,10 @@ add_executable(a3-engine-tests ReferenceSmoke.cpp Laws.cpp PurestGain.cpp Smooth
     Isolator3.cpp Meters.cpp DjFilter.cpp ChannelStrip.cpp DeckStrip.cpp ChannelSelect.cpp StripTiming.cpp Bench.cpp
     JuceEnvironment.cpp IemCompileTrial.cpp IemNode.cpp Layout.cpp SpatialBus.cpp SpatialTiming.cpp
     SpatialAllocation.cpp EngineConfig.cpp DualDelay.cpp DelayModulation.cpp AmbiEncoderBus.cpp Engine.cpp
-    EngineGate.cpp EngineAllocation.cpp EngineTiming.cpp)
-target_include_directories(a3-engine-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(a3-engine-tests PRIVATE a3-engine a3-engine-bench-lib a3-engine-reference
+    EngineGate.cpp EngineAllocation.cpp EngineTiming.cpp
+    ../app/EngineOsc.cpp ../app/HelloSender.cpp ../app/EngineHost.cpp)
+target_include_directories(a3-engine-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../app)
+target_link_libraries(a3-engine-tests PRIVATE a3-engine a3-engine-bench-lib a3-engine-app-lib a3-engine-reference
     GTest::gtest GTest::gtest_main)
 target_compile_definitions(a3-engine-tests PRIVATE
     A3_CURVES_GOLDEN="${CMAKE_CURRENT_SOURCE_DIR}/data/curves-golden.json"

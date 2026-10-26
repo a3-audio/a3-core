@@ -121,6 +121,7 @@ struct Engine::Impl
     std::unique_ptr<ZoneDecoder> main, booth;
     std::array<OutputGate, numGatedZones> gates;   // GatedZone order
     bool gateOpen = false;
+    std::atomic<bool> heldClosed { false };   // the host's fade before a swap; Core's gateOpen is left as it is
     float recGain = 1.0f;
     PortMeters meters;
     std::vector<int> mainMeters, boothMeters;
@@ -290,7 +291,7 @@ void Engine::Impl::processChunk (const EngineInputs& in, const EngineOutputs& ou
 void Engine::Impl::latchGlobals (EngineControls& controls)
 {
     auto& g = controls.global();
-    gateOpen = g.gateOpen.load (std::memory_order_relaxed);
+    gateOpen = g.gateOpen.load (std::memory_order_relaxed) && ! heldClosed.load (std::memory_order_relaxed);
     filter.kind.store (g.filter.kind.load (std::memory_order_relaxed), std::memory_order_relaxed);
     filter.mode.store (g.filter.mode.load (std::memory_order_relaxed), std::memory_order_relaxed);
     filter.frequency.store (load (g.filter.frequency), std::memory_order_relaxed);
@@ -642,6 +643,8 @@ GateLevels Engine::gateLevels() const
         levels.gain[z] = impl->gates[(size_t) z].currentGain();
     return levels;
 }
+
+void Engine::holdGateClosed (bool held) { impl->heldClosed.store (held, std::memory_order_relaxed); }
 
 void Engine::startGateAt (const GateLevels& levels)
 {

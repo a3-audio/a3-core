@@ -104,8 +104,10 @@ is small).
 
 - `tests/engine/data/curves-golden.json` is a copy from a3-core (commit 50e7997).
 - `tests/engine/data/a3-osc.json` is a copy of the OSC truth from a3-core's branch
-  `feat/engine-osc-endpoint` (commit 4014d27: the `engine.osc` listener, port 9004). That branch moves
-  to a3-core's `main` on merge; this reference then changes with it.
+  `feat/plan-4b-engine-mode` (commit 63cdcbe: the engine's words `channel.source`, `aux-return.source`,
+  `aux-return.cue`, `delay.bpm`, `engine.open`, `engine.hello`, and what `engine.osc` carries). The
+  app's tests read the words the engine understands from `engine.osc`'s `carries` in this copy. That
+  branch moves to a3-core's `main` on merge; this reference then changes with it.
 - `a3-engine-bench` never connects anything. It reads the truth at runtime from `--truth FILE`
   (default `/usr/share/a3/a3-osc.json`).
 

@@ -13,14 +13,31 @@
 
 namespace a3bench
 {
+// A "{ch}" address of the truth, split around {ch}, with the channel range the truth gives.
+struct ChannelPattern
+{
+    juce::String prefix, suffix;   // "/channel/" and "/gain" for "/channel/{ch}/gain"
+    int firstChannel = 1, lastChannel = 1;
+};
+
+// nullopt unless the truth entry has a pattern with "{ch}" and a two-number "ch" range.
+std::optional<ChannelPattern> channelPatternOf (const juce::var& truthAddress);
+
+// The channel (1-based) `address` names under the pattern, when it lies in the pattern's
+// range and in 1..numChannels; 0 otherwise. "+1", " 1", "01x" and "" are not channel numbers.
+int channelOfAddress (const ChannelPattern&, const juce::String& address, int numChannels);
+
+// A listener of the parsed truth (its root object) by name: its port (-1 if absent) and
+// its host's address through the truth's hosts ("" if absent).
+int listenerPort (const juce::var& truthRoot, const juce::String& name);
+juce::String listenerHostAddress (const juce::var& truthRoot, const juce::String& name);
+
 // The channel controls the bench owns, read from the truth by name: one entry
 // per key (channel.gain, channel.eq.high, ...) with the channel range the truth gives.
 struct ControlMap
 {
-    struct Entry
+    struct Entry : ChannelPattern
     {
-        juce::String prefix, suffix;   // "/channel/" and "/gain" for "/channel/{ch}/gain"
-        int firstChannel = 1, lastChannel = 1;
         std::atomic<float> a3::StripControls::* member = nullptr;
     };
     std::vector<Entry> entries;
@@ -29,10 +46,8 @@ struct ControlMap
 // The channel positions (channel.azimuth / channel.elevation), degrees.
 struct PositionMap
 {
-    struct Entry
+    struct Entry : ChannelPattern
     {
-        juce::String prefix, suffix;
-        int firstChannel = 1, lastChannel = 1;
         bool elevation = false;
     };
     std::vector<Entry> entries;

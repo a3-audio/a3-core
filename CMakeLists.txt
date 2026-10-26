@@ -46,6 +46,7 @@ target_link_libraries(a3-engine PUBLIC a3-engine-juce a3-iem)
 target_compile_options(a3-engine PRIVATE -Wall -Wextra -Werror=switch)
 
 add_subdirectory(bench)
+add_subdirectory(app)
 
 option(A3_ENGINE_TESTS "Build the engine tests" ON)
 if(A3_ENGINE_TESTS)
