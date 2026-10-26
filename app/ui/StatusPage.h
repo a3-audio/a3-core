@@ -6,6 +6,9 @@
 
 namespace a3app
 {
+// Core repeats its state more often than this; silence past it means it is gone.
+constexpr double coreSilentAfterSeconds = 5.0;
+
 juce::String modeText (const AppConfig&, const BackendStatus&);   // "JACK, connecting", "Device, no links (--no-connect)"
 juce::String coreText (bool heard, double secondsSince);          // "Core silent for 12.5 s"
 
@@ -18,6 +21,7 @@ public:
     ~StatusPage() override;
 
     void refresh();
+    juce::String modeLine() const { return modeText (config, status); }   // what runs, not the pending edit
     void resized() override;
     void paint (juce::Graphics&) override;
 

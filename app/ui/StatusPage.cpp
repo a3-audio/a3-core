@@ -15,10 +15,8 @@ juce::String coreText (bool heard, double secondsSince)
 {
     if (! heard)
         return "Core not heard yet";
-    // Core repeats its state more often than this; silence past a few seconds means it is gone.
-    constexpr double silentAfterSeconds = 5.0;
     const auto seconds = juce::String (secondsSince, 1) + " s";
-    return secondsSince > silentAfterSeconds ? "Core silent for " + seconds : "Core heard, last message " + seconds + " ago";
+    return secondsSince > coreSilentAfterSeconds ? "Core silent for " + seconds : "Core heard, last message " + seconds + " ago";
 }
 
 namespace
@@ -98,7 +96,7 @@ StatusPage::~StatusPage() = default;
 
 void StatusPage::refresh()
 {
-    config = view.config();
+    config = view.running();   // the pending edit belongs to the AUDIO page
     status = view.status();
     heard = view.coreHeard();
     sinceCore = view.secondsSinceCore();
@@ -133,7 +131,7 @@ void StatusPage::paint (juce::Graphics& g)
     };
 
     line ("MODE", modeText (config, status), status.connecting ? palette::text : palette::caution);
-    const bool silent = heard && sinceCore > 5.0;
+    const bool silent = heard && sinceCore > coreSilentAfterSeconds;
     line ("CORE", coreText (heard, sinceCore), ! heard || silent ? palette::caution : palette::running);
 
     static const char* const zones[a3::numGatedZones] = { "main", "booth", "phones" };

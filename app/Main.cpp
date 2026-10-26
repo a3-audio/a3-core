@@ -119,7 +119,7 @@ private:
 class SessionView final : public a3app::HostView
 {
 public:
-    SessionView (std::unique_ptr<Session>& s, const a3app::StartupData& startup) : session (s), edited (startup.config), names (portNames (startup)) {}
+    SessionView (std::unique_ptr<Session>& s, const a3app::StartupData& startup) : session (s), edited (startup.config), startedWith (startup.config), names (portNames (startup)) {}
 
     a3app::BackendStatus status() const override { return session->status(); }
     std::vector<a3::Engine::OutputMeter> meters() override { return session->engineHost().meters(); }
@@ -129,6 +129,7 @@ public:
     bool gateOpen() const override { return session->engineHost().controls().global().gateOpen.load(); }
     a3::GateLevels gateLevels() const override { return session->engineHost().gateLevels(); }
     a3app::AppConfig config() const override { return edited; }
+    a3app::AppConfig running() const override { return startedWith; }
     juce::Result apply (const a3app::AppConfig& config) override { edited = config; return juce::Result::ok(); }
 
 private:
@@ -139,6 +140,7 @@ private:
 
     std::unique_ptr<Session>& session;
     a3app::AppConfig edited;
+    const a3app::AppConfig startedWith;
     std::vector<std::string> names;
 };
 
@@ -229,7 +231,7 @@ private:
     a3app::AppArgs args;
     a3app::StartupData startup;
     std::unique_ptr<Session> session;
-    juce::AudioDeviceManager pageDevices;   // the audio page's selector; never opened by the app itself
+    juce::AudioDeviceManager pageDevices;   // the audio page's selector: choosing a device there opens it, which C7 must prevent while the backend holds one
     std::unique_ptr<SessionView> view;
     std::unique_ptr<a3app::MainWindow> window;
 };

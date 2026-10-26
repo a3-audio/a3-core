@@ -24,6 +24,7 @@ public:
     const juce::Label& quantumLabel() const { return quantum; }
     const juce::Label& rateSourceLabel() const { return rateSource; }
     const juce::Label& bitDepthLabel() const { return bitDepth; }
+    const juce::Label& pendingLabel() const { return pending; }
 
     void resized() override;
     void paint (juce::Graphics&) override;
@@ -33,7 +34,7 @@ private:
 
     HostView& view;
     juce::AudioDeviceManager& manager;
-    juce::Label title, backendCaption, rate, quantum, rateSource, bitDepth, applyMessage;
+    juce::Label title, backendCaption, rate, quantum, rateSource, bitDepth, applyMessage, pending;
     juce::TextButton jackButton { "JACK" }, deviceButton { "Device" };
     std::unique_ptr<juce::AudioDeviceSelectorComponent> selector;
 };

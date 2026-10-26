@@ -30,6 +30,7 @@ struct FakeView final : a3app::HostView
     FakeView()
     {
         cfg.engine = a3test::engineConfig (4, 2);
+        runningCfg = cfg;
         state.sampleRate = 44100;
         state.blockSize = 128;
         state.rateSource = "set by the JACK server";
@@ -45,9 +46,11 @@ struct FakeView final : a3app::HostView
     bool gateOpen() const override { return open; }
     a3::GateLevels gateLevels() const override { a3::GateLevels g; for (auto& v : g.gain) v = open ? 1.0f : 0.0f; return g; }
     a3app::AppConfig config() const override { return cfg; }
+    a3app::AppConfig running() const override { return runningCfg; }
     juce::Result apply (const a3app::AppConfig& c) override { cfg = c; ++applied; return juce::Result::ok(); }
 
-    a3app::AppConfig cfg;
+    void runDevice() { cfg.backend.type = runningCfg.backend.type = a3app::BackendSettings::Type::device; }
+    a3app::AppConfig cfg, runningCfg;   // the pending edit and what runs
     a3app::BackendStatus state;
     std::vector<a3::Engine::OutputMeter> meterValues;
     std::vector<std::string> names;
@@ -109,7 +112,7 @@ TEST_F (Pages, AudioPagePaintsForJackAndDevice)
         expectPainted (snapshot (page, "audio-jack"));
         EXPECT_FALSE (page.showsDeviceSelector());
     }
-    view.cfg.backend.type = a3app::BackendSettings::Type::device;
+    view.runDevice();
     view.state.rateSource = "set by the device";
     view.state.bitDepth = 24;
     a3app::AudioPage page (view, manager);
@@ -159,7 +162,7 @@ TEST_F (Pages, StatusPagePaintsEveryState)
     view.state.xruns = 3; view.state.dspLoadPercent = 71.5f;
     paint ("status-missing-peer");
     view.state.connecting = false;
-    view.cfg.backend.type = a3app::BackendSettings::Type::device;
+    view.runDevice();
     paint ("status-no-connect");
     view.meterValues = { { NAN, INFINITY }, { -1.0f, 5.0f }, { 0.5f, 0.2f } };
     view.names = { "a", "b", "c" };
@@ -169,11 +172,11 @@ TEST_F (Pages, StatusPagePaintsEveryState)
 TEST_F (Pages, StatusTextSaysWhatIsGoingOn)
 {
     FakeView view;
-    EXPECT_EQ (a3app::modeText (view.cfg, view.state), "JACK, connecting");
+    EXPECT_EQ (a3app::modeText (view.runningCfg, view.state), "JACK, connecting");
     view.state.connecting = false;
-    EXPECT_EQ (a3app::modeText (view.cfg, view.state), "JACK, no links (--no-connect)");
-    view.cfg.backend.type = a3app::BackendSettings::Type::device;
-    EXPECT_EQ (a3app::modeText (view.cfg, view.state), "Device, no links (--no-connect)");
+    EXPECT_EQ (a3app::modeText (view.runningCfg, view.state), "JACK, no links (--no-connect)");
+    view.runDevice();
+    EXPECT_EQ (a3app::modeText (view.runningCfg, view.state), "Device, no links (--no-connect)");
     EXPECT_EQ (a3app::coreText (false, 0), "Core not heard yet");
     EXPECT_EQ (a3app::coreText (true, 0.4), "Core heard, last message 0.4 s ago");
     EXPECT_EQ (a3app::coreText (true, 12.5), "Core silent for 12.5 s");
@@ -195,4 +198,28 @@ TEST_F (Pages, ServiceWindowHidesOnCloseOtherwiseQuits)
     window.closeButtonPressed();
     EXPECT_EQ (quits, 1);
     expectPainted (snapshot (*window.getContentComponent(), "window"));
+}
+
+// An edit is not the engine: clicking "Device" on a running JACK engine changes the AUDIO page's
+// layout and says "not saved", but STATUS and the read-only values keep describing what runs.
+TEST_F (Pages, PendingEditDoesNotChangeWhatRuns)
+{
+    FakeView view;   // running JACK
+    a3app::StatusPage status (view);
+    a3app::AudioPage audio (view, manager);
+    EXPECT_TRUE (audio.pendingLabel().getText().isEmpty());
+
+    audio.chooseBackend (a3app::BackendSettings::Type::device);
+    status.refresh();
+    audio.refresh();
+
+    EXPECT_EQ (view.runningCfg.backend.type, a3app::BackendSettings::Type::jack);
+    EXPECT_EQ (status.modeLine(), "JACK, connecting");
+    EXPECT_TRUE (audio.showsDeviceSelector());   // the edit is what the page edits
+    EXPECT_NE (audio.pendingLabel().getText().indexOf ("not saved"), -1);
+    EXPECT_EQ (audio.bitDepthLabel().getText().indexOf ("set by the device"), -1);   // 32 is JACK's value
+    EXPECT_NE (audio.bitDepthLabel().getText().indexOf ("JACK"), -1);
+
+    audio.chooseBackend (a3app::BackendSettings::Type::jack);   // back to what runs: nothing pending
+    EXPECT_TRUE (audio.pendingLabel().getText().isEmpty());
 }

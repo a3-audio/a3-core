@@ -22,7 +22,8 @@ public:
     virtual double secondsSinceCore() const = 0;                   // meaningless until coreHeard()
     virtual bool gateOpen() const = 0;                             // Core has opened the output gate
     virtual a3::GateLevels gateLevels() const = 0;                 // the zones' actual gain (main, booth, phones)
-    virtual AppConfig config() const = 0;
+    virtual AppConfig config() const = 0;                          // the pending edit (what the AUDIO page edits)
+    virtual AppConfig running() const = 0;                         // what runs now: the config the Session was built from
     virtual juce::Result apply (const AppConfig&) = 0;             // stores an edit; Save and rebuild are the window's later step
 };
 }

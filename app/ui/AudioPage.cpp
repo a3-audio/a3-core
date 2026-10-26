@@ -25,6 +25,7 @@ AudioPage::AudioPage (HostView& v, juce::AudioDeviceManager& m) : view (v), mana
     for (auto* label : { &rate, &quantum, &rateSource, &bitDepth })
         styleValue (*label);
     applyMessage.setColour (juce::Label::textColourId, palette::danger);
+    pending.setColour (juce::Label::textColourId, palette::caution);
     rateSource.setColour (juce::Label::textColourId, palette::textMuted);
     bitDepth.setColour (juce::Label::textColourId, palette::textMuted);
 
@@ -36,7 +37,7 @@ AudioPage::AudioPage (HostView& v, juce::AudioDeviceManager& m) : view (v), mana
     deviceButton.onClick = [this] { chooseBackend (BackendSettings::Type::device); };
 
     for (auto* child : std::initializer_list<juce::Component*> { &title, &backendCaption, &rate, &quantum, &rateSource, &bitDepth,
-                                                                &applyMessage, &jackButton, &deviceButton })
+                                                                &applyMessage, &pending, &jackButton, &deviceButton })
         addAndMakeVisible (child);
     rebuildForBackend();
 }
@@ -76,10 +77,12 @@ void AudioPage::refresh()
 {
     const auto status = view.status();
     const bool device = view.config().backend.type == BackendSettings::Type::device;
+    const bool runsDevice = view.running().backend.type == BackendSettings::Type::device;   // the values below describe what runs
+    pending.setText (device != runsDevice ? "not saved - applies after Save" : juce::String(), juce::dontSendNotification);
     rate.setText ("Sample rate   " + juce::String (juce::roundToInt (status.sampleRate)) + " Hz", juce::dontSendNotification);
     quantum.setText ("Quantum   " + juce::String (status.blockSize) + " frames", juce::dontSendNotification);
     rateSource.setText (status.rateSource, juce::dontSendNotification);
-    bitDepth.setText ("Bit depth   " + juce::String (status.bitDepth) + (device ? "  -  set by the device" : "  -  float samples, set by JACK"),
+    bitDepth.setText ("Bit depth   " + juce::String (status.bitDepth) + (runsDevice ? "  -  set by the device" : "  -  float samples, set by JACK"),
                       juce::dontSendNotification);
     if (device != (selector != nullptr))
         rebuildForBackend();
@@ -97,6 +100,7 @@ void AudioPage::resized()
     jackButton.setBounds (choice.removeFromLeft (choice.getWidth() / 3).reduced (2));
     deviceButton.setBounds (choice.removeFromLeft (choice.getWidth() / 2).reduced (2));
     applyMessage.setBounds (choice);
+    pending.setBounds (area.removeFromTop (row));
     area.removeFromTop (row / 2);
 
     if (selector != nullptr)
