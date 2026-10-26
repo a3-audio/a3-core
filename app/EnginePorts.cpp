@@ -55,4 +55,57 @@ PortNames enginePortNames (const a3::EngineConfig& config, const a3::SpatialConf
     }
     return ports;
 }
+
+bool isEngineInputPort (const std::string& name)
+{
+    return name.rfind ("analog_", 0) == 0 || name.rfind ("deck", 0) == 0;
+}
+
+namespace
+{
+void bindZone (PortSlots& slots, a3::ZoneOutputs& zone, const a3::Layout& layout)
+{
+    zone.tops.assign (layout.topChannels.size(), nullptr);
+    zone.sub = nullptr;
+    if (layout.hasSub())
+        slots.outputs.push_back (&zone.sub);
+    for (auto& top : zone.tops)
+        slots.outputs.push_back (&top);
+}
+}
+
+// The same walk as enginePortNames; EnginePorts.SlotsFollowTheNames pins the two together.
+PortSlots bindPortSlots (const a3::EngineConfig& config, const a3::SpatialConfig& spatial,
+                         a3::EngineInputs& in, a3::EngineOutputs& out)
+{
+    PortSlots slots;
+    in.analog.assign ((size_t) config.analogInputs, nullptr);
+    in.decks.assign ((size_t) config.decks, a3::DeckInputs {});
+    for (auto& analog : in.analog)
+        slots.inputs.push_back (&analog);
+    for (auto& deck : in.decks)
+    {
+        for (auto& channel : deck.bformat)
+            slots.inputs.push_back (&channel);
+        for (auto* pair : { &deck.cue, &deck.aux })
+            for (auto& side : *pair)
+                slots.inputs.push_back (&side);
+    }
+
+    bindZone (slots, out.main, spatial.main.layout);
+    bindZone (slots, out.booth, spatial.booth.layout);
+    for (auto* pair : { &out.rec, &out.phones })
+        for (auto& side : *pair)
+        {
+            side = nullptr;
+            slots.outputs.push_back (&side);
+        }
+    out.pre.assign ((size_t) config.channels, { nullptr, nullptr });
+    out.post.assign ((size_t) config.channels, { nullptr, nullptr });
+    for (size_t c = 0; c < (size_t) config.channels; ++c)
+        for (auto* taps : { &out.pre, &out.post })
+            for (auto& side : (*taps)[c])
+                slots.outputs.push_back (&side);
+    return slots;
+}
 }

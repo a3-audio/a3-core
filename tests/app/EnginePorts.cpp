@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include <algorithm>
 #include <gtest/gtest.h>
 #include "EngineFixture.h"
 #include "EnginePorts.h"
@@ -111,4 +112,69 @@ TEST (EnginePorts, OutputsMatchTheEnginesMeterOrderAndCount)
             const Names tail (ports.outputs.end() - 4 * n - 4, ports.outputs.end());
             EXPECT_EQ (tail, concat ({ { "rec_L", "rec_R", "phones_L", "phones_R" }, perChannel (n) }));
         }
+}
+
+TEST (EnginePorts, InputsAreTheAnalogAndDeckPorts)
+{
+    const auto spatial = a3test::loadedSpatialConfig (a3test::shippedSpatialDirectory);
+    const auto ports = a3app::enginePortNames (a3test::engineConfig (6, 3), spatial);
+    for (const auto& name : ports.inputs)
+        EXPECT_TRUE (a3app::isEngineInputPort (name)) << name;
+    for (const auto& name : ports.outputs)
+        EXPECT_FALSE (a3app::isEngineInputPort (name)) << name;
+}
+
+// Each port's buffer lands where the engine reads or writes that port: the slots walk
+// exactly enginePortNames' order, so a port named X is the engine's X.
+TEST (EnginePorts, SlotsFollowTheNames)
+{
+    for (const auto& directory : { a3test::shippedSpatialDirectory, a3test::reaperBoothSpatialDirectory })
+    {
+        const auto config = a3test::engineConfig (5, 2);
+        const auto spatial = a3test::loadedSpatialConfig (directory);
+        const auto names = a3app::enginePortNames (config, spatial);
+        a3::EngineInputs in;
+        a3::EngineOutputs out;
+        const auto slots = a3app::bindPortSlots (config, spatial, in, out);
+        ASSERT_EQ (slots.inputs.size(), names.inputs.size());
+        ASSERT_EQ (slots.outputs.size(), names.outputs.size());
+
+        // A distinct fake buffer per port, recognisable by its index.
+        std::vector<float> marks (names.inputs.size() + names.outputs.size());
+        for (size_t i = 0; i < slots.inputs.size(); ++i)
+            *slots.inputs[i] = &marks[i];
+        for (size_t i = 0; i < slots.outputs.size(); ++i)
+            *slots.outputs[i] = &marks[names.inputs.size() + i];
+        const auto inputNamed = [&] (const std::string& name)
+        {
+            const auto at = std::find (names.inputs.begin(), names.inputs.end(), name);
+            return &marks[(size_t) (at - names.inputs.begin())];
+        };
+        const auto outputNamed = [&] (const std::string& name)
+        {
+            const auto at = std::find (names.outputs.begin(), names.outputs.end(), name);
+            return &marks[names.inputs.size() + (size_t) (at - names.outputs.begin())];
+        };
+
+        ASSERT_EQ (in.analog.size(), (size_t) config.analogInputs);
+        ASSERT_EQ (in.decks.size(), 2u);
+        EXPECT_EQ (in.analog[0], inputNamed ("analog_1"));
+        EXPECT_EQ (in.analog[11], inputNamed ("analog_12"));
+        EXPECT_EQ (in.decks[0].bformat[0], inputNamed ("deckA_1"));
+        EXPECT_EQ (in.decks[1].bformat[15], inputNamed ("deckB_16"));
+        EXPECT_EQ (in.decks[1].cue[1], inputNamed ("deckB_cue_R"));
+        EXPECT_EQ (in.decks[0].aux[0], inputNamed ("deckA_aux_L"));
+
+        ASSERT_EQ (out.main.tops.size(), spatial.main.layout.topChannels.size());
+        ASSERT_EQ (out.booth.tops.size(), spatial.booth.layout.topChannels.size());
+        ASSERT_EQ (out.pre.size(), 5u);
+        ASSERT_EQ (out.post.size(), 5u);
+        EXPECT_EQ (out.main.sub, spatial.main.layout.hasSub() ? outputNamed ("main_sub") : nullptr);
+        EXPECT_EQ (out.main.tops.back(), outputNamed ("main_top_" + std::to_string (out.main.tops.size())));
+        EXPECT_EQ (out.booth.tops[0], outputNamed ("booth_top_1"));
+        EXPECT_EQ (out.rec[1], outputNamed ("rec_R"));
+        EXPECT_EQ (out.phones[0], outputNamed ("phones_L"));
+        EXPECT_EQ (out.pre[0][0], outputNamed ("ch1_pre_L"));
+        EXPECT_EQ (out.post[4][1], outputNamed ("ch5_post_R"));
+    }
 }

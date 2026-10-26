@@ -41,6 +41,8 @@ public:
 
     a3::EngineControls& controls();
     juce::String bootId() const;
+    const a3::EngineConfig& engineConfig() const;     // what every rebuilt Engine is built from
+    const a3::SpatialConfig& spatialConfig() const;   // (the backend names its ports after them)
 
     // Control thread: observation (status page, tests).
     std::vector<a3::Engine::OutputMeter> meters() const;   // as of the last controlTick

@@ -97,6 +97,8 @@ void EngineHost::controlTick (double nowSeconds)
 
 a3::EngineControls& EngineHost::controls() { return wire; }
 juce::String EngineHost::bootId() const { return hello.bootId(); }
+const a3::EngineConfig& EngineHost::engineConfig() const { return config; }
+const a3::SpatialConfig& EngineHost::spatialConfig() const { return spatial; }
 std::vector<a3::Engine::OutputMeter> EngineHost::meters() const { return lastMeters; }
 
 a3::GateLevels EngineHost::gateLevels() const

@@ -1,0 +1,275 @@
+// SPDX-FileCopyrightText: 2026 Raphael Eismann
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include "JackBackend.h"
+#include <algorithm>
+#include <cerrno>
+#include <chrono>
+#include <cstdio>
+
+namespace a3app
+{
+namespace
+{
+constexpr const char* clientName = "a3-engine";
+constexpr double connectEverySeconds = 1.0;
+
+// jack_get_ports / jack_port_get_all_connections hand out a null-terminated list the caller frees.
+std::vector<std::string> takeNames (const char** names)
+{
+    std::vector<std::string> list;
+    if (names == nullptr)
+        return list;
+    for (auto** name = names; *name != nullptr; ++name)
+        list.emplace_back (*name);
+    jack_free (names);
+    return list;
+}
+}
+
+JackBackend::JackBackend (bool shouldConnect) : connecting (shouldConnect) {}
+
+JackBackend::~JackBackend() { close(); }
+
+juce::Result JackBackend::open (EngineHost& engineHost, const AppConfig& config)
+{
+    if (client != nullptr)
+        return juce::Result::fail ("the JACK backend is already open");
+
+    // The name is fixed: the patchbay and Core know the engine by it (spec D9).
+    jack_status_t status {};
+    client = jack_client_open (clientName, (jack_options_t) (JackNoStartServer | JackUseExactName), &status);
+    if (client == nullptr)
+        return juce::Result::fail ((status & JackNameNotUnique) != 0 ? "a JACK client named a3-engine is already running"
+                                                                     : "no JACK server running");
+    const auto refused = refuseBesideReaper (clientNamesOf (graphPorts()), connecting);
+    if (refused.failed())
+    {
+        close();
+        return refused;
+    }
+
+    const auto names = enginePortNames (engineHost.engineConfig(), engineHost.spatialConfig());
+    if (! registerPorts (names))
+    {
+        close();
+        return juce::Result::fail ("cannot register the JACK ports");
+    }
+    slots = bindPortSlots (engineHost.engineConfig(), engineHost.spatialConfig(), inputs, outputs);
+    map = config.io;
+    sampleRate = (double) jack_get_sample_rate (client);
+    const auto built = engineHost.rebuild (sampleRate, (int) jack_get_buffer_size (client), false);
+    if (built.failed())
+    {
+        close();
+        return built;
+    }
+    host = &engineHost;
+
+    jack_set_process_callback (client, processCallback, this);
+    jack_set_buffer_size_callback (client, bufferSizeCallback, this);
+    jack_set_sample_rate_callback (client, sampleRateCallback, this);
+    jack_set_port_registration_callback (client, registrationCallback, this);
+    jack_set_xrun_callback (client, xrunCallback, this);
+    jack_on_shutdown (client, shutdownCallback, this);
+    if (jack_activate (client) != 0)
+    {
+        close();
+        return juce::Result::fail ("cannot activate the JACK client");
+    }
+    if (connecting)
+        connect();
+    return juce::Result::ok();
+}
+
+void JackBackend::close()
+{
+    if (client == nullptr)
+        return;
+    if (! serverGone.load())
+    {
+        removeOwnedLinks();   // the direct links would outlive the engine's ports otherwise
+        jack_deactivate (client);
+    }
+    jack_client_close (client);
+    client = nullptr;
+    host = nullptr;
+    inputPorts.clear();
+    outputPorts.clear();
+    slots = {};
+    madeByUs.clear();
+}
+
+BackendStatus JackBackend::status() const
+{
+    BackendStatus s;
+    s.rateSource = "PipeWire (pw-metadata -n settings; a3-core's pipewire config)";
+    s.bitDepth = 32;
+    s.connecting = connecting;
+    s.xruns = xruns.load();
+    for (const auto& peer : missingPeers)
+        s.missingPeers.push_back (juce::String (peer));
+    if (client == nullptr || serverGone.load())
+        return s;
+
+    s.sampleRate = (double) jack_get_sample_rate (client);
+    s.blockSize = (int) jack_get_buffer_size (client);
+    // jack_cpu_load is the whole graph's load and already holds the engine's time; the engine's
+    // own block time against the period shows when the engine alone is the heavy part.
+    const auto frames = lastBlockFrames.load();
+    const double periodMs = frames > 0 && s.sampleRate > 0 ? 1000.0 * frames / s.sampleRate : 0.0;
+    const float own = periodMs > 0 ? (float) (100.0 * engineBlockMs.load() / periodMs) : 0.0f;
+    s.dspLoadPercent = std::max (jack_cpu_load (client), own);
+    return s;
+}
+
+std::vector<std::pair<std::string, std::string>> JackBackend::liveLinks() const
+{
+    std::vector<std::pair<std::string, std::string>> links;
+    if (client == nullptr || serverGone.load())
+        return links;
+    for (auto* port : inputPorts)
+        for (const auto& peer : takeNames (jack_port_get_all_connections (client, port)))
+            links.emplace_back (peer, jack_port_name (port));
+    for (auto* port : outputPorts)
+        for (const auto& peer : takeNames (jack_port_get_all_connections (client, port)))
+            links.emplace_back (jack_port_name (port), peer);
+    return links;
+}
+
+void JackBackend::service (double nowSeconds)
+{
+    if (client == nullptr || serverGone.load())
+        return;
+    rebuildOnNewQuantumOrRate();
+    const bool portsCameOrWent = portsChanged.exchange (false);
+    if (! connecting || ! (portsCameOrWent || nowSeconds - lastConnectSeconds >= connectEverySeconds))
+        return;
+    lastConnectSeconds = nowSeconds;
+    connect();
+}
+
+bool JackBackend::lost() const { return serverGone.load(); }
+
+// A new quantum takes over at once (no re-fade); the engine chunks a longer call meanwhile.
+void JackBackend::rebuildOnNewQuantumOrRate()
+{
+    const int rate = pendingSampleRate.exchange (0);
+    const int quantum = pendingBlockSize.exchange (0);
+    const bool newRate = rate > 0 && (double) rate != sampleRate;
+    const bool newQuantum = quantum > 0 && quantum != host->preparedBlockSize();
+    if (! newRate && ! newQuantum)
+        return;
+    if (newRate)
+        sampleRate = (double) rate;
+    const auto built = host->rebuild (sampleRate, (int) jack_get_buffer_size (client), false);
+    if (built.failed())
+        std::fprintf (stderr, "a3-engine: cannot rebuild for %.0f Hz / %d frames: %s\n", sampleRate,
+                      (int) jack_get_buffer_size (client), built.getErrorMessage().toRawUTF8());
+}
+
+int JackBackend::processCallback (jack_nframes_t frames, void* self)
+{
+    static_cast<JackBackend*> (self)->process (frames);
+    return 0;
+}
+
+void JackBackend::process (jack_nframes_t frames)
+{
+    juce::ScopedNoDenormals noDenormals;
+    const auto started = std::chrono::steady_clock::now();
+    for (size_t i = 0; i < inputPorts.size(); ++i)
+        *slots.inputs[i] = static_cast<const float*> (jack_port_get_buffer (inputPorts[i], frames));
+    for (size_t i = 0; i < outputPorts.size(); ++i)
+        *slots.outputs[i] = static_cast<float*> (jack_port_get_buffer (outputPorts[i], frames));
+    host->audioCallback (inputs, outputs, (int) frames);
+    engineBlockMs.store ((float) std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - started).count(),
+                         std::memory_order_relaxed);
+    lastBlockFrames.store (frames, std::memory_order_relaxed);
+}
+
+int JackBackend::bufferSizeCallback (jack_nframes_t frames, void* self)
+{
+    static_cast<JackBackend*> (self)->pendingBlockSize.store ((int) frames);
+    return 0;
+}
+
+int JackBackend::sampleRateCallback (jack_nframes_t rate, void* self)
+{
+    static_cast<JackBackend*> (self)->pendingSampleRate.store ((int) rate);
+    return 0;
+}
+
+void JackBackend::registrationCallback (jack_port_id_t, int, void* self)
+{
+    static_cast<JackBackend*> (self)->portsChanged.store (true);
+}
+
+int JackBackend::xrunCallback (void* self)
+{
+    static_cast<JackBackend*> (self)->xruns.fetch_add (1);
+    return 0;
+}
+
+void JackBackend::shutdownCallback (void* self)
+{
+    static_cast<JackBackend*> (self)->serverGone.store (true);
+}
+
+bool JackBackend::registerPorts (const PortNames& names)
+{
+    const auto add = [this] (const std::string& name, unsigned long flags)
+    {
+        return jack_port_register (client, name.c_str(), JACK_DEFAULT_AUDIO_TYPE, flags, 0);
+    };
+    for (const auto& name : names.inputs)
+        if (inputPorts.emplace_back (add (name, JackPortIsInput)) == nullptr)
+            return false;
+    for (const auto& name : names.outputs)
+        if (outputPorts.emplace_back (add (name, JackPortIsOutput)) == nullptr)
+            return false;
+    return true;
+}
+
+// The plan against the graph as it is now. Only links it made itself are ever removed;
+// a link it made that died with a peer's port is forgotten and made again when the port is back.
+void JackBackend::connect()
+{
+    const auto live = graphLinks();
+    madeByUs = stillOwned (madeByUs, live);
+    const auto plan = planConnections (map, live, madeByUs, graphPorts(), jack_get_client_name (client));
+    for (const auto& link : plan.add)
+    {
+        const int result = jack_connect (client, link.from.c_str(), link.to.c_str());
+        if (result == 0 || result == EEXIST)
+            madeByUs.push_back (link);
+        else if (reportedFailures.insert ({ link.from, link.to }).second)
+            std::fprintf (stderr, "a3-engine: cannot connect %s -> %s\n", link.from.c_str(), link.to.c_str());
+    }
+    for (const auto& link : plan.remove)
+        if (jack_disconnect (client, link.from.c_str(), link.to.c_str()) == 0)
+            madeByUs.erase (std::find (madeByUs.begin(), madeByUs.end(), link));
+    missingPeers = plan.missingPeers;
+}
+
+std::vector<std::string> JackBackend::graphPorts() const
+{
+    return takeNames (jack_get_ports (client, nullptr, nullptr, 0));
+}
+
+std::vector<Link> JackBackend::graphLinks() const
+{
+    std::vector<Link> links;
+    for (const auto& from : takeNames (jack_get_ports (client, nullptr, nullptr, JackPortIsOutput)))
+        if (auto* port = jack_port_by_name (client, from.c_str()))
+            for (auto& to : takeNames (jack_port_get_all_connections (client, port)))
+                links.push_back ({ from, std::move (to) });
+    return links;
+}
+
+void JackBackend::removeOwnedLinks()
+{
+    for (const auto& link : madeByUs)
+        jack_disconnect (client, link.from.c_str(), link.to.c_str());
+    madeByUs.clear();
+}
+}
