@@ -193,3 +193,20 @@ TEST (AppArgs, SaveWritesTheFileConfigNamed)
     ASSERT_TRUE (data.has_value()) << error;
     EXPECT_EQ (data->saveFile, config);
 }
+
+TEST (AppArgs, CheckConfigRefusesWhatTheEngineRefuses)
+{
+    // The loaders check only the shape of the spatial files; IEM refuses an unknown parameter id.
+    Home home;
+    a3test::ScratchDirectory spatial;
+    const auto fx = spatial.root().getChildFile ("fx.parameters.json");
+    auto parameters = juce::JSON::parse (fx.loadFileAsString());
+    ASSERT_NE (parameters.getDynamicObject(), nullptr);
+    parameters.getDynamicObject()->setProperty ("noSuchParameter", 1.0);
+    ASSERT_TRUE (fx.replaceWithText (juce::JSON::toString (parameters)));
+
+    const auto config = home.write ("engine.json", "{\"spatial\":" + juce::JSON::toString (juce::var (spatial.root().getFullPathName())) + "}");
+    juce::String message;
+    EXPECT_FALSE (a3app::checkConfig (checkArgs (config), home.dir, message)) << message;
+    EXPECT_TRUE (message.startsWith (config.getFullPathName()) && message.contains ("fx.parameters.json")) << message;
+}

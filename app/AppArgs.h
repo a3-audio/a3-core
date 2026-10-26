@@ -33,7 +33,8 @@ struct StartupData
 // "<file>: <reason>". --spatial replaces the config's spatial directory.
 std::optional<StartupData> loadStartupData (const AppArgs&, const juce::File& home, juce::String& error);
 
-// --check-config: true with message "ok", or false with "<file>: <reason>". Opens no audio, no
-// JACK client, no window, no socket, and writes nothing.
+// --check-config: true with message "ok", or false with "<file>: <reason>". Reads as the start
+// does and builds the engine from it (never prepared); opens no audio, no JACK client, no window,
+// no socket, and writes nothing.
 bool checkConfig (const AppArgs&, const juce::File& home, juce::String& message);
 }

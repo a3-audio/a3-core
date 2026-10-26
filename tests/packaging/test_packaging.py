@@ -4,6 +4,7 @@
 packaging/stage lays out the engine app, its user unit, the default config and the bench;
 packaging/DEBIAN/control names the package a3-engine."""
 
+import json
 import os
 import shutil
 import subprocess
@@ -15,6 +16,10 @@ ROOT = Path(__file__).resolve().parents[2]
 STAGE = ROOT / "packaging" / "stage"
 CONTROL = ROOT / "packaging" / "DEBIAN" / "control"
 UNIT = ROOT / "packaging" / "a3-engine.service"
+APP = ROOT / "build" / "app" / "a3-engine"
+TRUTH = ROOT / "tests" / "engine" / "data" / "a3-osc.json"
+SHIPPED_CONFIG = ROOT / "data" / "engine.json"
+SHIPPED_SPATIAL = ROOT / "data" / "spatial"
 
 
 # The staging tests copy the whole package; where /tmp is a small tmpfs,
@@ -253,6 +258,68 @@ class ControlTest(unittest.TestCase):
     def test_the_truth_file_comes_with_a_recommended_a3_core(self):
         self.assertIn("a3-core", control_fields().get("Recommends", ""))
         self.assertIn("pipewire-jack", control_fields().get("Recommends", ""))
+
+
+
+class CheckConfigBinaryTest(unittest.TestCase):
+    """The contract the unit's ExecCondition and REAPER's drop-in read: the built binary's
+    --check-config prints exactly one line and exits 0 (ok), 1 (<file>: <reason>) or 2 (bad flag)."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(dir=SCRATCH_ROOT))
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        (self.tmp / "home").mkdir()
+
+    def run_check(self, *words):
+        # DISPLAY names a server that does not exist: the check must not need X (the unit runs it
+        # with DISPLAY=:0 before the screen is up).
+        env = dict(os.environ, HOME=str(self.tmp / "home"), DISPLAY=":87")
+        return subprocess.run([str(APP), "--check-config", "--truth", str(TRUTH), *words],
+                              capture_output=True, text=True, env=env, timeout=60)
+
+    def config_with_spatial(self, spatial):
+        config = self.tmp / "engine.json"
+        config.write_text(json.dumps({"spatial": str(spatial)}))
+        return config
+
+    def assert_one_line(self, result):
+        self.assertEqual(len(result.stdout.splitlines()), 1, result.stdout)
+
+    def test_the_shipped_config_is_ok(self):
+        result = self.run_check("--config", str(SHIPPED_CONFIG))
+        self.assertEqual((result.returncode, result.stdout), (0, "ok\n"), result.stderr)
+
+    def test_broken_json_names_the_file(self):
+        config = self.tmp / "broken.json"
+        config.write_text('{ "engine": ')
+        result = self.run_check("--config", str(config))
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assert_one_line(result)
+        self.assertTrue(result.stdout.startswith(str(config) + ": "), result.stdout)
+
+    def test_a_config_iem_refuses_fails(self):
+        spatial = self.tmp / "spatial"
+        shutil.copytree(SHIPPED_SPATIAL, spatial)
+        fx = spatial / "fx.parameters.json"
+        parameters = json.loads(fx.read_text())
+        parameters["noSuchParameter"] = 1.0
+        fx.write_text(json.dumps(parameters))
+        config = self.config_with_spatial(spatial)
+        result = self.run_check("--config", str(config))
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assert_one_line(result)
+        self.assertTrue(result.stdout.startswith(str(config) + ": "), result.stdout)
+        self.assertIn("fx.parameters.json", result.stdout)
+
+    def test_an_unknown_flag_exits_2(self):
+        result = self.run_check("--bogus")
+        self.assertEqual(result.returncode, 2)
+
+    def test_the_check_writes_nothing(self):
+        config = self.config_with_spatial(SHIPPED_SPATIAL)
+        result = self.run_check("--config", str(config))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(list((self.tmp / "home").iterdir()), [])
 
 
 if __name__ == "__main__":

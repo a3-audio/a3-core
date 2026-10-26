@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "AppArgs.h"
+#include "Engine.h"
 
 namespace a3app
 {
@@ -73,9 +74,19 @@ std::optional<StartupData> loadStartupData (const AppArgs& args, const juce::Fil
 
 bool checkConfig (const AppArgs& args, const juce::File& home, juce::String& message)
 {
-    juce::String error;
-    const bool good = loadStartupData (args, home, error).has_value();
-    message = good ? juce::String ("ok") : error;
-    return good;
+    const auto data = loadStartupData (args, home, message);
+    if (! data)
+        return false;
+    // The loaders check only the files' shape; IEM refuses parameter sets, decoders and encoder
+    // layouts only when the engine is built. Built here and dropped: never prepared, no audio.
+    juce::String refusal;
+    if (a3::Engine::create (data->config.engine, data->spatial, refusal) == nullptr)
+    {
+        message = data->configFile.getFullPathName() + ": the engine refuses it (spatial "
+                  + data->config.spatialDirectory.getFullPathName() + "): " + refusal;
+        return false;
+    }
+    message = "ok";
+    return true;
 }
 }
