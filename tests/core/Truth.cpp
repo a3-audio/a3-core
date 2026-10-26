@@ -581,3 +581,15 @@ TEST (Truth, LoadedFingerprintIsPythons)
     EXPECT_EQ (loaded.canonical(), decodedBase64 (joined["canonical_b64"]));
     EXPECT_EQ (loaded.fingerprint(), joined["fingerprint"].toString().toStdString());
 }
+
+#include "B0Truth.h"
+
+// What relayOnArrival asks of an address entry, without a handle on the truth's own object.
+TEST (Truth, AnAddressEntryCanBeAskedForAProperty)
+{
+    const auto& truth = b0::truth();
+    EXPECT_TRUE (truth.addressHas ("channel.volume", "relayed_to"));
+    EXPECT_FALSE (truth.addressHas ("channel.cue", "relayed_to"));
+    EXPECT_FALSE (truth.addressHas ("channel.volume", "no-such-property"));
+    EXPECT_THROW (truth.addressHas ("no.such.address", "relayed_to"), TruthError);
+}

@@ -435,6 +435,13 @@ juce::var Truth::entry (const std::string& key) const
     return object->getProperty (key.c_str());
 }
 
+bool Truth::addressHas (const std::string& key, const std::string& property) const
+{
+    const auto found = entry (key);
+    auto* object = found.getDynamicObject();
+    return object != nullptr && object->hasProperty (property.c_str());
+}
+
 std::string Truth::pattern (const std::string& key) const
 {
     return utf8 (member (entry (key), "pattern", key + " has no pattern").toString());

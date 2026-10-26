@@ -133,8 +133,7 @@ bool relayOnArrival (const Truth& truth, const std::string& address)
         return false;
 
     const auto& key = found->first;
-    const auto* entry = truth.addressEntry (key).getDynamicObject();
-    return entry != nullptr && entry->hasProperty ("relayed_to") && notPassedOnNorReplayed.count (key) == 0;
+    return truth.addressHas (key, "relayed_to") && notPassedOnNorReplayed.count (key) == 0;
 }
 
 std::vector<Client> everyoneBut (const std::vector<Client>& subscribers, const std::optional<std::string>& origin)
