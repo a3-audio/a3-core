@@ -283,7 +283,7 @@ TEST (Truth, TheFingerprintIsOfTheJoinedTruth)
 TEST (Truth, TheDefaults)
 {
     Scratch s;
-    expectMeters (s.withoutMeters().meters(), 0, 20, 1.5);
+    expectMeters (s.withMeters (object()).meters(), 0, 20, 1.5);   // METER_DEFAULTS: an empty block
 }
 
 TEST (Truth, NoBlockGivesTheDefaults)
@@ -553,4 +553,31 @@ TEST (Truth, ABrokenContractIsAnErrorNotACrash)
     Scratch s;
     EXPECT_TRUE (std::holds_alternative<TruthError> (Truth::load (s.dir.getChildFile ("missing.json"), std::nullopt)));
     EXPECT_TRUE (std::holds_alternative<TruthError> (Truth::load (s.write ("bad.json", "{"), std::nullopt)));
+}
+
+namespace
+{
+std::string decodedBase64 (const juce::var& encoded)
+{
+    juce::MemoryOutputStream decoded;
+    EXPECT_TRUE (juce::Base64::convertFromBase64 (decoded, encoded.toString()));
+    return std::string (static_cast<const char*> (decoded.getData()), decoded.getDataSize());
+}
+}
+
+TEST (Truth, LoadedFingerprintIsPythons)
+{
+    Scratch s;
+    const auto& shipped = parityFixture()["truth"];
+    const auto plain = s.load();
+    EXPECT_EQ (plain.canonical(), decodedBase64 (shipped["canonical_b64"]));
+    EXPECT_EQ (plain.fingerprint(), shipped["fingerprint"].toString().toStdString());
+
+    const auto& joined = parityFixture()["joined"];
+    const auto network = s.write ("network.json", parityFixture()["network_text"].toString());
+    const auto loaded = s.load (network);
+    EXPECT_FALSE (loaded.networkProblem.has_value());
+    EXPECT_FALSE (loaded.metersProblem.has_value());
+    EXPECT_EQ (loaded.canonical(), decodedBase64 (joined["canonical_b64"]));
+    EXPECT_EQ (loaded.fingerprint(), joined["fingerprint"].toString().toStdString());
 }
