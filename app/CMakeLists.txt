@@ -3,7 +3,7 @@
 
 # The app's pure parts (host, OSC vocabulary, hello, config file, port names, I/O map, connection plan): always built, the tests link them.
 add_library(a3-engine-app-lib STATIC EngineHost.cpp OscVocabulary.cpp HelloSender.cpp
-    ConfigFile.cpp EnginePorts.cpp IoMap.cpp ConnectionPlan.cpp DeviceBackend.cpp AppArgs.cpp
+    ConfigFile.cpp EnginePorts.cpp IoMap.cpp ConnectionPlan.cpp DeviceBackend.cpp AppArgs.cpp ConfigEdits.cpp
     ui/AudioPage.cpp ui/StatusPage.cpp ui/MainWindow.cpp)
 target_include_directories(a3-engine-app-lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/ui)
 target_link_libraries(a3-engine-app-lib PUBLIC a3-engine a3-engine-bench-lib)

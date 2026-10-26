@@ -170,6 +170,10 @@ juce::Result saveAppConfig (const AppConfig& config, const juce::File& file)
     juce::TemporaryFile temporary (file);
     if (! temporary.getFile().replaceWithText (text))
         return juce::Result::fail ("cannot write " + temporary.getFile().getFullPathName());
+    // The file must be one the loader accepts: a refused write leaves the old file in place.
+    juce::String refusal;
+    if (! loadAppConfig (temporary.getFile(), refusal))
+        return juce::Result::fail ("not saved, " + refusal);
     if (! temporary.overwriteTargetFileWithTemporary())
         return juce::Result::fail ("cannot replace " + file.getFullPathName());
     return juce::Result::ok();
