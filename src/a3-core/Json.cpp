@@ -8,6 +8,8 @@
 #include <charconv>
 #include <cmath>
 #include <cstdint>
+#include <locale.h>
+#include <stdlib.h>
 #include <utility>
 #include <vector>
 
@@ -484,11 +486,8 @@ private:
         if (isFloat)
         {
             double number = 0;
-            const bool negative = text[start] == '-';
-            const bool tinyExponent = text.find_first_of ("eE", start) < pos && text[text.find_first_of ("eE", start) + 1] == '-';
             if (std::from_chars (first, last, number).ec == std::errc::result_out_of_range)   // leaves `number` untouched
-                number = tinyExponent ? (negative ? -0.0 : 0.0)
-                                      : (negative ? -HUGE_VAL : HUGE_VAL);   // as Python reads 1e400 and 1e-400
+                number = readOutOfRange (std::string (first, last));
             return juce::var (number);
         }
         juce::int64 integer = 0;
@@ -497,6 +496,13 @@ private:
         if (integer >= INT32_MIN && integer <= INT32_MAX)
             return juce::var (static_cast<int> (integer));
         return juce::var (integer);
+    }
+
+    // strtod saturates to +-HUGE_VAL or +-0.0 by the number's magnitude, as Python's float() does.
+    static double readOutOfRange (const std::string& token)
+    {
+        static const locale_t cLocale = newlocale (LC_ALL_MASK, "C", nullptr);
+        return strtod_l (token.c_str(), nullptr, cLocale);
     }
 
     bool digits()

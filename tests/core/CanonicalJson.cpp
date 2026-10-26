@@ -169,3 +169,11 @@ TEST (CanonicalJson, NonFiniteWordsRoundTrip)
 {
     EXPECT_EQ (canonicalBytes (parsed ("[NaN,Infinity,-Infinity]")), "[NaN,Infinity,-Infinity]");
 }
+
+TEST (CanonicalJson, OutOfRangeIsDecidedByMagnitude)
+{
+    // Python: [inf, 0.0]; the exponent's sign alone points the wrong way for both
+    const std::string huge = "1" + std::string (400, '0') + "e-10";
+    const std::string tiny = "0." + std::string (400, '0') + "1e+10";
+    EXPECT_EQ (canonicalBytes (parsed ("[" + huge + "," + tiny + "]")), "[Infinity,0.0]");
+}
