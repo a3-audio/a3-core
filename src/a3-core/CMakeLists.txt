@@ -6,6 +6,7 @@ add_library(a3-core-lib STATIC Version.cpp Json.cpp Truth.cpp OscWire.cpp Dispat
     Buttons.cpp Tempo.cpp Ahead.cpp DeskFirst.cpp SendFailures.cpp Subscribers.cpp Announce.cpp
     StateFile.cpp CoreState.cpp Recall.cpp Evening.cpp
     Traffic.cpp SeenFile.cpp Register.cpp Render.cpp VuRelay.cpp
+    ScreencastFanout.cpp
     HttpServer.cpp CoreApi.cpp)
 target_include_directories(a3-core-lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(a3-core-lib PUBLIC a3-engine-juce)
