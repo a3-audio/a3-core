@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Raphael Eismann
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Core's engine-mode deck selector: the desk's input ring (analog, deck A,
-deck B) on each channel, the deck 3D that follows it, and deck presence.
+"""Core's engine-mode deck selector: the desk's input ring (deck A, deck B,
+..., analog) on each channel, the deck 3D that follows it, and deck presence.
 Pure: the clock is passed in."""
 
 import sys
@@ -26,14 +26,21 @@ def pick(selector, channel, source):
 
 
 class TheRing(unittest.TestCase):
-    def test_ring_is_analog_then_decks(self):
+    def test_ring_is_decks_then_analog(self):
+        # The desk reads D1 D2 ... A, analog last (maintainer, 2026-10-26).
         s = DeckSelector()
-        self.assertEqual(s.ring(1), [ANALOG, 1, 2])
-        self.assertEqual(DeckSelector(decks=3).ring(1), [ANALOG, 1, 2, 3])
+        self.assertEqual(s.ring(1), [1, 2, ANALOG])
+        self.assertEqual(DeckSelector(decks=4).ring(1), [1, 2, 3, 4, ANALOG])
+
+    def test_cursor_starts_on_analog(self):
+        s = DeckSelector()
+        self.assertEqual(s.ring(1)[s.cursor(1)], ANALOG)
 
     def test_turn_wraps_both_ways(self):
         s = DeckSelector()
-        s.turn(1, -1)
+        s.turn(1, 1)
+        self.assertEqual(s.ring(1)[s.cursor(1)], 1)
+        s.turn(1, -2)
         self.assertEqual(s.ring(1)[s.cursor(1)], 2)
         s.turn(1, 1)
         self.assertEqual(s.ring(1)[s.cursor(1)], ANALOG)
@@ -45,7 +52,7 @@ class TheRing(unittest.TestCase):
 
     def test_push_selects_the_cursor(self):
         s = DeckSelector()
-        s.turn(2, 1)
+        s.turn(2, 1)          # from analog, past the end, onto deck 1
         self.assertEqual(s.push(2), [(2, 1)])
         self.assertEqual(s.source(2), 1)
         self.assertEqual(s.channel_of(1), 2)

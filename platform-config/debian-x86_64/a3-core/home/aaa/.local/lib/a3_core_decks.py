@@ -3,7 +3,8 @@
 """Core's engine-mode deck selector: each channel's input ring.
 
 Mirrors the REAPER-mode ring (a3_core_stems) -- a turn moves a cursor, a push
-commits it -- but over [ANALOG, deck 1, ..., deck D] instead of stem pairs.
+commits it -- but over [deck 1, ..., deck D, ANALOG] instead of stem pairs;
+analog last, as the desk reads it: D1 D2 ... A.
 Channels and decks are numbered as on the wire: channels 1-4, decks 1-D
 (shown as letters A, B, ...), ANALOG = 0.
 
@@ -39,14 +40,15 @@ class DeckSelector:
         self.channels = channels
         self.decks = decks
         self._sources = [ANALOG] * channels
-        self._cursors = [0] * channels      # a place in ring(), not a source
+        # a place in ring(), not a source; starts on what the channel plays
+        self._cursors = [self.ring(c).index(ANALOG) for c in range(1, channels + 1)]
         self._heard = {}
         self._held_before = set()
 
     # -- the ring ---------------------------------------------------------
 
     def ring(self, channel):
-        return [ANALOG] + list(range(1, self.decks + 1))
+        return list(range(1, self.decks + 1)) + [ANALOG]
 
     def cursor(self, channel):
         return self._cursors[channel - 1]
