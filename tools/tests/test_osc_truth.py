@@ -488,7 +488,7 @@ class TheEngineSpeaks(unittest.TestCase):
     def test_core_sends_the_deck_3d_to_stemdeck(self):
         entry = self.truth.addresses()["stemdeck.3d"]
         self.assertEqual((entry["args"], entry["deck"], entry["from"], entry["to"]),
-                         ("f", [1, 2], ["core"], ["stemdeck"]))
+                         ("f", [1, 4], ["core"], ["stemdeck"]))
         self.assertEqual(self.truth.address("stemdeck.3d", deck=2), "/stemdeck/2/3d")
         self.assertEqual(self.truth.match("/stemdeck/1/3d"), ("stemdeck.3d", {"deck": 1}))
 
@@ -498,7 +498,7 @@ class TheEngineSpeaks(unittest.TestCase):
             self.assertIn(receiver, words["channel.source"]["to"])
             self.assertIn(receiver, words["stemdeck.present"]["to"])
         self.assertEqual((words["stemdeck.present"]["args"], words["stemdeck.present"]["from"],
-                          words["stemdeck.present"]["deck"]), ("i", ["core"], [1, 2]))
+                          words["stemdeck.present"]["deck"]), ("i", ["core"], [1, 4]))
         self.assertEqual(self.truth.address("stemdeck.present", deck=1),
                          "/stemdeck/1/present")
 
@@ -520,7 +520,19 @@ class TheEngineSpeaks(unittest.TestCase):
         entry = self.truth.addresses()["stemdeck.deck-hello"]
         self.assertEqual((entry["pattern"], entry["args"], entry["deck"],
                           entry["from"], entry["to"]),
-                         ("/stemdeck/{deck}/hello", "s", [1, 2], ["stemdeck"], ["core"]))
+                         ("/stemdeck/{deck}/hello", "s", [1, 4], ["stemdeck"], ["core"]))
+
+    def test_engine_mode_words_say_deck_four_is_D_and_reaper_words_keep_two(self):
+        words = self.truth.addresses()
+        for key in ("channel.source", "channel.source.cursor", "aux-return.source"):
+            with self.subTest(key=key):
+                self.assertIn("4 = D", words[key]["meaning"])
+        for key in ("stemdeck.bus", "stemdeck.buses"):
+            with self.subTest(key=key):
+                self.assertEqual(words[key]["deck"], [1, 2])
+        self.assertEqual(self.truth.address("stemdeck.3d", deck=4), "/stemdeck/4/3d")
+        self.assertEqual(self.truth.match("/stemdeck/4/hello"),
+                         ("stemdeck.deck-hello", {"deck": 4}))
 
 
 class CoreAnnouncesItself(unittest.TestCase):

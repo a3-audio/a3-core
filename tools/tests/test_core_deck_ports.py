@@ -102,6 +102,23 @@ class DeckPortsInCore(unittest.TestCase):
         self.channel("/channel/3/3d", 0.9)
         self.assertEqual(wire.sent[-1], ("/stemdeck/2/3d", 0.9))
 
+    def test_deck_d_hello_is_heard_and_its_3d_goes_to_7783(self):
+        deck_d = ("127.0.0.5", 6004)
+        self.deck_hello(4, deck_d)
+        self.assertTrue(self.core["_decks"].present(4, __import__("time").monotonic()))
+        self.channel("/channel/2/3d", 0.6)
+        self.put_deck_on_channel(4, 2)
+        wire = [w for w in Wire.made if w.target[0] == deck_d[0]][-1]
+        self.assertEqual(wire.target, (deck_d[0], 7783))
+        self.assertIn(("/stemdeck/4/3d", 0.6), wire.sent)
+
+    def test_channel_source_4_is_accepted_and_5_is_refused(self):
+        decks = self.core["_decks"]
+        decks.from_evening({"channel.source": [4, 0, 0, 0]})
+        self.assertEqual(decks.source(1), 4)
+        decks.from_evening({"channel.source": [5, 0, 0, 0]})
+        self.assertEqual(decks.source(1), 0)
+
     def test_deck_a_stays_on_the_base_port(self):
         self.deck_hello(1, DECK_A)
         self.assertEqual(self.wire_of(1).target, (DECK_A[0], 7780))

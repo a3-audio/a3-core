@@ -60,7 +60,9 @@ class EngineModeInProcess(unittest.TestCase):
             _engine_mode=True,
             osc_reaper=self.core["SilentClient"]("reaper"),
             osc_dualdelay=self.core["SilentClient"]("dualdelay"),
-            _decks=self.core["DeckSelector"](channels=4, decks=2),
+            _decks=self.core["DeckSelector"](
+                channels=4,
+                decks=self.core["_truth"].addresses()["stemdeck.deck-hello"]["deck"][1]),
             _project=self.core["EngineSession"](
                 [("/channel/1/gain", 0.3)], current=self.core["the_live_evening"]))
         self.core["_hello_gate"].trust(LOCAL)
