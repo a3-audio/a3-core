@@ -152,3 +152,44 @@ TEST (AppArgs, CheckConfigOpensNothing)
     ASSERT_TRUE (a3app::checkConfig (checkArgs (config), home.dir, message)) << message;
     EXPECT_EQ (home.listing(), before);
 }
+
+TEST (AppArgs, SaveOnAFreshHomeWritesTheUserFile)
+{
+    // The rig after the install: no user file, the package's file (spatial relative to itself) is read.
+    Home home;
+    const auto package = home.dir.getChildFile ("usr/share/a3-engine/engine.json");
+    ASSERT_TRUE (package.getParentDirectory().createDirectory());
+    ASSERT_TRUE (juce::File (A3_DEFAULT_ENGINE_CONFIG).copyFileTo (package));
+    ASSERT_TRUE (a3test::shippedSpatialDirectory.copyDirectoryTo (package.getSiblingFile ("spatial")));
+    const auto packageText = package.loadFileAsString();
+
+    a3app::AppArgs args;
+    args.truth = A3_TRUTH_COPY;
+    args.packageConfig = package;
+    juce::String error;
+    const auto data = a3app::loadStartupData (args, home.dir, error);
+    ASSERT_TRUE (data.has_value()) << error;
+    EXPECT_EQ (data->configFile, package);
+
+    const auto user = home.dir.getChildFile (".config/a3/engine/engine.json");
+    EXPECT_EQ (data->saveFile, user);
+    ASSERT_TRUE (a3app::saveAppConfig (data->config, data->saveFile).wasOk());
+    EXPECT_EQ (package.loadFileAsString(), packageText);
+
+    // The saved file is the one the next start reads, and it passes the unit's check.
+    const auto again = a3app::loadStartupData (args, home.dir, error);
+    ASSERT_TRUE (again.has_value()) << error;
+    EXPECT_EQ (again->configFile, user);
+    EXPECT_EQ (again->config.spatialDirectory, package.getSiblingFile ("spatial"));
+    EXPECT_TRUE (a3app::checkConfig (args, home.dir, error)) << error;
+}
+
+TEST (AppArgs, SaveWritesTheFileConfigNamed)
+{
+    Home home;
+    const auto config = home.write ("mine.json", "{" + spatialField() + "}");
+    juce::String error;
+    const auto data = a3app::loadStartupData (checkArgs (config), home.dir, error);
+    ASSERT_TRUE (data.has_value()) << error;
+    EXPECT_EQ (data->saveFile, config);
+}

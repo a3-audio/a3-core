@@ -13,6 +13,7 @@ struct AppArgs
 {
     bool noWindow = false, noConnect = false, service = false, timing = false, checkConfig = false;
     juce::String config, spatial, truth = "/usr/share/a3/a3-osc.json";
+    juce::File packageConfig = packageConfigFile;   // not a flag: the tests point it at a copy
 };
 
 // Refuses an unknown flag and a value flag without its value, naming it in `error`.
@@ -22,7 +23,8 @@ std::optional<AppArgs> parseAppArgs (const juce::StringArray&, juce::String& err
 struct StartupData
 {
     EngineTruth truth;
-    juce::File configFile;
+    juce::File configFile;   // where the config was read from
+    juce::File saveFile;     // where the window's Save writes
     AppConfig config;
     a3::SpatialConfig spatial;
 };

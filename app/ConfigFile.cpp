@@ -10,7 +10,6 @@ namespace a3app
 namespace
 {
 constexpr int minBlock = 64, maxBlock = 2048;
-const juce::File packageConfig { "/usr/share/a3-engine/engine.json" };
 
 using a3::jsonparse::Refusal;
 using a3::jsonparse::refuse;
@@ -179,11 +178,19 @@ juce::Result saveAppConfig (const AppConfig& config, const juce::File& file)
     return juce::Result::ok();
 }
 
-juce::File chooseConfigFile (const juce::String& argument, const juce::File& home, std::function<bool (const juce::File&)> exists)
+juce::File chooseConfigFile (const juce::String& argument, const juce::File& home, std::function<bool (const juce::File&)> exists,
+                             const juce::File& packageConfig)
 {
     if (argument.isNotEmpty())
         return juce::File (argument);
-    const auto user = home.getChildFile (".config/a3/engine/engine.json");
+    const auto user = userConfigFile (home);
     return exists (user) ? user : packageConfig;
+}
+
+juce::File userConfigFile (const juce::File& home) { return home.getChildFile (".config/a3/engine/engine.json"); }
+
+juce::File chooseSaveFile (const juce::String& argument, const juce::File& home)
+{
+    return argument.isNotEmpty() ? juce::File (argument) : userConfigFile (home);
 }
 }

@@ -143,7 +143,7 @@ class SessionView final : public a3app::HostView
 public:
     using Restart = std::function<juce::Result (const a3app::AppConfig&, juce::String& problem)>;
     SessionView (std::unique_ptr<Session>& s, const a3app::StartupData& startup, Restart restartApp)
-        : session (s), file (startup.configFile), edited (startup.config), startedWith (startup.config),
+        : session (s), file (startup.saveFile), edited (startup.config), startedWith (startup.config),
           names (portNames (startup)), restart (std::move (restartApp)) {}
 
     a3app::BackendStatus status() const override { return live() ? session->status() : a3app::BackendStatus {}; }

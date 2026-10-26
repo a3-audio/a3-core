@@ -52,7 +52,8 @@ std::optional<StartupData> loadStartupData (const AppArgs& args, const juce::Fil
     }
     data.truth = *truth;
 
-    data.configFile = chooseConfigFile (args.config, home, [] (const juce::File& f) { return f.existsAsFile(); });
+    data.configFile = chooseConfigFile (args.config, home, [] (const juce::File& f) { return f.existsAsFile(); }, args.packageConfig);
+    data.saveFile = chooseSaveFile (args.config, home);
     const auto config = loadAppConfig (data.configFile, error);   // names the file itself
     if (! config)
         return std::nullopt;
