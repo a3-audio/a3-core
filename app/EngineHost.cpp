@@ -42,6 +42,7 @@ EngineHost::EngineHost (a3::EngineConfig c, a3::SpatialConfig s, const EngineTru
                         std::function<void (const juce::OSCMessage&)> sendToCore)
     : config (std::move (c)), spatial (std::move (s)), wire (config.channels), hello (truth, std::move (sendToCore))
 {
+    wire.global().filter.kind.store (static_cast<int> (config.filterKind));   // Core's words change it later
 }
 
 EngineHost::~EngineHost()

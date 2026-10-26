@@ -29,7 +29,10 @@ public:
     // Builds and prepares a new Engine (allocates; control thread). fadeFirst = false:
     // it takes over at once with the old one's gate levels (a quantum change: no re-fade).
     // fadeFirst = true: the running Engine closes (10 ms), then the new one takes over
-    // closed and opens over 1 s if Core has opened (a Save of N, layout or device).
+    // closed and opens over 1 s if Core has opened. It swaps only while the audio callback is
+    // running (the old Engine must be heard to go silent), so a stopped or closed backend never
+    // swaps: the app's Save of N, layout or backend does not use this, it re-creates the whole
+    // Session (new EngineHost, new boot id).
     juce::Result rebuild (double sampleRate, int blockSize, bool fadeFirst);
 
     // Audio thread. Silence on every output while no Engine is published.

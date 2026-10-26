@@ -12,6 +12,7 @@
 #include "ui/MainWindow.h"
 #include <csignal>
 #include <cstdio>
+#include <functional>
 
 namespace
 {
@@ -99,6 +100,7 @@ public:
     }
 
     a3app::BackendStatus status() const { return backend->status(); }
+    a3app::LiveLinks liveLinks() const { return backend->liveLinks(); }
     a3app::EngineHost& engineHost() { return *host; }
     // Seconds on the app clock of Core's last message, or a negative number before the first.
     double lastCoreSeconds() const { return lastCoreMessage.load(); }
@@ -114,12 +116,15 @@ private:
     std::unique_ptr<a3app::AudioBackend> backend;
 };
 
-// What the pages see of the running Session. An edit (apply) is kept here for the pages to show;
-// writing it out and rebuilding the Session is the window's Save, which comes with its own task.
+// What the pages see of the running Session. An edit is kept here until Save; apply() hands it to
+// the app, which re-creates the Session (see EngineApp::restart).
 class SessionView final : public a3app::HostView
 {
 public:
-    SessionView (std::unique_ptr<Session>& s, const a3app::StartupData& startup) : session (s), edited (startup.config), startedWith (startup.config), names (portNames (startup)) {}
+    using Restart = std::function<juce::Result (const a3app::AppConfig&)>;
+    SessionView (std::unique_ptr<Session>& s, const a3app::StartupData& startup, Restart restartApp)
+        : session (s), file (startup.configFile), edited (startup.config), startedWith (startup.config),
+          names (portNames (startup)), restart (std::move (restartApp)) {}
 
     a3app::BackendStatus status() const override { return session->status(); }
     std::vector<a3::Engine::OutputMeter> meters() override { return session->engineHost().meters(); }
@@ -130,18 +135,44 @@ public:
     a3::GateLevels gateLevels() const override { return session->engineHost().gateLevels(); }
     a3app::AppConfig config() const override { return edited; }
     a3app::AppConfig running() const override { return startedWith; }
-    juce::Result apply (const a3app::AppConfig& config) override { edited = config; return juce::Result::ok(); }
+    juce::File configFile() const override { return file; }
+    a3app::LiveLinks liveLinks() const override { return session->liveLinks(); }
+    void edit (const a3app::AppConfig& config) override { edited = config; }
+
+    juce::Result apply (const a3app::AppConfig& config) override
+    {
+        const auto result = restart (config);
+        if (result.failed())
+            return result;
+        startedWith = edited = config;
+        names = portNames (config);
+        return juce::Result::ok();
+    }
+
+    void setFilterKind (a3::FilterKind kind) override
+    {
+        session->engineHost().controls().global().filter.kind.store (static_cast<int> (kind));
+        edited.engine.filterKind = startedWith.engine.filterKind = kind;   // it runs now
+    }
 
 private:
-    static std::vector<std::string> portNames (const a3app::StartupData& startup)
+    static std::vector<std::string> portNames (const a3app::StartupData& startup) { return portNames (startup.config, startup.spatial); }
+    static std::vector<std::string> portNames (const a3app::AppConfig& config, const a3::SpatialConfig& spatial)
     {
-        return a3app::enginePortNames (startup.config.engine, startup.spatial).outputs;
+        return a3app::enginePortNames (config.engine, spatial).outputs;
+    }
+    std::vector<std::string> portNames (const a3app::AppConfig& config) const
+    {
+        juce::String error;
+        const auto ports = a3app::portNamesFor (config, error);
+        return ports ? ports->outputs : names;
     }
 
     std::unique_ptr<Session>& session;
-    a3app::AppConfig edited;
-    const a3app::AppConfig startedWith;
+    const juce::File file;
+    a3app::AppConfig edited, startedWith;
     std::vector<std::string> names;
+    Restart restart;
 };
 
 class EngineApp final : public juce::JUCEApplication, private juce::Timer
@@ -184,8 +215,8 @@ public:
                       status.sampleRate, status.blockSize, status.connecting ? "connecting" : "no links", args.noWindow ? ", no window" : "");
         if (! args.noWindow)
         {
-            view = std::make_unique<SessionView> (session, startup);
-            window = std::make_unique<a3app::MainWindow> (*view, pageDevices, args.service, [this] { quit(); });
+            view = std::make_unique<SessionView> (session, startup, [this] (const a3app::AppConfig& config) { return restart (config); });
+            window = std::make_unique<a3app::MainWindow> (*view, pageDevices, spatialChoices(), args.service, [this] { quit(); });
             window->open();
         }
         startTimerHz (50);
@@ -211,6 +242,49 @@ public:
 private:
     static juce::File home() { return juce::File::getSpecialLocation (juce::File::userHomeDirectory); }
 
+    // Save of a changed config: the whole Session is dropped and built again (new host, new boot
+    // id, new ports; Core replays through the hello). That covers N, layout and backend changes
+    // and a backend that is stopped, which a fade-first rebuild could not swap. The old Session
+    // closes first because both bind engine.osc and may hold the device. If the new one does not
+    // open, the old config is opened again.
+    juce::Result restart (const a3app::AppConfig& config)
+    {
+        juce::String error;
+        const auto spatial = a3::loadSpatialConfig (config.spatialDirectory, error);
+        if (! spatial)
+            return juce::Result::fail ("spatial: " + error);
+
+        const auto before = startup;
+        session.reset();
+        startup.config = config;
+        startup.spatial = *spatial;
+        session = std::make_unique<Session> (startup);
+        const auto opened = session->open (! args.noConnect);
+        if (opened.wasOk())
+            return opened;
+
+        session.reset();
+        startup = before;
+        session = std::make_unique<Session> (startup);
+        if (session->open (! args.noConnect).failed())
+        {
+            finish (1, "cannot reopen the previous setting after: " + opened.getErrorMessage());
+            return juce::Result::fail (opened.getErrorMessage() + " (the previous setting could not be reopened either)");
+        }
+        return juce::Result::fail (opened.getErrorMessage() + " (the previous setting is running again)");
+    }
+
+    // The directories the ZONES page offers: the user's own and the installed variants, where they exist.
+    std::vector<juce::File> spatialChoices() const
+    {
+        std::vector<juce::File> choices;
+        for (const auto& directory : { home().getChildFile (".config/a3/engine/spatial"), juce::File ("/usr/share/a3-engine/spatial"),
+                                       juce::File ("/usr/share/a3-engine/spatial-reaper-booth-6.1") })
+            if (directory.isDirectory())
+                choices.push_back (directory);
+        return choices;
+    }
+
     void finish (int code, const juce::String& message)
     {
         if (message.isNotEmpty())
@@ -231,7 +305,7 @@ private:
     a3app::AppArgs args;
     a3app::StartupData startup;
     std::unique_ptr<Session> session;
-    juce::AudioDeviceManager pageDevices;   // the audio page's selector: choosing a device there opens it, which C7 must prevent while the backend holds one
+    juce::AudioDeviceManager pageDevices;   // only a catalogue of device types for the audio page; never initialised, so it opens no device
     std::unique_ptr<SessionView> view;
     std::unique_ptr<a3app::MainWindow> window;
 };

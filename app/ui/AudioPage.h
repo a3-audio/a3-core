@@ -8,8 +8,10 @@
 namespace a3app
 {
 // The audio page. JACK: rate and quantum are read-only (the server owns them) with where they
-// come from. Device: JUCE's own selector for device, rate and block size, and the bit depth as
-// the device reports it. The backend choice is an edit handed to HostView::apply.
+// come from. Device: choosers for device type, input and output device, rate and block size, and
+// the bit depth as the device reports it. Every choice only edits the pending config (HostView::edit);
+// Save applies it through the backend. The page opens no device: the manager is a catalogue of
+// device types and is never initialised.
 class AudioPage final : public juce::Component
 {
 public:
@@ -19,7 +21,7 @@ public:
     void chooseBackend (BackendSettings::Type);
     void refresh();   // re-reads the view's status (the window's timer)
 
-    bool showsDeviceSelector() const { return selector != nullptr; }
+    bool showsDeviceSelector() const { return deviceChoosers; }
     const juce::Label& rateLabel() const { return rate; }
     const juce::Label& quantumLabel() const { return quantum; }
     const juce::Label& rateSourceLabel() const { return rateSource; }
@@ -31,11 +33,16 @@ public:
 
 private:
     void rebuildForBackend();
+    void fillChoosers();
+    void editDevice();
 
     HostView& view;
     juce::AudioDeviceManager& manager;
     juce::Label title, backendCaption, rate, quantum, rateSource, bitDepth, applyMessage, pending;
     juce::TextButton jackButton { "JACK" }, deviceButton { "Device" };
-    std::unique_ptr<juce::AudioDeviceSelectorComponent> selector;
+    juce::Label typeCaption, inputCaption, outputCaption, rateCaption, blockCaption;
+    juce::ComboBox typeBox, inputBox, outputBox, rateBox, blockBox;
+    bool deviceChoosers = false;
+    bool filling = false;
 };
 }

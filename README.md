@@ -90,6 +90,42 @@ changes. Both are upstream and unedited; `EngineAllocation` checks that the engi
 IEM's DualDelay also sounds slightly different at different block sizes, so the echoes follow the JACK
 quantum, as they do in REAPER.
 
+## Plan 4c: the app
+
+`a3-engine` (CMake option `A3_ENGINE_APP`, default ON, needs libjack) hosts the engine: it reads
+the truth (`/usr/share/a3/a3-osc.json`), `engine.json` and the spatial data, runs the signal path
+on JACK (the rig) or on a JUCE audio device (anywhere else), listens for Core on `engine.osc`,
+says hello on `core.osc` and shows a window.
+
+    a3-engine [--config FILE] [--spatial DIR] [--truth FILE] [--no-connect] [--no-window]
+              [--service] [--timing] [--check-config]
+
+- `--config`: else `~/.config/a3/engine/engine.json`, else `/usr/share/a3-engine/engine.json`.
+  Save writes to the file the app started with. A saved file is checked the way a start checks it
+  and is refused, leaving the old file in place, if the start would refuse it.
+- `--no-connect`: the engine makes no JACK link (a run beside REAPER). `--no-window`: no window
+  (a unit without a screen). `--service`: closing the window only hides it.
+- `--check-config`: prints `ok` or `<file>: <reason>`, exit 0 or 1, opens nothing.
+
+The window has one page per job and a Save bar under them:
+
+| Page | What it edits |
+|---|---|
+| AUDIO | JACK: rate and quantum, read-only (the server owns them). Device: type, input, output, rate, block size. A choice only edits the config; it opens no device. |
+| CHANNELS | N (1..128) with the DSP load beside it |
+| ZONES | which spatial directory: the installed `spatial` and `spatial-reaper-booth-6.1`, and `~/.config/a3/engine/spatial`. No layout editor |
+| I/O | per engine port its JACK peers (editable) and the live ones the map does not name (foreign: shown, never edited), or its device channel; the direct links the engine makes between two foreign ports |
+| CALIBRATION | trim per zone, -90..+6 dB; a slider only proposes, a dialog names the old and the new value, a zone without a trim stays closed |
+| FILTER | SVF or Ladder, live: acts at once, needs no Save |
+| STATUS | what runs: mode, Core's last word, gate, load, xruns, missing peers, meters |
+
+Edits are pending until Save ("not saved" shows while the edit differs from what runs; STATUS
+keeps describing what runs). **Save** writes the file atomically, then applies it: the whole
+session is re-created (new engine, new boot id; Core replays its state through the hello). That
+holds for every change (N, layout, backend, trims, I/O map) and also works while the backend is
+stopped. If the new session does not open, the previous setting is opened again and the error
+is shown.
+
 ## Build and test
 
 Prerequisites: CMake 3.16 or newer, a C++17 compiler, JUCE 9.0.3 installed as a CMake package

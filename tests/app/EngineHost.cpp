@@ -178,3 +178,15 @@ TEST (EngineHost, ControlTickRunsTheModulation)
                                         + 4 * rig.config.channels);
     EXPECT_GT (meters[0].peak + meters[1].peak, 0.0f) << "main carries the sine";
 }
+
+// engine.json's filterKind is the value the engine starts with (Core's words change it later).
+TEST (EngineHostFilterKind, StartsWithTheConfiguredKind)
+{
+    auto config = a3test::engineConfig();
+    const auto spatial = a3test::loadedSpatialConfig (a3test::shippedSpatialDirectory);
+    a3app::EngineHost svf (config, spatial, a3apptest::engineTruth());
+    EXPECT_EQ (svf.controls().global().filter.kind.load(), static_cast<int> (a3::FilterKind::svf));
+    config.filterKind = a3::FilterKind::ladder;
+    a3app::EngineHost ladder (config, spatial, a3apptest::engineTruth());
+    EXPECT_EQ (ladder.controls().global().filter.kind.load(), static_cast<int> (a3::FilterKind::ladder));
+}

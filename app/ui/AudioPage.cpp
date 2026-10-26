@@ -39,10 +39,104 @@ AudioPage::AudioPage (HostView& v, juce::AudioDeviceManager& m) : view (v), mana
     for (auto* child : std::initializer_list<juce::Component*> { &title, &backendCaption, &rate, &quantum, &rateSource, &bitDepth,
                                                                 &applyMessage, &pending, &jackButton, &deviceButton })
         addAndMakeVisible (child);
+    const std::pair<juce::Label*, const char*> captions[] = { { &typeCaption, "Device type" }, { &inputCaption, "Input device" },
+        { &outputCaption, "Output device" }, { &rateCaption, "Sample rate" }, { &blockCaption, "Block size" } };
+    for (const auto& [label, text] : captions)
+    {
+        label->setText (text, juce::dontSendNotification);
+        look::caption (*label);
+        addChildComponent (*label);
+    }
+    for (auto* box : { &typeBox, &inputBox, &outputBox, &rateBox, &blockBox })
+    {
+        box->onChange = [this] { editDevice(); };
+        addChildComponent (*box);
+    }
     rebuildForBackend();
 }
 
 AudioPage::~AudioPage() = default;
+
+namespace
+{
+constexpr int defaultItem = 1;   // an empty name: the backend takes the system's default device
+
+void fill (juce::ComboBox& box, const juce::StringArray& names, const juce::String& current)
+{
+    box.clear (juce::dontSendNotification);
+    box.addItem ("(default)", defaultItem);
+    for (int i = 0; i < names.size(); ++i)
+        box.addItem (names[i], i + 2);
+    if (current.isNotEmpty() && ! names.contains (current))
+        box.addItem (current + "  (not found)", names.size() + 2);
+    const int index = names.indexOf (current);
+    box.setSelectedId (current.isEmpty() ? defaultItem : index >= 0 ? index + 2 : names.size() + 2, juce::dontSendNotification);
+}
+
+juce::String chosenName (const juce::ComboBox& box)
+{
+    if (box.getSelectedId() == defaultItem)
+        return {};
+    return box.getText().upToFirstOccurrenceOf ("  (not found)", false, false);
+}
+}
+
+void AudioPage::fillChoosers()
+{
+    const auto settings = view.config().backend;
+    const auto& types = manager.getAvailableDeviceTypes();   // scans, opens nothing
+    juce::StringArray typeNames, inputs, outputs;
+    for (auto* type : types)
+        typeNames.add (type->getTypeName());
+    const auto* selected = types.isEmpty() ? nullptr : types[juce::jmax (0, typeNames.indexOf (settings.deviceType))];
+    if (selected != nullptr)
+    {
+        inputs = selected->getDeviceNames (true);
+        outputs = selected->getDeviceNames (false);
+    }
+    filling = true;
+    fill (typeBox, typeNames, settings.deviceType);
+    fill (inputBox, inputs, settings.inputDevice);
+    fill (outputBox, outputs, settings.outputDevice);
+    rateBox.clear (juce::dontSendNotification);
+    int id = 1;
+    for (const double candidate : { 44100.0, 48000.0, 88200.0, 96000.0 })
+    {
+        rateBox.addItem (juce::String (juce::roundToInt (candidate)) + " Hz", id);
+        if (candidate == settings.sampleRate)
+            rateBox.setSelectedId (id, juce::dontSendNotification);
+        ++id;
+    }
+    blockBox.clear (juce::dontSendNotification);
+    for (int frames = 64; frames <= 2048; frames *= 2)
+    {
+        blockBox.addItem (juce::String (frames) + " frames", frames);
+        if (frames == settings.blockSize)
+            blockBox.setSelectedId (frames, juce::dontSendNotification);
+    }
+    filling = false;
+}
+
+void AudioPage::editDevice()
+{
+    if (filling)
+        return;
+    auto config = view.config();
+    auto& backend = config.backend;
+    const auto newType = chosenName (typeBox);
+    const bool typeChanged = newType != backend.deviceType;
+    backend.deviceType = newType;
+    backend.inputDevice = typeChanged ? juce::String() : chosenName (inputBox);
+    backend.outputDevice = typeChanged ? juce::String() : chosenName (outputBox);
+    if (rateBox.getSelectedId() > 0)
+        backend.sampleRate = rateBox.getText().getDoubleValue();
+    if (blockBox.getSelectedId() > 0)
+        backend.blockSize = blockBox.getSelectedId();
+    view.edit (config);
+    if (typeChanged)
+        fillChoosers();   // the other type's devices
+    refresh();
+}
 
 void AudioPage::chooseBackend (BackendSettings::Type type)
 {
@@ -50,10 +144,8 @@ void AudioPage::chooseBackend (BackendSettings::Type type)
     if (config.backend.type == type)
         return;
     config.backend.type = type;
-    const auto result = view.apply (config);
-    applyMessage.setText (result.failed() ? result.getErrorMessage() : juce::String(), juce::dontSendNotification);
-    if (result.wasOk())
-        rebuildForBackend();
+    view.edit (config);
+    rebuildForBackend();
 }
 
 void AudioPage::rebuildForBackend()
@@ -61,12 +153,12 @@ void AudioPage::rebuildForBackend()
     const bool device = view.config().backend.type == BackendSettings::Type::device;
     jackButton.setToggleState (! device, juce::dontSendNotification);
     deviceButton.setToggleState (device, juce::dontSendNotification);
-    selector.reset();
+    deviceChoosers = device;
     if (device)
-    {
-        selector = std::make_unique<juce::AudioDeviceSelectorComponent> (manager, 0, 64, 0, 64, false, false, false, false);
-        addAndMakeVisible (*selector);
-    }
+        fillChoosers();
+    for (auto* child : std::initializer_list<juce::Component*> { &typeCaption, &inputCaption, &outputCaption, &rateCaption, &blockCaption,
+                                                                &typeBox, &inputBox, &outputBox, &rateBox, &blockBox })
+        child->setVisible (device);
     rate.setVisible (! device);
     quantum.setVisible (! device);
     refresh();
@@ -84,7 +176,7 @@ void AudioPage::refresh()
     rateSource.setText (status.rateSource, juce::dontSendNotification);
     bitDepth.setText ("Bit depth   " + juce::String (status.bitDepth) + (runsDevice ? "  -  set by the device" : "  -  float samples, set by JACK"),
                       juce::dontSendNotification);
-    if (device != (selector != nullptr))
+    if (device != deviceChoosers)
         rebuildForBackend();
 }
 
@@ -103,11 +195,21 @@ void AudioPage::resized()
     pending.setBounds (area.removeFromTop (row));
     area.removeFromTop (row / 2);
 
-    if (selector != nullptr)
+    if (deviceChoosers)
     {
-        bitDepth.setBounds (area.removeFromBottom (row));
-        rateSource.setBounds (area.removeFromBottom (row));
-        selector->setBounds (area);
+        const auto line = [&] (juce::Label& caption, juce::ComboBox& box)
+        {
+            auto r = area.removeFromTop (row);
+            caption.setBounds (r.removeFromLeft (r.getWidth() / 4));
+            box.setBounds (r.reduced (2));
+        };
+        line (typeCaption, typeBox);
+        line (inputCaption, inputBox);
+        line (outputCaption, outputBox);
+        line (rateCaption, rateBox);
+        line (blockCaption, blockBox);
+        rateSource.setBounds (area.removeFromTop (row));
+        bitDepth.setBounds (area.removeFromTop (row));
         return;
     }
     rate.setBounds (area.removeFromTop (row));
