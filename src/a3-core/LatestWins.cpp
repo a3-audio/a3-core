@@ -8,6 +8,7 @@
 #include <cstring>
 #include <exception>
 #include <map>
+#include <string>
 #include <netinet/in.h>
 #include <poll.h>
 #include <sys/socket.h>
@@ -18,14 +19,12 @@ namespace a3core
 {
 namespace
 {
-constexpr char bundlePrefix[8] = { '#', 'b', 'u', 'n', 'd', 'l', 'e', '\0' };
-
 // a3_core_latest._addresses: a bundle's message addresses (nested bundles opened), or the one
 // message's -- read as osc_message.OscMessage reads it, without asking for a leading '/'.
 std::optional<std::vector<std::string>> addressesOf (const uint8_t* data, size_t size)
 {
     std::vector<std::string> out;
-    if (size >= sizeof bundlePrefix && std::memcmp (data, bundlePrefix, sizeof bundlePrefix) == 0)
+    if (isBundle (data, size))
     {
         const auto messages = decodePacket (data, size);
         if (! messages)
@@ -127,7 +126,18 @@ void serve (const ServeLoop& loop)
     while (loop.running())
     {
         pollfd ready { loop.socketFd, POLLIN, 0 };
-        ::poll (&ready, 1, waitMs);
+        if (::poll (&ready, 1, waitMs) < 0)
+        {
+            if (errno == EINTR)
+                continue;
+            loop.report (std::string ("poll: ") + std::strerror (errno));
+            return;
+        }
+        if ((ready.revents & POLLNVAL) != 0)   // not an open socket: waiting again would spin
+        {
+            loop.report ("poll: the socket is not open");
+            return;
+        }
         auto packets = drain (loop.socketFd, loop.limit);
         std::vector<std::optional<std::string>> keys;
         for (const auto& p : packets)

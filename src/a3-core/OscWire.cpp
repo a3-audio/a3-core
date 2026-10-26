@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "OscWire.h"
 
+#include "Utf8.h"
+
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -18,31 +20,6 @@ namespace
 
 struct Refused {};   // ParseError, or a UnicodeDecodeError python-osc lets through
 
-bool validUtf8 (const uint8_t* s, size_t n)   // Python's strict "utf-8" decoder
-{
-    size_t i = 0;
-    while (i < n)
-    {
-        const uint8_t c = s[i];
-        if (c < 0x80) { ++i; continue; }
-        size_t extra;
-        uint32_t cp, min;
-        if (c >= 0xc2 && c <= 0xdf) { extra = 1; cp = c & 0x1fu; min = 0x80; }
-        else if (c >= 0xe0 && c <= 0xef) { extra = 2; cp = c & 0x0fu; min = 0x800; }
-        else if (c >= 0xf0 && c <= 0xf4) { extra = 3; cp = c & 0x07u; min = 0x10000; }
-        else return false;
-        if (n - i <= extra) return false;
-        for (size_t k = 1; k <= extra; ++k)
-        {
-            if ((s[i + k] & 0xc0) != 0x80) return false;
-            cp = (cp << 6) | (s[i + k] & 0x3fu);
-        }
-        if (cp < min || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) return false;
-        i += extra + 1;
-    }
-    return true;
-}
-
 class Reader
 {
 public:
@@ -58,7 +35,7 @@ public:
             throw Refused {};
         const size_t length = (size_t) (nul - (data + index));
         const size_t total = (length + 1 + 3) / 4 * 4;
-        if (index + total > size || ! validUtf8 (data + index, length))
+        if (index + total > size || ! utf8::valid (data + index, length))
             throw Refused {};
         std::string out (reinterpret_cast<const char*> (data + index), length);
         index += total;
@@ -130,8 +107,7 @@ bool startsWith (const uint8_t* data, size_t size, const char* prefix, size_t le
     return size >= length && std::memcmp (data, prefix, length) == 0;
 }
 
-constexpr char bundlePrefix[] = "#bundle";   // with its NUL: 8 bytes
-constexpr size_t bundlePrefixLength = 8;
+constexpr size_t bundlePrefixLength = 8;   // "#bundle" and its NUL
 
 // osc_message.OscMessage._parse_datagram
 OscMessage parseMessage (const uint8_t* data, size_t size)
@@ -179,7 +155,7 @@ void parseBundle (const uint8_t* data, size_t size, std::vector<OscMessage>& out
             throw Refused {};
         const size_t take = std::min ((size_t) length, size - index);
         const uint8_t* content = data + index;
-        if (startsWith (content, take, bundlePrefix, bundlePrefixLength))
+        if (isBundle (content, take))
             parseBundle (content, take, out);
         else if (take > 0 && content[0] == '/')
             out.push_back (parseMessage (content, take));
@@ -298,27 +274,17 @@ bool unicodeSpace (char32_t cp)   // str.isspace() above ASCII
 
 // _PyUnicode_TransformDecimalAndSpaceToASCII: ASCII stays, other whitespace becomes ' ', other
 // decimal digits their ASCII digit, anything else '?'. nullopt: not UTF-8 (no Python str is).
-std::optional<std::string> asciiOfText (const std::string& utf8)
+std::optional<std::string> asciiOfText (const std::string& text)
 {
-    const auto* s = reinterpret_cast<const uint8_t*> (utf8.data());
-    if (! validUtf8 (s, utf8.size()))
+    const auto points = utf8::codePoints (text);
+    if (! points)
         return std::nullopt;
     std::string out;
-    for (size_t i = 0; i < utf8.size();)
+    for (const char32_t cp : *points)
     {
-        const uint8_t c = s[i];
-        if (c < 0x80)
-        {
-            out += (char) (c == 0x7f ? '?' : c);
-            ++i;
-            continue;
-        }
-        const size_t extra = c >= 0xf0 ? 3 : c >= 0xe0 ? 2 : 1;
-        char32_t cp = c & (0x3f >> extra);
-        for (size_t k = 1; k <= extra; ++k)
-            cp = (cp << 6) | (s[i + k] & 0x3fu);
-        i += extra + 1;
-        if (unicodeSpace (cp))
+        if (cp < 0x7f)
+            out += (char) cp;
+        else if (unicodeSpace (cp))
             out += ' ';
         else if (const int digit = unicodeDecimal (cp); digit >= 0)
             out += (char) ('0' + digit);
@@ -447,12 +413,14 @@ std::string textOfBytes (const OscArg& arg)
 }
 }
 
+bool isBundle (const uint8_t* data, size_t size) { return startsWith (data, size, "#bundle", bundlePrefixLength); }
+
 std::optional<std::vector<OscMessage>> decodePacket (const uint8_t* data, size_t size)
 {
     try
     {
         std::vector<OscMessage> out;
-        if (startsWith (data, size, bundlePrefix, bundlePrefixLength))
+        if (isBundle (data, size))
             parseBundle (data, size, out);
         else if (size > 0 && data[0] == '/')
             out.push_back (parseMessage (data, size));
@@ -495,6 +463,10 @@ std::vector<uint8_t> encodeMessage (const OscMessage& message)
         return out;
     }
     catch (const Unbuildable&)
+    {
+        return {};
+    }
+    catch (const std::bad_variant_access&)   // a value that does not fit its tag
     {
         return {};
     }

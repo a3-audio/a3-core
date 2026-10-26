@@ -7,12 +7,16 @@
 // re.match'ed against the incoming one. Every match in map order, the default only when nothing
 // matched; a pattern that does not compile reaches nothing, not even the default.
 //
-// The regexes are matched by a small engine for the part of Python's `re` syntax those two forms
-// can produce: literals, escapes of non-alphanumerics, '.', classes (with Python's rules: a ']' first
-// is literal, ranges, '^' negation), groups with '|', '*' '+' '?' (lazy or not), '^' and '$' ('$'
-// also before a final newline). Anything else (\w, {m,n} repeats, (?...) groups) is refused.
+// The regexes are matched by a small engine (a Pike VM, below) for the part of Python's `re` syntax
+// those two forms can produce: literals, escapes of non-alphanumerics, '.', classes (with Python's
+// rules: a ']' first is literal, ranges, '^' negation), groups with '|', '*' '+' '?' (lazy or not),
+// '^' and '$' ('$' also before a final newline). Anything else (\w, {m,n} repeats, (?...) groups)
+// is refused.
 #include "Dispatcher.h"
 
+#include "Utf8.h"
+
+#include <optional>
 #include <stdexcept>
 
 namespace a3core
@@ -20,23 +24,6 @@ namespace a3core
 namespace
 {
 struct Unsupported {};   // re.error, or syntax beyond the subset
-
-std::u32string codePoints (const std::string& utf8)
-{
-    std::u32string out;
-    const auto* s = reinterpret_cast<const unsigned char*> (utf8.data());
-    for (size_t i = 0; i < utf8.size();)
-    {
-        const unsigned char c = s[i];
-        const size_t extra = c < 0x80 ? 0 : c >= 0xf0 ? 3 : c >= 0xe0 ? 2 : 1;
-        char32_t cp = extra == 0 ? c : (char32_t) (c & (0x3f >> extra));
-        for (size_t k = 1; k <= extra && i + k < utf8.size(); ++k)
-            cp = (cp << 6) | (s[i + k] & 0x3fu);
-        out += cp;
-        i += extra + 1;
-    }
-    return out;
-}
 
 bool isAsciiAlnum (char32_t c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'); }
 
@@ -213,74 +200,175 @@ private:
 };
 
 // ---- the regex: re.match (anchored at the start, not at the end) ------------------------------
+//
+// Compiled to a small program and run as a Pike VM: every live state advances together, one input
+// character at a time. Nothing recurses per character, so neither a long address nor a long
+// pattern can grow the stack, and the time is linear in the text (a 60000-character address in one
+// datagram must neither crash Core nor stall it).
 
-class Matcher
+struct Instruction
+{
+    enum class Op { Char, Split, Jump, Start, End, Match } op = Op::Match;
+    Node::Kind test = Node::Kind::Literal;   // Char: Literal, Any or Class
+    char32_t literal = 0;
+    bool negated = false;
+    std::vector<std::pair<char32_t, char32_t>> ranges;
+    size_t x = 0, y = 0;                     // Split: both; Jump: x
+};
+
+class Program
 {
 public:
-    Matcher (const std::vector<Sequence>& top, const std::u32string& text) : regex (top), s (text) {}
-
-    bool matches() const
+    explicit Program (const std::vector<Sequence>& top)
     {
-        return alternatives (regex, 0, [] (size_t) { return true; });
+        alternation (top);
+        add (Instruction::Op::Match);
     }
 
-private:
-    using Rest = std::function<bool (size_t)>;
-
-    bool alternatives (const std::vector<Sequence>& alts, size_t at, const Rest& rest) const
+    bool matches (const std::u32string& s) const
     {
-        for (const auto& seq : alts)
-            if (sequence (seq, 0, at, rest))
-                return true;
-        return false;
-    }
-
-    bool sequence (const Sequence& seq, size_t node, size_t at, const Rest& rest) const
-    {
-        if (node == seq.size())
-            return rest (at);
-        const auto next = [&] (size_t after) { return sequence (seq, node + 1, after, rest); };
-        return repeated (seq[node], 0, at, next);
-    }
-
-    // Any count from min to max; greedy or lazy gives the same answer to "is there a match".
-    bool repeated (const Node& n, int count, size_t at, const Rest& rest) const
-    {
-        if (count >= n.min && rest (at))
+        std::vector<size_t> current, next;
+        std::vector<size_t> seen (code.size(), (size_t) -1);
+        if (closure (0, 0, s, current, seen))
             return true;
-        if (n.max != -1 && count >= n.max)
-            return false;
-        return once (n, at, [&] (size_t after) {
-            if (after == at && count >= n.min)
-                return false;   // an empty pass would loop forever
-            return repeated (n, count + 1, after, rest);
-        });
-    }
-
-    bool once (const Node& n, size_t at, const Rest& rest) const
-    {
-        switch (n.kind)
+        for (size_t at = 0; at < s.size() && ! current.empty(); ++at)
         {
-            case Node::Kind::Literal: return at < s.size() && s[at] == n.literal && rest (at + 1);
-            case Node::Kind::Any: return at < s.size() && s[at] != '\n' && rest (at + 1);
-            case Node::Kind::Class:
-            {
-                if (at >= s.size())
-                    return false;
-                bool inside = false;
-                for (const auto& [lo, hi] : n.ranges)
-                    inside = inside || (s[at] >= lo && s[at] <= hi);
-                return inside != n.negated && rest (at + 1);
-            }
-            case Node::Kind::Group: return alternatives (n.alternatives, at, rest);
-            case Node::Kind::Start: return at == 0 && rest (at);
-            case Node::Kind::End: return (at == s.size() || (at + 1 == s.size() && s[at] == '\n')) && rest (at);
+            next.clear();
+            for (const auto pc : current)
+                if (accepts (code[pc], s[at]) && closure (pc + 1, at + 1, s, next, seen))
+                    return true;
+            std::swap (current, next);
         }
         return false;
     }
 
-    const std::vector<Sequence>& regex;
-    const std::u32string& s;
+private:
+    size_t add (Instruction::Op op)
+    {
+        Instruction instruction;
+        instruction.op = op;
+        code.push_back (std::move (instruction));
+        return code.size() - 1;
+    }
+
+    void alternation (const std::vector<Sequence>& alts)
+    {
+        std::vector<size_t> jumpsToEnd;
+        for (size_t a = 0; a + 1 < alts.size(); ++a)
+        {
+            const auto split = add (Instruction::Op::Split);
+            code[split].x = code.size();
+            sequence (alts[a]);
+            jumpsToEnd.push_back (add (Instruction::Op::Jump));
+            code[split].y = code.size();
+        }
+        sequence (alts.back());
+        for (const auto jump : jumpsToEnd)
+            code[jump].x = code.size();
+    }
+
+    void sequence (const Sequence& seq)
+    {
+        for (const auto& node : seq)
+            item (node);
+    }
+
+    // x? : split body, after.  x* : loop: split body, after; body; jump loop.  x+ : body; split body, after.
+    void item (const Node& node)
+    {
+        if (node.min == 1 && node.max == 1)
+            return atom (node);
+        if (node.max == 1)
+        {
+            const auto split = add (Instruction::Op::Split);
+            code[split].x = code.size();
+            atom (node);
+            code[split].y = code.size();
+            return;
+        }
+        if (node.min == 0)
+        {
+            const auto loop = add (Instruction::Op::Split);
+            code[loop].x = code.size();
+            atom (node);
+            code[add (Instruction::Op::Jump)].x = loop;
+            code[loop].y = code.size();
+            return;
+        }
+        const auto body = code.size();
+        atom (node);
+        const auto split = add (Instruction::Op::Split);
+        code[split].x = body;
+        code[split].y = code.size();
+    }
+
+    void atom (const Node& node)
+    {
+        switch (node.kind)
+        {
+            case Node::Kind::Group: alternation (node.alternatives); return;
+            case Node::Kind::Start: add (Instruction::Op::Start); return;
+            case Node::Kind::End: add (Instruction::Op::End); return;
+            case Node::Kind::Literal: case Node::Kind::Any: case Node::Kind::Class:
+            {
+                auto& c = code[add (Instruction::Op::Char)];
+                c.test = node.kind;
+                c.literal = node.literal;
+                c.negated = node.negated;
+                c.ranges = node.ranges;
+                return;
+            }
+        }
+    }
+
+    static bool accepts (const Instruction& c, char32_t ch)
+    {
+        switch (c.test)
+        {
+            case Node::Kind::Literal: return ch == c.literal;
+            case Node::Kind::Any: return ch != '\n';
+            case Node::Kind::Class:
+            {
+                bool inside = false;
+                for (const auto& [lo, hi] : c.ranges)
+                    inside = inside || (ch >= lo && ch <= hi);
+                return inside != c.negated;
+            }
+            case Node::Kind::Group: case Node::Kind::Start: case Node::Kind::End: return false;
+        }
+        return false;
+    }
+
+    // Follows splits, jumps and assertions from `start` at position `at` with an explicit stack;
+    // adds the Char states reached to `out`. True when Match is reached: re.match has a match.
+    bool closure (size_t start, size_t at, const std::u32string& s, std::vector<size_t>& out, std::vector<size_t>& seen) const
+    {
+        std::vector<size_t> stack { start };
+        while (! stack.empty())
+        {
+            const auto pc = stack.back();
+            stack.pop_back();
+            if (seen[pc] == at)
+                continue;
+            seen[pc] = at;
+            const auto& c = code[pc];
+            switch (c.op)
+            {
+                case Instruction::Op::Match: return true;
+                case Instruction::Op::Char: out.push_back (pc); break;
+                case Instruction::Op::Jump: stack.push_back (c.x); break;
+                case Instruction::Op::Split: stack.push_back (c.y); stack.push_back (c.x); break;
+                case Instruction::Op::Start: if (at == 0) stack.push_back (pc + 1); break;
+                case Instruction::Op::End:
+                    if (at == s.size() || (at + 1 == s.size() && s[at] == '\n'))
+                        stack.push_back (pc + 1);
+                    break;
+            }
+        }
+        return false;
+    }
+
+    std::vector<Instruction> code;
 };
 
 // handlers_for_address's conversion of the incoming address pattern, character for character.
@@ -353,7 +441,7 @@ struct Dispatcher::Entry
 {
     std::string pattern;
     std::u32string text;
-    std::optional<std::vector<Sequence>> wildcard;   // the mapped address read as a regex, if it has '*'
+    std::optional<Program> wildcard;   // the mapped address read as a regex, if it has '*'
     std::vector<Handler> handlers;
 };
 
@@ -368,13 +456,16 @@ void Dispatcher::map (std::string pattern, Handler handler)
             entry->handlers.push_back (std::move (handler));
             return;
         }
+    const auto text = utf8::codePoints (pattern);
+    if (! text)
+        throw std::invalid_argument ("a mapped address is no UTF-8: " + pattern);
     auto entry = std::make_unique<Entry>();
-    entry->text = codePoints (pattern);
+    entry->text = *text;
     if (pattern.find ('*') != std::string::npos)
     {
         try
         {
-            entry->wildcard = Parser (regexOfMappedWildcard (entry->text)).parse();
+            entry->wildcard.emplace (Parser (regexOfMappedWildcard (entry->text)).parse());
         }
         catch (const Unsupported&)
         {
@@ -390,11 +481,13 @@ void Dispatcher::setDefault (Handler handler) { fallback = std::move (handler); 
 
 void Dispatcher::dispatch (const Endpoint& from, const OscMessage& message) const
 {
-    const auto address = codePoints (message.address);
-    std::vector<Sequence> incoming;
+    const auto address = utf8::codePoints (message.address);
+    if (! address)
+        return;   // no Python str: python-osc never gets this far (decoding raised)
+    std::optional<Program> incoming;
     try
     {
-        incoming = Parser (regexOfAddressPattern (address)).parse();
+        incoming.emplace (Parser (regexOfAddressPattern (*address)).parse());
     }
     catch (const Unsupported&)
     {
@@ -403,7 +496,7 @@ void Dispatcher::dispatch (const Endpoint& from, const OscMessage& message) cons
     bool matched = false;
     for (const auto& entry : entries)
     {
-        if (! Matcher (incoming, entry->text).matches() && ! (entry->wildcard && Matcher (*entry->wildcard, address).matches()))
+        if (! incoming->matches (entry->text) && ! (entry->wildcard && entry->wildcard->matches (*address)))
             continue;
         matched = true;
         for (const auto& handler : entry->handlers)

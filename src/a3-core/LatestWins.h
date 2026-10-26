@@ -48,6 +48,7 @@ struct ServeLoop
 };
 
 // a3_core_latest.serve: wait for the socket, take what waits, hand on what latestWins keeps. A
-// handler or tick that throws is reported and the loop goes on.
+// handler or tick that throws is reported and the loop goes on. A socket that cannot be waited on
+// (closed, or poll() failing) is reported once and ends the loop (Python's select() would raise).
 void serve (const ServeLoop& loop);
 }

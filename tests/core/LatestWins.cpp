@@ -218,3 +218,15 @@ TEST (LatestWins, AnIdleLoopTicks)
              passes ({ true, true, false }), [&ticks] { ++ticks; }, 0.01 });
     EXPECT_EQ (ticks, 2);
 }
+
+TEST (LatestWins, ABrokenSocketStopsTheLoop)
+{
+    const int fd = udpSocket();
+    ::close (fd);
+    int passesLeft = 1000;   // a loop that does not stop on its own is stopped here, and fails
+    std::vector<std::string> reports;
+    serve ({ fd, [] (const Bytes&, const Endpoint&) {}, key, 100, [&] (const std::string& r) { reports.push_back (r); },
+             [&] { return passesLeft-- > 0; }, [] {}, 0.001 });
+    EXPECT_GT (passesLeft, 990);
+    EXPECT_EQ (reports.size(), 1u);
+}

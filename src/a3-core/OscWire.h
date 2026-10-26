@@ -38,11 +38,15 @@ struct OscMessage
 // receives none, and a flat argument list cannot carry python-osc's nested list.
 std::optional<std::vector<OscMessage>> decodePacket (const uint8_t* data, size_t size);
 
+// osc_bundle.OscBundle.dgram_is_bundle: starts with "#bundle" and its NUL.
+bool isBundle (const uint8_t* data, size_t size);
+
 // osc_message.OscMessage(dgram): one message, read without asking for a leading '/'.
 std::optional<OscMessage> decodeMessage (const uint8_t* data, size_t size);
 
 // OscMessageBuilder.build().dgram. Empty where python-osc raises: an empty address or blob, a
-// Python float beyond float32 (struct.pack(">f") raises OverflowError).
+// Python float beyond float32 (struct.pack(">f") raises OverflowError); and for a value that does
+// not fit its tag.
 std::vector<uint8_t> encodeMessage (const OscMessage& message);
 
 // The tag python-osc's builder infers for a Python value (OscMessageBuilder._get_arg_type).

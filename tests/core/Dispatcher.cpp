@@ -87,3 +87,19 @@ TEST (Dispatcher, APatternPythonCannotCompileIsRefused)
     EXPECT_THROW (dispatcher.map ("/a/*(", none), std::invalid_argument);
     EXPECT_NO_THROW (dispatcher.map ("/a[/b", none));   // no '*': never read as a regex
 }
+
+TEST (Dispatcher, AVeryLongAddressStillDispatches)
+{
+    // One datagram can carry an address this long; python-osc calls the handler, and the matcher's
+    // depth must not grow with the address.
+    std::vector<std::string> calls;
+    Dispatcher dispatcher;
+    dispatcher.map ("/channel/*", [&] (const Endpoint&, const OscMessage& m) { calls.push_back ("channel " + std::to_string (m.address.size())); });
+    dispatcher.map ("/beat", [&] (const Endpoint&, const OscMessage&) { calls.push_back ("beat"); });
+    dispatcher.setDefault ([&] (const Endpoint&, const OscMessage&) { calls.push_back ("default"); });
+
+    dispatcher.dispatch ({ "h", 1 }, at ("/channel/" + std::string (60000, 'a')));
+    dispatcher.dispatch ({ "h", 1 }, at ("/channel/" + std::string (60000, '*')));
+    dispatcher.dispatch ({ "h", 1 }, at ("/" + std::string (60000, '?')));
+    EXPECT_EQ (calls, (std::vector<std::string> { "channel 60009", "channel 60009", "default" }));
+}

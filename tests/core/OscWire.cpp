@@ -138,6 +138,13 @@ TEST (OscWire, TheTypeIsPythonOscs)
     EXPECT_EQ (pyBool (false).tag, 'F');
 }
 
+TEST (OscWire, AnArgThatDoesNotFitItsTagIsNotBuilt)
+{
+    EXPECT_TRUE (encodeMessage ({ "/x", { OscArg { 'i', std::string ("1") } } }).empty());
+    EXPECT_TRUE (encodeMessage ({ "/x", { OscArg { 's', int32_t { 1 } } } }).empty());
+    EXPECT_TRUE (encodeMessage ({ "/x", { OscArg { 'b', std::monostate {} } } }).empty());
+}
+
 TEST (OscWire, DecodesAsPythonOsc)
 {
     const auto& cases = *wire()["decode"].getArray();
