@@ -103,7 +103,7 @@ bindsym $mod+a focus parent
 # "workspace number N" still finds them.
 set $ws1 "1:MOTION"
 set $ws2 "2:STEMDECK"
-set $ws3 "3:REAPER"
+set $ws3 "3:ENGINE"
 set $ws4 "4:QJACKCTL"
 set $ws5 "5:SCARLETT"
 set $ws6 "6"
@@ -207,6 +207,7 @@ exec /usr/bin/xrandr --dpi 120 &
 #exec /home/aaa/a3-core.lokal/alsa-scarlett-gui &
 
 for_window [class="A3 Motion UI"] move container to workspace number $ws1
+for_window [class="a3-engine"] move container to workspace number $ws3
 for_window [class="REAPER"] move container to workspace number $ws3
 for_window [class="QjackCtl"] move container to workspace number $ws4
 for_window [title="Scarlett 18i20 USB"] move container to workspace number $ws5

@@ -1,6 +1,6 @@
 """The rig's workspaces: which program lives where, and where i3bar shows.
 
-Decided 2026-09-30: 1 A3 Motion, 2 StemDeck, 3 REAPER, 4 QjackCtl, 5 the
+Decided 2026-09-30: 1 A3 Motion, 2 StemDeck, 3 REAPER (the engine window since 2026-10-26, renamed ENGINE), 4 QjackCtl, 5 the
 Scarlett mixer; 7 the virtual desk (A3 Desk, since 2026-10-25). The two touch UIs fill their 768x1024 screen and switch
 between each other themselves; from workspace 3 on, i3bar at the top gives
 the way back -- a3-bar-per-workspace shows it there and hides it on 1 and 2.
@@ -48,7 +48,7 @@ class BarPerWorkspace(unittest.TestCase):
             self.assertEqual(self.bar.bar_mode(name), "invisible", name)
 
     def test_from_workspace_three_on_the_bar_shows(self):
-        for name in ("3:REAPER", "4:QJACKCTL", "5:SCARLETT", "7:DESK", "7"):
+        for name in ("3:ENGINE", "4:QJACKCTL", "5:SCARLETT", "7:DESK", "7"):
             self.assertEqual(self.bar.bar_mode(name), "dock", name)
 
     def test_a_workspace_without_a_number_keeps_the_bar_away(self):
@@ -63,7 +63,8 @@ class WhereThingsLive(unittest.TestCase):
         expected = {
             '[class="A3 Motion UI"]': "1:MOTION",
             '[class="StemDeck"]': "2:STEMDECK",
-            '[class="REAPER"]': "3:REAPER",
+            '[class="a3-engine"]': "3:ENGINE",
+            '[class="REAPER"]': "3:ENGINE",
             '[class="QjackCtl"]': "4:QJACKCTL",
             '[title="Scarlett 18i20 USB"]': "5:SCARLETT",
             '[class="A3 Desk"]': "7:DESK",
