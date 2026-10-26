@@ -68,9 +68,21 @@ class WhereThingsLive(unittest.TestCase):
             '[class="QjackCtl"]': "4:QJACKCTL",
             '[title="Scarlett 18i20 USB"]': "5:SCARLETT",
             '[class="A3 Desk"]': "7:DESK",
+            '[class="StemDeck" title="^StemDeck B$"]': "6:STEMDECK B",
         }
         for criteria, name in expected.items():
             self.assertEqual(workspace_of(self.config, criteria), name, criteria)
+
+    def test_the_one_deck_windows_are_main_windows_not_dialogs(self):
+        # 2026-10-26: "StemDeck A" / "StemDeck B" (one deck per instance) floated
+        # as dialogs, and B covered A on workspace 2.
+        border = re.search(r'for_window \[class="StemDeck" title="([^"]+)"\] border none', self.config)
+        floating = re.search(r'for_window \[class="StemDeck" title="([^"]+)"\] floating enable', self.config)
+        for title in ("StemDeck", "StemDeck A", "StemDeck B"):
+            self.assertTrue(re.search(border.group(1), title), title)
+            self.assertFalse(re.search(floating.group(1), title), title)
+        for dialog in ("Settings", "Audio", "Create stems"):
+            self.assertTrue(re.search(floating.group(1), dialog), dialog)
 
     def test_the_bar_starts_hidden_at_the_top(self):
         bar = re.search(r"^bar \{(.*?)^\}", self.config, re.M | re.S)

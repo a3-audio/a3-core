@@ -106,7 +106,7 @@ set $ws2 "2:STEMDECK"
 set $ws3 "3:ENGINE"
 set $ws4 "4:QJACKCTL"
 set $ws5 "5:SCARLETT"
-set $ws6 "6"
+set $ws6 "6:STEMDECK B"
 set $ws7 "7:DESK"
 set $ws8 "8"
 set $ws9 "9"
@@ -221,10 +221,13 @@ for_window [class="A3 Desk"] move container to workspace number $ws7
 # service puts back the workspace that was showing
 # (stemdeck/tools/rig-keep-the-screen.sh).
 assign [class="StemDeck"] number $ws2
-for_window [class="StemDeck" title="^StemDeck$"] border none
+# One deck per instance (-bformat, 2026-10-26): "StemDeck A" stays on 2, deck B
+# gets workspace 6, so neither covers the other on the one screen.
+for_window [class="StemDeck" title="^StemDeck B$"] move container to workspace number $ws6
+for_window [class="StemDeck" title="^StemDeck( [A-D])?$"] border none
 # Its dialogs -- Settings, Audio, Create stems, the folder choosers, message
-# boxes: every StemDeck window but the main one -- float over it.
-for_window [class="StemDeck" title="^(?!StemDeck$)"] floating enable
+# boxes: every StemDeck window but a main one -- float over it.
+for_window [class="StemDeck" title="^(?!StemDeck( [A-D])?$)"] floating enable
 
 #exec --no-startup-id xrandr -o right
 #exec --no-startup-id xinput set-prop "wch.cn USB2IIC_CTP_CONTROL" --type=float "Coordinate Transformation Matrix" 0 1 0 -1 0 1 0 0 1
