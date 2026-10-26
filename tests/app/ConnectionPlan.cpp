@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <gtest/gtest.h>
 #include <algorithm>
+#include <cerrno>
 #include "ConnectionPlan.h"
 
 namespace
@@ -167,4 +168,15 @@ TEST (JackBackend, RefusesBesideReaperUnlessNoConnect)
     EXPECT_TRUE (a3app::refuseBesideReaper (withReaper, false).wasOk());
     EXPECT_TRUE (a3app::refuseBesideReaper ({ "system", "StemDeck-A", "REAPER-bridge" }, true).wasOk());
     EXPECT_TRUE (a3app::refuseBesideReaper ({}, true).wasOk());
+}
+
+// R4: a link someone else made between the graph snapshot and jack_connect is theirs.
+TEST (JackBackend, OnlyALinkItMadeIsOwned)
+{
+    using a3app::ConnectOutcome;
+    EXPECT_EQ (a3app::connectOutcome (0), ConnectOutcome::owned);
+    EXPECT_EQ (a3app::connectOutcome (EEXIST), ConnectOutcome::foreign);
+    EXPECT_EQ (a3app::connectOutcome (-EEXIST), ConnectOutcome::foreign);
+    EXPECT_EQ (a3app::connectOutcome (-1), ConnectOutcome::failed);
+    EXPECT_EQ (a3app::connectOutcome (1), ConnectOutcome::failed);
 }

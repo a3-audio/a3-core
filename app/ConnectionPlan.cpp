@@ -3,6 +3,7 @@
 #include "ConnectionPlan.h"
 #include "EnginePorts.h"
 #include <algorithm>
+#include <cerrno>
 #include <set>
 
 namespace a3app
@@ -65,6 +66,15 @@ std::vector<Link> stillOwned (const std::vector<Link>& madeByUs, const std::vect
         if (contains (live, link))
             owned.push_back (link);
     return owned;
+}
+
+ConnectOutcome connectOutcome (int result)
+{
+    if (result == 0)
+        return ConnectOutcome::owned;
+    if (result == EEXIST || result == -EEXIST)
+        return ConnectOutcome::foreign;
+    return ConnectOutcome::failed;
 }
 
 std::vector<std::string> clientNamesOf (const std::vector<std::string>& ports)

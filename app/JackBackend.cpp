@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "JackBackend.h"
 #include <algorithm>
-#include <cerrno>
 #include <chrono>
 #include <cstdio>
 
@@ -239,11 +238,18 @@ void JackBackend::connect()
     const auto plan = planConnections (map, live, madeByUs, graphPorts(), jack_get_client_name (client));
     for (const auto& link : plan.add)
     {
-        const int result = jack_connect (client, link.from.c_str(), link.to.c_str());
-        if (result == 0 || result == EEXIST)
-            madeByUs.push_back (link);
-        else if (reportedFailures.insert ({ link.from, link.to }).second)
-            std::fprintf (stderr, "a3-engine: cannot connect %s -> %s\n", link.from.c_str(), link.to.c_str());
+        switch (connectOutcome (jack_connect (client, link.from.c_str(), link.to.c_str())))
+        {
+            case ConnectOutcome::owned:
+                madeByUs.push_back (link);
+                break;
+            case ConnectOutcome::foreign:   // made by someone else since the graph was read: theirs (R4)
+                break;
+            case ConnectOutcome::failed:
+                if (reportedFailures.insert ({ link.from, link.to }).second)
+                    std::fprintf (stderr, "a3-engine: cannot connect %s -> %s\n", link.from.c_str(), link.to.c_str());
+                break;
+        }
     }
     for (const auto& link : plan.remove)
         if (jack_disconnect (client, link.from.c_str(), link.to.c_str()) == 0)

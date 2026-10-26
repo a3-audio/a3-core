@@ -33,6 +33,12 @@ ConnectionPlan planConnections (const IoMap& wanted, const std::vector<Link>& li
 // died with a peer's port is no one's; when it is made again it is owned again.
 std::vector<Link> stillOwned (const std::vector<Link>& madeByUs, const std::vector<Link>& live);
 
+// What a jack_connect result means for ownership. Only a link the engine itself made is
+// owned (0). EEXIST (JACK2 returns it positive, others negated) means someone else made it
+// after the graph was read: foreign, not an error. Anything else failed.
+enum class ConnectOutcome { owned, foreign, failed };
+ConnectOutcome connectOutcome (int jackConnectResult);
+
 // The client names in a list of "client:port" names, each once.
 std::vector<std::string> clientNamesOf (const std::vector<std::string>& ports);
 
