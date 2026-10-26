@@ -7,6 +7,7 @@
 #include "EngineConfig.h"
 #include "EngineControls.h"
 #include "IemNode.h"
+#include "OutputGate.h"
 #include "SpatialBus.h"
 #include "SpatialConfig.h"
 
@@ -48,7 +49,11 @@ struct EngineOutputs
 //
 // A deck channel ignores its positions, 3D, FREQ and Q. Every gain control at 0 is silence (R18);
 // aux/cue/mix weights move over 10 ms (R6). The DualDelay pitch modulation runs only in
-// serviceControls (R7). The output gate and trims come with A8.
+// serviceControls (R7).
+//
+// Output stage (Scope 7, Settled 6): main, booth and phones each pass an OutputGate
+// (trim and gate in one gain) behind MASTER/BOOTH/PHONES; rec gets trims.rec and is never
+// gated. A fresh or re-prepared Engine has every gate closed until gateOpen.
 class Engine
 {
 public:
@@ -61,7 +66,18 @@ public:
     void process (const EngineInputs&, const EngineOutputs&, int numSamples, EngineControls&);
     void serviceControls (double seconds);   // control thread: the delay's pitch modulation
 
-    // Observation (tests, diagnostics).
+    // The gates' current gains, and the hand-over to a new Engine on a swap: call
+    // startGateAt after prepare and before the first process.
+    GateLevels gateLevels() const;
+    void startGateAt (const GateLevels&);
+
+    // One meter per output port, in port order: main (sub when the layout has one, then
+    // tops 1..N), booth (the same), rec L/R, phones L/R, then per channel pre L/R, post L/R.
+    // Peaks since the last call (the call takes them; one reader), RMS now; lock-free.
+    struct OutputMeter { float peak, rms; };
+    std::vector<OutputMeter> outputMeters();
+
+    // Observation (tests, diagnostics); any thread.
     int analogSourceCount() const;
     float lastFxSendPeak() const;          // largest |sample| sent into the delay during the last process call
     float lastAnalogEncoderPeak() const;   // largest |sample| the analog encoder wrote to enc_main during the last call

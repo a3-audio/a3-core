@@ -46,6 +46,48 @@ carries the MIT, CC BY 3.0 and Apache-2.0 texts (the GPL texts are Debian's
 libjack, freetype and fontconfig. IEM's editors are compiled in but never opened, so the X11
 libraries JUCE would `dlopen` for a window are not needed.
 
+## Plan 4a: the graph
+
+`a3::Engine` (`src/a3-engine/Engine.h`) is the whole A³ signal path in one object, tested offline in
+`tests/engine/Engine*.cpp`; nothing hosts it yet (the app is Plan 4c). For N channels and D deck slots
+(`EngineConfig`, any N ≥ 1):
+
+- **Channels.** Each channel selects its source: its analog pair (the stereo strip of Plan 2 plus the
+  DJ filter, into its own moving encoder source and the shared bed) or deck slot k (StemDeck's 16
+  B-format channels through the 16-channel deck strip: TRIM, EQ, filter, VOLUME). Analog ↔ deck
+  crossfades over 10 ms, deck ↔ deck dips out and in. A path at gain 0 is not processed and is reset
+  before it fades in (R14), the analog strip included. A channel without an analog pair is deck-only
+  and has no encoder source (R10). Positions, 3D, FREQ and Q do nothing on a deck channel.
+- **Buses.** `enc_main`, `enc_fx` (AUX, into IEM's DualDelay) and `enc_phones` (cue pre-VOLUME, mix
+  post-VOLUME), order 3. A deck's 16 post-VOLUME channels are added to the buses directly, AUX included
+  (R11); its stereo `aux_L/R` is a return source only. The return is the analog return pair or deck k's
+  aux pair (R12: decks are 1…D on the wire).
+- **Stem cue.** Every deck slot's `cue_L/R` is added after the phones decoder, weighted by the CUE↔MIX
+  knob only, whether the deck is on a channel or not (R13).
+- **Outputs.** main and booth: SimpleDecoder → MASTER/BOOTH → trim and gate; rec: BinauralDecoder ×
+  `trims.rec`, never gated; phones: BinauralDecoder + stem cue → PHONES → trim and gate. The
+  `fixedGainDb` stages of `data/spatial/*.zone.json` are not applied: they are the MASTER/BOOTH knobs
+  (R1). Every gain control at 0 is exact silence, every send at 0 too (R2, R18).
+- **Gate.** A fresh or re-prepared `Engine` has main, booth and phones closed (exactly 0). `gateOpen`
+  ramps each to its trim over 1 s, linear in gain; closing reaches 0 within 10 ms. A zone without a
+  trim in the config stays closed. `gateLevels()` / `startGateAt()` hand the level over to a rebuilt
+  engine.
+- **Meters.** `outputMeters()` gives peak and RMS (beat-analyzer's ballistics) per output port, in port
+  order: main, booth, rec L/R, phones L/R, then per channel pre L/R and post L/R (a deck channel's
+  W on both sides).
+
+**Timing guard.** `EngineTiming.FullGraphUnderOneMillisecondPer128` fails above 1.0 ms mean per
+128-frame block on the build machine (a3coreV01, i5-4440) in the worst case: all four channels on
+decks, two stem cues, every send open. 2026-10-26: 0.99 ms (decks), 0.80 ms (analog). The two
+BinauralDecoders are ~42 % of it, the four deck strips ~32 %. `ReportsCostPerChannelAtThirtyTwo`
+prints the cost of one more channel (about 42 µs analog, 84 µs deck). The rig's own run decides.
+
+**Known upstream allocations.** IEM's SimpleDecoder copies a `juce::Array` on every call (one small
+malloc and free per zone per block), and DualDelay resizes scratch buffers when the block size
+changes. Both are upstream and unedited; `EngineAllocation` checks that the engine adds nothing to them.
+IEM's DualDelay also sounds slightly different at different block sizes, so the echoes follow the JACK
+quantum, as they do in REAPER.
+
 ## Build and test
 
 Prerequisites: CMake 3.16 or newer, a C++17 compiler, JUCE 9.0.3 installed as a CMake package

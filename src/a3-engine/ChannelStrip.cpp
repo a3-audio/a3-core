@@ -11,6 +11,7 @@ namespace a3
 void ChannelStrip::prepare (double sampleRate, int maxBlockSize)
 {
     maxBlock = std::max (1, maxBlockSize);
+    rate = sampleRate;
     for (int ch = 0; ch < 2; ++ch)
     {
         x[ch].assign ((size_t) maxBlock, 0.0f);
@@ -26,6 +27,15 @@ void ChannelStrip::prepare (double sampleRate, int maxBlockSize)
     post.prepare (sampleRate);
     if (sharedFilter != nullptr)
         filter.prepare (sampleRate, maxBlock, 2);
+    grid.reset();
+}
+
+void ChannelStrip::reset()
+{
+    eq.prepare (rate);         // clear the filter states and the grids; allocate nothing
+    isolator.prepare (rate);
+    if (sharedFilter != nullptr)
+        filter.reset();
     grid.reset();
 }
 

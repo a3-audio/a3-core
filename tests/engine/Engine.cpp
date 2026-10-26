@@ -569,3 +569,84 @@ TEST (Engine, DelayModulationIsNotOnTheAudioPath)
     rig.engine->serviceControls (3.7);
     EXPECT_NE (pitch->load(), before);
 }
+
+// The rig's quantum is 128; any call size gives the same output once the decoders have
+// settled. Aux stays 0: IEM's DualDelay depends on the call size itself (see above).
+TEST (Engine, AnyCallSizeMatchesTheQuantum)
+{
+    constexpr int quantum = 128;
+    const size_t frames = oneSecond + oneSecond / 2;
+    const auto run = [&] (const std::vector<int>& calls)
+    {
+        auto rig = std::make_unique<EngineRig> (engineConfig (4, 2), frames, quantum);
+        pinkOnAnalogPairs (*rig);
+        fillDeck (rig->decks[0], frames, 0.1f, 100);
+        rig->decks[1].cue[0] = noise (frames, 0.1f, 101).l;
+        rig->decks[1].aux = { noise (frames, 0.1f, 102).l, noise (frames, 0.1f, 103).l };
+        rig->controls.channel (1).source = 1;
+        rig->controls.channel (0).cue = 1.0f;
+        rig->controls.global().phonesMix = 0.5f;
+        rig->controls.global().returnSource = 2;   // a control change would land on a different sample per call size
+        rig->run (0, 0, calls);
+        return rig;
+    };
+    const auto reference = run ({ quantum });
+    EXPECT_GT (peak (reference->mainOutputs(), oneSecond), 1e-3);
+    EXPECT_GT (peak (stereo (reference->phones), oneSecond), 1e-3);
+    for (const auto& calls : std::vector<std::vector<int>> { { 64 }, { 1024 }, { 333 }, { 64, 128, 1024, 333 } })
+        EXPECT_LT (maxDifference (run (calls)->everyOutput(), reference->everyOutput(), oneSecond), 1e-6)
+            << "first call " << calls.front() << ", " << calls.size() << " sizes";
+}
+
+TEST (Engine, At48kIsFiniteAndNotSilent)
+{
+    constexpr double rate = 48000.0;
+    const size_t frames = 48000;
+    EngineRig rig (engineConfig (4, 2), frames, engineBlock, rate);
+    pinkOnAnalogPairs (rig);
+    fillDeck (rig.decks[0], frames, 0.1f, 110);
+    rig.controls.channel (1).source = 1;
+    for (int c = 0; c < 4; ++c)
+        rig.controls.channel (c).auxSend = 0.5f;
+    rig.controls.global().phonesMix = 0.5f;
+    rig.run();
+
+    for (const auto* channel : rig.everyOutput())
+        for (float x : *channel)
+            ASSERT_TRUE (std::isfinite (x));
+    for (const auto& zone : { rig.mainOutputs(), rig.boothOutputs(), rig.recOutputs(), stereo (rig.phones) })
+        EXPECT_GT (peak (zone, frames / 2), 1e-3);
+}
+
+// R14 (A8): while a channel plays a deck its analog strip does not run; it is reset
+// before it fades back in, so what came in on the analog pair meanwhile leaves no trace.
+TEST (Engine, SilentAnalogPathIsResetNotRun)
+{
+    const size_t frames = oneSecond / 2, back = 11008;   // a call boundary
+    const auto run = [&] (bool analogMeanwhile)
+    {
+        auto rig = std::make_unique<EngineRig> (engineConfig (4, 2), frames);
+        auto signal = pinkStereo (frames, 51);
+        if (! analogMeanwhile)
+        {
+            std::fill_n (signal.l.begin(), back, 0.0f);
+            std::fill_n (signal.r.begin(), back, 0.0f);
+        }
+        rig->setAnalogPair (1, signal);
+        fillDeck (rig->decks[0], frames, 0.1f, 52);
+        rig->controls.channel (0).threeD = 0.6f;
+        rig->run (0, 0, { engineBlock }, [&] (size_t start)
+        {
+            // Analog -> deck once the initial 10 ms are past, back to analog at `back`.
+            rig->controls.channel (0).source = start >= 1024 && start < back ? 1 : 0;
+        });
+        return rig;
+    };
+    const auto loud = run (true), quiet = run (false);
+    const auto taps = [] (const EngineRig& r)
+    {
+        return std::vector<const std::vector<float>*> { &r.pre[0].l, &r.pre[0].r, &r.post[0].l, &r.post[0].r };
+    };
+    EXPECT_GT (peak (taps (*loud), back + 1024), 1e-3);
+    EXPECT_EQ (maxDifference (taps (*loud), taps (*quiet), back), 0.0);
+}

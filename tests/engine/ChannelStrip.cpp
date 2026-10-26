@@ -480,3 +480,26 @@ TEST (ChannelStrip, ReachingZeroDoesNotClick)
                 EXPECT_TRUE (allZero (*v, 128 * 100 + 4410));
     }
 }
+
+// R14 (A8): a channel's analog strip is not run while its select gain is 0 and is reset
+// before it fades in again, so what it played before is forgotten, bit for bit.
+TEST (ChannelStrip, ResetForgetsTheHistory)
+{
+    const auto played = a3test::noise (10000, 0.5f, 31);
+    const auto quiet = a3test::Stereo { std::vector<float> (10000), std::vector<float> (10000) };
+    const auto after = a3test::noise (8192, 0.25f, 32);
+    const auto runAfter = [&] (const a3test::Stereo& before)
+    {
+        FilterRig rig (true);
+        auto& c = rig.strip->controls();
+        c.eqHigh = 0.9f; c.eqLow = 0.1f; c.threeD = 0.6f; c.frequency = 0.3f; c.q = 0.7f;
+        runWithTaps (*rig.strip, before, 128);
+        rig.strip->reset();
+        return runWithTaps (*rig.strip, after, 128);
+    };
+    const auto loud = runAfter (played), silent = runAfter (quiet);
+    EXPECT_EQ (a3test::maxAbsDiff (loud.moving, silent.moving), 0.0f);
+    EXPECT_EQ (a3test::maxAbsDiff (loud.steady, silent.steady), 0.0f);
+    EXPECT_EQ (a3test::maxAbsDiff (loud.pre, silent.pre), 0.0f);
+    EXPECT_GT (a3test::maxAbsDiff (loud.moving, a3test::Stereo { std::vector<float> (8192), std::vector<float> (8192) }), 1e-3f);
+}

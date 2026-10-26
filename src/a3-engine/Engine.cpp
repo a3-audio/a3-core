@@ -67,6 +67,7 @@ struct EngineChannel
         fxMovingL, fxMovingR, fxSteadyL, fxSteadyR,         // x aux
         phMovingL, phMovingR, phSteadyL, phSteadyR,         // x cue (pre) + x mix (post)
         analogGain, deckGain, auxCurve, cueCurve, mixCurve,
+        meterPreL, meterPreR, meterPostL, meterPostR,       // what the pre/post ports carry
         numPlanes
     };
 
@@ -77,6 +78,9 @@ struct EngineChannel
     WeightRamp aux, cue, mix;
     juce::AudioBuffer<float> planes, deckPre, deckPost;
     bool analogRuns = false, deckRuns = false;   // in the current chunk, with a gain above 0 somewhere
+    int analogStart = 0;                         // where in the chunk the analog path starts to run
+    bool resetAnalog = false;                    // it fades in from 0 there (R14)
+    int preMeter = 0, postMeter = 0;             // PortMeters groups
 
     float* p (Plane plane) { return planes.getWritePointer (plane); }
 };
@@ -99,6 +103,8 @@ struct Engine::Impl
     void encode (int n);
     void addDecks (int n);
     void decode (const EngineInputs&, const EngineOutputs&, int offset, int n);
+    void pushMeters (int n);
+    void buildMeters();
 
     const float* analogInput (const EngineInputs&, int index, int offset) const;
     const DeckInputs* deckInputs (const EngineInputs&, int slot) const;
@@ -113,6 +119,12 @@ struct Engine::Impl
     DelayModulation modulation;
     std::unique_ptr<HeadphoneDecoder> rec, phones;
     std::unique_ptr<ZoneDecoder> main, booth;
+    std::array<OutputGate, numGatedZones> gates;   // GatedZone order
+    bool gateOpen = false;
+    float recGain = 1.0f;
+    PortMeters meters;
+    std::vector<int> mainMeters, boothMeters;
+    int recMeter = 0, phonesMeter = 0;
 
     ReturnSelect returnSelect;
     GainStage returnStage, phonesStage;
@@ -127,7 +139,8 @@ struct Engine::Impl
     std::vector<float> zeros;
     double sampleRate = 44100.0;
     int blockSize = 0;
-    float fxSendPeak = 0.0f, analogEncoderPeak = 0.0f;
+    float fxSendPeak = 0.0f, analogEncoderPeak = 0.0f;   // this call's, published below at its end
+    std::atomic<float> lastFxSendPeak { 0.0f }, lastAnalogEncoderPeak { 0.0f };
     int returnSource = 0;
 };
 
@@ -173,6 +186,27 @@ Engine::Impl::Impl (const EngineConfig& c, const SpatialConfig& spatial)
 
     azimuth = std::make_unique<std::atomic<float>[]> ((size_t) analogSources);
     elevation = std::make_unique<std::atomic<float>[]> ((size_t) analogSources);
+
+    gates[(size_t) GatedZone::main].setTrim (config.trims.main);
+    gates[(size_t) GatedZone::booth].setTrim (config.trims.booth);
+    gates[(size_t) GatedZone::phones].setTrim (config.trims.phones);
+    recGain = juce::Decibels::decibelsToGain (config.trims.rec, -1000.0f);
+    buildMeters();
+}
+
+// Port order: main, booth (sub?, tops), rec L/R, phones L/R, per channel pre L/R, post L/R.
+void Engine::Impl::buildMeters()
+{
+    for (auto [zone, groups] : { std::pair { main.get(), &mainMeters }, { booth.get(), &boothMeters } })
+        for (int port = 0; port < zone->ports(); port += 2)
+            groups->push_back (meters.addGroup (std::min (2, zone->ports() - port)));
+    recMeter = meters.addGroup (2);
+    phonesMeter = meters.addGroup (2);
+    for (auto& channel : channels)
+    {
+        channel->preMeter = meters.addGroup (2);
+        channel->postMeter = meters.addGroup (2);
+    }
 }
 
 void Engine::Impl::prepare (double rate, int newBlockSize)
@@ -230,6 +264,9 @@ void Engine::Impl::prepare (double rate, int newBlockSize)
     phonesStage.prepare (rate);
     returnPhones.prepare (rate);
     stemCue.prepare (rate);
+    for (auto& gate : gates)
+        gate.prepare (rate);   // closed
+    meters.prepare (rate);
 }
 
 void Engine::Impl::processChunk (const EngineInputs& in, const EngineOutputs& out, int offset, int n, EngineControls& controls)
@@ -247,11 +284,13 @@ void Engine::Impl::processChunk (const EngineInputs& in, const EngineOutputs& ou
     fxSendPeak = std::max (fxSendPeak, peakOf (busFx, n));
     engine::runNode (*dualDelay, busFx, n);
     decode (in, out, offset, n);
+    pushMeters (n);
 }
 
 void Engine::Impl::latchGlobals (EngineControls& controls)
 {
     auto& g = controls.global();
+    gateOpen = g.gateOpen.load (std::memory_order_relaxed);
     filter.kind.store (g.filter.kind.load (std::memory_order_relaxed), std::memory_order_relaxed);
     filter.mode.store (g.filter.mode.load (std::memory_order_relaxed), std::memory_order_relaxed);
     filter.frequency.store (load (g.filter.frequency), std::memory_order_relaxed);
@@ -302,7 +341,12 @@ void Engine::Impl::selectPaths (EngineChannel& ch, const ChannelControls& contro
         const int length = s.length > 0 ? s.length : n - done;
         fillRamp (ch.p (EngineChannel::analogGain) + done, s.analogFrom, s.analogTo, length);
         fillRamp (ch.p (EngineChannel::deckGain) + done, s.deckFrom, s.deckTo, length);
-        ch.analogRuns = ch.analogRuns || (ch.strip != nullptr && (s.analogFrom > 0.0f || s.analogTo > 0.0f));
+        if (ch.strip != nullptr && ! ch.analogRuns && (s.analogFrom > 0.0f || s.analogTo > 0.0f))
+        {
+            ch.analogRuns = true;
+            ch.analogStart = done;
+            ch.resetAnalog = s.resetAnalog;
+        }
         if (s.deckFrom > 0.0f || s.deckTo > 0.0f)
         {
             if (s.resetDeck)
@@ -341,12 +385,22 @@ void Engine::Impl::runDeck (EngineChannel& ch, const ChannelControls& controls, 
     ch.deck.process (in16, taps, length, controls);
 }
 
-// The analog strip runs whenever the channel has a pair, so it never needs a reset;
-// while its select gain is 0 its taps are cleared and the encoder sources are silent.
+// R14: the analog strip runs only from where its select gain leaves 0 (reset first when
+// it fades in from 0); before that, and while it stays at 0, its taps are exact zeros and
+// the encoder sources silent.
 void Engine::Impl::runAnalog (EngineChannel& ch, const ChannelControls& controls, const EngineInputs& in, int offset, int n)
 {
+    using P = EngineChannel;
     if (ch.strip == nullptr)
         return;
+    const int at = ch.analogRuns ? ch.analogStart : n;
+    for (int plane = P::movingL; plane <= P::preR; ++plane)
+        clear (ch.p ((P::Plane) plane), at);
+    if (! ch.analogRuns)
+        return;
+    if (ch.resetAnalog)
+        ch.strip->reset();
+
     auto& state = ch.strip->controls();
     for (auto [to, from] : { std::pair { &state.gain, &controls.gain }, { &state.volume, &controls.volume },
                              { &state.eqHigh, &controls.eqHigh }, { &state.eqMid, &controls.eqMid },
@@ -356,21 +410,15 @@ void Engine::Impl::runAnalog (EngineChannel& ch, const ChannelControls& controls
         to->store (load (*from), std::memory_order_relaxed);
 
     const int first = 2 * ch.analogPair - 2;
-    const float* input[2] { analogInput (in, first, offset), analogInput (in, first + 1, offset) };
-    StripBuffers out { { ch.p (EngineChannel::movingL), ch.p (EngineChannel::movingR) },
-                       { ch.p (EngineChannel::steadyL), ch.p (EngineChannel::steadyR) },
-                       { ch.p (EngineChannel::movingPreL), ch.p (EngineChannel::movingPreR) },
-                       { ch.p (EngineChannel::steadyPreL), ch.p (EngineChannel::steadyPreR) },
-                       { ch.p (EngineChannel::preL), ch.p (EngineChannel::preR) } };
-    ch.strip->process (input, out, n);
+    const float* input[2] { analogInput (in, first, offset + at), analogInput (in, first + 1, offset + at) };
+    const auto plane = [&] (P::Plane p) { return ch.p (p) + at; };
+    StripBuffers out { { plane (P::movingL), plane (P::movingR) }, { plane (P::steadyL), plane (P::steadyR) },
+                       { plane (P::movingPreL), plane (P::movingPreR) }, { plane (P::steadyPreL), plane (P::steadyPreR) },
+                       { plane (P::preL), plane (P::preR) } };
+    ch.strip->process (input, out, n - at);
 
-    for (int plane = EngineChannel::movingL; plane <= EngineChannel::preR; ++plane)
-    {
-        if (ch.analogRuns)
-            multiply (ch.p ((EngineChannel::Plane) plane), ch.p (EngineChannel::analogGain), n);
-        else
-            clear (ch.p ((EngineChannel::Plane) plane), n);
-    }
+    for (int p = P::movingL; p <= P::preR; ++p)
+        multiply (plane ((P::Plane) p), plane (P::analogGain), n - at);
 }
 
 // fx = post x aux; phones = pre x cue + post x mix. A silent weight writes exact zeros.
@@ -407,17 +455,12 @@ void Engine::Impl::buildSends (EngineChannel& ch, int n)
 void Engine::Impl::writeMeters (EngineChannel& ch, const EngineOutputs& out, size_t channel, int offset, int n)
 {
     using P = EngineChannel;
-    const auto write = [&] (const std::vector<std::array<float*, 2>>& taps, P::Plane analogLeft, const juce::AudioBuffer<float>& deck,
-                            P::Plane analogSecondLeft)
+    const auto write = [&] (P::Plane meterLeft, P::Plane analogLeft, P::Plane analogSecondLeft, const juce::AudioBuffer<float>& deck,
+                            const std::vector<std::array<float*, 2>>& taps)
     {
-        if (channel >= taps.size())
-            return;
         for (int side = 0; side < sides; ++side)
         {
-            float* dst = taps[channel][(size_t) side];
-            if (dst == nullptr)
-                continue;
-            dst += offset;
+            float* dst = ch.p ((P::Plane) (meterLeft + side));
             clear (dst, n);
             if (ch.analogRuns)
             {
@@ -427,10 +470,12 @@ void Engine::Impl::writeMeters (EngineChannel& ch, const EngineOutputs& out, siz
             }
             if (ch.deckRuns)
                 juce::FloatVectorOperations::add (dst, deck.getReadPointer (0), n);
+            if (channel < taps.size() && taps[channel][(size_t) side] != nullptr)
+                juce::FloatVectorOperations::copy (taps[channel][(size_t) side] + offset, dst, n);
         }
     };
-    write (out.pre, P::preL, ch.deckPre, P::preL);
-    write (out.post, P::movingL, ch.deckPost, P::steadyL);
+    write (P::meterPreL, P::preL, P::preL, ch.deckPre, out.pre);
+    write (P::meterPostL, P::movingL, P::steadyL, ch.deckPost, out.post);
 }
 
 void Engine::Impl::runReturn (const EngineInputs& in, int offset, int n)
@@ -495,13 +540,17 @@ void Engine::Impl::decode (const EngineInputs& in, const EngineOutputs& out, int
         juce::FloatVectorOperations::add (busMain.getWritePointer (k), busFx.getReadPointer (k), n);
         juce::FloatVectorOperations::add (busPhones.getWritePointer (k), busFx.getReadPointer (k), n);
     }
-    main->process (busMain, out.main, offset, n);
-    booth->process (busMain, out.booth, offset, n);
+    main->process (busMain, out.main, offset, n, gates[(size_t) GatedZone::main], gateOpen);
+    booth->process (busMain, out.booth, offset, n, gates[(size_t) GatedZone::booth], gateOpen);
 
-    rec->process (busMain, n);
+    rec->process (busMain, n);   // trims.rec, never gated (Scope 7)
     for (int side = 0; side < sides; ++side)
+    {
+        if (recGain != 1.0f)
+            juce::FloatVectorOperations::multiply (rec->side (side), recGain, n);
         if (out.rec[side] != nullptr)
             juce::FloatVectorOperations::copy (out.rec[side] + offset, rec->side (side), n);
+    }
 
     // R13: every deck's stem cue, after the decoder and before PHONES.
     phones->process (busPhones, n);
@@ -515,9 +564,28 @@ void Engine::Impl::decode (const EngineInputs& in, const EngineOutputs& out, int
                                      returnPlanes.getReadPointer (stemCueCurve), n);
     float* heads[2] { phones->side (0), phones->side (1) };
     phonesStage.process (heads, n, sides);
+    gates[(size_t) GatedZone::phones].process (heads, sides, n, gateOpen);
     for (int side = 0; side < sides; ++side)
         if (out.phones[side] != nullptr)
             juce::FloatVectorOperations::copy (out.phones[side] + offset, heads[side], n);
+}
+
+void Engine::Impl::pushMeters (int n)
+{
+    for (auto [zone, groups] : { std::pair { main.get(), &mainMeters }, { booth.get(), &boothMeters } })
+        for (size_t g = 0; g < groups->size(); ++g)
+        {
+            const int port = 2 * (int) g;
+            meters.push ((*groups)[g], zone->port (port), port + 1 < zone->ports() ? zone->port (port + 1) : nullptr, n);
+        }
+    meters.push (recMeter, rec->side (0), rec->side (1), n);
+    meters.push (phonesMeter, phones->side (0), phones->side (1), n);
+    using P = EngineChannel;
+    for (auto& channel : channels)
+    {
+        meters.push (channel->preMeter, channel->p (P::meterPreL), channel->p (P::meterPreR), n);
+        meters.push (channel->postMeter, channel->p (P::meterPostL), channel->p (P::meterPostR), n);
+    }
 }
 
 const float* Engine::Impl::analogInput (const EngineInputs& in, int index, int offset) const
@@ -562,11 +630,35 @@ void Engine::process (const EngineInputs& in, const EngineOutputs& out, int numS
     impl->fxSendPeak = impl->analogEncoderPeak = 0.0f;
     for (int offset = 0; offset < numSamples; offset += impl->blockSize)
         impl->processChunk (in, out, offset, std::min (impl->blockSize, numSamples - offset), controls);
+    impl->lastFxSendPeak.store (impl->fxSendPeak, std::memory_order_relaxed);
+    impl->lastAnalogEncoderPeak.store (impl->analogEncoderPeak, std::memory_order_relaxed);
 }
 
 void Engine::serviceControls (double seconds) { impl->modulation.tick (seconds, *impl->dualDelay); }
+GateLevels Engine::gateLevels() const
+{
+    GateLevels levels;
+    for (int z = 0; z < numGatedZones; ++z)
+        levels.gain[z] = impl->gates[(size_t) z].currentGain();
+    return levels;
+}
+
+void Engine::startGateAt (const GateLevels& levels)
+{
+    for (int z = 0; z < numGatedZones; ++z)
+        impl->gates[(size_t) z].startAt (levels.gain[z]);
+}
+
+std::vector<Engine::OutputMeter> Engine::outputMeters()
+{
+    std::vector<OutputMeter> list ((size_t) impl->meters.ports());
+    for (int port = 0; port < impl->meters.ports(); ++port)
+        list[(size_t) port] = { impl->meters.takePeak (port), impl->meters.rms (port) };
+    return list;
+}
+
 int Engine::analogSourceCount() const { return (int) impl->analogChannelOf.size(); }
-float Engine::lastFxSendPeak() const { return impl->fxSendPeak; }
-float Engine::lastAnalogEncoderPeak() const { return impl->analogEncoderPeak; }
+float Engine::lastFxSendPeak() const { return impl->lastFxSendPeak.load (std::memory_order_relaxed); }
+float Engine::lastAnalogEncoderPeak() const { return impl->lastAnalogEncoderPeak.load (std::memory_order_relaxed); }
 IemNode& Engine::delay() { return *impl->dualDelay; }
 }

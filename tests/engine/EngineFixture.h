@@ -12,7 +12,8 @@
 #include "SpatialBusFixture.h"
 
 // One engine over whole signals: inputs as vectors (empty = nullptr = silence),
-// every output captured. The A7 rig has no gate yet; trims are 0 dB.
+// every output captured. Trims are 0 dB and, unless asked otherwise, the gate
+// starts open at them (startGateAt), so the graph's tests see no 1 s fade-in.
 namespace a3test
 {
 constexpr double engineRate = 44100.0;
@@ -50,7 +51,8 @@ inline std::vector<float> mono (size_t frames) { return std::vector<float> (fram
 class EngineRig
 {
 public:
-    EngineRig (a3::EngineConfig engineConfiguration, size_t totalFrames, int blockSize = engineBlock)
+    EngineRig (a3::EngineConfig engineConfiguration, size_t totalFrames, int blockSize = engineBlock,
+               double sampleRate = engineRate, bool gateOpenAtStart = true)
         : config (std::move (engineConfiguration)),
           spatial (loadedSpatialConfig (shippedSpatialDirectory)),
           controls (config.channels),
@@ -66,7 +68,9 @@ public:
         engine = a3::Engine::create (config, spatial, error);
         if (engine == nullptr)
             throw std::runtime_error (error.toStdString());
-        engine->prepare (engineRate, blockSize);
+        engine->prepare (sampleRate, blockSize);
+        if (gateOpenAtStart)
+            engine->startGateAt (fullyOpen (config.trims));
         restValues();
     }
 
@@ -136,6 +140,16 @@ public:
         return all;
     }
 
+    // The gate at each zone's trim (closed where a zone has none).
+    static a3::GateLevels fullyOpen (const a3::Trims& trims)
+    {
+        a3::GateLevels levels;
+        const std::optional<float> zones[] { trims.main, trims.booth, trims.phones };
+        for (int z = 0; z < 3; ++z)
+            levels.gain[z] = zones[z].has_value() ? juce::Decibels::decibelsToGain (*zones[z], -1000.0f) : 0.0f;
+        return levels;
+    }
+
     std::vector<const std::vector<float>*> mainOutputs() const { return channelsAt (out.mainIndices); }
     std::vector<const std::vector<float>*> boothOutputs() const { return channelsAt (out.boothIndices); }
     std::vector<const std::vector<float>*> recOutputs() const { return channelsAt (out.recIndices); }
@@ -151,15 +165,6 @@ public:
     OutputSignals out;
     Stereo phones;
     std::vector<Stereo> pre, post;
-
-private:
-    std::vector<const std::vector<float>*> channelsAt (const std::vector<size_t>& indices) const
-    {
-        std::vector<const std::vector<float>*> list;
-        for (auto i : indices)
-            list.push_back (&out.channels[i]);
-        return list;
-    }
 
     a3::EngineInputs inputsAt (size_t start) const
     {
@@ -199,6 +204,15 @@ private:
             o.post.push_back ({ post[c].l.data() + start, post[c].r.data() + start });
         }
         return o;
+    }
+
+private:
+    std::vector<const std::vector<float>*> channelsAt (const std::vector<size_t>& indices) const
+    {
+        std::vector<const std::vector<float>*> list;
+        for (auto i : indices)
+            list.push_back (&out.channels[i]);
+        return list;
     }
 };
 

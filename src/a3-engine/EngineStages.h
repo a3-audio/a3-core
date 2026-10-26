@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include <memory>
+#include <utility>
+#include <vector>
+#include "Meters.h"
 #include "IemNode.h"
+#include "OutputGate.h"
 #include "PurestGain.h"
 #include "SilenceFade.h"
 #include "SpatialBus.h"
@@ -40,8 +44,8 @@ private:
     bool started = false, silence = true;
 };
 
-// IEM's SimpleDecoder for one zone and its level stage (MASTER or BOOTH):
-//   outputs = route (stage (SimpleDecoder (bus16)))
+// IEM's SimpleDecoder for one zone, its level stage (MASTER or BOOTH) and its gate:
+//   outputs = route (gate (stage (SimpleDecoder (bus16))))
 // The stage sits after the decoder so that 0 is exact silence at once: in front
 // of it the crossover filters would ring out. PurestGain is linear, so the
 // place does not change the level. ZoneConfig::fixedGainDb is not applied (R1):
@@ -52,7 +56,11 @@ public:
     ZoneDecoder (const ZoneConfig&, const juce::String& name);   // throws std::runtime_error
     void prepare (double sampleRate, int blockSize);
     void setLevel (float control) { stage.set (control); }
-    void process (const juce::AudioBuffer<float>& bus16, const ZoneOutputs& out, int offset, int count);
+    void process (const juce::AudioBuffer<float>& bus16, const ZoneOutputs& out, int offset, int count, OutputGate&, bool open);
+    // The zone's ports in order (sub when the layout has one, then the tops) and what
+    // each carried in the last process call.
+    int ports() const { return (subChannel > 0 ? 1 : 0) + (int) topChannels.size(); }
+    const float* port (int index) const;
 
 private:
     std::unique_ptr<IemNode> decoder;
@@ -75,6 +83,23 @@ public:
 private:
     std::unique_ptr<IemNode> decoder;
     juce::AudioBuffer<float> buffer;
+};
+
+// Meters (beat-analyzer's ballistics) for output ports in groups of one or two:
+// pushed on the audio thread, read by one reader elsewhere (the read takes the peak).
+class PortMeters
+{
+public:
+    int addGroup (int width);                 // 1 or 2 ports; returns the group; allocates
+    void prepare (double sampleRate);
+    void push (int group, const float* left, const float* right, int count);   // right unused for width 1
+    int ports() const { return (int) portSides.size(); }
+    float takePeak (int port);
+    float rms (int port) const;
+
+private:
+    std::vector<std::unique_ptr<Meters>> groups;
+    std::vector<std::pair<int, int>> portSides;   // port -> group, side
 };
 
 namespace engine

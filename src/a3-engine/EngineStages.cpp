@@ -100,7 +100,8 @@ void ZoneDecoder::prepare (double sampleRate, int blockSize)
     decoder->prepare (sampleRate, blockSize);
 }
 
-void ZoneDecoder::process (const juce::AudioBuffer<float>& bus16, const ZoneOutputs& out, int offset, int count)
+void ZoneDecoder::process (const juce::AudioBuffer<float>& bus16, const ZoneOutputs& out, int offset, int count,
+                           OutputGate& gate, bool open)
 {
     for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
     {
@@ -111,6 +112,7 @@ void ZoneDecoder::process (const juce::AudioBuffer<float>& bus16, const ZoneOutp
     }
     engine::runNode (*decoder, buffer, count);
     stage.process (buffer.getArrayOfWritePointers(), count, outputs);
+    gate.process (buffer.getArrayOfWritePointers(), outputs, count, open);
 
     const auto route = [&] (float* destination, int channel)
     {
@@ -122,6 +124,46 @@ void ZoneDecoder::process (const juce::AudioBuffer<float>& bus16, const ZoneOutp
     const auto tops = std::min (out.tops.size(), topChannels.size());
     for (size_t k = 0; k < tops; ++k)
         route (out.tops[k], topChannels[k]);
+}
+
+const float* ZoneDecoder::port (int index) const
+{
+    const bool hasSub = subChannel > 0;
+    const int channel = hasSub && index == 0 ? subChannel : topChannels[(size_t) (index - (hasSub ? 1 : 0))];
+    return buffer.getReadPointer (channel - 1);
+}
+
+int PortMeters::addGroup (int width)
+{
+    const int group = (int) groups.size();
+    groups.push_back (std::make_unique<Meters>());
+    for (int side = 0; side < std::clamp (width, 1, 2); ++side)
+        portSides.emplace_back (group, side);
+    return group;
+}
+
+void PortMeters::prepare (double sampleRate)
+{
+    for (auto& meters : groups)
+        meters->prepare (sampleRate);
+}
+
+void PortMeters::push (int group, const float* left, const float* right, int count)
+{
+    const float* pair[2] { left, right != nullptr ? right : left };
+    groups[(size_t) group]->push (pair, count);
+}
+
+float PortMeters::takePeak (int port)
+{
+    const auto [group, side] = portSides[(size_t) port];
+    return groups[(size_t) group]->takePeak (side);
+}
+
+float PortMeters::rms (int port) const
+{
+    const auto [group, side] = portSides[(size_t) port];
+    return groups[(size_t) group]->rms (side);
 }
 
 HeadphoneDecoder::HeadphoneDecoder (const juce::var& parameters, const juce::String& name)

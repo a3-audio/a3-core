@@ -67,6 +67,7 @@ class ChannelStrip
 {
 public:
     void prepare (double sampleRate, int maxBlock);      // allocates; the only call that may
+    void reset();   // forgets the signal (EQ, isolator, filter state), not the gains; no allocation (R14)
     // Before prepare: the filter's controls (shared by the owner); nullptr = no filter (Plan 2 chain, bit-exact).
     void setSharedFilter (const FilterControls* controls) { sharedFilter = controls; }
     // in: stereo input (selected source). Any numSamples >= 0.
@@ -91,6 +92,7 @@ private:
     Meters pre, post;
     ControlGrid grid;
     int maxBlock = 0;
+    double rate = 44100.0;
     std::vector<float> x[2], sum[2];
 };
 }
