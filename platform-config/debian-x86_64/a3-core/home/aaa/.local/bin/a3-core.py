@@ -810,6 +810,7 @@ def select_deck(word, channel, value):
 
 #: Where StemDeck listens: learnt from its hello, None while it is silent.
 _stemdeck_client = None
+_stemdeck_target = None
 _stemdeck_watch = HelloWatch(
     STEMDECK_SILENCE, is_local=lambda host: is_this_machine(host, MOTION_OWN_HOSTS),
     one_at_a_time=True)
@@ -1684,7 +1685,7 @@ def stemdeck_said_hello(host, now):
 
     Only one StemDeck may run: a hello from a second host while the first is
     alive is said once in the journal and not followed."""
-    global _stemdeck_client
+    global _stemdeck_client, _stemdeck_target
     news = _stemdeck_watch.hello(host, now)
     for rival in _stemdeck_watch.take_rivals():
         print(f"stemdeck: a second StemDeck at {rival} while following "
@@ -1694,6 +1695,7 @@ def stemdeck_said_hello(host, now):
         return
     _stemdeck_client = WatchedClient(
         SimpleUDPClient(host, _truth.endpoint("stemdeck", "osc")[1]), "stemdeck")
+    _stemdeck_target = (host, _truth.endpoint("stemdeck", "osc")[1])
     _stemdeck_client.send_message(_truth.address("stemdeck.recall"), 1)
     _stemdeck_client.send_message(_truth.address("prodj.live"), live_value())
     tell_prodj_where("stemdeck", host)
@@ -1870,8 +1872,24 @@ def announce_live():
     listeners = list(_desk_clients.values()) + [osc_a3motion]
     if _stemdeck_client is not None:
         listeners.append(_stemdeck_client)
+    listeners += deck_listeners()
     for client in listeners:
         client.send_message(_truth.address("prodj.live"), live_value())
+
+
+def deck_listeners():
+    """Engine mode: each deck's own port, for a word meant for StemDeck as a
+    whole. Deck A may be the base port itself: never twice to one host:port."""
+    if not _engine_mode:
+        return []
+    taken = {_stemdeck_target} if _stemdeck_client is not None else set()
+    clients = []
+    for deck, client in sorted(_deck_clients.items()):
+        target = (_deck_hosts[deck], deck_port(_truth, deck))
+        if target not in taken:
+            taken.add(target)
+            clients.append(client)
+    return clients
 
 
 def asker_client(client_address):

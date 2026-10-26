@@ -137,6 +137,44 @@ class DeckPortsInCore(unittest.TestCase):
         self.assertEqual(wire.target[1], 7781)
         self.assertEqual(wire.sent, [("/stemdeck/2/3d", 1.0)])
 
+    def test_both_decks_on_one_host_3d_goes_to_their_own_ports(self):
+        same = ("127.0.0.2", 6002)
+        self.deck_hello(1, DECK_A)
+        self.deck_hello(2, same)
+        self.channel("/channel/1/3d", 0.2)
+        self.channel("/channel/2/3d", 0.3)
+        self.put_deck_on_channel(1, 1)
+        self.put_deck_on_channel(2, 2)
+        by_port = {w.target[1]: w for w in Wire.made if w.target[0] == DECK_A[0]}
+        self.assertEqual(sorted(by_port), [7780, 7781])
+        self.assertIn(("/stemdeck/1/3d", 0.2), by_port[7780].sent)
+        self.assertIn(("/stemdeck/2/3d", 0.3), by_port[7781].sent)
+        self.assertNotIn(("/stemdeck/2/3d", 0.3), by_port[7780].sent)
+
+    def test_engine_mode_prodj_live_reaches_every_deck_once(self):
+        self.core["stemdeck_said_hello"](DECK_A[0], 1.0)
+        self.deck_hello(1, DECK_A)
+        self.deck_hello(2, ("127.0.0.2", 6002))
+        targets = []
+        for w in Wire.made:
+            w.sent.clear()
+        self.core["announce_live"]()
+        for w in Wire.made:
+            targets += [w.target[1]] * sum(1 for a, _ in w.sent if a == "/prodj/live")
+        self.assertEqual(sorted(targets), [7780, 7781])
+
+    def test_reaper_mode_prodj_live_goes_to_the_base_client_only(self):
+        self.core["_engine_mode"] = False
+        self.core["stemdeck_said_hello"](DECK_A[0], 1.0)
+        self.core["_deck_clients"][2] = self.core["WatchedClient"](
+            Wire("127.0.0.2", 7781), "stemdeck-B")
+        for w in Wire.made:
+            w.sent.clear()
+        self.core["announce_live"]()
+        got = [w.target[1] for w in Wire.made
+               if any(a == "/prodj/live" for a, _ in w.sent)]
+        self.assertEqual(got, [7780])
+
 
 if __name__ == "__main__":
     unittest.main()
