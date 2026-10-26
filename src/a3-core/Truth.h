@@ -68,6 +68,8 @@ public:
     std::vector<juce::var> routes() const;
 
     std::string pattern (const std::string& key) const;
+    // The file's entry for an address key (a3_osc.Truth.addresses()[key]); throws if there is none.
+    juce::var addressEntry (const std::string& key) const { return entry (key); }
     // Range-checked against the file's range for each field given; a placeholder without a field throws.
     std::string address (const std::string& key, const std::map<std::string, int>& fields = {}) const;
     // address() backwards; the first key in file order whose pattern and ranges fit.
