@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "Json.h"
 
+#include <juce_cryptography/juce_cryptography.h>
+
 #include <algorithm>
 #include <charconv>
 #include <cmath>
@@ -297,6 +299,12 @@ private:
             return juce::var (false);
         if (takeWord ("null"))
             return juce::var();
+        if (takeWord ("NaN"))
+            return juce::var (std::nan (""));
+        if (takeWord ("Infinity"))
+            return juce::var (HUGE_VAL);
+        if (takeWord ("-Infinity"))
+            return juce::var (-HUGE_VAL);
         if (c == '-' || (c >= '0' && c <= '9'))
             return parseNumber();
         fail ("Expecting value");
@@ -438,6 +446,8 @@ private:
         }
         if (code >= 0xD800 && code < 0xE000)
             fail ("Unpaired surrogate in string");   // juce::String cannot hold one
+        if (code == 0)
+            fail ("NUL in string");   // nor a NUL: it would end the string early
         appendUtf8 (out, code);
     }
 
@@ -474,7 +484,11 @@ private:
         if (isFloat)
         {
             double number = 0;
-            std::from_chars (first, last, number);   // out of range stays +-inf/0 as Python reads it
+            const bool negative = text[start] == '-';
+            const bool tinyExponent = text.find_first_of ("eE", start) < pos && text[text.find_first_of ("eE", start) + 1] == '-';
+            if (std::from_chars (first, last, number).ec == std::errc::result_out_of_range)   // leaves `number` untouched
+                number = tinyExponent ? (negative ? -0.0 : 0.0)
+                                      : (negative ? -HUGE_VAL : HUGE_VAL);   // as Python reads 1e400 and 1e-400
             return juce::var (number);
         }
         juce::int64 integer = 0;

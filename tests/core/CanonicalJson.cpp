@@ -148,3 +148,24 @@ TEST (CanonicalJson, ParsesAsPython)
         EXPECT_FALSE (error.isEmpty()) << broken;
     }
 }
+
+TEST (CanonicalJson, OutOfRangeFloatsReadAsPython)
+{
+    // Python: [inf, -inf, 0.0, -0.0]
+    EXPECT_EQ (canonicalBytes (parsed ("[1e400,-1e400,1e-400,-1e-400]")), "[Infinity,-Infinity,0.0,-0.0]");
+}
+
+TEST (CanonicalJson, NulInAStringIsRefused)
+{
+    for (const char* broken : { "\"a\\u0000b\"", "{\"a\\u0000\":1}" })
+    {
+        juce::String error;
+        parseJson (broken, error);
+        EXPECT_FALSE (error.isEmpty()) << broken;
+    }
+}
+
+TEST (CanonicalJson, NonFiniteWordsRoundTrip)
+{
+    EXPECT_EQ (canonicalBytes (parsed ("[NaN,Infinity,-Infinity]")), "[NaN,Infinity,-Infinity]");
+}

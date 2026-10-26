@@ -5,7 +5,6 @@
 #include <string>
 
 #include <juce_core/juce_core.h>
-#include <juce_cryptography/juce_cryptography.h>
 
 namespace a3core
 {
