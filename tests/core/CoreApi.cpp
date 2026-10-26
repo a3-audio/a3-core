@@ -6,7 +6,10 @@
 // real HTTP for one scripted state. The HTML page, the bench (/api/send) and the status are other
 // tasks'. Every test talks real HTTP to an ephemeral port on loopback.
 #include <atomic>
+#include <sys/ioctl.h>
+
 #include <chrono>
+#include <fstream>
 #include <thread>
 
 #include <gtest/gtest.h>
@@ -186,11 +189,7 @@ struct Totals
 TEST (CoreApi, TheRowsOfOnePeerAndDirectionAddUp)
 {
     Totals totals;
-    auto& first = totals.first;
-    auto& second = totals.second;
-    const auto line = [&] (const std::string& peer, const std::string& direction) { return totals.line (peer, direction); };
-    (void) first; (void) second; (void) line;
-    const auto motion = line ("motion", "in");
+    const auto motion = totals.line ("motion", "in");
     EXPECT_NEAR (number (motion["rate"]), 7.0, 1e-9);     // (10 + 4) / 2 s
     EXPECT_NEAR (number (motion["kbit"]), 0.672, 1e-9);   // 168 B / 2 s * 8 / 1000
 }
@@ -198,24 +197,16 @@ TEST (CoreApi, TheRowsOfOnePeerAndDirectionAddUp)
 TEST (CoreApi, EachPeerAndDirectionIsItsOwnLine)
 {
     Totals totals;
-    auto& first = totals.first;
-    auto& second = totals.second;
-    const auto line = [&] (const std::string& peer, const std::string& direction) { return totals.line (peer, direction); };
-    (void) first; (void) second; (void) line;
-    EXPECT_EQ (snapshotAsJson (second, &first)["totals"].size(), 2);
-    EXPECT_NEAR (number (line ("reaper", "out")["rate"]), 10.0, 1e-9);
-    EXPECT_NEAR (number (line ("reaper", "out")["kbit"]), 1.6, 1e-9);
-    EXPECT_TRUE (line ("motion", "out").isVoid());
+    EXPECT_EQ (snapshotAsJson (totals.second, &totals.first)["totals"].size(), 2);
+    EXPECT_NEAR (number (totals.line ("reaper", "out")["rate"]), 10.0, 1e-9);
+    EXPECT_NEAR (number (totals.line ("reaper", "out")["kbit"]), 1.6, 1e-9);
+    EXPECT_TRUE (totals.line ("motion", "out").isVoid());
 }
 
 TEST (CoreApi, ThereIsAnOverallSumPerDirection)
 {
     Totals totals;
-    auto& first = totals.first;
-    auto& second = totals.second;
-    const auto line = [&] (const std::string& peer, const std::string& direction) { return totals.line (peer, direction); };
-    (void) first; (void) second; (void) line;
-    const auto overall = snapshotAsJson (second, &first)["overall"];
+    const auto overall = snapshotAsJson (totals.second, &totals.first)["overall"];
     EXPECT_NEAR (number (overall["in"]["rate"]), 7.0, 1e-9);
     EXPECT_NEAR (number (overall["out"]["kbit"]), 1.6, 1e-9);
 }
@@ -223,12 +214,8 @@ TEST (CoreApi, ThereIsAnOverallSumPerDirection)
 TEST (CoreApi, WithoutAPreviousSnapshotThereAreNoTotalsYet)
 {
     Totals totals;
-    auto& first = totals.first;
-    auto& second = totals.second;
-    const auto line = [&] (const std::string& peer, const std::string& direction) { return totals.line (peer, direction); };
-    (void) first; (void) second; (void) line;
     // Not zero: zero would say that nothing is arriving.
-    const auto out = snapshotAsJson (second, nullptr);
+    const auto out = snapshotAsJson (totals.second, nullptr);
     EXPECT_TRUE (out["totals"].isVoid());
     EXPECT_TRUE (out["overall"].isVoid());
 }
@@ -236,26 +223,18 @@ TEST (CoreApi, WithoutAPreviousSnapshotThereAreNoTotalsYet)
 TEST (CoreApi, ARowNewSinceTheLastLookIsLeftOut)
 {
     Totals totals;
-    auto& first = totals.first;
-    auto& second = totals.second;
-    const auto line = [&] (const std::string& peer, const std::string& direction) { return totals.line (peer, direction); };
-    (void) first; (void) second; (void) line;
-    second.rows.push_back (rowOf (Direction::in, "/new", "mixer", 50, 600));
-    EXPECT_TRUE (line ("mixer", "in").isVoid());
+    totals.second.rows.push_back (rowOf (Direction::in, "/new", "mixer", 50, 600));
+    EXPECT_TRUE (totals.line ("mixer", "in").isVoid());
 }
 
 TEST (CoreApi, ARowWithoutAByteCountCountsItsMessages)
 {
     Totals totals;
-    auto& first = totals.first;
-    auto& second = totals.second;
-    const auto line = [&] (const std::string& peer, const std::string& direction) { return totals.line (peer, direction); };
-    (void) first; (void) second; (void) line;
     // A snapshot from before bytes were counted, or a restored row.
-    for (auto* snapshot : { &first, &second })
+    for (auto* snapshot : { &totals.first, &totals.second })
         for (auto& row : snapshot->rows)
             row.bytes = 0;
-    const auto motion = line ("motion", "in");
+    const auto motion = totals.line ("motion", "in");
     EXPECT_NEAR (number (motion["rate"]), 7.0, 1e-9);
     EXPECT_NEAR (number (motion["kbit"]), 0.0, 1e-9);
 }
@@ -522,11 +501,7 @@ struct RegisterWindow
 TEST (CoreApi, TheRouteAnswersWithTheCatalogue)
 {
     RegisterWindow registered;
-    auto& window = registered.window;
-    const auto fetched = [&] { return registered.fetched(); };
-    const auto entryEnding = RegisterWindow::entryEnding;
-    (void) window; (void) fetched; (void) entryEnding;
-    const auto payload = fetched();
+    const auto payload = registered.fetched();
     EXPECT_EQ (payload["entries"].size(), 2);
     EXPECT_EQ (payload["devices"][0].toString(), "core");
     EXPECT_EQ (payload["devices"][1].toString(), "mixer");
@@ -535,51 +510,35 @@ TEST (CoreApi, TheRouteAnswersWithTheCatalogue)
 TEST (CoreApi, AnAddressThatArrivedIsMarkedAlive)
 {
     RegisterWindow registered;
-    auto& window = registered.window;
-    const auto fetched = [&] { return registered.fetched(); };
-    const auto entryEnding = RegisterWindow::entryEnding;
-    (void) window; (void) fetched; (void) entryEnding;
-    seenFloat (window.traffic, Direction::in, "/channel/0/gain", 0.5, "mixer");
-    const auto payload = fetched();
-    EXPECT_TRUE (static_cast<bool> (entryEnding (payload, "gain")["seen"]));
-    EXPECT_FALSE (static_cast<bool> (entryEnding (payload, "encbtn")["seen"]));
+    seenFloat (registered.window.traffic, Direction::in, "/channel/0/gain", 0.5, "mixer");
+    const auto payload = registered.fetched();
+    EXPECT_TRUE (static_cast<bool> (RegisterWindow::entryEnding (payload, "gain")["seen"]));
+    EXPECT_FALSE (static_cast<bool> (RegisterWindow::entryEnding (payload, "encbtn")["seen"]));
     EXPECT_EQ (static_cast<int> (payload["unseen"]), 1);
 }
 
 TEST (CoreApi, WhatCoreCouldNotRouteCountsAsArrived)
 {
     RegisterWindow registered;
-    auto& window = registered.window;
-    const auto fetched = [&] { return registered.fetched(); };
-    const auto entryEnding = RegisterWindow::entryEnding;
-    (void) window; (void) fetched; (void) entryEnding;
     // REAPER's feedback fills the unknown table and REAPER's patterns are most of the register; a
     // catalogue that ignored it would call every one of them dead.
-    unknownOf (window.traffic, "/channel/3/gain", pyFloat (0.5));
-    EXPECT_TRUE (static_cast<bool> (entryEnding (fetched(), "gain")["seen"]));
+    unknownOf (registered.window.traffic, "/channel/3/gain", pyFloat (0.5));
+    EXPECT_TRUE (static_cast<bool> (RegisterWindow::entryEnding (registered.fetched(), "gain")["seen"]));
 }
 
 TEST (CoreApi, TheHistoryDoesNotRideAlong)
 {
     RegisterWindow registered;
-    auto& window = registered.window;
-    const auto fetched = [&] { return registered.fetched(); };
-    const auto entryEnding = RegisterWindow::entryEnding;
-    (void) window; (void) fetched; (void) entryEnding;
     for (int i = 0; i < 2000; ++i)
-        seenFloat (window.traffic, Direction::in, "/channel/0/gain", 0.5, "mixer");
-    EXPECT_FALSE (fetched().hasProperty ("history"));
+        seenFloat (registered.window.traffic, Direction::in, "/channel/0/gain", 0.5, "mixer");
+    EXPECT_FALSE (registered.fetched().hasProperty ("history"));
 }
 
 TEST (CoreApi, ARegisterThatCannotBeReadIsSaidRatherThanThrown)
 {
     RegisterWindow registered;
-    auto& window = registered.window;
-    const auto fetched = [&] { return registered.fetched(); };
-    const auto entryEnding = RegisterWindow::entryEnding;
-    (void) window; (void) fetched; (void) entryEnding;
-    window.registerFile.deleteFile();
-    const auto payload = fetched();
+    registered.window.registerFile.deleteFile();
+    const auto payload = registered.fetched();
     EXPECT_EQ (payload["entries"].size(), 0);
     EXPECT_TRUE (pythonTruthy (payload["problem"]));
 }
@@ -676,49 +635,34 @@ struct Recorded
 TEST (CoreApi, TrafficAsPython)
 {
     Recorded recorded;
-    auto& window = recorded.window;
-    const auto& expected = recorded.expected;
-    (void) window; (void) expected;
-    expectJsonEqual (expected["traffic"], window.json ("/api/traffic"), "/api/traffic");
+    expectJsonEqual (recorded.expected["traffic"], recorded.window.json ("/api/traffic"), "/api/traffic");
 }
 
 TEST (CoreApi, UnknownAsPython)
 {
     Recorded recorded;
-    auto& window = recorded.window;
-    const auto& expected = recorded.expected;
-    (void) window; (void) expected;
-    expectJsonEqual (expected["unknown"], window.json ("/api/unknown"), "/api/unknown");
+    expectJsonEqual (recorded.expected["unknown"], recorded.window.json ("/api/unknown"), "/api/unknown");
 }
 
 TEST (CoreApi, RegisterAsPython)
 {
     Recorded recorded;
-    auto& window = recorded.window;
-    const auto& expected = recorded.expected;
-    (void) window; (void) expected;
-    expectJsonEqual (expected["register"], window.json ("/api/register"), "/api/register");
+    expectJsonEqual (recorded.expected["register"], recorded.window.json ("/api/register"), "/api/register");
 }
 
 TEST (CoreApi, DevicesAsPython)
 {
     Recorded recorded;
-    auto& window = recorded.window;
-    const auto& expected = recorded.expected;
-    (void) window; (void) expected;
-    expectJsonEqual (expected["devices"], window.json ("/api/devices"), "/api/devices");
+    expectJsonEqual (recorded.expected["devices"], recorded.window.json ("/api/devices"), "/api/devices");
 }
 
 TEST (CoreApi, AnAbsentPathAnswersAsPythonDid)
 {
     Recorded recorded;
-    auto& window = recorded.window;
-    const auto& expected = recorded.expected;
-    (void) window; (void) expected;
-    const auto reply = window.get ("/nope");
-    EXPECT_EQ (reply.status, static_cast<int> (expected["nope"]["status"]));
-    EXPECT_EQ (reply.body, expected["nope"]["body"].toString().toStdString());
-    EXPECT_EQ (reply.headers.at ("content-type"), expected["nope"]["content_type"].toString().toStdString());
+    const auto reply = recorded.window.get ("/nope");
+    EXPECT_EQ (reply.status, static_cast<int> (recorded.expected["nope"]["status"]));
+    EXPECT_EQ (reply.body, recorded.expected["nope"]["body"].toString().toStdString());
+    EXPECT_EQ (reply.headers.at ("content-type"), recorded.expected["nope"]["content_type"].toString().toStdString());
 }
 
 // The stream.
@@ -836,15 +780,32 @@ TEST (CoreApi, AStalledStreamReaderDoesNotBlockTheWriter)
     // A reader that opens the stream and never reads. The writer (Traffic::seen, on the serve thread)
     // must not wait for it, nor may any other reader of the window, nor the shutdown.
     Window window;
+    const std::string padding (400, 'p');
     for (int i = 0; i < 9000; ++i)
-        seenFloat (window.traffic, Direction::in, "/a/long/address/that/makes/each/history/entry/heavy/" + std::to_string (i), 0.5, "motion");
+        seenFloat (window.traffic, Direction::in, "/a/long/address/" + padding + std::to_string (i), 0.5, "motion");
     ASSERT_TRUE (window.open());
+
+    // The first event must be bigger than anything the kernel can hold for this connection (the send
+    // buffer's ceiling and the client's tiny receive buffer), or the writer would never meet EAGAIN.
+    const auto eventSize = canonicalBytes (snapshotAsJson (window.traffic.snapshot (std::nullopt, window.clock.monotonic()), nullptr)).size();
+    long long sendCeiling = 4 * 1024 * 1024;
+    if (std::ifstream wmem ("/proc/sys/net/ipv4/tcp_wmem"); wmem)
+    {
+        long long low = 0, middle = 0;
+        wmem >> low >> middle >> sendCeiling;
+    }
+    ASSERT_GT (static_cast<long long> (eventSize), sendCeiling + 1024 * 1024);
 
     const int stalled = hc::connectTo (window.port(), 1024);
     ASSERT_GE (stalled, 0);
     hc::sendAll (stalled, "GET /api/stream HTTP/1.0\r\n\r\n");
-    // Long enough for the first event (a megabyte or two) to be on its way and stuck.
     std::this_thread::sleep_for (std::chrono::milliseconds (700));
+
+    // The stall is real: the connection is open and most of the event has not reached the client.
+    int queuedAtClient = 0;
+    ::ioctl (stalled, FIONREAD, &queuedAtClient);
+    EXPECT_EQ (window.server->openConnections(), 1);
+    EXPECT_LT (static_cast<size_t> (queuedAtClient), eventSize / 10);
 
     const auto start = std::chrono::steady_clock::now();
     for (int i = 0; i < 1000; ++i)
@@ -853,6 +814,10 @@ TEST (CoreApi, AStalledStreamReaderDoesNotBlockTheWriter)
 
     EXPECT_EQ (window.get ("/api/devices").status, 200) << "another reader is served while one is stuck";
     EXPECT_EQ (window.get ("/api/unknown").status, 200);
+    // The two quick readers are gone (their close takes a moment); the stuck one is still held, not dropped.
+    for (int i = 0; i < 100 && window.server->openConnections() != 1; ++i)
+        std::this_thread::sleep_for (std::chrono::milliseconds (10));
+    EXPECT_EQ (window.server->openConnections(), 1) << "still stuck, not dropped";
 
     const auto stop = std::chrono::steady_clock::now();
     window.server->stop();

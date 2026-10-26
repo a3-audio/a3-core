@@ -92,6 +92,9 @@ public:
     // print), for a bind with no colon, no host, a port that is not a number or out of range, or
     // an address that is taken.
     bool start (const Journal& journal);
+    // How a connection gets its thread; the tests make it fail. Call before start().
+    using Spawn = std::function<std::thread (std::function<void()>)>;
+    void spawnWith (Spawn spawn) { makeThread = std::move (spawn); }
     // Joins every thread; open streams end. Safe to call twice.
     void stop();
 
@@ -106,7 +109,7 @@ private:
     };
 
     void acceptLoop();
-    void serve (std::unique_ptr<juce::StreamingSocket> socket);
+    void serve (std::shared_ptr<juce::StreamingSocket> socket);
     void serveStream (int fd, const Routes::Stream& stream);
     void refuseOverTheCap (juce::StreamingSocket& socket);
     void reap();
@@ -117,6 +120,9 @@ private:
     std::unique_ptr<juce::StreamingSocket> listener;
     std::thread acceptThread;
     std::list<std::unique_ptr<Connection>> connections;
+    Journal say;
+    Spawn makeThread = [] (std::function<void()> work) { return std::thread (std::move (work)); };
+    bool saidThreadFailure = false;
     std::atomic<int> active { 0 };
     std::atomic<bool> stopping { false };
     int boundPort = -1;

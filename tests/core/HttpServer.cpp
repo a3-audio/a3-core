@@ -7,6 +7,7 @@
 #include <atomic>
 #include <chrono>
 #include <mutex>
+#include <system_error>
 #include <thread>
 
 #include <gtest/gtest.h>
@@ -243,6 +244,30 @@ TEST (HttpServer, TheDefaultCapIsSixteen)
     EXPECT_EQ (hc::get (server.port(), "/hello").status, 503);
     for (const auto fd : held)
         ::close (fd);
+}
+
+TEST (HttpServer, AThreadThatCannotBeMadeIsALineAndNotTheEndOfTheWindow)
+{
+    Said said;
+    HttpServer server (loopback() + ":0", sampleRoutes());
+    std::atomic<int> asked { 0 };
+    server.spawnWith ([&] (std::function<void()> work) {
+        if (asked++ == 0)
+            throw std::system_error (std::make_error_code (std::errc::resource_unavailable_try_again));
+        return std::thread (std::move (work));
+    });
+    ASSERT_TRUE (server.start (said.journal()));
+
+    // The first connection finds no thread: it is closed unanswered, and its place is given back.
+    EXPECT_EQ (hc::get (server.port(), "/hello").status, 0);
+    EXPECT_TRUE (eventually ([&] { return server.openConnections() == 0; }));
+    {
+        std::lock_guard<std::mutex> guard (said.lock);
+        ASSERT_EQ (said.lines.size(), 1u);
+        EXPECT_NE (said.lines[0].first.find ("could not start a thread"), std::string::npos) << said.lines[0].first;
+    }
+    // The accept loop is alive and the next connection is served.
+    EXPECT_EQ (hc::get (server.port(), "/hello").status, 200);
 }
 
 // The stream.

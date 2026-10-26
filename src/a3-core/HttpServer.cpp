@@ -21,6 +21,8 @@ namespace
 constexpr int pollSliceMillis = 100;
 constexpr size_t maxHeaderBytes = 16 * 1024;
 constexpr size_t maxBodyBytes = 1024 * 1024;
+// The accept thread does the refusing, so this is the longest any one refusal can hold the door.
+constexpr int refuseDrainMillis = 20;
 
 using Steady = std::chrono::steady_clock;
 
@@ -333,6 +335,8 @@ bool HttpServer::start (const Journal& journal)
     if (! socket->createListener (wanted.port, address))
         return refuse ("the address is already in use, or not one of this machine's");
 
+    say = journal;
+    saidThreadFailure = false;
     boundPort = socket->getBoundPort();
     listener = std::move (socket);
     stopping = false;
@@ -384,14 +388,30 @@ void HttpServer::acceptLoop()
             refuseOverTheCap (*socket);
             continue;
         }
+        // Shared, so that a thread that cannot be made leaves the socket here to be closed.
+        std::shared_ptr<juce::StreamingSocket> shared (std::move (socket));
         ++active;
         auto connection = std::make_unique<Connection>();
         auto* raw = connection.get();
-        connection->thread = std::thread ([this, raw, owned = std::move (socket)]() mutable {
-            serve (std::move (owned));
+        try
+        {
+            connection->thread = makeThread ([this, raw, shared] {
+                serve (shared);
+                --active;
+                raw->done = true;
+            });
+        }
+        catch (const std::exception& problem)
+        {
+            // Out of threads or memory: this connection is lost, the window is not.
             --active;
-            raw->done = true;
-        });
+            if (! saidThreadFailure)
+            {
+                saidThreadFailure = true;
+                say ("the window could not start a thread for a connection: " + std::string (problem.what()), false);
+            }
+            continue;
+        }
         connections.push_back (std::move (connection));
     }
 }
@@ -399,9 +419,11 @@ void HttpServer::acceptLoop()
 void HttpServer::refuseOverTheCap (juce::StreamingSocket& socket)
 {
     const int fd = socket.getRawSocketHandle();
+    char arrived[1024];
+    ::recv (fd, arrived, sizeof (arrived), MSG_DONTWAIT);   // what the client already sent need not meet a reset
     auto response = plain (503, "too many connections");
     writeAll (fd, head (response) + response.body, stopping);
-    finish (fd, 100);
+    finish (fd, refuseDrainMillis);
 }
 
 void HttpServer::serveStream (int fd, const Routes::Stream& stream)
@@ -454,7 +476,7 @@ void HttpServer::serveStream (int fd, const Routes::Stream& stream)
     }
 }
 
-void HttpServer::serve (std::unique_ptr<juce::StreamingSocket> socket)
+void HttpServer::serve (std::shared_ptr<juce::StreamingSocket> socket)
 {
     const int fd = socket->getRawSocketHandle();
     const auto reply = [&] (const HttpResponse& response) {
