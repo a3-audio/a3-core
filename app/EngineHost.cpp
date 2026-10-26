@@ -73,6 +73,17 @@ juce::Result EngineHost::rebuild (double sampleRate, int blockSize, bool fadeFir
     return juce::Result::ok();
 }
 
+bool EngineHost::closeGate (const std::function<void()>& pump, int maxPumps)
+{
+    auto* running = current.load();
+    if (running == nullptr)
+        return true;
+    running->holdGateClosed (true);
+    for (int i = 0; i < maxPumps && ! silent (running->gateLevels()); ++i)
+        pump();
+    return silent (running->gateLevels());
+}
+
 void EngineHost::audioCallback (const a3::EngineInputs& in, const a3::EngineOutputs& out, int numSamples)
 {
     begun.fetch_add (1);

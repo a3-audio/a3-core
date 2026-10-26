@@ -35,6 +35,11 @@ public:
     // Session (new EngineHost, new boot id).
     juce::Result rebuild (double sampleRate, int blockSize, bool fadeFirst);
 
+    // Control thread: closes the gates (10 ms fade) and waits, calling `pump` between looks (the app
+    // sleeps a few ms; a test drives callbacks), up to maxPumps times. True once every zone is at
+    // exactly 0 or when no Engine runs. A Save does this before it drops the Session: no hard cut.
+    bool closeGate (const std::function<void()>& pump, int maxPumps);
+
     // Audio thread. Silence on every output while no Engine is published.
     void audioCallback (const a3::EngineInputs&, const a3::EngineOutputs&, int numSamples);
 

@@ -23,6 +23,7 @@ public:
     void refresh();
     double sliderRangeMin() const { return rows.front()->proposal.getMinimum(); }
     double sliderRangeMax() const { return rows.front()->proposal.getMaximum(); }
+    double proposalValue (TrimZone zone) const { return rows[(size_t) zone]->proposal.getValue(); }
     const juce::Label& messageLabel() const { return message; }
     void resized() override;
     void paint (juce::Graphics&) override;

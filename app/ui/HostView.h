@@ -27,6 +27,8 @@ public:
     virtual a3::GateLevels gateLevels() const = 0;                 // the zones' actual gain (main, booth, phones)
     virtual AppConfig config() const = 0;                          // the pending edit (what the AUDIO page edits)
     virtual AppConfig running() const = 0;                         // what runs now: the config the Session was built from
+    // Empty while an engine runs; else why none does (a Save whose config and fallback both failed to open).
+    virtual juce::String engineProblem() const { return {}; }
     virtual juce::File configFile() const = 0;                     // where Save writes
     virtual LiveLinks liveLinks() const = 0;                       // the engine ports' live JACK links, foreign ones included
     virtual void edit (const AppConfig&) = 0;                      // stores the pending edit; nothing runs differently yet

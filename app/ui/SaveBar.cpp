@@ -4,15 +4,34 @@
 
 namespace a3app
 {
+namespace
+{
+bool putBack (const juce::File& file, const juce::String& text)
+{
+    juce::TemporaryFile temporary (file);
+    return temporary.getFile().replaceWithText (text) && temporary.overwriteTargetFileWithTemporary();
+}
+}
+
 juce::Result saveEdits (HostView& view)
 {
     const auto config = view.config();
-    const auto written = saveAppConfig (config, view.configFile());
+    const auto file = view.configFile();
+    const bool existed = file.existsAsFile();
+    const auto previous = existed ? file.loadFileAsString() : juce::String();
+    const auto written = saveAppConfig (config, file);
     if (written.failed())
         return written;
     if (sameConfig (config, view.running()))
         return juce::Result::ok();
-    return view.apply (config);
+    const auto applied = view.apply (config);
+    if (applied.wasOk())
+        return applied;
+
+    // A file the engine could not start from must not stay: the next boot would fail the same way.
+    const bool restored = existed ? putBack (file, previous) : ! file.existsAsFile() || file.deleteFile();
+    return juce::Result::fail ("not applied: " + applied.getErrorMessage()
+                               + (restored ? ", previous config kept" : ", and the previous config could not be put back"));
 }
 
 SaveBar::SaveBar (HostView& v) : view (v)

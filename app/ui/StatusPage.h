@@ -21,7 +21,8 @@ public:
     ~StatusPage() override;
 
     void refresh();
-    juce::String modeLine() const { return modeText (config, status); }   // what runs, not the pending edit
+    // What runs, not the pending edit; or why no engine runs.
+    juce::String modeLine() const { return problem.isEmpty() ? modeText (config, status) : "NO ENGINE RUNNING - " + problem; }
     void resized() override;
     void paint (juce::Graphics&) override;
 
@@ -31,6 +32,7 @@ private:
     std::unique_ptr<Meters> meters;
     AppConfig config;
     BackendStatus status;
+    juce::String problem;
     bool heard = false, gate = false;
     double sinceCore = 0;
     a3::GateLevels gates;

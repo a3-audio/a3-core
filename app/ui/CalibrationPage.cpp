@@ -67,7 +67,8 @@ CalibrationPage::CalibrationPage (HostView& v, Confirm c)
         row.proposal.setRange (minTrimDb, maxTrimDb, 0.1);
         row.proposal.setNumDecimalPlacesToDisplay (1);
         row.proposal.setTextValueSuffix (" dB");
-        row.proposal.setValue (minTrimDb, juce::dontSendNotification);   // never starts above what the zone has
+        // Starts at what the zone has now (the lowest for a zone without a trim), so it never reads as a pending change.
+        row.proposal.setValue (trimOf (view.config(), row.zone).value_or (minTrimDb), juce::dontSendNotification);
         row.set.onClick = [this, zone = row.zone] { proposeTrim (zone, (float) rows[(size_t) zone]->proposal.getValue()); };
         for (auto* child : std::initializer_list<juce::Component*> { &row.name, &row.current, &row.proposal, &row.set })
             addAndMakeVisible (child);
@@ -87,14 +88,20 @@ void CalibrationPage::proposeTrim (TrimZone zone, float db)
         return;
     const auto text = juce::String (zoneName (zone)) + " trim: " + describe (trimOf (config, zone)) + "  ->  "
                       + juce::String (db, 1) + " dB.";
-    confirm (text, [this, zone, db]
+    confirm (text, [self = juce::Component::SafePointer<CalibrationPage> (this), zone, db]
     {
+        if (self == nullptr)
+            return;   // the window closed while the dialog was open
+        auto* page = self.getComponent();
+        auto& view = page->view;
+        auto& message = page->message;
         juce::String problem;
         if (const auto next = withTrim (view.config(), zone, db, problem))
             view.edit (*next);
         else
             look::say (message, problem);
-        refresh();
+        page->rows[(size_t) zone]->proposal.setValue (db, juce::dontSendNotification);
+        page->refresh();
     });
 }
 

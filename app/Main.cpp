@@ -8,6 +8,7 @@
 #include "DeviceBackend.h"
 #include "EngineHost.h"
 #include "JackBackend.h"
+#include "SessionRestart.h"
 #include "ui/HostView.h"
 #include "ui/MainWindow.h"
 #include <csignal>
@@ -72,11 +73,24 @@ public:
             backend = std::make_unique<a3app::JackBackend> (connecting);
         else
             backend = std::make_unique<a3app::DeviceBackend>();
-        return backend->open (*host, data.config);
+        const auto opened = backend->open (*host, data.config);
+        ready = opened.wasOk();
+        return opened;
+    }
+
+    // Only a session that opened has a host and a backend to tick, read or ask.
+    bool isReady() const { return ready; }
+
+    // Closes the gates and waits for the 10 ms fade, so closing the backend is not a hard cut.
+    void quiet()
+    {
+        if (ready)
+            host->closeGate ([] { juce::Thread::sleep (2); }, quietPumps);
     }
 
     void close()
     {
+        ready = false;
         if (backend != nullptr)
             backend->close();   // no audio callback after this
         receiver.removeListener (listener.get());
@@ -88,6 +102,8 @@ public:
 
     void tick()
     {
+        if (! ready)
+            return;
         const auto now = nowSeconds();
         host->controlTick (now);
         backend->service (now);
@@ -95,6 +111,8 @@ public:
 
     bool lost() const
     {
+        if (! ready)
+            return false;
         const auto* jack = dynamic_cast<const a3app::JackBackend*> (backend.get());
         return jack != nullptr && jack->lost();
     }
@@ -106,6 +124,8 @@ public:
     double lastCoreSeconds() const { return lastCoreMessage.load(); }
 
 private:
+    static constexpr int quietPumps = 25;   // 25 x 2 ms: far above the 10 ms fade
+    bool ready = false;
     std::atomic<double> lastCoreMessage { -1.0 };
     const a3app::StartupData& data;
     juce::OSCSender coreSender;
@@ -121,27 +141,30 @@ private:
 class SessionView final : public a3app::HostView
 {
 public:
-    using Restart = std::function<juce::Result (const a3app::AppConfig&)>;
+    using Restart = std::function<juce::Result (const a3app::AppConfig&, juce::String& problem)>;
     SessionView (std::unique_ptr<Session>& s, const a3app::StartupData& startup, Restart restartApp)
         : session (s), file (startup.configFile), edited (startup.config), startedWith (startup.config),
           names (portNames (startup)), restart (std::move (restartApp)) {}
 
-    a3app::BackendStatus status() const override { return session->status(); }
-    std::vector<a3::Engine::OutputMeter> meters() override { return session->engineHost().meters(); }
+    a3app::BackendStatus status() const override { return live() ? session->status() : a3app::BackendStatus {}; }
+    std::vector<a3::Engine::OutputMeter> meters() override { return live() ? session->engineHost().meters() : std::vector<a3::Engine::OutputMeter> {}; }
     std::vector<std::string> outputNames() const override { return names; }
-    bool coreHeard() const override { return session->lastCoreSeconds() >= 0.0; }
-    double secondsSinceCore() const override { return nowSeconds() - session->lastCoreSeconds(); }
-    bool gateOpen() const override { return session->engineHost().controls().global().gateOpen.load(); }
-    a3::GateLevels gateLevels() const override { return session->engineHost().gateLevels(); }
+    bool coreHeard() const override { return live() && session->lastCoreSeconds() >= 0.0; }
+    double secondsSinceCore() const override { return live() ? nowSeconds() - session->lastCoreSeconds() : 0.0; }
+    bool gateOpen() const override { return live() && session->engineHost().controls().global().gateOpen.load(); }
+    a3::GateLevels gateLevels() const override { return live() ? session->engineHost().gateLevels() : a3::GateLevels {}; }
     a3app::AppConfig config() const override { return edited; }
     a3app::AppConfig running() const override { return startedWith; }
     juce::File configFile() const override { return file; }
-    a3app::LiveLinks liveLinks() const override { return session->liveLinks(); }
+    a3app::LiveLinks liveLinks() const override { return live() ? session->liveLinks() : a3app::LiveLinks {}; }
+    juce::String engineProblem() const override { return problem; }
     void edit (const a3app::AppConfig& config) override { edited = config; }
 
+    // Fails when the new config did not open (the previous one is running again, or nothing is:
+    // then engineProblem() says so). Success makes the edit what runs.
     juce::Result apply (const a3app::AppConfig& config) override
     {
-        const auto result = restart (config);
+        const auto result = restart (config, problem);
         if (result.failed())
             return result;
         startedWith = edited = config;
@@ -151,11 +174,13 @@ public:
 
     void setFilterKind (a3::FilterKind kind) override
     {
-        session->engineHost().controls().global().filter.kind.store (static_cast<int> (kind));
+        if (live())
+            session->engineHost().controls().global().filter.kind.store (static_cast<int> (kind));
         edited.engine.filterKind = startedWith.engine.filterKind = kind;   // it runs now
     }
 
 private:
+    bool live() const { return session != nullptr && session->isReady(); }
     static std::vector<std::string> portNames (const a3app::StartupData& startup) { return portNames (startup.config, startup.spatial); }
     static std::vector<std::string> portNames (const a3app::AppConfig& config, const a3::SpatialConfig& spatial)
     {
@@ -172,6 +197,7 @@ private:
     const juce::File file;
     a3app::AppConfig edited, startedWith;
     std::vector<std::string> names;
+    juce::String problem;
     Restart restart;
 };
 
@@ -215,7 +241,7 @@ public:
                       status.sampleRate, status.blockSize, status.connecting ? "connecting" : "no links", args.noWindow ? ", no window" : "");
         if (! args.noWindow)
         {
-            view = std::make_unique<SessionView> (session, startup, [this] (const a3app::AppConfig& config) { return restart (config); });
+            view = std::make_unique<SessionView> (session, startup, [this] (const a3app::AppConfig& config, juce::String& problem) { return restart (config, problem); });
             window = std::make_unique<a3app::MainWindow> (*view, pageDevices, spatialChoices(), args.service, [this] { quit(); });
             window->open();
         }
@@ -244,10 +270,12 @@ private:
 
     // Save of a changed config: the whole Session is dropped and built again (new host, new boot
     // id, new ports; Core replays through the hello). That covers N, layout and backend changes
-    // and a backend that is stopped, which a fade-first rebuild could not swap. The old Session
-    // closes first because both bind engine.osc and may hold the device. If the new one does not
-    // open, the old config is opened again.
-    juce::Result restart (const a3app::AppConfig& config)
+    // and a backend that is stopped, which a fade-first rebuild could not swap. The old gates close
+    // first (no hard cut on the PA); the old Session closes before the new one opens because both
+    // bind engine.osc and may hold the device. An open is tried a few times (a JACK client name
+    // may still be in use for a moment); if the new config does not open, the old one is opened
+    // again, and if even that fails the app stays up without an engine and says so in STATUS.
+    juce::Result restart (const a3app::AppConfig& config, juce::String& problem)
     {
         juce::String error;
         const auto spatial = a3::loadSpatialConfig (config.spatialDirectory, error);
@@ -255,23 +283,41 @@ private:
             return juce::Result::fail ("spatial: " + error);
 
         const auto before = startup;
-        session.reset();
-        startup.config = config;
-        startup.spatial = *spatial;
-        session = std::make_unique<Session> (startup);
-        const auto opened = session->open (! args.noConnect);
-        if (opened.wasOk())
-            return opened;
-
-        session.reset();
-        startup = before;
-        session = std::make_unique<Session> (startup);
-        if (session->open (! args.noConnect).failed())
+        auto next = startup;
+        next.config = config;
+        next.spatial = *spatial;
+        const auto openWith = [this] (const a3app::StartupData& data)
         {
-            finish (1, "cannot reopen the previous setting after: " + opened.getErrorMessage());
-            return juce::Result::fail (opened.getErrorMessage() + " (the previous setting could not be reopened either)");
+            startup = data;
+            session = std::make_unique<Session> (startup);
+            return session->open (! args.noConnect);
+        };
+
+        a3app::RestartSteps steps;
+        steps.quietOld = [this] { if (session != nullptr) session->quiet(); };
+        steps.dropOld = [this] { session.reset(); };
+        steps.openNew = [&] { return openWith (next); };
+        steps.dropNew = [this] { session.reset(); };
+        steps.openPrevious = [&] { return openWith (before); };
+        steps.pauseMs = [] (int ms) { juce::Thread::sleep (ms); };
+
+        const auto result = a3app::runRestart (steps);
+        switch (result.outcome)
+        {
+            case a3app::RestartOutcome::applied:
+                problem = {};
+                return juce::Result::ok();
+            case a3app::RestartOutcome::previousRunning:
+                problem = {};
+                return juce::Result::fail (result.message + " (the previous setting is running again)");
+            case a3app::RestartOutcome::nothingRunning:
+                break;
         }
-        return juce::Result::fail (opened.getErrorMessage() + " (the previous setting is running again)");
+        // Keep a closed, not-ready Session so the pages have something to ask; tick() ignores it.
+        problem = result.message;
+        std::fprintf (stderr, "a3-engine: NO ENGINE RUNNING: %s\n", problem.toRawUTF8());
+        session = std::make_unique<Session> (startup);
+        return juce::Result::fail (result.message);
     }
 
     // The directories the ZONES page offers: the user's own and the installed variants, where they exist.

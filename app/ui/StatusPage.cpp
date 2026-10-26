@@ -98,6 +98,7 @@ void StatusPage::refresh()
 {
     config = view.running();   // the pending edit belongs to the AUDIO page
     status = view.status();
+    problem = view.engineProblem();
     heard = view.coreHeard();
     sinceCore = view.secondsSinceCore();
     gate = view.gateOpen();
@@ -130,7 +131,7 @@ void StatusPage::paint (juce::Graphics& g)
         g.drawText (value, r, juce::Justification::centredLeft, true);
     };
 
-    line ("MODE", modeText (config, status), status.connecting ? palette::text : palette::caution);
+    line ("MODE", modeLine(), ! problem.isEmpty() ? palette::danger : status.connecting ? palette::text : palette::caution);
     const bool silent = heard && sinceCore > coreSilentAfterSeconds;
     line ("CORE", coreText (heard, sinceCore), ! heard || silent ? palette::caution : palette::running);
 

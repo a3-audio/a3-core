@@ -190,3 +190,24 @@ TEST (EngineHostFilterKind, StartsWithTheConfiguredKind)
     a3app::EngineHost ladder (config, spatial, a3apptest::engineTruth());
     EXPECT_EQ (ladder.controls().global().filter.kind.load(), static_cast<int> (a3::FilterKind::ladder));
 }
+
+// Before a Save drops the Session the gate closes and the 10 ms fade runs out: no hard cut.
+TEST (EngineHost, CloseGateFadesTheOutputsToZeroBeforeTheBackendStops)
+{
+    HostRig rig;
+    EXPECT_TRUE (rig.host.closeGate ([] {}, 5));   // no engine: nothing to close
+    ASSERT_TRUE (rig.host.rebuild (rate, 64, false).wasOk());
+    rig.restValues();
+    rig.run (1.2, 64);
+    ASSERT_GT (rig.lastMainPeak, 0.001f);
+
+    EXPECT_FALSE (rig.host.closeGate ([] {}, 3)) << "a gate that never gets a callback is reported, not waited for forever";
+    int pumps = 0;
+    EXPECT_TRUE (rig.host.closeGate ([&] { rig.callback (64); ++pumps; }, 20));
+    EXPECT_GT (pumps, 0);
+    EXPECT_LE (pumps, 10);   // 10 ms is 441 samples: a handful of 64-frame blocks
+    for (const auto zone : { a3::GatedZone::main, a3::GatedZone::booth, a3::GatedZone::phones })
+        EXPECT_EQ (rig.host.gateLevels().gain[(int) zone], 0.0f);
+    rig.callback (64);
+    EXPECT_EQ (rig.lastMainPeak, 0.0f);
+}

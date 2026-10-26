@@ -57,6 +57,7 @@ struct FakeView final : a3app::HostView
     a3::GateLevels gateLevels() const override { a3::GateLevels g; for (auto& v : g.gain) v = open ? 1.0f : 0.0f; return g; }
     a3app::AppConfig config() const override { return cfg; }
     a3app::AppConfig running() const override { return runningCfg; }
+    juce::String engineProblem() const override { return problem; }
     juce::File configFile() const override { return file; }
     a3app::LiveLinks liveLinks() const override { return links; }
     void edit (const a3app::AppConfig& c) override { cfg = c; ++edited; }
@@ -64,7 +65,8 @@ struct FakeView final : a3app::HostView
     {
         ++applied;
         fileExistedAtApply = file.existsAsFile();
-        cfg = runningCfg = c;
+        if (applyResult.wasOk())
+            cfg = runningCfg = c;
         return applyResult;
     }
     void setFilterKind (a3::FilterKind kind) override { cfg.engine.filterKind = runningCfg.engine.filterKind = kind; ++filterSets; }
@@ -80,6 +82,7 @@ struct FakeView final : a3app::HostView
     juce::File file;
     a3app::LiveLinks links;
     juce::Result applyResult = juce::Result::ok();
+    juce::String problem;
     bool fileExistedAtApply = false;
     int edited = 0, applied = 0, filterSets = 0;
 };
@@ -460,4 +463,56 @@ TEST_F (Pages, SaveBarShowsPendingAndAFailedApply)
     view.applyResult = juce::Result::fail ("cannot open the device");
     bar.save();
     EXPECT_NE (bar.messageLabel().getText().indexOf ("cannot open the device"), -1);
+}
+
+TEST_F (Pages, AFailedApplyPutsThePreviousFileBack)
+{
+    FakeView view;
+    view.file.replaceWithText ("{\"engine\":{\"channels\":3}}");   // what was on disk, whatever it said
+    const auto before = view.file.loadFileAsString();
+    juce::String error;
+    view.cfg = *a3app::withChannels (view.cfg, 6, error);
+    view.applyResult = juce::Result::fail ("cannot open the device");
+
+    const auto result = a3app::saveEdits (view);
+    ASSERT_TRUE (result.failed());
+    EXPECT_NE (result.getErrorMessage().indexOf ("not applied"), -1);
+    EXPECT_NE (result.getErrorMessage().indexOf ("cannot open the device"), -1);
+    EXPECT_NE (result.getErrorMessage().indexOf ("previous config kept"), -1);
+    EXPECT_EQ (view.file.loadFileAsString(), before);   // the next boot reads what it read before
+    EXPECT_EQ (view.cfg.engine.channels, 6);            // the edit stays pending
+    EXPECT_TRUE (view.fileExistedAtApply);
+
+    view.file.deleteFile();   // no file before: none after
+    EXPECT_TRUE (a3app::saveEdits (view).failed());
+    EXPECT_FALSE (view.file.existsAsFile());
+
+    a3app::SaveBar bar (view);
+    bar.save();
+    EXPECT_NE (bar.messageLabel().getText().indexOf ("not applied"), -1);
+    EXPECT_NE (bar.pendingLabel().getText().indexOf ("not saved"), -1);
+}
+
+TEST_F (Pages, CalibrationSlidersStartAtTheCurrentTrim)
+{
+    FakeView view;
+    view.cfg.engine.trims.main = -3.0f;
+    view.cfg.engine.trims.booth.reset();
+    a3app::CalibrationPage page (view);
+    EXPECT_FLOAT_EQ ((float) page.proposalValue (a3app::TrimZone::main), -3.0f);
+    EXPECT_FLOAT_EQ ((float) page.proposalValue (a3app::TrimZone::phones), 0.0f);
+    EXPECT_EQ (page.proposalValue (a3app::TrimZone::booth), -90.0);   // no trim: the lowest, never above what the zone has
+}
+
+TEST_F (Pages, StatusSaysWhenNoEngineRuns)
+{
+    FakeView view;
+    a3app::StatusPage page (view);
+    page.refresh();
+    EXPECT_EQ (page.modeLine().indexOf ("NO ENGINE"), -1);
+    view.problem = "device gone; the previous setting could not be reopened";
+    page.refresh();
+    EXPECT_NE (page.modeLine().indexOf ("NO ENGINE RUNNING"), -1);
+    EXPECT_NE (page.modeLine().indexOf ("device gone"), -1);
+    expectPainted (snapshot (page, "status-no-engine"));
 }
