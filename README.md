@@ -76,11 +76,13 @@ libraries JUCE would `dlopen` for a window are not needed.
   order: main, booth, rec L/R, phones L/R, then per channel pre L/R and post L/R (a deck channel's
   W on both sides).
 
-**Timing guard.** `EngineTiming.FullGraphUnderOneMillisecondPer128` fails above 1.0 ms mean per
-128-frame block on the build machine (a3coreV01, i5-4440) in the worst case: all four channels on
-decks, two stem cues, every send open. 2026-10-26: 0.99 ms (decks), 0.80 ms (analog). The two
-BinauralDecoders are ~42 % of it, the four deck strips ~32 %. `ReportsCostPerChannelAtThirtyTwo`
-prints the cost of one more channel (about 42 µs analog, 84 µs deck). The rig's own run decides.
+**Timing guard.** `EngineTiming.FullGraphUnderOneMillisecondPer128` fails when the best of five
+repetition means exceeds 1.0 ms per 128-frame block on the build machine (a3coreV01, i5-4440). It
+measures the worst case: all four channels on decks, two stem cues, every send open. Background
+load only adds time, so it cannot fail the guard, but a real regression still does. 2026-10-26:
+0.84 ms (decks), 0.80 ms (analog). The two BinauralDecoders are about half of it.
+`ReportsCostPerChannelAtThirtyTwo` prints the cost of one more channel (about 43 µs analog, 44 µs
+deck). The rig's own run decides.
 
 **Known upstream allocations.** IEM's SimpleDecoder copies a `juce::Array` on every call (one small
 malloc and free per zone per block), and DualDelay resizes scratch buffers when the block size

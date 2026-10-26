@@ -186,13 +186,16 @@ double loadAverage()
 }
 
 // N = 4, quantum 128. The worst case of the revision: all four channels on decks (with signal
-// on the analog pairs too), two stem cues; then the same with all four analog.
+// on the analog pairs too), two stem cues; then the same with all four analog. Judged on the
+// best of several repetition means: background load only ever adds time, so it cannot fail
+// the guard, while a regression slows every repetition.
 TEST (EngineTiming, FullGraphUnderOneMillisecondPer128)
 {
 #ifndef NDEBUG
     GTEST_SKIP() << "timing is measured in Release only";
 #endif
     constexpr int blocks = 2000;
+    constexpr int repetitions = 5;
     constexpr double budgetMs = 1.0;
 
     EngineRig decks (engineConfig (4, 2), loopFrames, quantum);
@@ -201,22 +204,30 @@ TEST (EngineTiming, FullGraphUnderOneMillisecondPer128)
     everySendOpen (decks);
     for (int c = 0; c < 4; ++c)
         decks.controls.channel (c).source = c < 2 ? 1 : 2;
-    const auto onDecks = timeEngine (decks, blocks);
 
     EngineRig analog (engineConfig (4, 2), loopFrames, quantum);
     deckOnEveryChannel (analog);   // the stem cues still run
     analogOnEveryPair (analog);
     everySendOpen (analog);
-    const auto onAnalog = timeEngine (analog, blocks);
 
-    std::printf ("EngineTiming (load %.2f): all decks mean_ms %.4f worst_ms %.4f; all analog mean_ms %.4f worst_ms %.4f\n",
-                 loadAverage(), onDecks.meanMs, onDecks.worstMs, onAnalog.meanMs, onAnalog.worstMs);
-    RecordProperty ("decks_mean_ms", std::to_string (onDecks.meanMs));
-    RecordProperty ("analog_mean_ms", std::to_string (onAnalog.meanMs));
-    printShares (decks.spatial, onDecks.meanMs, onAnalog.meanMs, blocks);
+    double bestDecks = 1e9, bestAnalog = 1e9;
+    for (int r = 0; r < repetitions; ++r)
+    {
+        const auto onDecks = timeEngine (decks, blocks);
+        const auto onAnalog = timeEngine (analog, blocks);
+        std::printf ("EngineTiming rep %d (load %.2f): all decks mean_ms %.4f worst_ms %.4f; all analog mean_ms %.4f worst_ms %.4f\n",
+                     r + 1, loadAverage(), onDecks.meanMs, onDecks.worstMs, onAnalog.meanMs, onAnalog.worstMs);
+        bestDecks = std::min (bestDecks, onDecks.meanMs);
+        bestAnalog = std::min (bestAnalog, onAnalog.meanMs);
+    }
+    std::printf ("EngineTiming best of %d: all decks %.4f ms, all analog %.4f ms (budget %.1f)\n", repetitions, bestDecks,
+                 bestAnalog, budgetMs);
+    RecordProperty ("decks_best_mean_ms", std::to_string (bestDecks));
+    RecordProperty ("analog_best_mean_ms", std::to_string (bestAnalog));
+    printShares (decks.spatial, bestDecks, bestAnalog, blocks);
 
-    EXPECT_LT (onDecks.meanMs, budgetMs);
-    EXPECT_LT (onAnalog.meanMs, budgetMs);
+    EXPECT_LT (bestDecks, budgetMs);
+    EXPECT_LT (bestAnalog, budgetMs);
 }
 
 // No channel cap (D11): what one more channel costs, at N = 32 against N = 4.

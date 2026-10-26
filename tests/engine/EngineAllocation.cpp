@@ -251,8 +251,8 @@ HeapCount engineAllocations (EngineRig& rig, const std::vector<int>& calls)
 }
 
 // Calls of any size (shorter than the quantum, odd, longer): the engine adds no allocation
-// to IEM's own (see upstreamAllocations).
-TEST (EngineAllocation, ProcessAllocatesNothing)
+// to IEM's own (see upstreamAllocations), which are accepted (controller ruling, A8).
+TEST (EngineAllocation, ProcessAddsNoAllocationBeyondIemsOwn)
 {
     const std::vector<int> calls { quantum, 1, 7, 333, 2048, 64, 128, 65 };
     EngineRig rig (engineConfig (4, 2), 3 * 44100, quantum, engineRate, false);

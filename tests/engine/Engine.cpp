@@ -650,3 +650,33 @@ TEST (Engine, SilentAnalogPathIsResetNotRun)
     EXPECT_GT (peak (taps (*loud), back + 1024), 1e-3);
     EXPECT_EQ (maxDifference (taps (*loud), taps (*quiet), back), 0.0);
 }
+
+// R14 (A8): the analog path that comes back from a deck starts from reset() (filters and
+// the isolator's coefficients cleared) and must still fade in without a click.
+TEST (Engine, AnalogFadeInAfterResetIsClickFree)
+{
+    const size_t frames = oneSecond / 2, back = 11008;   // a call boundary
+    const float level = 0.5f;
+    EngineRig rig (engineConfig (4, 2), frames);
+    rig.setAnalogPair (1, sine (frames, 997.0, engineRate, level));
+    rig.neutralStrip (0);
+    rig.controls.channel (0).threeD = 0.6f;     // the isolator splits moving and steady
+    rig.controls.channel (0).filterOn = 1.0f;   // and the filter runs from its reset
+    rig.controls.global().filter.frequency = 0.3f;
+    rig.run (0, 0, { engineBlock }, [&] (size_t start) { rig.controls.channel (0).source = start >= 1024 && start < back ? 1 : 0; });
+
+    const double inputStep = 2.0 * juce::MathConstants<double>::pi * 997.0 / engineRate * level;
+    const size_t from = back - 64, to = back + 2048;   // the 10 ms fade-in and the first control blocks
+    const auto stepIn = [&] (const std::vector<float>& x)
+    {
+        double worst = 0.0;
+        for (size_t i = from; i < to; ++i)
+            worst = std::max (worst, (double) std::abs (x[i] - x[i - 1]));
+        return worst;
+    };
+    EXPECT_GT (peak (rig.post[0].l, back + 1024, to), 1e-2);
+    for (const auto* x : { &rig.post[0].l, &rig.post[0].r, &rig.pre[0].l, &rig.pre[0].r })
+        EXPECT_LE (stepIn (*x), 2.0 * inputStep);
+    for (const auto* x : rig.mainOutputs())
+        EXPECT_LE (stepIn (*x), 2.0 * inputStep);
+}

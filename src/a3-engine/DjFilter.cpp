@@ -147,7 +147,8 @@ void DjFilter::processChunk (float* const* io, int count)
 void DjFilter::render (float* const* io, int count)
 {
     // Ladder: sub-blocks counted across calls, so the result does not depend on the host's period.
-    for (int done = 0; done < count;)
+    // An SVF-only filter (the deck strip) never weighs the ladder in, so it is not run at all.
+    for (int done = 0; done < count && ! svfOnly;)
     {
         const int len = std::min (count - done, ladderSubBlock - ladderPhase);
         if (ladderPhase == 0)
@@ -180,7 +181,7 @@ void DjFilter::render (float* const* io, int count)
         {
             const float x = io[ch][i];
             const float filteredSvf = svf.processSample (ch, x);
-            const float filteredLadder = ladderOut[(size_t) ch * (size_t) maxBlock + (size_t) i];
+            const float filteredLadder = svfOnly ? x : ladderOut[(size_t) ch * (size_t) maxBlock + (size_t) i];
             io[ch][i] = x + wSvf * (filteredSvf - x) + wLadder * (filteredLadder - x);
         }
     }
