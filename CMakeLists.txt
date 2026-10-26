@@ -25,11 +25,14 @@ endif()
 add_library(a3-engine-juce STATIC)
 target_link_libraries(a3-engine-juce
     PRIVATE juce::juce_audio_basics juce::juce_core juce::juce_osc juce::juce_recommended_config_flags
-    juce::juce_audio_formats juce::juce_audio_processors juce::juce_dsp juce::juce_opengl)
+    juce::juce_audio_formats juce::juce_audio_processors juce::juce_dsp juce::juce_opengl
+    juce::juce_audio_devices)
 # JUCE_MODAL_LOOPS_PERMITTED is IEM's global definition; it changes module code,
 # so it has to be on the library that compiles the modules.
 target_compile_definitions(a3-engine-juce PUBLIC JUCE_STANDALONE_APPLICATION=1
     JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_MODAL_LOOPS_PERMITTED=1)
+# The device backend is ALSA; JUCE's JACK device type is never compiled (the JACK backend is our own).
+target_compile_definitions(a3-engine-juce PUBLIC JUCE_JACK=0 JUCE_ALSA=1)
 target_compile_definitions(a3-engine-juce INTERFACE $<TARGET_PROPERTY:a3-engine-juce,COMPILE_DEFINITIONS>)
 target_include_directories(a3-engine-juce INTERFACE $<TARGET_PROPERTY:a3-engine-juce,INCLUDE_DIRECTORIES>)
 
