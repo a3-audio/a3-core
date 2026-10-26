@@ -224,7 +224,7 @@ assign [class="StemDeck"] number $ws2
 # One deck per instance (-bformat, 2026-10-26): "StemDeck A" stays on 2, deck B
 # gets workspace 6, so neither covers the other on the one screen.
 for_window [class="StemDeck" title="^StemDeck B$"] move container to workspace number $ws6
-for_window [class="StemDeck" title="^StemDeck( [A-D])?$"] border none
+for_window [class="StemDeck" title="^StemDeck( [A-D])?$"] floating disable, border none
 # Its dialogs -- Settings, Audio, Create stems, the folder choosers, message
 # boxes: every StemDeck window but a main one -- float over it.
 for_window [class="StemDeck" title="^(?!StemDeck( [A-D])?$)"] floating enable

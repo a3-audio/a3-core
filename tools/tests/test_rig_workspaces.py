@@ -51,6 +51,9 @@ class BarPerWorkspace(unittest.TestCase):
         for name in ("3:ENGINE", "4:QJACKCTL", "5:SCARLETT", "7:DESK", "7"):
             self.assertEqual(self.bar.bar_mode(name), "dock", name)
 
+    def test_deck_b_has_the_whole_screen_too(self):
+        self.assertEqual(self.bar.bar_mode("6:STEMDECK B"), "invisible")
+
     def test_a_workspace_without_a_number_keeps_the_bar_away(self):
         self.assertEqual(self.bar.bar_mode("scratch"), "invisible")
 
@@ -76,11 +79,16 @@ class WhereThingsLive(unittest.TestCase):
     def test_the_one_deck_windows_are_main_windows_not_dialogs(self):
         # 2026-10-26: "StemDeck A" / "StemDeck B" (one deck per instance) floated
         # as dialogs, and B covered A on workspace 2.
-        border = re.search(r'for_window \[class="StemDeck" title="([^"]+)"\] border none', self.config)
+        border = re.search(r'for_window \[class="StemDeck" title="([^"]+)"\] [^\n]*border none', self.config)
         floating = re.search(r'for_window \[class="StemDeck" title="([^"]+)"\] floating enable', self.config)
         for title in ("StemDeck", "StemDeck A", "StemDeck B"):
             self.assertTrue(re.search(border.group(1), title), title)
             self.assertFalse(re.search(floating.group(1), title), title)
+        # JUCE maps the window before it sets the deck's title, so the floating
+        # rule catches it first; the main titles must take it back out.
+        unfloat = re.search(r'for_window \[class="StemDeck" title="([^"]+)"\] floating disable[^\n]*', self.config)
+        for title in ("StemDeck A", "StemDeck B"):
+            self.assertTrue(re.search(unfloat.group(1), title), title)
         for dialog in ("Settings", "Audio", "Create stems"):
             self.assertTrue(re.search(floating.group(1), dialog), dialog)
 
