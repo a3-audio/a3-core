@@ -57,10 +57,10 @@ namespace
 class FanoutFixture : public ::testing::Test
 {
 protected:
-    void run (const std::string& script, double linger = 10, size_t limitBytes = 4 * 1024 * 1024)
+    void run (const std::string& script, double linger = 10, size_t limitBytes = 4 * 1024 * 1024, double restartAfter = 0.1)
     {
         FanoutOptions options;
-        options.restartAfter = 0.1;
+        options.restartAfter = restartAfter;
         options.killAfter = 0.2;
         options.limitBytes = limitBytes;
         std::promise<int> listening;
@@ -69,6 +69,7 @@ protected:
         options.onEncoderStarted = [this] (int pid) { std::lock_guard<std::mutex> lock (mutex); started.push_back (pid); };
         options.onEncoderEnded = [this] (int pid, int status) { std::lock_guard<std::mutex> lock (mutex); ended.push_back ({ pid, status }); };
         options.onEncoderRead = [this] { ++reads; };
+        options.onEncoderChunk = [this] (const std::string& chunk) { std::lock_guard<std::mutex> lock (mutex); capacities.push_back ({ chunk.size(), chunk.capacity() }); };
         ran = true;
         thread = std::thread ([this, script, linger, options] { result = runFanout (0, sh (script), linger, stop, options); });
         ASSERT_EQ (portReady.wait_for (std::chrono::seconds (5)), std::future_status::ready);
@@ -136,6 +137,7 @@ protected:
     std::mutex mutex;
     std::vector<int> started;
     std::vector<std::pair<int, int>> ended;
+    std::vector<std::pair<size_t, size_t>> capacities;   // size, capacity of each chunk read
     std::atomic<int> reads { 0 };
     std::vector<int> clients;
     std::atomic<bool> stop { false };
@@ -358,9 +360,20 @@ TEST_F (ScreencastFanout, ANinthViewerIsClosedAndTheEightStay)
     EXPECT_EQ (startedCount(), 1u);
 }
 
+TEST_F (ScreencastFanout, AChunkHoldsWhatWasRead)
+{
+    run (eofEncoder);
+    const int viewer = connectClient();
+    EXPECT_EQ (receive (viewer, 2), "TS");
+    std::lock_guard<std::mutex> lock (mutex);
+    ASSERT_FALSE (capacities.empty());
+    EXPECT_EQ (capacities[0].first, 2u);
+    EXPECT_LE (capacities[0].second, capacities[0].first + 64);   // not the 64 KiB read buffer
+}
+
 TEST_F (ScreencastFanout, TwoViewersOneEncoder)
 {
-    run ("yes A3 | head -c 1000000", 10);
+    run ("yes A3 | head -c 1000000", 10, 4 * 1024 * 1024, 30.0);
     const int first = connectClient();
     const int second = connectClient();
     const auto all = receive (first, 1000000);

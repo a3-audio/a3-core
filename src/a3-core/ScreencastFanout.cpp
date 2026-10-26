@@ -158,9 +158,10 @@ public:
         if (pid <= 0 || reaped)
             return pid > 0;
         int status = 0;
-        if (::waitpid (pid, &status, WNOHANG) != pid)
+        const auto result = ::waitpid (pid, &status, WNOHANG);
+        if (result == 0 || (result < 0 && errno == EINTR))
             return false;
-        finish (status);
+        finish (result == pid ? status : 0);   // ECHILD: somebody else reaped it, it is gone
         return true;
     }
 
@@ -175,8 +176,8 @@ public:
             {
                 ::kill (pid, SIGKILL);
                 int status = 0;
-                ::waitpid (pid, &status, 0);
-                finish (status);
+                const auto result = ::waitpid (pid, &status, 0);
+                finish (result == pid ? status : 0);
             }
         }
         release();
@@ -191,6 +192,19 @@ public:
     }
 
 private:
+    // Python's Popen restores signals: an empty mask, and SIGPIPE and SIGTERM at their defaults.
+    static bool setCleanSignals (posix_spawnattr_t& attributes)
+    {
+        sigset_t none, defaults;
+        sigemptyset (&none);
+        sigemptyset (&defaults);
+        sigaddset (&defaults, SIGPIPE);
+        sigaddset (&defaults, SIGTERM);
+        return posix_spawnattr_setsigmask (&attributes, &none) == 0
+               && posix_spawnattr_setsigdefault (&attributes, &defaults) == 0
+               && posix_spawnattr_setflags (&attributes, POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF) == 0;
+    }
+
     bool spawn()
     {
         int fds[2];
@@ -198,11 +212,15 @@ private:
             return false;
 
         posix_spawn_file_actions_t actions;
+        posix_spawnattr_t attributes;
         posix_spawn_file_actions_init (&actions);
-        posix_spawn_file_actions_adddup2 (&actions, fds[1], 1);
+        posix_spawnattr_init (&attributes);
+
         // Python's Popen closes every other descriptor (close_fds); a stray socket in the encoder
-        // would keep a viewer's connection open after we closed it.
-        posix_spawn_file_actions_addclosefrom_np (&actions, 3);
+        // would keep a viewer's connection open after we closed it. So a failure refuses the spawn.
+        const bool prepared = posix_spawn_file_actions_adddup2 (&actions, fds[1], 1) == 0
+                              && posix_spawn_file_actions_addclosefrom_np (&actions, 3) == 0
+                              && setCleanSignals (attributes);
 
         std::vector<char*> argv;
         for (auto& word : command)
@@ -210,8 +228,13 @@ private:
         argv.push_back (nullptr);
 
         pid_t child = 0;
-        const int error = command.empty() ? EINVAL : ::posix_spawnp (&child, argv[0], &actions, nullptr, argv.data(), environ);
+        int error = EINVAL;
+        if (prepared && ! command.empty())
+            error = ::posix_spawnp (&child, argv[0], &actions, &attributes, argv.data(), environ);
+        else if (! prepared)
+            std::fprintf (stderr, "screencast fan-out: cannot prepare the encoder's descriptors, not starting it\n");
         posix_spawn_file_actions_destroy (&actions);
+        posix_spawnattr_destroy (&attributes);
         ::close (fds[1]);
         if (error != 0)
         {
@@ -234,9 +257,10 @@ private:
         while (true)
         {
             int status = 0;
-            if (::waitpid (pid, &status, WNOHANG) == pid)
+            const auto result = ::waitpid (pid, &status, WNOHANG);
+            if (result == pid || (result < 0 && errno != EINTR))
             {
-                finish (status);
+                finish (result == pid ? status : 0);
                 return true;
             }
             if (Steady::now() >= end)
@@ -281,11 +305,12 @@ int openListener (int port)
     return fd;
 }
 
-int boundPort (int fd)
+int boundPort (int fd, int port)
 {
     sockaddr_in address {};
     socklen_t length = sizeof address;
-    ::getsockname (fd, reinterpret_cast<sockaddr*> (&address), &length);
+    if (::getsockname (fd, reinterpret_cast<sockaddr*> (&address), &length) != 0)
+        return port;
     return ntohs (address.sin_port);
 }
 
@@ -353,8 +378,7 @@ private:
     {
         if (options.onEncoderRead)
             options.onEncoderRead();
-        auto chunk = std::make_shared<std::string> (chunkBytes, '\0');
-        const auto n = ::read (encoder.stdoutFd(), chunk->data(), chunk->size());
+        const auto n = ::read (encoder.stdoutFd(), readBuffer.data(), readBuffer.size());
         if (n < 0)
         {
             if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
@@ -367,8 +391,11 @@ private:
             encoder.stopReading();
             return;
         }
-        chunk->resize (static_cast<size_t> (n));
-        for (const auto viewer : fanout.feed (Chunk (std::move (chunk))))
+        // Exactly what was read, so the byte cap on a backlog is also a cap on its memory.
+        auto chunk = std::make_shared<const std::string> (readBuffer.data(), static_cast<size_t> (n));
+        if (options.onEncoderChunk)
+            options.onEncoderChunk (*chunk);
+        for (const auto viewer : fanout.feed (std::move (chunk)))
             ::close (viewer);
     }
 
@@ -390,7 +417,7 @@ private:
     // A viewer sends nothing; readable means it closed (or sent junk).
     static bool viewerGone (Viewer viewer)
     {
-        char scratch[chunkBytes];
+        char scratch[256];
         const auto n = ::recv (viewer, scratch, sizeof scratch, MSG_DONTWAIT);
         if (n == 0)
             return true;
@@ -420,6 +447,7 @@ private:
             encoder.stop();
     }
 
+    std::string readBuffer = std::string (chunkBytes, '\0');
     int listener;
     Encoder& encoder;
     EncoderGate gate;
@@ -438,7 +466,7 @@ int runFanout (int port, std::vector<std::string> encoderCommand, double linger,
         return 1;
     }
     if (options.onListening)
-        options.onListening (boundPort (listener));
+        options.onListening (boundPort (listener, port));
 
     Encoder encoder (std::move (encoderCommand), options);
     Loop loop (listener, encoder, linger, options);

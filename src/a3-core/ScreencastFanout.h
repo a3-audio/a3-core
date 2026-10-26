@@ -78,6 +78,7 @@ struct FanoutOptions
     std::function<void (int pid)> onEncoderStarted;
     std::function<void (int pid, int waitStatus)> onEncoderEnded;
     std::function<void()> onEncoderRead;
+    std::function<void (const std::string& chunk)> onEncoderChunk;   // each chunk, as queued
 };
 
 // Listen on `port` on every interface (0 = the system chooses) and serve until `stop` is set.
