@@ -694,8 +694,8 @@ audio_port() {
   )
 }
 
-# AES67 and PTP on the audio socket: ptp4l@<port> (linuxptp's unit, its stock
-# /etc/linuxptp/ptp4l.conf: master unless a better clock is there) and the
+# AES67 and PTP on the audio socket: ptp4l@<port> (linuxptp's unit, run with
+# /etc/linuxptp/a3-ptp4l.conf by a drop-in: master, steps clients) and the
 # AES67 instance in aaa's user manager. Enabled, not started: they come up
 # with the next boot or login. Without an audio socket neither is enabled.
 enable_aes67() {
