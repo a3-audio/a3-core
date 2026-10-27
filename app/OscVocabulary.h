@@ -37,6 +37,7 @@ struct EngineTruth : a3bench::Truth
     int corePort = -1;
     juce::String coreHost;        // "core.osc"'s host; a wildcard listener is reached on loopback, as Core's endpoint()
     juce::String helloAddress;    // "engine.hello"
+    juce::String deckAudioPattern;   // "engine.deck-audio", "{deck}" still in it
     std::vector<WordAddress> words;
 };
 

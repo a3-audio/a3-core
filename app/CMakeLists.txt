@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 # The app's pure parts (host, OSC vocabulary, hello, config file, port names, I/O map, connection plan): always built, the tests link them.
-add_library(a3-engine-app-lib STATIC EngineHost.cpp OscVocabulary.cpp HelloSender.cpp
+add_library(a3-engine-app-lib STATIC EngineHost.cpp OscVocabulary.cpp HelloSender.cpp DeckAudioReport.cpp
     ConfigFile.cpp EnginePorts.cpp IoMap.cpp ConnectionPlan.cpp DeviceBackend.cpp AppArgs.cpp ConfigEdits.cpp SessionRestart.cpp
     ui/AudioPage.cpp ui/StatusPage.cpp ui/MainWindow.cpp
     ui/ChannelsPage.cpp ui/ZonesPage.cpp ui/IoPage.cpp ui/CalibrationPage.cpp ui/FilterPage.cpp ui/SaveBar.cpp)

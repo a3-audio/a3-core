@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "StatusPage.h"
+#include <algorithm>
 #include <cmath>
 
 namespace a3app
@@ -17,6 +18,40 @@ juce::String coreText (bool heard, double secondsSince)
         return "Core not heard yet";
     const auto seconds = juce::String (secondsSince, 1) + " s";
     return secondsSince > coreSilentAfterSeconds ? "Core silent for " + seconds : "Core heard, last message " + seconds + " ago";
+}
+
+std::vector<std::pair<std::string, int>> groupMissingByClient (const std::vector<std::string>& missingPorts)
+{
+    std::vector<std::pair<std::string, int>> groups;
+    for (const auto& port : missingPorts)
+    {
+        const auto client = port.substr (0, port.find (':'));
+        const auto same = std::find_if (groups.begin(), groups.end(), [&] (const auto& g) { return g.first == client; });
+        if (same == groups.end())
+            groups.push_back ({ client, 1 });
+        else
+            ++same->second;
+    }
+    return groups;
+}
+
+juce::String missingText (const std::vector<std::string>& missingPorts)
+{
+    juce::StringArray parts;
+    for (const auto& [client, count] : groupMissingByClient (missingPorts))
+        parts.add (juce::String (client) + " (" + juce::String (count) + ")");
+    return parts.isEmpty() ? juce::String ("none") : parts.joinIntoString (", ");
+}
+
+juce::String droppedText (const std::vector<std::string>& droppedLinks)
+{
+    if (droppedLinks.empty())
+        return "none";
+    const auto count = (int) droppedLinks.size();
+    juce::String text = juce::String (count) + (count == 1 ? " retired link dropped:" : " retired links dropped:");
+    for (const auto& link : droppedLinks)
+        text << "\n" << link;
+    return text;
 }
 
 namespace
@@ -119,7 +154,7 @@ void StatusPage::paint (juce::Graphics& g)
     g.fillAll (palette::surface);
     auto area = getLocalBounds().reduced (getWidth() / 40);
     area.removeFromBottom (area.getHeight() / 2 + getHeight() / 80);
-    constexpr int rowCount = 8;
+    constexpr int rowCount = 10;   // seven single lines; DROPPED takes the other three
     const int row = area.getHeight() / rowCount;
     g.setFont (juce::FontOptions ((float) row * 0.55f));
 
@@ -152,16 +187,17 @@ void StatusPage::paint (juce::Graphics& g)
     line ("DSP LOAD", juce::String (status.dspLoadPercent, 1) + " %",
           status.dspLoadPercent >= loadDanger ? palette::danger : status.dspLoadPercent >= loadWarn ? palette::caution : palette::text);
     line ("XRUNS", juce::String (status.xruns), status.xruns > 0 ? palette::caution : palette::text);
-    juce::StringArray missing;
+    std::vector<std::string> missing;
     for (const auto& peer : status.missingPeers)
-        missing.add (peer);
-    line ("MISSING", missing.isEmpty() ? juce::String ("none") : missing.joinIntoString (", "),
-          missing.isEmpty() ? palette::textMuted : palette::caution);
+        missing.push_back (peer.toStdString());
+    line ("MISSING", missingText (missing), missing.empty() ? palette::textMuted : palette::caution);
 
-    juce::StringArray droppedText;
-    for (const auto& entry : dropped)
-        droppedText.add (entry);
-    line ("DROPPED", droppedText.isEmpty() ? juce::String ("none") : "retired links: " + droppedText.joinIntoString (", "),
-          droppedText.isEmpty() ? palette::textMuted : palette::caution);
+    // The dropped links take the rest of the block: a count, then one link a line.
+    auto rest = area;
+    const bool none = dropped.empty();
+    g.setColour (palette::textMuted);
+    g.drawText ("DROPPED", rest.removeFromLeft (rest.getWidth() / 4), juce::Justification::topLeft, true);
+    g.setColour (none ? palette::textMuted : palette::caution);
+    g.drawFittedText (droppedText (dropped), rest, juce::Justification::topLeft, juce::jmax (1, (int) ((float) rest.getHeight() / ((float) row * 0.65f))), 0.8f);
 }
 }

@@ -5,6 +5,7 @@
 // engine.osc, says hello to core.osc and drives the host from a 50 Hz message-thread timer.
 // Without --no-window it opens the audio and status pages; --service hides the window on close.
 #include "AppArgs.h"
+#include "DeckAudioReport.h"
 #include "DeviceBackend.h"
 #include "EngineHost.h"
 #include "JackBackend.h"
@@ -107,6 +108,7 @@ public:
         const auto now = nowSeconds();
         host->controlTick (now);
         backend->service (now);
+        reportDeckAudio();
     }
 
     bool lost() const
@@ -124,6 +126,19 @@ public:
     double lastCoreSeconds() const { return lastCoreMessage.load(); }
 
 private:
+    // Core hears each deck slot's link state with the hello. A backend that makes no links has
+    // nothing to report: Core then counts the deck by its hello alone, as for an older engine.
+    void reportDeckAudio()
+    {
+        const auto status = backend->status();
+        if (! status.connecting)
+            return;
+        std::vector<std::string> missing;
+        for (const auto& peer : status.missingPeers)
+            missing.push_back (peer.toStdString());
+        host->setDeckAudio (a3app::deckAudioLinked (data.config.io, data.config.engine.decks, missing));
+    }
+
     static constexpr int quietPumps = 25;   // 25 x 2 ms: far above the 10 ms fade
     bool ready = false;
     std::atomic<double> lastCoreMessage { -1.0 };

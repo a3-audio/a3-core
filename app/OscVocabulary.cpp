@@ -216,6 +216,9 @@ std::optional<EngineTruth> parseEngineTruth (const juce::String& json, juce::Str
     truth.helloAddress = addresses["engine.hello"]["pattern"].toString();
     if (truth.helloAddress.isEmpty())
         return error = "the truth has no address \"engine.hello\"", std::nullopt;
+    truth.deckAudioPattern = addresses["engine.deck-audio"]["pattern"].toString();
+    if (! truth.deckAudioPattern.contains ("{deck}"))
+        return error = "the truth has no address \"engine.deck-audio\" with a {deck}", std::nullopt;
     truth.corePort = a3bench::listenerPort (root, "core.osc");
     truth.coreHost = a3bench::listenerHostAddress (root, "core.osc");
     if (truth.coreHost == root["hosts"]["any"].toString())   // a wildcard listener is reached on loopback (a3_osc endpoint)
