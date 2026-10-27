@@ -44,6 +44,12 @@ class BootChoice(unittest.TestCase):
                  if l.startswith("Wants=")]
         self.assertIn("a3-engine.service", sum(wants, []))
 
+    def test_a3_main_wants_the_window(self):
+        # The unit itself ships with the a3-engine package, beside a3-engine.service.
+        wants = sum([l.split("=", 1)[1].split() for l in MAIN_UNIT.read_text().splitlines()
+                     if l.startswith("Wants=")], [])
+        self.assertIn("a3-core-window.service", wants)
+
     def test_the_two_deck_stemdeck_runs_only_in_reaper_mode(self):
         self.assertEqual(
             ["[Service]",
