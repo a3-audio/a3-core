@@ -335,6 +335,12 @@ class ControlTest(unittest.TestCase):
     def test_the_program_breaks_a_metering_analyzer(self):
         self.assertRegex(control_fields()["Breaks"], r"beat-analyzer \(<< [0-9][^)]*\)")
 
+    def test_the_window_recommends_the_on_screen_keyboard_and_never_depends_on_it(self):
+        # The touch screen needs onboard to type into the window's fields; a laptop with a keyboard does not.
+        fields = control_fields()
+        self.assertIn("onboard", [name.strip() for name in fields.get("Recommends", "").split(",")])
+        self.assertNotIn("onboard", fields["Depends"])
+
     def test_the_truth_file_comes_with_a_recommended_a3_core(self):
         self.assertIn("a3-core", control_fields().get("Recommends", ""))
         self.assertIn("pipewire-jack", control_fields().get("Recommends", ""))

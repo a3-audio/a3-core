@@ -5,7 +5,7 @@ Maintainer: Rafjagger
 Section: sound
 Priority: optional
 Depends: ${shlibs:Depends}
-Recommends: a3-core, pipewire-jack
+Recommends: a3-core, pipewire-jack, onboard
 Breaks: a3-core (<< 03.0+542), beat-analyzer (<< 03.0+64)
 Replaces: a3-engine-bench
 Conflicts: a3-engine-bench
