@@ -90,7 +90,7 @@ class ThePackaging(unittest.TestCase):
     def test_the_postinst_still_enables_ptp4l_and_does_not_restart_it(self):
         text = POSTINST.read_text()
         self.assertIn('systemctl enable "ptp4l@${port}.service"', text)
-        self.assertNotRegex(text, r"(restart|start)\s+\"?ptp4l")
+        self.assertNotRegex(text, r"(restart|start)\s+[\"']?ptp4l")
 
 
 if __name__ == "__main__":
