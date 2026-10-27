@@ -222,77 +222,203 @@
    "deckA_16": [
     "StemDeck-A:bformat_16"
    ],
-   "deckA_cue_L": [
-    "StemDeck-A:cue_L"
+   "deckA_aux_1": [
+    "StemDeck-A:aux_1"
    ],
-   "deckA_cue_R": [
-    "StemDeck-A:cue_R"
+   "deckA_aux_2": [
+    "StemDeck-A:aux_2"
    ],
-   "deckA_aux_L": [
-    "StemDeck-A:aux_L"
+   "deckA_aux_3": [
+    "StemDeck-A:aux_3"
    ],
-   "deckA_aux_R": [
-    "StemDeck-A:aux_R"
+   "deckA_aux_4": [
+    "StemDeck-A:aux_4"
+   ],
+   "deckA_aux_5": [
+    "StemDeck-A:aux_5"
+   ],
+   "deckA_aux_6": [
+    "StemDeck-A:aux_6"
+   ],
+   "deckA_aux_7": [
+    "StemDeck-A:aux_7"
+   ],
+   "deckA_aux_8": [
+    "StemDeck-A:aux_8"
+   ],
+   "deckA_aux_9": [
+    "StemDeck-A:aux_9"
+   ],
+   "deckA_aux_10": [
+    "StemDeck-A:aux_10"
+   ],
+   "deckA_aux_11": [
+    "StemDeck-A:aux_11"
+   ],
+   "deckA_aux_12": [
+    "StemDeck-A:aux_12"
+   ],
+   "deckA_aux_13": [
+    "StemDeck-A:aux_13"
+   ],
+   "deckA_aux_14": [
+    "StemDeck-A:aux_14"
+   ],
+   "deckA_aux_15": [
+    "StemDeck-A:aux_15"
+   ],
+   "deckA_aux_16": [
+    "StemDeck-A:aux_16"
+   ],
+   "deckA_cue_1": [
+    "StemDeck-A:cue_1"
+   ],
+   "deckA_cue_2": [
+    "StemDeck-A:cue_2"
+   ],
+   "deckA_cue_3": [
+    "StemDeck-A:cue_3"
+   ],
+   "deckA_cue_4": [
+    "StemDeck-A:cue_4"
+   ],
+   "deckA_cue_5": [
+    "StemDeck-A:cue_5"
+   ],
+   "deckA_cue_6": [
+    "StemDeck-A:cue_6"
+   ],
+   "deckA_cue_7": [
+    "StemDeck-A:cue_7"
+   ],
+   "deckA_cue_8": [
+    "StemDeck-A:cue_8"
+   ],
+   "deckA_cue_9": [
+    "StemDeck-A:cue_9"
    ],
    "deckB_1": [
-    "StemDeck-B:bformat_1"
+    "AES67 deck B:receive_MAIN1"
    ],
    "deckB_2": [
-    "StemDeck-B:bformat_2"
+    "AES67 deck B:receive_MAIN2"
    ],
    "deckB_3": [
-    "StemDeck-B:bformat_3"
+    "AES67 deck B:receive_MAIN3"
    ],
    "deckB_4": [
-    "StemDeck-B:bformat_4"
+    "AES67 deck B:receive_MAIN4"
    ],
    "deckB_5": [
-    "StemDeck-B:bformat_5"
+    "AES67 deck B:receive_MAIN5"
    ],
    "deckB_6": [
-    "StemDeck-B:bformat_6"
+    "AES67 deck B:receive_MAIN6"
    ],
    "deckB_7": [
-    "StemDeck-B:bformat_7"
+    "AES67 deck B:receive_MAIN7"
    ],
    "deckB_8": [
-    "StemDeck-B:bformat_8"
+    "AES67 deck B:receive_MAIN8"
    ],
    "deckB_9": [
-    "StemDeck-B:bformat_9"
+    "AES67 deck B:receive_MAIN9"
    ],
    "deckB_10": [
-    "StemDeck-B:bformat_10"
+    "AES67 deck B:receive_MAIN10"
    ],
    "deckB_11": [
-    "StemDeck-B:bformat_11"
+    "AES67 deck B:receive_MAIN11"
    ],
    "deckB_12": [
-    "StemDeck-B:bformat_12"
+    "AES67 deck B:receive_MAIN12"
    ],
    "deckB_13": [
-    "StemDeck-B:bformat_13"
+    "AES67 deck B:receive_MAIN13"
    ],
    "deckB_14": [
-    "StemDeck-B:bformat_14"
+    "AES67 deck B:receive_MAIN14"
    ],
    "deckB_15": [
-    "StemDeck-B:bformat_15"
+    "AES67 deck B:receive_MAIN15"
    ],
    "deckB_16": [
-    "StemDeck-B:bformat_16"
+    "AES67 deck B:receive_MAIN16"
    ],
-   "deckB_cue_L": [
-    "StemDeck-B:cue_L"
+   "deckB_aux_1": [
+    "AES67 deck B:receive_AUX1"
    ],
-   "deckB_cue_R": [
-    "StemDeck-B:cue_R"
+   "deckB_aux_2": [
+    "AES67 deck B:receive_AUX2"
    ],
-   "deckB_aux_L": [
-    "StemDeck-B:aux_L"
+   "deckB_aux_3": [
+    "AES67 deck B:receive_AUX3"
    ],
-   "deckB_aux_R": [
-    "StemDeck-B:aux_R"
+   "deckB_aux_4": [
+    "AES67 deck B:receive_AUX4"
+   ],
+   "deckB_aux_5": [
+    "AES67 deck B:receive_AUX5"
+   ],
+   "deckB_aux_6": [
+    "AES67 deck B:receive_AUX6"
+   ],
+   "deckB_aux_7": [
+    "AES67 deck B:receive_AUX7"
+   ],
+   "deckB_aux_8": [
+    "AES67 deck B:receive_AUX8"
+   ],
+   "deckB_aux_9": [
+    "AES67 deck B:receive_AUX9"
+   ],
+   "deckB_aux_10": [
+    "AES67 deck B:receive_AUX10"
+   ],
+   "deckB_aux_11": [
+    "AES67 deck B:receive_AUX11"
+   ],
+   "deckB_aux_12": [
+    "AES67 deck B:receive_AUX12"
+   ],
+   "deckB_aux_13": [
+    "AES67 deck B:receive_AUX13"
+   ],
+   "deckB_aux_14": [
+    "AES67 deck B:receive_AUX14"
+   ],
+   "deckB_aux_15": [
+    "AES67 deck B:receive_AUX15"
+   ],
+   "deckB_aux_16": [
+    "AES67 deck B:receive_AUX16"
+   ],
+   "deckB_cue_1": [
+    "AES67 deck B:receive_CUE1"
+   ],
+   "deckB_cue_2": [
+    "AES67 deck B:receive_CUE2"
+   ],
+   "deckB_cue_3": [
+    "AES67 deck B:receive_CUE3"
+   ],
+   "deckB_cue_4": [
+    "AES67 deck B:receive_CUE4"
+   ],
+   "deckB_cue_5": [
+    "AES67 deck B:receive_CUE5"
+   ],
+   "deckB_cue_6": [
+    "AES67 deck B:receive_CUE6"
+   ],
+   "deckB_cue_7": [
+    "AES67 deck B:receive_CUE7"
+   ],
+   "deckB_cue_8": [
+    "AES67 deck B:receive_CUE8"
+   ],
+   "deckB_cue_9": [
+    "AES67 deck B:receive_CUE9"
    ]
   },
   "directLinks": [

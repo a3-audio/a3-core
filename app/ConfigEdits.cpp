@@ -3,6 +3,7 @@
 #include "ConfigEdits.h"
 #include "SpatialConfig.h"
 #include <algorithm>
+#include <string>
 #include <cmath>
 #include <set>
 
@@ -122,6 +123,37 @@ std::optional<AppConfig> withHeadphoneEq (const AppConfig& config, const juce::S
     auto edited = config;
     edited.engine.phonesHeadphoneEq = model;
     return edited;
+}
+
+namespace
+{
+struct DeckBank { const char* inputInfix; const char* localPort; const char* aes67Port; int count; };
+constexpr DeckBank deckBanks[] = {
+    { "_",     "bformat_", "receive_MAIN", deckInputChannels },
+    { "_aux_", "aux_",     "receive_AUX",  deckAuxChannels },
+    { "_cue_", "cue_",     "receive_CUE",  deckCueChannels },
+};
+}
+
+void setDeckSource (IoMap& map, int slot, DeckSource source)
+{
+    const auto letter = deckLetters (slot);
+    const auto client = source == DeckSource::local ? "StemDeck-" + letter : "AES67 deck " + letter;
+    for (const auto& bank : deckBanks)
+        for (int i = 1; i <= bank.count; ++i)
+        {
+            const auto n = std::to_string (i);
+            const auto peerPort = std::string (source == DeckSource::local ? bank.localPort : bank.aes67Port) + n;
+            map.jack["deck" + letter + bank.inputInfix + n] = { client + ":" + peerPort };
+        }
+}
+
+DeckSource deckSourceOf (const IoMap& map, int slot)
+{
+    const auto link = map.jack.find ("deck" + deckLetters (slot) + "_1");
+    if (link == map.jack.end() || link->second.empty())
+        return DeckSource::local;
+    return link->second.front().rfind ("AES67 deck ", 0) == 0 ? DeckSource::aes67 : DeckSource::local;
 }
 
 bool sameConfig (const AppConfig& a, const AppConfig& b)

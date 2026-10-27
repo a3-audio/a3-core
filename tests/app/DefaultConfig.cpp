@@ -170,7 +170,7 @@ TEST (DefaultConfig, ConnectsWhatThePatchbayConnectedForReaper)
     EXPECT_EQ (direct, 10);   // REAPER's raw meter outs: out25-26 and out31-38
 }
 
-TEST (DefaultConfig, DeckSlotsLinkToTheirStemDeck)
+TEST (DefaultConfig, DeckAIsLocalDeckBIsAes67)
 {
     const auto config = loadDefault();
     const auto ports = portsOf (config);
@@ -179,18 +179,24 @@ TEST (DefaultConfig, DeckSlotsLinkToTheirStemDeck)
     {
         if (! startsWith (port, "deck"))
             continue;
-        const auto tail = port.substr (port.find ('_') + 1);   // "7", "aux_3", "cue_9"
-        // Only the 16 channels are linked in the shipped data; A7 writes the aux and cue links.
-        if (! std::isdigit ((unsigned char) tail[0]) || tail.find ('_') != std::string::npos)
-            continue;
         ++deckPorts;
         const auto letter = port.substr (4, port.find ('_') - 4);
+        const auto tail = port.substr (port.find ('_') + 1);   // "7", "aux_3", "cue_9"
+        const auto n = tail.substr (tail.find ('_') == std::string::npos ? 0 : tail.find ('_') + 1);
+        const auto kind = std::isdigit ((unsigned char) tail[0]) ? 0 : (startsWith (tail, "aux") ? 1 : 2);
+        const std::string local[] = { "bformat_", "aux_", "cue_" };
+        const std::string remote[] = { "receive_MAIN", "receive_AUX", "receive_CUE" };
+        const auto expected = letter == "A" ? "StemDeck-A:" + local[kind] + n
+                                            : "AES67 deck " + letter + ":" + remote[kind] + n;
         const auto found = config.io.jack.find (port);
         ASSERT_TRUE (found != config.io.jack.end()) << port;
-        const auto expectedPort = "bformat_" + tail;
-        EXPECT_EQ (found->second, std::vector<std::string> { "StemDeck-" + letter + ":" + expectedPort }) << port;
+        EXPECT_EQ (found->second, std::vector<std::string> { expected }) << port;
     }
-    EXPECT_EQ (deckPorts, 2 * 16);
+    EXPECT_EQ (deckPorts, 2 * 41);
+    EXPECT_EQ (config.io.jack.at ("deckA_cue_9"), std::vector<std::string> { "StemDeck-A:cue_9" });
+    EXPECT_EQ (config.io.jack.at ("deckB_aux_1"), std::vector<std::string> { "AES67 deck B:receive_AUX1" });
+    for (const auto& retired : a3app::retiredDeckPorts (2))
+        EXPECT_EQ (config.io.jack.count (retired), 0u) << retired;
 }
 
 TEST (DefaultConfig, CalibratedZonesHaveTrims)

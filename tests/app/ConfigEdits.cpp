@@ -159,3 +159,35 @@ TEST (ConfigEdits, SetHeadphoneEqWritesTheModel)
     EXPECT_FALSE (a3app::withHeadphoneEq (sample(), "Acme-Buds", error));
     EXPECT_NE (error.indexOf ("Acme-Buds"), -1);
 }
+
+TEST (ConfigEdits, DeckSourceWritesFortyOneLinks)
+{
+    a3app::IoMap map;
+    a3app::setDeckSource (map, 2, a3app::DeckSource::aes67);
+    EXPECT_EQ (map.jack.size(), 41u);
+    EXPECT_EQ (map.jack.at ("deckB_1"), std::vector<std::string> { "AES67 deck B:receive_MAIN1" });
+    EXPECT_EQ (map.jack.at ("deckB_16"), std::vector<std::string> { "AES67 deck B:receive_MAIN16" });
+    EXPECT_EQ (map.jack.at ("deckB_aux_16"), std::vector<std::string> { "AES67 deck B:receive_AUX16" });
+    EXPECT_EQ (map.jack.at ("deckB_cue_9"), std::vector<std::string> { "AES67 deck B:receive_CUE9" });
+    a3app::setDeckSource (map, 2, a3app::DeckSource::local);
+    EXPECT_EQ (map.jack.size(), 41u);
+    EXPECT_EQ (map.jack.at ("deckB_1"), std::vector<std::string> { "StemDeck-B:bformat_1" });
+    EXPECT_EQ (map.jack.at ("deckB_aux_3"), std::vector<std::string> { "StemDeck-B:aux_3" });
+    EXPECT_EQ (map.jack.at ("deckB_cue_9"), std::vector<std::string> { "StemDeck-B:cue_9" });
+}
+
+TEST (ConfigEdits, DeckSourceLeavesOtherSlotsAndAnalogAlone)
+{
+    a3app::IoMap map;
+    map.jack["analog_1"] = { "system:capture_1" };
+    map.jack["deckA_1"] = { "StemDeck-A:bformat_1" };
+    map.jack["deckB_1"] = { "old:thing", "second:peer" };
+    map.deviceChannels["analog_1"] = 3;
+    a3app::setDeckSource (map, 2, a3app::DeckSource::aes67);
+    EXPECT_EQ (map.jack.at ("analog_1"), std::vector<std::string> { "system:capture_1" });
+    EXPECT_EQ (map.jack.at ("deckA_1"), std::vector<std::string> { "StemDeck-A:bformat_1" });
+    EXPECT_EQ (map.jack.at ("deckB_1"), std::vector<std::string> { "AES67 deck B:receive_MAIN1" });
+    EXPECT_EQ (map.jack.count ("deckA_2"), 0u);
+    EXPECT_EQ (map.deviceChannels.at ("analog_1"), 3);
+    EXPECT_EQ (map.jack.size(), 41u + 2u);
+}

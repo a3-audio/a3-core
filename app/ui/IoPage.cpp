@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "IoPage.h"
+#include "ConfigEdits.h"
 #include <sstream>
 
 namespace a3app
@@ -168,6 +169,51 @@ void IoPage::setDirectLinks (const juce::String& text)
     edit (config);
 }
 
+juce::ComboBox* IoPage::deckSourceBox (int slot)
+{
+    return slot >= 1 && slot <= (int) deckChoosers.size() ? &deckChoosers[(size_t) slot - 1]->box : nullptr;
+}
+
+void IoPage::chooseDeckSource (int slot)
+{
+    const auto* box = deckSourceBox (slot);
+    if (box == nullptr)
+        return;
+    const auto source = box->getSelectedId() == 2 ? DeckSource::aes67 : DeckSource::local;
+    auto config = view.config();
+    if (deckSourceOf (config.io, slot) == source && config.io.jack.count ("deck" + deckLetters (slot) + "_cue_9") == 1)
+        return;
+    setDeckSource (config.io, slot, source);
+    look::say (message, {});
+    edit (config);
+}
+
+void IoPage::rebuildDeckChoosers()
+{
+    if ((int) deckChoosers.size() == shown.engine.decks)
+        return;
+    deckChoosers.clear();
+    for (int slot = 1; slot <= shown.engine.decks; ++slot)
+    {
+        auto chooser = std::make_unique<DeckChooser>();
+        look::caption (chooser->label);
+        chooser->label.setText ("Deck " + juce::String (deckLetters (slot)), juce::dontSendNotification);
+        chooser->box.addItem ("Local StemDeck", 1);
+        chooser->box.addItem ("AES67 stream", 2);
+        chooser->box.onChange = [this, slot] { chooseDeckSource (slot); };
+        addAndMakeVisible (chooser->label);
+        addAndMakeVisible (chooser->box);
+        deckChoosers.push_back (std::move (chooser));
+    }
+    resized();
+}
+
+void IoPage::showDeckSources()
+{
+    for (int slot = 1; slot <= (int) deckChoosers.size(); ++slot)
+        deckChoosers[(size_t) slot - 1]->box.setSelectedId (deckSourceOf (shown.io, slot) == DeckSource::aes67 ? 2 : 1, juce::dontSendNotification);
+}
+
 void IoPage::selectPort (int row)
 {
     if (row < 0 || row >= (int) portRows.size())
@@ -213,6 +259,8 @@ void IoPage::reload()
     if (! ports)
         return look::say (message, error);
     portRows = ioRows (shown, *ports, lastLinks);
+    rebuildDeckChoosers();
+    showDeckSources();
     list.updateContent();
     list.repaint();
     if (! linksEditor.hasKeyboardFocus (true))
@@ -238,6 +286,17 @@ void IoPage::resized()
     message.setBounds (bottom.removeFromBottom (row));
     linksCaption.setBounds (bottom.removeFromTop (row));
     linksEditor.setBounds (bottom);
+    auto deckRow = area.removeFromBottom (row);
+    if (! deckChoosers.empty())
+    {
+        const int cell = deckRow.getWidth() / (int) deckChoosers.size();
+        for (auto& chooser : deckChoosers)
+        {
+            auto slice = deckRow.removeFromLeft (cell).reduced (getWidth() / 120, 0);
+            chooser->label.setBounds (slice.removeFromLeft (slice.getWidth() / 4));
+            chooser->box.setBounds (slice);
+        }
+    }
     auto editRow = area.removeFromBottom (row);
     portCaption.setBounds (editRow.removeFromLeft (editRow.getWidth() / 2));
     portEditor.setBounds (editRow);

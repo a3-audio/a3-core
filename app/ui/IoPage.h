@@ -3,6 +3,8 @@
 #pragma once
 #include "HostView.h"
 #include "Look.h"
+#include <memory>
+#include <vector>
 
 namespace a3app
 {
@@ -25,6 +27,8 @@ public:
     void setDirectLinks (const juce::String& linesOfFromArrowTo);
     void refresh (bool force = false);   // re-reads the config and the live links (throttled unless forced)
     const juce::Label& messageLabel() const { return message; }
+    // The per-deck source chooser (1 = local StemDeck, 2 = AES67); nullptr past the config's decks.
+    juce::ComboBox* deckSourceBox (int slotOneBased);
 
     void resized() override;
     void paint (juce::Graphics&) override;
@@ -36,6 +40,9 @@ private:
     void selectPort (int row);
     void commitEditor();
     void edit (const AppConfig&);
+    void chooseDeckSource (int slotOneBased);
+    void showDeckSources();
+    void rebuildDeckChoosers();
 
     HostView& view;
     std::vector<IoRow> portRows;
@@ -46,5 +53,7 @@ private:
     std::unique_ptr<Model> model;
     juce::ListBox list;
     juce::TextEditor portEditor, linksEditor;
+    struct DeckChooser { juce::Label label; juce::ComboBox box; };
+    std::vector<std::unique_ptr<DeckChooser>> deckChoosers;
 };
 }

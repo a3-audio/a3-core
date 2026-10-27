@@ -559,3 +559,20 @@ TEST_F (Pages, StatusSaysWhenNoEngineRuns)
     EXPECT_NE (page.modeLine().indexOf ("device gone"), -1);
     expectPainted (snapshot (page, "status-no-engine"));
 }
+
+TEST_F (Pages, PaintsTheDeckSourceChooser)
+{
+    FakeView view;
+    view.cfg.io.jack["deckB_1"] = { "AES67 deck B:receive_MAIN1" };
+    a3app::IoPage page (view);
+    page.setSize (900, 600);
+    expectPainted (snapshot (page, "io-deck-source"));
+    ASSERT_NE (page.deckSourceBox (2), nullptr);
+    EXPECT_EQ (page.deckSourceBox (2)->getSelectedId(), 2);   // AES67
+    EXPECT_EQ (page.deckSourceBox (1)->getSelectedId(), 1);   // local
+    EXPECT_GT (page.deckSourceBox (2)->getHeight(), 0);
+
+    page.deckSourceBox (2)->setSelectedId (1, juce::sendNotificationSync);
+    EXPECT_EQ (view.cfg.io.jack.at ("deckB_cue_9"), std::vector<std::string> { "StemDeck-B:cue_9" });
+    EXPECT_EQ (view.cfg.io.jack.at ("deckB_1"), std::vector<std::string> { "StemDeck-B:bformat_1" });
+}
