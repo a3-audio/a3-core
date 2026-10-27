@@ -148,13 +148,16 @@ directories, `/usr/share/a3-engine/engine.json` (the default config) and the use
 `/usr/lib/systemd/user/a3-engine.service`. The postinst enables the unit for every user and reloads
 the running user managers; nothing is written under a home and nothing is restarted.
 
-**The unit** (Task 28). `PartOf=a3-main.service`, `Conflicts=a3-reaper.service`, and it runs
-`/usr/bin/a3-core --role engine` after `jack_wait -w`: no window, so no `DISPLAY`, no wait for the
-screen and no `ExecCondition`. `Restart=on-failure` with a start limit of 5 in 60 s: a failure
-(JACK absent, a port taken) restarts a few times and then stops visibly; there is no automatic
-fallback to REAPER (it is frozen). `LD_PRELOAD` (the JACK realtime-priority library) and
-`CPUAffinity=1 2 3` stay. The package `Breaks: a3-core (<< 03.0+542)` (the Python Core) and
-`beat-analyzer (<< 03.0+64)` (the analyzer that still meters); it depends on no Python.
+**The unit** (Task 28). `PartOf=a3-main.service`, and it runs `/usr/bin/a3-core --role engine`
+after `jack_wait -w`: no window, so no `DISPLAY`, no wait for the screen and no `ExecCondition`.
+There is also no `Conflicts=`: a3-main Wants REAPER's unit and this one in one transaction, and a
+`Conflicts=` would drop a start job before any condition runs. The engine always starts (there is no
+fallback); REAPER and StemDeck's units stay off through a3-core's own drop-ins (`ExecCondition`
+`a3-engine-runs --reaper`), and `a3-engine-runs` belongs to a3-core. `Restart=on-failure` with a
+start limit of 5 in 60 s: a failed open (a port taken) restarts a few times and then stops visibly.
+`LD_PRELOAD` (the JACK realtime-priority library) and `CPUAffinity=1 2 3` stay. The package `Breaks`
+the Python Core (a3-core before the cut) and the metering beat-analyzer (before no-vu); the version
+numbers are in `packaging/DEBIAN/control` only. It depends on no Python.
 
 **The default config** (`data/engine.json`): four channels on analog pairs 1-4, return pair 6, two
 decks, trims main/booth -30.88 dB (REAPER's output faders), phones 0, rec 0, SVF filter, Step 0's delay

@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Raphael Eismann
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Pins the Debian packaging that a3-system's installer/package.py reads:
-packaging/stage lays out the engine app, its user unit, the default config and the bench;
+packaging/stage lays out the a3-core program, its user unit, the default config and the bench;
 packaging/DEBIAN/control names the package a3-engine."""
 
 import json
@@ -174,11 +174,15 @@ class UnitTest(unittest.TestCase):
         lines = unit_lines()
         for line in ("PartOf=a3-main.service",
                      "After=pipewire.service wireplumber.service",
-                     "Conflicts=a3-reaper.service",
                      "Restart=on-failure", "RestartSec=1",
                      "WantedBy=default.target"):
             self.assertIn(line, lines)
-        # A broken open (JACK absent, a port taken) must stop visibly, not restart for ever.
+        # a3-main Wants a3-reaper.service and this unit in one transaction; a Conflicts= between them
+        # drops a start job before any condition runs, and then nothing may run. REAPER stays off
+        # through a3-core's own drop-in (ExecCondition a3-engine-runs --reaper), not through this unit.
+        for line in lines:
+            self.assertFalse(line.startswith("Conflicts="), line)
+        # A broken open (a port taken) must stop visibly, not restart for ever.
         self.assertIn("StartLimitIntervalSec=60", lines)
         self.assertIn("StartLimitBurst=5", lines)
 
@@ -189,8 +193,9 @@ class UnitTest(unittest.TestCase):
         self.assertIn("CPUAffinity=1 2 3", lines)
         for line in lines:
             for forbidden in ("DISPLAY", "a3-wait-for-the-screen", "ExecCondition",
-                              "a3-engine-runs", "--service", "/usr/bin/a3-engine "):
+                              "a3-engine-runs", "--service", "/home/"):
                 self.assertNotIn(forbidden, line)
+            self.assertFalse(line.endswith("/usr/bin/a3-engine") or "/usr/bin/a3-engine " in line, line)
         text = UNIT.read_text()
         self.assertNotIn("a3-audio-engine", text)
         self.assertNotIn("A3_ENGINE_BINARY", text)
@@ -284,8 +289,7 @@ class ControlTest(unittest.TestCase):
 
 
 class CheckConfigBinaryTest(unittest.TestCase):
-    """The contract the unit's ExecCondition and REAPER's drop-in read: the built binary's
-    --check-config prints exactly one line and exits 0 (ok), 1 (<file>: <reason>) or 2 (bad flag)."""
+    """The built program's engine role: --check-config prints exactly one line and exits 0 (ok), 1 (<file>: <reason>) or 2 (bad flag)."""
 
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(dir=SCRATCH_ROOT))
@@ -293,8 +297,7 @@ class CheckConfigBinaryTest(unittest.TestCase):
         (self.tmp / "home").mkdir()
 
     def run_check(self, *words):
-        # DISPLAY names a server that does not exist: the check must not need X (the unit runs it
-        # with DISPLAY=:0 before the screen is up).
+        # DISPLAY names a server that does not exist: the check must not need X.
         env = dict(os.environ, HOME=str(self.tmp / "home"), DISPLAY=":87")
         return subprocess.run([str(APP), "--role", "engine", "--check-config", "--truth", str(TRUTH), *words],
                               capture_output=True, text=True, env=env, timeout=60)

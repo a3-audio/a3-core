@@ -3,16 +3,16 @@
 [Unit]
 Description=a3-engine, the A3 audio engine
 PartOf=a3-main.service
-Conflicts=a3-reaper.service
 After=pipewire.service wireplumber.service
-# A failed open (JACK absent, a port taken) restarts five times in a minute and then stops,
+# A failed open (a port taken) restarts five times in a minute and then stops,
 # visibly, instead of looping while REAPER is off. There is no automatic fallback (REAPER is frozen).
 StartLimitIntervalSec=60
 StartLimitBurst=5
 
 [Service]
-# The engine role of the a3-core program, without a window or a screen. REAPER and the engine
-# do not share the PA, so starting one stops the other.
+# The engine role of the a3-core program, without a window or a screen. No condition and no
+# Conflicts= here: the engine always starts (there is no fallback), and REAPER and stemdeck stay
+# off through a3-core's own drop-ins (ExecCondition a3-engine-runs --reaper).
 # The JACK server accepting clients, not merely started (pipewire-jack answers).
 ExecStartPre=/usr/bin/jack_wait -w
 ExecStart=/usr/bin/a3-core --role engine
