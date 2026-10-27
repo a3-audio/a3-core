@@ -27,8 +27,11 @@ struct Graph
 
 a3app::LinkMeanings meanings() { return { a3::EngineConfig {}, { "main_sub", "main_top1", "phones_L", "rec_L" } }; }
 
-std::string show (const Graph& graph, std::optional<std::size_t> missing = 0)
+// On the rig the Midi-Bridge lists the card, which is how "system" is known for the Scarlett.
+std::string show (Graph graph, std::optional<std::size_t> missing = 0, bool cardListed = true)
 {
+    if (cardListed)
+        graph.ports.push_back ("Midi-Bridge:Scarlett 18i20 USB: MIDI 1 (capture)");
     return a3app::formatLinks ({ graph.links, graph.ports, missing }, meanings());
 }
 
@@ -109,12 +112,10 @@ TEST (LinksOverview, TheCardsLongAlsaNameAndSystemAreBothTheScarlett)
     EXPECT_TRUE (hasLine (show (alsa), "Scarlett inputs → engine")) << show (alsa);
 
     // On PipeWire the card is "system"; the Midi-Bridge port is what tells which card it is.
-    Graph pipewire = inputs();
-    pipewire.ports.push_back ("Midi-Bridge:Scarlett 18i20 USB: MIDI 1 (capture)");
-    EXPECT_TRUE (hasLine (show (pipewire), "Scarlett inputs → engine")) << show (pipewire);
+    EXPECT_TRUE (hasLine (show (inputs()), "Scarlett inputs → engine")) << show (inputs());
 
     // With no sign of a card, "system" stays what it is called.
-    EXPECT_TRUE (hasLine (show (inputs()), "system inputs → engine")) << show (inputs());
+    EXPECT_TRUE (hasLine (show (inputs(), 0, false), "system inputs → engine")) << show (inputs(), 0, false);
 }
 
 TEST (LinksOverview, LevelMeterFeedsAreCountedNotListed)
@@ -139,10 +140,10 @@ TEST (LinksOverview, GroupsRunInputsThenOutputsThenTheRest)
     graph.link ("system:capture_9", "AES67 a3nuc1 out:in_1");
     const auto text = show (graph);
     const auto at = [&] (const char* heading) { return text.find (heading); };
-    EXPECT_LT (at ("system inputs → engine"), at ("engine → system"));
-    EXPECT_LT (at ("engine → system"), at ("engine → beat-analyzer"));
+    EXPECT_LT (at ("Scarlett inputs → engine"), at ("engine → Scarlett"));
+    EXPECT_LT (at ("engine → Scarlett"), at ("engine → beat-analyzer"));
     EXPECT_LT (at ("engine → beat-analyzer"), at ("StemDeck A → engine"));
-    EXPECT_LT (at ("StemDeck A → engine"), at ("system → AES67 a3nuc1 out"));
+    EXPECT_LT (at ("StemDeck A → engine"), at ("Scarlett → AES67 a3nuc1 out"));
 }
 
 TEST (LinksOverview, TheLastLineCountsMissingTargetsAndPointsToTheStatusPage)
