@@ -11,4 +11,5 @@ IemNode::Parts createMultiEncoder (int numInputs, int numOutputs);
 IemNode::Parts createSimpleDecoder (int numInputs, int numOutputs);
 IemNode::Parts createBinauralDecoder (int numInputs, int numOutputs);
 IemNode::Parts createDualDelay (int numInputs, int numOutputs);
+IemNode::Parts createStereoEncoder (int numInputs, int numOutputs);
 }

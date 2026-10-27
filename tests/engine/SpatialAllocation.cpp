@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <new>
 #include "AmbiEncoderBus.h"
+#include "IemNode.h"
 #include "SpatialBusFixture.h"
 
 // Every form of the global operator new/delete is replaced for the whole test
@@ -200,4 +201,28 @@ TEST (AmbiEncoderBus, ProcessAllocatesNothingForAnyCallSize)
         EXPECT_EQ (allocations.allocated, 0) << calls << " frames";
         EXPECT_EQ (allocations.released, 0) << calls << " frames";
     }
+}
+
+// R3: a pose change goes through IEM's own parameterChanged on the audio thread.
+TEST (StereoEncoderAllocation, StereoEncoderPoseChangesDoNotAllocate)
+{
+    auto node = a3::IemNode::create (a3::IemKind::stereoEncoder, 2, 16);
+    ASSERT_TRUE (node != nullptr);
+    ASSERT_EQ (node->rawParameter ("highQuality")->load(), 1.0f);
+    node->prepare (spatialRate, spatialQuantum);
+    juce::AudioBuffer<float> io (16, spatialQuantum);
+
+    const auto count = countDuring ([&]
+    {
+        for (int i = 0; i < 100; ++i)
+        {
+            const float step = (float) i;
+            node->setStereoPose ({ -180.0f + 3.6f * step, -45.0f + 0.9f * step, step - 50.0f, 1.8f * step });
+            for (int c = 0; c < 2; ++c)
+                juce::FloatVectorOperations::fill (io.getWritePointer (c), 0.25f, spatialQuantum);
+            node->process (io);
+        }
+    });
+    EXPECT_EQ (count.allocated, 0);
+    EXPECT_EQ (count.released, 0);
 }

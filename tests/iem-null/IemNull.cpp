@@ -346,3 +346,16 @@ TEST_F (IemNull, DualDelayMatchesTheVst3)
     layout.outputBuses.add (juce::AudioChannelSet::ambisonic (3));
     compareToVst3 ("DualDelay", "DualDelay", *node, layout, busChannels, busChannels, numbered (busChannels));
 }
+
+TEST_F (IemNull, StereoEncoderMatchesTheVst3)
+{
+    auto node = a3::IemNode::create (a3::IemKind::stereoEncoder, 2, busChannels);
+    ASSERT_TRUE (node != nullptr);
+    // Set notifying, so the pose is in the state the VST3 is given.
+    ASSERT_TRUE (node->setParameters (juce::JSON::parse (R"({"azimuth":30,"elevation":10,"width":60})")).wasOk());
+
+    juce::AudioProcessor::BusesLayout layout;
+    layout.inputBuses.add (juce::AudioChannelSet::stereo());
+    layout.outputBuses.add (juce::AudioChannelSet::ambisonic (3));
+    compareToVst3 ("StereoEncoder", "StereoEncoder", *node, layout, 2, busChannels, numbered (busChannels));
+}

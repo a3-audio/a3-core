@@ -122,6 +122,7 @@ function(a3_add_iem_nodes SUFFIX JUCE_TARGET)
         a3-iem-BinauralEQs${SUFFIX} a3-iem-BinauralIRs${SUFFIX})
 
     a3_iem_add_plugin("${SUFFIX}" ${JUCE_TARGET} DualDelay ${A3_IEM_NODES_DIR}/DualDelayNode.cpp)
+    a3_iem_add_plugin("${SUFFIX}" ${JUCE_TARGET} StereoEncoder ${A3_IEM_NODES_DIR}/StereoEncoderNode.cpp)
 
     # parseLayout reads decoder files through IEM's ConfigurationHelper, so it
     # lives beside the IEM sources and sees IEM's environment.
@@ -135,6 +136,7 @@ function(a3_add_iem_nodes SUFFIX JUCE_TARGET)
     add_library(a3-iem${SUFFIX} STATIC ${A3_IEM_NODES_DIR}/IemNode.cpp)
     target_include_directories(a3-iem${SUFFIX} PUBLIC ${A3_IEM_PUBLIC_INCLUDE_DIR})
     target_include_directories(a3-iem${SUFFIX} PRIVATE ${A3_IEM_NODES_DIR})
-    target_link_libraries(a3-iem${SUFFIX} PUBLIC ${JUCE_TARGET} a3-iem-layout${SUFFIX} PRIVATE ${MultiEncoder_TARGET} ${SimpleDecoder_TARGET} ${BinauralDecoder_TARGET} ${DualDelay_TARGET})
+    target_link_libraries(a3-iem${SUFFIX} PUBLIC ${JUCE_TARGET} a3-iem-layout${SUFFIX} PRIVATE ${MultiEncoder_TARGET} ${SimpleDecoder_TARGET} ${BinauralDecoder_TARGET} ${DualDelay_TARGET}
+        ${StereoEncoder_TARGET})
     target_compile_options(a3-iem${SUFFIX} PRIVATE -Wall -Wextra -Werror=switch)
 endfunction()

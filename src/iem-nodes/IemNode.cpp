@@ -15,6 +15,7 @@ IemNode::Parts createParts (IemKind kind, int numInputs, int numOutputs)
         case IemKind::simpleDecoder:   return iem::createSimpleDecoder (numInputs, numOutputs);
         case IemKind::binauralDecoder: return iem::createBinauralDecoder (numInputs, numOutputs);
         case IemKind::dualDelay:       return iem::createDualDelay (numInputs, numOutputs);
+        case IemKind::stereoEncoder:   return iem::createStereoEncoder (numInputs, numOutputs);
     }
     return {};
 }
@@ -154,6 +155,12 @@ void IemNode::process (juce::AudioBuffer<float>& io)
         return;
     }
     parts.processor->processBlock (io, noMidi);
+}
+
+void IemNode::setStereoPose (const StereoPose& pose)
+{
+    if (parts.setStereoPose)
+        parts.setStereoPose (pose);
 }
 
 std::atomic<float>* IemNode::rawParameter (const juce::String& id)
