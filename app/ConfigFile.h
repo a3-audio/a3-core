@@ -6,6 +6,8 @@
 #include <functional>
 #include <juce_core/juce_core.h>
 #include <optional>
+#include <string>
+#include <vector>
 
 namespace a3app
 {
@@ -23,13 +25,19 @@ struct AppConfig
     BackendSettings backend;
     IoMap io;
     juce::File spatialDirectory { "/usr/share/a3-engine/spatial" };
+    // Entries of the loaded file's io section that named a retired deck port ("<port> -> <peer>"),
+    // left out of `io`. Only a load fills it; a save writes the map without them.
+    std::vector<std::string> droppedLinks;
 };
 
 constexpr float minTrimDb = -90.0f, maxTrimDb = 6.0f;
 
 // Sections "engine", "backend", "io", "spatial"; a missing section takes its defaults.
-// Refuses (never clamps) a broken file, naming file and reason in `error`.
+// Refuses (never clamps) a broken file, naming file and reason in `error`. Links of retired
+// deck ports (EnginePorts.h) are dropped, not refused, and listed in droppedLinks.
 std::optional<AppConfig> loadAppConfig (const juce::File&, juce::String& error);
+// "dropped retired link <entry>", one line per entry of AppConfig::droppedLinks.
+juce::StringArray droppedLinkLines (const AppConfig&);
 // Atomic replace. Called only from the window's Save, never by a load.
 juce::Result saveAppConfig (const AppConfig&, const juce::File&);
 inline const juce::File packageConfigFile { "/usr/share/a3-engine/engine.json" };

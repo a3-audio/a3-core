@@ -29,6 +29,8 @@ public:
     virtual AppConfig running() const = 0;                         // what runs now: the config the Session was built from
     // Empty while an engine runs; else why none does (a Save whose config and fallback both failed to open).
     virtual juce::String engineProblem() const { return {}; }
+    // Links of retired ports the loaded file named and the load left out ("<port> -> <peer>").
+    virtual std::vector<std::string> droppedLinks() const { return {}; }
     virtual juce::File configFile() const = 0;                     // where Save writes
     virtual LiveLinks liveLinks() const = 0;                       // the engine ports' live JACK links, foreign ones included
     virtual void edit (const AppConfig&) = 0;                      // stores the pending edit; nothing runs differently yet

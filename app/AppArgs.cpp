@@ -86,7 +86,9 @@ bool checkConfig (const AppArgs& args, const juce::File& home, juce::String& mes
                   + data->config.spatialDirectory.getFullPathName() + "): " + refusal;
         return false;
     }
-    message = "ok";
+    auto lines = droppedLinkLines (data->config);
+    lines.add ("ok");
+    message = lines.joinIntoString ("\n");
     return true;
 }
 }

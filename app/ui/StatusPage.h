@@ -33,6 +33,7 @@ private:
     AppConfig config;
     BackendStatus status;
     juce::String problem;
+    std::vector<std::string> dropped;
     bool heard = false, gate = false;
     double sinceCore = 0;
     a3::GateLevels gates;

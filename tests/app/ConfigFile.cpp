@@ -159,6 +159,39 @@ TEST (ConfigFile, MapNamingAnUnknownEnginePortIsRefused)
     EXPECT_FALSE (a3app::loadAppConfig (badPeer, error).has_value());
 }
 
+TEST (ConfigFile, RetiredDeckPortsAreDroppedNotRefused)
+{
+    Scratch scratch;
+    juce::String error;
+    const auto file = scratch.write ("old.json", withSpatial (
+        "\"engine\":{\"decks\":2},\"io\":{\"jack\":{"
+        "\"deckA_cue_L\":[\"x:y\"],\"deckB_aux_R\":[\"p:q\"],\"deckA_1\":[\"keep:1\"],\"main_top_1\":[\"system:playback_1\"]},"
+        "\"deviceChannels\":{\"deckA_cue_R\":4,\"rec_L\":0}}"));
+    const auto config = a3app::loadAppConfig (file, error);
+    ASSERT_TRUE (config.has_value()) << error;
+    EXPECT_EQ (config->droppedLinks, (std::vector<std::string> { "deckA_cue_L -> x:y", "deckB_aux_R -> p:q", "deckA_cue_R -> device channel 4" }));
+    EXPECT_EQ (config->io.jack.count ("deckA_cue_L"), 0u);
+    EXPECT_EQ (config->io.jack.count ("deckB_aux_R"), 0u);
+    EXPECT_EQ (config->io.jack.at ("deckA_1"), (std::vector<std::string> { "keep:1" }));
+    EXPECT_EQ (config->io.jack.at ("main_top_1"), (std::vector<std::string> { "system:playback_1" }));
+    EXPECT_EQ (config->io.deviceChannels.count ("deckA_cue_R"), 0u);
+    EXPECT_EQ (config->io.deviceChannels.at ("rec_L"), 0);
+
+    const auto clean = scratch.write ("new.json", withSpatial ("\"io\":{\"jack\":{\"main_top_1\":[\"x:y\"]}}"));
+    const auto loaded = a3app::loadAppConfig (clean, error);
+    ASSERT_TRUE (loaded.has_value()) << error;
+    EXPECT_TRUE (loaded->droppedLinks.empty());
+}
+
+TEST (ConfigFile, UnknownNamesAreStillRefused)
+{
+    Scratch scratch;
+    juce::String error;
+    const auto file = scratch.write ("bad.json", withSpatial ("\"engine\":{\"decks\":2},\"io\":{\"jack\":{\"deckA_cue_10\":[\"x:y\"]}}"));
+    EXPECT_FALSE (a3app::loadAppConfig (file, error).has_value());
+    EXPECT_TRUE (error.contains ("deckA_cue_10")) << error;
+}
+
 TEST (ConfigFile, TrimsOutsideNinetyToPlusSixAreRefusedNotClamped)
 {
     Scratch scratch;

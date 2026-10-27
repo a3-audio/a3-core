@@ -61,24 +61,34 @@ TEST (EnginePorts, FollowNAndTheLayouts)
         perChannel (6) }));
 }
 
-TEST (EnginePorts, TwentyInputsPerDeck)
+TEST (EnginePorts, DeckSlotHas41Inputs)
 {
     const auto spatial = a3test::loadedSpatialConfig (a3test::shippedSpatialDirectory);
     EXPECT_EQ (a3app::enginePortNames (a3test::engineConfig (4, 0), spatial).inputs.size(), 12u);
-    EXPECT_EQ (a3app::enginePortNames (a3test::engineConfig (4, 2), spatial).inputs.size(), 12u + 2 * 20u);
+    const auto two = a3app::enginePortNames (a3test::engineConfig (4, 2), spatial).inputs;
+    ASSERT_EQ (two.size(), 12u + 2 * 41u);
 
-    const auto three = a3app::enginePortNames (a3test::engineConfig (4, 3), spatial).inputs;
-    ASSERT_EQ (three.size(), 12u + 3 * 20u);
-    // Slot 2 is letter B in port names (R12); the 20 are 16 channels, cue, aux.
-    const Names deckB (three.begin() + 12 + 20, three.begin() + 12 + 40);
+    // Slot 2 is letter B in port names (R12): 16 channels, 16 aux, 9 cue.
+    const Names deckB (two.begin() + 12 + 41, two.end());
     Names expected;
     for (int i = 1; i <= 16; ++i)
         expected.push_back ("deckB_" + std::to_string (i));
-    for (const char* tail : { "deckB_cue_L", "deckB_cue_R", "deckB_aux_L", "deckB_aux_R" })
-        expected.push_back (tail);
+    for (int i = 1; i <= 16; ++i)
+        expected.push_back ("deckB_aux_" + std::to_string (i));
+    for (int i = 1; i <= 9; ++i)
+        expected.push_back ("deckB_cue_" + std::to_string (i));
     EXPECT_EQ (deckB, expected);
-    EXPECT_EQ (three[12], "deckA_1");
-    EXPECT_EQ (three.back(), "deckC_aux_R");
+    EXPECT_EQ (two[12], "deckA_1");
+    EXPECT_EQ (two.back(), "deckB_cue_9");
+    EXPECT_EQ (std::count (two.begin(), two.end(), "deckA_cue_L"), 0);
+}
+
+TEST (EnginePorts, RetiredDeckPortsAreTheOldStereoPairs)
+{
+    const Names expected { "deckA_cue_L", "deckA_cue_R", "deckA_aux_L", "deckA_aux_R",
+                           "deckB_cue_L", "deckB_cue_R", "deckB_aux_L", "deckB_aux_R" };
+    EXPECT_EQ (a3app::retiredDeckPorts (2), expected);
+    EXPECT_TRUE (a3app::retiredDeckPorts (0).empty());
 }
 
 TEST (EnginePorts, OutputsMatchTheEnginesMeterOrderAndCount)
@@ -162,8 +172,10 @@ TEST (EnginePorts, SlotsFollowTheNames)
         EXPECT_EQ (in.analog[11], inputNamed ("analog_12"));
         EXPECT_EQ (in.decks[0].bformat[0], inputNamed ("deckA_1"));
         EXPECT_EQ (in.decks[1].bformat[15], inputNamed ("deckB_16"));
-        EXPECT_EQ (in.decks[1].cue[1], inputNamed ("deckB_cue_R"));
-        EXPECT_EQ (in.decks[0].aux[0], inputNamed ("deckA_aux_L"));
+        EXPECT_EQ (in.decks[1].cue[8], inputNamed ("deckB_cue_9"));
+        EXPECT_EQ (in.decks[1].aux[15], inputNamed ("deckB_aux_16"));
+        EXPECT_EQ (in.decks[0].aux[0], inputNamed ("deckA_aux_1"));
+        EXPECT_EQ (in.decks[0].cue[0], inputNamed ("deckA_cue_1"));
 
         ASSERT_EQ (out.main.tops.size(), spatial.main.layout.topChannels.size());
         ASSERT_EQ (out.booth.tops.size(), spatial.booth.layout.topChannels.size());
@@ -177,4 +189,18 @@ TEST (EnginePorts, SlotsFollowTheNames)
         EXPECT_EQ (out.pre[0][0], outputNamed ("ch1_pre_L"));
         EXPECT_EQ (out.post[4][1], outputNamed ("ch5_post_R"));
     }
+}
+
+TEST (EnginePorts, SlotsBindAuxAndCue)
+{
+    const auto config = a3test::engineConfig (4, 2);
+    const auto spatial = a3test::loadedSpatialConfig (a3test::shippedSpatialDirectory);
+    a3::EngineInputs in;
+    a3::EngineOutputs out;
+    const auto slots = a3app::bindPortSlots (config, spatial, in, out);
+    std::vector<float> marks (slots.inputs.size());
+    for (size_t i = 0; i < slots.inputs.size(); ++i)
+        *slots.inputs[i] = &marks[i];
+    EXPECT_EQ (in.decks[1].aux[15], &marks[12 + 41 + 16 + 15]);
+    EXPECT_EQ (in.decks[1].cue[8], &marks[12 + 41 + 32 + 8]);
 }

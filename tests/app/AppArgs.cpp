@@ -99,6 +99,18 @@ TEST (AppArgs, CheckConfigOkForTheShippedData)
     EXPECT_EQ (message, "ok");
 }
 
+TEST (AppArgs, CheckConfigPassesWithRetiredDeckPorts)
+{
+    Home home;
+    const auto config = home.write ("old.json", "{\"engine\":{\"decks\":2},\"io\":{\"jack\":{\"deckA_cue_L\":[\"x:y\"],\"deckB_aux_R\":[\"p:q\"]}},"
+                                    + spatialField() + "}");
+    juce::String message;
+    EXPECT_TRUE (a3app::checkConfig (checkArgs (config), home.dir, message)) << message;
+    EXPECT_TRUE (message.contains ("dropped retired link deckA_cue_L -> x:y")) << message;
+    EXPECT_TRUE (message.contains ("dropped retired link deckB_aux_R -> p:q")) << message;
+    EXPECT_TRUE (message.endsWith ("ok")) << message;
+}
+
 TEST (AppArgs, CheckConfigNamesFileAndReason)
 {
     Home home;

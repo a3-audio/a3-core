@@ -99,6 +99,7 @@ void StatusPage::refresh()
     config = view.running();   // the pending edit belongs to the AUDIO page
     status = view.status();
     problem = view.engineProblem();
+    dropped = view.droppedLinks();
     heard = view.coreHeard();
     sinceCore = view.secondsSinceCore();
     gate = view.gateOpen();
@@ -118,7 +119,7 @@ void StatusPage::paint (juce::Graphics& g)
     g.fillAll (palette::surface);
     auto area = getLocalBounds().reduced (getWidth() / 40);
     area.removeFromBottom (area.getHeight() / 2 + getHeight() / 80);
-    constexpr int rowCount = 7;
+    constexpr int rowCount = 8;
     const int row = area.getHeight() / rowCount;
     g.setFont (juce::FontOptions ((float) row * 0.55f));
 
@@ -156,5 +157,11 @@ void StatusPage::paint (juce::Graphics& g)
         missing.add (peer);
     line ("MISSING", missing.isEmpty() ? juce::String ("none") : missing.joinIntoString (", "),
           missing.isEmpty() ? palette::textMuted : palette::caution);
+
+    juce::StringArray droppedText;
+    for (const auto& entry : dropped)
+        droppedText.add (entry);
+    line ("DROPPED", droppedText.isEmpty() ? juce::String ("none") : "retired links: " + droppedText.joinIntoString (", "),
+          droppedText.isEmpty() ? palette::textMuted : palette::caution);
 }
 }

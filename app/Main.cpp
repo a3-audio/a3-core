@@ -158,6 +158,7 @@ public:
     juce::File configFile() const override { return file; }
     a3app::LiveLinks liveLinks() const override { return live() ? session->liveLinks() : a3app::LiveLinks {}; }
     juce::String engineProblem() const override { return problem; }
+    std::vector<std::string> droppedLinks() const override { return startedWith.droppedLinks; }
     void edit (const a3app::AppConfig& config) override { edited = config; }
 
     // Fails when the new config did not open (the previous one is running again, or nothing is:
@@ -168,6 +169,8 @@ public:
         if (result.failed())
             return result;
         startedWith = edited = config;
+        startedWith.droppedLinks.clear();   // the saved file no longer names them
+        edited.droppedLinks.clear();
         names = portNames (config);
         return juce::Result::ok();
     }
@@ -228,6 +231,8 @@ public:
         if (! loaded)
             return finish (1, error);
         startup = std::move (*loaded);
+        for (const auto& line : a3app::droppedLinkLines (startup.config))
+            std::fprintf (stderr, "a3-engine: %s\n", line.toRawUTF8());
 
         std::signal (SIGINT, onSignal);
         std::signal (SIGTERM, onSignal);

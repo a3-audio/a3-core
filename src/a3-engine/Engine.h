@@ -15,8 +15,8 @@ namespace a3
 {
 struct DeckInputs   // one StemDeck slot; nullptr = silence
 {
-    std::array<const float*, 16> bformat {};
-    std::array<const float*, 2> cue {}, aux {};
+    std::array<const float*, 16> bformat {}, aux {};
+    std::array<const float*, 9> cue {};
 };
 
 struct EngineInputs

@@ -179,15 +179,18 @@ TEST (DefaultConfig, DeckSlotsLinkToTheirStemDeck)
     {
         if (! startsWith (port, "deck"))
             continue;
+        const auto tail = port.substr (port.find ('_') + 1);   // "7", "aux_3", "cue_9"
+        // Only the 16 channels are linked in the shipped data; A7 writes the aux and cue links.
+        if (! std::isdigit ((unsigned char) tail[0]) || tail.find ('_') != std::string::npos)
+            continue;
         ++deckPorts;
         const auto letter = port.substr (4, port.find ('_') - 4);
-        const auto tail = port.substr (port.find ('_') + 1);   // "7", "cue_L", "aux_R"
         const auto found = config.io.jack.find (port);
         ASSERT_TRUE (found != config.io.jack.end()) << port;
-        const auto expectedPort = std::isdigit ((unsigned char) tail[0]) ? "bformat_" + tail : tail;
+        const auto expectedPort = "bformat_" + tail;
         EXPECT_EQ (found->second, std::vector<std::string> { "StemDeck-" + letter + ":" + expectedPort }) << port;
     }
-    EXPECT_EQ (deckPorts, 2 * (16 + 2 + 2));
+    EXPECT_EQ (deckPorts, 2 * 16);
 }
 
 TEST (DefaultConfig, CalibratedZonesHaveTrims)

@@ -3,6 +3,7 @@
 #include "ConfigFile.h"
 #include "JsonParse.h"
 #include "SpatialConfig.h"
+#include <algorithm>
 #include <cmath>
 
 namespace a3app
@@ -96,6 +97,50 @@ juce::var parseFile (const juce::File& file)
     return parsed;
 }
 
+std::string peerText (const juce::var& peer) { return peer.toString().toStdString(); }
+
+// Removes the retired ports from the io section before it is validated, so an engine.json saved
+// before aux and cue grew still loads; each removed link is recorded for STATUS and stderr.
+juce::var withoutRetiredPorts (const juce::var& io, const std::vector<std::string>& retired, std::vector<std::string>& dropped)
+{
+    const auto* object = io.getDynamicObject();
+    if (object == nullptr)
+        return io;   // parseIoMap refuses it, naming the section
+    auto* copy = object->clone().release();
+    juce::var result (copy);   // owns the clone
+
+    const auto isRetired = [&] (const juce::Identifier& name)
+    {
+        return std::find (retired.begin(), retired.end(), name.toString().toStdString()) != retired.end();
+    };
+    // The clone is deep (var::clone), so removing from it never touches the caller's section.
+    const auto retiredIn = [&] (const char* key)
+    {
+        std::vector<std::pair<juce::Identifier, juce::var>> found;
+        if (auto* section = copy->getProperty (key).getDynamicObject())
+        {
+            for (const auto& property : section->getProperties())
+                if (isRetired (property.name))
+                    found.emplace_back (property.name, property.value);
+            for (const auto& entry : found)
+                section->removeProperty (entry.first);
+        }
+        return found;
+    };
+    for (const auto& [name, peers] : retiredIn ("jack"))
+    {
+        const auto port = name.toString().toStdString();
+        if (peers.getArray() == nullptr || peers.getArray()->isEmpty())
+            dropped.push_back (port);
+        else
+            for (const auto& peer : *peers.getArray())
+                dropped.push_back (port + " -> " + peerText (peer));
+    }
+    for (const auto& [name, channel] : retiredIn ("deviceChannels"))
+        dropped.push_back (name.toString().toStdString() + " -> device channel " + channel.toString().toStdString());
+    return result;
+}
+
 AppConfig parse (const juce::File& file)
 {
     const auto root = parseFile (file);
@@ -125,7 +170,8 @@ AppConfig parse (const juce::File& file)
     if (! spatial)
         refuse ("spatial (" + config.spatialDirectory.getFullPathName() + "): " + error);
     const auto io = object.hasProperty ("io") ? object.getProperty ("io") : juce::var (new juce::DynamicObject());
-    if (const auto map = parseIoMap (io, enginePortNames (config.engine, *spatial), error))
+    const auto cleaned = withoutRetiredPorts (io, retiredDeckPorts (config.engine.decks), config.droppedLinks);
+    if (const auto map = parseIoMap (cleaned, enginePortNames (config.engine, *spatial), error))
         config.io = *map;
     else
         refuse (error);
@@ -145,6 +191,14 @@ std::optional<AppConfig> loadAppConfig (const juce::File& file, juce::String& er
         error = file.getFullPathName() + ": " + refusal.reason;
         return std::nullopt;
     }
+}
+
+juce::StringArray droppedLinkLines (const AppConfig& config)
+{
+    juce::StringArray lines;
+    for (const auto& entry : config.droppedLinks)
+        lines.add ("dropped retired link " + entry);
+    return lines;
 }
 
 juce::Result saveAppConfig (const AppConfig& config, const juce::File& file)
