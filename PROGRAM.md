@@ -59,13 +59,15 @@ libraries JUCE would `dlopen` for a window are not needed.
   before it fades in (R14), the analog strip included. A channel without an analog pair is deck-only
   and has no encoder source (R10). Positions, 3D, FREQ and Q do nothing on a deck channel.
 - **Buses.** `enc_main`, `enc_fx` (AUX, into IEM's DualDelay) and `enc_phones` (cue pre-VOLUME, mix
-  post-VOLUME), order 3. A deck's 16 post-VOLUME channels are added to the buses directly, AUX included
-  (R11); its stereo `aux_L/R` is a return source only. The return is the analog return pair or deck k's
-  aux pair (R12: decks are 1…D on the wire).
-- **Stem cue.** Every deck slot's `cue_L/R` is added after the phones decoder, weighted by the CUE↔MIX
-  knob only, whether the deck is on a channel or not (R13).
+  post-VOLUME), order 3. A deck's 16 post-VOLUME channels are added to `enc_main` directly; its 16-channel
+  `aux` bus runs through a second deck strip on the channel's controls and, post-VOLUME times the AUX
+  send, joins `enc_fx` (never the main 16). The return is the analog return pair or the delay (decks
+  are 1…D on the wire, R12).
+- **Stem cue.** Every deck slot's 9 `cue` channels (second-order B-format, ACN 0..8) are added to
+  `enc_phones` ahead of the phones decoder, weighted by the CUE↔MIX knob only, whether the deck is on
+  a channel or not (R13); they share the HRTF and PHONES with the desk's cue.
 - **Outputs.** main and booth: SimpleDecoder → MASTER/BOOTH → trim and gate; rec: BinauralDecoder ×
-  `trims.rec`, never gated; phones: BinauralDecoder + stem cue → PHONES → trim and gate. The
+  `trims.rec`, never gated; phones: BinauralDecoder (`enc_fx` + `enc_phones`, which carries the stem cue) → PHONES → trim and gate. The
   `fixedGainDb` stages of `data/spatial/*.zone.json` are not applied: they are the MASTER/BOOTH knobs
   (R1). Every gain control at 0 is exact silence, every send at 0 too (R2, R18).
 - **Gate.** A fresh or re-prepared `Engine` has main, booth and phones closed (exactly 0). `gateOpen`
@@ -176,13 +178,14 @@ exit 0 and stay closed; a crash or a kill signal starts it again. There is no `[
 decks, trims main/booth -30.88 dB (REAPER's output faders), phones 0, rec 0, SVF filter, Step 0's delay
 modulation, the JACK backend, and the rig's connections: what `a3-patchbay.xml` connected for REAPER,
 moved to the engine's ports (analog capture, Scarlett playback, StemDeck's rec input and the
-analyzer's beat input `bpm_1`), and every deck port to
-`StemDeck-A`/`StemDeck-B` (`bformat_k`, `cue_L/R`, `aux_L/R`; they exist once StemDeck's S4 is
+analyzer's beat input `bpm_1`; since M10 also `rec_L/R` to `StemDeck-A:rec_L/R` and to the Core's
+AES67 sender `AES67 a3nuc1 out:send_CH1/2`, the one recording source), and every deck port to
+`StemDeck-A`/`StemDeck-B` (`bformat_1..16`, `aux_1..16`, `cue_1..9`; they exist once StemDeck's S4 is
 installed, until then they are reported as missing, not an error). Since Task 24 the links into the
 analyzer's meter ports (`beat-analyzer:vu_*`, and the direct capture links that only fed them) are gone:
 the engine measures those meters itself. Left out on purpose: REAPER's inputs
-13-24 (StemDeck's stems and AES67's cue have no engine counterpart) and the AES67 sender, whose client
-name carries the machine's host name. The engine reads the file from `~/.config/a3/engine/engine.json`
+13-24 (StemDeck's stems and AES67's cue have no engine counterpart) and the AES67 sender's other channels (its client
+name carries the machine's host name, so the default map names a3nuc1's). The engine reads the file from `~/.config/a3/engine/engine.json`
 first; the package never writes there.
 
 ## The program: one binary, a3-core
