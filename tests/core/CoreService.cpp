@@ -16,6 +16,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <fcntl.h>
@@ -1185,4 +1186,156 @@ TEST (CoreService, AStoppedServiceIsFinishedWithoutAReason)
     const auto reason = rig.service->waitUntilFinished (0.1);
     ASSERT_TRUE (reason.has_value());
     EXPECT_EQ (*reason, "");
+}
+
+//==============================================================================
+// Task 21: the window's rig, status and bench, on the real service.
+
+namespace
+{
+std::string benchBody (const std::string& to, const std::string& address, const std::string& value)
+{
+    auto* made = new juce::DynamicObject();
+    made->setProperty ("to", juce::String (to));
+    made->setProperty ("address", juce::String (address));
+    made->setProperty ("value", juce::String (value));
+    return juce::JSON::toString (juce::var (made), true).toStdString();
+}
+
+juce::var jsonOf (const httpclient::Reply& reply)
+{
+    juce::String problem;
+    return parseJson (juce::String (reply.body), problem);
+}
+
+// The first row of /api/traffic with this direction and address, or a void var.
+juce::var trafficRow (const Rig& rig, const std::string& direction, const std::string& address)
+{
+    const auto traffic = rig.traffic();   // kept: the loop reads into it
+    for (const auto& row : *traffic["rows"].getArray())
+        if (row["direction"].toString().toStdString() == direction && row["address"].toString().toStdString() == address)
+            return row;
+    return {};
+}
+
+bool waitUntil (const std::function<bool()>& condition, int millis = 3000)
+{
+    const auto end = Steady::now() + std::chrono::milliseconds (millis);
+    while (Steady::now() < end)
+    {
+        if (condition())
+            return true;
+        std::this_thread::sleep_for (std::chrono::milliseconds (10));
+    }
+    return condition();
+}
+}
+
+TEST (CoreApi, SendToSelfIsHandledLikeTraffic)
+{
+    // B1's bench sent to Core's own port from a fresh socket: the message is traffic like any other --
+    // the handler runs on the serve thread and the table has its row -- and not a call into Core.
+    Rig rig;
+    ASSERT_TRUE (rig.start()) << rig.error;
+    const auto reply = httpclient::post (rig.service->webPort().port, "/api/send", benchBody ("self", "/state/recall", "1"));
+    EXPECT_EQ (reply.status, 200) << reply.body;
+    EXPECT_EQ (jsonOf (reply)["address"].toString(), "/state/recall");
+    ASSERT_TRUE (rig.said.waitFor ("/state/recall: replayed "));
+    ASSERT_TRUE (waitUntil ([&] { return ! trafficRow (rig, "in", "/state/recall").isVoid(); }));
+    EXPECT_EQ (static_cast<int> (trafficRow (rig, "in", "/state/recall")["count"]), 1);
+    // The handler said its line on the serve thread, and nothing else was said on any other.
+    const auto serveThread = rig.said.find ("/state/recall: replayed ")->thread;
+    for (const auto& line : rig.said.all())
+        EXPECT_EQ (line.thread, serveThread) << line.text;
+}
+
+TEST (CoreApi, TheBenchSendsMixerAndMotionThroughCoresOwnClients)
+{
+    Rig rig;
+    ASSERT_TRUE (rig.start()) << rig.error;
+    rig.mixer.messages (200);
+    rig.motion.messages (200);
+    const auto port = rig.service->webPort().port;
+    EXPECT_EQ (httpclient::post (port, "/api/send", benchBody ("mixer", "/bench/one", "0.5")).status, 200);
+    EXPECT_EQ (httpclient::post (port, "/api/send", benchBody ("motion", "/bench/two", "\"1\"")).status, 200);
+
+    const auto one = rig.mixer.awaitAddress ("/bench/one");
+    ASSERT_TRUE (one.has_value());
+    EXPECT_EQ (one->args.size(), 1u);
+    EXPECT_FLOAT_EQ (std::get<float> (one->args[0].value), 0.5f);
+    const auto two = rig.motion.awaitAddress ("/bench/two");
+    ASSERT_TRUE (two.has_value());
+    EXPECT_EQ (std::get<std::string> (two->args.at (0).value), "1");
+
+    // Sent as Core sends, so its table has the rows (B1: the clients were WatchedClients).
+    ASSERT_TRUE (waitUntil ([&] { return ! trafficRow (rig, "out", "/bench/two").isVoid(); }));
+    EXPECT_EQ (trafficRow (rig, "out", "/bench/one")["peer"].toString(), "mixer");
+    EXPECT_EQ (trafficRow (rig, "out", "/bench/two")["last_type"].toString(), "str");
+    for (const auto& line : rig.said.texts())
+        EXPECT_EQ (line.find ("bench"), std::string::npos) << line;
+}
+
+TEST (CoreApi, TheWindowNeverCallsIntoCoreFromAnHttpThread)
+{
+    // The rig, the status and the bench from several HTTP threads at once while the serve thread
+    // works: if a handler reached into Core, the owning-thread check would answer 400/500 here.
+    Rig rig;
+    ASSERT_TRUE (rig.start()) << rig.error;
+    const auto port = rig.service->webPort().port;
+    std::atomic<int> notOk { 0 };
+    std::atomic<bool> go { true };
+    std::vector<std::thread> readers;
+    for (const auto* path : { "/api/rig", "/api/status", "/api/rig" })
+        readers.emplace_back ([&, path] {
+            while (go)
+                if (httpclient::get (port, path).status != 200)
+                    ++notOk;
+        });
+    for (int i = 0; i < 20; ++i)
+    {
+        EXPECT_EQ (httpclient::post (port, "/api/send", benchBody (i % 2 ? "mixer" : "motion", "/bench/x", std::to_string (i))).status, 200);
+        rig.mixer.osc (rig.port(), "/channel/1/gain", { pyFloat (0.1 * i) });
+    }
+    go = false;
+    for (auto& reader : readers)
+        reader.join();
+    EXPECT_EQ (notOk.load(), 0);
+    for (const auto& line : rig.said.texts())
+        EXPECT_EQ (line.find ("does not own"), std::string::npos) << line;
+}
+
+TEST (CoreApi, TheServiceServesTheStatusAndWhoIsThere)
+{
+    Rig rig;
+    ASSERT_TRUE (rig.start()) << rig.error;
+    const auto port = rig.service->webPort().port;
+    const auto status = httpclient::get (port, "/api/status");
+    EXPECT_EQ (status.status, 200);
+    EXPECT_EQ (jsonOf (status)["audio_engine"].toString(), "engine");
+    EXPECT_EQ (jsonOf (status)["reason"].toString(), "");
+
+    EXPECT_FALSE (static_cast<bool> (jsonOf (httpclient::get (port, "/api/rig"))["engine"]["heard"]));
+    const Socket engineSays;
+    engineSays.osc (rig.port(), "/engine/hello", { pyStr ("boot-9") });
+    EXPECT_TRUE (waitUntil ([&] {
+        const auto engine = jsonOf (httpclient::get (port, "/api/rig"))["engine"];
+        return static_cast<bool> (engine["heard"]) && static_cast<bool> (engine["open"]);
+    }));
+    EXPECT_EQ (jsonOf (httpclient::get (port, "/api/rig"))["engine"]["boot_id"].toString(), "boot-9");
+
+    rig.hello (rig.mixer, "desk");
+    EXPECT_TRUE (waitUntil ([&] { return jsonOf (httpclient::get (port, "/api/rig"))["devices"].size() > 0; }));
+}
+
+TEST (CoreApi, TheWindowAddressIsTheBoundOneAsB1Says)
+{
+    // B1 printed window_address(), what the socket was bound to, not the host the person wrote: a name
+    // is the address it resolved to.
+    Rig rig;
+    auto options = rig.options();
+    options.webBind = "localhost:0";
+    ASSERT_TRUE (rig.start (options)) << rig.error;
+    const auto port = rig.service->webPort();
+    EXPECT_EQ (port.host, loopbackAddress());
+    EXPECT_TRUE (rig.said.find ("window on http://" + loopbackAddress() + ":" + std::to_string (port.port)).has_value());
 }

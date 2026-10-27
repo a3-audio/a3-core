@@ -86,6 +86,12 @@ std::optional<int> DeckSelector::channelOf (int deck) const
 
 void DeckSelector::heard (int deck, double now) { lastHeard[deck] = now; }
 
+std::optional<double> DeckSelector::lastHeardOf (int deck) const
+{
+    const auto found = lastHeard.find (deck);
+    return found == lastHeard.end() ? std::nullopt : std::optional<double> (found->second);
+}
+
 bool DeckSelector::present (int deck, double now) const
 {
     const auto found = lastHeard.find (deck);

@@ -22,6 +22,8 @@ public:
     explicit Presence (double silenceAfter) : silenceAfter (silenceAfter) {}
 
     bool present (double now) const;
+    // When the last hello came, nullopt when none has.
+    std::optional<double> lastHeard() const { return last; }
     // Note a hello. True if it is news: the first, or after silence.
     bool heard (double now);
     // True exactly once, when the silence has begun.
@@ -49,6 +51,8 @@ public:
     std::vector<std::string> takeRivals();
 
     const std::optional<std::string>& host() const { return followed; }
+    // When `host` last said hello; nullopt when it never did (or was forgotten for silence).
+    std::optional<double> lastHeard (const std::string& host) const;
 
 private:
     bool isLocalHost (const std::string& host) const { return isLocal && isLocal (host); }

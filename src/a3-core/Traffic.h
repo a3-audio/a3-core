@@ -49,12 +49,16 @@ std::string peerName (const std::string& host, const std::map<std::string, std::
 // tuple, NoneType (nullptr too).
 const char* pythonTypeName (const OscArg* value);
 
+// What a message of several arguments carried: a Python list (B1 records list(osc_arguments)).
+using ListValue = std::vector<OscArg>;
+
 struct TrafficRow
 {
     Direction direction = Direction::in;
     std::string address;
     long long count = 0, bytes = 0;
     std::optional<OscArg> lastValue;
+    std::optional<ListValue> lastList;   // set instead of lastValue; lastType is "list"
     std::string lastType;
     double lastSeen = 0;
     std::string peer;
@@ -66,6 +70,7 @@ struct HistoryEntry
     Direction direction = Direction::in;
     std::string address;
     std::optional<OscArg> value;
+    std::optional<ListValue> list;
     std::string type, peer;
 };
 
@@ -74,6 +79,7 @@ struct UnknownRow
     std::string address;
     long long count = 0;
     std::optional<OscArg> lastValue;
+    std::optional<ListValue> lastList;
     std::string lastType;
     double lastSeen = 0;
     std::string peer;
@@ -130,9 +136,15 @@ public:
     // last stamp of any call, so the stamps follow the order of the lock -- see stamp().
     void seen (Direction direction, const std::string& address, const OscArg* value, const std::string& peer, double now);
 
+    // The same for a message whose value is a Python list (several arguments; the pointers always): the
+    // row holds the list, its type is "list", and its size in bytes is that of one word, as B1 counts a
+    // list.
+    void seenList (Direction direction, const std::string& address, const ListValue& value, const std::string& peer, double now);
+
     // Note a message Core received and could not route. A full row, not a bare count, but never part
     // of snapshot(): REAPER alone reports 19,335 of them.
     void unknown (const std::string& address, const OscArg* value, const std::string& peer, double now);
+    void unknownList (const std::string& address, const ListValue& value, const std::string& peer, double now);
 
     // A whole, consistent copy. `historySince` makes `history` incremental: only entries stamped later.
     TrafficSnapshot snapshot (std::optional<double> historySince, double now);
@@ -151,6 +163,9 @@ private:
     using Rows = std::list<TrafficRow>;
     using Unknowns = std::list<UnknownRow>;
 
+    void noteSeen (Direction direction, const std::string& address, const OscArg* value, const ListValue* list,
+                   const std::string& peer, double now);
+    void noteUnknown (const std::string& address, const OscArg* value, const ListValue* list, const std::string& peer, double now);
     double stamp (double now);
     void dropUnknown (const std::string& address);
     void trimRows();

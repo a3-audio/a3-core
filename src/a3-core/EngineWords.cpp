@@ -142,6 +142,14 @@ bool EngineSession::heardHello (const OscArg& id)
     return true;
 }
 
+std::optional<std::string> EngineSession::lastBootId() const
+{
+    if (! bootId)
+        return std::nullopt;
+    const auto* text = std::get_if<std::string> (&bootId->value);
+    return text != nullptr ? std::optional<std::string> (*text) : std::nullopt;
+}
+
 Evening EngineSession::evening() const { return live ? current() : fromFile; }
 
 bool EngineSession::replayed (int roundStarted)

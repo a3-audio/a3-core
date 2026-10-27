@@ -76,6 +76,8 @@ public:
 
     // True when the engine gets the replay.
     bool heardHello (const OscArg& bootId);
+    // The boot id of the engine heard last, as text; nullopt before the first hello.
+    std::optional<std::string> lastBootId() const;
     // The file's evening until the first replay completed, then Core's own.
     Evening evening() const;
     // False when a newer hello overtook the replay that began in `roundStarted`.

@@ -14,6 +14,9 @@ namespace a3core
 {
 namespace
 {
+// B1's osc_bytes counts a list as "anything else a single word carries".
+const OscArg listWord = pyInt (0);
+
 int indexOf (Direction direction) { return direction == Direction::in ? 0 : 1; }
 
 // OSC aligns every field to four bytes.
@@ -99,6 +102,87 @@ juce::var jsonableOf (const std::optional<OscArg>& value)
         default: break;
     }
     return {};
+}
+
+// str.__repr__ of a Python str.
+std::string strRepr (const std::string& value)
+{
+    const bool hasSingle = value.find ('\'') != std::string::npos;
+    const bool hasDouble = value.find ('"') != std::string::npos;
+    const char quote = hasSingle && ! hasDouble ? '"' : '\'';
+    static const char hex[] = "0123456789abcdef";
+
+    std::string out (1, quote);
+    for (const auto character : value)
+    {
+        const auto byte = static_cast<uint8_t> (character);
+        if (character == quote || character == '\\')
+            out += std::string ("\\") + character;
+        else if (character == '\t')
+            out += "\\t";
+        else if (character == '\n')
+            out += "\\n";
+        else if (character == '\r')
+            out += "\\r";
+        else if (byte < 0x20 || byte == 0x7f)
+            out += std::string ("\\x") + hex[byte >> 4] + hex[byte & 15];
+        else
+            out += character;   // UTF-8 goes through: Python prints printable non-ASCII as it is
+    }
+    return out + quote;
+}
+
+// repr() of one OSC argument as python-osc hands it on.
+std::string argRepr (const OscArg& arg)
+{
+    switch (arg.tag)
+    {
+        case 'i': case 'h': case 'r': case 't':
+            if (const auto* small = std::get_if<int32_t> (&arg.value))
+                return std::to_string (*small);
+            if (const auto* big = std::get_if<int64_t> (&arg.value))
+                return std::to_string (*big);
+            break;
+        case 'f': case 'd':
+            if (const auto number = floatOf (arg))
+                return pythonRepr (*number);
+            break;
+        case 's':
+            if (const auto* text = std::get_if<std::string> (&arg.value))
+                return strRepr (*text);
+            break;
+        case 'T': return "True";
+        case 'F': return "False";
+        case 'b':
+            if (const auto* bytes = std::get_if<std::vector<uint8_t>> (&arg.value))
+                return bytesRepr (*bytes);
+            break;
+        case 'm':
+            if (const auto* bytes = std::get_if<std::vector<uint8_t>> (&arg.value))
+            {
+                std::string out = "(";
+                for (size_t i = 0; i < bytes->size(); ++i)
+                    out += (i > 0 ? ", " : "") + std::to_string ((*bytes)[i]);
+                return out + (bytes->size() == 1 ? ",)" : ")");
+            }
+            break;
+        default: break;
+    }
+    return "None";
+}
+
+// a3_core_web._jsonable of a list: a list is not str, int, bool or None, so it is its repr.
+juce::var listRepr (const ListValue& list)
+{
+    std::string out = "[";
+    for (size_t i = 0; i < list.size(); ++i)
+        out += (i > 0 ? ", " : "") + argRepr (list[i]);
+    return juce::var (juce::String::fromUTF8 ((out + "]").c_str()));
+}
+
+juce::var jsonableOf (const std::optional<OscArg>& value, const std::optional<ListValue>& list)
+{
+    return list ? listRepr (*list) : jsonableOf (value);
 }
 
 juce::var text (const std::string& utf8) { return juce::var (juce::String::fromUTF8 (utf8.data(), static_cast<int> (utf8.size()))); }
@@ -232,7 +316,18 @@ void Traffic::trimUnknown()
 
 void Traffic::seen (Direction direction, const std::string& address, const OscArg* value, const std::string& peer, double now)
 {
-    const char* typeName = pythonTypeName (value);
+    noteSeen (direction, address, value, nullptr, peer, now);
+}
+
+void Traffic::seenList (Direction direction, const std::string& address, const ListValue& value, const std::string& peer, double now)
+{
+    noteSeen (direction, address, nullptr, &value, peer, now);
+}
+
+void Traffic::noteSeen (Direction direction, const std::string& address, const OscArg* value, const ListValue* list,
+                        const std::string& peer, double now)
+{
+    const char* typeName = list != nullptr ? "list" : pythonTypeName (value);
 
     std::lock_guard<std::mutex> guard (lock);
     const double at = stamp (now);
@@ -264,11 +359,9 @@ void Traffic::seen (Direction direction, const std::string& address, const OscAr
     }
 
     ++row->count;
-    row->bytes += oscBytes (address, value);
-    if (value != nullptr)
-        row->lastValue = *value;
-    else
-        row->lastValue.reset();
+    row->bytes += list != nullptr ? oscBytes (address, &listWord) : oscBytes (address, value);
+    row->lastValue = value != nullptr ? std::optional<OscArg> (*value) : std::nullopt;
+    row->lastList = list != nullptr ? std::optional<ListValue> (*list) : std::nullopt;
     row->lastType.assign (typeName);
     row->lastSeen = at;
     row->peer = peer;
@@ -278,14 +371,25 @@ void Traffic::seen (Direction direction, const std::string& address, const OscAr
     if (historyLimit == 0)
         return;
     // Built from what was handed in: with a row cap of zero the row is already gone.
-    history.push_back ({ at, direction, address, value != nullptr ? std::optional<OscArg> (*value) : std::nullopt, typeName, peer });
+    history.push_back ({ at, direction, address, value != nullptr ? std::optional<OscArg> (*value) : std::nullopt,
+                         list != nullptr ? std::optional<ListValue> (*list) : std::nullopt, typeName, peer });
     if (history.size() > historyLimit)
         history.pop_front();
 }
 
 void Traffic::unknown (const std::string& address, const OscArg* value, const std::string& peer, double now)
 {
-    const char* typeName = pythonTypeName (value);
+    noteUnknown (address, value, nullptr, peer, now);
+}
+
+void Traffic::unknownList (const std::string& address, const ListValue& value, const std::string& peer, double now)
+{
+    noteUnknown (address, nullptr, &value, peer, now);
+}
+
+void Traffic::noteUnknown (const std::string& address, const OscArg* value, const ListValue* list, const std::string& peer, double now)
+{
+    const char* typeName = list != nullptr ? "list" : pythonTypeName (value);
 
     std::lock_guard<std::mutex> guard (lock);
     const double at = stamp (now);
@@ -307,10 +411,8 @@ void Traffic::unknown (const std::string& address, const OscArg* value, const st
     }
 
     ++row->count;
-    if (value != nullptr)
-        row->lastValue = *value;
-    else
-        row->lastValue.reset();
+    row->lastValue = value != nullptr ? std::optional<OscArg> (*value) : std::nullopt;
+    row->lastList = list != nullptr ? std::optional<ListValue> (*list) : std::nullopt;
     row->lastType.assign (typeName);
     row->lastSeen = at;
     row->peer = peer;
@@ -440,7 +542,7 @@ juce::var snapshotAsJson (const TrafficSnapshot& snapshot, const TrafficSnapshot
                               { "address", text (row.address) },
                               { "count", static_cast<juce::int64> (row.count) },
                               { "bytes", static_cast<juce::int64> (row.bytes) },
-                              { "last_value", jsonableOf (row.lastValue) },
+                              { "last_value", jsonableOf (row.lastValue, row.lastList) },
                               { "last_type", text (row.lastType) },
                               { "last_seen", row.lastSeen },
                               { "peer", text (row.peer) },
@@ -467,7 +569,7 @@ juce::var snapshotAsJson (const TrafficSnapshot& snapshot, const TrafficSnapshot
         entries.add (objectOf ({ { "at", entry.at },
                                  { "direction", directionName (entry.direction) },
                                  { "address", text (entry.address) },
-                                 { "value", jsonableOf (entry.value) },
+                                 { "value", jsonableOf (entry.value, entry.list) },
                                  { "type", text (entry.type) },
                                  { "peer", text (entry.peer) },
                                  { "age", snapshot.at - entry.at } }));
@@ -522,7 +624,7 @@ juce::var unknownAsJson (const UnknownSnapshot& unknown)
     for (const auto& row : unknown.rows)
         rows.add (objectOf ({ { "address", text (row.address) },
                               { "count", static_cast<juce::int64> (row.count) },
-                              { "last_value", jsonableOf (row.lastValue) },
+                              { "last_value", jsonableOf (row.lastValue, row.lastList) },
                               { "last_type", text (row.lastType) },
                               { "last_seen", row.lastSeen },
                               { "peer", text (row.peer) },

@@ -46,6 +46,7 @@ void Core::recall (const Endpoint& from, const OscMessage& message)
     {
         sendToEngine (stateMessages (truth, channels, master, decks, engineReturnSource (stems.returnMode), engineBpm));
         sendToEngine ({ openMessage (truth) });
+        engineOpen = engineHeard();
     }
 }
 
@@ -60,6 +61,7 @@ void Core::engineHello (const Endpoint& from, const OscMessage& message)
     const auto bootId = pythonStr (message.args.front());
     if (! project->heardHello (pyStr (bootId)))
         return;
+    engineOpen = false;   // a new engine knows nothing until the recall after the replay opens it
     const auto roundStarted = project->round;
     say ("engine: hello from " + bootId + ", replaying the evening");
 

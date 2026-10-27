@@ -18,6 +18,7 @@
 #include <juce_core/juce_core.h>
 
 #include "Channels.h"
+#include "CoreView.h"
 #include "Decks.h"
 #include "DeskFirst.h"
 #include "Desks.h"
@@ -87,7 +88,17 @@ public:
     void tick();                                                      // on_tick + debounce flushes, every 0.1 s
     void stop();                                                      // flush state, evening, seen
 
+    // B1's engine_status, and project 2's rig: who is there. Serve thread only (P8) -- an HTTP thread
+    // reads view(), which publishView() fills; tick() does that every publishEvery seconds.
     juce::var statusJson() const;
+    juce::var rigJson() const;
+    void publishView();
+    const CoreView& view() const { return published; }
+    static constexpr double publishEvery = 0.25;
+
+    // The bench's mixer and motion: sent as Core's own clients send, so the traffic table has the
+    // row. Serve thread only. std::invalid_argument for any other `to`.
+    void sendFromBench (const std::string& to, const OscMessage& message);
 
     Traffic& traffic() { return trafficTable; }
     Devices& devices() { return deviceTable; }
@@ -196,6 +207,9 @@ private:
     SaidKinds saidKinds;
     ProdjLive prodjLive;
     OwningThread subscribersOwner;
+    CoreView published;
+    std::optional<double> viewPublishedAt;
+    bool engineOpen = false;   // Core has sent the engine `open` since its last hello
 
     std::vector<ChannelInfo> channels;
     MasterInfo master;

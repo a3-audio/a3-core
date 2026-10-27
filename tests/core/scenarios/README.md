@@ -161,11 +161,10 @@ is in no transcript.
 
 `a3core::Core` (src/a3-core/Core.cpp) carries only what a recorded scenario pins. Every other path
 is a `notPortedYet` stub that throws a `std::logic_error` naming the B1 function and the task that
-ports it, test-first, with its scenario:
-
-| Stub | B1 | Task |
-|---|---|---|
-| `statusJson`, `rigJson` (not declared yet) | `engine_status`, project 2's rig | 21 |
+ports it, test-first, with its scenario. None is left: Task 21 ported `statusJson` (B1's `engine_status`)
+and added `rigJson` (project 2's RIG STATE data, no B1 oracle) in src/a3-core/CoreView.cpp. Both, and
+`publishView` and `sendFromBench`, belong to the serve thread and throw anywhere else; the window reads
+the copy `publishView` leaves in `Core::view()`.
 
 Not a stub, a path that does not exist yet: `handleVu` forwards every datagram to
 `vu_destinations()` (the remote Motion followed and every desk), as B1 does with the analyzer's and

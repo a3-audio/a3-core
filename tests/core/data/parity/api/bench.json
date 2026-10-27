@@ -1,0 +1,813 @@
+{
+ "fetched_at": 100.0,
+ "list_ops": [
+  {
+   "address": "/stemdeck/1/pointer",
+   "dir": "in",
+   "op": "seen",
+   "peer": "motion",
+   "t": 10.0,
+   "value": [
+    "list",
+    [
+     [
+      "float",
+      0.5
+     ],
+     [
+      "float",
+      0.25
+     ]
+    ]
+   ]
+  },
+  {
+   "address": "/motion/pointer",
+   "dir": "in",
+   "op": "seen",
+   "peer": "motion",
+   "t": 10.5,
+   "value": [
+    "list",
+    [
+     [
+      "float",
+      0.75
+     ]
+    ]
+   ]
+  },
+  {
+   "address": "/odd/mixed",
+   "dir": "out",
+   "op": "seen",
+   "peer": "mixer",
+   "t": 11.0,
+   "value": [
+    "list",
+    [
+     [
+      "int",
+      3
+     ],
+     [
+      "str",
+      "it's"
+     ],
+     [
+      "bool",
+      true
+     ],
+     [
+      "NoneType",
+      null
+     ],
+     [
+      "bytes",
+      "6101270a00ff"
+     ]
+    ]
+   ]
+  },
+  {
+   "address": "/odd/quotes",
+   "dir": "in",
+   "op": "seen",
+   "peer": "mixer",
+   "t": 11.5,
+   "value": [
+    "list",
+    [
+     [
+      "str",
+      "a\"b'c"
+     ],
+     [
+      "str",
+      "line\nbreak\\"
+     ],
+     [
+      "str",
+      "gr\u00fc\u00dfe \u266a"
+     ],
+     [
+      "float",
+      "nan"
+     ],
+     [
+      "float",
+      1e+22
+     ]
+    ]
+   ]
+  },
+  {
+   "address": "/odd/empty",
+   "dir": "in",
+   "op": "seen",
+   "peer": "motion",
+   "t": 12.0,
+   "value": [
+    "list",
+    []
+   ]
+  },
+  {
+   "address": "/odd/single",
+   "dir": "out",
+   "op": "seen",
+   "peer": "mixer",
+   "t": 12.5,
+   "value": [
+    "list",
+    [
+     [
+      "int",
+      4
+     ]
+    ]
+   ]
+  },
+  {
+   "address": "/stemdeck/1/ahead",
+   "op": "unknown",
+   "peer": "motion",
+   "t": 13.0,
+   "value": [
+    "list",
+    [
+     [
+      "float",
+      0.5
+     ],
+     [
+      "str",
+      "x"
+     ],
+     [
+      "int",
+      7
+     ]
+    ]
+   ]
+  },
+  {
+   "address": "/track/3/name",
+   "op": "unknown",
+   "peer": "reaper",
+   "t": 13.5,
+   "value": [
+    "str",
+    "kick"
+   ]
+  }
+ ],
+ "read_only": {
+  "has_problem": true,
+  "status": 400
+ },
+ "responses": {
+  "status": {
+   "audio_engine": "engine",
+   "reason": ""
+  },
+  "status_without": {},
+  "traffic": {
+   "at": 100.0,
+   "evicted": {
+    "rows": 0,
+    "unknown": 0
+   },
+   "full": true,
+   "history": [
+    {
+     "address": "/stemdeck/1/pointer",
+     "age": 90.0,
+     "at": 10.0,
+     "direction": "in",
+     "peer": "motion",
+     "type": "list",
+     "value": "[0.5, 0.25]"
+    },
+    {
+     "address": "/motion/pointer",
+     "age": 89.5,
+     "at": 10.5,
+     "direction": "in",
+     "peer": "motion",
+     "type": "list",
+     "value": "[0.75]"
+    },
+    {
+     "address": "/odd/mixed",
+     "age": 89.0,
+     "at": 11.0,
+     "direction": "out",
+     "peer": "mixer",
+     "type": "list",
+     "value": "[3, \"it's\", True, None, b\"a\\x01'\\n\\x00\\xff\"]"
+    },
+    {
+     "address": "/odd/quotes",
+     "age": 88.5,
+     "at": 11.5,
+     "direction": "in",
+     "peer": "mixer",
+     "type": "list",
+     "value": "['a\"b\\'c', 'line\\nbreak\\\\', 'gr\u00fc\u00dfe \u266a', nan, 1e+22]"
+    },
+    {
+     "address": "/odd/empty",
+     "age": 88.0,
+     "at": 12.0,
+     "direction": "in",
+     "peer": "motion",
+     "type": "list",
+     "value": "[]"
+    },
+    {
+     "address": "/odd/single",
+     "age": 87.5,
+     "at": 12.5,
+     "direction": "out",
+     "peer": "mixer",
+     "type": "list",
+     "value": "[4]"
+    }
+   ],
+   "overall": null,
+   "rows": [
+    {
+     "address": "/stemdeck/1/pointer",
+     "age": 90.0,
+     "bytes": 28,
+     "count": 1,
+     "direction": "in",
+     "last_seen": 10.0,
+     "last_type": "list",
+     "last_value": "[0.5, 0.25]",
+     "peer": "motion",
+     "rate": null
+    },
+    {
+     "address": "/motion/pointer",
+     "age": 89.5,
+     "bytes": 24,
+     "count": 1,
+     "direction": "in",
+     "last_seen": 10.5,
+     "last_type": "list",
+     "last_value": "[0.75]",
+     "peer": "motion",
+     "rate": null
+    },
+    {
+     "address": "/odd/mixed",
+     "age": 89.0,
+     "bytes": 20,
+     "count": 1,
+     "direction": "out",
+     "last_seen": 11.0,
+     "last_type": "list",
+     "last_value": "[3, \"it's\", True, None, b\"a\\x01'\\n\\x00\\xff\"]",
+     "peer": "mixer",
+     "rate": null
+    },
+    {
+     "address": "/odd/quotes",
+     "age": 88.5,
+     "bytes": 20,
+     "count": 1,
+     "direction": "in",
+     "last_seen": 11.5,
+     "last_type": "list",
+     "last_value": "['a\"b\\'c', 'line\\nbreak\\\\', 'gr\u00fc\u00dfe \u266a', nan, 1e+22]",
+     "peer": "mixer",
+     "rate": null
+    },
+    {
+     "address": "/odd/empty",
+     "age": 88.0,
+     "bytes": 20,
+     "count": 1,
+     "direction": "in",
+     "last_seen": 12.0,
+     "last_type": "list",
+     "last_value": "[]",
+     "peer": "motion",
+     "rate": null
+    },
+    {
+     "address": "/odd/single",
+     "age": 87.5,
+     "bytes": 20,
+     "count": 1,
+     "direction": "out",
+     "last_seen": 12.5,
+     "last_type": "list",
+     "last_value": "[4]",
+     "peer": "mixer",
+     "rate": null
+    }
+   ],
+   "totals": null,
+   "unknown_addresses": 2,
+   "unknown_messages": 2
+  },
+  "unknown": {
+   "at": 100.0,
+   "evicted": 0,
+   "rows": [
+    {
+     "address": "/stemdeck/1/ahead",
+     "age": 87.0,
+     "count": 1,
+     "direction": "in",
+     "last_seen": 13.0,
+     "last_type": "list",
+     "last_value": "[0.5, 'x', 7]",
+     "peer": "motion",
+     "rate": null,
+     "unknown": true
+    },
+    {
+     "address": "/track/3/name",
+     "age": 86.5,
+     "count": 1,
+     "direction": "in",
+     "last_seen": 13.5,
+     "last_type": "str",
+     "last_value": "kick",
+     "peer": "reaper",
+     "rate": null,
+     "unknown": true
+    }
+   ]
+  }
+ },
+ "sends": [
+  {
+   "body": {
+    "address": "/channel/0/pfl",
+    "to": "mixer",
+    "value": "1"
+   },
+   "name": "an int",
+   "reply": {
+    "address": "/channel/0/pfl",
+    "value": 1
+   },
+   "sent": [
+    [
+     "mixer",
+     "/channel/0/pfl",
+     1,
+     "int"
+    ]
+   ],
+   "status": 200
+  },
+  {
+   "body": {
+    "address": "/channel/0/gain",
+    "to": "motion",
+    "value": "0.5"
+   },
+   "name": "a float",
+   "reply": {
+    "address": "/channel/0/gain",
+    "value": 0.5
+   },
+   "sent": [
+    [
+     "motion",
+     "/channel/0/gain",
+     0.5,
+     "float"
+    ]
+   ],
+   "status": 200
+  },
+  {
+   "body": {
+    "address": "/channel/0/azimuth",
+    "to": "self",
+    "value": "-180"
+   },
+   "name": "a negative int",
+   "reply": {
+    "address": "/channel/0/azimuth",
+    "value": -180
+   },
+   "sent": [
+    [
+     "self",
+     "/channel/0/azimuth",
+     -180,
+     "int"
+    ]
+   ],
+   "status": 200
+  },
+  {
+   "body": {
+    "address": "/channel/0/pfl",
+    "to": "mixer",
+    "value": "\"1\""
+   },
+   "name": "a quoted number",
+   "reply": {
+    "address": "/channel/0/pfl",
+    "value": "1"
+   },
+   "sent": [
+    [
+     "mixer",
+     "/channel/0/pfl",
+     "1",
+     "str"
+    ]
+   ],
+   "status": 200
+  },
+  {
+   "body": {
+    "address": "/fx/mode",
+    "to": "motion",
+    "value": "high_pass"
+   },
+   "name": "a bare word",
+   "reply": {
+    "address": "/fx/mode",
+    "value": "high_pass"
+   },
+   "sent": [
+    [
+     "motion",
+     "/fx/mode",
+     "high_pass",
+     "str"
+    ]
+   ],
+   "status": 200
+  },
+  {
+   "body": {
+    "address": "/a",
+    "to": "mixer",
+    "value": "1.2.3"
+   },
+   "name": "a mistyped float",
+   "reply": {
+    "address": "/a",
+    "value": "1.2.3"
+   },
+   "sent": [
+    [
+     "mixer",
+     "/a",
+     "1.2.3",
+     "str"
+    ]
+   ],
+   "status": 200
+  },
+  {
+   "body": {
+    "address": "  /a  ",
+    "to": "mixer",
+    "value": "  7  "
+   },
+   "name": "spaces around",
+   "reply": {
+    "address": "/a",
+    "value": 7
+   },
+   "sent": [
+    [
+     "mixer",
+     "/a",
+     7,
+     "int"
+    ]
+   ],
+   "status": 200
+  },
+  {
+   "body": {
+    "address": "/a",
+    "to": "mixer",
+    "value": 5
+   },
+   "name": "a number in the body",
+   "reply": {
+    "address": "/a",
+    "value": 5
+   },
+   "sent": [
+    [
+     "mixer",
+     "/a",
+     5,
+     "int"
+    ]
+   ],
+   "status": 200
+  },
+  {
+   "body": {
+    "address": "/a",
+    "to": "mixer",
+    "value": "nan"
+   },
+   "name": "nan",
+   "reply": {
+    "address": "/a",
+    "value": "nan"
+   },
+   "sent": [
+    [
+     "mixer",
+     "/a",
+     "nan",
+     "float"
+    ]
+   ],
+   "status": 200
+  },
+  {
+   "body": {
+    "address": "/a",
+    "to": "mixer",
+    "value": "1e3"
+   },
+   "name": "exponent",
+   "reply": {
+    "address": "/a",
+    "value": 1000.0
+   },
+   "sent": [
+    [
+     "mixer",
+     "/a",
+     1000.0,
+     "float"
+    ]
+   ],
+   "status": 200
+  },
+  {
+   "body": {
+    "address": "/a",
+    "to": "mixer",
+    "value": ".5"
+   },
+   "name": "a leading dot",
+   "reply": {
+    "address": "/a",
+    "value": 0.5
+   },
+   "sent": [
+    [
+     "mixer",
+     "/a",
+     0.5,
+     "float"
+    ]
+   ],
+   "status": 200
+  },
+  {
+   "body": {
+    "address": "/a",
+    "to": "mixer",
+    "value": "+3"
+   },
+   "name": "a plus sign",
+   "reply": {
+    "address": "/a",
+    "value": 3
+   },
+   "sent": [
+    [
+     "mixer",
+     "/a",
+     3,
+     "int"
+    ]
+   ],
+   "status": 200
+  },
+  {
+   "body": {
+    "address": "/a",
+    "to": "mixer",
+    "value": "1_000"
+   },
+   "name": "an underscore",
+   "reply": {
+    "address": "/a",
+    "value": 1000
+   },
+   "sent": [
+    [
+     "mixer",
+     "/a",
+     1000,
+     "int"
+    ]
+   ],
+   "status": 200
+  },
+  {
+   "body": {
+    "address": "/a",
+    "to": "mixer",
+    "value": "0x10"
+   },
+   "name": "hex is text",
+   "reply": {
+    "address": "/a",
+    "value": "0x10"
+   },
+   "sent": [
+    [
+     "mixer",
+     "/a",
+     "0x10",
+     "str"
+    ]
+   ],
+   "status": 200
+  },
+  {
+   "body": {
+    "address": "/a",
+    "to": "mixer",
+    "value": "-inf"
+   },
+   "name": "inf",
+   "reply": {
+    "address": "/a",
+    "value": "-inf"
+   },
+   "sent": [
+    [
+     "mixer",
+     "/a",
+     "-inf",
+     "float"
+    ]
+   ],
+   "status": 200
+  },
+  {
+   "body": {
+    "address": "/a",
+    "to": "mixer",
+    "value": "1e400"
+   },
+   "name": "too large for a float",
+   "reply": {
+    "address": "/a",
+    "value": "inf"
+   },
+   "sent": [
+    [
+     "mixer",
+     "/a",
+     "inf",
+     "float"
+    ]
+   ],
+   "status": 200
+  },
+  {
+   "body": {
+    "address": "/a",
+    "to": "mixer",
+    "value": "-0"
+   },
+   "name": "negative zero",
+   "reply": {
+    "address": "/a",
+    "value": 0
+   },
+   "sent": [
+    [
+     "mixer",
+     "/a",
+     0,
+     "int"
+    ]
+   ],
+   "status": 200
+  },
+  {
+   "body": {
+    "address": "/a",
+    "to": "mixer",
+    "value": "   "
+   },
+   "name": "nothing typed",
+   "reply": {
+    "problem": "nothing typed"
+   },
+   "sent": [],
+   "status": 400
+  },
+  {
+   "body": {
+    "address": "",
+    "to": "mixer",
+    "value": "1"
+   },
+   "name": "an empty address",
+   "reply": {
+    "problem": "eine Adresse f\u00e4ngt mit / an"
+   },
+   "sent": [],
+   "status": 400
+  },
+  {
+   "body": {
+    "address": "a",
+    "to": "mixer",
+    "value": "1"
+   },
+   "name": "an address without a slash",
+   "reply": {
+    "problem": "eine Adresse f\u00e4ngt mit / an"
+   },
+   "sent": [],
+   "status": 400
+  },
+  {
+   "body": {
+    "to": "mixer",
+    "value": "1"
+   },
+   "name": "no address",
+   "reply": {
+    "problem": "'address'"
+   },
+   "sent": [],
+   "status": 400
+  },
+  {
+   "body": {
+    "address": "/a",
+    "value": "1"
+   },
+   "name": "no destination",
+   "reply": {
+    "problem": "'to'"
+   },
+   "sent": [],
+   "status": 400
+  },
+  {
+   "body": {
+    "address": "/a",
+    "to": "mixer"
+   },
+   "name": "no value",
+   "reply": {
+    "problem": "'value'"
+   },
+   "sent": [],
+   "status": 400
+  },
+  {
+   "body": {
+    "address": "/a",
+    "to": "nowhere",
+    "value": "1"
+   },
+   "name": "an unknown destination",
+   "reply": {
+    "problem": "unbekanntes Ziel: nowhere"
+   },
+   "sent": [],
+   "status": 400
+  },
+  {
+   "name": "not json",
+   "raw": "not json at all",
+   "reply": {
+    "problem": "Expecting value: line 1 column 1 (char 0)"
+   },
+   "sent": [],
+   "status": 400
+  },
+  {
+   "name": "a json list",
+   "raw": "[1, 2]",
+   "reply": {
+    "problem": "list indices must be integers or slices, not str"
+   },
+   "sent": [],
+   "status": 400
+  }
+ ]
+}

@@ -103,6 +103,7 @@ void Core::startSpeaking()
 
     helloGate.trust (env.selfSocket);
     subscribersOwner.claim();
+    publishView();   // the window has something to show before the first tick
 }
 
 void Core::serveOn (int port)
@@ -136,6 +137,9 @@ void Core::tick()
     const auto before = seenFile.writes;
     seenFile.writeIfDue (now);
     tellWritten (before, seenFile.writes, seenFilePath);
+
+    if (! viewPublishedAt || now - *viewPublishedAt >= publishEvery)
+        publishView();
 }
 
 // The SIGTERM handler's stop(): what is still inside a delay goes to disk now.
@@ -152,10 +156,6 @@ void Core::stop()
     tellWritten (before, seenFile.writes, seenFilePath);
 }
 
-juce::var Core::statusJson() const
-{
-    notPortedYet ("engine_status (Task 21)");
-}
 
 //==============================================================================
 // The doors out.
@@ -163,9 +163,12 @@ juce::var Core::statusJson() const
 // WatchedClient.send_message: the traffic row, then the send, a failure said once.
 void Core::send (const Client& client, const OscMessage& message)
 {
-    // A message of several arguments is a Python list; Traffic holds one value per row (Task 21).
-    const OscArg* value = message.args.size() == 1 ? &message.args.front() : nullptr;
-    trafficTable.seen (Direction::out, message.address, value, client.name, env.clock.monotonic());
+    // A message of several arguments is a Python list.
+    if (message.args.size() > 1)
+        trafficTable.seenList (Direction::out, message.address, message.args, client.name, env.clock.monotonic());
+    else
+        trafficTable.seen (Direction::out, message.address, message.args.empty() ? nullptr : &message.args.front(), client.name,
+                           env.clock.monotonic());
     sendFailures.send (client.name, [&] { env.out.send (client, message); });
 }
 

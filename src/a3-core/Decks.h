@@ -60,6 +60,7 @@ public:
 
     void heard (int deck, double now);
     bool present (int deck, double now) const;
+    std::optional<double> lastHeardOf (int deck) const;
 
     // Deck k's 3D, to the deck on `channel`; nothing while the channel is analog.
     std::vector<std::pair<std::string, OscArg>> threeDMessages (const Truth& truth, int channel, double value) const;

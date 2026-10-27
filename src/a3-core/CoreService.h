@@ -12,6 +12,8 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <deque>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -74,6 +76,11 @@ private:
     void bindTheMetersInbox();
     void openTheWindow();
     void startAnnouncing();
+    // The bench (POST /api/send), called on an HTTP thread: `self` is a new datagram from a socket of
+    // its own to Core's main port; mixer and motion are queued to the serve thread, which sends them
+    // through Core's own clients. Core is never called from here (P8).
+    void benchSend (const std::string& to, const OscMessage& message);
+    void runTheBench();                     // on the serve thread, before every tick
     void serve();                           // the serve loop, then Core's stop(), on the serve thread
     void say (const std::string& line, bool toStderr = false) { journal (line, toStderr); }
     void stopHelpers();                     // the window and the announcer
@@ -91,6 +98,10 @@ private:
     std::unique_ptr<Core> core;
     std::unique_ptr<HttpServer> window;
     std::string windowHost;
+    std::optional<UdpSocket> benchSocket;      // the bench's `self` leaves from here: a stranger to the hello gate
+    std::mutex benchLock;                      // guards benchSocket's use and benchWork
+    std::deque<std::function<void()>> benchWork;
+    std::atomic<int> servedPort { 0 };         // the main port once it is open
 
     std::thread serveThread, announceThread;
     std::atomic<bool> serving { false };

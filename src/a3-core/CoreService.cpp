@@ -26,8 +26,6 @@ constexpr size_t latestWinsLimit = 1024;
 // How Python prints a socket address: ('<host>', <port>).
 std::string pythonAddress (const Endpoint& endpoint) { return "('" + endpoint.host + "', " + std::to_string (endpoint.port) + ")"; }
 
-std::string hostOf (const std::string& bind) { return bind.substr (0, bind.rfind (':')); }
-
 void nameThisThread (const char* name) { pthread_setname_np (pthread_self(), name); }
 
 std::string refusal (const std::string& why) { return "a3-core: " + why; }
@@ -124,6 +122,7 @@ std::optional<std::string> CoreService::startUp()
     mainSocket = std::move (std::get<UdpSocket> (main));
     mainBuffer = mainSocket->widenReceiveBuffer();
     core->serveOn (mainSocket->local().port);
+    servedPort = mainSocket->local().port;
     say ("Serving on " + pythonAddress (mainSocket->local()));
 
     if (truth.networkProblem)
@@ -159,19 +158,74 @@ void CoreService::bindTheMetersInbox()
 }
 
 // The window, if it will come. Its failure is not Core's: HttpServer says it, and the rig still
-// makes sound. Only the monitor's routes; status, send and the rig are Task 21's.
+// makes sound. The monitor's routes, and status, rig and the bench: those read the copy Core publishes
+// and hand sends to benchSend, so no HTTP thread ever calls into Core.
 void CoreService::openTheWindow()
 {
     const auto bind = options.webBind.empty() ? defaultBind (truth) : options.webBind;
     Routes routes;
     addMonitorRoutes (routes, MonitorSources { &truth, core->traffic(), &core->devices(),
                                                options.packageShare.getChildFile ("osc-register.json"), clock });
+    if (auto bench = UdpSocket::bound (truth.host ("local"), 0); std::holds_alternative<UdpSocket> (bench))
+        benchSocket = std::move (std::get<UdpSocket> (bench));
+    addCoreRoutes (routes, &core->view(), [this] (const std::string& to, const OscMessage& message) { benchSend (to, message); });
     auto server = std::make_unique<HttpServer> (bind, std::move (routes));
     if (! server->start (journal))
         return;
-    windowHost = hostOf (bind);
+    windowHost = server->host();
     say ("window on http://" + windowHost + ":" + std::to_string (server->port()));
     window = std::move (server);
+}
+
+// B1's send_from_bench. `self` is Core's own port, reached as any sender reaches it: from a socket
+// the hello gate does not trust, so the message is handled -- or refused -- like traffic. mixer and
+// motion go out through Core's clients, as B1's WatchedClients did, so the table has the row; that
+// is the serve thread's work, queued here and done before its next tick.
+void CoreService::benchSend (const std::string& to, const OscMessage& message)
+{
+    constexpr size_t queueLimit = 256;
+    if (to == "self")
+    {
+        const std::scoped_lock hold (benchLock);
+        if (! benchSocket || servedPort == 0)
+            throw SendRefused ("Core is not serving yet");
+        try
+        {
+            benchSocket->sendTo ({ truth.host ("local"), servedPort }, encodeMessage (message));
+        }
+        catch (const OsError& problem)
+        {
+            throw SendRefused (problem.text);
+        }
+        return;
+    }
+    const std::scoped_lock hold (benchLock);
+    if (benchWork.size() >= queueLimit)
+        throw SendRefused ("the bench is busy, try again");
+    benchWork.push_back ([this, to, message] { core->sendFromBench (to, message); });
+}
+
+void CoreService::runTheBench()
+{
+    for (;;)
+    {
+        std::function<void()> work;
+        {
+            const std::scoped_lock hold (benchLock);
+            if (benchWork.empty())
+                return;
+            work = std::move (benchWork.front());
+            benchWork.pop_front();
+        }
+        try
+        {
+            work();
+        }
+        catch (const std::exception& problem)
+        {
+            say (std::string ("the bench could not send: ") + problem.what(), true);
+        }
+    }
 }
 
 // /core/here every 2 s by broadcast, from a thread of its own (B1's "a3-announce").
@@ -214,7 +268,10 @@ void CoreService::serve()
                          say (text, true);
                      },
                      [this] { return serving.load(); },
-                     [this] { core->tick(); } };
+                     [this] {
+                         runTheBench();
+                         core->tick();
+                     } };
     if (vuSocket)
         loop.also.push_back ({ vuSocket->fd(), [this] (const std::vector<uint8_t>& data, const Endpoint& from) {
                                   core->handleVu (from, data.data(), data.size());

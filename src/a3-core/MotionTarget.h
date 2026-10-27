@@ -36,6 +36,8 @@ public:
     // The address of the Motion followed, as it was heard; nullopt if none.
     std::optional<std::string> followed() const;
     bool follows (const std::string& host) const;
+    // When the Motion followed last said hello; nullopt if none is followed.
+    std::optional<double> lastHeard() const;
     // Addresses of Motions that turned up beside the one followed, each once.
     std::vector<std::string> takeRivals();
     // The default, once, when the remote Motion followed has gone quiet.

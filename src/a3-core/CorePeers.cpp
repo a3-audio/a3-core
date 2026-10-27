@@ -156,8 +156,7 @@ void Core::forwardAhead (const OscMessage& message, const std::string& origin)
     const auto arguments = aheadArguments (message.args);
     if (! arguments)
     {
-        // A list in B1; the traffic table holds one value per row (Task 21).
-        trafficTable.unknown (message.address, nullptr, origin, env.clock.monotonic());
+        trafficTable.unknownList (message.address, message.args, origin, env.clock.monotonic());
         return;
     }
     send (motionClient, OscMessage { message.address, sentOnAsPython (*arguments) });
@@ -401,9 +400,8 @@ void Core::pointerHandler (const Endpoint& from, const OscMessage& message)
         return;
     const auto& key = found->first;
     const auto origin = originOf (from);
-    // Seen before the gate: a refused pointer is an arrival with no send after it. A list in B1;
-    // the traffic table holds one value per row (Task 21).
-    seen (message, message.args.size() == 1 ? &message.args.front() : nullptr, origin);
+    // Seen before the gate: a refused pointer is an arrival with no send after it. A list in B1, always.
+    trafficTable.seenList (Direction::in, message.address, message.args, origin, env.clock.monotonic());
     if (! prodjLive.admits (saidKinds.gateName (origin, from.host, from.port), key))
         return;
     const auto target = key == "stemdeck.pointer" ? stemdeckClient : std::optional<Client> (motionClient);
