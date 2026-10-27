@@ -76,7 +76,10 @@ juce::Result JackBackend::open (EngineHost& engineHost, const AppConfig& config)
         return juce::Result::fail ("cannot activate the JACK client");
     }
     if (connecting)
+    {
         linker->apply (map);
+        linksPlanned = true;
+    }
     return juce::Result::ok();
 }
 
@@ -90,6 +93,7 @@ void JackBackend::close()
         jack_deactivate (client);
     }
     linker.reset();
+    linksPlanned = false;
     jack_client_close (client);
     client = nullptr;
     host = nullptr;
@@ -104,6 +108,7 @@ BackendStatus JackBackend::status() const
     s.rateSource = "PipeWire (pw-metadata -n settings; a3-core's pipewire config)";
     s.bitDepth = 32;
     s.connecting = connecting;
+    s.linksPlanned = linksPlanned;
     s.xruns = xruns.load();
     if (linker != nullptr)
         for (const auto& peer : linker->missingPeers())
@@ -143,6 +148,7 @@ void JackBackend::service (double nowSeconds)
         return;
     lastConnectSeconds = nowSeconds;
     linker->apply (map);
+    linksPlanned = true;
 }
 
 bool JackBackend::lost() const { return serverGone.load(); }

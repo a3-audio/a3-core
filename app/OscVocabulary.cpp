@@ -216,9 +216,9 @@ std::optional<EngineTruth> parseEngineTruth (const juce::String& json, juce::Str
     truth.helloAddress = addresses["engine.hello"]["pattern"].toString();
     if (truth.helloAddress.isEmpty())
         return error = "the truth has no address \"engine.hello\"", std::nullopt;
-    truth.deckAudioPattern = addresses["engine.deck-audio"]["pattern"].toString();
+    truth.deckAudioPattern = addresses["engine.deck-audio"]["pattern"].toString();   // an older truth has none: no reports then
     if (! truth.deckAudioPattern.contains ("{deck}"))
-        return error = "the truth has no address \"engine.deck-audio\" with a {deck}", std::nullopt;
+        truth.deckAudioPattern.clear();
     truth.corePort = a3bench::listenerPort (root, "core.osc");
     truth.coreHost = a3bench::listenerHostAddress (root, "core.osc");
     if (truth.coreHost == root["hosts"]["any"].toString())   // a wildcard listener is reached on loopback (a3_osc endpoint)
@@ -226,6 +226,11 @@ std::optional<EngineTruth> parseEngineTruth (const juce::String& json, juce::Str
     if (truth.corePort <= 0 || truth.coreHost.isEmpty())
         return error = "the truth has no listener \"core.osc\" with a host and a port", std::nullopt;
     return truth;
+}
+
+juce::String truthNote (const EngineTruth& truth)
+{
+    return truth.deckAudioPattern.isEmpty() ? "the truth has no engine.deck-audio: deck audio reports are off" : juce::String();
 }
 
 bool applyEngineMessage (const EngineTruth& truth, const a3::EngineConfig& config, const juce::OSCMessage& m,

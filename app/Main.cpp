@@ -130,13 +130,8 @@ private:
     // nothing to report: Core then counts the deck by its hello alone, as for an older engine.
     void reportDeckAudio()
     {
-        const auto status = backend->status();
-        if (! status.connecting)
-            return;
-        std::vector<std::string> missing;
-        for (const auto& peer : status.missingPeers)
-            missing.push_back (peer.toStdString());
-        host->setDeckAudio (a3app::deckAudioLinked (data.config.io, data.config.engine.decks, missing));
+        if (const auto report = a3app::deckAudioReport (backend->status(), data.config.io, data.config.engine.decks))
+            host->setDeckAudio (*report);
     }
 
     static constexpr int quietPumps = 25;   // 25 x 2 ms: far above the 10 ms fade
@@ -158,7 +153,7 @@ class SessionView final : public a3app::HostView
 public:
     using Restart = std::function<juce::Result (const a3app::AppConfig&, juce::String& problem)>;
     SessionView (std::unique_ptr<Session>& s, const a3app::StartupData& startup, Restart restartApp)
-        : session (s), file (startup.saveFile), edited (startup.config), startedWith (startup.config),
+        : session (s), file (startup.saveFile), edited (startup.config), startedWith (startup.config), truth (startup.truth),
           names (portNames (startup)), restart (std::move (restartApp)) {}
 
     a3app::BackendStatus status() const override { return live() ? session->status() : a3app::BackendStatus {}; }
@@ -174,6 +169,7 @@ public:
     a3app::LiveLinks liveLinks() const override { return live() ? session->liveLinks() : a3app::LiveLinks {}; }
     juce::String engineProblem() const override { return problem; }
     std::vector<std::string> droppedLinks() const override { return startedWith.droppedLinks; }
+    juce::String truthNote() const override { return a3app::truthNote (truth); }
     void edit (const a3app::AppConfig& config) override { edited = config; }
 
     // Fails when the new config did not open (the previous one is running again, or nothing is:
@@ -214,6 +210,7 @@ private:
     std::unique_ptr<Session>& session;
     const juce::File file;
     a3app::AppConfig edited, startedWith;
+    a3app::EngineTruth truth;
     std::vector<std::string> names;
     juce::String problem;
     Restart restart;
@@ -246,6 +243,8 @@ public:
         if (! loaded)
             return finish (1, error);
         startup = std::move (*loaded);
+        if (const auto note = a3app::truthNote (startup.truth); note.isNotEmpty())
+            std::fprintf (stderr, "a3-engine: %s\n", note.toRawUTF8());
         for (const auto& line : a3app::droppedLinkLines (startup.config))
             std::fprintf (stderr, "a3-engine: %s\n", line.toRawUTF8());
 

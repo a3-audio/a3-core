@@ -32,10 +32,29 @@ TEST (StatusGrouping, TextNamesEachClientWithItsCount)
                "AES67 deck B (2), system (1)");
 }
 
-TEST (StatusGrouping, DroppedTextCountsAndNamesEachLink)
+TEST (StatusGrouping, DroppedTextCountsAndGroupsBySlot)
 {
     EXPECT_EQ (a3app::droppedText ({}), "none");
-    EXPECT_EQ (a3app::droppedText ({ "deckA_cue_L -> x:y", "deckB_aux_R -> p:q" }),
-               "2 retired links dropped:\ndeckA_cue_L -> x:y\ndeckB_aux_R -> p:q");
-    EXPECT_EQ (a3app::droppedText ({ "deckA_cue_L -> x:y" }), "1 retired link dropped:\ndeckA_cue_L -> x:y");
+    EXPECT_EQ (a3app::droppedText ({ "deckA_cue_L -> x:y" }), "1 retired link dropped:\ndeckA: cue_L");
+    EXPECT_EQ (a3app::droppedText ({ "deckA_cue_L -> x:y", "deckB_aux_R -> p:q", "deckA_cue_R -> x:y", "mystery -> a:b" }),
+               "4 retired links dropped:\ndeckA: cue_L cue_R\ndeckB: aux_R\nmystery -> a:b");
+}
+
+TEST (StatusGrouping, TheRetiredRigCaseFitsInFourLines)
+{
+    std::vector<std::string> eight;
+    for (const char* deck : { "deckA", "deckB" })
+        for (const char* kind : { "cue", "aux" })
+            for (const char* side : { "L", "R" })
+                eight.push_back (std::string (deck) + "_" + kind + "_" + side + " -> x:y");
+    const auto text = a3app::droppedText (eight, 4);
+    EXPECT_EQ (text, "8 retired links dropped:\ndeckA: cue_L cue_R aux_L aux_R\ndeckB: cue_L cue_R aux_L aux_R");
+}
+
+TEST (StatusGrouping, WhatDoesNotFitIsSaidNotCut)
+{
+    const std::vector<std::string> many { "deckA_cue_L -> a:b", "deckB_cue_L -> a:b", "deckC_cue_L -> a:b", "deckD_cue_L -> a:b" };
+    const auto text = a3app::droppedText (many, 3);
+    EXPECT_EQ (text, "4 retired links dropped:\ndeckA: cue_L\n+3 more");
+    EXPECT_EQ (juce::StringArray::fromLines (text).size(), 3);
 }

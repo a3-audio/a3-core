@@ -15,7 +15,9 @@ juce::String coreText (bool heard, double secondsSince);          // "Core silen
 // "client:port" names as (client, count), in the order the clients first appear.
 std::vector<std::pair<std::string, int>> groupMissingByClient (const std::vector<std::string>& missingPorts);
 juce::String missingText (const std::vector<std::string>& missingPorts);   // "AES67 deck B (41), system (1)" or "none"
-juce::String droppedText (const std::vector<std::string>& droppedLinks);   // a count, then one link a line, or "none"
+// A count, then one line per deck slot ("deckA: cue_L cue_R"), or "none"; a line past maxLines
+// becomes "+N more", so a cut is always said.
+juce::String droppedText (const std::vector<std::string>& droppedLinks, int maxLines = 1000);
 
 // Read-only: engine mode, Core's last word, the gate per zone, load and xruns, missing peers
 // and the per-port meters. refresh() re-reads the view (the window's timer calls it).
@@ -39,6 +41,7 @@ private:
     BackendStatus status;
     juce::String problem;
     std::vector<std::string> dropped;
+    juce::String truthWarning;
     bool heard = false, gate = false;
     double sinceCore = 0;
     a3::GateLevels gates;

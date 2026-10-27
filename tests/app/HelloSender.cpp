@@ -88,3 +88,16 @@ TEST (HelloSender, SendsDeckAudioOnChangeAtOnce)
     EXPECT_EQ (sent[0].getAddressPattern().toString(), "/engine/deck/2/audio");
     EXPECT_EQ (sent[0][0].getInt32(), 0);
 }
+
+TEST (HelloSender, AnOldTruthWithoutDeckAudioSendsOnlyTheHello)
+{
+    auto truth = a3apptest::engineTruth();
+    truth.deckAudioPattern.clear();
+    std::vector<juce::OSCMessage> sent;
+    a3app::HelloSender hello (truth, [&] (const juce::OSCMessage& m) { sent.push_back (m); });
+    hello.setDeckAudio ({ true, false });
+    hello.tick (0.0);
+    hello.setDeckAudio ({ false, false });
+    ASSERT_EQ (sent.size(), 1u);
+    EXPECT_EQ (sent[0].getAddressPattern().toString(), "/engine/hello");
+}

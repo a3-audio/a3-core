@@ -26,4 +26,14 @@ std::vector<bool> deckAudioLinked (const IoMap& map, int decks, const std::vecto
     }
     return linked;
 }
+
+std::optional<std::vector<bool>> deckAudioReport (const BackendStatus& status, const IoMap& map, int decks)
+{
+    if (! status.connecting || ! status.linksPlanned)
+        return std::nullopt;
+    std::vector<std::string> missing;
+    for (const auto& peer : status.missingPeers)
+        missing.push_back (peer.toStdString());
+    return deckAudioLinked (map, decks, missing);
+}
 }

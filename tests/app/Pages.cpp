@@ -59,6 +59,7 @@ struct FakeView final : a3app::HostView
     a3app::AppConfig running() const override { return runningCfg; }
     juce::String engineProblem() const override { return problem; }
     std::vector<std::string> droppedLinks() const override { return dropped; }
+    juce::String truthNote() const override { return note; }
     juce::File configFile() const override { return file; }
     a3app::LiveLinks liveLinks() const override { return links; }
     void edit (const a3app::AppConfig& c) override { cfg = c; ++edited; }
@@ -85,6 +86,7 @@ struct FakeView final : a3app::HostView
     juce::Result applyResult = juce::Result::ok();
     juce::String problem;
     std::vector<std::string> dropped;
+    juce::String note;
     bool fileExistedAtApply = false;
     int edited = 0, applied = 0, filterSets = 0;
 };
@@ -195,6 +197,8 @@ TEST_F (Pages, StatusPagePaintsEveryState)
     for (int i = 1; i <= 41; ++i)
         view.state.missingPeers.push_back ("AES67 deck B:out_" + juce::String (i));
     view.dropped = { "deckA_cue_L -> x:y", "deckA_cue_R -> x:y", "deckB_aux_L -> p:q", "deckB_aux_R -> p:q", "deckB_cue_L -> r:s" };
+    view.dropped.push_back ("deckC_cue_L -> r:s");
+    view.note = "the truth has no engine.deck-audio: deck audio reports are off";
     paint ("status-grouped-and-dropped");
     view.state.connecting = false;
     view.runDevice();

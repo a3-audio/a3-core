@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <gtest/gtest.h>
+#include <algorithm>
 #include "DeckAudioReport.h"
 #include "a3-links/LinkPlan.h"
 
@@ -58,4 +59,19 @@ TEST (EngineStatus, ReturningPeerIsRelinked)
     EXPECT_TRUE (back.missingPeers.empty());
     EXPECT_NE (std::find (back.add.begin(), back.add.end(), a3::links::Link { "AES67 deck B:out_1", "a3-engine:deckB_1" }), back.add.end());
     EXPECT_EQ (a3app::deckAudioLinked (map, 2, back.missingPeers), (Bits { true, true }));
+}
+
+TEST (DeckAudioState, NothingIsReportedBeforeTheFirstLinkPlan)
+{
+    a3app::BackendStatus status;
+    status.connecting = true;
+    EXPECT_FALSE (a3app::deckAudioReport (status, twoDecks(), 2).has_value()) << "an empty missing list before the plan is not 'all live'";
+
+    status.linksPlanned = true;
+    EXPECT_EQ (a3app::deckAudioReport (status, twoDecks(), 2), (std::optional<Bits> { Bits { true, true } }));
+    status.missingPeers = { "AES67 deck B:out_1" };
+    EXPECT_EQ (a3app::deckAudioReport (status, twoDecks(), 2), (std::optional<Bits> { Bits { true, false } }));
+
+    status.connecting = false;   // --no-connect: no links to report on
+    EXPECT_FALSE (a3app::deckAudioReport (status, twoDecks(), 2).has_value());
 }

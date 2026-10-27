@@ -43,15 +43,35 @@ juce::String missingText (const std::vector<std::string>& missingPorts)
     return parts.isEmpty() ? juce::String ("none") : parts.joinIntoString (", ");
 }
 
-juce::String droppedText (const std::vector<std::string>& droppedLinks)
+juce::String droppedText (const std::vector<std::string>& droppedLinks, int maxLines)
 {
     if (droppedLinks.empty())
         return "none";
-    const auto count = (int) droppedLinks.size();
-    juce::String text = juce::String (count) + (count == 1 ? " retired link dropped:" : " retired links dropped:");
+    // "deckA_cue_L -> x:y" joins the line of deckA; anything else keeps a line of its own.
+    std::vector<std::pair<std::string, std::string>> groups;
     for (const auto& link : droppedLinks)
-        text << "\n" << link;
-    return text;
+    {
+        const auto port = link.substr (0, link.find (" -> "));
+        const auto cut = port.find ('_');
+        const bool deckPort = port.rfind ("deck", 0) == 0 && cut != std::string::npos;
+        const auto key = deckPort ? port.substr (0, cut) : link;
+        const auto item = deckPort ? port.substr (cut + 1) : std::string();
+        auto same = std::find_if (groups.begin(), groups.end(), [&] (const auto& g) { return g.first == key; });
+        if (same == groups.end())
+            same = groups.insert (groups.end(), { key, "" });
+        same->second += (same->second.empty() ? "" : " ") + item;
+    }
+    const auto count = (int) droppedLinks.size();
+    juce::StringArray lines { juce::String (count) + (count == 1 ? " retired link dropped:" : " retired links dropped:") };
+    for (const auto& [key, items] : groups)
+        lines.add (items.empty() ? juce::String (key) : juce::String (key) + ": " + items);
+    if (lines.size() > maxLines)
+    {
+        const int hidden = lines.size() - juce::jmax (1, maxLines - 1);
+        lines.removeRange (juce::jmax (1, maxLines - 1), hidden);
+        lines.add ("+" + juce::String (hidden) + " more");
+    }
+    return lines.joinIntoString ("\n");
 }
 
 namespace
@@ -135,6 +155,7 @@ void StatusPage::refresh()
     status = view.status();
     problem = view.engineProblem();
     dropped = view.droppedLinks();
+    truthWarning = view.truthNote();
     heard = view.coreHeard();
     sinceCore = view.secondsSinceCore();
     gate = view.gateOpen();
@@ -182,7 +203,8 @@ void StatusPage::paint (juce::Graphics& g)
     }
     line ("GATE", gateText + (gate ? "   (Core: open)" : "   (Core: closed)"), anyOpen ? palette::running : palette::textMuted);
 
-    line ("AUDIO", juce::String (juce::roundToInt (status.sampleRate)) + " Hz, " + juce::String (status.blockSize) + " frames", palette::text);
+    const auto audioText = juce::String (juce::roundToInt (status.sampleRate)) + " Hz, " + juce::String (status.blockSize) + " frames";
+    line ("AUDIO", truthWarning.isEmpty() ? audioText : audioText + "   (" + truthWarning + ")", palette::text);
     constexpr float loadWarn = 70.0f, loadDanger = 90.0f;
     line ("DSP LOAD", juce::String (status.dspLoadPercent, 1) + " %",
           status.dspLoadPercent >= loadDanger ? palette::danger : status.dspLoadPercent >= loadWarn ? palette::caution : palette::text);
@@ -198,6 +220,7 @@ void StatusPage::paint (juce::Graphics& g)
     g.setColour (palette::textMuted);
     g.drawText ("DROPPED", rest.removeFromLeft (rest.getWidth() / 4), juce::Justification::topLeft, true);
     g.setColour (none ? palette::textMuted : palette::caution);
-    g.drawFittedText (droppedText (dropped), rest, juce::Justification::topLeft, juce::jmax (1, (int) ((float) rest.getHeight() / ((float) row * 0.65f))), 0.8f);
+    const int maxLines = juce::jmax (2, (int) ((float) rest.getHeight() / ((float) row * 0.65f)));
+    g.drawFittedText (droppedText (dropped, maxLines), rest, juce::Justification::topLeft, maxLines, 0.8f);
 }
 }

@@ -179,6 +179,18 @@ TEST_F (EngineOsc, ReadsCoresAddressesAndTheHello)
     EXPECT_FALSE (error.isEmpty());
 }
 
+TEST_F (EngineOsc, ATruthWithoutDeckAudioStillParsesAndSaysSo)
+{
+    EXPECT_EQ (engineTruth().deckAudioPattern, "/engine/deck/{deck}/audio");
+    EXPECT_TRUE (a3app::truthNote (engineTruth()).isEmpty());
+
+    juce::String error;
+    const auto old = a3app::parseEngineTruth (a3apptest::truthText().replace ("\"engine.deck-audio\"", "\"engine.deck-other\""), error);
+    ASSERT_TRUE (old.has_value()) << error;
+    EXPECT_TRUE (old->deckAudioPattern.isEmpty());
+    EXPECT_TRUE (a3app::truthNote (*old).contains ("engine.deck-audio"));
+}
+
 // The brief's list in one place; the tests after it go through each kind in turn.
 TEST_F (EngineOsc, GarbageIsRefusedOrClamped)
 {

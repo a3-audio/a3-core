@@ -67,6 +67,7 @@ private:
     std::atomic<jack_nframes_t> lastBlockFrames { 0 };
 
     std::unique_ptr<a3::links::JackLinker> linker;   // exists while the client is open
+    bool linksPlanned = false;
     double lastConnectSeconds = -1.0e9;
 };
 }
