@@ -183,3 +183,21 @@ TEST (LinkPlan, KnowsWhichOwnPortsTakeAudioIn)
     EXPECT_TRUE (a3::links::isInputPort ("analog_1", rigInputs));
     EXPECT_FALSE (a3::links::isInputPort ("main_top_1", rigInputs));
 }
+
+// `a3-core --links` counts the configured links that have nowhere to land. A link whose missing end is our
+// own port is not one: that is "the engine is not running", said on its own.
+TEST (LinkPlan, CountsLinksWhoseTargetIsMissing)
+{
+    EXPECT_EQ (a3::links::linksWithMissingTarget (rigMap(), rigPorts()), 0u);
+
+    Ports withoutCard = rigPorts();
+    withoutCard.erase (std::remove (withoutCard.begin(), withoutCard.end(), "system:playback_1"), withoutCard.end());
+    EXPECT_EQ (a3::links::linksWithMissingTarget (rigMap(), withoutCard), 1u);   // main_top_1 -> playback_1
+
+    auto direct = rigMap();
+    direct.directLinks = { { "system:capture_9", "beat-analyzer:vu_a" }, { "system:capture_1", "beat-analyzer:in_1" } };
+    EXPECT_EQ (a3::links::linksWithMissingTarget (direct, rigPorts()), 1u);   // capture_9 is not there
+
+    // No engine in the graph: its ports are not "missing targets".
+    EXPECT_EQ (a3::links::linksWithMissingTarget (rigMap(), { "system:capture_1", "system:playback_1" }), 1u);   // only StemDeck-A:rec_in_L
+}

@@ -32,6 +32,11 @@ ConnectionPlan planConnections (const LinkMap& wanted, const std::vector<Link>& 
                                 const std::vector<std::string>& existingPorts, const std::vector<std::string>& ownInputs,
                                 const std::string& client = "a3-engine");
 
+// How many of the map's links have a port that is not in the graph. Our own ports do not count: with
+// us absent they all are, and that is a different thing to say. Direction plays no part, so no ownInputs.
+std::size_t linksWithMissingTarget (const LinkMap& wanted, const std::vector<std::string>& existingPorts,
+                                    const std::string& client = "a3-engine");
+
 // The links we still own: the ones we made that are still live. A link that died with a peer's
 // port is no one's; when it is made again it is owned again.
 std::vector<Link> stillOwned (const std::vector<Link>& madeByUs, const std::vector<Link>& live);

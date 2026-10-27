@@ -5,7 +5,7 @@
 # the program's command line, its roles and the supervisor): always built, the tests link them.
 add_library(a3-engine-app-lib STATIC EngineHost.cpp OscVocabulary.cpp HelloSender.cpp DeckAudioReport.cpp
     ConfigFile.cpp EnginePorts.cpp IoMap.cpp ConnectionPlan.cpp DeviceBackend.cpp AppArgs.cpp ConfigEdits.cpp SessionRestart.cpp
-    ProgramArgs.cpp Roles.cpp Supervisor.cpp Subcommands.cpp EngineControlApi.cpp WindowProcess.cpp ui/RemoteHostView.cpp ui/LoopbackHttp.cpp ui/CoreClient.cpp ui/MonitorTable.cpp
+    ProgramArgs.cpp Roles.cpp Supervisor.cpp Subcommands.cpp LinksOverview.cpp EngineControlApi.cpp WindowProcess.cpp ui/RemoteHostView.cpp ui/LoopbackHttp.cpp ui/CoreClient.cpp ui/MonitorTable.cpp
     ui/MonitorTrafficPage.cpp ui/MonitorTruthPage.cpp ui/MonitorUnknownPage.cpp ui/MonitorRegisterPage.cpp ui/MonitorBenchPage.cpp
     ui/AudioPage.cpp ui/StatusPage.cpp ui/MainWindow.cpp
     ui/ChannelsPage.cpp ui/ZonesPage.cpp ui/IoPage.cpp ui/CalibrationPage.cpp ui/FilterPage.cpp ui/SaveBar.cpp
@@ -19,7 +19,7 @@ target_compile_options(a3-engine-app-lib PRIVATE -Wall -Wextra -Werror=switch)
 # (pipewire-jack on the rig). The target is a3-core-app (a3-core-lib is the Core library); its file is a3-core.
 option(A3_ENGINE_APP "Build a3-core, the program (needs libjack)" ON)
 if(A3_ENGINE_APP)
-    add_executable(a3-core-app Main.cpp EngineRole.cpp JackBackend.cpp)
+    add_executable(a3-core-app Main.cpp EngineRole.cpp JackBackend.cpp LinksCommand.cpp)
     set_target_properties(a3-core-app PROPERTIES OUTPUT_NAME a3-core)
     target_link_libraries(a3-core-app PRIVATE a3-engine-app-lib PkgConfig::JACK)
     target_compile_options(a3-core-app PRIVATE -Wall -Wextra -Werror=switch)

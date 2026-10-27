@@ -244,3 +244,14 @@ TEST (ProgramArgs, Subcommands)
     EXPECT_TRUE (refused ({ "--truth", "host", "core", "extra" }, "--truth"));
     EXPECT_TRUE (refused ({ "--truth", "/some/a3-osc.json" }, "--truth"));   // a file is the engine's --truth
 }
+
+TEST (ProgramArgs, LinksPrintsTheConnections)
+{
+    const auto args = parse ({ "--links" });
+    ASSERT_TRUE (args);
+    EXPECT_EQ (args->role, Role::links);
+    EXPECT_TRUE (refused ({ "--links", "--headless" }, "cannot be combined"));
+    EXPECT_TRUE (refused ({ "--links", "--role", "core" }, "cannot be combined"));
+    EXPECT_TRUE (refused ({ "--links", "--port", "7" }, "--port"));
+    EXPECT_TRUE (refused ({ "--links", "--links" }, "twice"));
+}

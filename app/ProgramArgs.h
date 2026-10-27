@@ -8,6 +8,7 @@
 //   a3-core --role core|engine|window|screencast-fanout|i3-bar [flags]
 //   a3-core --render-truth user|network-file|network
 //   a3-core --truth host NAME | --truth port PROGRAM ROLE
+//   a3-core --links
 #pragma once
 
 #include <optional>
@@ -22,7 +23,7 @@
 
 namespace a3app
 {
-enum class Role { window, core, engine, screencastFanout, i3Bar, supervisor, renderTruth, truthQuery };
+enum class Role { window, core, engine, screencastFanout, i3Bar, supervisor, renderTruth, truthQuery, links };
 
 // The core flags that default to the truth (B1's argparse defaults read a3-osc.json); unset here
 // means "the truth's", which only coreOptions() can know.

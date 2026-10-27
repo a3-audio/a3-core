@@ -64,6 +64,24 @@ ConnectionPlan planConnections (const LinkMap& wanted, const std::vector<Link>& 
     return plan;
 }
 
+std::size_t linksWithMissingTarget (const LinkMap& wanted, const std::vector<std::string>& existingPorts, const std::string& client)
+{
+    const std::set<std::string> existing (existingPorts.begin(), existingPorts.end());
+    const auto ownPrefix = client + ":";
+    const auto strangerMissing = [&] (const std::string& port) {
+        return existing.count (port) == 0 && port.rfind (ownPrefix, 0) != 0;
+    };
+    std::size_t count = 0;
+    for (const auto& [port, peers] : wanted.jack)
+        for (const auto& peer : peers)
+            if (strangerMissing (peer))
+                ++count;
+    for (const auto& [from, to] : wanted.directLinks)
+        if (strangerMissing (from) || strangerMissing (to))
+            ++count;
+    return count;
+}
+
 std::vector<Link> stillOwned (const std::vector<Link>& madeByUs, const std::vector<Link>& live)
 {
     std::vector<Link> owned;
