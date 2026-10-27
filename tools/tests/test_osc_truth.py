@@ -524,7 +524,7 @@ class TheEngineSpeaks(unittest.TestCase):
 
     def test_engine_mode_words_say_deck_four_is_D_and_reaper_words_keep_two(self):
         words = self.truth.addresses()
-        for key in ("channel.source", "channel.source.cursor", "aux-return.source"):
+        for key in ("channel.source", "channel.source.cursor"):
             with self.subTest(key=key):
                 self.assertIn("4 = D", words[key]["meaning"])
         for key in ("stemdeck.bus", "stemdeck.buses"):
@@ -582,3 +582,55 @@ class TheInstalledTruthIsJoined(unittest.TestCase):
             joined = a3_osc.load(TRUTH)
         self.assertNotEqual(joined.fingerprint(), a3_osc.load(TRUTH).fingerprint())
         self.assertEqual(json.loads(joined.canonical())["hosts"]["mixer"], "10.9.9.9")
+
+
+class TheDeckStreams(unittest.TestCase):
+    """Deck B over AES67 (2026-10-27): each StemDeck host sends its deck's 41
+    channels as one stream; the engine tells Core whether its links are live."""
+
+    def setUp(self):
+        self.truth = a3_osc.load(TRUTH)
+
+    def test_deck_groups_are_in_the_aes67_range(self):
+        # 239.69.x.x is the AES67 range the Core's own group already sits in.
+        core = self.truth.host("aes67-core")
+        for name, group in (("aes67-deck-a", "239.69.150.244"),
+                            ("aes67-deck-b", "239.69.150.245")):
+            with self.subTest(name=name):
+                self.assertEqual(self.truth.host(name), group)
+                self.assertTrue(group.startswith("239.69."))
+        hosts = [self.truth.host(n) for n in ("aes67-core", "aes67-deck-a", "aes67-deck-b")]
+        self.assertEqual(len(set(hosts)), 3, core)
+
+    def test_deck_stream_listener_names_41_channels(self):
+        listener = self.truth.listener("aes67", "deck")
+        self.assertEqual((listener["name"], listener["host"], listener["port"]),
+                         ("aes67.deck", "aes67-deck-{deck}", 5004))
+        carries = listener["carries"]
+        for word in ("41 channels", "MAIN1-16", "AUX1-16", "CUE1-9", "L24",
+                     "44.1 kHz", "ptime 0.25 ms", 'sess.name "AES67 deck <X>"',
+                     "net.mtu = 1500"):
+            with self.subTest(word=word):
+                self.assertIn(word, carries)
+        for letter in "ab":
+            self.assertIn(f"aes67-deck-{letter}", self.truth._data["hosts"])
+
+    def test_engine_deck_audio_is_engine_to_core(self):
+        entry = self.truth.addresses()["engine.deck-audio"]
+        self.assertEqual((entry["pattern"], entry["args"], entry["deck"],
+                          entry["from"], entry["to"]),
+                         ("/engine/deck/{deck}/audio", "i", [1, 4], ["engine"], ["core"]))
+        self.assertEqual(self.truth.address("engine.deck-audio", deck=3),
+                         "/engine/deck/3/audio")
+        self.assertEqual(self.truth.match("/engine/deck/2/audio"),
+                         ("engine.deck-audio", {"deck": 2}))
+        self.assertIsNone(self.truth.match("/engine/deck/5/audio"))
+
+    def test_return_source_means_analog_or_delay(self):
+        words = self.truth.addresses()
+        source = words["aux-return.source"]["meaning"]
+        mode = words["aux-return.stem.mode"]["meaning"]
+        self.assertIn("0 = analog 11/12", source)
+        self.assertIn("1 = the delay", source)
+        self.assertNotIn("deck k's AUX", source)
+        self.assertIn("1 = DELAY", mode)

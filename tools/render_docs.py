@@ -51,12 +51,27 @@ def vu_table(truth):
     return "\n".join(rows)
 
 
+def _address_of(truth, host):
+    """A host written "name-{deck}" stands for one host a deck letter
+    (aes67-deck-a, aes67-deck-b): all of their addresses."""
+    if "{deck}" not in host:
+        return truth.host(host)
+    import a3_osc   # the caller has put the package lib on sys.path
+    addresses = []
+    for letter in "abcd":
+        try:
+            addresses.append(truth.host(host.replace("{deck}", letter)))
+        except a3_osc.TruthError:
+            continue
+    return ", ".join(addresses)
+
+
 def ports_table(truth):
     rows = [_row(["Program", "Role", "Host", "Port", "Carries"]),
             _row(["---"] * 5)]
     for listener in truth.listeners():
         host = listener["host"]
-        address = truth.host(host)
+        address = _address_of(truth, host)
         rows.append(_row([listener["program"], listener["role"],
                           f"{host} ({address})", str(listener["port"]),
                           listener.get("carries", "")]))
