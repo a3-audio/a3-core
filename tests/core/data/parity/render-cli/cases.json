@@ -1,0 +1,145 @@
+[
+ {
+  "name": "user-shipped",
+  "argv": [
+   "user"
+  ],
+  "env": {},
+  "exit": 0
+ },
+ {
+  "name": "user-again",
+  "argv": [
+   "user"
+  ],
+  "env": {},
+  "exit": 0
+ },
+ {
+  "name": "user-network-refused",
+  "argv": [
+   "user"
+  ],
+  "env": {
+   "A3_NETWORK": "@HOME@/bad.json"
+  },
+  "exit": 0
+ },
+ {
+  "name": "user-network-joined",
+  "argv": [
+   "user"
+  ],
+  "env": {
+   "A3_NETWORK": "@HOME@/net.json"
+  },
+  "exit": 0
+ },
+ {
+  "name": "user-no-audio",
+  "argv": [
+   "user"
+  ],
+  "env": {
+   "A3_NETWORK": "@HOME@/net.json"
+  },
+  "exit": 0
+ },
+ {
+  "name": "network-file-first",
+  "argv": [
+   "network-file"
+  ],
+  "env": {},
+  "exit": 0
+ },
+ {
+  "name": "network-file-kept",
+  "argv": [
+   "network-file"
+  ],
+  "env": {},
+  "exit": 0
+ },
+ {
+  "name": "network-file-refused",
+  "argv": [
+   "network-file"
+  ],
+  "env": {
+   "A3_NETWORK": "@HOME@/bad.json"
+  },
+  "exit": 0
+ },
+ {
+  "name": "network-shipped",
+  "argv": [
+   "network"
+  ],
+  "env": {},
+  "exit": 0
+ },
+ {
+  "name": "network-moved",
+  "argv": [
+   "network"
+  ],
+  "env": {
+   "A3_NETWORK": "@HOME@/net.json"
+  },
+  "exit": 0
+ },
+ {
+  "name": "network-refused",
+  "argv": [
+   "network"
+  ],
+  "env": {
+   "A3_NETWORK": "@HOME@/bad.json"
+  },
+  "exit": 0
+ },
+ {
+  "name": "network-refused-comma",
+  "argv": [
+   "network"
+  ],
+  "env": {
+   "A3_NETWORK": "@HOME@/bad.json"
+  },
+  "exit": 0
+ },
+ {
+  "name": "network-refused-lines",
+  "argv": [
+   "network"
+  ],
+  "env": {
+   "A3_NETWORK": "@HOME@/bad.json"
+  },
+  "exit": 0
+ },
+ {
+  "name": "usage-nothing",
+  "argv": [],
+  "env": {},
+  "exit": 2
+ },
+ {
+  "name": "usage-unknown",
+  "argv": [
+   "bogus"
+  ],
+  "env": {},
+  "exit": 2
+ },
+ {
+  "name": "usage-two",
+  "argv": [
+   "user",
+   "network"
+  ],
+  "env": {},
+  "exit": 2
+ }
+]

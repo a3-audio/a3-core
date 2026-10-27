@@ -104,7 +104,7 @@ bindsym $mod+a focus parent
 set $ws1 "1:MOTION"
 set $ws2 "2:STEMDECK"
 set $ws3 "3:ENGINE"
-set $ws4 "4:QJACKCTL"
+set $ws4 "4"
 set $ws5 "5:SCARLETT"
 set $ws6 "6:STEMDECK B"
 set $ws7 "7:DESK"
@@ -188,11 +188,8 @@ bindsym $mod+Shift+s exec --no-startup-id maim --select | xclip -selection clipb
 #exec eval $(ssh-agent -s)
 #exec /usr/bin/find ~/.ssh/ -type f -exec grep -l "PRIVATE" {} \; | xargs ssh-add &> /dev/null
 
-#exec /usr/bin/qjackctl
-#exec /usr/bin/sleep 10 && /usr/bin/qjackctl
 #exec /usr/bin/thunar --daemon
 #exec /usr/bin/sleep 2 && /usr/bin/mixxx
-#exec /usr/bin/sleep 2 &&/home/aaa/opt/REAPER/reaper
 exec /usr/bin/xset s 0 0 &
 exec /usr/bin/xset s off &
 exec /usr/bin/xset s noblank &
@@ -207,9 +204,7 @@ exec /usr/bin/xrandr --dpi 120 &
 #exec /home/aaa/a3-core.lokal/alsa-scarlett-gui &
 
 for_window [class="A3 Motion UI"] move container to workspace number $ws1
-for_window [class="a3-engine"] move container to workspace number $ws3
-for_window [class="REAPER"] move container to workspace number $ws3
-for_window [class="QjackCtl"] move container to workspace number $ws4
+for_window [class="a3-core"] move container to workspace number $ws3
 for_window [title="Scarlett 18i20 USB"] move container to workspace number $ws5
 # The virtual desk (a3-desk), on its own workspace (2026-10-25); the bar shows
 # there, since the desk has no way back to the other workspaces itself.

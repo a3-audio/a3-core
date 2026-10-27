@@ -1,0 +1,22 @@
+{
+ "stages": [
+  {
+   "name": "dec_booth PurestGain (8 pair instances, one per channel pair)",
+   "db": -0.1564,
+   "kind": "fixed"
+  },
+  {
+   "name": "booth output fader (muted at template rest)",
+   "db": -30.88,
+   "kind": "plan4"
+  }
+ ],
+ "topDirections": [
+  [29.5, 0],
+  [-29.5, 0],
+  [-90, 0],
+  [-150.5, 0],
+  [150.5, 0],
+  [90, 0]
+ ]
+}

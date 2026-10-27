@@ -1,0 +1,17 @@
+{
+ "about": "A deck's hello: Core learns where it listens, marks it present and tells it its 3D (neutral while on no channel, the channel's 3D once it plays one). A hello of the same deck from a new host re-learns it: said once, and the deck's words go to the new host from then on.",
+ "steps": [
+ {"at": 0.1, "from": ["127.0.0.1", 41000], "osc": ["/engine/hello", ["s", "boot-1"]]},
+ {"at": 0.2, "from": ["127.0.0.2", 6000], "osc": ["/stemdeck/1/hello", ["s", "deck-a"]]},
+ {"at": 0.3, "from": ["192.168.8.11", 50001], "osc": ["/channel/1/3d", ["s", "0.3"]]},
+ {"at": 0.35, "from": ["192.168.8.11", 50001], "osc": ["/channel/1/stem/turn", ["s", "1"]]},
+ {"at": 0.4, "from": ["192.168.8.11", 50001], "osc": ["/channel/1/stem/push", ["s", "1"]]},
+ {"at": 0.45, "from": ["192.168.8.11", 50001], "osc": ["/channel/1/3d", ["s", "0.7"]]},
+ {"at": 1.2, "from": ["127.0.0.2", 6000], "osc": ["/stemdeck/1/hello", ["s", "deck-a"]]},
+ {"at": 1.5, "from": ["192.168.8.30", 6100], "osc": ["/stemdeck/1/hello", ["s", "deck-a"]]},
+ {"at": 1.6, "from": ["192.168.8.11", 50001], "osc": ["/channel/1/3d", ["s", "0.2"]]},
+ {"at": 1.7, "from": ["127.0.0.2", 6000], "osc": ["/stemdeck/9/hello", ["s", "deck-x"]]},
+ {"at": 1.8, "tick": true},
+ {"at": 2.0, "flush": true}
+ ]
+}

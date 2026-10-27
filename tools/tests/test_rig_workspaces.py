@@ -1,12 +1,12 @@
 """The rig's workspaces: which program lives where, and where i3bar shows.
 
-Decided 2026-09-30: 1 A3 Motion, 2 StemDeck, 3 REAPER (the engine window since 2026-10-26, renamed ENGINE), 4 QjackCtl, 5 the
-Scarlett mixer; 7 the virtual desk (A3 Desk, since 2026-10-25). The two touch UIs fill their 768x1024 screen and switch
+Decided 2026-09-30: 1 A3 Motion, 2 StemDeck, 3 REAPER (the engine window since 2026-10-26, renamed ENGINE), 4 QjackCtl
+(gone with REAPER on 2026-10-27; the workspace keeps its number, labelled "4"), 5 the Scarlett mixer;
+7 the virtual desk (A3 Desk, since 2026-10-25). The two touch UIs fill their 768x1024 screen and switch
 between each other themselves; from workspace 3 on, i3bar at the top gives
-the way back -- a3-bar-per-workspace shows it there and hides it on 1 and 2.
+the way back -- the a3-core program's i3-bar role shows it there and hides it on 1 and 2.
 """
 
-import importlib.util
 import re
 import unittest
 from pathlib import Path
@@ -14,14 +14,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core/home/aaa"
 I3_CONFIG = PACKAGE / ".local/share/a3-core/config/i3/config"
-BAR_SCRIPT = PACKAGE / ".local/bin/a3-bar-per-workspace.py"
-
-
-def load_bar_script():
-    spec = importlib.util.spec_from_file_location("a3_bar_per_workspace", BAR_SCRIPT)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+#: The a3-core program's window class: JUCE's getApplicationName().
+PROGRAM_CLASS = "a3-core"
 
 
 def workspace_variables(config):
@@ -39,25 +33,6 @@ def workspace_of(config, criteria):
     return None
 
 
-class BarPerWorkspace(unittest.TestCase):
-    def setUp(self):
-        self.bar = load_bar_script()
-
-    def test_the_two_uis_have_the_whole_screen(self):
-        for name in ("1:MOTION", "2:STEMDECK", "1", "2"):
-            self.assertEqual(self.bar.bar_mode(name), "invisible", name)
-
-    def test_from_workspace_three_on_the_bar_shows(self):
-        for name in ("3:ENGINE", "4:QJACKCTL", "5:SCARLETT", "7:DESK", "7"):
-            self.assertEqual(self.bar.bar_mode(name), "dock", name)
-
-    def test_deck_b_has_the_whole_screen_too(self):
-        self.assertEqual(self.bar.bar_mode("6:STEMDECK B"), "invisible")
-
-    def test_a_workspace_without_a_number_keeps_the_bar_away(self):
-        self.assertEqual(self.bar.bar_mode("scratch"), "invisible")
-
-
 class WhereThingsLive(unittest.TestCase):
     def setUp(self):
         self.config = I3_CONFIG.read_text()
@@ -66,15 +41,23 @@ class WhereThingsLive(unittest.TestCase):
         expected = {
             '[class="A3 Motion UI"]': "1:MOTION",
             '[class="StemDeck"]': "2:STEMDECK",
-            '[class="a3-engine"]': "3:ENGINE",
-            '[class="REAPER"]': "3:ENGINE",
-            '[class="QjackCtl"]': "4:QJACKCTL",
+            '[class="a3-core"]': "3:ENGINE",
             '[title="Scarlett 18i20 USB"]': "5:SCARLETT",
             '[class="A3 Desk"]': "7:DESK",
             '[class="StemDeck" title="^StemDeck B$"]': "6:STEMDECK B",
         }
         for criteria, name in expected.items():
             self.assertEqual(workspace_of(self.config, criteria), name, criteria)
+
+    def test_workspace_4_keeps_its_number_and_names_nothing(self):
+        self.assertEqual("4", workspace_variables(self.config)["ws4"])
+
+    def test_the_programs_window_is_matched_by_its_application_name(self):
+        """JUCE sets WM_CLASS to getApplicationName(), which is "a3-core" for
+        the program (a3-engine app/Main.cpp); "a3-engine" is the package, and
+        no window carries that class."""
+        self.assertEqual(workspace_of(self.config, f'[class="{PROGRAM_CLASS}"]'), "3:ENGINE")
+        self.assertNotIn('class="a3-engine"', self.config)
 
     def test_the_one_deck_windows_are_main_windows_not_dialogs(self):
         # 2026-10-26: "StemDeck A" / "StemDeck B" (one deck per instance) floated

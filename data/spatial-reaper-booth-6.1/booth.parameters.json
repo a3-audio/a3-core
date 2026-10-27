@@ -1,0 +1,11 @@
+{
+ "highPassFrequency": 150.0,
+ "inputOrderSetting": 0.0,
+ "lowPassFrequency": 150.0,
+ "lowPassGain": 0.0,
+ "overallGain": 0.0,
+ "swChannel": 1.0,
+ "swMode": 1.0,
+ "useSN3D": 1.0,
+ "weights": 2.0
+}

@@ -17,11 +17,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config" / "debian-x86_64" / "a3-core"
-POSTINST = PACKAGE / "DEBIAN" / "postinst"
-TEMPLATES = PACKAGE / "DEBIAN" / "templates"
+from tools.tests.paths import DEBIAN, PACKAGE
+
+POSTINST = DEBIAN / "postinst"
+TEMPLATES = DEBIAN / "templates"
 TRUTH = PACKAGE / "usr" / "share" / "a3" / "a3-osc.json"
-sys.path.insert(0, str(PACKAGE / "home" / "aaa" / ".local" / "lib"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import a3_osc          # noqa: E402
 import a3_osc_render   # noqa: E402
 VNC = PACKAGE / "home" / "aaa" / ".local" / "share" / "a3-core" / "recipes" / "a3vnc.sh"

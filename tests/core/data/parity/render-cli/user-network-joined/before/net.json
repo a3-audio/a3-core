@@ -1,0 +1,10 @@
+{
+ "hosts": {
+  "core": "10.0.0.2",
+  "mixer": "10.0.0.3",
+  "küche": "10.0.0.77",
+  "日本": "10.0.0.78"
+ },
+ "network": {"address": "10.0.0.2/24", "gateway": "10.0.0.1", "dns": "10.0.0.1"},
+ "meters": {"attack_ms": 5, "release_db_per_second": 17.5, "peak_hold_seconds": 0.35}
+}

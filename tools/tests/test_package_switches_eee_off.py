@@ -16,11 +16,11 @@ that policy with it.
 
 import configparser
 import unittest
-from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config" / "debian-x86_64" / "a3-core"
+from tools.tests.paths import DEBIAN, PACKAGE
+
 DROPIN = PACKAGE / "etc" / "systemd" / "network" / "99-default.link.d" / "a3-eee.conf"
-CONFFILES = PACKAGE / "DEBIAN" / "conffiles"
+CONFFILES = DEBIAN / "conffiles"
 
 
 def parsed():

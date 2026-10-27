@@ -8,20 +8,19 @@ would be a second truth, and the day the rig moved from 192.168.43.x to
 
 import json
 import os
-import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config" / "debian-x86_64" / "a3-core"
-LIB = PACKAGE / "home/aaa/.local/lib"
-TOOL = PACKAGE / "home/aaa/.local/bin/a3-osc-render"
+from tools.tests.paths import DEBIAN, PACKAGE
+
+LIB = Path(__file__).resolve().parents[1] / "lib"
 TRUTH_FILE = PACKAGE / "usr/share/a3/a3-osc.json"
 UNITS = PACKAGE / "home/aaa/.local/share/a3-core/config/systemd/user"
-POSTINST = PACKAGE / "DEBIAN/postinst"
-TEMPLATES = PACKAGE / "DEBIAN/templates"
+POSTINST = DEBIAN / "postinst"
+TEMPLATES = DEBIAN / "templates"
 
 sys.path.insert(0, str(LIB))
 import a3_osc          # noqa: E402
@@ -57,7 +56,6 @@ class NoZitaIsRendered(unittest.TestCase):
 
 
 SYSTEM_UNITS = PACKAGE / "etc/systemd/system"
-RECIPES = PACKAGE / "home/aaa/.local/share/a3-core/recipes"
 
 
 class VncIsRendered(unittest.TestCase):
@@ -80,19 +78,6 @@ class VncIsRendered(unittest.TestCase):
         self.assertIn("-rfbport ${A3_VNC_PORT}", start)
         self.assertNotRegex(start, r"\b\d{4,5}\b")
 
-    def test_the_viewer_recipe_asks_the_truth(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            fake = Path(tmp) / "vncviewer"
-            fake.write_text('#!/bin/sh\necho "$@"\n')
-            fake.chmod(0o755)
-            env = dict(os.environ, A3_OSC_TRUTH=str(TRUTH_FILE),
-                       PATH=f"{tmp}:{os.environ['PATH']}")
-            done = subprocess.run(["bash", str(RECIPES / "a3vnc.sh")], env=env,
-                                  capture_output=True, text=True, check=True)
-        host = TRUTH.host("core")
-        port = TRUTH.port("x11vnc", "vnc")
-        self.assertEqual(f"QualityLevel 2 {host}::{port}", done.stdout.strip())
-
 
 class TheNetworkDefaultsAreRendered(unittest.TestCase):
     def test_the_default_network_is_the_truths(self):
@@ -111,7 +96,7 @@ class TheNetworkDefaultsAreRendered(unittest.TestCase):
 
     def test_postinst_takes_the_default_from_the_tool(self):
         text = POSTINST.read_text()
-        self.assertRegex(text, r'a3-osc-render"? network')
+        self.assertRegex(text, r'/usr/bin/a3-core --render-truth network')
         self.assertNotIn('ADDR="192.168.', text)
 
     def test_the_questions_default_to_the_truth(self):
@@ -144,13 +129,11 @@ class TheAnalyzerTargetsAreRendered(unittest.TestCase):
             with self.subTest(route=route["to"], vu=vu):
                 self.assertEqual(targets[prefix + program], f"{host}:{port}")
 
-    def test_the_mixer_gets_its_meters(self):
-        """Once one OSC_VU_ target exists the analyzer sends /vu to those
-        only -- a program on one port for both needs its OSC_VU_ line too, or
-        its meters stop (the mixer, whose meters sit on its OSC port)."""
+    def test_the_analyzer_gets_no_meter_target(self):
+        """O13: the engine measures the meters and Core sends them on, so the
+        analyzer's conf.d carries clock targets only (no OSC_VU_ line)."""
         targets = pairs(a3_osc_render.analyzer_block(TRUTH))
-        host, port = TRUTH.endpoint("mixer", "osc")
-        self.assertEqual(targets["OSC_VU_mixer"], f"{host}:{port}")
+        self.assertEqual([k for k in targets if k.startswith("OSC_VU_")], [])
 
     def test_nothing_else_is_a_target(self):
         targets = pairs(a3_osc_render.analyzer_block(TRUTH))
@@ -232,48 +215,6 @@ class TheAnalyzerGetsAFileOfItsOwn(unittest.TestCase):
             old.write_text("LOG_LEVEL=1\n")
             a3_osc_render.write_user_files(TRUTH, home)
             self.assertEqual(old.read_text(), "LOG_LEVEL=1\n")
-
-
-class TheToolWritesTheFiles(unittest.TestCase):
-    def run_tool(self, *args, env_extra=None):
-        env = dict(os.environ, A3_OSC_TRUTH=str(TRUTH_FILE), **(env_extra or {}))
-        return subprocess.run([sys.executable, str(TOOL), *args], env=env,
-                              check=True, capture_output=True, text=True)
-
-    def test_user_writes_the_env_file_and_the_analyzers_file(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp)
-            self.run_tool("user", env_extra={"HOME": str(home)})
-            env_file = home / ".config/a3/osc.env"
-            self.assertEqual(env_file.read_text(), a3_osc_render.osc_env(TRUTH))
-            analyzer = home / ".config/beat-analyzer/conf.d/50-a3-osc.env"
-            self.assertEqual(analyzer.read_text(), a3_osc_render.analyzer_block(TRUTH))
-            self.assertFalse((home / "a3-system").exists())
-
-    def test_a_refused_network_file_is_said(self):
-        # Final review 2026-10-02: the postinst would configure the interface
-        # from the package's values without a word about the maintainer's file.
-        with tempfile.TemporaryDirectory() as tmp:
-            broken = Path(tmp) / "network.json"
-            broken.write_text("{")
-            done = self.run_tool("network", env_extra={"A3_NETWORK": str(broken)})
-        self.assertIn("network.json", done.stderr)
-        self.assertIn("refused", done.stderr)
-
-    def test_network_prints_shell_assignments(self):
-        out = self.run_tool("network").stdout
-        self.assertEqual(out, a3_osc_render.network_defaults(TRUTH))
-
-    def test_postinst_renders_for_the_user(self):
-        self.assertRegex(POSTINST.read_text(), r'a3-osc-render"? user')
-
-    def test_postinst_creates_the_network_file_as_the_user(self):
-        self.assertRegex(POSTINST.read_text(), r'sudo -u "\$APPUSER" -H [^\n]*a3-osc-render"? network-file')
-
-    def test_postinst_renders_the_users_network_as_root(self):
-        self.assertRegex(POSTINST.read_text(),
-                         r'(?m)A3_NETWORK="\$\{USER_HOME\}/\.config/a3/network\.json" [^\n]*a3-osc-render"? network$')
-
 
 
 class TheNetworkFile(unittest.TestCase):

@@ -16,12 +16,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config/debian-x86_64/a3-core"
+from tools.tests.paths import DEBIAN, PACKAGE
+
 UNITS = PACKAGE / "home/aaa/.local/share/a3-core/config/systemd/user"
 DROP_IN = UNITS / "beat-analyzer.service.d/a3-core.conf"
 USER_INSTALL = PACKAGE / "home/aaa/.local/share/a3-core/recipes/user_install.sh"
-CONTROL = PACKAGE / "DEBIAN/control"
-POSTINST = PACKAGE / "DEBIAN/postinst"
+CONTROL = DEBIAN / "control"
+POSTINST = DEBIAN / "postinst"
 
 OLD_UNIT = """[Unit]
 Description=beat-analyzer (bpm & vu-meters)
@@ -41,8 +42,9 @@ def section(path, name):
 
 
 def control_field(name):
+    """The package names in a control field, without their versions."""
     match = re.search(rf"^{name}: (.*)$", CONTROL.read_text(), re.MULTILINE)
-    return [part.strip() for part in match.group(1).split(",")] if match else []
+    return [part.split("(")[0].strip() for part in match.group(1).split(",")] if match else []
 
 
 def postinst_function(name):
@@ -73,10 +75,9 @@ class TheUnitIsThePackages(unittest.TestCase):
 
 
 class NothingBuildsTheCheckout(unittest.TestCase):
-    def test_the_user_install_does_not_build_the_analyzer(self):
-        text = USER_INSTALL.read_text()
-        self.assertNotIn("build.sh", text)
-        self.assertNotIn("beat-analyzer/build", text)
+    def test_the_user_install_that_built_it_is_gone(self):
+        # It went with REAPER, which it also installed (2026-10-27).
+        self.assertFalse(USER_INSTALL.exists())
 
 
 class ThePackageIsAsked(unittest.TestCase):

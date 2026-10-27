@@ -24,7 +24,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core"
 TRUTH = PACKAGE / "usr/share/a3/a3-osc.json"
-sys.path.insert(0, str(PACKAGE / "home/aaa/.local/lib"))
+sys.path.insert(0, str(ROOT / "tools/lib"))
 
 import a3_osc   # noqa: E402
 
@@ -68,24 +68,47 @@ class ThePorts(unittest.TestCase):
     def test_who_listens_where(self):
         t = truth()
         self.assertEqual(t.port("core", "osc"), 9000)
-        self.assertEqual(t.port("core", "reaper-feedback"), 9002)
         self.assertEqual(t.port("motion", "osc"), 7771)
         self.assertEqual(t.port("motion", "vu"), 7772)
         self.assertEqual(t.port("motion", "energy"), 7777)
         self.assertEqual(t.port("mixer", "osc"), 7772)
         self.assertEqual(t.port("beat-analyzer", "clock"), 7775)
-        self.assertEqual(t.port("reaper", "osc"), 9001)
-        self.assertEqual(t.port("dualdelay", "osc"), 1340)
         self.assertEqual(t.port("prolink", "announce"), 50000)
 
     def test_the_engine_bench_listens_on_the_first_free_port_above_core(self):
-        """9004: the lowest port above 9000 that no listener holds (2026-10-16)."""
+        """9004: the lowest port above 9000 that no listener held (2026-10-16).
+        REAPER's 9002 is free again since 2026-10-27; the engine stays where
+        every device already sends to it."""
         t = truth()
         self.assertEqual(t.port("engine", "osc"), 9004)
         self.assertIn("engine", t.programs())
         others = [l["port"] for l in t.listeners() if l["name"] != "engine.osc"]
         self.assertNotIn(9004, others)
-        self.assertEqual([p for p in range(9001, 9004) if p not in others], [])
+
+    def test_no_reaper_ports(self):
+        """REAPER left the Core on 2026-10-27, and with it the receivers that
+        lived inside its project: its own OSC port, Core's feedback port, the
+        IEM MultiEncoders' and the DualDelay's."""
+        t = truth()
+        gone = ("reaper", "dualdelay")
+        self.assertEqual([p for p in t.programs() if p in gone], [])
+        self.assertEqual([l["name"] for l in t.listeners()
+                          if l["program"] in gone or "reaper" in l["name"]
+                          or l["name"].startswith("iem.multiencoder-")], [])
+        self.assertEqual([r for r in t.routes()
+                          if r["from"] in gone or "reaper" in r["to"]
+                          or r["to"].split(".")[0] in gone
+                          or r["to"].startswith("iem.multiencoder-")], [])
+        self.assertNotIn("reaper", t.external())
+
+    def test_motion_energy_stays(self):
+        """Motion still reads its energy listener; the IEM vocabulary stays
+        with it."""
+        t = truth()
+        self.assertEqual(t.port("motion", "energy"), 7777)
+        self.assertIn({"from": "iem", "to": "motion.energy"}, t.routes())
+        self.assertIn("iem", t.programs())
+        self.assertIn("iem", t.external())
 
     def test_no_two_listeners_on_one_host_and_port(self):
         # "any", "local" and "core" are one machine: a port bound on all of
@@ -317,6 +340,13 @@ class TheVuRange(unittest.TestCase):
     def test_the_range_covers_every_meter(self):
         t = truth()
         self.assertEqual(t.index_range("vu", "n"), (1, len(t.vu_meters())))
+
+    def test_the_meaning_names_no_reaper_outputs(self):
+        """The engine measures the meters since the cut; the REAPER outputs
+        the patchbay once fed the analyzer are history, not a contract."""
+        meaning = truth().data()["addresses"]["vu"]["meaning"]
+        self.assertNotIn("REAPER out", meaning)
+        self.assertNotIn("until the cut", meaning)
 
 
 class TheCueWords(unittest.TestCase):
@@ -634,3 +664,68 @@ class TheDeckStreams(unittest.TestCase):
         self.assertIn("1 = the delay", source)
         self.assertNotIn("deck k's AUX", source)
         self.assertIn("1 = DELAY", mode)
+
+
+B1_TRUTH = Path("/home/aaa/a3-system/wt/parity-baseline/a3-core-7a7b2441f74e") / \
+    "platform-config/debian-x86_64/a3-core/usr/share/a3/a3-osc.json"
+
+#: The vu endpoints the analyzer reached at B1 (a3-core 7a7b244): the set Core
+#: reaches now that the engine measures the meters (O13). Written out, not read
+#: from the baseline export, so the test holds where that export is absent.
+B1_ANALYZER_VU = {"motion.vu", "core.vu-relay", "mixer.osc", "radla.vu"}
+
+
+def _carries_vu(route):
+    return route["to"].endswith(".vu") or route.get("carries") == "vu"
+
+
+class TheMetersComeFromTheEngine(unittest.TestCase):
+    """O13 (2026-10-27): the engine measures /vu, Core forwards, the analyzer
+    sends no meter any more."""
+
+    def setUp(self):
+        self.truth = a3_osc.load(TRUTH)
+        self.routes = self.truth.routes()
+
+    def test_engine_control_is_loopback_http_on_its_own_port(self):
+        listener = self.truth.listener("engine", "control")
+        self.assertEqual(listener["host"], "local")
+        self.assertEqual(listener["port"], 9005)
+        self.assertEqual(listener["name"], "engine.control")
+        self.assertIn("not OSC", listener["carries"])
+        self.assertNotEqual(listener["port"], self.truth.port("engine", "osc"))
+
+    def test_the_b1_set_is_what_b1_says(self):
+        if not B1_TRUTH.exists():
+            self.skipTest("no B1 export")
+        b1 = a3_osc.load(B1_TRUTH)
+        reached = {r["to"] for r in b1.routes()
+                   if r["from"] == "beat-analyzer" and _carries_vu(r)}
+        self.assertEqual(reached, B1_ANALYZER_VU)
+
+    def test_core_sends_the_meters_the_analyzer_sent(self):
+        reached = {r["to"] for r in self.routes
+                   if r["from"] == "core" and _carries_vu(r)}
+        self.assertEqual(reached, (B1_ANALYZER_VU - {"core.vu-relay"}) | {"desk.vu"})
+
+    def test_the_engine_sends_its_meters_to_core(self):
+        self.assertIn({"from": "engine", "to": "core.vu-relay", "carries": "vu"},
+                      self.routes)
+
+    def test_the_analyzer_has_no_vu_route(self):
+        self.assertEqual([r for r in self.routes
+                          if r["from"] == "beat-analyzer" and _carries_vu(r)], [])
+        self.assertNotIn("beat-analyzer", self.truth.addresses()["vu"]["from"])
+
+    def test_vu_has_the_engine_and_stemdeck_as_senders(self):
+        self.assertEqual(self.truth.addresses()["vu"]["from"], ["engine", "stemdeck"])
+        self.assertIn("engine", self.truth.addresses()["vu"]["meaning"])
+
+    def test_vu_numbering_is_unchanged(self):
+        entry = self.truth.addresses()["vu"]
+        self.assertEqual((entry["pattern"], entry["args"], entry["n"]),
+                         ("/vu/{n}", "ff", [1, 66]))
+        self.assertEqual(len(self.truth.vu_meters()), 66)
+        if B1_TRUTH.exists():
+            self.assertEqual(self.truth.vu_meters(), a3_osc.load(B1_TRUTH).vu_meters())
+            self.assertEqual(self.truth.meters(), a3_osc.load(B1_TRUTH).meters())

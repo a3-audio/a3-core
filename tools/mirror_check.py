@@ -54,23 +54,12 @@ DPKG_SUMS = Path("/var/lib/dpkg/info/a3-core.md5sums")
 CONFIG = Path("home/aaa/.local/share/a3-core/config")
 LIVE_CONFIG = Path("home/aaa/.config")
 
-#: Files the applications own -- scan caches, window positions, recent lists.
-#: Never compared, never carried: shipping them is how a February plugin scan
-#: reached a September machine and took the IEM plugins out of REAPER.
+#: Files a program writes for itself -- caches, compiled bytecode. Never
+#: compared, never carried: shipping a scan cache is how a February plugin scan
+#: once reached a September machine. (REAPER's and QjackCtl's own files stood
+#: here until both left the package, 2026-10-27.)
 NEVER = (
-    "reaper-vstplugins64.ini", "reaper-clap-", "reaper-fxtags.ini",
-    "reaper-wndpos.ini", "reaper-recentfx.ini", "reaper-jsfx.ini",
-    "reaper-defpresets.ini", "reaper-extstate.ini", "reaper-midihw",
-    "reaper-themeconfig.ini", "reaper-mouse.ini", "reaper.ini",
     "__pycache__", ".pyc",
-    # QjackCtl stores window geometry and per-device levels in the same file
-    # as its settings, and rewrites it on exit.
-    "QjackCtl.conf",
-    # REAPER's own OSC patterns, beside ours, and what it writes about itself:
-    # the registration, the install revision, its plug-in shell scan.
-    "Default.ReaperOSC", "LogicPad.ReaperOSC", "LogicTouch.ReaperOSC",
-    "reaper-reginfo2.ini", "reaper-install-rev.txt", "reaper-configzip-info",
-    "reaper-vstshells64.ini",
 )
 
 #: Directories that hold shipped files among everything else a home holds.
@@ -101,6 +90,8 @@ def shipped_pairs(package_root=PACKAGE, machine_root="/"):
         if path.is_symlink() or not path.is_file():
             continue
         rel = path.relative_to(package_root)
+        # The maintainer scripts live in packaging/DEBIAN now; the skip keeps an
+        # older tree's DEBIAN/ (dpkg's, never installed as files) out too.
         if rel.parts[0] == "DEBIAN" or skipped(rel):
             continue
         pairs.append((path, machine_root / rel))

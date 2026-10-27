@@ -15,10 +15,10 @@ value without asking.
 import re
 import subprocess
 import unittest
-from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config" / "debian-x86_64" / "a3-core"
-POSTINST = PACKAGE / "DEBIAN" / "postinst"
+from tools.tests.paths import DEBIAN
+
+POSTINST = DEBIAN / "postinst"
 
 # Stand-ins for debconf's shell commands that write down how they were called.
 STUBS = """

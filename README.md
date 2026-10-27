@@ -1,7 +1,9 @@
 # A³ Core
 
+The C++ program `a3-core` (Core, engine, window) is built from this repository too: see `PROGRAM.md`.
+
 The 3D sound server of [A³ Audio](https://github.com/a3-audio/a3-system): a
-Debian x86_64 machine running PipeWire, REAPER and the beat-analyzer. A³ Mixer and
+Debian x86_64 machine running PipeWire, the a3-core program and the beat-analyzer. A³ Mixer and
 A³ Motion control it over OSC. This repository *is* the deployment: the `.deb`
 package tree under `platform-config/debian-x86_64/a3-core/`, not application
 source.
@@ -12,7 +14,7 @@ source.
 - [Configuration](https://a3-audio.github.io/a3-doc/configuration/core.html):
   installing, what the package does, the services, the files
 - [Development](https://a3-audio.github.io/a3-doc/development/core.html):
-  `a3-core.py`, the window, the OSC register
+  the Core, the window, the OSC register
 
 ## Install
 
@@ -31,19 +33,26 @@ The script switches the machine to Debian testing. Updates after that are
 
 A push to `main` builds the package and publishes the apt archive
 (`.github/workflows/pages-deploy.yml`). The version is the last `v*` tag plus
-the commits since it; `python3 tools/package_version.py` prints it. To build by
-hand:
+the commits since it; `python3 tools/package_version.py` prints it.
+
+The package is one: the `a3-core` program (`/usr/bin/a3-core`, built from this
+repository's C++ source) and the deployment payload under
+`platform-config/debian-x86_64/a3-core/`. Its recipe is `packaging/stage`, its
+control file and maintainer scripts are in `packaging/DEBIAN/`, and the
+packages a build needs are listed in `packaging/build-depends`. It takes over
+from the old `a3-engine` package (`Conflicts`/`Replaces`). To build by hand,
+from a clean checkout and with JUCE installed, use the umbrella's builder:
 
 ```sh
-cd platform-config/debian-x86_64 && dpkg-deb --build --root-owner-group a3-core
+python3 /path/to/a3-system/installer/package.py <a3-core checkout> --out <dir> --juce ~/local/juce
 ```
 
-Tests run on a Python with the packages from
-`platform-config/debian-x86_64/a3-core/home/aaa/.local/share/a3-core/recipes/requirements.txt`
-(on a Core: `~/.venv/bin/python3`):
+The package runs no Python. The tests
+and the dev tools are Python on the development machine; they need only the
+standard library, and read the truth through `tools/lib/a3_osc.py`:
 
 ```sh
-~/.venv/bin/python3 -m unittest discover -s tools/tests
+python3 -m unittest discover -s tools/tests
 ```
 
 The OSC register test needs the other A³ repositories checked out beside this

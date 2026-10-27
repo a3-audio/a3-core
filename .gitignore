@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: CC0-1.0
 platform-config/debian-x86_64/a3-core.deb
-platform-config/debian-x86_64/a3-core/home/aaa/.local/share/a3-core/config/REAPER/ProjectTemplates/Backups
 *.swp
 
 # Python-Bytecode. Er wird beim ersten Lauf erzeugt, ist an die
@@ -13,3 +12,7 @@ __pycache__/
 # A VNC password is made on the machine (x11vnc -storepasswd) and is nobody
 # else's: never in the package, never in a commit.
 .vnc/
+
+# The C++ program's build trees.
+build/
+build-*/

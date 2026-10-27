@@ -1,0 +1,164 @@
+{
+ "sources": [
+  [
+   {
+    "strip": 1,
+    "tap": "moving",
+    "side": "L",
+    "gain": 1.0
+   },
+   {
+    "strip": 1,
+    "tap": "moving",
+    "side": "R",
+    "gain": 1.0
+   }
+  ],
+  [
+   {
+    "strip": 2,
+    "tap": "moving",
+    "side": "L",
+    "gain": 1.0
+   },
+   {
+    "strip": 2,
+    "tap": "moving",
+    "side": "R",
+    "gain": 1.0
+   }
+  ],
+  [
+   {
+    "strip": 3,
+    "tap": "moving",
+    "side": "L",
+    "gain": 1.0
+   },
+   {
+    "strip": 3,
+    "tap": "moving",
+    "side": "R",
+    "gain": 1.0
+   }
+  ],
+  [
+   {
+    "strip": 4,
+    "tap": "moving",
+    "side": "L",
+    "gain": 1.0
+   },
+   {
+    "strip": 4,
+    "tap": "moving",
+    "side": "R",
+    "gain": 1.0
+   }
+  ],
+  [
+   {
+    "strip": 1,
+    "tap": "steady",
+    "side": "L",
+    "gain": 1.0
+   },
+   {
+    "strip": 2,
+    "tap": "steady",
+    "side": "L",
+    "gain": 1.0
+   },
+   {
+    "strip": 3,
+    "tap": "steady",
+    "side": "L",
+    "gain": 1.0
+   },
+   {
+    "strip": 4,
+    "tap": "steady",
+    "side": "L",
+    "gain": 1.0
+   }
+  ],
+  [
+   {
+    "strip": 1,
+    "tap": "steady",
+    "side": "R",
+    "gain": 1.0
+   },
+   {
+    "strip": 2,
+    "tap": "steady",
+    "side": "R",
+    "gain": 1.0
+   },
+   {
+    "strip": 3,
+    "tap": "steady",
+    "side": "R",
+    "gain": 1.0
+   },
+   {
+    "strip": 4,
+    "tap": "steady",
+    "side": "R",
+    "gain": 1.0
+   }
+  ],
+  [
+   {
+    "strip": 1,
+    "tap": "steady",
+    "side": "R",
+    "gain": 1.0
+   },
+   {
+    "strip": 2,
+    "tap": "steady",
+    "side": "R",
+    "gain": 1.0
+   },
+   {
+    "strip": 3,
+    "tap": "steady",
+    "side": "R",
+    "gain": 1.0
+   },
+   {
+    "strip": 4,
+    "tap": "steady",
+    "side": "R",
+    "gain": 1.0
+   }
+  ],
+  [
+   {
+    "strip": 1,
+    "tap": "steady",
+    "side": "L",
+    "gain": 1.0
+   },
+   {
+    "strip": 2,
+    "tap": "steady",
+    "side": "L",
+    "gain": 1.0
+   },
+   {
+    "strip": 3,
+    "tap": "steady",
+    "side": "L",
+    "gain": 1.0
+   },
+   {
+    "strip": 4,
+    "tap": "steady",
+    "side": "L",
+    "gain": 1.0
+   }
+  ]
+ ]
+}

@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
-sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local/lib"))
+sys.path.insert(0, str(ROOT / "tools/lib"))
 
 import a3_osc          # noqa: E402
 import second_truth    # noqa: E402
@@ -31,6 +31,18 @@ class TheGuardSees(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text)
             return second_truth.findings({"a3-mixer": repo}, PORTS)
+
+    def test_the_programs_tree_stays_outside_the_guard(self):
+        # The C++ program joined a3-core on 2026-10-27, unguarded before.
+        with tempfile.TemporaryDirectory() as tmp:
+            repos = {}
+            for name in ("a3-core", "a3-mixer"):
+                path = Path(tmp) / name / "src" / "net.cpp"
+                path.parent.mkdir(parents=True)
+                path.write_text('auto core = "192.168.8.10";\n')
+                repos[name] = Path(tmp) / name
+            labels = {label for label, _, _ in second_truth.findings(repos, PORTS)}
+        self.assertEqual(labels, {"a3-mixer/src/net.cpp"})
 
     def test_an_address_in_python(self):
         self.assertTrue(self.found_in("desk.py", 'send("/channel/1/volume", 0.5)\n'))

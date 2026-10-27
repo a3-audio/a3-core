@@ -7,8 +7,8 @@ After=graphical.target
 # with the PartOf= each of them carries -- "when the mother stops, stop too"
 # -- that was a trap in both directions. Stopping one component stopped the
 # mother, and the mother stopping took the other four with it, so a single
-# `systemctl --user stop a3-core` took down JACK, REAPER, qjackctl and the
-# beat-analyzer. There was no way to restart one thing, which is the first
+# `systemctl --user stop a3-core` took down the audio server, the engine of
+# the day and the beat-analyzer. There was no way to restart one thing, which is the first
 # thing anybody wants to do while working on one thing.
 #
 # Wants starts them all the same way and lets each be stopped, restarted or
@@ -17,10 +17,12 @@ After=graphical.target
 # The audio server is not in the group: PipeWire is the user session's, and
 # it runs whether a3-main does or not (jackd and a3-jack are gone since
 # 2026-10-14).
-Wants=qjackctl.service a3-reaper.service a3-engine.service a3-core.service beat-analyzer.service a3-motion.service stemdeck@A.service
-# stemdeck@A.service is the B-format deck A, started only in engine mode (see
-# stemdeck@.service.d/audio-engine.conf). Deck B is not listed: it will run on
-# a3nuc2, over AES67.
+Wants=a3-engine.service a3-core.service a3-core-window.service beat-analyzer.service a3-motion.service stemdeck@A.service
+# a3-engine.service and a3-core-window.service are the program's units, laid
+# into this package from packaging/ beside the deployment.
+# stemdeck@A.service is the B-format deck A. Deck B is not listed: it will run
+# on a3nuc2, over AES67. The two-deck stemdeck.service stays off on a Core
+# (stemdeck.service.d/two-deck-off.conf).
 # a3-motion is listed even though this package does not ship its unit:
 # Wants= on something absent is not an error, and on a machine that has
 # it the group is then whole. On a rig where Motion sits on its own

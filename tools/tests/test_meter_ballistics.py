@@ -19,7 +19,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core"
 TRUTH = PACKAGE / "usr/share/a3/a3-osc.json"
-sys.path.insert(0, str(PACKAGE / "home/aaa/.local/lib"))
+sys.path.insert(0, str(ROOT / "tools/lib"))
 
 import a3_osc   # noqa: E402
 from a3_osc_join import join, read_network   # noqa: E402
@@ -165,10 +165,6 @@ class ALocalOverride(unittest.TestCase):
         joined = join(contract, {"hosts": {}, "network": {},
                                  "meters": {"release_db_per_second": 30}})
         self.assertEqual(joined["meters"], {"attack_ms": 0, "release_db_per_second": 30})
-
-    def test_core_says_a_refused_block(self):
-        core = (PACKAGE / "home/aaa/.local/bin/a3-core.py").read_text()
-        self.assertIn("_truth.meters_problem", core)
 
 
 if __name__ == "__main__":

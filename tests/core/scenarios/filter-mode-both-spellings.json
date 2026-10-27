@@ -1,0 +1,18 @@
+{
+ "about": "The filter mode in both spellings: the desk's word, Motion's number; said back twice to everybody (the word on /filter/led, the number on /filter/mode); a word Core cannot read keeps the mode; the shared filter's values are relayed.",
+ "steps": [
+  {"at": 0.1, "from": ["127.0.0.1", 40001], "osc": ["/device/hello", ["s", "motion"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+  {"at": 0.2, "from": ["192.168.8.11", 50001], "osc": ["/filter/mode", ["s", "high_pass"]]},
+  {"at": 0.25, "from": ["127.0.0.1", 40001], "osc": ["/filter/mode", ["f", 0.0]]},
+  {"at": 0.3, "from": ["192.168.8.11", 50001], "osc": ["/filter/mode", ["s", "garbage"]]},
+  {"at": 0.35, "from": ["127.0.0.1", 40001], "osc": ["/filter/mode", ["T", null]]},
+  {"at": 0.4, "from": ["192.168.8.11", 50001], "osc": ["/filter/mode", ["s", "low_pass"]]},
+  {"at": 0.45, "from": ["127.0.0.1", 40001], "osc": ["/filter/mode", ["i", 1]]},
+  {"at": 0.5, "from": ["127.0.0.1", 40001], "osc": ["/filter/resonance", ["f", 0.4]]},
+  {"at": 0.55, "from": ["192.168.8.11", 50001], "osc": ["/filter/frequency", ["s", "0.6"]]},
+  {"at": 0.6, "from": ["192.168.8.11", 50001], "osc": ["/filter/led", ["s", "x"]]},
+  {"at": 0.65, "from": ["192.168.8.11", 50001], "osc": ["/filter/mode"]},
+  {"at": 3.0, "tick": true},
+  {"at": 3.5, "flush": true}
+ ]
+}

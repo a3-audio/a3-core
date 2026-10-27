@@ -16,8 +16,8 @@ tools/tests/test_osc_register.py.
 `direction` is from Core's side: `in` Core hears it, `out` Core says it
 (itself, as a relay or as an announcement), `both` the two, and `aside` the
 device's traffic that passes Core by. The words we speak but do not own --
-REAPER's, the IEM plug-ins' -- are in the truth without a direction, and are
-listed as `both`: the truth does not say more, and neither does this.
+the IEM plug-ins' -- are in the truth without a direction, and are listed as
+`both`: the truth does not say more, and neither does this.
 """
 
 import json
@@ -99,7 +99,7 @@ def as_text(register):
 
 def main(argv):
     root = Path(__file__).resolve().parents[1]
-    sys.path.insert(0, str(root / f"{PACKAGE}/home/aaa/.local/lib"))
+    sys.path.insert(0, str(root / "tools/lib"))
     import a3_osc
 
     register = build(a3_osc.load(root / TRUTH))

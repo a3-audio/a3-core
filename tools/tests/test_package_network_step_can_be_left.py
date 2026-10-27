@@ -24,9 +24,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config" / "debian-x86_64" / "a3-core"
-POSTINST = PACKAGE / "DEBIAN" / "postinst"
-TEMPLATES = PACKAGE / "DEBIAN" / "templates"
+from tools.tests.paths import DEBIAN
+
+POSTINST = DEBIAN / "postinst"
+TEMPLATES = DEBIAN / "templates"
 
 # The postinst's own functions the network step is made of.
 FUNCTIONS = ("forget_retired_network", "ask_address_questions",

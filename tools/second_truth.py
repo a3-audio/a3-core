@@ -37,8 +37,15 @@ SKIPPED_DIRS = {"tests", "test", "a3-motion-tests", "build", "build-make",
                 "node_modules", "hardware", "docs", "cmake-build-debug",
                 "cmake-build-release", "patches"}
 
+#: Directories (repo-relative) of one repo that stay outside the guard. The C++
+#: program joined a3-core on 2026-10-27; a3-engine was never in REPOS, so its
+#: tree was never guarded. Bringing it under the guard is separate work.
+#: Not a SKIPPED_DIRS entry: other repos have a src/ that stays guarded.
+SKIPPED_REPO_DIRS = {"a3-core": ("src", "app", "bench", "host", "third_party", "tools/parity")}
+
 #: The families of our words. Not `fx`: that family became `filter` on
-#: 2026-09-30, and `/fx/` in code is REAPER's (`/track/N/fx/...`).
+#: 2026-09-30, and `/fx/` in code was REAPER's (`/track/N/fx/...`, gone from
+#: the truth since 2026-10-27).
 OUR_WORDS = re.compile(
     r"^/(channel|master|filter|aux-return|stemdeck|motion|prodj|vu|beat|tap|clockmode|state|device|core)(/|$)")
 IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
@@ -55,8 +62,8 @@ def _is_second_truth(value):
 #: path (relative to its repo, with the repo's name first) -> why it may.
 ALLOWED = {
     # The readers of the truth: their job is to know its shape.
-    "a3-core/platform-config/debian-x86_64/a3-core/home/aaa/.local/lib/a3_osc.py":
-        "the truth's reader in Python",
+    "a3-core/tools/lib/a3_osc.py":
+        "the truth's reader in Python (dev server: tests, render, this guard)",
     "a3-motion-ui/src/a3-motion-engine/OscTruth.cc":
         "the truth's reader in Motion",
     "a3-mixer/software/scripts/a3_mixer_osc.py":
@@ -73,8 +80,6 @@ ALLOWED = {
 
 #: (path, literal) -> why this one literal may stand where it stands.
 ALLOWED_LITERALS = {
-    ("a3-core/platform-config/debian-x86_64/a3-core/home/aaa/.local/lib/a3_core_traffic.py", 50000):
-        "a count of unknown addresses, not a port",
     ("a3-mixer/software/scripts/a3_mixer_truth.py", 7790):
         "the port every device knows before it has a truth (spec truth-from-core)",
     ("a3-mixer/software/scripts/a3_mixer_truth.py", "/core/here"):
@@ -158,10 +163,13 @@ def literals(path):
         return
 
 
-def code_files(repo):
+def code_files(repo, name=None):
+    repo_skipped = tuple(d + "/" for d in SKIPPED_REPO_DIRS.get(name, ()))
     for path in sorted(repo.rglob("*")):
+        relative = path.relative_to(repo)
+        parts = relative.parts
         if path.suffix in CODE and path.is_file() and not path.is_symlink() \
-                and not SKIPPED_DIRS & set(path.relative_to(repo).parts):
+                and not SKIPPED_DIRS & set(parts) and not relative.as_posix().startswith(repo_skipped):
             yield path
 
 
@@ -171,7 +179,7 @@ def findings(repos, ports):
     `repos` maps a repo's name to its checkout; `ports` are the truth's."""
     found = []
     for name, root in sorted(repos.items()):
-        for path in code_files(root):
+        for path in code_files(root, name):
             label = f"{name}/{path.relative_to(root)}"
             if label in ALLOWED:
                 continue
@@ -191,7 +199,7 @@ def truth_ports(truth):
 
 def main(argv):
     root = Path(__file__).resolve().parents[1]
-    sys.path.insert(0, str(root / "platform-config/debian-x86_64/a3-core/home/aaa/.local/lib"))
+    sys.path.insert(0, str(root / "tools/lib"))
     import a3_osc
     truth = a3_osc.load(root / "platform-config/debian-x86_64/a3-core/usr/share/a3/a3-osc.json")
     repos = dict(arg.split("=", 1) for arg in argv) if argv else \

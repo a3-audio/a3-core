@@ -8,12 +8,13 @@ One letter apart, same author, and nothing compared the two. Found
 2026-09-21, see issues/a3-core-zita-bridges-haben-nie-laufen-koennen.md.
 
 Writing this down found a second one the same day: `jack_wait`, which
-a3-reaper and qjackctl wait on since they stopped sleeping, comes from
+a3-reaper and qjackctl waited on once they stopped sleeping, comes from
 `jack-example-tools` -- also absent from Depends. On a fresh install REAPER
-would never have come up.
+would never have come up. The engine's unit waits on it today.
 
 **What counts as started.** Everything reachable from default.target.wants
-through `Wants=`. A unit that is shipped but that nothing starts is not a
+through `Wants=`, the program's own units (packaging/, laid into the package
+by packaging/stage) included. A unit that is shipped but that nothing starts is not a
 promise, so a program it names is not one either.
 
 **What it cannot check.** Which package really ships a program. That is
@@ -23,23 +24,28 @@ failed: a program the units run must have an entry there, and the entry's
 package must be in Depends. A new program in a unit is a question this file
 asks out loud instead of a boot that fails quietly.
 
-Programs under /home are the project's own and are installed by it.
+Programs under /home (or %h, the user's home) are the project's own and are
+installed by it.
 """
 
 import re
 import unittest
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-DEBIAN = ROOT / "platform-config/debian-x86_64/a3-core/DEBIAN"
-UNITS = (ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local"
-         / "share/a3-core/config/systemd/user")
+from tools.tests.paths import DEBIAN, LOCAL, ROOT
+
+UNITS = LOCAL / "share/a3-core/config/systemd/user"
+#: The program's units, beside its recipe; packaging/stage installs them.
+PROGRAM_UNITS = ROOT / "packaging"
 
 #: Present on every Debian system this package can be installed on, so a
 #: Depends entry would say nothing. `Essential: yes` for all but procps, which
 #: is priority important and in every installation that has a systemd user
 #: session to begin with.
 BASE_SYSTEM = "base system"
+
+#: Built and shipped by this package itself (packaging/stage), so not a
+#: Depends of it.
+THIS_PACKAGE = "this package"
 
 PROVIDED_BY = {
     "/bin/bash": BASE_SYSTEM,
@@ -50,11 +56,11 @@ PROVIDED_BY = {
     "/bin/true": BASE_SYSTEM,
     "/usr/bin/pkill": BASE_SYSTEM,
     "/usr/bin/jack_wait": "jack-example-tools",
-    "/usr/bin/qjackctl": "qjackctl",
-    "/usr/bin/python3": "python3",
+    "/usr/bin/a3-core": THIS_PACKAGE,
 }
 
-_EXEC_LINE = re.compile(r"^Exec\w*=[-@:+!]*(\S+)", re.MULTILINE)
+_EXEC_LINE = re.compile(r"^(Exec\w*)=(.*)$")
+_PROGRAM = re.compile(r"^[-@:+!]*(\S+)")
 
 
 def depends():
@@ -77,6 +83,14 @@ def wanted_by(unit_text):
     return names
 
 
+def unit_path(name):
+    """Where the package carries the unit `name`, or None."""
+    for directory in (UNITS, PROGRAM_UNITS):
+        if (directory / name).is_file():
+            return directory / name
+    return None
+
+
 def started_units():
     """Shipped units reachable from default.target.wants through Wants=.
     Names that are not shipped here (a3-motion comes from its own repo) are
@@ -85,28 +99,54 @@ def started_units():
     seen = set()
     while pending:
         name = pending.pop()
-        path = UNITS / name
-        if name in seen or not path.is_file():
+        path = unit_path(name)
+        if name in seen or path is None:
             continue
         seen.add(name)
         pending.extend(wanted_by(path.read_text()))
     return seen
 
 
+def drop_ins(unit):
+    """The unit's drop-ins in the order systemd applies them."""
+    directory = unit.with_name(unit.name + ".d")
+    return sorted(directory.glob("*.conf")) if directory.is_dir() else []
+
+
+def exec_lines(unit):
+    """{"ExecStart": [command, ...], ...} as systemd runs the unit: its own
+    lines, then each drop-in's, an empty value resetting that key. A unit
+    switched by a drop-in (a3-core.service runs the program since the cut)
+    is counted by what it runs, not by the line the drop-in replaced."""
+    lines = {}
+    for path in (unit, *drop_ins(unit)):
+        for line in path.read_text().splitlines():
+            match = _EXEC_LINE.match(line)
+            if match is None:
+                continue
+            key, value = match.group(1), match.group(2).strip()
+            if value:
+                lines.setdefault(key, []).append(value)
+            else:
+                lines[key] = []
+    return lines
+
+
 def programs_run_by(unit_names):
     programs = {}
     for name in unit_names:
-        for program in _EXEC_LINE.findall((UNITS / name).read_text()):
-            programs.setdefault(program, set()).add(name)
+        for commands in exec_lines(unit_path(name)).values():
+            for command in commands:
+                program = _PROGRAM.match(command).group(1)
+                programs.setdefault(program, set()).add(name)
     return programs
 
 
 class WhatIsStarted(unittest.TestCase):
     def test_the_whole_group_is_started(self):
         started = started_units()
-        for unit in ("a3-main.service",
-                     "a3-reaper.service", "qjackctl.service",
-                     "a3-core.service"):
+        for unit in ("a3-main.service", "a3-core.service",
+                     "a3-engine.service", "a3-core-window.service"):
             self.assertIn(unit, started)
 
 
@@ -115,7 +155,7 @@ class EveryProgramIsInstalled(unittest.TestCase):
         self.programs = {
             program: units
             for program, units in programs_run_by(started_units()).items()
-            if not program.startswith("/home/")
+            if not program.startswith(("/home/", "%h/"))
         }
 
     def test_every_program_a_started_unit_runs_is_accounted_for(self):
@@ -131,7 +171,7 @@ class EveryProgramIsInstalled(unittest.TestCase):
             program: PROVIDED_BY[program]
             for program in self.programs
             if program in PROVIDED_BY
-            and PROVIDED_BY[program] != BASE_SYSTEM
+            and PROVIDED_BY[program] not in (BASE_SYSTEM, THIS_PACKAGE)
             and PROVIDED_BY[program] not in declared
         }
         self.assertEqual({}, missing,

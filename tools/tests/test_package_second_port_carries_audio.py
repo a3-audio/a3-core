@@ -18,9 +18,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config" / "debian-x86_64" / "a3-core"
-POSTINST = PACKAGE / "DEBIAN" / "postinst"
-TEMPLATES = PACKAGE / "DEBIAN" / "templates"
+from tools.tests.paths import DEBIAN
+
+POSTINST = DEBIAN / "postinst"
+TEMPLATES = DEBIAN / "templates"
 
 MAIN = "10-a3.network"
 AUDIO = "20-a3-aes67.network"

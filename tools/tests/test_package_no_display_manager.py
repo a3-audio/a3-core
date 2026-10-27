@@ -7,16 +7,15 @@ getty autologin on tty1, then startx. A display manager in this package would
 be a second way to start X fighting the first one for the screen.
 
 xinit and i3 stay in Depends: a Core installed from the bare package, without
-the installer, still runs REAPER under i3.
+the installer, still runs the a3-core window under i3.
 """
 import re
 import unittest
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core"
-CONTROL = PACKAGE / "DEBIAN/control"
-CONFFILES = PACKAGE / "DEBIAN/conffiles"
+from tools.tests.paths import DEBIAN, PACKAGE, ROOT
+
+CONTROL = DEBIAN / "control"
+CONFFILES = DEBIAN / "conffiles"
 
 
 def depends():
@@ -48,6 +47,9 @@ class ThePackageHasNoDisplayManager(unittest.TestCase):
 
 USER_UNITS = PACKAGE / "home/aaa/.local/share/a3-core/config/systemd/user"
 WAIT = "ExecStartPre=/home/aaa/.local/bin/a3-wait-for-the-screen"
+#: The program's window, laid into the package from packaging/; %h is aaa's home.
+WINDOW_UNIT = ROOT / "packaging/a3-core-window.service"
+WINDOW_WAIT = "ExecStartPre=%h/.local/bin/a3-wait-for-the-screen"
 
 
 class WindowsWaitForTheScreen(unittest.TestCase):
@@ -57,10 +59,12 @@ class WindowsWaitForTheScreen(unittest.TestCase):
     for the screen itself, as a3-bar-per-workspace already did."""
 
     def test_each_window_names_the_display_and_waits(self):
-        for name in ("a3-reaper.service", "qjackctl.service", "a3-bar-per-workspace.service"):
-            text = (USER_UNITS / name).read_text()
-            self.assertIn("Environment=DISPLAY=:0", text, name)
-            self.assertIn(WAIT, text, name)
+        text = (USER_UNITS / "a3-bar-per-workspace.service").read_text()
+        self.assertIn("Environment=DISPLAY=:0", text)
+        self.assertIn(WAIT, text)
+        text = WINDOW_UNIT.read_text()
+        self.assertIn("Environment=DISPLAY=:0", text, WINDOW_UNIT.name)
+        self.assertIn(WINDOW_WAIT, text, WINDOW_UNIT.name)
 
 
 if __name__ == "__main__":

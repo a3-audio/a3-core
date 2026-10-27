@@ -1,0 +1,57 @@
+{
+ "about": "The engine's first hello: the evening (with what the desk sent before it laid over) replayed through Core's own port, then Core's token recall -- the whole state to everybody, the engine's state words (positions, flags, sources, mode) and engine.open. The evening becomes Core's own: the first tick moves it, and it is written two seconds later.",
+ "files": {
+  "state.json": {
+   "channels": [
+    {
+     "toggle_fx": true,
+     "toggle_cue": false,
+     "three_d": 0.62,
+     "azimuth": 30.0,
+     "elevation": 10.0
+    },
+    {
+     "toggle_fx": false,
+     "toggle_cue": true,
+     "three_d": null
+    },
+    {
+     "toggle_fx": false,
+     "toggle_cue": false,
+     "three_d": 0.0
+    },
+    {
+     "toggle_fx": true,
+     "toggle_cue": true,
+     "three_d": 1.0
+    }
+   ],
+   "fx_mode": 1,
+   "phones_mix": 0.3,
+   "return_cue": true
+  },
+  "evening.json": {
+   "values": {
+    "/channel/1/gain": 0.5,
+    "/channel/2/volume": 0.7,
+    "/master/volume": 0.8,
+    "/channel/3/eq/high": 0.25
+   },
+   "channel.source": [
+    1,
+    0,
+    0,
+    2
+   ]
+  }
+ },
+ "steps": [
+ {"at": 0.2, "from": ["192.168.8.11", 50001], "osc": ["/channel/4/gain", ["s", "0.35"]]},
+ {"at": 0.5, "from": ["127.0.0.1", 41000], "osc": ["/engine/hello", ["s", "boot-1"]]},
+ {"at": 0.6, "tick": true},
+ {"at": 0.7, "from": ["192.168.8.11", 50001], "osc": ["/channel/2/volume", ["s", "0.9"]]},
+ {"at": 1.0, "tick": true},
+ {"at": 3.0, "tick": true},
+ {"at": 3.5, "flush": true}
+ ]
+}

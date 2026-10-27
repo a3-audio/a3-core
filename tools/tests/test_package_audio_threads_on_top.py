@@ -9,9 +9,13 @@ clients were gone. That half still holds: no unit raises a whole process.
 
 The audio server is PipeWire now. Its module-rt puts the data loop at FIFO 83,
 which it may only do when limits.d gives @audio an rtprio above that; the JACK
-clients' threads run below it (REAPER's are set by the realtime preload, see
-test_package_reaper_runs_realtime). The USB IRQ threads stay above it all:
-set_irq_prio puts xhci at FIFO 95."""
+clients' threads run below it (the engine's are set by the realtime preload,
+src/jack-rt-priority.c, which the postinst builds). The USB IRQ threads stay
+above it all: set_irq_prio puts xhci at FIFO 95.
+
+The JACK clients a3-core starts itself were REAPER and QjackCtl until
+2026-10-27; since then it is the engine role of the program
+(packaging/a3-engine.service)."""
 
 import configparser
 import re
@@ -21,22 +25,21 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core"
 CONFIG = PACKAGE / "home/aaa/.local/share/a3-core/config"
-UNITS = CONFIG / "systemd/user"
 LIMITS = PACKAGE / "etc/security/limits.d/audio.conf"
 
 USB_IRQ_PRIORITY = 95
 #: PipeWire's data loop: module-rt's default rt.prio.
 DATA_LOOP_PRIORITY = 83
-CLIENT_UNITS = ("a3-reaper.service", "qjackctl.service")
+CLIENT_UNITS = (ROOT / "packaging/a3-engine.service",)
 # beat-analyzer: its own package's unit plus a3-core's drop-in, see
 # test_package_analyzer_from_package.
 SCHEDULING_KEYS = ("CPUSchedulingPolicy", "CPUSchedulingPriority")
 
 
-def service(name):
+def service(unit):
     parser = configparser.ConfigParser(strict=False, interpolation=None)
     parser.optionxform = str
-    parser.read_string((UNITS / name).read_text())
+    parser.read_string(unit.read_text())
     return parser["Service"]
 
 
@@ -64,15 +67,15 @@ class AudioThreadsOnTop(unittest.TestCase):
                 self.assertEqual(set_lines, [])
 
     def test_no_unit_raises_a_whole_process(self):
-        for name in CLIENT_UNITS:
+        for unit in CLIENT_UNITS:
             for key in SCHEDULING_KEYS:
-                with self.subTest(unit=name, key=key):
-                    self.assertNotIn(key, service(name))
+                with self.subTest(unit=unit.name, key=key):
+                    self.assertNotIn(key, service(unit))
 
     def test_the_units_keep_their_cpu_affinity(self):
-        for name in CLIENT_UNITS:
-            with self.subTest(unit=name):
-                self.assertEqual(service(name).get("CPUAffinity"), "1 2 3")
+        for unit in CLIENT_UNITS:
+            with self.subTest(unit=unit.name):
+                self.assertEqual(service(unit).get("CPUAffinity"), "1 2 3")
 
 
 if __name__ == "__main__":
