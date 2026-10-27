@@ -1,0 +1,12 @@
+{
+ "about": "The rig's own state.json, evening.json and seen.json (given at run time, never committed): start-up, the engine's first hello, the evening replayed through Core's own port, Core's token recall, the ticks that move and write it, the seen file's look, then stop().",
+ "steps": [
+ {"at": 0.5, "from": ["127.0.0.1", 41000], "osc": ["/engine/hello", ["s", "boot-rig"]]},
+ {"at": 0.6, "tick": true},
+ {"at": 1.0, "tick": true},
+ {"at": 3.0, "tick": true},
+ {"at": 5.5, "tick": true},
+ {"at": 10.5, "tick": true},
+ {"at": 11.0, "flush": true}
+ ]
+}

@@ -202,3 +202,13 @@ with the reason, and is never re-recorded. The runner compares it as strictly as
   copied from `beat-to-remote-motion-and-desks.expected.json`, which B1 recorded for the same empty
   start; the three `vu` entries are written by hand from the truth's routes (Motion's vu port, the
   mixer, radla) with the datagram encoded by an independent script. B1 has no engine meters.
+
+## The rig's own files
+
+`tests/core/rig/startup-on-rig-files.json` holds only steps; its files are the rig's own
+`state.json`, `evening.json` and `seen.json`, private and never committed. `RigFiles.RecallMatchesPython`
+reads them from `A3_RIG_STATE` (skipped when unset) and B1's transcript from `A3_RIG_EXPECTED`,
+recorded outside the repo with
+
+    A3_CORE_BASELINE=/home/aaa/a3-system/wt/parity-baseline/a3-core-7a7b2441f74e A3_RIG_STATE=<dir> \
+        /home/aaa/.venv/bin/python3 -I tools/parity/record_rig.py <out dir outside the repo>
