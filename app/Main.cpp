@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // a3-core: the one program. One JUCEApplication that runs the role its command line names (see
 // ProgramArgs.h): core (the C++ Core service), engine (Plan 4's engine without its window), the
-// screencast fan-out, the supervisor (--headless: Core and the engine as children); the window,
-// the i3 bar and the subcommands come later and only say so. Each role is a RoleRunner the app's
+// screencast fan-out, the supervisor (--headless: Core and the engine as children), the window and the
+// i3 bar; --render-truth and --truth print and exit. Each role is a RoleRunner the app's
 // timer drives on the message thread; SIGTERM and SIGINT only set a flag that the next tick reads.
 #include <atomic>
 #include <cstdio>
@@ -11,10 +11,12 @@
 
 #include "CoreService.h"
 #include "EngineRole.h"
+#include "I3Bar.h"
 #include "Platform.h"
 #include "ProgramArgs.h"
 #include "Roles.h"
 #include "ScreencastFanout.h"
+#include "Subcommands.h"
 #include "Supervisor.h"
 #include "WindowProcess.h"
 #include "ui/MainWindow.h"
@@ -68,6 +70,37 @@ public:
 
 private:
     a3core::FanoutOptions options;
+    std::atomic<bool> stop { false }, done { false };
+    std::atomic<int> result { 0 };
+    std::thread loop;
+};
+
+// i3-msg's event stream blocks; the bar follows it on a thread of its own until the stop signal.
+class I3BarRunner final : public a3app::RoleRunner
+{
+public:
+    explicit I3BarRunner (const a3core::Platform& platform)
+    {
+        loop = std::thread ([this, &platform] {
+            result = a3core::runI3Bar (platform, &stop);
+            done = true;
+        });
+    }
+    ~I3BarRunner() override
+    {
+        stop = true;
+        loop.join();
+    }
+    std::optional<int> tick (bool stopRequested) override
+    {
+        if (stopRequested)
+            stop = true;
+        if (! done)
+            return std::nullopt;
+        return result.load();
+    }
+
+private:
     std::atomic<bool> stop { false }, done { false };
     std::atomic<int> result { 0 };
     std::thread loop;
@@ -226,11 +259,14 @@ Started startFanout (const a3app::ProgramArgs& args, const a3core::Platform& pla
     return std::make_unique<FanoutRunner> (port, std::move (command), args.fanoutLinger, platform);
 }
 
-Started notBuiltYet (const char* what)
+// --render-truth and --truth: say it, exit with its code.
+Started sayAndExit (const a3app::ProgramArgs& args, const a3core::Platform& platform)
 {
-    std::printf ("a3-core: %s is not built yet\n", what);
+    const auto result = a3app::runSubcommand (args, platform);
+    std::fputs (result.out.c_str(), stdout);
+    std::fputs (result.err.c_str(), stderr);
     std::fflush (stdout);
-    return 0;
+    return result.exitCode;
 }
 
 Started startRole (const a3app::ProgramArgs& args, const a3core::Platform& platform)
@@ -243,9 +279,9 @@ Started startRole (const a3app::ProgramArgs& args, const a3core::Platform& platf
         case Role::supervisor:
             return std::make_unique<SupervisorRunner> (platform, platform.self().getFullPathName());
         case Role::window: return startWindow (platform);
-        case Role::i3Bar: return notBuiltYet ("--role i3-bar");
-        case Role::renderTruth: return notBuiltYet ("--render-truth");
-        case Role::truthQuery: return notBuiltYet ("--truth");
+        case Role::i3Bar: return std::make_unique<I3BarRunner> (platform);
+        case Role::renderTruth:
+        case Role::truthQuery: return sayAndExit (args, platform);
     }
     return 2;
 }

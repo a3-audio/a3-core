@@ -1538,9 +1538,9 @@ test_reverse_covers_forward.ThePotsStayOut.test_no_reversal_relays_a_pot	retired
 test_reverse_covers_forward.ThePotsStayOut.test_nothing_an_action_can_drive_is_relayed_continuously	retired:REAPER path retired with O8	stable		
 test_reverse_covers_forward.TheWayBackIsSpelledLikeTheWayOut.test_every_channel_reversal_names_a_control_the_forward_path_knows	retired:REAPER path retired with O8	stable		
 test_reverse_covers_forward.TheWayBackIsSpelledLikeTheWayOut.test_every_global_reversal_names_an_address_a_handler_answers_to	retired:REAPER path retired with O8	stable		
-test_rig_workspaces.BarPerWorkspace.test_a_workspace_without_a_number_keeps_the_bar_away	stays:package/render/guard test of a3-core's dev-server suite (tools/lib paths adjusted in Task 29)	stable		
-test_rig_workspaces.BarPerWorkspace.test_from_workspace_three_on_the_bar_shows	stays:package/render/guard test of a3-core's dev-server suite (tools/lib paths adjusted in Task 29)	stable		
-test_rig_workspaces.BarPerWorkspace.test_the_two_uis_have_the_whole_screen	stays:package/render/guard test of a3-core's dev-server suite (tools/lib paths adjusted in Task 29)	stable		
+test_rig_workspaces.BarPerWorkspace.test_a_workspace_without_a_number_keeps_the_bar_away	port:I3Bar.ModeByWorkspace	G	7a7b2441f74e377938003520e0d87ba15989f83b	27
+test_rig_workspaces.BarPerWorkspace.test_from_workspace_three_on_the_bar_shows	port:I3Bar.ModeByWorkspace	G	7a7b2441f74e377938003520e0d87ba15989f83b	27
+test_rig_workspaces.BarPerWorkspace.test_the_two_uis_have_the_whole_screen	port:I3Bar.ModeByWorkspace	G	7a7b2441f74e377938003520e0d87ba15989f83b	27
 test_rig_workspaces.WhereThingsLive.test_each_program_has_its_workspace	stays:package/render/guard test of a3-core's dev-server suite (tools/lib paths adjusted in Task 29)	stable		
 test_rig_workspaces.WhereThingsLive.test_the_bar_starts_hidden_at_the_top	stays:package/render/guard test of a3-core's dev-server suite (tools/lib paths adjusted in Task 29)	stable		
 test_screencast_fanout.Serving.test_a_ninth_viewer_is_closed_and_the_eight_stay	port:ScreencastFanout.ANinthViewerIsClosedAndTheEightStay	stable	f3345dc7feeba2029b95611e645261dc37c6527a	12
@@ -1711,7 +1711,7 @@ test_osc_truth.TheEngineSpeaks.test_mixer_desk_and_motion_hear_the_channel_sourc
 test_package_boot_choice.BootChoice.test_a3_main_wants_deck_a_only	stays:package/render/guard test of a3-core's dev-server suite (tools/lib paths adjusted in Task 29)	G		
 test_package_boot_choice.BootChoice.test_the_b_format_decks_run_only_when_the_engine_does	stays:package/render/guard test of a3-core's dev-server suite (tools/lib paths adjusted in Task 29)	G		
 test_package_boot_choice.BootChoice.test_the_two_deck_stemdeck_runs_only_in_reaper_mode	stays:package/render/guard test of a3-core's dev-server suite (tools/lib paths adjusted in Task 29)	G		
-test_rig_workspaces.BarPerWorkspace.test_deck_b_has_the_whole_screen_too	stays:package/render/guard test of a3-core's dev-server suite (tools/lib paths adjusted in Task 29)	stable		
+test_rig_workspaces.BarPerWorkspace.test_deck_b_has_the_whole_screen_too	port:I3Bar.ModeByWorkspace	G	7a7b2441f74e377938003520e0d87ba15989f83b	27
 test_rig_workspaces.WhereThingsLive.test_the_one_deck_windows_are_main_windows_not_dialogs	stays:package/render/guard test of a3-core's dev-server suite (tools/lib paths adjusted in Task 29)	stable		
 beat-analyzer.vu_meter_test.test_a_loud_block_shows_once_at_full_level	port:VuTaps.ALoudBlockShowsOnceAtFullLevel	G	7dd100b16410f0aec58638db37663d99374753d1	24
 beat-analyzer.vu_meter_test.test_the_next_tick_shows_the_new_block_not_a_fall	port:VuTaps.TheNextTickShowsTheNewBlockNotAFall	G	7dd100b16410f0aec58638db37663d99374753d1	24

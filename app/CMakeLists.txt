@@ -5,7 +5,7 @@
 # the program's command line, its roles and the supervisor): always built, the tests link them.
 add_library(a3-engine-app-lib STATIC EngineHost.cpp OscVocabulary.cpp HelloSender.cpp
     ConfigFile.cpp EnginePorts.cpp IoMap.cpp ConnectionPlan.cpp DeviceBackend.cpp AppArgs.cpp ConfigEdits.cpp SessionRestart.cpp
-    ProgramArgs.cpp Roles.cpp Supervisor.cpp EngineControlApi.cpp WindowProcess.cpp ui/RemoteHostView.cpp ui/LoopbackHttp.cpp ui/CoreClient.cpp ui/MonitorTable.cpp
+    ProgramArgs.cpp Roles.cpp Supervisor.cpp Subcommands.cpp EngineControlApi.cpp WindowProcess.cpp ui/RemoteHostView.cpp ui/LoopbackHttp.cpp ui/CoreClient.cpp ui/MonitorTable.cpp
     ui/MonitorTrafficPage.cpp ui/MonitorTruthPage.cpp ui/MonitorUnknownPage.cpp ui/MonitorRegisterPage.cpp ui/MonitorBenchPage.cpp
     ui/AudioPage.cpp ui/StatusPage.cpp ui/MainWindow.cpp
     ui/ChannelsPage.cpp ui/ZonesPage.cpp ui/IoPage.cpp ui/CalibrationPage.cpp ui/FilterPage.cpp ui/SaveBar.cpp)

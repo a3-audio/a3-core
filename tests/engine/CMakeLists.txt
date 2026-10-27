@@ -31,7 +31,7 @@ add_executable(a3-engine-tests ReferenceSmoke.cpp Laws.cpp PurestGain.cpp Smooth
     ../app/Pages.cpp ../app/ConfigEdits.cpp ../app/SessionRestart.cpp
     ../app/DefaultConfig.cpp ../app/ProgramArgs.cpp ../app/Supervisor.cpp
     ../app/EngineControlApi.cpp ../app/RemoteHostView.cpp
-    ../app/Monitor.cpp ../app/WindowProcess.cpp)
+    ../app/Monitor.cpp ../app/WindowProcess.cpp ../app/Subcommands.cpp)
 target_include_directories(a3-engine-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../app)
 target_link_libraries(a3-engine-tests PRIVATE a3-engine a3-engine-bench-lib a3-engine-app-lib a3-engine-reference
     GTest::gtest GTest::gtest_main)
@@ -46,6 +46,7 @@ target_compile_definitions(a3-engine-tests PRIVATE
     A3_REAPER_TO_ENGINE_PORTS="${CMAKE_CURRENT_SOURCE_DIR}/data/reaper-to-engine-ports.json"
     A3_VU_POINTS="${CMAKE_CURRENT_SOURCE_DIR}/data/vu-points.json"
     A3_VU_BUNDLES="${CMAKE_CURRENT_SOURCE_DIR}/data/vu-bundles.json"
+    A3_RENDER_CLI_DATA="${CMAKE_SOURCE_DIR}/tests/core/data/parity/render-cli"
     A3_APP_SOURCE_DIR="${CMAKE_SOURCE_DIR}/app")
 include(GoogleTest)
 gtest_discover_tests(a3-engine-tests)
