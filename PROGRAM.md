@@ -199,6 +199,7 @@ API, P2). The package ships it as `/usr/bin/a3-core` (Task 28); there is no `/us
     a3-core --role i3-bar                     (not built yet)
     a3-core --render-truth user|network-file|network      (not built yet)
     a3-core --truth host NAME | --truth port PROGRAM ROLE (not built yet)
+    a3-core --links                           the JACK/PipeWire connections, explained
 
 - Each role takes only its own flags; another role's flag, an unknown one or a missing value is
   exit 2 with the usage.
@@ -210,6 +211,16 @@ API, P2). The package ships it as `/usr/bin/a3-core` (Task 28); there is no `/us
   the address list and exit 0; a serve loop that ends by itself exits 1 (the unit decides whether to restart). A
   start that is refused says why on stderr and exits 1.
 - **engine**: Plan 4c's flags; `--no-window` and `--service` are still accepted and do nothing.
+- **--links**: replaces looking at qjackctl. Prints the audio connections of the running graph, grouped
+  by the two programs they join (`Scarlett inputs → engine`, `engine → Scarlett`, `StemDeck A →
+  engine`, ...). Ports that run in parallel on both sides are one range (`capture 1–8 → analog 1–8`),
+  each with what it is for: a channel, the return, the PA, the booth, the phones, the tempo. The
+  meanings are the engine's own port names and config (`analogPairs`, `returnAnalogPair`) and the
+  truth's `vu_meters`; level-meter feeds to the analyzer are counted on one line. The last line counts
+  the links that `io.jack` of `engine.json` names but whose port is not in the graph, and points to the
+  window's STATUS page, which lists them. It only reads: no JACK server is exit 1 with one line on
+  stderr; anything else is exit 0. The wording is `app/LinksOverview.cpp` (a pure function, tested in
+  `tests/app/LinksOverview.cpp`); reading the graph is `app/LinksCommand.cpp`.
 - **screencast-fanout**: `--port` defaults to `$A3_SCREENCAST_PORT`; a port of 0 or no command is
   refused as the Python fan-out refused it (exit 2).
 - **--headless**: starts `a3-core --role core` and `a3-core --role engine` and keeps them as the

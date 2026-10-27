@@ -23,6 +23,7 @@ const char* const usage =
     "       a3-core --role i3-bar\n"
     "       a3-core --render-truth user|network-file|network\n"
     "       a3-core --truth host NAME | --truth port PROGRAM ROLE\n"
+    "       a3-core --links              the JACK/PipeWire connections, explained\n"
     "  core: every default from the truth (A3_OSC_TRUTH, else /usr/share/a3/a3-osc.json)\n"
     "  engine: --no-window and --service are accepted and do nothing (the engine role has no window)\n"
     "  screencast-fanout: --port defaults to A3_SCREENCAST_PORT\n";
@@ -67,7 +68,8 @@ const std::vector<Flag>& flagsOf (Role role)
         case Role::i3Bar:
         case Role::supervisor:
         case Role::renderTruth:
-        case Role::truthQuery: return noFlags;
+        case Role::truthQuery:
+        case Role::links: return noFlags;
     }
     return noFlags;
 }
@@ -80,6 +82,7 @@ juce::String phraseOf (Role role)
         case Role::supervisor: return "--headless";
         case Role::renderTruth: return "--render-truth";
         case Role::truthQuery: return "--truth host|port";
+        case Role::links: return "--links";
         case Role::core:
         case Role::engine:
         case Role::screencastFanout:
@@ -180,9 +183,9 @@ std::optional<Selection> selectRole (const juce::StringArray& words, juce::Strin
                 selection.rest.add (words[i]);
             break;
         }
-        if (word == "--headless")
+        if (word == "--headless" || word == "--links")
         {
-            if (! choose (Role::supervisor, word))
+            if (! choose (word == "--links" ? Role::links : Role::supervisor, word))
                 return std::nullopt;
             continue;
         }
@@ -357,7 +360,8 @@ bool fillRole (ProgramArgs& args, const juce::StringArray& rest, juce::String& e
         case Role::i3Bar:
         case Role::supervisor:
         case Role::renderTruth:
-        case Role::truthQuery: return true;
+        case Role::truthQuery:
+        case Role::links: return true;
     }
     return true;
 }

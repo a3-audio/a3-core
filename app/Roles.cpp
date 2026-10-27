@@ -57,7 +57,8 @@ std::string unitOf (Role role)
         case Role::i3Bar:
         case Role::supervisor:
         case Role::renderTruth:
-        case Role::truthQuery: break;
+        case Role::truthQuery:
+        case Role::links: break;
     }
     return {};
 }
