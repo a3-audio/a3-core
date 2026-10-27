@@ -11,9 +11,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config/debian-x86_64/a3-core"
-POSTINST = PACKAGE / "DEBIAN/postinst"
-CONTROL = PACKAGE / "DEBIAN/control"
+from tools.tests.paths import DEBIAN, PACKAGE
+
+POSTINST = DEBIAN / "postinst"
+CONTROL = DEBIAN / "control"
 I3_CONFIG = PACKAGE / "home/aaa/.local/share/a3-core/config/i3/config"
 
 #: Every program the i3 config starts or binds, and the Debian package it
@@ -125,14 +126,14 @@ class NothingNeedsWhatCannotBeInstalled(unittest.TestCase):
     def test_no_rtirq_config_is_shipped(self):
         self.assertFalse((PACKAGE / "etc/rtirq.conf").exists())
         entries = [line.split() for line in
-                   (PACKAGE / "DEBIAN/conffiles").read_text().splitlines()]
+                   (DEBIAN / "conffiles").read_text().splitlines()]
         self.assertNotIn(["/etc/rtirq.conf"], entries)
 
     def test_an_upgrade_takes_the_old_rtirq_config_away(self):
         """dpkg keeps a conffile the new version no longer ships; the flag
         removes it on the upgrade, or keeps it as .dpkg-bak if it was edited."""
         entries = [line.split() for line in
-                   (PACKAGE / "DEBIAN/conffiles").read_text().splitlines()]
+                   (DEBIAN / "conffiles").read_text().splitlines()]
         self.assertIn(["remove-on-upgrade", "/etc/rtirq.conf"], entries)
 
     def test_the_i3_config_starts_no_nm_applet(self):

@@ -33,15 +33,21 @@ The script switches the machine to Debian testing. Updates after that are
 
 A push to `main` builds the package and publishes the apt archive
 (`.github/workflows/pages-deploy.yml`). The version is the last `v*` tag plus
-the commits since it; `python3 tools/package_version.py` prints it. To build by
-hand:
+the commits since it; `python3 tools/package_version.py` prints it.
+
+The package is one: the `a3-core` program (`/usr/bin/a3-core`, built from this
+repository's C++ source) and the deployment payload under
+`platform-config/debian-x86_64/a3-core/`. Its recipe is `packaging/stage`, its
+control file and maintainer scripts are in `packaging/DEBIAN/`, and the
+packages a build needs are listed in `packaging/build-depends`. It takes over
+from the old `a3-engine` package (`Conflicts`/`Replaces`). To build by hand,
+from a clean checkout and with JUCE installed, use the umbrella's builder:
 
 ```sh
-cd platform-config/debian-x86_64 && dpkg-deb --build --root-owner-group a3-core
+python3 /path/to/a3-system/installer/package.py <a3-core checkout> --out <dir> --juce ~/local/juce
 ```
 
-The Core itself is the `a3-core` program (`/usr/bin/a3-core`), shipped by the
-`a3-engine` package; this package depends on it and runs no Python. The tests
+The package runs no Python. The tests
 and the dev tools are Python on the development machine; they need only the
 standard library, and read the truth through `tools/lib/a3_osc.py`:
 

@@ -25,9 +25,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config/debian-x86_64/a3-core"
-PREINST = PACKAGE / "DEBIAN/preinst"
-POSTINST = PACKAGE / "DEBIAN/postinst"
+from tools.tests.paths import DEBIAN, PACKAGE
+
+PREINST = DEBIAN / "preinst"
+POSTINST = DEBIAN / "postinst"
 
 
 def function(script, name):

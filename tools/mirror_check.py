@@ -101,6 +101,8 @@ def shipped_pairs(package_root=PACKAGE, machine_root="/"):
         if path.is_symlink() or not path.is_file():
             continue
         rel = path.relative_to(package_root)
+        # The maintainer scripts live in packaging/DEBIAN now; the skip keeps an
+        # older tree's DEBIAN/ (dpkg's, never installed as files) out too.
         if rel.parts[0] == "DEBIAN" or skipped(rel):
             continue
         pairs.append((path, machine_root / rel))

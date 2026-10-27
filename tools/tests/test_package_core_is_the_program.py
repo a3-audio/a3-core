@@ -2,8 +2,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""The cut: the a3-core program (/usr/bin/a3-core, from the a3-engine package)
-is the Core, and no Python runs on the rig.
+"""The cut: the a3-core program (/usr/bin/a3-core, built and shipped by this
+package since the a3-engine repo moved in) is the Core, and no Python runs on
+the rig.
 
 The units switch by drop-ins, not by edits: the postinst installs a missing
 file but may keep a unit the rig already has, so only a new drop-in reaches an
@@ -17,21 +18,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tools.tests.paths import DEBIAN, LOCAL, PACKAGE, ROOT
 from tools.tests.test_package_installs_what_its_units_run import exec_lines
 
-ROOT = Path(__file__).resolve().parents[2]
-PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core"
-LOCAL = PACKAGE / "home/aaa/.local"
 UNITS = LOCAL / "share/a3-core/config/systemd/user"
 SYSTEM_UNITS = PACKAGE / "etc/systemd/system"
 RECIPES = LOCAL / "share/a3-core/recipes"
-DEBIAN = PACKAGE / "DEBIAN"
 PROGRAM = "/usr/bin/a3-core"
 
-#: The first a3-engine version that ships the program (a3-engine
-#: feat/core-4-package as it lands on main), and the first beat-analyzer
-#: that no longer meters. Provisional until the maintainer merges.
-ENGINE_CUT = "03.0+120"
+#: The first beat-analyzer that no longer meters.
 ANALYZER_NO_VU = "03.0+64"
 
 #: Frozen with REAPER: never edited by the cut. The patchbay left this list
@@ -158,8 +153,10 @@ class ReaperStaysFrozen(unittest.TestCase):
 
 
 class TheProgramIsInstalled(unittest.TestCase):
-    def test_the_package_depends_on_the_program(self):
-        self.assertIn(f"a3-engine (>= {ENGINE_CUT})", entries("Depends"))
+    def test_the_program_is_in_this_package(self):
+        # No second package to depend on: packaging/stage builds the program into this one.
+        self.assertNotIn("a3-engine", [e.split()[0] for e in entries("Depends")])
+        self.assertTrue((ROOT / "packaging/a3-engine.service").is_file())
         self.assertIn(f"beat-analyzer (>= {ANALYZER_NO_VU})", entries("Recommends"))
         self.assertNotIn("beat-analyzer", control_field("Depends"))
 

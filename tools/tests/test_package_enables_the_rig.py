@@ -14,8 +14,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config/debian-x86_64/a3-core"
-POSTINST = PACKAGE / "DEBIAN/postinst"
+from tools.tests.paths import DEBIAN
+
+POSTINST = DEBIAN / "postinst"
 
 
 def postinst_function(name):

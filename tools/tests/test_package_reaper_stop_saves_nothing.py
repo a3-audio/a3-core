@@ -13,13 +13,12 @@ the maintainer restarts a3-main himself after an upgrade.
 
 import re
 import unittest
-from pathlib import Path
 
-PACKAGE = (Path(__file__).resolve().parents[2]
-           / "platform-config/debian-x86_64/a3-core")
+from tools.tests.paths import DEBIAN, PACKAGE
+
 UNIT = (PACKAGE / "home/aaa/.local/share/a3-core"
         / "config/systemd/user/a3-reaper.service")
-POSTINST = PACKAGE / "DEBIAN/postinst"
+POSTINST = DEBIAN / "postinst"
 TEMPLATE = "/home/aaa/.config/REAPER/ProjectTemplates/a3-reaper.RPP"
 
 

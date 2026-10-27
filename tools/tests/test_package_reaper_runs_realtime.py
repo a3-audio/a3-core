@@ -21,10 +21,11 @@ import textwrap
 import unittest
 from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config/debian-x86_64/a3-core"
+from tools.tests.paths import DEBIAN, PACKAGE
+
 SOURCE = PACKAGE / "home/aaa/.local/share/a3-core/src/jack-rt-priority.c"
 REAPER_UNIT = PACKAGE / "home/aaa/.local/share/a3-core/config/systemd/user/a3-reaper.service"
-POSTINST = PACKAGE / "DEBIAN/postinst"
+POSTINST = DEBIAN / "postinst"
 LIBRARY = ".local/lib/a3/libjack-rt-priority.so"
 DATA_LOOP_PRIORITY = 83
 

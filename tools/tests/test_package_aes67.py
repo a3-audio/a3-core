@@ -25,11 +25,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config/debian-x86_64/a3-core"
+from tools.tests.paths import DEBIAN, PACKAGE
+
 LIB = Path(__file__).resolve().parents[1] / "lib"
 UNITS = PACKAGE / "home/aaa/.local/share/a3-core/config/systemd/user"
 UNIT = UNITS / "a3-aes67.service"
-POSTINST = PACKAGE / "DEBIAN/postinst"
+POSTINST = DEBIAN / "postinst"
 TRUTH_FILE = PACKAGE / "usr/share/a3/a3-osc.json"
 
 sys.path.insert(0, str(LIB))

@@ -60,8 +60,10 @@ Copyright: 2026 A³ Audio contributors
 License: CC-BY-SA-4.0
 
 Files: packaging/*
-Copyright: 2026 A³ Audio contributors
+Copyright: 2023-2026 A³ Audio contributors
 License: GPL-3.0-or-later
+Comment: packaging/DEBIAN holds a3-core's maintainer scripts, which were CC-BY-SA-4.0 under
+ platform-config/ until 2026-10-27; CC BY-SA 4.0 is one-way compatible with GPLv3.
 
 Files: third_party/IEMPluginSuite/*
 Copyright: 2017-2026 Institute of Electronic Music and Acoustics (IEM), Graz

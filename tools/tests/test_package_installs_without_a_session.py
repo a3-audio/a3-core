@@ -12,9 +12,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config/debian-x86_64/a3-core"
-POSTINST = PACKAGE / "DEBIAN/postinst"
-CONTROL = PACKAGE / "DEBIAN/control"
+from tools.tests.paths import DEBIAN
+
+POSTINST = DEBIAN / "postinst"
+CONTROL = DEBIAN / "control"
 
 
 def function(name):

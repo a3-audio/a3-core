@@ -28,18 +28,20 @@ Programs under /home are the project's own and are installed by it.
 
 import re
 import unittest
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-DEBIAN = ROOT / "platform-config/debian-x86_64/a3-core/DEBIAN"
-UNITS = (ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local"
-         / "share/a3-core/config/systemd/user")
+from tools.tests.paths import DEBIAN, LOCAL
+
+UNITS = LOCAL / "share/a3-core/config/systemd/user"
 
 #: Present on every Debian system this package can be installed on, so a
 #: Depends entry would say nothing. `Essential: yes` for all but procps, which
 #: is priority important and in every installation that has a systemd user
 #: session to begin with.
 BASE_SYSTEM = "base system"
+
+#: Built and shipped by this package itself (packaging/stage), so not a
+#: Depends of it.
+THIS_PACKAGE = "this package"
 
 PROVIDED_BY = {
     "/bin/bash": BASE_SYSTEM,
@@ -51,7 +53,7 @@ PROVIDED_BY = {
     "/usr/bin/pkill": BASE_SYSTEM,
     "/usr/bin/jack_wait": "jack-example-tools",
     "/usr/bin/qjackctl": "qjackctl",
-    "/usr/bin/a3-core": "a3-engine",
+    "/usr/bin/a3-core": THIS_PACKAGE,
 }
 
 _EXEC_LINE = re.compile(r"^(Exec\w*)=(.*)$")
@@ -159,7 +161,7 @@ class EveryProgramIsInstalled(unittest.TestCase):
             program: PROVIDED_BY[program]
             for program in self.programs
             if program in PROVIDED_BY
-            and PROVIDED_BY[program] != BASE_SYSTEM
+            and PROVIDED_BY[program] not in (BASE_SYSTEM, THIS_PACKAGE)
             and PROVIDED_BY[program] not in declared
         }
         self.assertEqual({}, missing,

@@ -11,15 +11,15 @@ so the loader's cache has it before anything starts.
 
 import re
 import unittest
-from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config/debian-x86_64/a3-core"
+from tools.tests.paths import DEBIAN, PACKAGE
+
 LD_CONF = PACKAGE / "etc/ld.so.conf.d/pipewire-jack-x86_64-linux-gnu.conf"
 PIPEWIRE_JACK = "/usr/lib/x86_64-linux-gnu/pipewire-0.3/jack"
 
 
 def maintainer_script(name):
-    return (PACKAGE / "DEBIAN" / name).read_text()
+    return (DEBIAN / name).read_text()
 
 
 class TheLoaderFindsPipeWiresLibjack(unittest.TestCase):

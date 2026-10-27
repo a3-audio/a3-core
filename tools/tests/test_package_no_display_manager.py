@@ -11,12 +11,11 @@ the installer, still runs REAPER under i3.
 """
 import re
 import unittest
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core"
-CONTROL = PACKAGE / "DEBIAN/control"
-CONFFILES = PACKAGE / "DEBIAN/conffiles"
+from tools.tests.paths import DEBIAN, PACKAGE, ROOT
+
+CONTROL = DEBIAN / "control"
+CONFFILES = DEBIAN / "conffiles"
 
 
 def depends():

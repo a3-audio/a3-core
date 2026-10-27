@@ -1,8 +1,9 @@
 # SPDX-FileCopyrightText: 2026 Raphael Eismann
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Pins the Debian packaging that a3-system's installer/package.py reads:
-packaging/stage lays out the a3-core program, its user unit, the default config and the bench;
-packaging/DEBIAN/control names the package a3-engine."""
+packaging/stage lays out the a3-core program, its user units, the default config and the bench,
+and the deployment payload (platform-config/debian-x86_64/a3-core); packaging/DEBIAN/control
+names the one package a3-core, which takes over from the old a3-engine package."""
 
 import json
 import os
@@ -12,9 +13,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+from tools.tests.paths import DEBIAN, PACKAGE, ROOT
+
 STAGE = ROOT / "packaging" / "stage"
-CONTROL = ROOT / "packaging" / "DEBIAN" / "control"
+CONTROL = DEBIAN / "control"
 UNIT = ROOT / "packaging" / "a3-engine.service"
 WINDOW_UNIT = ROOT / "packaging" / "a3-core-window.service"
 # The program (Task 23); its engine role is what the unit runs. Staging is Task 28's.
@@ -22,6 +24,9 @@ APP = ROOT / "build" / "app" / "a3-core"
 TRUTH = ROOT / "tests" / "engine" / "data" / "a3-osc.json"
 SHIPPED_CONFIG = ROOT / "data" / "engine.json"
 SHIPPED_SPATIAL = ROOT / "data" / "spatial"
+COPYRIGHT = "usr/share/doc/a3-core/copyright"
+#: Every licence dep5 names that /usr/share/common-licenses does not carry.
+UNCOMMON_LICENCES = ("MIT", "CC-BY-3.0", "Apache-2.0", "CC-BY-SA-4.0")
 
 
 # The staging tests copy the whole package; where /tmp is a small tmpfs,
@@ -59,6 +64,10 @@ def staged_files(case):
     return stage
 
 
+def control_entries(field):
+    return [entry.strip() for entry in control_fields().get(field, "").split(",") if entry.strip()]
+
+
 def control_fields():
     fields = {}
     for line in CONTROL.read_text().splitlines():
@@ -76,20 +85,12 @@ class BenchRulesTest(unittest.TestCase):
 
 class StageTest(unittest.TestCase):
     def test_files_installs_the_bench_executable(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            build = stub_build(Path(tmp, "build"))
-            stage = Path(tmp, "stage")
-            subprocess.run([str(STAGE), "files", str(ROOT), str(build), str(stage)], check=True)
-            installed = stage / "usr" / "bin" / "a3-engine-bench"
-            self.assertTrue(installed.is_file())
-            self.assertTrue(os.access(installed, os.X_OK))
+        installed = self.stage_files() / "usr" / "bin" / "a3-engine-bench"
+        self.assertTrue(installed.is_file())
+        self.assertTrue(os.access(installed, os.X_OK))
 
     def test_the_shipped_copyright_carries_the_mit_text(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            build = stub_build(Path(tmp, "build"))
-            stage = Path(tmp, "stage")
-            subprocess.run([str(STAGE), "files", str(ROOT), str(build), str(stage)], check=True)
-            copyright = (stage / "usr/share/doc/a3-engine/copyright").read_text()
+        copyright = (self.stage_files() / COPYRIGHT).read_text()
         self.assertIn("\nLicense: MIT\n", copyright)
         self.assertIn("Copyright (c) 2018 Chris Johnson", copyright)
         # the licence body, line for line (blank lines are " ." in this format)
@@ -106,23 +107,35 @@ class StageTest(unittest.TestCase):
         # engine.json names its spatial directory relative to itself; that directory ships beside it.
         self.assertTrue((stage / "usr/share/a3-engine/spatial/main.zone.json").is_file())
 
-    def test_the_package_writes_nothing_under_home(self):
+    def test_stage_holds_program_and_payload(self):
         stage = self.stage_files()
-        shipped = [p.relative_to(stage) for p in stage.rglob("*") if p.is_file()]
-        self.assertTrue(shipped)
-        for path in shipped:
-            self.assertNotEqual(path.parts[0], "home", path)
-        for name in ("postinst", "prerm", "postrm"):
-            script = (CONTROL.parent / name).read_text()
-            for forbidden in ("$HOME", "~", "/home/", "mkdir", "useradd"):
-                self.assertNotIn(forbidden, script, name + " " + forbidden)
+        for path in ("usr/bin/a3-core", "usr/bin/a3-engine-bench",
+                     "usr/lib/systemd/user/a3-engine.service",
+                     "usr/lib/systemd/user/a3-core-window.service",
+                     "usr/share/a3-engine/engine.json", "usr/share/a3/a3-osc.json",
+                     "home/aaa/.local/bin/a3-wait-for-the-screen"):
+            self.assertTrue((stage / path).is_file(), path)
+        # DEBIAN/ is installer/package.py's, from packaging/DEBIAN; the recipe lays out the payload only.
+        self.assertFalse((stage / "DEBIAN").exists())
 
-    def test_the_maintainer_scripts_enable_and_disable_the_user_unit(self):
-        postinst = (CONTROL.parent / "postinst").read_text()
-        self.assertIn("systemctl --global enable a3-engine.service", postinst)
-        self.assertIn("daemon-reload", postinst)
-        self.assertNotIn("restart", postinst.replace("no restart", ""))
-        self.assertIn("systemctl --global disable a3-engine.service", (CONTROL.parent / "prerm").read_text())
+    def test_the_payload_is_staged_as_it_is_in_git(self):
+        stage = self.stage_files()
+        for relative in ("usr/share/a3/a3-osc.json", "home/aaa/.local/bin/a3-wait-for-the-screen"):
+            with self.subTest(path=relative):
+                self.assertEqual((stage / relative).read_bytes(), (PACKAGE / relative).read_bytes())
+                self.assertEqual(os.access(stage / relative, os.X_OK),
+                                 os.access(PACKAGE / relative, os.X_OK))
+
+    def test_copyright_is_a3_cores_and_carries_every_uncommon_licence(self):
+        stage = self.stage_files()
+        copyright = (stage / COPYRIGHT).read_text()
+        lines = copyright.splitlines()
+        for name in UNCOMMON_LICENCES:
+            with self.subTest(license=name):
+                self.assertIn("\nLicense: " + name + "\n", copyright)
+                for line in (ROOT / "LICENSES" / (name + ".txt")).read_text().splitlines():
+                    self.assertIn(" " + (line or "."), lines)
+        self.assertFalse((stage / "usr/share/doc/a3-engine").exists())
 
     def test_ships_a3_core_and_no_a3_engine_binary(self):
         stage = self.stage_files()
@@ -157,7 +170,7 @@ class StageTest(unittest.TestCase):
                                  [p.name for p in originals])
 
     def test_the_shipped_copyright_carries_cc_by_and_apache(self):
-        copyright = (self.stage_files() / "usr/share/doc/a3-engine/copyright").read_text()
+        copyright = (self.stage_files() / COPYRIGHT).read_text()
         lines = copyright.splitlines()
         for name, file_name in (("CC-BY-3.0", "CC-BY-3.0.txt"), ("Apache-2.0", "Apache-2.0.txt")):
             with self.subTest(license=name):
@@ -280,13 +293,26 @@ class SubmoduleTest(unittest.TestCase):
 
 
 class ControlTest(unittest.TestCase):
-    def test_names_the_package_and_takes_libraries_from_shlibs(self):
+    def test_control_names_a3_core_with_section_and_priority(self):
+        # reprepro files a stage-built package by its Section and Priority.
         fields = control_fields()
-        self.assertEqual(fields["Package"], "a3-engine")
-        for field in ("Replaces", "Conflicts", "Provides"):
-            self.assertIn("a3-engine-bench", fields[field], field)
-        self.assertIn("${shlibs:Depends}", fields["Depends"])
+        self.assertEqual(fields["Package"], "a3-core")
         self.assertEqual(fields["Architecture"], "amd64")
+        self.assertEqual(fields["Section"], "sound")
+        self.assertEqual(fields["Priority"], "optional")
+
+    def test_control_takes_over_from_a3_engine(self):
+        # The program came in the a3-engine package; this one carries its files now (design U9).
+        for field in ("Conflicts", "Replaces"):
+            self.assertIn("a3-engine", control_entries(field), field)
+        self.assertNotIn("a3-engine", [entry.split()[0] for entry in control_entries("Depends")])
+        self.assertNotIn("a3-engine-bench", CONTROL.read_text())
+        self.assertIn("${shlibs:Depends}", control_entries("Depends"))
+
+    def test_control_keeps_the_analyzer_rule(self):
+        self.assertIn("beat-analyzer (>= 03.0+64)", control_entries("Recommends"))
+        self.assertIn("onboard", control_entries("Recommends"))
+        self.assertIn("beat-analyzer (<< 03.0+64)", control_entries("Breaks"))
 
     @unittest.skipUnless(shutil.which("dpkg-shlibdeps") and shutil.which("objdump")
                          and (ROOT / "build/bench/a3-engine-bench").is_file()
@@ -329,24 +355,32 @@ class ControlTest(unittest.TestCase):
             script = CONTROL.parent / name
             self.assertTrue(os.access(script, os.X_OK), name)
 
-    def test_the_program_breaks_the_python_core(self):
-        self.assertRegex(control_fields()["Breaks"], r"a3-core \(<< [0-9][^)]*\)")
-
-    def test_the_program_breaks_a_metering_analyzer(self):
-        self.assertRegex(control_fields()["Breaks"], r"beat-analyzer \(<< [0-9][^)]*\)")
-
     def test_the_window_recommends_the_on_screen_keyboard_and_never_depends_on_it(self):
         # The touch screen needs onboard to type into the window's fields; a laptop with a keyboard does not.
         fields = control_fields()
         self.assertIn("onboard", [name.strip() for name in fields.get("Recommends", "").split(",")])
         self.assertNotIn("onboard", fields["Depends"])
 
-    def test_the_truth_file_comes_with_a_recommended_a3_core(self):
-        self.assertIn("a3-core", control_fields().get("Recommends", ""))
-        self.assertIn("pipewire-jack", control_fields().get("Recommends", ""))
+    def test_maintainer_scripts(self):
+        postinst = (DEBIAN / "postinst").read_text()
+        self.assertIn(". /usr/share/debconf/confmodule", postinst)
+        self.assertIn('\ninstall_shipped_config "$SHIPPED_CONFIG"', postinst)
+        enable = postinst.index("systemctl --global enable a3-engine.service")
+        # Enabled for every user before aaa's user manager is reloaded and a3-main enabled.
+        self.assertLess(enable, postinst.index("\nrun_user_install\n"))
+        for line in postinst.splitlines():
+            self.assertNotRegex(line.split("#", 1)[0], r"systemctl .*restart .*a3-", line)
+        prerm = (DEBIAN / "prerm").read_text()
+        self.assertIn("systemctl --global disable a3-engine.service", prerm)
+        self.assertRegex(prerm, r"(?m)^\s*remove\|deconfigure\)$")
+        self.assertEqual(prerm.count("disable"), 1)
+        mode = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-s", "packaging/DEBIAN/preinst"],
+                              capture_output=True, text=True, check=True).stdout.split()[:1]
+        self.assertEqual(mode, ["100755"])
 
 
 
+@unittest.skipUnless(APP.is_file(), "needs the built program (build/app/a3-core)")
 class CheckConfigBinaryTest(unittest.TestCase):
     """The built program's engine role: --check-config prints exactly one line and exits 0 (ok), 1 (<file>: <reason>) or 2 (bad flag)."""
 

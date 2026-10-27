@@ -14,14 +14,13 @@ taskset there pins Xorg alone.
 import configparser
 import re
 import unittest
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core"
+from tools.tests.paths import DEBIAN, PACKAGE, ROOT
+
 SHARE = PACKAGE / "home/aaa/.local/share/a3-core"
 VNC_DROP_IN = PACKAGE / "etc/systemd/system/x11vnc.service.d/cpu.conf"
 XSERVERRC = SHARE / "xserverrc"
-POSTINST = PACKAGE / "DEBIAN/postinst"
+POSTINST = DEBIAN / "postinst"
 USER_UNITS = SHARE / "config/systemd/user"
 AUDIO_UNITS = ("a3-reaper.service", "qjackctl.service")
 
@@ -43,7 +42,7 @@ class X11vncStaysOnCpu0(unittest.TestCase):
 
     def test_the_drop_in_is_a_conffile(self):
         """Every file shipped under etc/ is one (test_package_keeps_local_config)."""
-        conffiles = (PACKAGE / "DEBIAN/conffiles").read_text()
+        conffiles = (DEBIAN / "conffiles").read_text()
         self.assertIn("/etc/systemd/system/x11vnc.service.d/cpu.conf", conffiles)
 
 

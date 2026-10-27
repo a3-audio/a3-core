@@ -11,7 +11,8 @@ once), so the package is the last tag plus the commits since it: v03.0 with
 63 commits on top is 03.0+63. That grows with every push, and a new tag starts
 above every commit before it. No tag is an error rather than a guess: a
 made-up version could sort below what a rig already has, and apt would never
-offer it.
+offer it. a3-system's installer/package.py applies the same rule when it stamps
+packaging/DEBIAN/control (Version: 0 in git).
 
     python3 tools/package_version.py            prints the version for this repo
 """

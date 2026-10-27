@@ -11,10 +11,10 @@ a3-jack any more, and what came after it comes after PipeWire.
 import configparser
 import re
 import unittest
-from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config/debian-x86_64/a3-core"
-CONTROL = PACKAGE / "DEBIAN/control"
+from tools.tests.paths import DEBIAN, PACKAGE
+
+CONTROL = DEBIAN / "control"
 CONFIG = PACKAGE / "home/aaa/.local/share/a3-core/config"
 UNITS = CONFIG / "systemd/user"
 

@@ -16,8 +16,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-POSTINST = (Path(__file__).resolve().parents[2]
-            / "platform-config/debian-x86_64/a3-core/DEBIAN/postinst")
+from tools.tests.paths import DEBIAN
+
+POSTINST = DEBIAN / "postinst"
 
 
 TEMPLATES = POSTINST.parent / "templates"

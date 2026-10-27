@@ -6,11 +6,11 @@ a unit that refuses to start without ~/.vnc/passwd left the rig without its
 screen after a reboot. At a venue the VNC forwards are switched off."""
 
 import unittest
-from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config/debian-x86_64/a3-core"
+from tools.tests.paths import DEBIAN, PACKAGE
+
 UNIT = PACKAGE / "etc/systemd/system/x11vnc.service"
-POSTINST = PACKAGE / "DEBIAN/postinst"
+POSTINST = DEBIAN / "postinst"
 
 
 class VncStartsWithoutAPassword(unittest.TestCase):

@@ -16,12 +16,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config/debian-x86_64/a3-core"
+from tools.tests.paths import DEBIAN, PACKAGE
+
 UNITS = PACKAGE / "home/aaa/.local/share/a3-core/config/systemd/user"
 DROP_IN = UNITS / "beat-analyzer.service.d/a3-core.conf"
 USER_INSTALL = PACKAGE / "home/aaa/.local/share/a3-core/recipes/user_install.sh"
-CONTROL = PACKAGE / "DEBIAN/control"
-POSTINST = PACKAGE / "DEBIAN/postinst"
+CONTROL = DEBIAN / "control"
+POSTINST = DEBIAN / "postinst"
 
 OLD_UNIT = """[Unit]
 Description=beat-analyzer (bpm & vu-meters)

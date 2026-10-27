@@ -16,10 +16,10 @@ lists live there now, and a3-core keeps only what a Core needs.
 
 import re
 import unittest
-from pathlib import Path
 
-CONTROL = (Path(__file__).resolve().parents[2]
-           / "platform-config/debian-x86_64/a3-core/DEBIAN/control")
+from tools.tests.paths import DEBIAN
+
+CONTROL = DEBIAN / "control"
 
 #: beat-analyzer's build on the Core -- see beat-analyzer's CMakeLists.txt
 #: (pkg_check_modules jack and samplerate, REQUIRED pkg-config; sndfile is
