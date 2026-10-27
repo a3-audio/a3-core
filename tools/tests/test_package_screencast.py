@@ -15,7 +15,7 @@ import sys
 import unittest
 from pathlib import Path
 
-from tools.tests.paths import DEBIAN, PACKAGE
+from tools.tests.paths import DEBIAN, PACKAGE, ROOT
 
 HOME = PACKAGE / "home/aaa/.local"
 SCRIPT = HOME / "bin/a3-screencast"
@@ -110,8 +110,8 @@ class TheScript(unittest.TestCase):
 
     def test_it_defaults_to_a_core_the_audio_units_leave_free(self):
         default = re.search(r"A3_SCREENCAST_CPUS:-([^}]+)\}", SCRIPT.read_text()).group(1)
-        reaper = UNIT.with_name("a3-reaper.service").read_text()
-        audio = re.search(r"^CPUAffinity=(.*)$", reaper, re.M).group(1).split()
+        engine = (ROOT / "packaging/a3-engine.service").read_text()
+        audio = re.search(r"^CPUAffinity=(.*)$", engine, re.M).group(1).split()
         self.assertEqual("0", default)
         self.assertNotIn(default, audio)
 

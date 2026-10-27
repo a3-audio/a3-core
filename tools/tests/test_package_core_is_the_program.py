@@ -8,8 +8,8 @@ the rig.
 
 The units switch by drop-ins, not by edits: the postinst installs a missing
 file but may keep a unit the rig already has, so only a new drop-in reaches an
-installed machine. REAPER stays frozen -- its files are untouched -- and never
-starts, because a3-engine-runs always chooses the engine."""
+installed machine. REAPER, which stayed frozen beside the program until
+2026-10-27, is gone from the package."""
 
 import os
 import re
@@ -29,9 +29,8 @@ PROGRAM = "/usr/bin/a3-core"
 #: The first beat-analyzer that no longer meters.
 ANALYZER_NO_VU = "03.0+64"
 
-#: Frozen with REAPER: never edited by the cut. The patchbay left this list
-#: when the maintainer had its dead meter sockets removed (2026-10-27);
-#: test_package_patchbay_has_no_meter_wiring pins it since.
+#: Frozen with REAPER during the cut, deleted with it on 2026-10-27: none of
+#: these ships.
 REAPER_FILES = (
     UNITS / "a3-reaper.service",
     UNITS / "a3-reaper.service.d/audio-engine.conf",
@@ -44,10 +43,6 @@ REAPER_FILES = (
 def git(*args):
     return subprocess.run(["git", "-C", str(ROOT), *args],
                           capture_output=True, check=True).stdout
-
-
-def on_main(path):
-    return git("show", f"main:{path.relative_to(ROOT).as_posix()}")
 
 
 def shipped(directory):
@@ -84,7 +79,6 @@ def run(command, env_extra=None, **kwargs):
 class TheUnitsRunTheProgram(unittest.TestCase):
     def check_switched(self, unit_name, command):
         unit = UNITS / unit_name
-        self.assertEqual(on_main(unit), unit.read_bytes(), f"{unit_name} was edited")
         drop_in = unit.with_name(unit_name + ".d") / "program.conf"
         lines = drop_in_lines(drop_in)
         self.assertIn("ExecStart=", lines)
@@ -143,39 +137,22 @@ class ThePostinstRendersThroughTheProgram(unittest.TestCase):
         self.assertNotRegex(text, r"(?m)^[^#]*\bpip\b")
 
 
-class ReaperStaysFrozen(unittest.TestCase):
-    def test_reaper_files_are_untouched(self):
+class ReaperIsGone(unittest.TestCase):
+    def test_none_of_reapers_files_ships(self):
         for path in REAPER_FILES:
-            self.assertTrue(path.exists(), path)
-        changed = git("diff", "--name-only", "main", "--",
-                      *[str(p.relative_to(ROOT)) for p in REAPER_FILES]).decode()
-        self.assertEqual("", changed)
+            self.assertFalse(path.exists(), path)
 
 
 class TheProgramIsInstalled(unittest.TestCase):
     def test_the_program_is_in_this_package(self):
         # No second package to depend on: packaging/stage builds the program into this one.
         self.assertNotIn("a3-engine", [e.split()[0] for e in entries("Depends")])
+        # It takes over the old a3-engine package's files, and removes it on the upgrade.
+        self.assertIn("a3-engine", entries("Conflicts"))
+        self.assertIn("a3-engine", entries("Replaces"))
         self.assertTrue((ROOT / "packaging/a3-engine.service").is_file())
         self.assertIn(f"beat-analyzer (>= {ANALYZER_NO_VU})", entries("Recommends"))
         self.assertNotIn("beat-analyzer", control_field("Depends"))
-
-
-class TheEngineAlwaysRuns(unittest.TestCase):
-    TOOL = LOCAL / "bin/a3-engine-runs"
-
-    def test_engine_runs_always_chooses_the_engine(self):
-        self.assertEqual("#!/bin/sh", self.TOOL.read_text().splitlines()[0])
-        self.assertTrue(os.access(self.TOOL, os.X_OK))
-        missing = {"A3_ENGINE_BINARY": "/nonexistent/a3-engine"}
-        engine = run(["sh", str(self.TOOL)], missing)
-        reaper = run(["sh", str(self.TOOL), "--reaper"], missing)
-        other = run(["sh", str(self.TOOL), "--what"])
-        self.assertEqual((0, "", ""), (engine.returncode, engine.stdout, engine.stderr))
-        self.assertEqual((1, "", ""), (reaper.returncode, reaper.stdout, reaper.stderr))
-        self.assertEqual(2, other.returncode)
-        self.assertIn("usage: a3-engine-runs [--reaper]", other.stderr)
-        self.assertEqual(2, run(["sh", str(self.TOOL), "--reaper", "x"]).returncode)
 
 
 class TheScreencastRunsTheProgram(unittest.TestCase):

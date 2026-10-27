@@ -12,7 +12,7 @@ import configparser
 import re
 import unittest
 
-from tools.tests.paths import DEBIAN, PACKAGE
+from tools.tests.paths import DEBIAN, PACKAGE, ROOT
 
 CONTROL = DEBIAN / "control"
 CONFIG = PACKAGE / "home/aaa/.local/share/a3-core/config"
@@ -22,8 +22,7 @@ UNITS = CONFIG / "systemd/user"
 #: after a3-jack: they need the audio graph.
 AUDIO_UNITS = (
     UNITS / "a3-core.service",
-    UNITS / "a3-reaper.service",
-    UNITS / "qjackctl.service",
+    ROOT / "packaging/a3-engine.service",
     UNITS / "beat-analyzer.service.d/a3-core.conf",
     UNITS / "stemdeck.service.d/a3-core.conf",
 )
@@ -66,8 +65,10 @@ class DependsOnPipeWire(unittest.TestCase):
     def test_the_jack_headers_stay_for_builds(self):
         self.assertIn("libjack-jackd2-dev", depends())
 
-    def test_qjackctl_stays_for_its_patchbay(self):
-        self.assertIn("qjackctl", depends())
+    def test_qjackctl_went_with_its_patchbay(self):
+        """Every cable of the patchbay had a REAPER end; the engine makes its
+        own links (2026-10-27)."""
+        self.assertNotIn("qjackctl", depends())
 
 
 class NothingStartsJackd(unittest.TestCase):
@@ -94,7 +95,7 @@ class NothingStartsJackd(unittest.TestCase):
 class AudioUnitsComeAfterPipeWire(unittest.TestCase):
     def test_each_comes_after_pipewire_and_wireplumber(self):
         for path in AUDIO_UNITS:
-            with self.subTest(unit=str(path.relative_to(UNITS))):
+            with self.subTest(unit=str(path.relative_to(ROOT))):
                 after = unit_section(path, "Unit").get("After", "").split()
                 self.assertIn("pipewire.service", after)
                 self.assertIn("wireplumber.service", after)

@@ -1,7 +1,8 @@
 """The rig's workspaces: which program lives where, and where i3bar shows.
 
-Decided 2026-09-30: 1 A3 Motion, 2 StemDeck, 3 REAPER (the engine window since 2026-10-26, renamed ENGINE), 4 QjackCtl, 5 the
-Scarlett mixer; 7 the virtual desk (A3 Desk, since 2026-10-25). The two touch UIs fill their 768x1024 screen and switch
+Decided 2026-09-30: 1 A3 Motion, 2 StemDeck, 3 REAPER (the engine window since 2026-10-26, renamed ENGINE), 4 QjackCtl
+(gone with REAPER on 2026-10-27; the workspace keeps its number, labelled "4"), 5 the Scarlett mixer;
+7 the virtual desk (A3 Desk, since 2026-10-25). The two touch UIs fill their 768x1024 screen and switch
 between each other themselves; from workspace 3 on, i3bar at the top gives
 the way back -- the a3-core program's i3-bar role shows it there and hides it on 1 and 2.
 """
@@ -41,14 +42,15 @@ class WhereThingsLive(unittest.TestCase):
             '[class="A3 Motion UI"]': "1:MOTION",
             '[class="StemDeck"]': "2:STEMDECK",
             '[class="a3-core"]': "3:ENGINE",
-            '[class="REAPER"]': "3:ENGINE",
-            '[class="QjackCtl"]': "4:QJACKCTL",
             '[title="Scarlett 18i20 USB"]': "5:SCARLETT",
             '[class="A3 Desk"]': "7:DESK",
             '[class="StemDeck" title="^StemDeck B$"]': "6:STEMDECK B",
         }
         for criteria, name in expected.items():
             self.assertEqual(workspace_of(self.config, criteria), name, criteria)
+
+    def test_workspace_4_keeps_its_number_and_names_nothing(self):
+        self.assertEqual("4", workspace_variables(self.config)["ws4"])
 
     def test_the_programs_window_is_matched_by_its_application_name(self):
         """JUCE sets WM_CLASS to getApplicationName(), which is "a3-core" for

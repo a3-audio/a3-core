@@ -84,9 +84,9 @@ class MirrorCheck(unittest.TestCase):
 
     def test_config_is_compared_where_postinst_puts_it(self):
         # config/* is copied to ~/.config by postinst; that copy is the live one.
-        self.m.ship("home/aaa/.local/share/a3-core/config/rncbc.org/a3-patchbay.xml", "p")
-        self.m.put("home/aaa/.config/rncbc.org/a3-patchbay.xml", "mine")
-        self.assertIn("home/aaa/.config/rncbc.org/a3-patchbay.xml", self.m.changes())
+        self.m.ship("home/aaa/.local/share/a3-core/config/i3/config", "p")
+        self.m.put("home/aaa/.config/i3/config", "mine")
+        self.assertIn("home/aaa/.config/i3/config", self.m.changes())
 
     def test_a_file_as_dpkg_installed_it_is_no_change_when_the_repo_is_newer(self):
         self.m.ship("etc/rtirq.conf", "newer in the repo")
@@ -94,8 +94,8 @@ class MirrorCheck(unittest.TestCase):
         self.assertEqual(self.m.changes({str(live): md5("as installed")}), [])
 
     def test_a_dpkg_file_edited_after_the_install_is_a_change(self):
-        # The patchbay case: written into dpkg's own copy, replaced by the next install.
-        rel = "home/aaa/.local/share/a3-core/config/rncbc.org/a3-patchbay.xml"
+        # The patchbay case (2026-09-29): written into dpkg's own copy, replaced by the next install.
+        rel = "home/aaa/.local/share/a3-core/config/i3/config"
         self.m.ship(rel, "shipped")
         live = self.m.put(rel, "written here")
         self.assertEqual(self.m.changes({str(live): md5("shipped")}), [rel])
@@ -111,9 +111,9 @@ class MirrorCheck(unittest.TestCase):
         link.symlink_to(shipped)
         self.assertEqual(self.m.changes(), [])
 
-    def test_what_the_application_owns_is_never_compared(self):
-        self.m.ship("home/aaa/.local/share/a3-core/config/rncbc.org/QjackCtl.conf", "x")
-        self.m.put("home/aaa/.config/rncbc.org/QjackCtl.conf", "window moved")
+    def test_what_a_program_writes_for_itself_is_never_compared(self):
+        self.m.ship("home/aaa/.local/share/a3-core/tools/__pycache__/x.pyc", "x")
+        self.m.put("home/aaa/.local/share/a3-core/tools/__pycache__/x.pyc", "recompiled")
         self.assertEqual(self.m.changes(), [])
 
     def test_debian_control_files_are_not_shipped_files(self):
@@ -155,14 +155,6 @@ class MirrorCheck(unittest.TestCase):
         self.m.ship("home/aaa/.ssh/authorized_keys", "k")
         self.m.put("home/aaa/.ssh/authorized_keys", "k")
         self.m.put("home/aaa/.ssh/id_private", "secret")
-        self.assertEqual(mirror_check.new_beside(self.m.pairs(), self.m.root), [])
-
-    def test_reapers_own_files_are_never_named(self):
-        self.m.ship("home/aaa/.local/share/a3-core/config/REAPER/a3.ini", "x")
-        self.m.put("home/aaa/.config/REAPER/a3.ini", "x")
-        for own in ("reaper-reginfo2.ini", "reaper-install-rev.txt",
-                    "reaper-configzip-info", "reaper-vstshells64.ini"):
-            self.m.put(f"home/aaa/.config/REAPER/{own}", "r")
         self.assertEqual(mirror_check.new_beside(self.m.pairs(), self.m.root), [])
 
     # ── Which side is newer (2026-09-29) ─────────────────────────────────

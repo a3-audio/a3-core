@@ -4,7 +4,7 @@ Architecture: amd64
 Maintainer: Rafjagger
 Section: sound
 Priority: optional
-Depends: ${shlibs:Depends}, systemd, git, vim, i3, htop, linux-image-rt-amd64, liblo-tools, qjackctl, x11vnc, iem-plugin-suite-vst3, xserver-xorg-video-dummy, xserver-xorg-video-amdgpu, curl, net-tools, xinit, sudo, wget, gpg, unzip, build-essential, cmake, pkg-config, pipewire, pipewire-jack, wireplumber, linuxptp, libjack-jackd2-dev, libsamplerate0-dev, libgtk2.0-0, pcmanfm, jack-example-tools, tree, x11-utils, x11-xserver-utils, i3status, dex, unclutter-xfixes, maim, ffmpeg, xclip, brightnessctl, openssh-server
+Depends: ${shlibs:Depends}, systemd, git, vim, i3, htop, linux-image-rt-amd64, liblo-tools, x11vnc, xserver-xorg-video-dummy, xserver-xorg-video-amdgpu, curl, net-tools, xinit, sudo, wget, gpg, build-essential, cmake, pkg-config, pipewire, pipewire-jack, wireplumber, linuxptp, libjack-jackd2-dev, libsamplerate0-dev, libgtk2.0-0, pcmanfm, jack-example-tools, tree, x11-utils, x11-xserver-utils, i3status, dex, unclutter-xfixes, maim, ffmpeg, xclip, brightnessctl, openssh-server
 Recommends: beat-analyzer (>= 03.0+64), onboard
 Breaks: beat-analyzer (<< 03.0+64)
 Conflicts: wpasupplicant, modemmanager, blueman, bluetooth,bluez, bluez-obexd, network-manager, plymouth, cron, gnome-keyring, gnome-accessibility-themes, gnome-keyring-pkcs11, gnome-themes-extra, gnome-themes-extra-data, dhcpcd-base, gvfs-common, gvfs-daemons, gvfs-fuse, gvfs-libs, i3lock, a3-engine

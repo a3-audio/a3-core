@@ -16,7 +16,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools.tests.paths import DEBIAN
+from tools.tests.paths import DEBIAN, LOCAL
 
 POSTINST = DEBIAN / "postinst"
 
@@ -50,10 +50,10 @@ class InstallShippedConfig(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         root = Path(self.tmp.name)
         self.src, self.dst, self.backup = root / "src", root / "dst", root / "backup"
-        (self.src / "REAPER/ProjectTemplates").mkdir(parents=True)
-        (self.src / "REAPER/ProjectTemplates/a3-reaper.RPP").write_text("new template\n")
-        (self.src / "REAPER/presets").mkdir()
-        (self.src / "REAPER/presets/with space.ini").write_text("preset\n")
+        (self.src / "systemd/user").mkdir(parents=True)
+        (self.src / "systemd/user/a3-main.service").write_text("new unit\n")
+        (self.src / "pipewire/pipewire.conf.d").mkdir(parents=True)
+        (self.src / "pipewire/pipewire.conf.d/with space.conf").write_text("rate\n")
         (self.src / "i3").mkdir()
         (self.src / "i3/config").write_text("new i3\n")
         self.dst.mkdir()
@@ -61,7 +61,7 @@ class InstallShippedConfig(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def install(self, replace="reaper, i3, systemd, qjackctl, pipewire, iem, other"):
+    def install(self, replace="i3, systemd, pipewire, other"):
         return subprocess.run(
             ["sh", "-c", f"set -e\n{function(*INSTALLING)}\n"
              'install_shipped_config "$1" "$2" "$3" "$4"', "sh",
@@ -99,17 +99,17 @@ class InstallShippedConfig(unittest.TestCase):
         self.assertNotIn("i3/config", done.stdout)
 
     def test_files_the_package_does_not_ship_are_left_alone(self):
-        (self.dst / "REAPER").mkdir()
-        (self.dst / "REAPER/reaper.ini").write_text("this machine's audio device\n")
+        (self.dst / "pipewire").mkdir()
+        (self.dst / "pipewire/client.conf").write_text("this machine's own\n")
         self.install()
-        self.assertEqual("this machine's audio device\n",
-                         (self.dst / "REAPER/reaper.ini").read_text())
+        self.assertEqual("this machine's own\n",
+                         (self.dst / "pipewire/client.conf").read_text())
 
 
     def test_a_part_not_chosen_is_kept_and_named(self):
         (self.dst / "i3").mkdir()
         (self.dst / "i3/config").write_text("old i3\n")
-        done = self.install(replace="reaper")
+        done = self.install(replace="systemd")
         self.assertEqual("old i3\n", (self.dst / "i3/config").read_text())
         self.assertFalse((self.backup / "i3/config").exists())
         self.assertIn("kept the local ~/.config/i3/config", done.stdout)
@@ -121,13 +121,25 @@ class InstallShippedConfig(unittest.TestCase):
     def test_only_parts_with_a_differing_file_are_offered(self):
         (self.dst / "i3").mkdir()
         (self.dst / "i3/config").write_text("old i3\n")
-        (self.dst / "REAPER/ProjectTemplates").mkdir(parents=True)
-        (self.dst / "REAPER/ProjectTemplates/a3-reaper.RPP").write_text("saved live\n")
-        # presets/with space.ini is missing: installing it replaces nothing.
-        self.assertEqual("reaper, i3", self.groups())
+        (self.dst / "systemd/user").mkdir(parents=True)
+        (self.dst / "systemd/user/a3-main.service").write_text("edited here\n")
+        # pipewire/.../with space.conf is missing: installing it replaces nothing.
+        self.assertEqual("i3, systemd", self.groups())
 
     def test_nothing_differing_offers_nothing(self):
         self.assertEqual("", self.groups())
+
+    def test_reaper_qjackctl_and_iem_are_no_parts_any_more(self):
+        """REAPER, the patchbay and the IEM settings left the package
+        (2026-10-27); a leftover copy under such a folder is nobody's part."""
+        for rel in ("REAPER/a3-reaper.RPP", "rncbc.org/a3-patchbay.xml", "IEM/Decoder.settings"):
+            (self.src / rel).parent.mkdir(parents=True, exist_ok=True)
+            (self.src / rel).write_text("shipped\n")
+            (self.dst / rel).parent.mkdir(parents=True, exist_ok=True)
+            (self.dst / rel).write_text("local\n")
+        offered = self.groups().split(", ")
+        for gone in ("reaper", "qjackctl", "iem"):
+            self.assertNotIn(gone, offered)
 
 
 class EveryShippedFileHasAPart(unittest.TestCase):
@@ -135,7 +147,8 @@ class EveryShippedFileHasAPart(unittest.TestCase):
     which says nothing about what it is."""
 
     def test_every_shipped_file_falls_in_a_named_part(self):
-        shipped = POSTINST.parents[1] / "home/aaa/.local/share/a3-core/config"
+        shipped = LOCAL / "share/a3-core/config"
+        self.assertTrue(shipped.is_dir(), shipped)
         for path in shipped.rglob("*"):
             if path.is_file():
                 rel = str(path.relative_to(shipped))
@@ -158,7 +171,7 @@ class TheReplaceQuestion(unittest.TestCase):
 
     def test_every_offered_part_starts_ticked(self):
         """The default is everything (decided 2026-10-04): replacing nothing
-        is what left a3nuc2 on a six month old REAPER."""
+        is what left a3nuc2 on a six month old REAPER template."""
         body = function("ask_replace_question")
         self.assertIn('db_set a3-core/replace-config "$groups"', body)
 
@@ -180,12 +193,17 @@ class TheReplaceQuestion(unittest.TestCase):
 
     def test_labels_carry_no_comma(self):
         """debconf reads a comma in Choices as the next choice."""
-        for group in ("reaper", "i3", "systemd", "qjackctl", "pipewire", "iem", "other"):
+        for group in ("i3", "systemd", "pipewire", "other"):
             label = subprocess.run(
                 ["sh", "-c", f"{function('config_group_label')}\n"
                  'config_group_label "$1"', "sh", group],
                 capture_output=True, text=True).stdout.strip()
             self.assertNotIn(",", label, group)
+
+    def test_the_question_names_no_reaper(self):
+        block = TEMPLATES.read_text().split("Template: a3-core/replace-config", 1)[1]
+        block = block.split("\nTemplate: ", 1)[0]
+        self.assertNotIn("REAPER", block)
 
 
 class NoMoreCopyNoClobber(unittest.TestCase):

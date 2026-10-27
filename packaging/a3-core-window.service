@@ -9,8 +9,8 @@ PartOf=a3-main.service
 After=a3-core.service a3-engine.service
 
 [Service]
-# The display by name and the screen awaited here, as a3-reaper.service does. The helper is
-# a3-core's (its package installs it into ~/.local/bin); this package does not ship it.
+# The display by name and the screen awaited here. The helper comes with the deployment's
+# payload, in ~/.local/bin.
 Environment=DISPLAY=:0
 ExecStartPre=%h/.local/bin/a3-wait-for-the-screen
 # No role: the window. It exits 0 when it is closed (also after the quit question) and on SIGTERM,

@@ -195,9 +195,8 @@ class UnitTest(unittest.TestCase):
                      "Restart=on-failure", "RestartSec=1",
                      "WantedBy=default.target"):
             self.assertIn(line, lines)
-        # a3-main Wants a3-reaper.service and this unit in one transaction; a Conflicts= between them
-        # drops a start job before any condition runs, and then nothing may run. REAPER stays off
-        # through a3-core's own drop-in (ExecCondition a3-engine-runs --reaper), not through this unit.
+        # a3-main Wants this unit with others in one transaction; a Conflicts= between them drops a
+        # start job before any condition runs, and then nothing may run.
         for line in lines:
             self.assertFalse(line.startswith("Conflicts="), line)
         # A broken open (a port taken) must stop visibly, not restart for ever.
@@ -219,7 +218,7 @@ class UnitTest(unittest.TestCase):
         self.assertNotIn("A3_ENGINE_BINARY", text)
 
     def test_the_unit_leaves_the_priorities_to_the_jack_library(self):
-        # Raising the whole process put its GUI/OSC threads above JACK's (a3-reaper.service says why).
+        # Raising the whole process put its GUI/OSC threads above JACK's (2026-10-06).
         lines = unit_lines()
         self.assertIn("Environment=LD_PRELOAD=%h/.local/lib/a3/libjack-rt-priority.so", lines)
         for line in lines:

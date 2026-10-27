@@ -75,10 +75,9 @@ class TheUnitIsThePackages(unittest.TestCase):
 
 
 class NothingBuildsTheCheckout(unittest.TestCase):
-    def test_the_user_install_does_not_build_the_analyzer(self):
-        text = USER_INSTALL.read_text()
-        self.assertNotIn("build.sh", text)
-        self.assertNotIn("beat-analyzer/build", text)
+    def test_the_user_install_that_built_it_is_gone(self):
+        # It went with REAPER, which it also installed (2026-10-27).
+        self.assertFalse(USER_INSTALL.exists())
 
 
 class ThePackageIsAsked(unittest.TestCase):

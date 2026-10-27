@@ -3,7 +3,7 @@
 #
 # A template: a3-osc-render renders it into ~/.config/pipewire/ with the
 # audio network's socket (the truth's network.audio_port) and the sender's
-# name, "AES67 <hostname> out" -- the name JACK clients and the patchbay see.
+# name, "AES67 <hostname> out" -- the name JACK clients see.
 # Rate and block come from pipewire-aes67.conf.d/10-a3-rate.conf.
 
 context.properties = {
@@ -157,8 +157,8 @@ context.modules = [
                 device.api = aes67
                 sess.sap.announce = true
                 node.always-process = true
-                # Not in pipewire.ptp0: the Scarlett drives this sender like REAPER, so
-                # the samples go out unconverted and REAPER is never pulled under PTP.
+                # Not in pipewire.ptp0: the Scarlett drives this sender like the engine, so
+                # the samples go out unconverted and the engine is never pulled under PTP.
                 rtp.ntp = 0
                 rtp.fetch-ts-refclk = true
             }

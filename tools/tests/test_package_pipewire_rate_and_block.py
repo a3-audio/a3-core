@@ -4,15 +4,15 @@
 At 64 REAPER took 1.0-1.1 ms of a 1.45 ms cycle after a restart on 2026-10-25 and the Scarlett
 counted about 160 xruns a second; at 128 the counter stood still.
 
-The rig runs at 44.1 kHz end to end -- REAPER, the stems, the AES67 streams --
+The rig runs at 44.1 kHz end to end -- the engine, the stems, the AES67 streams --
 and a driver at 48 kHz would resample every packet. The block never goes below
 128 samples: the AES67 nodes share their PTP clock with every node connected
 to them, and their 0.5 ms packets would otherwise pull the whole graph down to
-32 samples, more than REAPER and the Scarlett keep up with. Both PipeWire
+32 samples, more than the engine and the Scarlett keep up with. Both PipeWire
 instances -- the session's and the AES67 one -- get the same settings.
 
-JACK programs see the Scarlett as "system", so the patchbay's
-system:playback_N and system:capture_N fit as they did on jackd.
+JACK programs see the Scarlett as "system", so system:playback_N and
+system:capture_N fit as they did on jackd.
 """
 
 import re
