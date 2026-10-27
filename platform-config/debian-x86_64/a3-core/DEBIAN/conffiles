@@ -7,4 +7,6 @@
 /etc/systemd/system/x11vnc.service
 /etc/systemd/system/x11vnc.service.d/cpu.conf
 /etc/systemd/network/99-default.link.d/a3-eee.conf
+/etc/linuxptp/a3-ptp4l.conf
+/etc/systemd/system/ptp4l@.service.d/a3.conf
 remove-on-upgrade /etc/rtirq.conf
