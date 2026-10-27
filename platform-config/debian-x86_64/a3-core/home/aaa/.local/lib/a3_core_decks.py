@@ -43,6 +43,7 @@ class DeckSelector:
         # a place in ring(), not a source; starts on what the channel plays
         self._cursors = [self.ring(c).index(ANALOG) for c in range(1, channels + 1)]
         self._heard = {}
+        self._audio = {}
         self._held_before = set()
 
     # -- the ring ---------------------------------------------------------
@@ -95,9 +96,22 @@ class DeckSelector:
     def heard(self, deck, now):
         self._heard[deck] = now
 
+    def heard_audio(self, deck, linked, now):
+        """The engine's report that every link of this deck's slot is live
+        (`linked` true) or that one is missing."""
+        self._audio[deck] = (bool(linked), now)
+
     def present(self, deck, now):
+        """A fresh hello, and the engine hears the deck's audio -- or has not
+        said anything about it lately, which is an engine that never reports
+        (R11)."""
         last = self._heard.get(deck)
-        return last is not None and now - last <= PRESENCE_SECONDS
+        if last is None or now - last > PRESENCE_SECONDS:
+            return False
+        report = self._audio.get(deck)
+        if report is None or now - report[1] > PRESENCE_SECONDS:
+            return True
+        return report[0]
 
     # -- the deck's 3D ------------------------------------------------------
 

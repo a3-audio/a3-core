@@ -1684,6 +1684,22 @@ def osc_handler_deck_hello(client_address: Tuple[str, int], address: str,
     report_decks()
 
 
+def osc_handler_engine_deck_audio(client_address: Tuple[str, int], address: str,
+                                  *osc_arguments: List[Any]) -> None:
+    """The engine's word on whether it hears a deck's audio (every map link of
+    the slot live), with each hello and on change. A deck the engine does not
+    hear is not present, however fresh its own hello (R11)."""
+    found = known_address(client_address, address, osc_arguments)
+    if found is None:
+        return
+    traffic.seen(IN, address, osc_arguments[0] if osc_arguments else None,
+                 peer_name(client_address[0], PEER_HOSTS))
+    if not _engine_mode or not osc_arguments:
+        return
+    _decks.heard_audio(found[1]["deck"], bool(osc_arguments[0]), time.monotonic())
+    report_decks()
+
+
 def stemdeck_said_hello(host, now):
     """StemDeck is there. When that is news (a3_core_presence.HelloWatch),
     learn where it listens and ask it for every stem's switches -- it may have
@@ -2337,6 +2353,9 @@ if __name__ == "__main__":
     for deck in range(first_deck, last_deck + 1):
         dispatcher.map(_truth.address("stemdeck.deck-hello", deck=deck),
                        osc_handler_deck_hello, needs_reply_address=True)
+    for deck in range(first_deck, last_deck + 1):
+        dispatcher.map(_truth.address("engine.deck-audio", deck=deck),
+                       osc_handler_engine_deck_audio, needs_reply_address=True)
     dispatcher.map(_truth.address("prodj.live"), osc_handler_prodj_live,
                    needs_reply_address=True)
     for pointer in ("stemdeck.pointer", "motion.pointer"):

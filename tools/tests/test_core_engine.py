@@ -216,15 +216,16 @@ class Session(unittest.TestCase):
 
 
 class TheReturnSourceFollowsTheDesksMode(unittest.TestCase):
-    """Engine mode keeps the desk's return word (fix round 1 of B4): STEM
-    plays deck A's AUX pair, ANALOG plays analog 11/12."""
+    """Engine mode keeps the desk's return word: STEM mode (the desk's word 1)
+    plays the delay (R1), ANALOG plays analog 11/12."""
 
-    def test_stem_mode_is_deck_a(self):
-        from a3_core_engine import engine_return_source
+    def test_stem_mode_returns_the_delay(self):
+        from a3_core_engine import RETURN_DELAY, engine_return_source
         from a3_core_stems import STEM_MODE
-        self.assertEqual(engine_return_source(STEM_MODE), 1)
+        self.assertEqual(RETURN_DELAY, 1)
+        self.assertEqual(engine_return_source(STEM_MODE), RETURN_DELAY)
 
-    def test_analog_mode_is_analog(self):
+    def test_analog_mode_returns_analog(self):
         from a3_core_engine import engine_return_source
         from a3_core_stems import ANALOG_MODE
         self.assertEqual(engine_return_source(ANALOG_MODE), 0)

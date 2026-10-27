@@ -277,6 +277,13 @@ class Decks(unittest.TestCase):
         # The family handler leaves it to its own.
         self.assertIn('"stemdeck.deck-hello"', _source_of("osc_handler_stemdeck"))
 
+    def test_engine_deck_audio_is_mapped_by_the_truth(self):
+        main = _main_block()
+        self.assertIn('_truth.address("engine.deck-audio", deck=deck)', main)
+        self.assertIn("osc_handler_engine_deck_audio", main)
+        handler = _source_of("osc_handler_engine_deck_audio")
+        self.assertIn("_decks.heard_audio(", handler)
+
     def test_deck_words_go_to_the_decks_own_host(self):
         sender = _source_of("send_to_deck")
         self.assertIn("_deck_clients.get(", sender)

@@ -134,6 +134,44 @@ class Presence(unittest.TestCase):
         self.assertFalse(s.present(1, 105.01))
         self.assertFalse(s.present(2, 100.0))
 
+    def test_deck_present_with_hello_and_audio(self):
+        s = DeckSelector()
+        s.heard(1, 100.0)
+        s.heard_audio(1, True, 100.0)
+        self.assertTrue(s.present(1, 101.0))
+
+    def test_deck_absent_when_engine_reports_its_audio_missing(self):
+        s = DeckSelector()
+        s.heard(1, 100.0)
+        s.heard_audio(1, False, 100.0)
+        self.assertFalse(s.present(1, 101.0))
+
+    def test_deck_present_on_hello_alone_without_engine_reports(self):
+        # an engine that never reports (an older one)
+        s = DeckSelector()
+        s.heard(1, 100.0)
+        self.assertTrue(s.present(1, 101.0))
+
+    def test_audio_report_older_than_five_seconds_is_ignored(self):
+        s = DeckSelector()
+        s.heard_audio(1, False, 100.0)
+        s.heard(1, 105.0)
+        self.assertFalse(s.present(1, 105.0))
+        s.heard(1, 105.5)
+        self.assertTrue(s.present(1, 105.5))
+
+    def test_audio_report_alone_does_not_make_a_deck_present(self):
+        s = DeckSelector()
+        s.heard_audio(1, True, 100.0)
+        self.assertFalse(s.present(1, 100.0))
+
+    def test_a_later_report_replaces_an_earlier_one(self):
+        s = DeckSelector()
+        s.heard(1, 100.0)
+        s.heard_audio(1, False, 100.0)
+        s.heard_audio(1, True, 101.0)
+        self.assertTrue(s.present(1, 101.0))
+
     def test_absent_deck_keeps_its_channel(self):
         s = DeckSelector()
         pick(s, 1, 1)

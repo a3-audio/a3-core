@@ -16,6 +16,7 @@ import os
 import runpy
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -220,6 +221,16 @@ class EngineModeInProcess(unittest.TestCase):
         self.channel("/channel/3/stem/turn", 1)
         self.channel("/channel/3/stem/push", 1)
         self.assertEqual(self.engine.sent, [])
+
+    def test_engine_deck_audio_reaches_the_deck_selector(self):
+        self.core["osc_handler_deck_hello"](DECK_A, "/stemdeck/1/hello", 1)
+        self.assertTrue(self.core["_decks"].present(1, time.monotonic()))
+        self.motion.sent.clear()
+        self.core["osc_handler_engine_deck_audio"](LOCAL, "/engine/deck/1/audio", 0)
+        self.assertIn(("/stemdeck/1/present", 0), self.motion.sent)
+        self.assertFalse(self.core["_decks"].present(1, time.monotonic()))
+        self.core["osc_handler_engine_deck_audio"](LOCAL, "/engine/deck/1/audio", 1)
+        self.assertIn(("/stemdeck/1/present", 1), self.motion.sent)
 
     def test_a_turn_reports_the_cursor_and_a_push_the_source(self):
         self.hello("boot-1")
