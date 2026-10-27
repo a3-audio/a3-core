@@ -104,11 +104,6 @@ void Core::handlePacket (const Endpoint& from, const uint8_t* data, size_t size)
         dispatcher.dispatch (from, message);
 }
 
-void Core::handleVu (const Endpoint&, const uint8_t*, size_t)
-{
-    notPortedYet ("a3_core_vu_relay.forward and vu_destinations (Tasks 19, 22)");
-}
-
 // on_tick, then what B1's timers and SeenFile's thread did: the debounced writes that fell due.
 void Core::tick()
 {
@@ -242,18 +237,6 @@ void Core::speakRememberedState()
          + std::to_string (subscribers.size()) + " subscribers");
 }
 
-// Every value to every subscriber, as the messages it would have arrived as: not through broadcast(),
-// which drops a value already passed on -- a recall is somebody who knows nothing.
-int Core::sayTheWholeState()
-{
-    const auto messages = recallMessages (truth, channels, master, relayed);
-    for (const auto& message : messages)
-        for (const auto& client : subscribers)
-            send (client, message);
-    speakStems (true);
-    return static_cast<int> (messages.size());
-}
-
 void Core::speakStems (bool full)
 {
     // REAPER's half (analog, stems and return-source sends) reaches nobody in engine mode.
@@ -296,44 +279,6 @@ void Core::reportDecks (bool full)
 //==============================================================================
 // The tick's watchers.
 
-void Core::noticeMotionSilence (double now)
-{
-    if (const auto moved = motion.silence (now))
-        pointMotionAt (*moved, "the remote one is silent, back to the rig's");
-}
-
-void Core::pointMotionAt (const Endpoint&, const std::string&)
-{
-    notPortedYet ("point_motion_at (Task 19)");
-}
-
-void Core::noticeDeskSilence (double now)
-{
-    subscribersOwner.check ("a desk leaving");
-    if (! desks.silence (now).empty())
-        notPortedYet ("notice_desk_silence's leaving desks (Task 19)");
-}
-
-bool Core::deskLeaves (const std::string&)
-{
-    notPortedYet ("desk_leaves (Task 19)");
-}
-
-void Core::liveOffWhenNoProdjIsLeft()
-{
-    notPortedYet ("live_off_when_no_prodj_is_left (Task 19)");
-}
-
-void Core::announceLive()
-{
-    notPortedYet ("announce_live (Task 19)");
-}
-
-std::vector<Client> Core::deckListeners() const
-{
-    notPortedYet ("deck_listeners (Task 19)");
-}
-
 void Core::noticeDeckPresence (double now)
 {
     constexpr double everySeconds = 1.0;   // DECK_PRESENCE_EVERY_SECONDS
@@ -356,7 +301,6 @@ void Core::tellWritten (int before, int after, const juce::File& path)
         env.fileWritten (path);
 }
 
-
 //==============================================================================
 // The dispatcher.
 
@@ -372,17 +316,15 @@ void Core::mapHandlers()
     for (const auto& [family, method] : families)
         dispatcher.map (std::string ("/") + family + "/*", to (method));
     dispatcher.map (truth.address ("state.recall"), to (&Core::recall));
-    dispatcher.map (truth.address ("beat"), [this] (const Endpoint&, const OscMessage&) { notPortedYet ("osc_handler_beat (Task 19)"); });
+    dispatcher.map (truth.address ("beat"), to (&Core::beatHandler));
     dispatcher.map (truth.address ("device.hello"), to (&Core::deviceHello));
     dispatcher.map (truth.address ("engine.hello"), to (&Core::engineHello));
     const auto [firstDeck, lastDeck] = truth.indexRange ("stemdeck.deck-hello", "deck");
     for (int deck = firstDeck; deck <= lastDeck; ++deck)
         dispatcher.map (truth.address ("stemdeck.deck-hello", { { "deck", deck } }), to (&Core::deckHello));
-    dispatcher.map (truth.address ("prodj.live"),
-                    [this] (const Endpoint&, const OscMessage&) { notPortedYet ("osc_handler_prodj_live (Task 19)"); });
+    dispatcher.map (truth.address ("prodj.live"), to (&Core::prodjLiveHandler));
     for (const auto* pointer : { "stemdeck.pointer", "motion.pointer" })
-        dispatcher.map (truth.address (pointer),
-                        [this] (const Endpoint&, const OscMessage&) { notPortedYet ("osc_handler_pointer (Task 19)"); });
+        dispatcher.map (truth.address (pointer), to (&Core::pointerHandler));
     dispatcher.setDefault ([this] (const Endpoint& from, const OscMessage& message) { unrouted (from, message); });
 }
 

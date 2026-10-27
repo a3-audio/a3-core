@@ -69,6 +69,9 @@ public:
 
     // Every datagram to Core's own port, for the runner to feed back after the step.
     std::function<void (const std::vector<uint8_t>&)> toSelf;
+    // Told after each send is written down: a test that needs something to arrive in the middle of
+    // a send (another thread's view of the serve loop) hooks it here.
+    std::function<void (const a3core::Client&, const a3core::OscMessage&)> sent;
 
     void send (const a3core::Client& client, const a3core::OscMessage& message) override
     {
@@ -82,6 +85,8 @@ public:
         transcript.add (juce::var (entry));
         if (client.name == "self" && toSelf)
             toSelf (a3core::encodeMessage (message));
+        if (sent)
+            sent (client, message);
     }
 
     void sendRaw (const a3core::Client& client, const std::vector<uint8_t>& data) override

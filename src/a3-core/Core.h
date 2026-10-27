@@ -32,6 +32,7 @@
 #include "Recall.h"
 #include "SeenFile.h"
 #include "SendFailures.h"
+#include "Tempo.h"
 #include "StartupRecall.h"
 #include "StateFile.h"
 #include "Stems.h"
@@ -74,7 +75,7 @@ public:
 
     void start();                                                     // B1's start-up, engine mode
     void handlePacket (const Endpoint& from, const uint8_t*, size_t);
-    void handleVu (const Endpoint& from, const uint8_t*, size_t);     // core.vu-relay datagrams (Task 22)
+    void handleVu (const Endpoint& from, const uint8_t*, size_t);     // core.vu-relay datagrams (the engine's: Task 22)
     void tick();                                                      // on_tick + debounce flushes, every 0.1 s
     void stop();                                                      // flush state, evening, seen
 
@@ -101,8 +102,9 @@ private:
     void speakStems (bool full);
     void reportDecks (bool full);
 
-    // The tick's watchers. A method whose body only says notPortedYet is a path no scenario pins yet:
-    // it throws until the task named in it ports it test-first (tests/core/scenarios/README.md).
+    // The tick's watchers (CorePeers.cpp, but the decks' presence). A method whose body only says
+    // notPortedYet is a path no scenario pins yet: it throws until the task named in it ports it
+    // test-first (tests/core/scenarios/README.md).
     void noticeMotionSilence (double now);
     void pointMotionAt (const Endpoint& endpoint, const std::string& why);
     void noticeDeskSilence (double now);
@@ -119,7 +121,8 @@ private:
     void unrouted (const Endpoint& from, const OscMessage& message);
     [[noreturn]] void notPortedYet (const char* handler) const;
 
-    // The router (CoreValues.cpp): the handlers of Core's main port and what they share.
+    // The router: the handlers of Core's main port and what they share -- the values (CoreValues.cpp),
+    // who Core follows and tells (CorePeers.cpp), the recall and the engine's replay (CoreRecall.cpp).
     void channelHandler (const Endpoint& from, const OscMessage& message);
     void masterHandler (const Endpoint& from, const OscMessage& message);
     void filterHandler (const Endpoint& from, const OscMessage& message);
@@ -129,6 +132,11 @@ private:
     void engineHello (const Endpoint& from, const OscMessage& message);
     void deckHello (const Endpoint& from, const OscMessage& message);
     void recall (const Endpoint& from, const OscMessage& message);
+    void beatHandler (const Endpoint& from, const OscMessage& message);
+    void prodjLiveHandler (const Endpoint& from, const OscMessage& message);
+    void pointerHandler (const Endpoint& from, const OscMessage& message);
+    void forwardAhead (const OscMessage& message, const std::string& origin);
+    std::vector<Endpoint> vuDestinations() const;
 
     using Found = std::pair<std::string, std::map<std::string, int>>;   // a truth key and its fields
     std::optional<Found> knownAddress (const Endpoint& from, const OscMessage& message);
@@ -148,6 +156,7 @@ private:
     void tellProdjWhere (const std::string& device, const std::string& host);
     void tellProdj (const Client& client);
     std::optional<Client> askerClient (const Endpoint& from) const;
+    std::optional<Client> deskClientOf (const std::string& host) const;
     void stemdeckSaidHello (const std::string& host, double now);
     void motionSaidHello (const std::string& host, double now);
     void deskSaidHello (const std::string& host, double now, const std::string& kind);
@@ -194,6 +203,7 @@ private:
     double decksLookedAt = 0.0;
     std::optional<EngineSession> project;
     std::map<std::string, OscArg> sourcesSentToEngine;
+    TempoFollower tempo;
     std::optional<double> engineBpm;
     // A NaN was just put into the state (B1: a new float object, so the state differs from the last).
     bool nanArrived = false;

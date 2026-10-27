@@ -1,0 +1,22 @@
+{
+ "about": "Deck presence, said once a second on the tick: present after its hello, 0 once five seconds pass without one (only the change is broadcast), 1 again when it comes back; the deck keeps its channel.",
+ "steps": [
+ {"at": 0.1, "from": ["127.0.0.1", 41000], "osc": ["/engine/hello", ["s", "boot-1"]]},
+ {"at": 0.2, "from": ["127.0.0.2", 6000], "osc": ["/stemdeck/1/hello", ["s", "a"]]},
+ {"at": 0.3, "from": ["192.168.8.11", 50001], "osc": ["/channel/2/stem/turn", ["s", "1"]]},
+ {"at": 0.35, "from": ["192.168.8.11", 50001], "osc": ["/channel/2/stem/push", ["s", "1"]]},
+ {"at": 0.5, "tick": true},
+ {"at": 1.0, "tick": true},
+ {"at": 1.6, "tick": true},
+ {"at": 3.0, "tick": true},
+ {"at": 5.1, "tick": true},
+ {"at": 5.3, "tick": true},
+ {"at": 6.0, "tick": true},
+ {"at": 6.5, "tick": true},
+ {"at": 7.6, "tick": true},
+ {"at": 8.0, "from": ["127.0.0.2", 6000], "osc": ["/stemdeck/1/hello", ["s", "a"]]},
+ {"at": 8.1, "tick": true},
+ {"at": 9.2, "tick": true},
+ {"at": 9.5, "flush": true}
+ ]
+}

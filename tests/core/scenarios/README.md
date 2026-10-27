@@ -165,25 +165,27 @@ ports it, test-first, with its scenario:
 
 | Stub | B1 | Task |
 |---|---|---|
-| `/stemdeck/ahead` (the family handler's preview branch) | `forward_ahead` | 19 |
-| `/beat`, `prodj.live`, pointers | `osc_handler_beat`, `_prodj_live`, `_pointer` | 19 |
-| a desk's or pro-DJ app's hello with Core's own truth | `desk_said_hello` | 19 |
-| `pointMotionAt` (a remote Motion said hello, or fell silent) | `point_motion_at` | 19 |
-| `noticeDeskSilence`'s leaving desks, `deskLeaves`, `liveOffWhenNoProdjIsLeft` | `notice_desk_silence`, `desk_leaves`, `live_off_when_no_prodj_is_left` | 19 |
-| `announceLive`, `deckListeners` (the LIVE repeat) | `announce_live`, `deck_listeners` | 19 |
-| `handleVu` | `a3_core_vu_relay.forward`, `vu_destinations` | 19 (B1's), 22 (the engine's) |
 | `statusJson`, `rigJson` (not declared yet) | `engine_status`, project 2's rig | 21 |
+
+Not a stub, a path that does not exist yet: `handleVu` forwards every datagram to
+`vu_destinations()` (the remote Motion followed and every desk), as B1 does with the analyzer's and
+StemDeck's meters. The engine's meters (P11: an engine datagram also to the truth's `core` routes
+that carry vu, each endpoint once) are Task 22's.
 
 Task 18 ported the router (src/a3-core/CoreValues.cpp): the channel, master, filter and aux-return
 handlers, `unrouted_handler`, `values_refused`, `relay`/`broadcast` (a list too), `write_the_evening`,
-`send_to_engine`, `send_to_deck`, the deck ring, StemDeck's bus reports -- and, because its scenarios
-and B1's engine-mode tests pass through them, these of Task 19's list: `osc_handler_recall` with
-`say_the_whole_state`, `osc_handler_engine_hello` (the replay), `osc_handler_deck_hello`, and
-`osc_handler_device_hello` with `stemdeck_said_hello`, `motion_said_hello` (a Motion on this machine;
-a remote one reaches the `point_motion_at` stub) and `notice_stemdeck_silence`.
+`send_to_engine`, `send_to_deck`, the deck ring, StemDeck's bus reports.
 
-The constructor still builds `MotionTarget` with B1's own-host set (`MOTION_OWN_HOSTS` + `--motion`'s
-host): it cannot be built without one, and Task 19's motion scenarios pin it.
+Task 19 ported the rest of the router: who Core follows and tells (src/a3-core/CorePeers.cpp -- the
+device and deck hellos, the one Motion and the one StemDeck, the desks and pro-DJ apps, LIVE and its
+repeat, the pointers, the beat and the tempo, StemDeck's preview, the meters' destinations, the
+silences) and the recall with the engine's replay (src/a3-core/CoreRecall.cpp). Task 18 had ported
+the recall, the hellos and the replay early; they moved there unchanged.
+
+**The hello gate opens after Motion is told** (B1: `_hello_gate.greet` after `motion_said_hello`).
+On one serve thread nothing reads the gate in between, so no scenario can tell the two orders
+apart; `CorePeers.AHelloOpensTheGateOnlyAfterMotionIsTold` holds it with a value delivered while
+Core is still saying the whole state to a Motion that moved.
 
 ## Hand-written expectations
 
