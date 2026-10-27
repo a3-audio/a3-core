@@ -29,7 +29,11 @@ public:
     // offered is not a change: every message offers one and almost none change it, and restarting
     // the clock on each would push the write past the end of a fader sweep every time. The state is
     // copied, so a caller that changes its object afterwards is offering a new state next time.
-    void remember (const juce::var& state, double now);
+    //
+    // A NaN held is no change (B1: Python's == between two states holding the same float object is
+    // True, a container compares by identity first); `freshNan` says a NaN arrived anew -- another
+    // object in Python -- so this state is a change whatever it holds.
+    void remember (const juce::var& state, double now, bool freshNan = false);
 
     // Write if a state waits and its time has come.
     void flushIfDue (double now);

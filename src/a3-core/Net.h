@@ -43,6 +43,9 @@ public:
     virtual double wall() = 0;
 };
 
+// The steady and the wall clock of this machine; the one every `now` comes from unless a test gives its own.
+Clock& systemClock();
+
 // The loopback address, without a dotted literal in the sources.
 inline std::string loopbackAddress() { return juce::IPAddress::local().toString().toStdString(); }
 

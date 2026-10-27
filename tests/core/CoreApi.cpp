@@ -3,8 +3,8 @@
 // Port of the monitor half of a3-core's tools/tests/test_core_web.py and the API case of
 // test_core_devices.py (B0 f3345dc7feeb): the JSON a3-core serves for people, and the truth that
 // StemDeck and the desks fetch. Plus what tools/parity/record_api.py recorded from B0's window over
-// real HTTP for one scripted state. The HTML page, the bench (/api/send) and the status are other
-// tasks'. Every test talks real HTTP to an ephemeral port on loopback.
+// real HTTP for one scripted state; at the end, B1's bench, status and list rows (bench.json) and Core's own
+// rig. The HTML page is gone. Every test talks real HTTP to an ephemeral port on loopback.
 #include <atomic>
 #include <sys/ioctl.h>
 
@@ -16,6 +16,7 @@
 
 #include "B0Truth.h"
 #include "CoreApi.h"
+#include "CoreRig.h"
 #include "HttpClient.h"
 #include "HttpServer.h"
 #include "StateRecorded.h"
@@ -23,6 +24,7 @@
 
 using namespace a3core;
 using namespace recordedtraffic;
+using corerig::CoreRig;
 namespace hc = httpclient;
 
 namespace
@@ -823,4 +825,585 @@ TEST (CoreApi, AStalledStreamReaderDoesNotBlockTheWriter)
     window.server->stop();
     EXPECT_LT (std::chrono::duration<double> (std::chrono::steady_clock::now() - stop).count(), 1.0) << "a stuck reader does not hold the shutdown";
     ::close (stalled);
+}
+
+//==============================================================================
+// Task 21: what a list is, the bench, the status and the rig.
+
+namespace
+{
+juce::var benchFixture()
+{
+    static const juce::var recorded = [] {
+        juce::String error;
+        auto value = parseJson (juce::File (A3_CORE_TEST_DATA "/parity/api/bench.json").loadFileAsString(), error);
+        EXPECT_EQ (error, juce::String());
+        return value;
+    }();
+    return recorded;
+}
+
+// A recorded Python value ["list", [["float", 0.5], ...]] fed to the traffic table the way Core feeds it.
+ListValue listOf (const juce::var& items)
+{
+    ListValue out;
+    for (const auto& item : *items.getArray())
+        out.push_back (*valueOf (item).arg);
+    return out;
+}
+
+void playBench (Traffic& traffic, const juce::var& ops)
+{
+    for (const auto& op : *ops.getArray())
+    {
+        const auto at = static_cast<double> (op["t"]);
+        const auto peer = op["peer"].toString().toStdString();
+        const auto address = op["address"].toString().toStdString();
+        const auto& value = op["value"];
+        const bool list = value[0].toString() == "list";
+        if (op["op"].toString() == "seen")
+        {
+            if (list)
+                traffic.seenList (directionOf (op["dir"].toString()), address, listOf (value[1]), peer, at);
+            else
+                traffic.seen (directionOf (op["dir"].toString()), address, valueOf (value).get(), peer, at);
+        }
+        else if (list)
+            traffic.unknownList (address, listOf (value[1]), peer, at);
+        else
+            traffic.unknown (address, valueOf (value).get(), peer, at);
+    }
+}
+
+// The bench's window: addCoreRoutes with a stand-in for the service's sender, and a view to read.
+struct BenchWindow
+{
+    CoreView view;
+    std::vector<std::pair<std::string, OscMessage>> sent;
+    bool withSend = true, withView = true;
+    std::unique_ptr<HttpServer> server;
+
+    bool open()
+    {
+        Routes routes;
+        addCoreRoutes (routes, withView ? &view : nullptr,
+                       withSend ? BenchSend ([this] (const std::string& to, const OscMessage& message) { sent.emplace_back (to, message); })
+                                : BenchSend());
+        server = std::make_unique<HttpServer> (loopbackAddress() + ":0", std::move (routes));
+        return server->start ([] (const std::string&, bool) {});
+    }
+
+    ~BenchWindow()
+    {
+        if (server)
+            server->stop();
+    }
+
+    hc::Reply get (const std::string& path) const { return hc::get (server->port(), path); }
+    hc::Reply post (const juce::var& body) const { return hc::post (server->port(), "/api/send", juce::JSON::toString (body, true).toStdString()); }
+    hc::Reply postRaw (const std::string& body) const { return hc::post (server->port(), "/api/send", body); }
+
+    static juce::var request (const std::string& to, const std::string& address, const std::string& value)
+    {
+        auto* made = new juce::DynamicObject();
+        made->setProperty ("to", juce::String (to));
+        made->setProperty ("address", juce::String (address));
+        made->setProperty ("value", juce::String (value));
+        return juce::var (made);
+    }
+};
+
+std::string problemOf (const hc::Reply& reply) { return parsedBody (reply.body)["problem"].toString().toStdString(); }
+}
+
+// parse_value.
+
+TEST (CoreApi, ABareNumberIsANumber)
+{
+    EXPECT_EQ (parseValue ("1"), pyInt (1));
+    EXPECT_EQ (parseValue ("1").tag, 'i');
+    EXPECT_EQ (parseValue ("0.5"), pyFloat (0.5));
+    EXPECT_EQ (parseValue ("-180"), pyInt (-180));
+}
+
+TEST (CoreApi, AQuotedNumberIsText)
+{
+    EXPECT_EQ (parseValue ("\"1\""), pyStr ("1"));
+}
+
+TEST (CoreApi, ABareWordIsText)
+{
+    EXPECT_EQ (parseValue ("high_pass"), pyStr ("high_pass"));
+}
+
+TEST (CoreApi, SurroundingSpaceDoesNotChangeTheType)
+{
+    EXPECT_EQ (parseValue ("  1  "), pyInt (1));
+}
+
+TEST (CoreApi, NothingTypedIsAnErrorNotAnEmptyString)
+{
+    EXPECT_THROW (parseValue ("   "), std::invalid_argument);
+    EXPECT_THROW (parseValue (""), std::invalid_argument);
+}
+
+TEST (CoreApi, AnIntegerBeyondInt64IsRefusedNotWrapped)
+{
+    // python-osc cannot encode it either (BuildError): the bench says no instead of sending nonsense.
+    EXPECT_THROW (parseValue ("99999999999999999999"), std::out_of_range);
+    EXPECT_EQ (parseValue ("4294967296"), pyInt (4294967296LL));
+    EXPECT_EQ (parseValue ("4294967296").tag, 'h');
+}
+
+// The bench.
+
+TEST (CoreApi, ANumberArrivesAsANumber)
+{
+    BenchWindow window;
+    ASSERT_TRUE (window.open());
+    const auto reply = window.post (BenchWindow::request ("mixer", "/channel/0/pfl", "1"));
+    EXPECT_EQ (reply.status, 200);
+    ASSERT_EQ (window.sent.size(), 1u);
+    EXPECT_EQ (window.sent[0].first, "mixer");
+    EXPECT_EQ (window.sent[0].second, (OscMessage { "/channel/0/pfl", { pyInt (1) } }));
+    const auto answer = parsedBody (reply.body);
+    EXPECT_EQ (answer["address"].toString(), "/channel/0/pfl");
+    EXPECT_EQ (static_cast<int> (answer["value"]), 1);
+}
+
+TEST (CoreApi, AQuotedNumberArrivesAsText)
+{
+    BenchWindow window;
+    ASSERT_TRUE (window.open());
+    window.post (BenchWindow::request ("mixer", "/channel/0/pfl", "\"1\""));
+    ASSERT_EQ (window.sent.size(), 1u);
+    EXPECT_EQ (window.sent[0].second.args, (std::vector<OscArg> { pyStr ("1") }));
+}
+
+TEST (CoreApi, AnEmptyAddressSendsNothing)
+{
+    BenchWindow window;
+    ASSERT_TRUE (window.open());
+    const auto reply = window.post (BenchWindow::request ("mixer", "", "1"));
+    EXPECT_EQ (reply.status, 400);
+    EXPECT_TRUE (window.sent.empty());
+    EXPECT_FALSE (problemOf (reply).empty());
+}
+
+TEST (CoreApi, ABodyThatIsNotJsonSendsNothing)
+{
+    BenchWindow window;
+    ASSERT_TRUE (window.open());
+    const auto reply = window.postRaw ("not json at all");
+    EXPECT_EQ (reply.status, 400);
+    EXPECT_TRUE (window.sent.empty());
+    EXPECT_FALSE (problemOf (reply).empty());
+}
+
+TEST (CoreApi, AnUnknownDestinationSendsNothing)
+{
+    BenchWindow window;
+    ASSERT_TRUE (window.open());
+    const auto reply = window.post (BenchWindow::request ("nowhere", "/a", "1"));
+    EXPECT_EQ (reply.status, 400);
+    EXPECT_TRUE (window.sent.empty());
+    EXPECT_EQ (problemOf (reply), "unknown destination: nowhere");
+}
+
+TEST (CoreApi, PostingToAReadOnlyWindowIsRefusedNotACrash)
+{
+    BenchWindow window;
+    window.withSend = false;
+    ASSERT_TRUE (window.open());
+    const auto reply = window.post (BenchWindow::request ("mixer", "/a", "1"));
+    EXPECT_EQ (reply.status, 400);
+    EXPECT_EQ (problemOf (reply), "this window can only watch");
+}
+
+TEST (CoreApi, SendRefusesReaperAndGarbage)
+{
+    BenchWindow window;
+    ASSERT_TRUE (window.open());
+    // REAPER is not behind the bench any more (the engine plays); the refusal says so, in English.
+    auto reply = window.post (BenchWindow::request ("reaper", "/a", "1"));
+    EXPECT_EQ (reply.status, 400);
+    EXPECT_EQ (problemOf (reply), "reaper is not reachable from the bench: the audio engine plays, send to self, mixer or motion");
+
+    EXPECT_EQ (window.post (BenchWindow::request ("mixer", "no-slash", "1")).status, 400);
+    EXPECT_EQ (problemOf (window.post (BenchWindow::request ("mixer", "no-slash", "1"))), "an address starts with /");
+    EXPECT_EQ (problemOf (window.post (BenchWindow::request ("mixer", "/a", "   "))), "nothing typed");
+    EXPECT_EQ (problemOf (window.post (BenchWindow::request ("mixer", "/a", "99999999999999999999"))).empty(), false);
+    EXPECT_EQ (window.postRaw ("[1, 2]").status, 400);
+    EXPECT_EQ (window.postRaw ("").status, 400);
+    EXPECT_EQ (window.postRaw ("{\"to\": \"mixer\"}").status, 400);
+    EXPECT_EQ (window.postRaw ("{\"to\": 5, \"address\": \"/a\", \"value\": \"1\"}").status, 400);
+    EXPECT_TRUE (window.sent.empty());
+}
+
+TEST (CoreApi, ASenderThatRefusesIsAnswered400)
+{
+    Routes routes;
+    addCoreRoutes (routes, nullptr, [] (const std::string&, const OscMessage&) { throw SendRefused ("the bench is busy"); });
+    HttpServer server (loopbackAddress() + ":0", std::move (routes));
+    ASSERT_TRUE (server.start ([] (const std::string&, bool) {}));
+    const auto reply = hc::post (server.port(), "/api/send", "{\"to\": \"self\", \"address\": \"/a\", \"value\": \"1\"}");
+    server.stop();
+    EXPECT_EQ (reply.status, 400);
+    EXPECT_EQ (problemOf (reply), "the bench is busy");
+}
+
+TEST (CoreApi, TheBenchAsPython)
+{
+    // Every body B1's window was posted: the status, the message that went out and the answer; where B1
+    // refuses, we refuse too (its wording is German or Python's own, ours is English, so only "nothing typed",
+    // which both say, is compared as text).
+    for (const auto& recorded : *benchFixture()["sends"].getArray())
+    {
+        BenchWindow window;
+        ASSERT_TRUE (window.open());
+        const auto name = recorded["name"].toString().toStdString();
+        const auto reply = recorded.hasProperty ("raw") ? window.postRaw (recorded["raw"].toString().toStdString())
+                                                         : window.post (recorded["body"]);
+        EXPECT_EQ (reply.status, static_cast<int> (recorded["status"])) << name;
+        const auto expected = recorded["reply"];
+        const auto got = parsedBody (reply.body);
+        if (reply.status != 200)
+        {
+            EXPECT_TRUE (window.sent.empty()) << name;
+            EXPECT_TRUE (got["problem"].isString()) << name;
+            if (expected["problem"].toString() == "nothing typed")
+                EXPECT_EQ (got["problem"].toString(), "nothing typed") << name;
+            continue;
+        }
+        expectJsonEqual (expected, got, name);
+        ASSERT_EQ (window.sent.size(), 1u) << name;
+        const auto& wanted = recorded["sent"][0];
+        const auto& [to, message] = window.sent[0];
+        EXPECT_EQ (to, wanted[0].toString().toStdString()) << name;
+        EXPECT_EQ (message.address, expected["address"].toString().toStdString()) << name;
+        ASSERT_EQ (message.args.size(), 1u) << name;
+        const auto& arg = message.args[0];
+        const auto type = wanted[3].toString();
+        EXPECT_EQ (type == "int" ? "i" : type == "float" ? "f" : "s", std::string (1, arg.tag == 'h' ? 'i' : arg.tag)) << name;
+    }
+}
+
+// The status.
+
+TEST (CoreApi, TheStatusIsServed)
+{
+    BenchWindow window;
+    window.view.publish ({ canonicalBytes (benchFixture()["responses"]["status"]), "{}" });
+    ASSERT_TRUE (window.open());
+    const auto reply = window.get ("/api/status");
+    EXPECT_EQ (reply.status, 200);
+    EXPECT_EQ (reply.headers.at ("content-type"), "application/json");
+    expectJsonEqual (benchFixture()["responses"]["status"], parsedBody (reply.body), "/api/status");
+}
+
+TEST (CoreApi, WithoutAStatusItIsEmpty)
+{
+    BenchWindow window;
+    window.withView = false;
+    ASSERT_TRUE (window.open());
+    const auto empty = parsedBody (window.get ("/api/status").body);
+    ASSERT_TRUE (empty.isObject());
+    EXPECT_EQ (empty.getDynamicObject()->getProperties().size(), 0);
+    expectJsonEqual (benchFixture()["responses"]["status_without"], parsedBody (window.get ("/api/status").body), "no status");
+    EXPECT_EQ (window.get ("/api/rig").status, 200);
+}
+
+// A list in the traffic table, as B1's window shows it.
+
+TEST (CoreApi, AListIsInTheTrafficTableAsB1HasIt)
+{
+    // One table per look: every look stamps its instant, and B1's recorded ones are the scripted 100.0.
+    for (const char* name : { "traffic", "unknown" })
+    {
+        Traffic traffic;
+        playBench (traffic, benchFixture()["list_ops"]);
+        TestClock clock;
+        clock.mono = static_cast<double> (benchFixture()["fetched_at"]);
+        Routes routes;
+        addMonitorRoutes (routes, { nullptr, traffic, nullptr, shippedRegister(), clock });
+        HttpServer server (loopbackAddress() + ":0", std::move (routes));
+        ASSERT_TRUE (server.start ([] (const std::string&, bool) {}));
+        const auto asked = parsedBody (hc::get (server.port(), std::string ("/api/") + name).body);
+        server.stop();
+        expectJsonEqual (benchFixture()["responses"][name], asked, std::string ("/api/") + name);
+    }
+}
+
+TEST (CoreApi, ASnapshotWithAListHasItInTheHistoryToo)
+{
+    Traffic traffic;
+    traffic.seenList (Direction::in, "/a", { pyFloat (0.5), pyStr ("x") }, "motion", 1.0);
+    const auto json = snapshotAsJson (traffic.snapshot (std::nullopt, 2.0), nullptr);
+    EXPECT_EQ (json["history"][0]["value"].toString(), "[0.5, 'x']");
+    EXPECT_EQ (json["history"][0]["type"].toString(), "list");
+    EXPECT_EQ (json["rows"][0]["last_type"].toString(), "list");
+}
+
+namespace
+{
+const Endpoint prodjApp { "192.168.8.60", 7773 };   // the desk port: the origin is known by it
+
+juce::var parsedRig (const CoreRig& rig)
+{
+    return parsedBody (rig.core->view().texts().rig);
+}
+
+juce::var property (const juce::var& object, const char* name) { return object[juce::Identifier (name)]; }
+
+std::vector<juce::var> rowsOf (const juce::var& array)
+{
+    std::vector<juce::var> out;
+    for (const auto& item : *array.getArray())
+        out.push_back (item);
+    return out;
+}
+}
+
+// Core's own traffic rows carry a list too.
+
+TEST (CoreApi, ASendOfSeveralArgumentsIsAListInTheTable)
+{
+    CoreRig rig;
+    rig.motionHello();
+    rig.stemdeckHello ("127.0.0.2");
+    rig.hello (prodjApp, "prodj");
+    rig.osc (prodjApp, "/prodj/live", { pyInt (1) });
+    rig.osc (prodjApp, "/stemdeck/pointer", { pyInt (0), pyFloat (0.25), pyFloat (0.75) });
+    bool found = false;
+    for (const auto& row : rig.core->traffic().snapshot (std::nullopt, rig.clock.monotonic()).rows)
+    {
+        if (row.address == "/stemdeck/pointer" && row.direction == Direction::out)
+        {
+            found = true;
+            ASSERT_TRUE (row.lastList.has_value());
+            EXPECT_EQ (row.lastType, "list");
+            EXPECT_EQ (row.lastList->size(), 3u);
+        }
+    }
+    EXPECT_TRUE (found);
+}
+
+TEST (CoreApi, APointerArrivesAsAListEvenWhenRefused)
+{
+    // B1 records list(osc_arguments) for a pointer, and records it before the LIVE gate.
+    CoreRig rig;
+    rig.hello (prodjApp, "prodj");
+    rig.osc (prodjApp, "/motion/pointer", { pyInt (1), pyFloat (0.5), pyFloat (0.5) });   // LIVE is off: refused
+    for (const auto& row : rig.core->traffic().snapshot (std::nullopt, rig.clock.monotonic()).rows)
+        if (row.address == "/motion/pointer" && row.direction == Direction::in)
+        {
+            EXPECT_EQ (row.lastType, "list");
+            ASSERT_TRUE (row.lastList.has_value());
+            EXPECT_EQ (*row.lastList, (ListValue { pyInt (1), OscArg { 'f', 0.5f }, OscArg { 'f', 0.5f } }));   // as the wire decodes them
+            return;
+        }
+    FAIL() << "the pointer is not in the table";
+}
+
+TEST (CoreApi, AMalformedPreviewIsAnUnknownRowHoldingTheList)
+{
+    CoreRig rig;
+    rig.stemdeckHello ("127.0.0.2");
+    rig.osc ({ "127.0.0.2", 6000 }, "/stemdeck/ahead", { pyStr ("drop"), pyInt (3) });
+    for (const auto& row : rig.core->traffic().unknownSnapshot (rig.clock.monotonic()).rows)
+        if (row.address == "/stemdeck/ahead")
+        {
+            EXPECT_EQ (row.lastType, "list");
+            ASSERT_TRUE (row.lastList.has_value());
+            EXPECT_EQ (*row.lastList, (ListValue { pyStr ("drop"), pyInt (3) }));
+            return;
+        }
+    FAIL() << "the preview is not in the unknown table";
+}
+
+// The status and the rig.
+
+TEST (CoreApi, StatusSaysTheEngine)
+{
+    CoreRig rig;
+    const auto status = rig.core->statusJson();
+    EXPECT_EQ (status["audio_engine"].toString(), "engine");
+    EXPECT_EQ (status["reason"].toString(), "");
+    rig.core->publishView();
+    expectJsonEqual (benchFixture()["responses"]["status"], parsedBody (rig.core->view().texts().status), "published status");
+
+    BenchWindow window;
+    window.view.publish (rig.core->view().texts());
+    ASSERT_TRUE (window.open());
+    expectJsonEqual (benchFixture()["responses"]["status"], parsedBody (window.get ("/api/status").body), "/api/status");
+}
+
+TEST (CoreApi, RigShowsWhoIsThere)
+{
+    CoreRig rig;
+    rig.at (10.0);
+    rig.hello (rig.remoteMotion, "motion");
+    rig.hello ({ "192.168.8.40", 7773 }, "desk");
+    rig.hello (prodjApp, "prodj");
+    rig.osc (prodjApp, "/prodj/live", { pyInt (1) });
+    rig.stemdeckHello ("127.0.0.2");
+    rig.deckHello (1, rig.deckA);
+    rig.engineHello ("boot-7");
+    rig.at (12.5);
+    rig.core->publishView();
+
+    const auto rigJson = parsedRig (rig);
+    const auto motion = property (rigJson, "motion");
+    EXPECT_EQ (motion["followed"].toString(), "192.168.8.20");
+    EXPECT_TRUE (static_cast<bool> (motion["remote"]));
+    EXPECT_DOUBLE_EQ (static_cast<double> (motion["last_heard"]), 2.5);
+
+    const auto desks = rowsOf (property (rigJson, "desks"));
+    ASSERT_EQ (desks.size(), 2u);
+    EXPECT_EQ (desks[0]["host"].toString(), "192.168.8.40");
+    EXPECT_EQ (desks[0]["kind"].toString(), "desk");
+    EXPECT_EQ (desks[0]["name"].toString(), "desk@192.168.8.40");
+    EXPECT_DOUBLE_EQ (static_cast<double> (desks[0]["last_heard"]), 2.5);
+    EXPECT_EQ (desks[1]["kind"].toString(), "prodj");
+    EXPECT_EQ (desks[1]["name"].toString(), "prodj@192.168.8.60");
+
+    const auto decks = rowsOf (property (rigJson, "decks"));
+    ASSERT_GE (decks.size(), 2u);   // one row for every deck the selector knows
+    EXPECT_EQ (static_cast<int> (decks[0]["deck"]), 1);
+    EXPECT_TRUE (static_cast<bool> (decks[0]["present"]));
+    EXPECT_EQ (decks[0]["host"].toString(), "127.0.0.2");
+    EXPECT_EQ (static_cast<int> (decks[0]["port"]), deckPort (b0::truth(), 1));
+    EXPECT_TRUE (decks[0]["channel"].isVoid());   // on no channel: the channels play analog
+    EXPECT_DOUBLE_EQ (static_cast<double> (decks[0]["last_heard"]), 2.5);
+    EXPECT_EQ (static_cast<int> (decks[1]["deck"]), 2);
+    EXPECT_FALSE (static_cast<bool> (decks[1]["present"]));
+    EXPECT_TRUE (decks[1]["host"].isVoid());
+    EXPECT_EQ (static_cast<int> (decks[1]["port"]), deckPort (b0::truth(), 2));
+    EXPECT_TRUE (decks[1]["last_heard"].isVoid());
+
+    EXPECT_EQ (property (rigJson, "stemdeck")["host"].toString(), "127.0.0.2");
+    EXPECT_TRUE (static_cast<bool> (property (rigJson, "prodj_live")));
+
+    const auto engine = property (rigJson, "engine");
+    EXPECT_TRUE (static_cast<bool> (engine["heard"]));
+    EXPECT_EQ (engine["boot_id"].toString(), "boot-7");
+    EXPECT_TRUE (static_cast<bool> (engine["open"]));
+
+    const auto devices = rowsOf (property (rigJson, "devices"));
+    ASSERT_FALSE (devices.empty());
+    expectJsonEqual (rig.core->devices().snapshot (rig.clock.monotonic()), property (rigJson, "devices"), "the /api/devices rows");
+}
+
+TEST (CoreApi, RigOfAnEmptyRigSaysNobodyIsThere)
+{
+    CoreRig rig;
+    rig.core->publishView();
+    const auto rigJson = parsedRig (rig);
+    EXPECT_TRUE (property (rigJson, "motion")["followed"].isVoid());
+    EXPECT_FALSE (static_cast<bool> (property (rigJson, "motion")["remote"]));
+    EXPECT_TRUE (property (rigJson, "motion")["last_heard"].isVoid());
+    EXPECT_TRUE (rowsOf (property (rigJson, "desks")).empty());
+    EXPECT_TRUE (property (rigJson, "stemdeck")["host"].isVoid());
+    EXPECT_FALSE (static_cast<bool> (property (rigJson, "prodj_live")));
+    EXPECT_FALSE (static_cast<bool> (property (rigJson, "engine")["heard"]));
+    EXPECT_TRUE (property (rigJson, "engine")["boot_id"].isVoid());
+    EXPECT_FALSE (static_cast<bool> (property (rigJson, "engine")["open"]));
+}
+
+TEST (CoreApi, AnEngineThatCameBackIsNotOpenUntilTheRecallOpensIt)
+{
+    CoreRig rig;
+    rig.engineHello ("boot-1");
+    rig.core->publishView();
+    EXPECT_TRUE (static_cast<bool> (property (parsedRig (rig), "engine")["open"]));
+    rig.engineHello ("boot-1");   // the repeated hello changes nothing
+    rig.core->publishView();
+    EXPECT_TRUE (static_cast<bool> (property (parsedRig (rig), "engine")["open"]));
+
+    // A different boot id is a new engine: closed until the recall after the replay opens it. The rig
+    // feeds Core's own sends back at once, so the new hello is split to look between the two steps.
+    const auto hello = encodeMessage ({ "/engine/hello", { pyStr ("boot-2") } });
+    rig.core->handlePacket (rig.engine, hello.data(), hello.size());   // replay queued, recall not yet handled
+    rig.core->publishView();
+    const auto engine = property (parsedRig (rig), "engine");
+    EXPECT_EQ (engine["boot_id"].toString(), "boot-2");
+    EXPECT_FALSE (static_cast<bool> (engine["open"]));
+    rig.osc (rig.engine, "/nothing");   // feeds the queued replay and the recall back
+    rig.core->publishView();
+    EXPECT_TRUE (static_cast<bool> (property (parsedRig (rig), "engine")["open"]));
+}
+
+TEST (CoreApi, TheViewIsPublishedByTheTickNoOftenerThanItIsDue)
+{
+    CoreRig rig;
+    rig.at (1.0);
+    rig.tick();
+    const auto first = rig.core->view().texts().rig;
+    rig.hello (rig.remoteMotion, "motion");
+    rig.at (1.1);
+    rig.tick();
+    EXPECT_EQ (rig.core->view().texts().rig, first) << "not yet due";
+    rig.at (1.0 + Core::publishEvery);
+    rig.tick();
+    EXPECT_NE (rig.core->view().texts().rig, first);
+}
+
+TEST (CoreApi, TheRigIsOnlyBuiltOnTheServeThread)
+{
+    // P8: an HTTP thread never calls into Core. The owning-thread check is what would say so, loudly.
+    CoreRig rig;
+    std::string status, rigText, publish, bench;
+    std::thread other ([&] {
+        const auto what = [] (const std::function<void()>& call) {
+            try
+            {
+                call();
+            }
+            catch (const std::runtime_error& problem)
+            {
+                return std::string (problem.what());
+            }
+            return std::string();
+        };
+        status = what ([&] { rig.core->statusJson(); });
+        rigText = what ([&] { rig.core->rigJson(); });
+        publish = what ([&] { rig.core->publishView(); });
+        bench = what ([&] { rig.core->sendFromBench ("mixer", { "/a", { pyInt (1) } }); });
+    });
+    other.join();
+    for (const auto* said : { &status, &rigText, &publish, &bench })
+        EXPECT_NE (said->find ("does not own"), std::string::npos) << *said;
+    EXPECT_NO_THROW (rig.core->rigJson());   // the owner may
+}
+
+TEST (CoreApi, TheWindowAnswersFromTheCopyAndNeverCallsIntoCore)
+{
+    CoreRig rig;
+    rig.hello (rig.remoteMotion, "motion");
+    rig.core->publishView();
+    BenchWindow window;
+    window.view.publish (rig.core->view().texts());
+    ASSERT_TRUE (window.open());
+    // The handlers hold a CoreView and a sender, not Core: they have nothing to call into.
+    const auto answered = parsedBody (window.get ("/api/rig").body);
+    EXPECT_EQ (property (answered, "motion")["followed"].toString(), "192.168.8.20");
+    // ... and the copy is a copy: a change in Core is not in it before the next publishing.
+    rig.hello ({ "192.168.8.40", 7773 }, "desk");
+    EXPECT_TRUE (rowsOf (property (parsedBody (window.get ("/api/rig").body), "desks")).empty());
+}
+
+TEST (CoreApi, TheBenchSendsMixerAndMotionAsCoreSends)
+{
+    CoreRig rig;
+    rig.clear();
+    rig.core->sendFromBench ("mixer", { "/bench/one", { pyFloat (0.5) } });
+    rig.core->sendFromBench ("motion", { "/bench/two", { pyStr ("1") } });
+    EXPECT_EQ (rig.to ("mixer"), (std::vector<std::string> { "/bench/one f:0.5" }));
+    EXPECT_EQ (rig.to ("motion"), (std::vector<std::string> { "/bench/two s:1" }));
+    bool counted = false;
+    for (const auto& row : rig.core->traffic().snapshot (std::nullopt, rig.clock.monotonic()).rows)
+        counted = counted || (row.address == "/bench/one" && row.direction == Direction::out && row.peer == "mixer");
+    EXPECT_TRUE (counted);
+    EXPECT_THROW (rig.core->sendFromBench ("reaper", { "/x", {} }), std::invalid_argument);
+    EXPECT_THROW (rig.core->sendFromBench ("self", { "/x", {} }), std::invalid_argument);
 }

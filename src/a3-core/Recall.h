@@ -24,6 +24,9 @@ namespace a3core
 {
 using Message = std::pair<std::string, OscArg>;
 
+// a == b as Python compares two values an OSC message carried: numbers by value (1 == 1.0 == True), anything else by tag and value.
+bool sameAsPython (const OscArg& a, const OscArg& b);
+
 // The two flags a channel carries, and the lamp each one lights.
 enum class LedFlag { cue, fx };
 inline constexpr std::array<LedFlag, 2> ledFlags { LedFlag::cue, LedFlag::fx };
@@ -54,24 +57,41 @@ std::vector<Message> lampMessages (const Truth& truth, const std::vector<Channel
 std::vector<Message> flagMessages (const Truth& truth, const std::vector<ChannelInfo>& channels, const MasterInfo& master);
 
 // The last value Core passed on, per address, in the order the controls were first touched.
-// In memory only: it cannot be older than the last message REAPER (or the engine) sent.
+// In memory only: it cannot be older than the last message REAPER (or the engine) sent. A value is
+// one argument, or a Python list -- the return's word is nine integers -- which python-osc sends as
+// several arguments.
 class Relayed
 {
 public:
-    // Whether this is already what was last passed on (Python's ==: 1 == 1.0 == True).
+    // Whether this is already what was last passed on (Python's ==: 1 == 1.0 == True; a list is
+    // never one number, and equals a list of the same length whose items are equal).
     bool holds (const std::string& address, const OscArg& value) const;
+    bool holds (const std::string& address, const std::vector<OscArg>& list) const;
     void note (const std::string& address, OscArg value);
-    // The last value passed on for this address; none before any.
+    void note (const std::string& address, std::vector<OscArg> list);
+    // The last value passed on for this address; none before any, and none for a list (its one
+    // reader, analog_again_messages, reads the filter's words, which never hold one).
     std::optional<OscArg> value (const std::string& address) const;
-    std::vector<Message> messages() const { return held; }
+    bool isList (const std::string& address) const;
+    // Each value as the message that says it again: a list as several arguments.
+    std::vector<OscMessage> messages() const;
     size_t size() const { return held.size(); }
 
 private:
-    std::vector<Message> held;
+    struct Held
+    {
+        std::vector<OscArg> args;
+        bool list = false;
+    };
+
+    void put (const std::string& address, Held value);
+    const Held* find (const std::string& address) const;
+
+    std::vector<std::pair<std::string, Held>> held;
     std::unordered_map<std::string, size_t> place;
 };
 
 // The whole answer: lamps, flags, positions and crossfade, then what was relayed.
-std::vector<Message> recallMessages (const Truth& truth, const std::vector<ChannelInfo>& channels, const MasterInfo& master,
+std::vector<OscMessage> recallMessages (const Truth& truth, const std::vector<ChannelInfo>& channels, const MasterInfo& master,
                                      const Relayed& relayed);
 }

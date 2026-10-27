@@ -338,6 +338,7 @@ bool HttpServer::start (const Journal& journal)
     say = journal;
     saidThreadFailure = false;
     boundPort = socket->getBoundPort();
+    boundHost = address;
     listener = std::move (socket);
     stopping = false;
     acceptThread = std::thread ([this] { acceptLoop(); });

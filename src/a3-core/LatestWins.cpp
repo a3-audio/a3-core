@@ -120,22 +120,41 @@ std::vector<Datagram> drain (int socketFd, size_t limit)
     return packets;
 }
 
+namespace
+{
+// One bad packet must not stop Core: what a handler throws is reported, and the loop goes on.
+void handleReported (const ServeLoop& loop, const std::function<void (const std::vector<uint8_t>&, const Endpoint&)>& handle,
+                     const Datagram& datagram)
+{
+    try
+    {
+        handle (datagram.data, datagram.from);
+    }
+    catch (...)
+    {
+        report (loop, std::current_exception());
+    }
+}
+}
+
 void serve (const ServeLoop& loop)
 {
     const int waitMs = loop.tick ? (int) std::ceil (loop.tickSeconds * 1000.0) : -1;
+    std::vector<pollfd> watched { { loop.socketFd, POLLIN, 0 } };
+    for (const auto& side : loop.also)
+        watched.push_back ({ side.socketFd, POLLIN, 0 });
     while (loop.running())
     {
-        pollfd ready { loop.socketFd, POLLIN, 0 };
-        if (::poll (&ready, 1, waitMs) < 0)
+        if (::poll (watched.data(), watched.size(), waitMs) < 0)
         {
             if (errno == EINTR)
                 continue;
             loop.report (std::string ("poll: ") + std::strerror (errno));
             return;
         }
-        if ((ready.revents & POLLNVAL) != 0)   // not an open socket: waiting again would spin
+        if (std::any_of (watched.begin(), watched.end(), [] (const pollfd& p) { return (p.revents & POLLNVAL) != 0; }))
         {
-            loop.report ("poll: the socket is not open");
+            loop.report ("poll: the socket is not open");   // waiting again would spin
             return;
         }
         auto packets = drain (loop.socketFd, loop.limit);
@@ -143,16 +162,10 @@ void serve (const ServeLoop& loop)
         for (const auto& p : packets)
             keys.push_back (loop.keyOf (p.data));
         for (const auto i : latestWinsIndices (keys))
-        {
-            try
-            {
-                loop.handle (packets[i].data, packets[i].from);
-            }
-            catch (...)
-            {
-                report (loop, std::current_exception());
-            }
-        }
+            handleReported (loop, loop.handle, packets[i]);
+        for (const auto& side : loop.also)
+            for (const auto& datagram : drain (side.socketFd, loop.limit))
+                handleReported (loop, side.handle, datagram);
         if (loop.tick)
         {
             try

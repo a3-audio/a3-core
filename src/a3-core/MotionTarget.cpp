@@ -59,6 +59,11 @@ std::optional<std::string> MotionTarget::followed() const
     return seen->second;
 }
 
+std::optional<double> MotionTarget::lastHeard() const
+{
+    return watch.host() ? watch.lastHeard (*watch.host()) : std::nullopt;
+}
+
 bool MotionTarget::follows (const std::string& host) const
 {
     const std::string key = isThisMachine (host, ownHosts) ? localKey : host;

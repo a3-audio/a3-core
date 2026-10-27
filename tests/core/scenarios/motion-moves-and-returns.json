@@ -1,0 +1,20 @@
+{
+ "about": "A Motion on another machine says hello: Core points Motion's slot at it (the truth's motion port), says the whole state to it, tells a pro-DJ app where it runs, answers LIVE; its values count after the hello; the meters and the beat go on to it. A minute without its hello: back to the rig's own, the whole state again, the meters stop.",
+ "steps": [
+ {"at": 0.1, "from": ["192.168.8.60", 7773], "osc": ["/device/hello", ["s", "prodj"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+ {"at": 0.2, "from": ["192.168.8.20", 40002], "osc": ["/channel/1/gain", ["f", 0.4]]},
+ {"at": 0.3, "from": ["192.168.8.20", 40002], "osc": ["/device/hello", ["s", "motion"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+ {"at": 0.4, "from": ["192.168.8.20", 40002], "osc": ["/channel/1/gain", ["f", 0.45]]},
+ {"at": 0.5, "from": ["127.0.0.1", 45000], "osc": ["/beat", ["i", 1], ["i", 3], ["f", 124.0]]},
+ {"at": 0.6, "from": ["127.0.0.1", 47000], "vu": "I2J1bmRsZQAAAAAAAAAAAQAAABQvdnUvMQAAACxmZgA/AAAAPoAAAAAAABQvdnUvMgAAACxmZgA/AAAAPoAAAA=="},
+ {"at": 0.65, "from": ["127.0.0.1", 47001], "vu": "I2J1bmRsZQAAAAAAAAAAAQAAABQvdnUvNDEAACxmZgA/AAAAPoAAAAAAABQvdnUvNDIAACxmZgA/AAAAPoAAAA=="},
+ {"at": 30.0, "from": ["192.168.8.20", 40002], "osc": ["/device/hello", ["s", "motion"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+ {"at": 45.0, "from": ["192.168.8.60", 7773], "osc": ["/device/hello", ["s", "prodj"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+ {"at": 60.0, "tick": true},
+ {"at": 90.5, "tick": true},
+ {"at": 91.0, "tick": true},
+ {"at": 91.5, "from": ["127.0.0.1", 47000], "vu": "I2J1bmRsZQAAAAAAAAAAAQAAABQvdnUvMQAAACxmZgA/AAAAPoAAAAAAABQvdnUvMgAAACxmZgA/AAAAPoAAAA=="},
+ {"at": 91.6, "from": ["127.0.0.1", 45000], "osc": ["/beat", ["i", 2], ["i", 3], ["f", 124.0]]},
+ {"at": 92.0, "flush": true}
+ ]
+}

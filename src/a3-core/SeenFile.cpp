@@ -28,14 +28,18 @@ public:
     double wall() override { return std::chrono::duration<double> (std::chrono::system_clock::now().time_since_epoch()).count(); }
 };
 
+}
+
 Clock& systemClock()
 {
     static SystemClock clock;
     return clock;
 }
 
+namespace
+{
+
 std::string utf8 (const juce::var& value) { return value.toString().toStdString(); }
-juce::var text (const std::string& value) { return juce::var (juce::String::fromUTF8 (value.data(), static_cast<int> (value.size()))); }
 
 bool isInteger (const juce::var& value) { return value.isInt() || value.isInt64() || value.isBool(); }
 bool isNumber (const juce::var& value) { return isInteger (value) || value.isDouble(); }
@@ -176,7 +180,7 @@ void SeenFile::write()
     object->setProperty ("at", now);
     object->setProperty ("rows", juce::var (rows));
     object->setProperty ("unknown", juce::var (unknownRows));
-    const auto contents = dumpIndented (file, -1);
+    const auto contents = dumpPython (file);   // json.dumps(saved), byte for byte
 
     const auto cannot = [&] { problem = "cannot write " + path.getFullPathName().toStdString(); };
     if (! path.getParentDirectory().createDirectory())

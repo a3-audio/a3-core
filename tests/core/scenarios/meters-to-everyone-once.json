@@ -1,0 +1,8 @@
+{
+ "about": "O13: the engine sends its meters to core.vu-relay; Core forwards the datagram, bytes unchanged, to each display the analyzer used to reach -- the truth's core routes that carry vu: Motion's vu port, the mixer, radla -- once each. StemDeck's meters (41-50) go to nobody here: no remote Motion or desk is followed. HAND-WRITTEN expected: B1 has no such path (see README, Hand-written expectations). Runs on the engine truth (a3-core 78230b9), not B1's.",
+ "truth": "engine",
+ "steps": [
+ {"at": 0.1, "from": ["127.0.0.1", 47000], "vu": "I2J1bmRsZQAAAAAAAAAAAQAAABQvdnUvMQAAACxmZgA/AAAAPoAAAAAAABQvdnUvMgAAACxmZgA/AAAAPoAAAAAAABQvdnUvMwAAACxmZgA/AAAAPoAAAAAAABQvdnUvNAAAACxmZgA/AAAAPoAAAAAAABQvdnUvNQAAACxmZgA/AAAAPoAAAAAAABQvdnUvNgAAACxmZgA/AAAAPoAAAAAAABQvdnUvNwAAACxmZgA/AAAAPoAAAAAAABQvdnUvOAAAACxmZgA/AAAAPoAAAAAAABQvdnUvOQAAACxmZgA/AAAAPoAAAAAAABQvdnUvMTAAACxmZgA/AAAAPoAAAA=="},
+ {"at": 0.2, "from": ["127.0.0.1", 47001], "vu": "I2J1bmRsZQAAAAAAAAAAAQAAABQvdnUvNDEAACxmZgA/AAAAPoAAAAAAABQvdnUvNDIAACxmZgA/AAAAPoAAAAAAABQvdnUvNDMAACxmZgA/AAAAPoAAAAAAABQvdnUvNDQAACxmZgA/AAAAPoAAAAAAABQvdnUvNDUAACxmZgA/AAAAPoAAAAAAABQvdnUvNDYAACxmZgA/AAAAPoAAAAAAABQvdnUvNDcAACxmZgA/AAAAPoAAAAAAABQvdnUvNDgAACxmZgA/AAAAPoAAAAAAABQvdnUvNDkAACxmZgA/AAAAPoAAAAAAABQvdnUvNTAAACxmZgA/AAAAPoAAAA=="}
+ ]
+}

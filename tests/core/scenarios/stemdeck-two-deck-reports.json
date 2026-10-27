@@ -1,0 +1,21 @@
+{
+ "about": "StemDeck's device hello: news, so Core learns where it listens, asks it for every stem's switches and tells it LIVE, and a pro-DJ app hears where it runs; its bus reports for both decks change what the stems show (only what changed is broadcast); a second StemDeck is a rival said once; a minute without the hello empties the buses, noticed at the next device's hello (not on the tick); its next hello is news again.",
+ "steps": [
+ {"at": 0.05, "from": ["192.168.8.60", 7773], "osc": ["/device/hello", ["s", "prodj"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+ {"at": 0.1, "from": ["127.0.0.2", 6000], "osc": ["/device/hello", ["s", "stemdeck"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+ {"at": 0.2, "from": ["127.0.0.2", 6000], "osc": ["/stemdeck/1/1/buses", ["i", 1]]},
+ {"at": 0.25, "from": ["127.0.0.2", 6000], "osc": ["/stemdeck/1/3/buses", ["i", 2]]},
+ {"at": 0.3, "from": ["127.0.0.2", 6000], "osc": ["/stemdeck/2/2/buses", ["i", 4]]},
+ {"at": 0.35, "from": ["127.0.0.2", 6000], "osc": ["/stemdeck/2/4/buses", ["i", 16]]},
+ {"at": 0.4, "from": ["127.0.0.2", 6000], "osc": ["/stemdeck/2/4/buses", ["i", 16]]},
+ {"at": 0.45, "from": ["127.0.0.2", 6000], "osc": ["/stemdeck/3/1/buses", ["i", 1]]},
+ {"at": 0.5, "from": ["192.168.8.30", 6000], "osc": ["/device/hello", ["s", "stemdeck"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+ {"at": 0.6, "from": ["192.168.8.30", 6000], "osc": ["/device/hello", ["s", "stemdeck"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+ {"at": 30.0, "from": ["127.0.0.2", 6000], "osc": ["/device/hello", ["s", "stemdeck"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+ {"at": 30.1, "tick": true},
+ {"at": 91.0, "tick": true},
+ {"at": 91.2, "from": ["127.0.0.1", 40001], "osc": ["/device/hello", ["s", "motion"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+ {"at": 91.5, "from": ["127.0.0.2", 6000], "osc": ["/device/hello", ["s", "stemdeck"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+ {"at": 92.0, "flush": true}
+ ]
+}

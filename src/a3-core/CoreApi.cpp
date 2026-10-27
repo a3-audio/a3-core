@@ -3,8 +3,14 @@
 #include "CoreApi.h"
 
 #include <algorithm>
+#include <cerrno>
+#include <cmath>
+#include <cstdlib>
+#include <map>
 #include <memory>
 #include <optional>
+#include <regex>
+#include <variant>
 
 #include "Json.h"
 #include "Register.h"
@@ -95,6 +101,171 @@ void addMonitorRoutes (Routes& routes, MonitorSources sources)
         });
 
     routes.stream ("/api/stream", [sources] { return streamOf (sources); }, 1000 / std::max (1, sources.streamHz));
+}
+
+namespace
+{
+bool isSpace (char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v'; }
+
+std::string stripped (const std::string& text)
+{
+    size_t first = 0, last = text.size();
+    while (first < last && isSpace (text[first]))
+        ++first;
+    while (last > first && isSpace (text[last - 1]))
+        --last;
+    return text.substr (first, last - first);
+}
+
+// Python's number grammar lets a single underscore stand between two digits (1_000); anywhere else it
+// makes the text no number. The digits only, or nullopt.
+std::optional<std::string> withoutDigitSeparators (const std::string& text)
+{
+    std::string out;
+    for (size_t i = 0; i < text.size(); ++i)
+    {
+        if (text[i] != '_')
+        {
+            out += text[i];
+            continue;
+        }
+        const bool between = i > 0 && i + 1 < text.size() && std::isdigit (static_cast<unsigned char> (text[i - 1]))
+                             && std::isdigit (static_cast<unsigned char> (text[i + 1]));
+        if (! between)
+            return std::nullopt;
+    }
+    return out;
+}
+
+// int(text), or nullopt when Python's int() would raise ValueError. std::out_of_range when it fits no int64.
+std::optional<long long> pythonInteger (const std::string& said)
+{
+    static const std::regex integer (R"(^[+-]?[0-9]+$)");
+    const auto digits = withoutDigitSeparators (said);
+    if (! digits || ! std::regex_match (*digits, integer))
+        return std::nullopt;
+    errno = 0;
+    const auto number = std::strtoll (digits->c_str(), nullptr, 10);
+    if (errno == ERANGE)
+        throw std::out_of_range ("an integer beyond 64 bits cannot be sent as OSC");
+    return number;
+}
+
+// float(text), or nullopt when Python's float() would raise ValueError.
+std::optional<double> pythonFloatOf (const std::string& said)
+{
+    static const std::regex number (R"(^[+-]?(([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?|inf|infinity|nan)$)", std::regex::icase);
+    const auto digits = withoutDigitSeparators (said);
+    if (! digits || ! std::regex_match (*digits, number))
+        return std::nullopt;
+    return std::strtod (digits->c_str(), nullptr);
+}
+
+HttpResponse refused (const std::string& why)
+{
+    auto response = jsonResponse (objectOf ({ { "problem", juce::String::fromUTF8 (why.c_str()) } }));
+    response.status = 400;
+    return response;
+}
+
+// a3_core_web._jsonable of what was sent, for the answer: a number that JSON cannot hold is its repr.
+juce::var answerValue (const OscArg& arg)
+{
+    if (arg.tag == 's')
+        return juce::var (juce::String::fromUTF8 (std::get<std::string> (arg.value).c_str()));
+    if (arg.tag == 'i' || arg.tag == 'h')
+        return juce::var (static_cast<juce::int64> (*pythonInt (arg)));
+    const auto number = *pythonFloat (arg);
+    return std::isfinite (number) ? juce::var (number) : juce::var (juce::String (pythonRepr (number)));
+}
+
+struct BenchRequest
+{
+    std::string to, address;
+    OscArg value;
+};
+
+// The body of a POST /api/send, or why it is refused.
+std::variant<BenchRequest, std::string> readBenchRequest (const std::string& body)
+{
+    juce::String error;
+    const auto asked = parseJson (juce::String::fromUTF8 (body.data(), static_cast<int> (body.size())), error);
+    if (error.isNotEmpty())
+        return "the body is not JSON: " + error.toStdString();
+    if (! asked.isObject())
+        return std::string ("the body must be a JSON object with to, address and value");
+
+    std::map<std::string, std::string> fields;
+    for (const auto* name : { "address", "to", "value" })
+    {
+        if (! asked.hasProperty (juce::Identifier (name)))
+            return std::string ("the body has no ") + name;
+        fields[name] = pythonStrOf (asked[juce::Identifier (name)]);   // B1: str(asked[name])
+    }
+    try
+    {
+        return BenchRequest { fields["to"], stripped (fields["address"]), parseValue (fields["value"]) };
+    }
+    catch (const std::exception& problem)
+    {
+        return std::string (problem.what());
+    }
+}
+
+HttpResponse benchSends (const BenchSend& send, const HttpRequest& request)
+{
+    if (! send)
+        return refused ("this window can only watch");
+    const auto read = readBenchRequest (request.body);
+    if (const auto* why = std::get_if<std::string> (&read))
+        return refused (*why);
+    const auto& asked = std::get<BenchRequest> (read);
+
+    if (asked.address.empty() || asked.address.front() != '/')
+        return refused ("an address starts with /");
+    if (asked.to == "reaper")
+        return refused ("reaper is not reachable from the bench: the audio engine plays, send to self, mixer or motion");
+    if (asked.to != "self" && asked.to != "mixer" && asked.to != "motion")
+        return refused ("unknown destination: " + asked.to);
+    try
+    {
+        send (asked.to, OscMessage { asked.address, { asked.value } });
+    }
+    catch (const std::exception& problem)
+    {
+        return refused (problem.what());
+    }
+    return jsonResponse (objectOf ({ { "address", juce::String::fromUTF8 (asked.address.c_str()) }, { "value", answerValue (asked.value) } }));
+}
+
+HttpResponse textResponse (const std::string& json)
+{
+    HttpResponse response;
+    response.contentType = "application/json";
+    response.body = json;
+    return response;
+}
+}
+
+OscArg parseValue (const std::string& text)
+{
+    const auto said = stripped (text);
+    if (said.empty())
+        throw std::invalid_argument ("nothing typed");
+    if (said.size() >= 2 && said.front() == '"' && said.back() == '"')
+        return pyStr (said.substr (1, said.size() - 2));
+    if (const auto integer = pythonInteger (said))
+        return pyInt (*integer);
+    if (const auto number = pythonFloatOf (said))
+        return pyFloat (*number);
+    return pyStr (said);   // a bare word is text, and so is a mistyped number
+}
+
+void addCoreRoutes (Routes& routes, const CoreView* view, BenchSend send)
+{
+    routes.get ("/api/status", [view] (const HttpRequest&) { return textResponse (view != nullptr ? view->texts().status : "{}"); });
+    routes.get ("/api/rig", [view] (const HttpRequest&) { return textResponse (view != nullptr ? view->texts().rig : "{}"); });
+    routes.post ("/api/send", [send = std::move (send)] (const HttpRequest& request) { return benchSends (send, request); });
 }
 
 std::string defaultBind (const Truth& truth)

@@ -2,8 +2,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "VuRelay.h"
 
+#include <algorithm>
+
+#include "OscWire.h"
+
 namespace a3core
 {
+void appendOnce (std::vector<Endpoint>& endpoints, const Endpoint& endpoint)
+{
+    if (std::find (endpoints.begin(), endpoints.end(), endpoint) == endpoints.end())
+        endpoints.push_back (endpoint);
+}
+
 void forward (const std::function<std::optional<Datagram>()>& receive,
               const std::function<void (const Datagram&, const Endpoint&)>& send,
               const std::function<std::vector<Endpoint>()>& destinations,
@@ -25,6 +35,76 @@ void forward (const std::function<std::optional<Datagram>()>& receive,
             }
         }
     }
+}
+
+namespace
+{
+// The truth's words for the meters' key, its vu role and the prefix that marks StemDeck's meters.
+constexpr const char* vuKey = "vu";
+constexpr const char* vuRole = "vu";
+constexpr const char* vuNumber = "n";
+constexpr const char* stemPrefix = "stem_";
+constexpr const char* coreProgram = "core";
+constexpr const char* deskProgram = "desk";
+constexpr const char* engineProgram = "engine";
+
+bool startsWith (const std::string& text, const std::string& prefix) { return text.compare (0, prefix.size(), prefix) == 0; }
+
+std::string textOf (const juce::var& value) { return value.toString().toStdString(); }
+
+// Whether the truth has the engine send meters to Core. Before O13 the analyzer does, and reaches the
+// displays itself: Core adds nothing then.
+bool engineSendsMeters (const std::vector<juce::var>& routes)
+{
+    return std::any_of (routes.begin(), routes.end(), [] (const juce::var& route) {
+        const auto to = textOf (route["to"]);
+        return textOf (route["from"]) == engineProgram && textOf (route["carries"]) == vuKey && startsWith (to, std::string (coreProgram) + ".");
+    });
+}
+}
+
+VuSource vuSourceOf (const Truth& truth, const uint8_t* data, size_t size)
+{
+    const auto messages = decodePacket (data, size);
+    if (! messages || messages->empty())
+        return VuSource::unknown;
+    const auto found = truth.match (messages->front().address);
+    if (! found || found->first != vuKey)
+        return VuSource::unknown;
+    const auto names = truth.vuMeters();
+    const auto number = static_cast<size_t> (found->second.at (vuNumber));
+    if (number < 1 || number > names.size())
+        return VuSource::unknown;
+    return startsWith (names[number - 1], stemPrefix) ? VuSource::stemdeck : VuSource::engine;
+}
+
+std::vector<Endpoint> engineVuTargets (const Truth& truth)
+{
+    std::vector<Endpoint> targets;
+    const auto routes = truth.routes();
+    if (! engineSendsMeters (routes))
+        return targets;
+    for (const auto& route : routes)
+    {
+        if (textOf (route["from"]) != coreProgram)
+            continue;
+        const auto name = textOf (route["to"]);
+        const auto dot = name.find ('.');
+        if (dot == std::string::npos)
+            continue;
+        const auto program = name.substr (0, dot), role = name.substr (dot + 1);
+        // The desks are followed by address, not named by the truth: their port is no display of its own.
+        if (program == deskProgram || (textOf (route["carries"]) != vuKey && role != vuRole))
+            continue;
+        try
+        {
+            appendOnce (targets, truth.endpoint (program, role));
+        }
+        catch (const TruthError&)
+        {
+        }
+    }
+    return targets;
 }
 
 class VuRelayThread::Loop : public juce::Thread

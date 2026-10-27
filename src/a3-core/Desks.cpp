@@ -74,6 +74,15 @@ std::vector<std::string> DeskFollowers::hosts() const
     return out;
 }
 
+std::vector<DeskFollowers::Row> DeskFollowers::rows() const
+{
+    std::lock_guard<std::mutex> guard (lock);
+    std::vector<Row> out;
+    for (const auto& one : followed)
+        out.push_back ({ one.host, one.kind, one.presence.lastHeard() });
+    return out;
+}
+
 std::vector<std::string> DeskFollowers::hostsOfKind (const std::string& kind) const
 {
     const std::lock_guard<std::mutex> guard (lock);

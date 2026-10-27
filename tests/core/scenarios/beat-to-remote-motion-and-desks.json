@@ -1,0 +1,15 @@
+{
+ "about": "The analyzer's /beat: the rig's own Motion gets it from the analyzer directly, so Core passes it on only to a remote Motion it follows and to every desk, unchanged and every beat, short ones too.",
+ "steps": [
+ {"at": 0.1, "from": ["127.0.0.1", 45000], "osc": ["/beat", ["i", 1], ["i", 1], ["f", 120.0]]},
+ {"at": 0.2, "from": ["192.168.8.40", 7773], "osc": ["/device/hello", ["s", "desk"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+ {"at": 0.25, "from": ["192.168.8.41", 7773], "osc": ["/device/hello", ["s", "desk"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+ {"at": 0.3, "from": ["127.0.0.1", 45000], "osc": ["/beat", ["i", 2], ["i", 1], ["f", 120.0]]},
+ {"at": 0.4, "from": ["192.168.8.20", 40002], "osc": ["/device/hello", ["s", "motion"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+ {"at": 0.5, "from": ["127.0.0.1", 45000], "osc": ["/beat", ["i", 3], ["i", 1], ["f", 120.0]]},
+ {"at": 0.6, "from": ["127.0.0.1", 45000], "osc": ["/beat", ["i", 4], ["i", 1]]},
+ {"at": 0.7, "from": ["127.0.0.1", 45000], "osc": ["/beat"]},
+ {"at": 0.8, "from": ["127.0.0.1", 40001], "osc": ["/beat", ["i", 1], ["i", 2], ["f", 121.5]]},
+ {"at": 1.0, "flush": true}
+ ]
+}

@@ -3,27 +3,27 @@
 """Records the OSC wire as python-osc speaks it, its Dispatcher's choices for Core's map patterns,
 and Python's float()/int() of OSC argument values -- for the C++ wire, dispatcher and numbers.
 
-    A3_CORE_BASELINE=<exported a3-core B0> /home/aaa/.venv/bin/python3 -I \
+    A3_CORE_BASELINE=<exported a3-core B1> /home/aaa/.venv/bin/python3 -I \
         tools/parity/record_wire.py tests/core/data/parity/wire.json
 
-The map patterns are Core's main block: B0's (a3-core f3345dc7feeb, a3-core.py `dispatcher.map`)
-plus what 4b's adds (a3-core feat/plan-4b-engine-mode, read with `git show`, never checked out):
-`engine.hello` and one `stemdeck.deck-hello` per deck. Those two come from 4b's a3-osc.json.
+The map patterns are Core's main block at B1 (a3-core 7a7b2441f74e, a3-core.py `dispatcher.map`,
+lines 2297-2342), every pattern from B1's own a3-osc.json: the families, the recall, the beat, the
+device and engine hellos, one `stemdeck.deck-hello` per deck, LIVE and the two pointers. Until Task 19
+the engine's words were read from a3-core's moving branch feat/plan-4b-engine-mode; B1 is fixed.
 """
 import base64
 import json
 import os
 import socket
-import subprocess
 import sys
-import tempfile
 from importlib import metadata
 from pathlib import Path
 
 BASELINE = Path(os.environ["A3_CORE_BASELINE"])
 PACKAGE = BASELINE / "platform-config/debian-x86_64/a3-core"
-A3_CORE_CHECKOUT = Path(os.environ.get("A3_CORE_CHECKOUT", "/home/aaa/a3-system/a3-core"))
-PLAN_4B = "feat/plan-4b-engine-mode"
+B1 = "7a7b2441f74e377938003520e0d87ba15989f83b"
+if not BASELINE.name.endswith(B1[:12]):
+    sys.exit(f"A3_CORE_BASELINE is not B1's export (a3-core-{B1[:12]}): {BASELINE}")
 sys.path.insert(0, str(PACKAGE / "home/aaa/.local/lib"))
 os.environ.pop("A3_NETWORK", None)
 os.environ.pop("A3_OSC_TRUTH", None)
@@ -33,17 +33,7 @@ from pythonosc import dispatcher as osc_dispatcher  # noqa: E402
 from pythonosc import osc_packet  # noqa: E402
 from pythonosc.udp_client import SimpleUDPClient  # noqa: E402
 
-b0 = a3_osc.load(PACKAGE / "usr/share/a3/a3-osc.json")
-sha_4b = subprocess.run(["git", "-C", str(A3_CORE_CHECKOUT), "rev-parse", PLAN_4B],
-                        check=True, capture_output=True, text=True).stdout.strip()
-truth_4b_text = subprocess.run(
-    ["git", "-C", str(A3_CORE_CHECKOUT), "show",
-     f"{sha_4b}:platform-config/debian-x86_64/a3-core/usr/share/a3/a3-osc.json"],
-    check=True, capture_output=True).stdout
-with tempfile.NamedTemporaryFile(suffix=".json") as scratch:
-    scratch.write(truth_4b_text)
-    scratch.flush()
-    t4b = a3_osc.load(Path(scratch.name))
+b1 = a3_osc.load(PACKAGE / "usr/share/a3/a3-osc.json")
 
 
 def value_json(value):
@@ -173,18 +163,18 @@ decode = [{"name": n, "hex": d.hex(), **decoded(d)} for n, d in PACKETS]
 
 # --- the dispatcher: which of Core's maps python-osc calls, in order ----------------------------
 MAPS = [
-    *[{"pattern": f"/{family}/*", "from": "B0"}
+    *[{"pattern": f"/{family}/*", "from": "B1"}
       for family in ("channel", "master", "filter", "aux-return", "stemdeck")],
-    {"pattern": b0.address("state.recall"), "from": "B0"},
-    {"pattern": b0.address("beat"), "from": "B0"},
-    {"pattern": b0.address("device.hello"), "from": "B0"},
-    {"pattern": t4b.address("engine.hello"), "from": f"4b {sha_4b}"},
-    *[{"pattern": t4b.address("stemdeck.deck-hello", deck=deck), "from": f"4b {sha_4b}"}
-      for deck in range(t4b.addresses()["stemdeck.deck-hello"]["deck"][0],
-                        t4b.addresses()["stemdeck.deck-hello"]["deck"][1] + 1)],
-    {"pattern": b0.address("prodj.live"), "from": "B0"},
-    {"pattern": b0.address("stemdeck.pointer"), "from": "B0"},
-    {"pattern": b0.address("motion.pointer"), "from": "B0"},
+    {"pattern": b1.address("state.recall"), "from": "B1"},
+    {"pattern": b1.address("beat"), "from": "B1"},
+    {"pattern": b1.address("device.hello"), "from": "B1"},
+    {"pattern": b1.address("engine.hello"), "from": "B1"},
+    *[{"pattern": b1.address("stemdeck.deck-hello", deck=deck), "from": "B1"}
+      for deck in range(b1.addresses()["stemdeck.deck-hello"]["deck"][0],
+                        b1.addresses()["stemdeck.deck-hello"]["deck"][1] + 1)],
+    {"pattern": b1.address("prodj.live"), "from": "B1"},
+    {"pattern": b1.address("stemdeck.pointer"), "from": "B1"},
+    {"pattern": b1.address("motion.pointer"), "from": "B1"},
 ]
 
 ADDRESSES = [
@@ -238,7 +228,7 @@ numbers = [{"value": value_json(v), "float": number(float, v), "int": number(int
 recorded = {
     "python_osc": metadata.version("python-osc"),
     "python": sys.version.split()[0],
-    "a3_core_4b": sha_4b,
+    "a3_core": B1,
     "encode": encode,
     "decode": decode,
     "maps": MAPS,

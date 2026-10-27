@@ -203,3 +203,32 @@ TEST (StateFile, WrittenFileReadsBackInPython)
     }
     EXPECT_GE (compared, 5);
 }
+
+// A NaN held (B1 a3-core 7a7b2441f74e): Python's == between two states that hold the same float object
+// is True even for a NaN (a container compares by identity first). Core's state holds a NaN 3D or
+// phones-mix as one object until a message assigns a new one: a NaN kept is no change, a NaN that
+// arrives anew (freshNan) is.
+
+TEST (StateFile, TheSameNanKeptIsNoChange)
+{
+    recorded::TempDir temp;
+    StateFile file (temp.dir.getChildFile ("state.json"), 1.0);
+    juce::String error;
+    file.remember (parseJson ("{\"three_d\": NaN, \"a\": 1}", error), 0.0);
+    file.remember (parseJson ("{\"three_d\": NaN, \"a\": 1}", error), 0.5);
+    file.flushIfDue (1.0);   // due since the one change
+    EXPECT_EQ (file.writes(), 1);
+}
+
+TEST (StateFile, AFreshNanIsAChange)
+{
+    recorded::TempDir temp;
+    StateFile file (temp.dir.getChildFile ("state.json"), 1.0);
+    juce::String error;
+    file.remember (parseJson ("{\"three_d\": NaN}", error), 0.0);
+    file.remember (parseJson ("{\"three_d\": NaN}", error), 0.5, true);
+    file.flushIfDue (1.0);
+    EXPECT_EQ (file.writes(), 0);
+    file.flushIfDue (1.5);
+    EXPECT_EQ (file.writes(), 1);
+}

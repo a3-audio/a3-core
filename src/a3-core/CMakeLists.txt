@@ -5,9 +5,12 @@ add_library(a3-core-lib STATIC Version.cpp Json.cpp Truth.cpp OscWire.cpp Dispat
     Presence.cpp HelloGate.cpp Devices.cpp Desks.cpp MotionTarget.cpp ProdjLive.cpp
     Buttons.cpp Tempo.cpp Ahead.cpp DeskFirst.cpp SendFailures.cpp Subscribers.cpp Announce.cpp
     StateFile.cpp CoreState.cpp Recall.cpp Evening.cpp
+    Stems.cpp StemsWords.cpp Decks.cpp EngineWords.cpp StartupRecall.cpp
     Traffic.cpp SeenFile.cpp Register.cpp Render.cpp VuRelay.cpp
     ScreencastFanout.cpp
-    HttpServer.cpp CoreApi.cpp)
+    HttpServer.cpp CoreApi.cpp
+    Core.cpp CoreView.cpp CoreValues.cpp CorePython.cpp CorePeers.cpp CoreRecall.cpp
+    UdpNet.cpp CoreService.cpp)
 target_include_directories(a3-core-lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(a3-core-lib PUBLIC a3-engine-juce)
 target_compile_options(a3-core-lib PRIVATE -Wall -Wextra -Werror=switch)

@@ -99,6 +99,9 @@ public:
     void stop();
 
     int port() const { return boundPort; }   // where it actually ended up
+    // The address it listens on, as the socket was bound (a name is the address it resolved to), like
+    // B1's window_address(); empty before start().
+    const std::string& host() const { return boundHost; }
     int openConnections() const { return active.load(); }
 
 private:
@@ -126,5 +129,6 @@ private:
     std::atomic<int> active { 0 };
     std::atomic<bool> stopping { false };
     int boundPort = -1;
+    std::string boundHost;
 };
 }

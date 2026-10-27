@@ -7,7 +7,14 @@ X-A3-Truth) and the first two events of /api/stream.
     A3_CORE_BASELINE=<exported a3-core B0> /home/aaa/.venv/bin/python3 -I \
         tools/parity/record_api.py tests/core/data/parity/api
 
-Writes api.json. The clocks of the traffic and of the window are the scripted one of record_traffic.py,
+Writes api.json. With a second argument `bench` it writes bench.json instead -- what the same window answers for
+a list arrival, /api/status and /api/send -- and the baseline must then be B1 (a3-core 7a7b2441f74e), whose window
+has them:
+
+    A3_CORE_BASELINE=<exported a3-core B1> /home/aaa/.venv/bin/python3 -I \
+        tools/parity/record_api.py tests/core/data/parity/api bench
+
+The clocks of the traffic and of the window are the scripted one of record_traffic.py,
 so every number is exact; the register is the shipped file that record_traffic.py copied beside its output.
 """
 import base64
@@ -133,11 +140,124 @@ def record():
     return out
 
 
-def main(target):
+def post(port, path, body):
+    """POST `body` (bytes) and return (status, parsed JSON body)."""
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as client:
+        client.sendall(f"POST {path} HTTP/1.0\r\nContent-Length: {len(body)}\r\n\r\n".encode() + body)
+        data = b""
+        while chunk := client.recv(65536):
+            data += chunk
+    head, _, reply = data.partition(b"\r\n\r\n")
+    return int(head.split()[1]), json.loads(reply)
+
+
+def list_aware(spec):
+    kind, raw = spec
+    if kind == "list":
+        return [list_aware(item) for item in raw]
+    return ORIGINAL_VALUE_OF(spec)
+
+
+ORIGINAL_VALUE_OF = rt.value_of
+rt.value_of = list_aware
+
+# What arrives as a Python list: several arguments, or a pointer's one. python-osc hands floats over as
+# float32 widened to double, so the values here are ones float32 holds exactly or are given as such.
+LIST_OPS = [rt.snap(10.0, "/stemdeck/1/pointer", ["list", [["float", 0.5], ["float", 0.25]]], "motion"),
+            rt.snap(10.5, "/motion/pointer", ["list", [["float", 0.75]]], "motion"),
+            rt.snap(11.0, "/odd/mixed", ["list", [["int", 3], ["str", "it's"], ["bool", True], ["NoneType", None],
+                                                  ["bytes", "6101270a00ff"]]], "mixer", "out"),
+            rt.snap(11.5, "/odd/quotes", ["list", [["str", "a\"b'c"], ["str", "line\nbreak\\"], ["str", "gr\u00fc\u00dfe \u266a"],
+                                                  ["float", "nan"], ["float", 1e22]]], "mixer"),
+            rt.snap(12.0, "/odd/empty", ["list", []], "motion"),
+            rt.snap(12.5, "/odd/single", ["list", [["int", 4]]], "mixer", "out"),
+            rt.unk(13.0, "/stemdeck/1/ahead", ["list", [["float", 0.5], ["str", "x"], ["int", 7]]], "motion"),
+            rt.unk(13.5, "/track/3/name", ["str", "kick"])]
+
+# (name, body as sent, which the bench's stand-in for Core's own sender is told to refuse)
+SENDS = [("an int", {"to": "mixer", "address": "/channel/0/pfl", "value": "1"}),
+         ("a float", {"to": "motion", "address": "/channel/0/gain", "value": "0.5"}),
+         ("a negative int", {"to": "self", "address": "/channel/0/azimuth", "value": "-180"}),
+         ("a quoted number", {"to": "mixer", "address": "/channel/0/pfl", "value": "\"1\""}),
+         ("a bare word", {"to": "motion", "address": "/fx/mode", "value": "high_pass"}),
+         ("a mistyped float", {"to": "mixer", "address": "/a", "value": "1.2.3"}),
+         ("spaces around", {"to": "mixer", "address": "  /a  ", "value": "  7  "}),
+         ("a number in the body", {"to": "mixer", "address": "/a", "value": 5}),
+         ("nan", {"to": "mixer", "address": "/a", "value": "nan"}),
+         ("exponent", {"to": "mixer", "address": "/a", "value": "1e3"}),
+         ("a leading dot", {"to": "mixer", "address": "/a", "value": ".5"}),
+         ("a plus sign", {"to": "mixer", "address": "/a", "value": "+3"}),
+         ("an underscore", {"to": "mixer", "address": "/a", "value": "1_000"}),
+         ("hex is text", {"to": "mixer", "address": "/a", "value": "0x10"}),
+         ("inf", {"to": "mixer", "address": "/a", "value": "-inf"}),
+         ("too large for a float", {"to": "mixer", "address": "/a", "value": "1e400"}),
+         ("negative zero", {"to": "mixer", "address": "/a", "value": "-0"}),
+         ("nothing typed", {"to": "mixer", "address": "/a", "value": "   "}),
+         ("an empty address", {"to": "mixer", "address": "", "value": "1"}),
+         ("an address without a slash", {"to": "mixer", "address": "a", "value": "1"}),
+         ("no address", {"to": "mixer", "value": "1"}),
+         ("no destination", {"address": "/a", "value": "1"}),
+         ("no value", {"to": "mixer", "address": "/a"}),
+         ("a space before the destination", {"to": " mixer", "address": "/a", "value": "1"}),
+         ("a list value", {"to": "mixer", "address": "/a", "value": [1, 2]}),
+         ("an object value", {"to": "mixer", "address": "/a", "value": {"a": 1, "b": [True, None, "x'y", 1.5]}}),
+         ("a true value", {"to": "mixer", "address": "/a", "value": True}),
+         ("a null value", {"to": "mixer", "address": "/a", "value": None}),
+         ("a float value", {"to": "mixer", "address": "/a", "value": 1.0}),
+         ("a list of strings", {"to": "mixer", "address": "/a", "value": ["a\"b", "c'd", "\u00fc"]}),
+         ("an unknown destination", {"to": "nowhere", "address": "/a", "value": "1"})]
+
+
+def record_bench():
+    traffic = Traffic()
+    rt.play(traffic, LIST_OPS)
+    sent = []
+
+    def fake_send(to, address, value):
+        if to not in ("mixer", "motion", "reaper", "self"):
+            raise KeyError(to)
+        sent.append([to, address, rt.jsonable(a3_core_web._jsonable(value)),
+                     type(value).__name__])
+
+    status = {"audio_engine": "engine", "reason": ""}
+    assert a3_core_web.start_window(traffic, "127.0.0.1:0", send=fake_send, status=lambda: status,
+                                    register_path=REGISTER)
+    out = {"list_ops": LIST_OPS, "fetched_at": 100.0, "responses": {}, "sends": []}
+    try:
+        _, port = a3_core_web.window_address()
+        rt.Scripted.mono = out["fetched_at"]
+        for name in ("traffic", "unknown", "status"):
+            reply = get(port, f"/api/{name}")
+            assert reply["status"] == 200 and reply["headers"]["content-type"] == "application/json"
+            out["responses"][name] = rt.jsonable(json.loads(reply["body"]))
+        for name, body in SENDS:
+            del sent[:]
+            status_code, reply = post(port, "/api/send", json.dumps(body).encode())
+            out["sends"].append({"name": name, "body": body, "status": status_code, "reply": rt.jsonable(reply),
+                                 "sent": list(sent)})
+        for name, raw in (("not json", b"not json at all"), ("a json list", b"[1, 2]")):
+            del sent[:]
+            status_code, reply = post(port, "/api/send", raw)
+            out["sends"].append({"name": name, "raw": raw.decode(), "status": status_code, "reply": reply, "sent": list(sent)})
+    finally:
+        a3_core_web.stop_window()
+    assert a3_core_web.start_window(Traffic(), "127.0.0.1:0")
+    try:
+        _, port = a3_core_web.window_address()
+        out["responses"]["status_without"] = json.loads(get(port, "/api/status")["body"])
+        status_code, reply = post(port, "/api/send", json.dumps(SENDS[0][1]).encode())
+        out["read_only"] = {"status": status_code, "has_problem": "problem" in reply}
+    finally:
+        a3_core_web.stop_window()
+    return out
+
+
+def main(target, what="api"):
     target = Path(target)
     target.mkdir(parents=True, exist_ok=True)
-    (target / "api.json").write_text(json.dumps(record(), indent=1, ensure_ascii=True, sort_keys=True) + "\n")
+    result = record_bench() if what == "bench" else record()
+    (target / f"{what}.json").write_text(json.dumps(result, indent=1, ensure_ascii=True, sort_keys=True) + "\n")
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    main(*sys.argv[1:])

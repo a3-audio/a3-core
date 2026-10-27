@@ -39,6 +39,13 @@ public:
     std::vector<std::string> silence (double now);
     std::vector<std::string> hosts() const;
     std::vector<std::string> hostsOfKind (const std::string& kind) const;
+    struct Row
+    {
+        std::string host, kind;
+        std::optional<double> lastHeard;
+    };
+    // Every desk and pro-DJ app followed, in the order they joined.
+    std::vector<Row> rows() const;
     // deskName(host) when (host, port) is a followed desk's listening socket.
     std::optional<std::string> nameOf (const std::string& host, int port) const;
     std::vector<Endpoint> vuDestinations() const;

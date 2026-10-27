@@ -1,7 +1,7 @@
 {
  "python_osc": "1.10.2",
  "python": "3.14.8",
- "a3_core_4b": "5f753c317e55ef2db5f10553e606dc192114f4da",
+ "a3_core": "7a7b2441f74e377938003520e0d87ba15989f83b",
  "encode": [
   {
    "address": "/int",
@@ -722,67 +722,67 @@
  "maps": [
   {
    "pattern": "/channel/*",
-   "from": "B0"
+   "from": "B1"
   },
   {
    "pattern": "/master/*",
-   "from": "B0"
+   "from": "B1"
   },
   {
    "pattern": "/filter/*",
-   "from": "B0"
+   "from": "B1"
   },
   {
    "pattern": "/aux-return/*",
-   "from": "B0"
+   "from": "B1"
   },
   {
    "pattern": "/stemdeck/*",
-   "from": "B0"
+   "from": "B1"
   },
   {
    "pattern": "/state/recall",
-   "from": "B0"
+   "from": "B1"
   },
   {
    "pattern": "/beat",
-   "from": "B0"
+   "from": "B1"
   },
   {
    "pattern": "/device/hello",
-   "from": "B0"
+   "from": "B1"
   },
   {
    "pattern": "/engine/hello",
-   "from": "4b 5f753c317e55ef2db5f10553e606dc192114f4da"
+   "from": "B1"
   },
   {
    "pattern": "/stemdeck/1/hello",
-   "from": "4b 5f753c317e55ef2db5f10553e606dc192114f4da"
+   "from": "B1"
   },
   {
    "pattern": "/stemdeck/2/hello",
-   "from": "4b 5f753c317e55ef2db5f10553e606dc192114f4da"
+   "from": "B1"
   },
   {
    "pattern": "/stemdeck/3/hello",
-   "from": "4b 5f753c317e55ef2db5f10553e606dc192114f4da"
+   "from": "B1"
   },
   {
    "pattern": "/stemdeck/4/hello",
-   "from": "4b 5f753c317e55ef2db5f10553e606dc192114f4da"
+   "from": "B1"
   },
   {
    "pattern": "/prodj/live",
-   "from": "B0"
+   "from": "B1"
   },
   {
    "pattern": "/stemdeck/pointer",
-   "from": "B0"
+   "from": "B1"
   },
   {
    "pattern": "/motion/pointer",
-   "from": "B0"
+   "from": "B1"
   }
  ],
  "dispatch": [

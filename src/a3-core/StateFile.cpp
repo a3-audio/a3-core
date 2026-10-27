@@ -29,9 +29,9 @@ juce::var StateFile::load() const
     return error.isEmpty() ? state : empty();
 }
 
-void StateFile::remember (const juce::var& state, double now)
+void StateFile::remember (const juce::var& state, double now, bool freshNan)
 {
-    if (last && pythonEquals (state, *last))
+    if (last && ! freshNan && pythonEquals (state, *last, true))
         return;
     last = state.clone();
     pending = state.clone();

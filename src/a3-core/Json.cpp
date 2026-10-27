@@ -19,9 +19,10 @@ namespace
 {
 struct Style
 {
-    int indent;          // < 0: compact, separators "," and ":"
+    int indent;          // < 0: on one line, separators "," and ":" -- or ", " and ": " when spaced
     bool sortKeys;
     bool asciiOnly;
+    bool spaced = false; // json.dumps's default separators (indent None)
 };
 
 void appendHex4 (std::string& out, unsigned unit)
@@ -152,6 +153,8 @@ public:
 private:
     using Member = std::pair<juce::String, juce::var>;
 
+    const char* itemSeparator() const { return style.indent < 0 && style.spaced ? ", " : ","; }
+
     void newline (int depth)
     {
         if (style.indent < 0)
@@ -191,7 +194,7 @@ private:
         for (int i = 0; i < array.size(); ++i)
         {
             if (i > 0)
-                out += ',';
+                out += itemSeparator();
             newline (depth + 1);
             append (array.getReference (i), depth + 1);
         }
@@ -217,10 +220,10 @@ private:
         for (size_t i = 0; i < members.size(); ++i)
         {
             if (i > 0)
-                out += ',';
+                out += itemSeparator();
             newline (depth + 1);
             appendString (out, members[i].first, style.asciiOnly);
-            out += style.indent < 0 ? ":" : ": ";
+            out += style.indent < 0 && ! style.spaced ? ":" : ": ";
             append (members[i].second, depth + 1);
         }
         newline (depth);
@@ -557,6 +560,11 @@ std::string dumpIndented (const juce::var& value, int indent)
     return Writer ({ indent, false, true }).write (value);
 }
 
+std::string dumpPython (const juce::var& value)
+{
+    return Writer ({ -1, false, true, true }).write (value);
+}
+
 bool pythonTruthy (const juce::var& value)
 {
     if (value.isVoid() || value.isUndefined())
@@ -599,7 +607,7 @@ std::optional<juce::int64> wholeOf (const juce::var& value)
 }
 }
 
-bool pythonEquals (const juce::var& a, const juce::var& b)
+bool pythonEquals (const juce::var& a, const juce::var& b, bool sameNan)
 {
     const auto left = numberOf (a);
     const auto right = numberOf (b);
@@ -611,6 +619,8 @@ bool pythonEquals (const juce::var& a, const juce::var& b)
         const auto wholeB = wholeOf (b);
         if (wholeA && wholeB)
             return *wholeA == *wholeB;
+        if (sameNan && std::isnan (*left) && std::isnan (*right))
+            return true;
         return static_cast<long double> (*left) == static_cast<long double> (*right);
     }
     if (a.isVoid() || a.isUndefined() || b.isVoid() || b.isUndefined())
@@ -623,7 +633,7 @@ bool pythonEquals (const juce::var& a, const juce::var& b)
         if (y == nullptr || x->size() != y->size())
             return false;
         for (int i = 0; i < x->size(); ++i)
-            if (! pythonEquals (x->getReference (i), y->getReference (i)))
+            if (! pythonEquals (x->getReference (i), y->getReference (i), sameNan))
                 return false;
         return true;
     }
@@ -633,10 +643,92 @@ bool pythonEquals (const juce::var& a, const juce::var& b)
         if (y == nullptr || x->getProperties().size() != y->getProperties().size())
             return false;
         for (const auto& property : x->getProperties())
-            if (! y->hasProperty (property.name) || ! pythonEquals (property.value, y->getProperty (property.name)))
+            if (! y->hasProperty (property.name) || ! pythonEquals (property.value, y->getProperty (property.name), sameNan))
                 return false;
         return true;
     }
     return false;
+}
+
+juce::var text (const std::string& utf8) { return juce::var (juce::String::fromUTF8 (utf8.data(), static_cast<int> (utf8.size()))); }
+
+juce::var objectOf (std::initializer_list<std::pair<const char*, juce::var>> members)
+{
+    auto* made = new juce::DynamicObject();
+    for (const auto& member : members)
+        made->setProperty (juce::Identifier (member.first), member.second);
+    return juce::var (made);
+}
+
+std::string pythonStrRepr (const std::string& value)
+{
+    const bool hasSingle = value.find ('\'') != std::string::npos;
+    const bool hasDouble = value.find ('"') != std::string::npos;
+    const char quote = hasSingle && ! hasDouble ? '"' : '\'';
+    static const char hex[] = "0123456789abcdef";
+
+    std::string out (1, quote);
+    for (const auto character : value)
+    {
+        const auto byte = static_cast<uint8_t> (character);
+        if (character == quote || character == '\\')
+            out += std::string ("\\") + character;
+        else if (character == '\t')
+            out += "\\t";
+        else if (character == '\n')
+            out += "\\n";
+        else if (character == '\r')
+            out += "\\r";
+        else if (byte < 0x20 || byte == 0x7f)
+            out += std::string ("\\x") + hex[byte >> 4] + hex[byte & 15];
+        else
+            out += character;   // UTF-8 goes through: Python prints printable non-ASCII as it is
+    }
+    return out + quote;
+}
+
+namespace
+{
+// repr() of a JSON value inside a Python container.
+std::string reprOfJson (const juce::var& value)
+{
+    if (value.isString())
+        return pythonStrRepr (value.toString().toStdString());
+    return pythonStrOf (value);
+}
+}
+
+std::string pythonStrOf (const juce::var& value)
+{
+    if (value.isString())
+        return value.toString().toStdString();
+    if (value.isVoid())
+        return "None";
+    if (value.isBool())
+        return static_cast<bool> (value) ? "True" : "False";
+    if (value.isInt() || value.isInt64())
+        return std::to_string (static_cast<juce::int64> (value));
+    if (value.isDouble())
+        return pythonRepr (static_cast<double> (value));
+    std::string out;
+    if (const auto* array = value.getArray())
+    {
+        out = "[";
+        for (int i = 0; i < array->size(); ++i)
+            out += (i > 0 ? ", " : "") + reprOfJson ((*array)[i]);
+        return out + "]";
+    }
+    if (auto* object = value.getDynamicObject())
+    {
+        out = "{";
+        bool first = true;
+        for (const auto& member : object->getProperties())
+        {
+            out += std::string (first ? "" : ", ") + pythonStrRepr (member.name.toString().toStdString()) + ": " + reprOfJson (member.value);
+            first = false;
+        }
+        return out + "}";
+    }
+    return "None";
 }
 }

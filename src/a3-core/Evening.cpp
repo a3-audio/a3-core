@@ -63,23 +63,6 @@ std::optional<OscArg> argOf (const juce::var& value)
         return OscArg { 'N', std::monostate {} };
     return std::nullopt;
 }
-
-juce::var varOf (const OscArg& arg)
-{
-    switch (arg.tag)
-    {
-        case 'i': return juce::var (std::get<int32_t> (arg.value));
-        case 'h': case 'r': case 't': return juce::var (static_cast<juce::int64> (std::get<int64_t> (arg.value)));
-        case 'T': return juce::var (true);
-        case 'F': return juce::var (false);
-        case 'f': case 'd':
-            if (const auto* single = std::get_if<float> (&arg.value))
-                return juce::var (static_cast<double> (*single));
-            return juce::var (std::get<double> (arg.value));
-        case 's': return juce::var (juce::String::fromUTF8 (std::get<std::string> (arg.value).c_str()));
-        default: return juce::var();
-    }
-}
 }
 
 bool notReplayed (const std::string& key)
@@ -102,11 +85,40 @@ std::optional<std::string> currentName (const Truth& truth, const std::string& a
     return address;
 }
 
+juce::var jsonOf (const OscArg& arg)
+{
+    switch (arg.tag)
+    {
+        case 'i': return juce::var (std::get<int32_t> (arg.value));
+        case 'h': case 'r': case 't': return juce::var (static_cast<juce::int64> (std::get<int64_t> (arg.value)));
+        case 'T': return juce::var (true);
+        case 'F': return juce::var (false);
+        case 'f': case 'd':
+            if (const auto* single = std::get_if<float> (&arg.value))
+                return juce::var (static_cast<double> (*single));
+            return juce::var (std::get<double> (arg.value));
+        case 's': return juce::var (juce::String::fromUTF8 (std::get<std::string> (arg.value).c_str()));
+        default: return juce::var();
+    }
+}
+
 juce::var eveningState (const Relayed& relayed)
 {
     auto* values = new juce::DynamicObject();
-    for (const auto& [address, value] : relayed.messages())
-        values->setProperty (juce::String::fromUTF8 (address.c_str()), varOf (value));
+    for (const auto& message : relayed.messages())
+    {
+        juce::var value;
+        if (relayed.isList (message.address))
+        {
+            juce::Array<juce::var> items;
+            for (const auto& item : message.args)
+                items.add (jsonOf (item));
+            value = items;
+        }
+        else
+            value = jsonOf (message.args.front());
+        values->setProperty (juce::String::fromUTF8 (message.address.c_str()), value);
+    }
     auto* state = new juce::DynamicObject();
     state->setProperty ("values", juce::var (values));
     return juce::var (state);

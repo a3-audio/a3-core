@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "Recall.h"
 
+#include <algorithm>
 #include <cstring>
 
 namespace a3core
@@ -41,6 +42,7 @@ std::optional<Number> numberOf (const OscArg& arg)
         default: return std::nullopt;
     }
 }
+}
 
 bool sameAsPython (const OscArg& a, const OscArg& b)
 {
@@ -54,7 +56,6 @@ bool sameAsPython (const OscArg& a, const OscArg& b)
         return left->integer == right->integer;
     const auto real = [] (const Number& n) { return n.whole ? static_cast<long double> (n.integer) : n.real; };
     return real (*left) == real (*right);
-}
 }
 
 const char* ledKey (LedFlag flag) { return flag == LedFlag::cue ? "channel.cue.led" : "channel.filter.led"; }
@@ -107,11 +108,45 @@ std::vector<Message> flagMessages (const Truth& truth, const std::vector<Channel
 
 bool Relayed::holds (const std::string& address, const OscArg& value) const
 {
-    const auto found = place.find (address);
-    return found != place.end() && sameAsPython (held[found->second].second, value);
+    const auto* found = find (address);
+    return found != nullptr && ! found->list && sameAsPython (found->args.front(), value);
 }
 
-void Relayed::note (const std::string& address, OscArg value)
+bool Relayed::holds (const std::string& address, const std::vector<OscArg>& list) const
+{
+    const auto* found = find (address);
+    if (found == nullptr || ! found->list || found->args.size() != list.size())
+        return false;
+    return std::equal (list.begin(), list.end(), found->args.begin(), sameAsPython);
+}
+
+void Relayed::note (const std::string& address, OscArg value) { put (address, { { std::move (value) }, false }); }
+
+void Relayed::note (const std::string& address, std::vector<OscArg> list) { put (address, { std::move (list), true }); }
+
+std::optional<OscArg> Relayed::value (const std::string& address) const
+{
+    const auto* found = find (address);
+    if (found == nullptr || found->list)
+        return std::nullopt;
+    return found->args.front();
+}
+
+bool Relayed::isList (const std::string& address) const
+{
+    const auto* found = find (address);
+    return found != nullptr && found->list;
+}
+
+std::vector<OscMessage> Relayed::messages() const
+{
+    std::vector<OscMessage> out;
+    for (const auto& [address, value] : held)
+        out.push_back ({ address, value.args });
+    return out;
+}
+
+void Relayed::put (const std::string& address, Held value)
 {
     const auto found = place.find (address);
     if (found != place.end())
@@ -123,22 +158,25 @@ void Relayed::note (const std::string& address, OscArg value)
     held.emplace_back (address, std::move (value));
 }
 
-std::optional<OscArg> Relayed::value (const std::string& address) const
+const Relayed::Held* Relayed::find (const std::string& address) const
 {
     const auto found = place.find (address);
-    if (found == place.end())
-        return std::nullopt;
-    return held[found->second].second;
+    return found == place.end() ? nullptr : &held[found->second].second;
 }
 
-std::vector<Message> recallMessages (const Truth& truth, const std::vector<ChannelInfo>& channels, const MasterInfo& master,
-                                     const Relayed& relayed)
+std::vector<OscMessage> recallMessages (const Truth& truth, const std::vector<ChannelInfo>& channels, const MasterInfo& master,
+                                        const Relayed& relayed)
 {
-    auto out = lampMessages (truth, channels, master);
-    const auto append = [&out] (const std::vector<Message>& more) { out.insert (out.end(), more.begin(), more.end()); };
+    std::vector<OscMessage> out;
+    const auto append = [&out] (const std::vector<Message>& more) {
+        for (const auto& [address, value] : more)
+            out.push_back ({ address, { value } });
+    };
+    append (lampMessages (truth, channels, master));
     append (flagMessages (truth, channels, master));
     append (rememberedMessages (truth, channels));
-    append (relayed.messages());
+    for (auto& message : relayed.messages())
+        out.push_back (std::move (message));
     return out;
 }
 }

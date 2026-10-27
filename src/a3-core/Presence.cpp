@@ -27,6 +27,12 @@ bool Presence::gone (double now)
     return true;
 }
 
+std::optional<double> HelloWatch::lastHeard (const std::string& host) const
+{
+    const auto found = heardFrom.find (host);
+    return found == heardFrom.end() ? std::nullopt : found->second.lastHeard();
+}
+
 HelloWatch::HelloWatch (double silence, std::function<bool (const std::string&)> isLocalHost, bool oneAtATime)
     : silenceAfter (silence), isLocal (std::move (isLocalHost)), oneAtATime (oneAtATime)
 {

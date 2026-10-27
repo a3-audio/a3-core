@@ -1,0 +1,19 @@
+{
+ "about": "StemDeck's preview goes on to the Motion Core follows, unchanged (a whole-number energy as f), never noted or replayed -- only from the StemDeck Core follows; before any StemDeck hello, or from another host, nothing; a malformed one is unknown.",
+ "steps": [
+ {"at": 0.1, "from": ["127.0.0.2", 6000], "osc": ["/stemdeck/ahead", ["s", "groove"], ["s", "build"], ["i", 8], ["f", 0.6]]},
+ {"at": 0.2, "from": ["127.0.0.2", 6000], "osc": ["/device/hello", ["s", "stemdeck"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+ {"at": 0.3, "from": ["127.0.0.2", 6000], "osc": ["/stemdeck/ahead", ["s", "groove"], ["s", "build"], ["i", 8], ["f", 0.6]]},
+ {"at": 0.35, "from": ["127.0.0.2", 6000], "osc": ["/stemdeck/ahead", ["s", "groove"], ["s", "build"], ["i", 8], ["f", 0.6]]},
+ {"at": 0.4, "from": ["127.0.0.2", 6000], "osc": ["/stemdeck/ahead", ["s", "build"], ["s", "drop"], ["i", 4], ["i", 1]]},
+ {"at": 0.45, "from": ["192.168.8.30", 6000], "osc": ["/stemdeck/ahead", ["s", "drop"], ["s", "end"], ["i", -1], ["f", 0.9]]},
+ {"at": 0.5, "from": ["127.0.0.2", 6000], "osc": ["/stemdeck/ahead", ["s", "drop"], ["i", 3]]},
+ {"at": 0.55, "from": ["127.0.0.2", 6000], "osc": ["/stemdeck/ahead"]},
+ {"at": 0.6, "from": ["192.168.8.20", 40002], "osc": ["/device/hello", ["s", "motion"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+ {"at": 0.7, "from": ["127.0.0.2", 6000], "osc": ["/stemdeck/ahead", ["s", "drop"], ["s", "end"], ["i", -1], ["f", 0.9]]},
+ {"at": 0.8, "from": ["127.0.0.2", 6000], "osc": ["/stemdeck/1/9/buses", ["i", 1]]},
+ {"at": 0.85, "from": ["127.0.0.2", 6000], "osc": ["/stemdeck/unknown/word", ["i", 1]]},
+ {"at": 1.0, "from": ["127.0.0.1", 41000], "osc": ["/engine/hello", ["s", "boot-1"]]},
+ {"at": 1.5, "flush": true}
+ ]
+}

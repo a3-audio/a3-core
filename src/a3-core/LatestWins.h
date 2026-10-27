@@ -45,6 +45,15 @@ struct ServeLoop
     std::function<bool()> running;
     std::function<void()> tick;          // optional
     double tickSeconds = 0.1;
+
+    // Another socket read by the same loop, every datagram in its order (nothing collapses): Core's
+    // meters' inbox, so its datagrams are handled on the serve thread too (P8).
+    struct Side
+    {
+        int socketFd;
+        std::function<void (const std::vector<uint8_t>&, const Endpoint&)> handle;
+    };
+    std::vector<Side> also = {};
 };
 
 // a3_core_latest.serve: wait for the socket, take what waits, hand on what latestWins keeps. A
