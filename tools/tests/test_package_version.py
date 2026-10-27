@@ -10,6 +10,7 @@ once), so the package version is the last tag plus the commits since:
 v03.0 with 63 commits on top is 03.0+63.
 """
 
+import re
 import subprocess
 import sys
 import tempfile
@@ -84,21 +85,67 @@ class FromARealRepository(unittest.TestCase):
         self.assertEqual("03.0+2", package_version.version_of(self.repo))
 
 
-class TheWorkflowStampsIt(unittest.TestCase):
-    """The script is only half of it: the workflow has to fetch the tags and
-    write the version into DEBIAN/control before it builds."""
+class TheWorkflowBuildsTheProgram(unittest.TestCase):
+    """The script is only half of it: the workflow builds the program and the
+    deployment into one .deb with the umbrella's installer/package.py, which
+    reads the tags (so the history) and stamps the version itself. The YAML is
+    read as text; no YAML library is a dependency here."""
 
     def setUp(self):
         self.text = WORKFLOW.read_text()
 
-    def test_it_fetches_the_history_the_tags_are_in(self):
-        self.assertIn("fetch-depth: 0", self.text)
+    def test_ci_builds_in_debian_testing(self):
+        """The rig is Debian testing: dpkg-shlibdeps must name its libraries."""
+        self.assertIn("runs-on: ubuntu-latest", self.text)
+        self.assertIn("container: debian:testing", self.text)
 
-    def test_it_writes_the_version_before_building(self):
-        stamp = self.text.find("package_version.py")
-        build = self.text.find("dpkg-deb --build")
-        self.assertNotEqual(-1, stamp, "the workflow never runs package_version.py")
-        self.assertLess(stamp, build, "the version is written after the build")
+    def test_ci_checks_out_history_and_the_iem_submodule(self):
+        self.assertIn("fetch-depth: 0", self.text)
+        self.assertIn("submodules: true", self.text)
+        self.assertNotIn("recursive", self.text)
+        self.assertIn("safe.directory '*'", self.text)
+
+    def test_ci_installs_the_build_depends_file(self):
+        self.assertIn("xargs -a packaging/build-depends apt-get install -y "
+                      "--no-install-recommends", self.text)
+        self.assertNotIn("sudo", self.text)
+        git_first = self.text.find("apt-get install -y --no-install-recommends git ca-certificates")
+        self.assertNotEqual(-1, git_first, "git must exist before checkout")
+        self.assertLess(git_first, self.text.find("actions/checkout@v4"))
+
+    def test_ci_builds_with_package_py_and_juce_9_0_3(self):
+        self.assertIn("a3-audio/a3-system/main/installer/package.py", self.text)
+        self.assertIn('python3 -I "$RUNNER_TEMP/package.py" "$GITHUB_WORKSPACE" '
+                      "--rev HEAD", self.text)
+        for flag in ("--out", "--cache", "--juce /opt/juce", "--jobs 4"):
+            self.assertIn(flag, self.text)
+        self.assertIn("--branch 9.0.3", self.text)
+        self.assertNotIn("dpkg-deb --build", self.text)
+        self.assertNotIn("package_version.py", self.text)
+
+    def test_ci_caches_juce_and_ccache(self):
+        self.assertIn("path: /opt/juce", self.text)
+        self.assertIn("key: juce-9.0.3-debian-testing-v1", self.text)
+        self.assertIn("path: /github/home/.ccache", self.text)
+        self.assertIn("key: ccache-${{ github.sha }}", self.text)
+        self.assertIn("restore-keys: ccache-", self.text)
+        self.assertIn("CCACHE_DIR: /github/home/.ccache", self.text)
+
+    def test_ci_publishes_repo_a3_core_deb(self):
+        self.assertIn("repo/a3-core.deb", self.text)
+        self.assertNotIn("platform-config/debian-x86_64/a3-core.deb", self.text)
+
+
+class TheBuildDependsCoverTheInstaller(unittest.TestCase):
+    def test_build_depends_covers_the_installers_juce_list(self):
+        base = ROOT.parent / "installer" / "roles" / "base.py"
+        if not base.is_file():
+            self.skipTest("not inside the umbrella checkout")
+        match = re.search(r"JUCE_PACKAGES = \((.*?)\n\)", base.read_text(), re.S)
+        self.assertIsNotNone(match, "JUCE_PACKAGES not found")
+        wanted = re.findall(r'"([^"]+)"', re.sub(r"#.*", "", match.group(1)))
+        have = (ROOT / "packaging" / "build-depends").read_text().split()
+        self.assertEqual([], [p for p in wanted if p not in have])
 
 
 if __name__ == "__main__":
