@@ -29,6 +29,11 @@ struct ConnectionPlan
 ConnectionPlan planConnections (const IoMap& wanted, const std::vector<Link>& live, const std::vector<Link>& madeByUs,
                                 const std::vector<std::string>& existingPorts, const std::string& client = "a3-engine");
 
+// How many of the configured links have a port that is not in the graph. The engine's own ports do not
+// count: with the engine absent they all are, and that is a different thing to say.
+std::size_t linksWithMissingTarget (const IoMap& wanted, const std::vector<std::string>& existingPorts,
+                                    const std::string& client = "a3-engine");
+
 // The links the engine still owns: the ones it made that are still live. A link that
 // died with a peer's port is no one's; when it is made again it is owned again.
 std::vector<Link> stillOwned (const std::vector<Link>& madeByUs, const std::vector<Link>& live);
