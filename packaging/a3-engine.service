@@ -4,24 +4,21 @@
 Description=a3-engine, the A3 audio engine
 PartOf=a3-main.service
 After=pipewire.service wireplumber.service
-# A failed open (JACK absent, a port taken) restarts five times in a minute and then stops,
-# visibly, instead of looping while REAPER is off. There is no automatic fallback (REAPER is frozen).
+# A failed open (a port taken) restarts five times in a minute and then stops,
+# visibly, instead of looping. There is no fallback engine.
 StartLimitIntervalSec=60
 StartLimitBurst=5
 
 [Service]
-# The engine runs when it is installed and `a3-engine --check-config` passes; otherwise this unit
-# is skipped (exit 1 of the condition is not a failure) and a3-reaper.service runs as before.
-# Environment= below applies to this command too: the preload is harmless to a Python helper.
-ExecCondition=/home/aaa/.local/bin/a3-engine-runs
-# The display by name and the screen awaited here, as a3-reaper.service does.
-Environment=DISPLAY=:0
-ExecStartPre=/home/aaa/.local/bin/a3-wait-for-the-screen
+# The engine role of the a3-core program, without a window or a screen. No condition and no
+# Conflicts= here: the engine always starts. The two-deck stemdeck stays off through its own
+# drop-in (stemdeck.service.d/two-deck-off.conf); a conflict between units in one transaction
+# drops a start job before any condition runs.
 # The JACK server accepting clients, not merely started (pipewire-jack answers).
 ExecStartPre=/usr/bin/jack_wait -w
-ExecStart=/usr/bin/a3-engine --service
-# No CPUScheduling here, as in a3-reaper.service: raising the whole process would put its
-# GUI/OSC threads above JACK's process threads (2026-10-06). The audio threads get their priority
+ExecStart=/usr/bin/a3-core --role engine
+# No CPUScheduling here: raising the whole process would put its GUI/OSC threads above JACK's
+# process threads (2026-10-06). The audio threads get their priority
 # from the JACK library; pipewire-jack's answer is uninitialised, so this preload gives the right
 # one (a3-core's postinst builds it).
 Environment=LD_PRELOAD=%h/.local/lib/a3/libjack-rt-priority.so

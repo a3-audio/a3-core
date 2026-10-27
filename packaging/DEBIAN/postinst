@@ -1,15 +1,773 @@
 #!/bin/sh
-# Enables a3-engine's user unit for every user, and nothing else: no write into any
-# home, no restart. A running engine keeps its old binary until its next start.
 set -e
 
-if [ "$1" = "configure" ] && command -v systemctl >/dev/null 2>&1; then
-	systemctl --global enable a3-engine.service || true
-	# Every running user manager learns of the new unit file. Only a reload: reaching
-	# a user manager needs its user's name, which loginctl gives here.
-	for user in $(loginctl list-users --no-legend 2>/dev/null | awk '{print $2}'); do
-		systemctl --user --machine="$user@" daemon-reload 2>/dev/null || true
-	done
+# Debconf helper
+if [ -f /usr/share/debconf/confmodule ]; then
+  . /usr/share/debconf/confmodule
+fi
+# ESC (back) in a dialog comes back from db_go as 30 instead of being taken as
+# the pre-filled answer. The network step leaves on it (a3-core#68).
+db_capb backup
+
+APPUSER="aaa"
+UID=$(id -u $APPUSER)
+USER_HOME=$(getent passwd "$APPUSER" | cut -d: -f6 || echo "/home/$APPUSER")
+
+# Put back the authorized_keys the preinst kept aside, when the unpack took it
+# (older versions shipped the file, a3-core#66). A file that is there is the
+# machine's and stays; the copy goes either way. Never through a symlink: root
+# would write wherever aaa pointed it. Runs before anything that can fail, so
+# a failed upgrade never leaves a machine run over ssh without its keys.
+KEPT_KEYS=/var/lib/a3-core/authorized_keys.keep
+
+restore_authorized_keys() {
+  ssh_dir="$1"
+  kept="$2"
+  owner="$3"
+  [ -f "$kept" ] || return 0
+  if [ -L "$ssh_dir" ] || [ -L "$ssh_dir/authorized_keys" ]; then
+    echo "a3-core: $ssh_dir is behind a symlink; the old keys stay in $kept" >&2
+    return 0
+  fi
+  if [ -e "$ssh_dir/authorized_keys" ]; then
+    rm -f "$kept"
+    return 0
+  fi
+  if [ ! -d "$ssh_dir" ]; then
+    mkdir -p "$ssh_dir"
+    chmod 700 "$ssh_dir"
+    chown "$owner" "$ssh_dir"
+  fi
+  mv "$kept" "$ssh_dir/authorized_keys"
+}
+
+restore_authorized_keys "${USER_HOME}/.ssh" "$KEPT_KEYS" "$APPUSER"
+
+# limits.d/audio.conf gives @audio realtime priority; on the rig aaa was put in
+# the group by hand, on a fresh machine nobody did (a3-core#65). Takes effect
+# at the next login.
+join_audio_group() {
+  case " $(id -nG "$1") " in
+    *" audio "*) return 0 ;;
+  esac
+  usermod -aG audio "$1"
+}
+
+join_audio_group "$APPUSER"
+
+# Take an interface out of ifupdown's hands, so systemd-networkd is the only
+# thing that configures it. With both, /etc/network/interfaces' DHCP stanza and
+# a3.network's static address claimed the same interface, and the address the
+# machine came up with depended on which one was first (a3-core issue #54).
+# Comments the lines out rather than deleting them, so the change can be read
+# and undone. Idempotent: a commented line no longer matches.
+disable_ifupdown_for() {
+  iface="$1"
+  file="$2"
+  [ -f "$file" ] || return 0
+  sed -i \
+    -e "s/^\([[:space:]]*\(allow-hotplug\|auto\)[[:space:]]\+${iface}[[:space:]]*\)$/# a3-core: networkd owns ${iface} -- \1/" \
+    -e "s/^\([[:space:]]*iface[[:space:]]\+${iface}[[:space:]].*\)$/# a3-core: networkd owns ${iface} -- \1/" \
+    "$file"
+}
+
+# Put X on the dummy screen, or take it off again. The config used to ship as
+# an active conffile, which on a machine with a screen is a black monitor with
+# everything running behind it -- and dpkg re-installs a conffile that is new
+# to the package even where somebody had moved it aside (a3-core issue #53).
+# "No" takes the shipped config out of X by renaming it, which mends a machine
+# the old package left it on; a config somebody wrote themselves is left alone.
+apply_headless_choice() {
+  choice="$1"
+  shipped="$2"
+  target="$3"
+  if [ "x$choice" = "xtrue" ]; then
+    mkdir -p "$(dirname "$target")"
+    cp "$shipped" "$target"
+    return 0
+  fi
+  if [ -f "$target" ] && cmp -s "$shipped" "$target"; then
+    mv -f "$target" "$target.off"
+  fi
+}
+
+# One public key, given at install time (a3-core/ssh-key), appended to the
+# keys already there. Anything but a single public-key line is refused without
+# failing the install; options such as command="..." are left to the hand.
+install_ssh_key() {
+  ssh_dir="$1"
+  key="$(printf '%s' "$2" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  [ -n "$key" ] || return 0
+  if [ "$(printf '%s\n' "$key" | wc -l)" -ne 1 ] || ! printf '%s\n' "$key" | grep -Eq \
+      '^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)|sk-ssh-ed25519@openssh\.com|sk-ecdsa-sha2-nistp256@openssh\.com) AAAA[A-Za-z0-9+/]+={0,3}( .*)?$'; then
+    echo "a3-core: the answer to a3-core/ssh-key is not a public key; no key added" >&2
+    return 0
+  fi
+  keys="$ssh_dir/authorized_keys"
+  if [ -L "$ssh_dir" ] || [ -L "$keys" ]; then
+    echo "a3-core: $keys is behind a symlink; no key added" >&2
+    return 0
+  fi
+  mkdir -p "$ssh_dir"
+  chmod 700 "$ssh_dir"
+  # The same key under another comment, or with options in front, is the same key.
+  body="$(printf '%s\n' "$key" | cut -d' ' -f2)"
+  if [ -f "$keys" ] && awk -v body="$body" '{ for (i = 1; i <= NF; i++) if ($i == body) found = 1 } END { exit !found }' "$keys"; then
+    return 0
+  fi
+  if [ -s "$keys" ] && [ -n "$(tail -c1 "$keys")" ]; then
+    echo >> "$keys"
+  fi
+  printf '%s\n' "$key" >> "$keys"
+  chmod 600 "$keys"
+}
+
+# Ask for the key, add it, then forget the answer: an upgrade must not put
+# back a key somebody has since removed by hand.
+ssh_key_step() {
+  db_input high a3-core/ssh-key || true
+  db_go || true
+  db_get a3-core/ssh-key
+  install_ssh_key "$1" "$RET"
+  db_set a3-core/ssh-key "" || true
+}
+
+# The parts of the shipped config the replace question offers, by the top
+# folder a file sits in. Parts, not files: a3nuc2 alone had eleven files that
+# differed, and a list of files runs past a screen.
+config_group() {
+  case "$1" in
+    i3/*)         echo i3 ;;
+    systemd/*)    echo systemd ;;
+    pipewire/*)   echo pipewire ;;
+    *)            echo other ;;
+  esac
+}
+
+config_group_label() {
+  case "$1" in
+    i3)       echo "i3 config" ;;
+    systemd)  echo "systemd user units" ;;
+    pipewire) echo "PipeWire: rate + block + AES67" ;;
+    *)        echo "other files" ;;
+  esac
+}
+
+# The parts with at least one file that is there and differs from the shipped
+# one, in debconf's list form ("i3, systemd") and always in the same order. A
+# file that is not there yet is not in it: installing it replaces nothing, so
+# there is nothing to ask.
+differing_config_groups() {
+  src="$1"; dst="$2"
+  found="$(find "$src" -type f | while IFS= read -r shipped; do
+    rel="${shipped#"$src"/}"
+    [ -e "$dst/$rel" ] || continue
+    cmp -s "$shipped" "$dst/$rel" && continue
+    config_group "$rel"
+  done)"
+  for g in i3 systemd pipewire other; do
+    echo "$found" | grep -qx "$g" && echo "$g"
+  done | paste -sd, - | sed 's/,/, /g'
+}
+
+# Whether $1 is in the debconf list $2 ("i3, systemd").
+in_list() {
+  case ", $2," in
+    *", $1,"*) return 0 ;;
+  esac
+  return 1
+}
+
+# Put the shipped config in place, file by file. It used to be `cp -rn`, which
+# never replaced anything: a Core set up from a home with an older a3 in it
+# kept its old i3 config and user units (and, then, REAPER's template), and a new
+# package changed nothing (a3nuc2, 2026-10-04). A file that is missing is
+# installed. One that differs is replaced only if its part is in $replace --
+# the answer to a3-core/replace-config -- and is copied to $backup first,
+# keeping its path, and named: a local edit is replaced but neither lost nor
+# silent. One whose part was not chosen stays, and is named too.
+install_shipped_config() {
+  src="$1"; dst="$2"; backup="$3"; replace="$4"
+  find "$src" -type f | while IFS= read -r shipped; do
+    rel="${shipped#"$src"/}"
+    target="$dst/$rel"
+    cmp -s "$shipped" "$target" && continue
+    if [ -e "$target" ]; then
+      if ! in_list "$(config_group "$rel")" "$replace"; then
+        echo "a3-core: kept the local ~/.config/$rel"
+        continue
+      fi
+      mkdir -p "$(dirname "$backup/$rel")"
+      cp -p "$target" "$backup/$rel"
+      echo "a3-core: replaced ~/.config/$rel (previous in $backup)"
+    fi
+    mkdir -p "$(dirname "$target")"
+    cp "$shipped" "$target"
+  done
+}
+
+# beat-analyzer.service as a3-core shipped it before the analyzer had its own
+# package: it ran the checkout's build/, and in ~/.config it hides the
+# package's unit in /usr/lib. Moved to the backup, not deleted. A unit of that
+# name that does something else is somebody's own: kept, and named.
+retire_checkout_analyzer_unit() {
+  unit="$1/systemd/user/beat-analyzer.service"; backup="$2"
+  package_unit="${3:-/usr/lib/systemd/user/beat-analyzer.service}"
+  [ -f "$unit" ] || return 0
+  if ! grep -q '^ExecStart=.*/beat-analyzer/build/beat-analyzer' "$unit"; then
+    echo "a3-core: kept the local ~/.config/systemd/user/beat-analyzer.service -- it hides the beat-analyzer package's unit"
+    return 0
+  fi
+  if [ ! -f "$package_unit" ]; then
+    echo "a3-core: kept ~/.config/systemd/user/beat-analyzer.service (it runs the checkout) -- the beat-analyzer package is not installed"
+    return 0
+  fi
+  if mkdir -p "$backup/systemd/user" 2>/dev/null \
+     && mv "$unit" "$backup/systemd/user/beat-analyzer.service"; then
+    echo "a3-core: moved ~/.config/systemd/user/beat-analyzer.service (it ran the checkout) to $backup"
+  else
+    echo "a3-core: could not move ~/.config/systemd/user/beat-analyzer.service -- it still hides the package's unit" >&2
+  fi
+}
+
+# a3-jack, zita-j2n and zita-n2j as earlier versions of the package shipped
+# them: PipeWire and AES67 replaced them (2026-10-14), and left enabled in
+# ~/.config an old unit would start jackd and take the sound card away from
+# PipeWire. Disabled (their links in the .wants folders) and moved to the
+# backup, not deleted. Only the Core's own -- the ones that run jackd or zita
+# itself; StemDeck's zita units of the same names stay, and are named. Their
+# names are collected in RETIRED_UNITS, to be stopped once aaa's manager is up.
+retire_jack_and_zita_units() {
+  units_dir="$1/systemd/user"; backup="$2"
+  for name in a3-jack.service zita-j2n.service zita-n2j.service; do
+    unit="$units_dir/$name"
+    [ -f "$unit" ] || continue
+    case "$name" in
+      a3-jack.service) program=/usr/bin/jackd ;;
+      *)               program="/usr/bin/${name%.service}" ;;
+    esac
+    if ! grep -Eq "^ExecStart=${program}( |\$)" "$unit"; then
+      echo "a3-core: kept the local ~/.config/systemd/user/$name -- not the Core's"
+      continue
+    fi
+    if mkdir -p "$backup/systemd/user" 2>/dev/null \
+       && mv "$unit" "$backup/systemd/user/$name"; then
+      find "$units_dir" -mindepth 2 -maxdepth 2 -type l -path "*.wants/$name" \
+        -exec rm -f {} + || true
+      RETIRED_UNITS="${RETIRED_UNITS:+$RETIRED_UNITS }$name"
+      echo "a3-core: moved ~/.config/systemd/user/$name (jackd and zita are gone) to $backup"
+    else
+      echo "a3-core: could not move ~/.config/systemd/user/$name -- it may still start" >&2
+    fi
+  done
+}
+
+# REAPER, its patchbay and qjackctl as earlier versions of the package
+# shipped them: the a3-core program replaced REAPER (2026-10-27). dpkg deletes
+# ~/.local/bin/a3-engine-runs with the package, but the drop-ins in ~/.config
+# that call it are this machine's copies and stay -- and a drop-in whose
+# ExecCondition calls a missing helper keeps its unit (deck A) from starting.
+# So the three units are disabled (their links in the .wants folders) and
+# moved to the backup with their drop-in folders, every drop-in that names the
+# helper, and the patchbay; each is named, nothing is deleted. Their names go
+# to RETIRED_UNITS, to be stopped once aaa's manager is up. REAPER's own files
+# -- ~/.config/REAPER, ~/.local/opt, ~/.local/vst, ~/.local/clap -- are never
+# touched: they are the maintainer's to remove by hand.
+retire_reaper_files() {
+  config="$1"; backup="$2"
+  units_dir="$config/systemd/user"
+  # ~/.config/$1, a file or a folder, to the same path in the backup; named.
+  move_to_backup() {
+    if mkdir -p "$(dirname "$backup/$1")" 2>/dev/null \
+       && mv "$config/$1" "$backup/$1"; then
+      echo "a3-core: moved ~/.config/$1 (REAPER and qjackctl are gone) to $backup"
+      return 0
+    fi
+    echo "a3-core: could not move ~/.config/$1 -- it is still in place" >&2
+    return 1
+  }
+  for name in a3-reaper.service qjackctl.service a3-user-install.service; do
+    [ -f "$units_dir/$name" ] || continue
+    if move_to_backup "systemd/user/$name"; then
+      find "$units_dir" -mindepth 2 -maxdepth 2 -type l -path "*.wants/$name" \
+        -exec rm -f {} + || true
+      RETIRED_UNITS="${RETIRED_UNITS:+$RETIRED_UNITS }$name"
+    fi
+  done
+  for folder in a3-reaper.service.d qjackctl.service.d; do
+    [ -d "$units_dir/$folder" ] || continue
+    move_to_backup "systemd/user/$folder" || true
+  done
+  for drop_in in "$units_dir"/*.service.d/*.conf; do
+    [ -f "$drop_in" ] || continue
+    grep -q 'a3-engine-runs' "$drop_in" || continue
+    move_to_backup "${drop_in#"$config"/}" || true
+  done
+  for file in rncbc.org/a3-patchbay.xml rncbc.org/QjackCtl.conf; do
+    [ -f "$config/$file" ] || continue
+    move_to_backup "$file" || true
+  done
+}
+
+# Stop what retire_jack_and_zita_units and retire_reaper_files took away and
+# still runs.
+stop_retired_units() {
+  [ -n "$RETIRED_UNITS" ] || return 0
+  user_systemctl stop $RETIRED_UNITS || true
+}
+
+# Ask which differing parts to replace. Every one is offered ticked: the old
+# answer, replacing nothing, is what left a3nuc2 on a six-month-old REAPER template,
+# and nothing replaced is lost (decided 2026-10-04). Asked only when something
+# differs, at high, and its choices are this machine's. An unattended install
+# takes the ticked default: everything. The answer is left in REPLACE_CONFIG.
+# Labels carry no commas: debconf reads a comma as the next choice.
+#
+# The a3-system installer asks this itself, before the package is installed,
+# and hands the answer over preseeded and marked seen. Such an answer is taken
+# as it is, not asked again and not overwritten with the default; seen is
+# then cleared, so a later install without the installer asks once more.
+ask_replace_question() {
+  groups="$1"
+  db_fget a3-core/replace-config seen || true
+  if [ "x$RET" = "xtrue" ]; then
+    db_get a3-core/replace-config
+    REPLACE_CONFIG="$RET"
+    db_fset a3-core/replace-config seen false || true
+    return 0
+  fi
+  labels=""
+  for g in $(echo "$groups" | tr -d ','); do
+    labels="${labels:+$labels, }$(config_group_label "$g")"
+  done
+  db_subst a3-core/replace-config choices_c "$groups" || true
+  db_subst a3-core/replace-config choices "$labels" || true
+  db_set a3-core/replace-config "$groups" || true
+  db_input high a3-core/replace-config || true
+  db_go || true
+  db_get a3-core/replace-config
+  REPLACE_CONFIG="$RET"
+  # Shown, debconf marks it seen; cleared, so it does not pass for the
+  # installer's answer next time.
+  db_fset a3-core/replace-config seen false || true
+}
+
+# Ask for the address, gateway and DNS on every install and upgrade, pre-filled
+# with what is stored -- Enter keeps it. They ran at `medium`, which Debian does
+# not show by default, and an answered question is never asked again: the
+# answer from before the rig moved subnet went out silently with every install
+# (2026-09-25). An unattended install still takes the stored value.
+# The rig moved from 192.168.43.x to 192.168.8.x (see a3-doc's ports page).
+# debconf pre-fills a question with the stored answer, not the template's
+# default, so a machine set up on the old network was offered the old address
+# first -- and a hurried Enter put it back (2026-09-25). An answer still on the
+# retired network is reset to the template's default before it is shown. Each
+# of the three on its own, and only an exact 192.168.43. prefix.
+forget_retired_network() {
+  for question in address gateway dns; do
+    db_get "a3-core/$question" || true
+    case "$RET" in
+      192.168.43.*) db_reset "a3-core/$question" || true ;;
+    esac
+  done
+}
+
+ask_address_questions() {
+  forget_retired_network
+  for question in address gateway dns; do
+    db_fset "a3-core/$question" seen false || true
+    db_input high "a3-core/$question" || true
+  done
+  db_input medium a3-core/interface || true
+  db_go || return 1
+}
+
+# The other wired socket on this machine, to offer for the audio network:
+# physical, not Wi-Fi, not the one already configured. Empty if there is none.
+other_wired_interface() {
+  primary="$1"
+  sysnet="${2:-/sys/class/net}"
+  for path in "$sysnet"/*; do
+    name=$(basename "$path")
+    [ "$name" = "$primary" ] && continue
+    [ -e "$path/device" ] || continue
+    [ -e "$path/wireless" ] && continue
+    [ -e "$path/phy80211" ] && continue
+    echo "$name"
+    return 0
+  done
+}
+
+# Write the network for systemd-networkd into $dir: the first socket with the
+# Core's address, gateway and DNS in 10-a3.network, and -- with a second
+# socket -- the audio network (AES67, PTP) in 20-a3-aes67.network: a subnet of
+# its own without gateway, so a reply always leaves by the socket it came in
+# on. Two networks, not a bridge: with the bridge (2026-09-25 to 2026-10-14)
+# every carrier drop on one socket cost both some thirty seconds of STP. The
+# bridge files and the old single a3.network are retired, so an upgrade is
+# also the way out of the bridge. Nothing is switched here: networkd reads
+# the files at the next boot.
+write_network_config() {
+  dir="$1"; iface="$2"; addr="$3"; gateway="$4"; dns="$5"
+  audio_port="$6"; audio_addr="$7"
+  mkdir -p "$dir"
+
+  # Only a unit whose content changes is written, and the one it replaces --
+  # or removes -- is kept beside it as <name>.bak-<time>, a name networkd does
+  # not read: a wrong write can be undone (a3-core#68).
+  stamp="$(date +%Y%m%d-%H%M%S)"
+  put_unit () {
+    tmp="$(mktemp "$1.XXXXXX")"
+    printf '%s\n' "$2" > "$tmp"
+    if cmp -s "$tmp" "$1"; then
+      rm -f "$tmp"
+      return 0
+    fi
+    if [ -e "$1" ]; then
+      cp -p "$1" "$1.bak-$stamp"
+    fi
+    chmod 644 "$tmp"
+    chown root:root "$tmp" 2>/dev/null || true
+    mv -f "$tmp" "$1"
+  }
+  retire_unit () {
+    [ -e "$1" ] || return 0
+    mv -f "$1" "$1.bak-$stamp"
+  }
+
+  put_unit "$dir/10-a3.network" "[Match]
+Name=${iface}
+
+[Network]
+Address=${addr}
+Gateway=${gateway}
+DNS=${dns}"
+
+  if [ -n "$audio_port" ]; then
+    put_unit "$dir/20-a3-aes67.network" "[Match]
+Name=${audio_port}
+
+[Network]
+# AES67 and PTP in a subnet of their own: one subnet per port, so a reply
+# always leaves by the port it came in on.
+# No gateway and no DNS here: the only way out is the first socket.
+Address=${audio_addr}"
+  else
+    retire_unit "$dir/20-a3-aes67.network"
+  fi
+
+  retire_unit "$dir/a3.network"
+  retire_unit "$dir/10-a3-bridge.netdev"
+  retire_unit "$dir/20-a3-bridge-ports.network"
+  retire_unit "$dir/30-a3-bridge-address.network"
+}
+
+# The socket and the address for the audio network; an empty socket is none.
+# Asked on every install like the address. The socket is pre-filled with the
+# other wired one only the first time it is ever asked -- after that the
+# stored answer stands, an empty one included, so a Core set to "none" is not
+# talked back into one.
+ask_audio_questions() {
+  db_fget a3-core/audio-port seen || true
+  if [ "x$RET" != "xtrue" ]; then
+    db_set a3-core/audio-port "$(other_wired_interface "$1")" || true
+  fi
+  db_fset a3-core/audio-port seen false || true
+  db_input high a3-core/audio-port || true
+  db_fset a3-core/audio-address seen false || true
+  db_input high a3-core/audio-address || true
+  db_go || return 1
+}
+
+# Whether the a3-system installer answered the network questions. It preseeds
+# its answers together with a3-core/preseeded=true; the marker is cleared here
+# whatever it says, so it counts for this one install only. The `seen` flag is
+# no such sign: package 1.0.0 showed configure-network itself, and the seen
+# flag it left behind passed for the installer's answer -- an upgrade then
+# rewrote the network unasked (a3-core#68).
+installer_answered_network() {
+  db_get a3-core/preseeded || true
+  answered="$RET"
+  db_set a3-core/preseeded false || true
+  [ "x$answered" = "xtrue" ]
+}
+
+# Ask whether to configure network. High: at medium a fresh machine never saw
+# it, took the default (no) and got no network at all. Asked every time, with
+# no as the answer offered: debconf would offer the stored answer and skip a
+# seen question, and one "yes" walked every later install through the whole
+# network setup again (2026-10-01). Enter leaves the network as it is.
+# Fails on ESC.
+ask_configure_network() {
+  db_reset a3-core/configure-network || true
+  db_fset a3-core/configure-network seen false || true
+  db_input high a3-core/configure-network || true
+  db_go || return 1
+}
+
+# The steps below need root or the user's real home; they are functions of
+# their own so the tests can stand in for them.
+#
+# The maintainer's network (hosts, Core's interface): created once from the
+# package's defaults, never overwritten -- it is his to edit (spec
+# truth-from-core).
+create_network_file() {
+  sudo -u "$APPUSER" -H /usr/bin/a3-core --render-truth network-file \
+    || echo "a3-core: could not create ~/.config/a3/network.json" >&2
+}
+
+# INTERFACE, ADDR, GATEWAY, DNS, AUDIO_PORT and AUDIO_ADDR as shell assignments, from the
+# truth joined with the user's ~/.config/a3/network.json (not root's: this
+# runs as root).
+render_default_network() {
+  A3_NETWORK="${USER_HOME}/.config/a3/network.json" /usr/bin/a3-core --render-truth network
+}
+
+# Enable systemd-networkd but do NOT start it: the files take effect at boot.
+enable_networkd() {
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl daemon-reload || true
+    systemctl enable systemd-networkd.service || true
+  fi
+}
+
+network_left() {
+  echo "a3-core: network setup left (ESC), the network is as it was"
+}
+
+# The network step: the installer's marked answers, or asked here. ESC in any
+# of its dialogs leaves it without writing anything -- no unit, no ifupdown
+# edit, no network.json -- and the rest of the postinst carries on.
+# network.json is created only for the default network, which is what it
+# describes: asked answers are not in it, and a network left alone gets none
+# (it used to be created on every install, naming eno1, a second socket and
+# .10 on machines that had none of them).
+network_step() {
+  netdir="$1"; interfaces="$2"
+  if installer_answered_network; then
+    preseeded=true
+  else
+    preseeded=false
+    if ! ask_configure_network; then
+      network_left
+      return 0
+    fi
+  fi
+  db_get a3-core/configure-network
+  configure="$RET"
+  db_fset a3-core/configure-network seen false || true
+  [ "x$configure" = "xtrue" ] || return 0
+
+  db_get a3-core/install-default-network
+  if [ "x$RET" = "xtrue" ]; then
+    create_network_file
+    eval "$(render_default_network)"
+  else
+    if [ "$preseeded" = false ] && ! ask_address_questions; then
+      network_left
+      return 0
+    fi
+    db_get a3-core/interface; INTERFACE="$RET"
+    db_get a3-core/address; ADDR="$RET"
+    db_get a3-core/gateway; GATEWAY="$RET"
+    db_get a3-core/dns; DNS="$RET"
+
+    if [ "$preseeded" = false ] && ! ask_audio_questions "$INTERFACE"; then
+      network_left
+      return 0
+    fi
+    db_get a3-core/audio-port; AUDIO_PORT="$RET"
+    db_get a3-core/audio-address; AUDIO_ADDR="$RET"
+  fi
+
+  write_network_config "$netdir" "$INTERFACE" "$ADDR" "$GATEWAY" "$DNS" \
+    "$AUDIO_PORT" "$AUDIO_ADDR"
+
+  disable_ifupdown_for "$INTERFACE" "$interfaces"
+  if [ -n "$AUDIO_PORT" ]; then
+    disable_ifupdown_for "$AUDIO_PORT" "$interfaces"
+  fi
+  enable_networkd
+}
+
+network_step /etc/systemd/network /etc/network/interfaces
+
+# Ask whether this Core runs without a monitor. High, not medium: Debian shows
+# high and above by default, and the wrong default here is a black screen.
+db_input high a3-core/headless-display || true
+db_go || true
+db_get a3-core/headless-display
+apply_headless_choice "$RET" \
+  "${USER_HOME}/.local/share/a3-core/x11/10-headless.conf" \
+  /etc/X11/xorg.conf.d/10-headless.conf
+
+# Continue with original postinst tasks (chown, enable services, etc.)
+# --- existing operations start ---
+# (preserve previous behavior; adjust below if your original postinst differs)
+
+mkdir -p /home/aaa/.config
+SHIPPED_CONFIG="${USER_HOME}/.local/share/a3-core/config"
+user_systemctl() {
+  sudo -u "$APPUSER" env XDG_RUNTIME_DIR="/run/user/$UID" \
+    DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$UID/bus" systemctl --user "$@"
+}
+
+REPLACE_CONFIG=""
+DIFFERING="$(differing_config_groups "$SHIPPED_CONFIG" "${USER_HOME}/.config")"
+if [ -n "$DIFFERING" ]; then
+  ask_replace_question "$DIFFERING"
 fi
 
-exit 0
+# The postinst restarts nothing of the rig: a running unit keeps its old
+# config until it is restarted. The maintainer restarts a3-main himself after
+# an upgrade.
+CONFIG_BACKUP="${USER_HOME}/.config/a3-replaced/$(date +%Y-%m-%d_%H%M%S)"
+install_shipped_config "$SHIPPED_CONFIG" "${USER_HOME}/.config" "$CONFIG_BACKUP" "$REPLACE_CONFIG"
+retire_checkout_analyzer_unit "${USER_HOME}/.config" "$CONFIG_BACKUP"
+RETIRED_UNITS=""
+retire_jack_and_zita_units "${USER_HOME}/.config" "$CONFIG_BACKUP"
+retire_reaper_files "${USER_HOME}/.config" "$CONFIG_BACKUP"
+echo "a3-core: nothing restarted; restart a3-main to run the new config"
+
+ssh_key_step "${USER_HOME}/.ssh"
+
+# The engine's realtime preload (see the source's comment, and
+# a3-engine.service's LD_PRELOAD): pipewire-jack answers its maximum realtime
+# priority from an uninitialised variable, and a JACK client then runs its
+# worker threads without realtime. The library is compiled here, on the
+# machine. A failed build is said, not fatal: the engine then runs its
+# workers without realtime.
+build_jack_rt_shim() {
+  shim_source="$1"; library="$2"
+  mkdir -p "$(dirname "$library")" || true
+  if gcc -shared -fPIC -O2 -Wall -o "$library.new" "$shim_source"; then
+    mv -f "$library.new" "$library"
+  else
+    rm -f "$library.new"
+    echo "a3-core: could not build $library -- the engine's workers run without realtime" >&2
+  fi
+}
+
+build_jack_rt_shim "${USER_HOME}/.local/share/a3-core/src/jack-rt-priority.c" "${USER_HOME}/.local/lib/a3/libjack-rt-priority.so"
+
+# startx runs ~/.xserverrc as the X server: Xorg alone goes to CPU 0 (see the
+# shipped file). A ~/.xserverrc that is not ours is somebody's own: kept, named.
+install_xserverrc() {
+  shipped="$1"; target="$2"
+  if [ -e "$target" ] && ! cmp -s "$shipped" "$target" \
+     && ! grep -q '^# a3-core: X server for startx' "$target"; then
+    echo "a3-core: kept the local $target -- Xorg is not pinned to CPU 0"
+    return 0
+  fi
+  cp "$shipped" "$target" && chmod 755 "$target" \
+    || echo "a3-core: could not install $target -- Xorg is not pinned to CPU 0" >&2
+}
+
+install_xserverrc "${USER_HOME}/.local/share/a3-core/xserverrc" "${USER_HOME}/.xserverrc"
+
+chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.local" || true
+chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.config" || true
+[ -f "${USER_HOME}/.xserverrc" ] && chown "${APPUSER}:${APPUSER}" "${USER_HOME}/.xserverrc" || true
+[ -d "${USER_HOME}/.ssh" ] && chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.ssh" || true
+
+# x11vnc's port and the beat-analyzer's targets, from a3-osc.json. A failure
+# is said out loud: they would start without their addresses.
+sudo -u "$APPUSER" -H /usr/bin/a3-core --render-truth user \
+  || echo "a3-core: a3-core --render-truth user failed -- x11vnc and the analyzer lack their addresses" >&2
+
+find "$USER_HOME/.config" -type d -exec chmod 0755 {} \;
+find "$USER_HOME/.config" -type f -exec chmod 0664 {} \;
+
+if [ -d /home/aaa/.ssh ]; then
+  chmod 0700 /home/aaa/.ssh
+  find /home/aaa/.ssh -type f -exec chmod 0600 {} \;
+fi
+
+# The loader's cache with pipewire-jack's libjack in it
+# (/etc/ld.so.conf.d/pipewire-jack-x86_64-linux-gnu.conf), before anything
+# that runs a JACK program is started.
+ldconfig || true
+
+echo "enable system services..."
+systemctl daemon-reload || true
+systemctl enable x11vnc.service || true
+# Start it now too: enabling alone left VNC off until the next reboot (2026-10-06).
+systemctl restart x11vnc.service || true
+systemctl enable set_irq_prio.service || true
+
+# Set up aaa's side in aaa's user manager: stop what was retired, enable the
+# rig and AES67. Linger only starts that manager -- asynchronously -- and
+# taking linger away stops it when aaa has no session: a step run in it died
+# two seconds in and was never started again, since apt doesn't rerun the
+# postinst for the same version (a3-core#70). So the manager is started and
+# waited for, the steps run to their end, and only then is linger taken away
+# -- unless it was on before; the rig starts its services from the autologin
+# session, not linger.
+run_user_install() {
+  linger_before="$(loginctl show-user "$APPUSER" -p Linger --value 2>/dev/null || echo no)"
+  loginctl enable-linger "$APPUSER" || true
+  systemctl start "user@${UID}.service" || true
+  if user_systemctl daemon-reload; then
+    stop_retired_units
+    enable_the_rig
+    enable_aes67
+  else
+    echo "a3-core: no user manager for $APPUSER -- the rig is not enabled; run 'dpkg-reconfigure a3-core'" >&2
+  fi
+  [ "x$linger_before" = "xyes" ] || loginctl disable-linger "$APPUSER" || true
+}
+
+# a3-main wants the engine, Core, the window, the analyzer, Motion and deck A:
+# enabled, the rig comes up at the next login. The shipped units arrive as files only, never
+# with their .wants links, and replacing the systemd group took the link away.
+enable_the_rig() {
+  user_systemctl enable a3-main.service || true
+}
+
+# The audio network's socket, from the truth joined with network.json --
+# the one place it is named; empty on a machine without one.
+audio_port() {
+  (
+    eval "$(render_default_network)"
+    printf '%s' "${AUDIO_PORT:-}"
+  )
+}
+
+# AES67 and PTP on the audio socket: ptp4l@<port> (linuxptp's unit, run with
+# /etc/linuxptp/a3-ptp4l.conf by a drop-in: master, steps clients) and the
+# AES67 instance in aaa's user manager. Enabled, not started: they come up
+# with the next boot or login. Without an audio socket neither is enabled.
+enable_aes67() {
+  port="$(audio_port)"
+  if [ -z "$port" ]; then
+    echo "a3-core: no audio port in the network -- AES67 and PTP not enabled"
+    user_systemctl disable a3-aes67.service || true
+    return 0
+  fi
+  systemctl enable "ptp4l@${port}.service" || true
+  user_systemctl enable a3-aes67.service || true
+}
+
+# The engine role's user unit, enabled for every user (it came from the
+# a3-engine package until this one carried the program). Before aaa's user
+# manager is started and a3-main enabled below, so that manager already sees
+# the unit. No restart: a running engine keeps its old binary until its next start.
+if [ "$1" = "configure" ] && command -v systemctl >/dev/null 2>&1; then
+  systemctl --global enable a3-engine.service || true
+  # Every running user manager learns of the new unit file. Only a reload: reaching
+  # a user manager needs its user's name, which loginctl gives here.
+  for user in $(loginctl list-users --no-legend 2>/dev/null | awk '{print $2}'); do
+    systemctl --user --machine="$user@" daemon-reload 2>/dev/null || true
+  done
+fi
+
+echo "enable userservices..."
+run_user_install
+
+echo "update grub..."
+update-grub || true
+
+echo "Installation complete."
+echo "use 'systemctl --user status a3-main.service' to check the rig"
+echo "use 'dpkg-reconfigure a3-core' to configure network and the headless screen"
+echo "Please Reboot or manage a3-core manually with 'systemctl --user start a3-main.service'"

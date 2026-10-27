@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: 2026 Raphael Eismann
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=the a3-core window
+PartOf=a3-main.service
+# The window attaches to the Core and the engine. After= orders only their start (a3-core.service is
+# Type=idle), not the moment their ports answer, so the window also asks systemd: it spawns a role
+# only when no unit has it enabled or running.
+After=a3-core.service a3-engine.service
+
+[Service]
+# The display by name and the screen awaited here. The helper comes with the deployment's
+# payload, in ~/.local/bin.
+Environment=DISPLAY=:0
+ExecStartPre=%h/.local/bin/a3-wait-for-the-screen
+# No role: the window. It exits 0 when it is closed (also after the quit question) and on SIGTERM,
+# so on-failure leaves a closed window closed; a crash or a kill signal starts it again.
+ExecStart=/usr/bin/a3-core
+Restart=on-failure
+RestartSec=2
+# The quit question can hold SIGTERM until it is answered; this bounds `systemctl stop`.
+TimeoutStopSec=10
+
+# No install section and no conflict line: a3-main Wants this unit, and a conflict between units in one
+# transaction drops a start job before any condition runs.

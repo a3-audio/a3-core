@@ -225,6 +225,12 @@ std::optional<EngineTruth> parseEngineTruth (const juce::String& json, juce::Str
         truth.coreHost = root["hosts"]["local"].toString();
     if (truth.corePort <= 0 || truth.coreHost.isEmpty())
         return error = "the truth has no listener \"core.osc\" with a host and a port", std::nullopt;
+    truth.vuRelayPort = a3bench::listenerPort (root, "core.vu-relay");
+    truth.vuRelayHost = a3bench::listenerHostAddress (root, "core.vu-relay");
+    if (truth.vuRelayHost == root["hosts"]["any"].toString())
+        truth.vuRelayHost = root["hosts"]["local"].toString();
+    truth.controlPort = a3bench::listenerPort (root, "engine.control");
+    truth.controlHost = a3bench::listenerHostAddress (root, "engine.control");
     return truth;
 }
 

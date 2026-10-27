@@ -1,0 +1,21 @@
+{
+ "about": "A virtual desk with Core's own truth joins: a subscriber slot, the whole state, LIVE; its values reach everybody but itself; it is named by its socket; it hears the beat and the meters; its recall is answered with LIVE; a desk on another truth is not followed. A minute without its hello it leaves, said once, and is told nothing more.",
+ "steps": [
+ {"at": 0.1, "from": ["192.168.8.40", 7773], "osc": ["/device/hello", ["s", "desk"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+ {"at": 0.15, "from": ["192.168.8.41", 7773], "osc": ["/device/hello", ["s", "desk"], ["s", "000000000000000000000000000000000000000000000000000000000000beef"]]},
+ {"at": 0.2, "from": ["192.168.8.40", 7773], "osc": ["/channel/1/gain", ["s", "0.3"]]},
+ {"at": 0.25, "from": ["192.168.8.40", 50000], "osc": ["/channel/1/gain", ["s", "0.31"]]},
+ {"at": 0.3, "from": ["192.168.8.11", 50001], "osc": ["/channel/2/gain", ["s", "0.6"]]},
+ {"at": 0.35, "from": ["127.0.0.1", 45000], "osc": ["/beat", ["i", 1], ["i", 1], ["f", 120.0]]},
+ {"at": 0.36, "from": ["127.0.0.1", 45000], "osc": ["/beat", ["i", 2]]},
+ {"at": 0.4, "from": ["127.0.0.1", 47000], "vu": "I2J1bmRsZQAAAAAAAAAAAQAAABQvdnUvMQAAACxmZgA/AAAAPoAAAAAAABQvdnUvMgAAACxmZgA/AAAAPoAAAA=="},
+ {"at": 0.5, "from": ["192.168.8.40", 7773], "osc": ["/state/recall"]},
+ {"at": 30.0, "from": ["192.168.8.40", 7773], "osc": ["/device/hello", ["s", "desk"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+ {"at": 30.1, "tick": true},
+ {"at": 90.0, "tick": true},
+ {"at": 90.2, "tick": true},
+ {"at": 90.3, "from": ["192.168.8.11", 50001], "osc": ["/channel/2/gain", ["s", "0.7"]]},
+ {"at": 90.4, "from": ["127.0.0.1", 47000], "vu": "I2J1bmRsZQAAAAAAAAAAAQAAABQvdnUvMQAAACxmZgA/AAAAPoAAAAAAABQvdnUvMgAAACxmZgA/AAAAPoAAAA=="},
+ {"at": 91.0, "flush": true}
+ ]
+}

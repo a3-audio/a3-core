@@ -1,0 +1,85 @@
+Template: a3-core/configure-network
+Type: boolean
+Default: false
+Description: Do you want to configure networking for a3-core?
+
+Template: a3-core/install-default-network
+Type: boolean
+Default: false
+Description: Install the standard default network configuration automatically?
+
+Template: a3-core/interface
+Type: string
+Default: eno1
+Description: Network interface to match (e.g. eno1)
+
+Template: a3-core/address
+Type: string
+Default: 192.168.8.10/24
+Description: Static IP address (CIDR), e.g. 192.168.8.10/24
+
+Template: a3-core/gateway
+Type: string
+Default: 192.168.8.1
+Description: Gateway address
+
+Template: a3-core/dns
+Type: string
+Default: 192.168.8.1
+Description: DNS server address
+
+Template: a3-core/headless-display
+Type: boolean
+Default: false
+Description: Draw to a dummy screen instead of a monitor?
+ Only for a Core that runs without a monitor and is used over VNC. X then
+ draws to a virtual 1920x1080 screen, and a monitor that is plugged in stays
+ black. Answer no on a machine with a screen, such as one that also runs
+ A3 Motion with its touch panel.
+
+Template: a3-core/audio-port
+Type: string
+Default:
+Description: Second network socket for AES67 audio and PTP (empty: none)
+ The second socket carries the audio network: AES67 streams and the PTP clock,
+ on a subnet of their own without gateway, so the Core's own network on the
+ first socket stays as it is. Name that socket here (for example enp5s0), or
+ leave it empty to use one socket only. Takes effect at the next boot.
+
+Template: a3-core/audio-address
+Type: string
+Default: 192.168.9.10/24
+Description: This Core's address on the audio network (CIDR)
+ Its own subnet, different from the first socket's: a reply always leaves by
+ the socket it came in on. No gateway and no DNS on this network.
+
+Template: a3-core/replace-config
+Type: multiselect
+Choices-C: ${choices_c}
+Choices: ${choices}
+Description: Local files differ from this package. Which should be replaced?
+ These parts of ~/.config differ from what this package ships -- left over
+ from an older a3, or edited on this machine. A chosen part is replaced; every
+ file that is replaced is kept first in ~/.config/a3-replaced/<time>/ and
+ named on the output. A part that is not chosen stays as it is.
+ .
+ The REAPER template nearly always differs: REAPER saves the running project
+ over it whenever it stops. Replacing it stops REAPER for a moment and starts
+ it again on the new template.
+
+Template: a3-core/preseeded
+Type: boolean
+Default: false
+Description: for internal use
+ Set by the a3-system installer together with its network answers, so the
+ postinst takes them without asking. Cleared by the postinst on every install.
+
+Template: a3-core/ssh-key
+Type: string
+Default:
+Description: Public ssh key allowed to log in as aaa (empty: none)
+ Paste one public key line, for example "ssh-ed25519 AAAA... you@laptop".
+ It is added to ~/.ssh/authorized_keys of the user aaa, next to the keys
+ already there, and is not added twice. Leave it empty to add nothing. The
+ answer is forgotten after the install, so a later upgrade does not put back
+ a key that was removed by hand.

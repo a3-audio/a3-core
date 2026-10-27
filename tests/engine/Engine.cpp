@@ -3,8 +3,10 @@
 #include <gtest/gtest.h>
 #include <cmath>
 #include "ChannelSelect.h"
+#include <map>
 #include "EngineFixture.h"
 #include "Laws.h"
+#include "VuTestData.h"
 
 using namespace a3test;
 
@@ -1051,4 +1053,108 @@ TEST (Engine, RecDecoderNeverGetsTheEq)
     EXPECT_EQ (maxDifference (plain->recOutputs(), eq->recOutputs()), 0.0);   // rec parameters unchanged
     EXPECT_GT (peak (stereo (plain->phones), afterStartUp), 1e-3);
     EXPECT_GT (maxDifference (stereo (plain->phones), stereo (eq->phones), afterStartUp), 1e-4);   // phones are filtered
+}
+
+// O13: the /vu meters at the points the patchbay fed beat-analyzer. The raw inputs: an impulse into
+// analog_3 shows only on analog2_L, one into analog_12 (the return's pair) only on aux_R. The outputs and
+// strip taps: a sine through channel 1 moves in1_pre/post, the main and booth ports and rec, each tap's
+// peak exactly what its port carried; tops beyond the layout and the other channels stay 0. The window's
+// outputMeters keeps its own peaks: taking them leaves the taps' alone.
+TEST (Engine, MetersAtTheAnalyzersPoints)
+{
+    const auto names = truthVuMeters();
+    const auto taken = [] (a3::VuTaps& taps)
+    {
+        std::vector<float> peaks, rms;
+        taps.take (peaks, rms);
+        std::map<std::string, std::pair<float, float>> byName;
+        for (size_t slot = 0; slot < taps.names().size(); ++slot)
+            byName[taps.names()[slot]] = { peaks[slot], rms[slot] };
+        return byName;
+    };
+    const auto startsWith = [] (const std::string& text, const char* prefix) { return text.rfind (prefix, 0) == 0; };
+
+    {
+        a3::VuTaps taps (names, a3::VuSettings {});
+        EngineRig rig (engineConfig (4, 2), 4096);
+        rig.engine->attachVuTaps (taps);
+        rig.analog[2] = impulseAt (rig.frames, 100, 1.0f);
+        rig.analog[11] = impulseAt (rig.frames, 300, 0.5f);
+        rig.run();
+        for (const auto& [name, meter] : taken (taps))
+        {
+            if (! startsWith (name, "analog") && ! startsWith (name, "aux_"))
+                continue;
+            const float expected = name == "analog2_L" ? 1.0f : name == "aux_R" ? 0.5f : 0.0f;
+            EXPECT_EQ (meter.first, expected) << name;
+        }
+    }
+
+    a3::VuTaps taps (names, a3::VuSettings {});
+    EngineRig rig (engineConfig (4, 2), oneSecond / 4);
+    rig.engine->attachVuTaps (taps);
+    rig.setAnalogPair (1, sine (rig.frames, 997.0, engineRate, 0.3f));
+    rig.run();
+    EXPECT_FALSE (rig.engine->outputMeters().empty());   // the window's reader takes its peaks first
+    auto meters = taken (taps);
+
+    const auto expectPort = [&] (const std::string& name, const std::vector<float>& carried)
+    {
+        EXPECT_EQ ((double) meters.at (name).first, peak (carried)) << name;
+    };
+    const auto& mainLayout = rig.spatial.main.layout;
+    const auto& boothLayout = rig.spatial.booth.layout;
+    const auto zone = [&] (const std::string& prefix, const a3::Layout& layout, const std::vector<const std::vector<float>*>& ports)
+    {
+        size_t port = 0;
+        if (layout.hasSub())
+            expectPort (prefix + "_sub", *ports[port++]);
+        else
+            EXPECT_EQ (meters.at (prefix + "_sub").first, 0.0f) << prefix;
+        for (size_t top = 1; top <= 9; ++top)
+        {
+            const auto name = prefix + "_top" + std::to_string (top);
+            if (top <= layout.topChannels.size())
+                expectPort (name, *ports[port++]);
+            else
+                EXPECT_EQ (meters.at (name).first, 0.0f) << name;
+        }
+    };
+    zone ("main", mainLayout, rig.mainOutputs());
+    zone ("booth", boothLayout, rig.boothOutputs());
+    EXPECT_GT (meters.at ("main_top1").first, 1e-3f);
+    EXPECT_GT (meters.at ("booth_top1").first, 1e-3f);
+
+    const auto rec = rig.recOutputs();
+    expectPort ("rec_L", *rec[0]);
+    expectPort ("rec_R", *rec[1]);
+    EXPECT_GT (meters.at ("rec_L").first, 1e-3f);
+    EXPECT_GT (meters.at ("rec_R").first, 1e-3f);
+    expectPort ("phones_L", rig.phones.l);
+    expectPort ("phones_R", rig.phones.r);
+
+    for (int c = 1; c <= 4; ++c)
+        for (const char* side : { "L", "R" })
+        {
+            const auto& pre = rig.pre[(size_t) c - 1];
+            const auto& post = rig.post[(size_t) c - 1];
+            const bool left = side[0] == 'L';
+            const auto preName = "in" + std::to_string (c) + "_pre_" + side;
+            const auto postName = "in" + std::to_string (c) + "_post_" + side;
+            expectPort (preName, left ? pre.l : pre.r);
+            expectPort (postName, left ? post.l : post.r);
+            if (c == 1)
+            {
+                EXPECT_GT (meters.at (preName).first, 1e-2f) << preName;
+                EXPECT_GT (meters.at (postName).first, 1e-2f) << postName;
+                EXPECT_GT (meters.at (preName).second, 1e-3f) << preName;
+            }
+            else
+            {
+                EXPECT_EQ (meters.at (preName).first, 0.0f) << preName;
+                EXPECT_EQ (meters.at (postName).first, 0.0f) << postName;
+            }
+        }
+    EXPECT_GT (meters.at ("analog1_L").first, 0.29f);
+    EXPECT_EQ (meters.at ("analog2_L").first, 0.0f);
 }

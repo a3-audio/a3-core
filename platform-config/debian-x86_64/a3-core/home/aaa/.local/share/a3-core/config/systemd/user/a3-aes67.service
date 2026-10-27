@@ -1,0 +1,15 @@
+[Unit]
+Description=AES67 sender and PTP clock (PipeWire, on the audio network)
+# Its config is rendered by a3-osc-render from the truth's network.audio_port;
+# a machine without an audio socket has none, and nothing is started.
+ConditionPathExists=%h/.config/pipewire/pipewire-aes67.conf
+Requires=pipewire.service
+After=pipewire.service wireplumber.service
+
+[Service]
+ExecStart=/usr/bin/pipewire -c %h/.config/pipewire/pipewire-aes67.conf
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target

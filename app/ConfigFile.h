@@ -38,9 +38,19 @@ constexpr float minTrimDb = -90.0f, maxTrimDb = 6.0f;
 std::optional<AppConfig> loadAppConfig (const juce::File&, juce::String& error);
 // "dropped retired link <entry>", one line per entry of AppConfig::droppedLinks.
 juce::StringArray droppedLinkLines (const AppConfig&);
+// The four sections as saveAppConfig writes them, and back (an absolute "spatial" ignores `base`, a relative
+// one is read from it). The control API carries configs in this form. `error` is the reason alone.
+juce::var toJson (const AppConfig&);
+std::optional<AppConfig> parseAppConfig (const juce::var&, const juce::File& base, juce::String& error);
 // Atomic replace. Called only from the window's Save, never by a load.
 juce::Result saveAppConfig (const AppConfig&, const juce::File&);
 inline const juce::File packageConfigFile { "/usr/share/a3-engine/engine.json" };
+
+// The spatial directories the ZONES page may offer, in order: the user's (<configDir>/engine/spatial), the
+// package's default (AppConfig's), and the package's REAPER booth variant beside it. Existing or not.
+std::vector<juce::File> spatialCandidates (const juce::File& configDir);
+// Those of them that are directories.
+std::vector<juce::File> spatialChoices (const juce::File& configDir);
 
 // ~/.config/a3/engine/engine.json under `home`.
 juce::File userConfigFile (const juce::File& home);

@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include "EngineFixture.h"
 #include "EngineStages.h"
+#include "HeapCounter.h"
 
 // The C allocator is replaced for the whole test binary (glibc's documented way,
 // "Replacing malloc"): every entry forwards to glibc's own and only counts while
@@ -88,10 +89,7 @@ using namespace a3test;
 
 namespace
 {
-struct HeapCount
-{
-    int allocated = 0, released = 0;
-};
+using a3test::HeapCount;
 
 // Counts what `work` allocates and frees on this thread, disarmed before any assertion.
 template <typename Work>
@@ -104,7 +102,12 @@ HeapCount countHeapDuring (Work&& work)
     cAllocatorArmed = false;
     return { cAllocations.load(), cReleases.load() };
 }
+}
 
+a3test::HeapCount a3test::heapDuring (const std::function<void()>& work) { return countHeapDuring (work); }
+
+namespace
+{
 // volatile: the optimiser may otherwise elide an allocation whose result is unused.
 void* (*volatile callMalloc) (size_t) = std::malloc;
 void* (*volatile callCalloc) (size_t, size_t) = std::calloc;

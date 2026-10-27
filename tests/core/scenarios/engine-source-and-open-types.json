@@ -1,0 +1,24 @@
+{
+ "about": "The engine's words carry python-osc's types: values as f (the desk's text too), channel.source and engine.open as i, the flags and the filter mode as f. The hello replays the evening through Core's own port, then Core's token recall sends the state and opens; the same boot id again replays nothing; the evening's bytes once it is Core's own.",
+ "files": {
+  "evening.json": {
+   "values": {"/channel/1/gain": 0.3, "/master/volume": 0.8, "/channel/1/cue/led": 1.0},
+   "channel.source": [0, 2, 0, 0]
+  }
+ },
+ "steps": [
+  {"at": 0.2, "from": ["192.168.8.11", 50001], "osc": ["/channel/2/gain", ["s", "0.4"]]},
+  {"at": 0.5, "from": ["127.0.0.1", 41000], "osc": ["/engine/hello", ["s", "boot-1"]]},
+  {"at": 0.6, "from": ["192.168.8.11", 50001], "osc": ["/channel/3/gain", ["s", "0.5"]]},
+  {"at": 0.65, "from": ["192.168.8.11", 50001], "osc": ["/channel/3/azimuth", ["s", "45"]]},
+  {"at": 0.7, "from": ["192.168.8.11", 50001], "osc": ["/channel/3/cue", ["s", "1"]]},
+  {"at": 0.75, "from": ["192.168.8.11", 50001], "osc": ["/channel/1/stem/turn", ["s", "-1"]]},
+  {"at": 0.8, "from": ["192.168.8.11", 50001], "osc": ["/channel/1/stem/push", ["s", "1"]]},
+  {"at": 0.85, "from": ["192.168.8.11", 50001], "osc": ["/filter/mode", ["s", "high_pass"]]},
+  {"at": 0.9, "from": ["192.168.8.11", 50001], "osc": ["/master/phones-mix", ["s", "0.2"]]},
+  {"at": 1.0, "from": ["127.0.0.1", 41000], "osc": ["/engine/hello", ["s", "boot-1"]]},
+  {"at": 1.1, "tick": true},
+  {"at": 3.2, "tick": true},
+  {"at": 3.5, "flush": true}
+ ]
+}

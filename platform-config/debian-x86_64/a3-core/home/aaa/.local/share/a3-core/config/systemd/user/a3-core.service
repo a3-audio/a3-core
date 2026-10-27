@@ -1,0 +1,17 @@
+[Unit]                                                                                     
+Description=a3-core (python osc server)
+PartOf=a3-main.service
+# The audio server comes first; Core reaching the void for a moment costs
+# nothing.
+After=pipewire.service wireplumber.service
+
+
+[Service]
+Type=idle
+PrivateTmp=true
+Environment=PYTHONUNBUFFERED=1
+#ExecStartPre=/bin/sleep 3
+ExecStart=/home/aaa/.venv/bin/python3 /home/aaa/.local/bin/a3-core.py
+
+[Install]
+WantedBy=default.target

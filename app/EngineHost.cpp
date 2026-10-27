@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "EngineHost.h"
 #include <algorithm>
+#include "VuBundles.h"
 
 namespace a3app
 {
@@ -39,9 +40,15 @@ void silence (const a3::EngineOutputs& out, int n)
 }
 
 EngineHost::EngineHost (a3::EngineConfig c, a3::SpatialConfig s, const EngineTruth& truth,
-                        std::function<void (const juce::OSCMessage&)> sendToCore)
-    : config (std::move (c)), spatial (std::move (s)), wire (config.channels), hello (truth, std::move (sendToCore))
+                        std::function<void (const juce::OSCMessage&)> sendToCore,
+                        std::function<void (const Datagram&)> metersTo, a3::VuSettings settings)
+    : config (std::move (c)), spatial (std::move (s)), wire (config.channels), hello (truth, std::move (sendToCore)),
+      vuSettings (settings), vuPattern (truth.vuPattern.toStdString()), sendMeters (std::move (metersTo))
 {
+    std::vector<std::string> names;
+    for (const auto& name : truth.vuMeters)
+        names.push_back (name.toStdString());
+    vuTaps = std::make_unique<a3::VuTaps> (names, vuSettings);
     wire.global().filter.kind.store (static_cast<int> (config.filterKind));   // Core's words change it later
 }
 
@@ -58,6 +65,7 @@ juce::Result EngineHost::rebuild (double sampleRate, int blockSize, bool fadeFir
     if (next == nullptr)
         return juce::Result::fail (error);
     next->prepare (sampleRate, blockSize);   // closes its gate
+    next->attachVuTaps (*vuTaps);
 
     auto* running = current.load();
     if (running != nullptr && fadeFirst)
@@ -105,6 +113,23 @@ void EngineHost::controlTick (double nowSeconds)
         lastMeters = engine->outputMeters();
     }
     hello.tick (nowSeconds);
+    sendMetersWhenDue (nowSeconds);
+}
+
+// As the analyzer's VU thread: one send every 1/rate s (rate held to 1..100), its six bundles. A tick
+// that comes late sends once and the next send is a whole period later: no burst to catch up.
+void EngineHost::sendMetersWhenDue (double nowSeconds)
+{
+    if (! sendMeters)
+        return;
+    const double period = 1.0 / std::clamp (vuSettings.rateHz, 1, 100);
+    constexpr double slack = 1e-6;   // a tick on the due time counts as on time, whatever the rounding
+    if (nextMeterSend >= 0.0 && nowSeconds + slack < nextMeterSend)
+        return;
+    nextMeterSend = nextMeterSend < 0.0 || nowSeconds - nextMeterSend >= period ? nowSeconds + period : nextMeterSend + period;
+    vuTaps->take (vuPeaks, vuRms);
+    for (const auto& bundle : a3::vuBundles (vuPattern, vuPeaks, vuRms))
+        sendMeters (bundle);
 }
 
 a3::EngineControls& EngineHost::controls() { return wire; }

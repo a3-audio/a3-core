@@ -1,0 +1,61 @@
+{
+ "about": "The engine restarts mid-set: a new boot id is an engine that knows nothing. What is replayed is Core's live evening -- the values passed on since the first replay, the desk's moves among them -- then the recall, the state words and engine.open again.",
+ "files": {
+  "state.json": {
+   "channels": [
+    {
+     "toggle_fx": true,
+     "toggle_cue": false,
+     "three_d": 0.62,
+     "azimuth": 30.0,
+     "elevation": 10.0
+    },
+    {
+     "toggle_fx": false,
+     "toggle_cue": true,
+     "three_d": null
+    },
+    {
+     "toggle_fx": false,
+     "toggle_cue": false,
+     "three_d": 0.0
+    },
+    {
+     "toggle_fx": true,
+     "toggle_cue": true,
+     "three_d": 1.0
+    }
+   ],
+   "fx_mode": 1,
+   "phones_mix": 0.3,
+   "return_cue": true
+  },
+  "evening.json": {
+   "values": {
+    "/channel/1/gain": 0.5,
+    "/channel/2/volume": 0.7,
+    "/master/volume": 0.8,
+    "/channel/3/eq/high": 0.25
+   },
+   "channel.source": [
+    1,
+    0,
+    0,
+    2
+   ]
+  }
+ },
+ "steps": [
+ {"at": 0.1, "from": ["127.0.0.1", 41000], "osc": ["/engine/hello", ["s", "boot-1"]]},
+ {"at": 0.2, "tick": true},
+ {"at": 0.3, "from": ["192.168.8.11", 50001], "osc": ["/channel/1/gain", ["s", "0.66"]]},
+ {"at": 0.4, "from": ["192.168.8.11", 50001], "osc": ["/master/volume", ["s", "0.5"]]},
+ {"at": 0.45, "from": ["192.168.8.11", 50001], "osc": ["/channel/2/cue", ["s", "1"]]},
+ {"at": 0.5, "from": ["192.168.8.11", 50001], "osc": ["/channel/3/azimuth", ["s", "-30"]]},
+ {"at": 2.5, "tick": true},
+ {"at": 3.0, "from": ["127.0.0.1", 41000], "osc": ["/engine/hello", ["s", "boot-2"]]},
+ {"at": 3.1, "tick": true},
+ {"at": 5.2, "tick": true},
+ {"at": 5.5, "flush": true}
+ ]
+}

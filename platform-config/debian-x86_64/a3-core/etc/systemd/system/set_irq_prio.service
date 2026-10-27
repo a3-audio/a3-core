@@ -1,0 +1,10 @@
+[Unit]
+Description=Set RT priority for USB audio IRQ
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'for pid in $(pgrep -f "irq/.*-xhci_hcd"); do /usr/bin/chrt -f -p 95 "$pid"; done'
+
+[Install]
+WantedBy=multi-user.target

@@ -1,9 +1,46 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: a3-engine
-Upstream-Contact: A³ Audio
-Source: https://github.com/a3-audio/a3-engine
+Upstream-Name: A3 Audio
+Upstream-Contact: A3 Audio <contact@a3-audio.com>
+Source: https://github.com/a3-audio/a3-core
+Comment: https://a3-audio.com
 
-Files: src/* tests/* host/* CMakeLists.txt build.sh test.sh .gitignore bench/* app/* cmake/* data/*
+Files: docs/*
+Copyright: 2023 A3 Audio <contact@a3-audio.com>
+License: CC-BY-SA-4.0
+
+Files: platform-config/*
+Copyright: 2023 A3 Audio <contact@a3-audio.com>
+License: CC-BY-SA-4.0
+
+Files: software/*
+Copyright: 2023 A3 Audio <contact@a3-audio.com>
+License: GPL-3.0-or-later
+
+Files: platform-config/debian-x86_64/presets/*
+Copyright: 2023 A3 Audio <contact@a3-audio.com>
+License: CC0-1.0
+
+Files: README.md
+Copyright: 2023 A3 Audio <contact@a3-audio.com>
+License: CC0-1.0
+
+Files: tools/*
+Copyright: 2026 A3 Audio <contact@a3-audio.com>
+License: GPL-3.0-or-later
+
+Files: tools/*.json
+Copyright: 2026 A3 Audio <contact@a3-audio.com>
+License: CC0-1.0
+
+Files: tools/*.md
+Copyright: 2026 A3 Audio <contact@a3-audio.com>
+License: CC-BY-SA-4.0
+
+Files: .github/*
+Copyright: 2026 A3 Audio <contact@a3-audio.com>
+License: CC0-1.0
+
+Files: src/* tests/* tools/parity/data/* host/* CMakeLists.txt build.sh test.sh .gitignore bench/* app/* cmake/* data/*
  src/iem-adapter/* src/iem-nodes/*
 Copyright: 2023-2026 A³ Audio contributors
 License: GPL-3.0-or-later
@@ -18,13 +55,15 @@ Files: tests/engine/reference/airwindows/*
 Copyright: 2018 Chris Johnson
 License: MIT
 
-Files: *.md
+Files: PROGRAM.md tests/core/scenarios/README.md tools/parity/README.md
 Copyright: 2026 A³ Audio contributors
 License: CC-BY-SA-4.0
 
 Files: packaging/*
-Copyright: 2026 A³ Audio contributors
+Copyright: 2023-2026 A³ Audio contributors
 License: GPL-3.0-or-later
+Comment: packaging/DEBIAN holds a3-core's maintainer scripts, which were CC-BY-SA-4.0 under
+ platform-config/ until 2026-10-27; CC BY-SA 4.0 is one-way compatible with GPLv3.
 
 Files: third_party/IEMPluginSuite/*
 Copyright: 2017-2026 Institute of Electronic Music and Acoustics (IEM), Graz

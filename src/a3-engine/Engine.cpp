@@ -55,6 +55,19 @@ float peakOf (const juce::AudioBuffer<float>& bus, int n)
     return worst;
 }
 
+// The number between `prefix` and `rest` in a meter name ("in3_pre_L" with "in", "_pre_L" is 3);
+// 0 when the name is not of that form.
+int numberIn (const std::string& name, const std::string& prefix, const std::string& rest)
+{
+    if (name.size() <= prefix.size() + rest.size() || name.compare (0, prefix.size(), prefix) != 0
+        || name.compare (name.size() - rest.size(), rest.size(), rest) != 0)
+        return 0;
+    const auto digits = name.substr (prefix.size(), name.size() - prefix.size() - rest.size());
+    if (digits.size() > 3 || ! std::all_of (digits.begin(), digits.end(), [] (char c) { return c >= '0' && c <= '9'; }))
+        return 0;
+    return std::stoi (digits);
+}
+
 // Linear ramp from `from` to `to` over `length` samples: the j-th value is from + (to - from) (j + 1) / length.
 void fillRamp (float* curve, float from, float to, int length)
 {
@@ -118,6 +131,11 @@ struct Engine::Impl
     void decode (const EngineInputs&, const EngineOutputs&, int offset, int n);
     void pushMeters (int n);
     void buildMeters();
+    std::vector<std::string> attachVuTaps (VuTaps&);
+    bool placeVuTap (const std::string& name, VuTap&);
+    bool placeZoneTap (const std::string& name, const std::string& zoneName, const ZoneDecoder&,
+                       std::vector<std::pair<int, VuTap*>>&, VuTap&);
+    void pushVu (const EngineInputs&, int offset, int n);
 
     const float* analogInput (const EngineInputs&, int index, int offset) const;
     const DeckInputs* deckInputs (const EngineInputs&, int slot) const;
@@ -139,6 +157,12 @@ struct Engine::Impl
     PortMeters meters;
     std::vector<int> mainMeters, boothMeters;
     int recMeter = 0, phonesMeter = 0;
+
+    // The /vu taps (O13), placed by attachVuTaps; each list is read only by the audio thread.
+    std::vector<std::pair<int, VuTap*>> vuInputs, vuMain, vuBooth;   // analog input / zone port, tap
+    std::array<VuTap*, 2> vuRec {}, vuPhones {};
+    struct VuStripTap { size_t channel; EngineChannel::Plane plane; VuTap* tap; };
+    std::vector<VuStripTap> vuStrips;
 
     ReturnSelect returnSelect;
     GainStage returnStage, phonesStage;
@@ -305,6 +329,7 @@ void Engine::Impl::processChunk (const EngineInputs& in, const EngineOutputs& ou
             multiply (busFx.getWritePointer (k), returnPlanes.getReadPointer (delayCurve), n);
     decode (in, out, offset, n);
     pushMeters (n);
+    pushVu (in, offset, n);
 }
 
 void Engine::Impl::latchGlobals (EngineControls& controls)
@@ -631,6 +656,88 @@ void Engine::Impl::pushMeters (int n)
     }
 }
 
+std::vector<std::string> Engine::Impl::attachVuTaps (VuTaps& taps)
+{
+    for (auto* list : { &vuInputs, &vuMain, &vuBooth })
+        list->clear();
+    vuRec = vuPhones = {};
+    vuStrips.clear();
+    std::vector<std::string> unplaced;
+    for (const auto& name : taps.names())
+        if (auto* tap = taps.tapFor (name); tap != nullptr && ! placeVuTap (name, *tap))
+            unplaced.push_back (name);
+    return unplaced;
+}
+
+// The points the patchbay fed beat-analyzer (baseline Step 7, tests/engine/data/vu-points.json).
+bool Engine::Impl::placeVuTap (const std::string& name, VuTap& tap)
+{
+    using P = EngineChannel;
+    for (int side = 0; side < sides; ++side)
+    {
+        const std::string s = side == 0 ? "_L" : "_R";
+        const auto input = [&] (int pair)
+        {
+            const int index = 2 * pair - 2 + side;
+            if (pair < 1 || index >= config.analogInputs)
+                return false;
+            vuInputs.emplace_back (index, &tap);
+            return true;
+        };
+        if (const int pair = numberIn (name, "analog", s))
+            return input (pair);
+        if (name == "aux" + s)
+            return input (config.returnAnalogPair);
+        if (name == "rec" + s || name == "phones" + s)
+        {
+            (name == "rec" + s ? vuRec : vuPhones)[(size_t) side] = &tap;
+            return true;
+        }
+        for (const auto& [part, left] : { std::pair { std::string ("_pre"), P::meterPreL }, { std::string ("_post"), P::meterPostL } })
+            if (const int channel = numberIn (name, "in", part + s))
+            {
+                if (channel > (int) channels.size())
+                    return false;
+                vuStrips.push_back ({ (size_t) channel - 1, (P::Plane) (left + side), &tap });
+                return true;
+            }
+    }
+    return placeZoneTap (name, "main", *main, vuMain, tap) || placeZoneTap (name, "booth", *booth, vuBooth, tap);
+}
+
+bool Engine::Impl::placeZoneTap (const std::string& name, const std::string& zoneName, const ZoneDecoder& zone,
+                                 std::vector<std::pair<int, VuTap*>>& list, VuTap& tap)
+{
+    int port = -1;
+    if (name == zoneName + "_sub")
+        port = zone.hasSub() ? 0 : -1;
+    else if (const int top = numberIn (name, zoneName + "_top", ""))
+        port = (zone.hasSub() ? 1 : 0) + top - 1;
+    if (port < 0 || port >= zone.ports())
+        return false;
+    list.emplace_back (port, &tap);
+    return true;
+}
+
+// Audio thread: each tap reads its point as this chunk leaves it.
+void Engine::Impl::pushVu (const EngineInputs& in, int offset, int n)
+{
+    for (const auto& [index, tap] : vuInputs)
+        tap->processMono (analogInput (in, index, offset), n);
+    for (auto [zone, list] : { std::pair { main.get(), &vuMain }, { booth.get(), &vuBooth } })
+        for (const auto& [port, tap] : *list)
+            tap->processMono (zone->port (port), n);
+    for (int side = 0; side < sides; ++side)
+    {
+        if (vuRec[(size_t) side] != nullptr)
+            vuRec[(size_t) side]->processMono (rec->side (side), n);
+        if (vuPhones[(size_t) side] != nullptr)
+            vuPhones[(size_t) side]->processMono (phones->side (side), n);
+    }
+    for (const auto& strip : vuStrips)
+        strip.tap->processMono (channels[strip.channel]->p (strip.plane), n);
+}
+
 const float* Engine::Impl::analogInput (const EngineInputs& in, int index, int offset) const
 {
     if (index < 0 || index >= (int) in.analog.size() || in.analog[(size_t) index] == nullptr)
@@ -702,6 +809,7 @@ std::vector<Engine::OutputMeter> Engine::outputMeters()
     return list;
 }
 
+std::vector<std::string> Engine::attachVuTaps (VuTaps& taps) { return impl->attachVuTaps (taps); }
 int Engine::analogSourceCount() const { return (int) impl->analogChannelOf.size(); }
 float Engine::lastFxSendPeak() const { return impl->lastFxSendPeak.load (std::memory_order_relaxed); }
 float Engine::lastAnalogEncoderPeak() const { return impl->lastAnalogEncoderPeak.load (std::memory_order_relaxed); }

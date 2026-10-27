@@ -1,0 +1,11 @@
+{
+  "channels": [
+    {"toggle_fx": false, "toggle_pfl": true, "three_d": 0.25},
+    {"toggle_fx": true, "toggle_pfl": true, "toggle_cue": false},
+    {"toggle_pfl": false, "toggle_cue": true}
+  ],
+  "fx_mode": 0,
+  "phones_mix": 0.5,
+  "stem_cue": true,
+  "cue_cleared_on": ["local", "192.168.8.20"]
+}

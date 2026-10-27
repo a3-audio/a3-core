@@ -1,0 +1,1 @@
+network.json refused, the package's defaults are used: @HOME@/bad.json is not JSON: Expecting ':' delimiter: line 3 column 6 (char 20)

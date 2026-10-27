@@ -1,0 +1,17 @@
+{
+ "about": "A host that has not said hello moves nothing: its values are ignored, not relayed, not seen, said once in the journal; its buttons and turns are edges and pass; the desk at its configured host is trusted from any port, hello or not.",
+ "steps": [
+  {"at": 0.1, "from": ["192.168.8.50", 9999], "osc": ["/channel/1/gain", ["f", 0.5]]},
+  {"at": 0.15, "from": ["192.168.8.50", 9999], "osc": ["/master/volume", ["f", 0.3]]},
+  {"at": 0.2, "from": ["192.168.8.50", 9998], "osc": ["/filter/frequency", ["f", 0.3]]},
+  {"at": 0.25, "from": ["192.168.8.50", 9999], "osc": ["/channel/1/cue", ["f", 1.0]]},
+  {"at": 0.3, "from": ["192.168.8.50", 9999], "osc": ["/aux-return/stem/turn", ["i", 1]]},
+  {"at": 0.35, "from": ["192.168.8.50", 9999], "osc": ["/filter/mode", ["f", 1.0]]},
+  {"at": 0.4, "from": ["192.168.8.11", 50001], "osc": ["/channel/1/gain", ["s", "0.5"]]},
+  {"at": 0.45, "from": ["192.168.8.11", 50002], "osc": ["/channel/1/gain", ["s", "0.55"]]},
+  {"at": 0.5, "from": ["192.168.8.51", 9999], "osc": ["/channel/2/gain", ["f", 0.5]]},
+  {"at": 0.55, "from": ["127.0.0.1", 40001], "osc": ["/master/volume", ["f", 0.2]]},
+  {"at": 3.0, "tick": true},
+  {"at": 3.5, "flush": true}
+ ]
+}

@@ -1,0 +1,19 @@
+[Unit]
+Description=The picture of this machine's screen for OBS and the pro-DJ (MPEG-TS, several viewers)
+After=graphical.target
+StartLimitIntervalSec=0
+
+[Service]
+Environment=DISPLAY=:0
+# Port from a3-osc.json, rendered by a3-osc-render; the settings file is optional.
+EnvironmentFile=%h/.config/a3/osc.env
+EnvironmentFile=-%h/.config/a3/screencast.env
+ExecStartPre=%h/.local/bin/a3-wait-for-the-screen
+ExecStart=%h/.local/bin/a3-screencast
+# The fan-out keeps listening; if it or the encoder dies, start again.
+Restart=always
+RestartSec=2
+
+# Not linked into default.target.wants by the package: each machine opts in.
+[Install]
+WantedBy=default.target

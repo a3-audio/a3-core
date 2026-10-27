@@ -141,9 +141,8 @@ juce::var withoutRetiredPorts (const juce::var& io, const std::vector<std::strin
     return result;
 }
 
-AppConfig parse (const juce::File& file)
+AppConfig parseRoot (const juce::var& root, const juce::File& base)
 {
-    const auto root = parseFile (file);
     const auto& object = objectOf (root, "the file");
     rejectUnknownKeys (object, { "engine", "backend", "io", "spatial" }, "the file");
 
@@ -163,7 +162,7 @@ AppConfig parse (const juce::File& file)
         const auto path = object.getProperty ("spatial");
         if (! path.isString() || path.toString().isEmpty())
             refuse ("spatial must be a directory path");
-        config.spatialDirectory = file.getParentDirectory().getChildFile (path.toString());
+        config.spatialDirectory = base.getChildFile (path.toString());
     }
 
     const auto spatial = a3::loadSpatialConfig (config.spatialDirectory, error);
@@ -177,6 +176,22 @@ AppConfig parse (const juce::File& file)
         refuse (error);
     return config;
 }
+
+AppConfig parse (const juce::File& file) { return parseRoot (parseFile (file), file.getParentDirectory()); }
+}
+
+std::optional<AppConfig> parseAppConfig (const juce::var& root, const juce::File& base, juce::String& error)
+{
+    try
+    {
+        error = {};
+        return parseRoot (root, base);
+    }
+    catch (const Refusal& refusal)
+    {
+        error = refusal.reason;
+        return std::nullopt;
+    }
 }
 
 std::optional<AppConfig> loadAppConfig (const juce::File& file, juce::String& error)
@@ -201,7 +216,7 @@ juce::StringArray droppedLinkLines (const AppConfig& config)
     return lines;
 }
 
-juce::Result saveAppConfig (const AppConfig& config, const juce::File& file)
+juce::var toJson (const AppConfig& config)
 {
     auto* backend = new juce::DynamicObject();
     backend->setProperty ("type", config.backend.type == BackendSettings::Type::jack ? "jack" : "device");
@@ -216,7 +231,12 @@ juce::Result saveAppConfig (const AppConfig& config, const juce::File& file)
     root->setProperty ("backend", juce::var (backend));
     root->setProperty ("io", toJson (config.io));
     root->setProperty ("spatial", config.spatialDirectory.getFullPathName());
-    const auto text = juce::JSON::toString (juce::var (root), false);
+    return juce::var (root);
+}
+
+juce::Result saveAppConfig (const AppConfig& config, const juce::File& file)
+{
+    const auto text = juce::JSON::toString (toJson (config), false);
 
     if (! file.getParentDirectory().createDirectory())
         return juce::Result::fail ("cannot create " + file.getParentDirectory().getFullPathName());
@@ -246,5 +266,20 @@ juce::File userConfigFile (const juce::File& home) { return home.getChildFile ("
 juce::File chooseSaveFile (const juce::String& argument, const juce::File& home)
 {
     return argument.isNotEmpty() ? juce::File (argument) : userConfigFile (home);
+}
+
+std::vector<juce::File> spatialCandidates (const juce::File& configDir)
+{
+    const auto installed = AppConfig{}.spatialDirectory;
+    return { configDir.getChildFile ("engine/spatial"), installed, installed.getSiblingFile (installed.getFileName() + "-reaper-booth-6.1") };
+}
+
+std::vector<juce::File> spatialChoices (const juce::File& configDir)
+{
+    std::vector<juce::File> choices;
+    for (const auto& directory : spatialCandidates (configDir))
+        if (directory.isDirectory())
+            choices.push_back (directory);
+    return choices;
 }
 }

@@ -1,0 +1,244 @@
+{
+ "state-current": {
+  "text": "{\n  \"channels\": [\n    {\n      \"toggle_fx\": true,\n      \"toggle_cue\": false,\n      \"three_d\": 0.62\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": true,\n      \"three_d\": null\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": 0.0\n    },\n    {\n      \"toggle_fx\": true,\n      \"toggle_cue\": true,\n      \"three_d\": 1.0\n    }\n  ],\n  \"fx_mode\": 1,\n  \"phones_mix\": 0.3,\n  \"return_cue\": true,\n  \"stems\": {\n    \"cursors\": [\n      0,\n      1,\n      2,\n      3\n    ],\n    \"sources\": [\n      \"stem\",\n      \"analog\"\n    ],\n    \"return\": \"aux\",\n    \"note\": \"Gr\u00fc\u00dfe \ud83c\udfb5\"\n  }\n}\n",
+  "loaded": {
+   "channels": [
+    {
+     "toggle_fx": true,
+     "toggle_cue": false,
+     "three_d": 0.62
+    },
+    {
+     "toggle_fx": false,
+     "toggle_cue": true,
+     "three_d": null
+    },
+    {
+     "toggle_fx": false,
+     "toggle_cue": false,
+     "three_d": 0.0
+    },
+    {
+     "toggle_fx": true,
+     "toggle_cue": true,
+     "three_d": 1.0
+    }
+   ],
+   "master": {
+    "fx_mode": 1,
+    "phones_mix": 0.3,
+    "return_cue": true
+   }
+  },
+  "state_of": "{\n  \"channels\": [\n    {\n      \"toggle_fx\": true,\n      \"toggle_cue\": false,\n      \"three_d\": 0.62\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": true,\n      \"three_d\": null\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": 0.0\n    },\n    {\n      \"toggle_fx\": true,\n      \"toggle_cue\": true,\n      \"three_d\": 1.0\n    }\n  ],\n  \"fx_mode\": 1,\n  \"phones_mix\": 0.3,\n  \"return_cue\": true,\n  \"stems\": {\n    \"cursors\": [\n      0,\n      1,\n      2,\n      3\n    ],\n    \"sources\": [\n      \"stem\",\n      \"analog\"\n    ],\n    \"return\": \"aux\",\n    \"note\": \"Gr\\u00fc\\u00dfe \\ud83c\\udfb5\"\n  }\n}\n",
+  "file_written": "{\n  \"channels\": [\n    {\n      \"toggle_fx\": true,\n      \"toggle_cue\": false,\n      \"three_d\": 0.62\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": true,\n      \"three_d\": null\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": 0.0\n    },\n    {\n      \"toggle_fx\": true,\n      \"toggle_cue\": true,\n      \"three_d\": 1.0\n    }\n  ],\n  \"fx_mode\": 1,\n  \"phones_mix\": 0.3,\n  \"return_cue\": true,\n  \"stems\": {\n    \"cursors\": [\n      0,\n      1,\n      2,\n      3\n    ],\n    \"sources\": [\n      \"stem\",\n      \"analog\"\n    ],\n    \"return\": \"aux\",\n    \"note\": \"Gr\\u00fc\\u00dfe \\ud83c\\udfb5\"\n  }\n}\n"
+ },
+ "state-empty": {
+  "text": "",
+  "loaded": {
+   "channels": [
+    {
+     "toggle_fx": false,
+     "toggle_cue": false,
+     "three_d": null
+    },
+    {
+     "toggle_fx": false,
+     "toggle_cue": false,
+     "three_d": null
+    },
+    {
+     "toggle_fx": false,
+     "toggle_cue": false,
+     "three_d": null
+    },
+    {
+     "toggle_fx": false,
+     "toggle_cue": false,
+     "three_d": null
+    }
+   ],
+   "master": {
+    "fx_mode": 0,
+    "phones_mix": 0.0,
+    "return_cue": false
+   }
+  },
+  "state_of": "{\n  \"channels\": [\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": null\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": null\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": null\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": null\n    }\n  ],\n  \"fx_mode\": 0,\n  \"phones_mix\": 0.0,\n  \"return_cue\": false\n}\n",
+  "file_written": "{}\n"
+ },
+ "state-exotic": {
+  "text": "{\"channels\": [{\"toggle_fx\": false, \"toggle_cue\": false, \"three_d\": 1e-05},\n              {\"toggle_fx\": true, \"toggle_cue\": false, \"three_d\": 1e+16},\n              {\"toggle_fx\": false, \"toggle_cue\": true, \"three_d\": -0.0},\n              {\"toggle_fx\": false, \"toggle_cue\": false, \"three_d\": 0.1}],\n \"fx_mode\": 0, \"phones_mix\": 0.1, \"return_cue\": false,\n \"stems\": {\"empty\": [], \"none\": {}, \"big\": 12345678901234, \"text\": \"\u00e4\u00df\\\"\\\\/\", \"t\": true, \"n\": null, \"f\": 2.5e-07}}\n",
+  "loaded": {
+   "channels": [
+    {
+     "toggle_fx": false,
+     "toggle_cue": false,
+     "three_d": 1e-05
+    },
+    {
+     "toggle_fx": true,
+     "toggle_cue": false,
+     "three_d": 1e+16
+    },
+    {
+     "toggle_fx": false,
+     "toggle_cue": true,
+     "three_d": -0.0
+    },
+    {
+     "toggle_fx": false,
+     "toggle_cue": false,
+     "three_d": 0.1
+    }
+   ],
+   "master": {
+    "fx_mode": 0,
+    "phones_mix": 0.1,
+    "return_cue": false
+   }
+  },
+  "state_of": "{\n  \"channels\": [\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": 1e-05\n    },\n    {\n      \"toggle_fx\": true,\n      \"toggle_cue\": false,\n      \"three_d\": 1e+16\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": true,\n      \"three_d\": -0.0\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": 0.1\n    }\n  ],\n  \"fx_mode\": 0,\n  \"phones_mix\": 0.1,\n  \"return_cue\": false,\n  \"stems\": {\n    \"empty\": [],\n    \"none\": {},\n    \"big\": 12345678901234,\n    \"text\": \"\\u00e4\\u00df\\\"\\\\/\",\n    \"t\": true,\n    \"n\": null,\n    \"f\": 2.5e-07\n  }\n}\n",
+  "file_written": "{\n  \"channels\": [\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": 1e-05\n    },\n    {\n      \"toggle_fx\": true,\n      \"toggle_cue\": false,\n      \"three_d\": 1e+16\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": true,\n      \"three_d\": -0.0\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": 0.1\n    }\n  ],\n  \"fx_mode\": 0,\n  \"phones_mix\": 0.1,\n  \"return_cue\": false,\n  \"stems\": {\n    \"empty\": [],\n    \"none\": {},\n    \"big\": 12345678901234,\n    \"text\": \"\\u00e4\\u00df\\\"\\\\/\",\n    \"t\": true,\n    \"n\": null,\n    \"f\": 2.5e-07\n  }\n}\n"
+ },
+ "state-half": {
+  "text": "{\n  \"channels\": [\n    {\n      \"toggle_fx\": tr",
+  "loaded": {
+   "channels": [
+    {
+     "toggle_fx": false,
+     "toggle_cue": false,
+     "three_d": null
+    },
+    {
+     "toggle_fx": false,
+     "toggle_cue": false,
+     "three_d": null
+    },
+    {
+     "toggle_fx": false,
+     "toggle_cue": false,
+     "three_d": null
+    },
+    {
+     "toggle_fx": false,
+     "toggle_cue": false,
+     "three_d": null
+    }
+   ],
+   "master": {
+    "fx_mode": 0,
+    "phones_mix": 0.0,
+    "return_cue": false
+   }
+  },
+  "state_of": "{\n  \"channels\": [\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": null\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": null\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": null\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": null\n    }\n  ],\n  \"fx_mode\": 0,\n  \"phones_mix\": 0.0,\n  \"return_cue\": false\n}\n",
+  "file_written": "{}\n"
+ },
+ "state-list": {
+  "text": "[]",
+  "raises": "AttributeError"
+ },
+ "state-numbers": {
+  "text": "{\"channels\": [{\"toggle_fx\": 1, \"toggle_cue\": 0}, {\"toggle_fx\": true, \"three_d\": 0.5}],\n \"fx_mode\": 1.0, \"phones_mix\": 1, \"return_cue\": 1}\n",
+  "loaded": {
+   "channels": [
+    {
+     "toggle_fx": true,
+     "toggle_cue": false,
+     "three_d": null
+    },
+    {
+     "toggle_fx": true,
+     "toggle_cue": false,
+     "three_d": 0.5
+    },
+    {
+     "toggle_fx": false,
+     "toggle_cue": false,
+     "three_d": null
+    },
+    {
+     "toggle_fx": false,
+     "toggle_cue": false,
+     "three_d": null
+    }
+   ],
+   "master": {
+    "fx_mode": 1,
+    "phones_mix": 1.0,
+    "return_cue": true
+   }
+  },
+  "state_of": "{\n  \"channels\": [\n    {\n      \"toggle_fx\": 1,\n      \"toggle_cue\": 0,\n      \"three_d\": null\n    },\n    {\n      \"toggle_fx\": true,\n      \"toggle_cue\": false,\n      \"three_d\": 0.5\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": null\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": null\n    }\n  ],\n  \"fx_mode\": 1,\n  \"phones_mix\": 1,\n  \"return_cue\": 1\n}\n",
+  "file_written": "{\n  \"channels\": [\n    {\n      \"toggle_fx\": 1,\n      \"toggle_cue\": 0\n    },\n    {\n      \"toggle_fx\": true,\n      \"three_d\": 0.5\n    }\n  ],\n  \"fx_mode\": 1.0,\n  \"phones_mix\": 1,\n  \"return_cue\": 1\n}\n"
+ },
+ "state-odd": {
+  "text": "{\"channels\": {\"a\": 1}, \"fx_mode\": 99}",
+  "loaded": {
+   "channels": [
+    {
+     "toggle_fx": false,
+     "toggle_cue": false,
+     "three_d": null
+    },
+    {
+     "toggle_fx": false,
+     "toggle_cue": false,
+     "three_d": null
+    },
+    {
+     "toggle_fx": false,
+     "toggle_cue": false,
+     "three_d": null
+    },
+    {
+     "toggle_fx": false,
+     "toggle_cue": false,
+     "three_d": null
+    }
+   ],
+   "master": {
+    "fx_mode": 0,
+    "phones_mix": 0.0,
+    "return_cue": false
+   }
+  },
+  "state_of": "{\n  \"channels\": [\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": null\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": null\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": null\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": null\n    }\n  ],\n  \"fx_mode\": 0,\n  \"phones_mix\": 0.0,\n  \"return_cue\": false\n}\n",
+  "file_written": "{\n  \"channels\": {\n    \"a\": 1\n  },\n  \"fx_mode\": 99\n}\n"
+ },
+ "state-pfl": {
+  "text": "{\n  \"channels\": [\n    {\"toggle_fx\": false, \"toggle_pfl\": true, \"three_d\": 0.25},\n    {\"toggle_fx\": true, \"toggle_pfl\": true, \"toggle_cue\": false},\n    {\"toggle_pfl\": false, \"toggle_cue\": true}\n  ],\n  \"fx_mode\": 0,\n  \"phones_mix\": 0.5,\n  \"stem_cue\": true,\n  \"cue_cleared_on\": [\"local\", \"192.168.8.20\"]\n}\n",
+  "loaded": {
+   "channels": [
+    {
+     "toggle_fx": false,
+     "toggle_cue": true,
+     "three_d": 0.25
+    },
+    {
+     "toggle_fx": true,
+     "toggle_cue": false,
+     "three_d": null
+    },
+    {
+     "toggle_fx": false,
+     "toggle_cue": true,
+     "three_d": null
+    },
+    {
+     "toggle_fx": false,
+     "toggle_cue": false,
+     "three_d": null
+    }
+   ],
+   "master": {
+    "fx_mode": 0,
+    "phones_mix": 0.5,
+    "return_cue": false
+   }
+  },
+  "state_of": "{\n  \"channels\": [\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": true,\n      \"three_d\": 0.25\n    },\n    {\n      \"toggle_fx\": true,\n      \"toggle_cue\": false,\n      \"three_d\": null\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": true,\n      \"three_d\": null\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": null\n    }\n  ],\n  \"fx_mode\": 0,\n  \"phones_mix\": 0.5,\n  \"return_cue\": false\n}\n",
+  "file_written": "{\n  \"channels\": [\n    {\n      \"toggle_fx\": false,\n      \"toggle_pfl\": true,\n      \"three_d\": 0.25\n    },\n    {\n      \"toggle_fx\": true,\n      \"toggle_pfl\": true,\n      \"toggle_cue\": false\n    },\n    {\n      \"toggle_pfl\": false,\n      \"toggle_cue\": true\n    }\n  ],\n  \"fx_mode\": 0,\n  \"phones_mix\": 0.5,\n  \"stem_cue\": true,\n  \"cue_cleared_on\": [\n    \"local\",\n    \"192.168.8.20\"\n  ]\n}\n"
+ }
+}

@@ -1,0 +1,31 @@
+#!/bin/sh
+set -e
+
+# Older versions shipped ~/.ssh/authorized_keys, so dpkg deletes it while
+# unpacking a version that no longer does. Keep a copy aside; the postinst
+# puts it back (a3-core#66). Which keys may log in is the machine's business.
+# The copy goes to a folder only root writes: root copying to a fixed name in
+# a folder aaa owns would follow any symlink aaa put there.
+KEPT_KEYS=/var/lib/a3-core/authorized_keys.keep
+
+keep_authorized_keys() {
+  ssh_dir="$1"
+  kept="$2"
+  if [ -L "$ssh_dir" ] || [ -L "$ssh_dir/authorized_keys" ]; then
+    echo "a3-core: $ssh_dir/authorized_keys is a symlink; not kept aside" >&2
+    return 0
+  fi
+  [ -f "$ssh_dir/authorized_keys" ] || return 0
+  mkdir -p "$(dirname "$kept")"
+  chmod 700 "$(dirname "$kept")"
+  cp -p "$ssh_dir/authorized_keys" "$kept"
+}
+
+case "$1" in
+  install|upgrade)
+    USER_HOME=$(getent passwd aaa | cut -d: -f6 || echo /home/aaa)
+    keep_authorized_keys "${USER_HOME:-/home/aaa}/.ssh" "$KEPT_KEYS"
+  ;;
+esac
+
+exit 0

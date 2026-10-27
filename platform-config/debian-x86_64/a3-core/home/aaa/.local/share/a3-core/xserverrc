@@ -1,0 +1,6 @@
+#!/bin/sh
+# a3-core: X server for startx, kept on CPU 0 (installed as ~/.xserverrc).
+# With a VNC client connected Xorg took most of CPU 1, which the audio
+# threads share (a3nuc1, 2026-10-17). Pinned here, not on the login session:
+# i3 and the apps it starts inherit nothing and keep their own CPUs.
+exec taskset -c 0 /usr/bin/X -nolisten tcp "$@"

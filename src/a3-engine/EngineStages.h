@@ -59,7 +59,8 @@ public:
     void process (const juce::AudioBuffer<float>& bus16, const ZoneOutputs& out, int offset, int count, OutputGate&, bool open);
     // The zone's ports in order (sub when the layout has one, then the tops) and what
     // each carried in the last process call.
-    int ports() const { return (subChannel > 0 ? 1 : 0) + (int) topChannels.size(); }
+    bool hasSub() const { return subChannel > 0; }
+    int ports() const { return (hasSub() ? 1 : 0) + (int) topChannels.size(); }
     const float* port (int index) const;
 
 private:

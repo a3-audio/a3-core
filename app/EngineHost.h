@@ -7,6 +7,7 @@
 #include <memory>
 #include <vector>
 #include "Engine.h"
+#include "VuTaps.h"
 #include "HelloSender.h"
 #include "OscVocabulary.h"
 
@@ -22,8 +23,11 @@ namespace a3app
 class EngineHost
 {
 public:
+    using Datagram = std::vector<uint8_t>;
+    // sendMeters: where the /vu bundles go (core.vu-relay), from controlTick at settings.rateHz.
     EngineHost (a3::EngineConfig, a3::SpatialConfig, const EngineTruth&,
-                std::function<void (const juce::OSCMessage&)> sendToCore = {});
+                std::function<void (const juce::OSCMessage&)> sendToCore = {},
+                std::function<void (const Datagram&)> sendMeters = {}, a3::VuSettings = {});
     ~EngineHost();   // the backend has stopped calling audioCallback
 
     // Builds and prepares a new Engine (allocates; control thread). fadeFirst = false:
@@ -43,8 +47,9 @@ public:
     // Audio thread. Silence on every output while no Engine is published.
     void audioCallback (const a3::EngineInputs&, const a3::EngineOutputs&, int numSamples);
 
-    // Control thread, ~50 Hz: a waiting rebuild takes over once the old Engine is silent,
-    // replaced Engines are freed, the delay's modulation and the hello run, the meters are taken.
+    // Control thread, at least 2 x the meters' rate: a waiting rebuild takes over once the old Engine
+    // is silent, replaced Engines are freed, the delay's modulation and the hello run, the window's
+    // meters are taken, and the /vu bundles go out when their 1/rateHz is due (never from the audio thread).
     void controlTick (double nowSeconds);
 
     a3::EngineControls& controls();
@@ -62,11 +67,20 @@ public:
 private:
     void publish (std::unique_ptr<a3::Engine>);
     void freeWhatNoCallbackSees();
+    void sendMetersWhenDue (double nowSeconds);
 
     a3::EngineConfig config;
     a3::SpatialConfig spatial;
     a3::EngineControls wire;
     HelloSender hello;
+
+    // The /vu meters (O13): the taps outlive every Engine, which feeds them; one send per 1/rateHz.
+    a3::VuSettings vuSettings;
+    std::string vuPattern;
+    std::unique_ptr<a3::VuTaps> vuTaps;
+    std::function<void (const Datagram&)> sendMeters;
+    double nextMeterSend = -1.0;
+    std::vector<float> vuPeaks, vuRms;
 
     std::atomic<a3::Engine*> current { nullptr };
     std::unique_ptr<a3::Engine> waiting;   // rebuilt with fadeFirst, until the current one is silent

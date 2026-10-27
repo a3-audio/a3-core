@@ -1,4 +1,18 @@
-build/
+# SPDX-FileCopyrightText: 2023 A3 Audio UG (haftungsbeschränkt) <contact@a3-audio.com>
+#
+# SPDX-License-Identifier: CC0-1.0
+platform-config/debian-x86_64/a3-core.deb
+*.swp
+
+# Python-Bytecode. Er wird beim ersten Lauf erzeugt, ist an die
+# Interpreter-Version gebunden und gehört keinem Repository.
 __pycache__/
-*.pyc
+*.py[cod]
+
+# A VNC password is made on the machine (x11vnc -storepasswd) and is nobody
+# else's: never in the package, never in a commit.
+.vnc/
+
+# The C++ program's build trees.
+build/
 build-*/
