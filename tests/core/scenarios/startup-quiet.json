@@ -1,0 +1,32 @@
+{
+ "about": "Core starts on a remembered state and evening, nobody speaks, two ticks: the remembered state to the mixer and Motion, the start lines, nothing to the engine; a stop writes the address list.",
+ "files": {
+  "state.json": {
+   "channels": [
+    {"toggle_fx": true, "toggle_cue": false, "three_d": 0.62},
+    {"toggle_fx": false, "toggle_cue": true, "three_d": null},
+    {"toggle_fx": false, "toggle_cue": false, "three_d": 0.0},
+    {"toggle_fx": true, "toggle_cue": true, "three_d": 1.0}
+   ],
+   "fx_mode": 1,
+   "phones_mix": 0.3,
+   "return_cue": true,
+   "stems": {"cursors": [8, 8, 8, 8], "sources": ["stem", "analog", null, null], "return_cursor": 1, "return_mode": 1}
+  },
+  "evening.json": {
+   "values": {
+    "/channel/1/gain": 0.5,
+    "/channel/2/volume": 0.7,
+    "/channel/3/eq/high": 0.25,
+    "/channel/4/3d": 0.5,
+    "/master/volume": 0.8
+   },
+   "channel.source": [1, 0, 0, 2]
+  }
+ },
+ "steps": [
+  {"at": 0.1, "tick": true},
+  {"at": 0.2, "tick": true},
+  {"at": 0.3, "flush": true}
+ ]
+}
