@@ -185,6 +185,14 @@ HeapCount upstreamAllocations (const a3::SpatialConfig& spatial, int prepared, c
 
 constexpr int quantum = 128;
 
+// The headphone EQ (a convolution on the phones decoder) is on, so the counts cover it too.
+a3::EngineConfig allocationConfig()
+{
+    auto config = engineConfig (4, 2);
+    config.phonesHeadphoneEq = "Sennheiser-HD600";
+    return config;
+}
+
 // N = 4, two decks, every path running and moving: analog and deck strips, all three
 // buses, the delay, the return from both kinds of source, cue/mix/aux, the stem cues,
 // the filter, the gate opening and closing, source switches (analog <-> deck crossfade,
@@ -257,7 +265,7 @@ HeapCount engineAllocations (EngineRig& rig, const std::vector<int>& calls)
 TEST (EngineAllocation, ProcessAddsNoAllocationBeyondIemsOwn)
 {
     const std::vector<int> calls { quantum, 1, 7, 333, 2048, 64, 128, 65 };
-    EngineRig rig (engineConfig (4, 2), 3 * 44100, quantum, engineRate, false);
+    EngineRig rig (allocationConfig(), 3 * 44100, quantum, engineRate, false);
     const auto engine = engineAllocations (rig, calls);
     const auto upstream = upstreamAllocations (rig.spatial, quantum, calls, rig.frames);
     EXPECT_EQ (engine.allocated, upstream.allocated);
@@ -270,7 +278,7 @@ TEST (EngineAllocation, ProcessAddsNoAllocationBeyondIemsOwn)
 TEST (EngineAllocation, AtTheQuantumOnlyIemSimpleDecoderAllocates)
 {
     const std::vector<int> calls { quantum };
-    EngineRig rig (engineConfig (4, 2), 344 * quantum, quantum, engineRate, false);
+    EngineRig rig (allocationConfig(), 344 * quantum, quantum, engineRate, false);
     const auto engine = engineAllocations (rig, calls);
     EXPECT_EQ (engine.allocated, 2 * 344);
     EXPECT_EQ (engine.released, 2 * 344);

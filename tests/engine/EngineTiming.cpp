@@ -74,7 +74,10 @@ void deckOnEveryChannel (EngineRig& rig)
     {
         for (int ch = 0; ch < deckChannels; ++ch)
             rig.decks[d].bformat[(size_t) ch] = noise (rig.frames, 0.1f, 500 + 20 * (uint32_t) d + (uint32_t) ch).l;
-        rig.decks[d].cue = { noise (rig.frames, 0.1f, 600 + (uint32_t) d).l, noise (rig.frames, 0.1f, 610 + (uint32_t) d).l };
+        for (int ch = 0; ch < deckChannels; ++ch)
+            rig.decks[d].aux[(size_t) ch] = noise (rig.frames, 0.1f, 800 + 20 * (uint32_t) d + (uint32_t) ch).l;
+        for (size_t acn = 0; acn < rig.decks[d].cue.size(); ++acn)
+            rig.decks[d].cue[acn] = noise (rig.frames, 0.1f, 600 + 10 * (uint32_t) d + (uint32_t) acn).l;
     }
 }
 
@@ -172,6 +175,7 @@ void printShares (const a3::SpatialConfig& spatial, double decksMs, double analo
     std::printf ("EngineTiming shares (each piece timed alone; whole graph: decks %.4f ms, analog %.4f ms):\n", decksMs, analogMs);
     row ("analog strip (filter on)", 0, 4, perStrip);
     row ("deck strip, 16 ch", 4, 0, perDeck);
+    row ("deck AUX strip, 16 ch", 4, 0, perDeck);   // runs whether or not AUX is open
     row ("AmbiEncoderBus, 4 sources", 3, 3, perEncoder);
     row ("DualDelay", 1, 1, perDelay);
     row ("SimpleDecoder + MASTER/gate", 2, 2, perZone);
@@ -186,7 +190,10 @@ double loadAverage()
 }
 
 // N = 4, quantum 128. The worst case of the revision: all four channels on decks (with signal
-// on the analog pairs too), two stem cues; then the same with all four analog. Judged on the
+// on the analog pairs too), two stem cues with all nine ACN planes, the four aux strips with an
+// open AUX send and signal on every aux plane, cue and mix adds open (PHONES MIX 0.5), the
+// return on the DELAY and a headphone EQ model on the phones decoder; then the same with all
+// four analog. Judged on the
 // best of several repetition means: background load only ever adds time, so it cannot fail
 // the guard, while a regression slows every repetition.
 TEST (EngineTiming, FullGraphAnalogUnderOneDecksUnderOnePointTwoFiveMillisecondsPer128)
@@ -200,31 +207,54 @@ TEST (EngineTiming, FullGraphAnalogUnderOneDecksUnderOnePointTwoFiveMilliseconds
     // Design 4.2 accepted one more 16-ch strip per deck channel; StemDeck A's removed cue decoder pays for it on this machine.
     constexpr double decksBudgetMs = 1.25;
 
-    EngineRig decks (engineConfig (4, 2), loopFrames, quantum);
+    auto decksConfig = engineConfig (4, 2);
+    decksConfig.phonesHeadphoneEq = "Sennheiser-HD600";
+    EngineRig decks (decksConfig, loopFrames, quantum);
     deckOnEveryChannel (decks);
     analogOnEveryPair (decks);
     everySendOpen (decks);
+    decks.controls.global().returnSource = 1;
     for (int c = 0; c < 4; ++c)
         decks.controls.channel (c).source = c < 2 ? 1 : 2;
+
+    // The same graph with the aux strips shut (AUX 0): the difference is their share.
+    EngineRig decksNoAux (decksConfig, loopFrames, quantum);
+    deckOnEveryChannel (decksNoAux);
+    analogOnEveryPair (decksNoAux);
+    everySendOpen (decksNoAux);
+    decksNoAux.controls.global().returnSource = 1;
+    for (int c = 0; c < 4; ++c)
+    {
+        decksNoAux.controls.channel (c).source = c < 2 ? 1 : 2;
+        decksNoAux.controls.channel (c).auxSend = 0.0f;
+    }
 
     EngineRig analog (engineConfig (4, 2), loopFrames, quantum);
     deckOnEveryChannel (analog);   // the stem cues still run
     analogOnEveryPair (analog);
     everySendOpen (analog);
 
-    double bestDecks = 1e9, bestAnalog = 1e9;
+    double bestDecks = 1e9, bestAnalog = 1e9, bestNoAux = 1e9, worstDecksMs = 0.0;
     for (int r = 0; r < repetitions; ++r)
     {
         const auto onDecks = timeEngine (decks, blocks);
         const auto onAnalog = timeEngine (analog, blocks);
         std::printf ("EngineTiming rep %d (load %.2f): all decks mean_ms %.4f worst_ms %.4f; all analog mean_ms %.4f worst_ms %.4f\n",
                      r + 1, loadAverage(), onDecks.meanMs, onDecks.worstMs, onAnalog.meanMs, onAnalog.worstMs);
+        const auto noAux = timeEngine (decksNoAux, blocks);
+        std::printf ("EngineTiming rep %d: all decks, AUX 0: mean_ms %.4f worst_ms %.4f\n", r + 1, noAux.meanMs, noAux.worstMs);
+        bestNoAux = std::min (bestNoAux, noAux.meanMs);
         bestDecks = std::min (bestDecks, onDecks.meanMs);
+        worstDecksMs = std::max (worstDecksMs, onDecks.worstMs);
         bestAnalog = std::min (bestAnalog, onAnalog.meanMs);
     }
     std::printf ("EngineTiming best of %d: all decks %.4f ms, all analog %.4f ms (budgets %.2f / %.2f)\n", repetitions, bestDecks,
                  bestAnalog, decksBudgetMs, analogBudgetMs);
+    std::printf ("EngineTiming aux strips: all decks %.1f us mean (best), %.1f us max (worst block of %d); AUX 0: %.1f us; aux share %.1f us = %.1f %%\n",
+                 1000.0 * bestDecks, 1000.0 * worstDecksMs, repetitions * blocks, 1000.0 * bestNoAux,
+                 1000.0 * (bestDecks - bestNoAux), 100.0 * (bestDecks - bestNoAux) / bestDecks);
     RecordProperty ("decks_best_mean_ms", std::to_string (bestDecks));
+    RecordProperty ("decks_no_aux_best_mean_ms", std::to_string (bestNoAux));
     RecordProperty ("analog_best_mean_ms", std::to_string (bestAnalog));
     printShares (decks.spatial, bestDecks, bestAnalog, blocks);
 
