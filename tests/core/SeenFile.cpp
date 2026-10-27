@@ -425,7 +425,8 @@ TEST (SeenFile, EveryShapeOfFileComesBackAsInPython)
 
 TEST (SeenFile, WritesWhatPythonWrites)
 {
-    // The same traffic as the recorder's, written at the same clocks: JSON-equal to the file Python wrote.
+    // The same traffic as the recorder's, written at the same clocks: the bytes Python wrote
+    // (json.dumps's default separators ", " and ": "), and so JSON-equal too.
     Folder folder;
     Traffic traffic;
     const auto put = [&] (Direction direction, const char* address, const OscArg& value, const char* peer, double at) {
@@ -447,6 +448,7 @@ TEST (SeenFile, WritesWhatPythonWrites)
     EXPECT_EQ (file.problem, "");
     expectJsonEqual (parsedText (fixture ("seen.json")["written_by_python"]["text"].toString().toStdString()),
                      parsedText (textOf (folder.path)), "seen.json");
+    EXPECT_EQ (textOf (folder.path), fixture ("seen.json")["written_by_python"]["text"].toString().toStdString());
 }
 
 TEST (SeenFile, AWriteAfterAFailureClearsTheProblem)

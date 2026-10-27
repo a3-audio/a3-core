@@ -29,7 +29,8 @@ determinism and that is a bug in `tools/parity/scenario_core.py`, not in the sce
 3. Add `TEST (Scenarios, <CamelCaseName>) { expectAsPython ("<name>"); }` to
    tests/core/Scenarios.cpp and run
    `flock /home/aaa/a3-system/wt/.build.lock nice -n 19 env JOBS=2 ./test.sh --core --gtest_filter='Scenarios.*'`.
-   On a difference the test names the first twelve and where the whole C++ transcript was written.
+   On a difference the test names the first twelve and where the whole C++ transcript was written
+   (`build/tests/core/scenario-<name>.actual.json`, beside the runner).
 
 ## The scenario
 
@@ -52,7 +53,8 @@ determinism and that is a bug in `tools/parity/scenario_core.py`, not in the sce
   half-written or otherwise broken file is given. Only these three names.
 - **args**: all optional. `mixer`/`motion` default to the truth's endpoints, `subscriber` to none.
   Core's own port is the truth's `core.osc`.
-- **steps**, in order, `at` never going back (seconds after start; start-up itself is at 0.0):
+- **steps**, in order, `at` never going back — both sides refuse a step that does (seconds after
+  start; start-up itself is at 0.0):
   - `osc`: one datagram from `from` = `[host, port]`: the address, then each argument as
     `[tag, value]` — `i`, `h`, `f`, `d`, `s`, `T`, `F`, `N` (value `null`), `b` (base64). Encoded
     by python-osc on the recording side and by `OscWire` on the C++ side.
@@ -72,6 +74,20 @@ the socket Core's replays leave from, `127.0.0.1:50000`, which the hello gate tr
 until Core sends itself nothing more. The engine's replay thread in B1 is started and joined at
 once, inside its hello handler; the C++ Core sends the replay from the serve thread (P8).
 
+**This interleaving is a modelling choice, not B1's real scheduling.** On the rig the replay thread
+and the serve loop run side by side: the replayed values arrive over several passes, with ticks
+between them, possibly interleaved with other senders' packets. The model (whole replay first, then
+one pass per round of self-sends, no tick in between) is the one deterministic order both sides can
+agree on; Task 19's engine-hello scenarios pin that order, not the rig's timing.
+
+**A handler that raises.** B1's serve loop catches it per packet and prints the traceback on stderr
+(`a3_core_latest.serve`); the rest of that packet's messages are not handled. Both sides record it
+as one entry `{"at", "journal": "handler raised: <ExceptionType>", "stderr": true}` — Python's type
+name (`ValueError`, `KeyError`…). A C++ port that must fail where B1 fails throws an exception whose
+`what()` is that Python type name; the runner catches per packet as the serve loop does. A
+`notPortedYet` stub (below) reached from a handler shows up here with its own text, so it is red
+and readable.
+
 ## The transcript
 
 A JSON list, in the order things happened:
@@ -80,7 +96,7 @@ A JSON list, in the order things happened:
 [
   { "at": 0.0, "to": "mixer", "host": "192.168.8.11", "port": 7772, "address": "/channel/1/3d", "args": [["f", 0.6200000047683716]] },
   { "at": 0.0, "journal": "startup: spoke the remembered state, 22 messages to 2 subscribers", "stderr": false },
-  { "file": "seen.json", "json": {…} },
+  { "at": 3.0, "file": "seen.json", "text": "{\"version\": 1, …}", "json": {…} },
   { "at": 4.0, "to": "vu", "host": "192.168.8.30", "port": 7774, "raw": "<base64>" }
 ]
 ```
@@ -93,12 +109,15 @@ A JSON list, in the order things happened:
   clients are silent in engine mode and never appear.
 - **A journal line**: every `print`, `stderr` true for `file=sys.stderr`. The state directory is
   written as `<state>` (so `<state>/seen.json`), since it is a temporary directory on both sides.
-- **A file write**: `state.json`, `evening.json` or `seen.json`, with the content just written.
+- **A file write**: `{"at", "file", "text", "json"}` — `state.json`, `evening.json` or `seen.json`,
+  `text` the exact bytes just written (`state.json`/`evening.json`: `json.dumps(…, indent=2)` +
+  newline; `seen.json`: `json.dumps(…)`, separators `", "` and `": "`), `json` the same parsed, for a
+  readable difference.
 - **A meter forward** (`vu` steps): the bytes forwarded unchanged, client name `vu`.
 
 The runner compares entry by entry: same order and count; `at`, `to`, `host`, `port`, `address`
 equal; arguments of equal tags, `f` equal as `float`, `d` as `double`, `i`/`h` as integers, `s`/`b`
-as text; journal lines and their stream equal; files JSON-equal by Python's `==` (`1 == 1.0`).
+as text; journal lines and their stream equal; files byte-equal (`text`).
 
 ## The clock and what is fixed
 
@@ -106,6 +125,12 @@ Both sides run on the same fake clock: `time.monotonic()` = 1000.0 + `at`, `time
 1800000000.0 + `at`. The start-up token is 1000000 + n for the n-th one drawn (the first at
 start-up), Core's own boot id `core-boot-0001`. Nothing else in B1 draws a random number on these
 paths.
+
+**Hash order.** `python3 -I` ignores `PYTHONHASHSEED`, so string hashing is randomised per run and
+a `set`/`frozenset` of strings iterates in a different order each time. Today no path that reaches a
+transcript iterates a set (checked in review; `deck_listeners` sorts, `MOTION_OWN_HOSTS` is only
+tested for membership). A new scenario must keep it so: recording twice and `cmp` is the check —
+a difference there is a set on an output path, and the recorder must sort it, not the scenario.
 
 ## What the recorder patches in B1, and why
 
@@ -119,6 +144,37 @@ part that is `Core::start` — is copied into `scenario_core.Recording.start` an
 into `build_dispatcher`, each with B1's SHA and line range. The service's part of the main block
 (`audio engine: engine`, sockets, window, network problems, user files, announce) is Task 20's and
 is in no transcript.
+
+## Known differences, by decision
+
+- A **list-shaped** `state.json` (e.g. `[1, 2]`): B1 raises at import (`apply_stems` calls `.get`
+  on it) and Core does not come up; the C++ Core reads it as no state and no stems. Left as is — a
+  broken file is an empty state, never a crash (Review Focus 3); no scenario records it, since B1
+  cannot.
+
+## What the C++ Core does not do yet
+
+`a3core::Core` (src/a3-core/Core.cpp) carries only what a recorded scenario pins. Every other path
+is a `notPortedYet` stub that throws a `std::logic_error` naming the B1 function and the task that
+ports it, test-first, with its scenario:
+
+| Stub | B1 | Task |
+|---|---|---|
+| `/channel/*`, `/master/*`, `/filter/*`, `/aux-return/*` handlers | `osc_handler_channel`, `_master`, `_filter`, `_aux_return` | 18 |
+| default handler | `unrouted_handler` | 18 |
+| `writeTheEvening` (reached once the engine's replay made the evening live) | `write_the_evening` | 18 |
+| `sendToEngine`'s sending branch (after the engine's hello) | `send_to_engine` | 18 |
+| `broadcast` of several arguments (`Relayed` holds one value) | `broadcast` → `_relayed.note` | 18 |
+| `/stemdeck/*`, `/state/recall`, `/beat`, `/device/hello`, `/engine/hello`, `/stemdeck/n/hello`, `prodj.live`, pointers | `osc_handler_stemdeck`, `_recall`, `_beat`, `_device_hello`, `_engine_hello`, `_deck_hello`, `_prodj_live`, `_pointer` | 19 |
+| `sayTheWholeState` | `say_the_whole_state` | 19 |
+| `pointMotionAt` (a remote Motion falls silent) | `point_motion_at` | 19 |
+| `noticeDeskSilence`'s leaving desks, `deskLeaves`, `liveOffWhenNoProdjIsLeft` | `notice_desk_silence`, `desk_leaves`, `live_off_when_no_prodj_is_left` | 19 |
+| `announceLive`, `deckListeners` (the LIVE repeat) | `announce_live`, `deck_listeners` | 19 |
+| `handleVu` | `a3_core_vu_relay.forward`, `vu_destinations` | 19 (B1's), 22 (the engine's) |
+| `statusJson`, `rigJson` (not declared yet) | `engine_status`, project 2's rig | 21 |
+
+The constructor still builds `MotionTarget` with B1's own-host set (`MOTION_OWN_HOSTS` + `--motion`'s
+host): it cannot be built without one, and Task 19's motion scenarios pin it.
 
 ## Hand-written expectations
 

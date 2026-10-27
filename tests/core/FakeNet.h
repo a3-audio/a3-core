@@ -104,10 +104,12 @@ public:
         transcript.add (juce::var (entry));
     }
 
-    void file (const std::string& name, const juce::var& json)
+    void file (const std::string& name, const juce::String& text, const juce::var& json)
     {
         auto* entry = new juce::DynamicObject();
+        entry->setProperty ("at", clock.at);
         entry->setProperty ("file", juce::String (name));
+        entry->setProperty ("text", text);
         entry->setProperty ("json", json);
         transcript.add (juce::var (entry));
     }

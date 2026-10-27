@@ -154,8 +154,9 @@ class Recording:
                                 "stderr": file is sys.stderr})
 
     def record_file(self, path):
-        self.transcript.append({"file": Path(path).name,
-                                "json": json.loads(Path(path).read_text())})
+        text = Path(path).read_text()
+        self.transcript.append({"at": self.clock.at, "file": Path(path).name,
+                                "text": text, "json": json.loads(text)})
 
     # ------------------------------------------------------------ set-up
 
@@ -349,7 +350,13 @@ class Recording:
     # ------------------------------------------------------------ the steps
 
     def handle(self, dgram, client):
-        self.dispatcher.call_handlers_for_packet(dgram, client)
+        """One packet, as B1's serve loop hands it on: a handler that raises is reported on stderr
+        and the loop goes on (a3_core_latest.serve). B1 prints the whole traceback; the transcript
+        keeps the exception's type, which the C++ side can match."""
+        try:
+            self.dispatcher.call_handlers_for_packet(dgram, client)
+        except Exception as problem:  # noqa: BLE001 -- as serve(): reported, never fatal
+            print(f"handler raised: {type(problem).__name__}", file=sys.stderr)
 
     def pass_of(self, packets):
         """One pass of B1's serve loop (a3_core_latest.serve): the newest position wins."""

@@ -176,7 +176,7 @@ void SeenFile::write()
     object->setProperty ("at", now);
     object->setProperty ("rows", juce::var (rows));
     object->setProperty ("unknown", juce::var (unknownRows));
-    const auto contents = dumpIndented (file, -1);
+    const auto contents = dumpPython (file);   // json.dumps(saved), byte for byte
 
     const auto cannot = [&] { problem = "cannot write " + path.getFullPathName().toStdString(); };
     if (! path.getParentDirectory().createDirectory())

@@ -26,8 +26,6 @@ std::set<std::string> ownHostsOf (const Truth& truth, const std::string& motionH
 
 int channelCountOf (const Truth& truth) { return truth.indexRange ("channel.gain", "ch").second; }
 int deckCountOf (const Truth& truth) { return truth.indexRange ("stemdeck.deck-hello", "deck").second; }
-
-std::string endpointText (const Endpoint& endpoint) { return endpoint.host + ":" + std::to_string (endpoint.port); }
 }
 
 bool isPosition (const Truth& truth, const std::string& address)
@@ -106,12 +104,9 @@ void Core::handlePacket (const Endpoint& from, const uint8_t* data, size_t size)
         dispatcher.dispatch (from, message);
 }
 
-// a3_core_vu_relay.forward: the bytes, unchanged, to every vu destination. Task 22 adds the engine's.
-void Core::handleVu (const Endpoint&, const uint8_t* data, size_t size)
+void Core::handleVu (const Endpoint&, const uint8_t*, size_t)
 {
-    const std::vector<uint8_t> bytes (data, data + size);
-    for (const auto& to : vuDestinations())
-        env.out.sendRaw ({ "vu", to }, bytes);
+    notPortedYet ("a3_core_vu_relay.forward and vu_destinations (Tasks 19, 22)");
 }
 
 // on_tick, then what B1's timers and SeenFile's thread did: the debounced writes that fell due.
@@ -146,12 +141,9 @@ void Core::stop()
     tellWritten (before, seenFile.writes, seenFilePath);
 }
 
-juce::var Core::statusJson() const   // engine_status
+juce::var Core::statusJson() const
 {
-    auto* status = new juce::DynamicObject();
-    status->setProperty ("audio_engine", "engine");
-    status->setProperty ("reason", "");
-    return juce::var (status);
+    notPortedYet ("engine_status (Task 21)");
 }
 
 //==============================================================================
@@ -203,13 +195,7 @@ void Core::notePassedOn (const std::string& address, const OscArg& value)
 
 void Core::writeTheEvening()
 {
-    auto state = eveningState (relayed);
-    // Beside "values", which is all replayable() reads: a deck's place is Core's own.
-    if (auto* object = state.getDynamicObject())
-        if (const auto* places = decks.toEvening().getDynamicObject())
-            for (const auto& place : places->getProperties())
-                object->setProperty (place.name, place.value);
-    eveningFile.remember (state, env.clock.monotonic());
+    notPortedYet ("write_the_evening (Task 18)");
 }
 
 bool Core::engineHeard() const { return project && project->round > 0; }
@@ -218,8 +204,8 @@ void Core::sendToEngine (const std::vector<Message>& messages)
 {
     if (! engineHeard())
         return;   // Core asks, devices answer: nothing before the engine's hello
-    for (const auto& message : messages)
-        send (engineClient, message);
+    if (! messages.empty())
+        notPortedYet ("send_to_engine after the hello (Task 18)");
 }
 
 void Core::say (const std::string& line, bool toStderr) { env.journal (line, toStderr); }
@@ -241,12 +227,7 @@ void Core::speakRememberedState()
 
 int Core::sayTheWholeState()
 {
-    const auto messages = recallMessages (truth, channels, master, relayed);
-    for (const auto& message : messages)
-        for (const auto& client : subscribers)
-            send (client, message);
-    speakStems (true);
-    return static_cast<int> (messages.size());   // send_cue_levels: REAPER's, nobody in engine mode
+    notPortedYet ("say_the_whole_state (Task 19)");
 }
 
 void Core::speakStems (bool full)
@@ -297,80 +278,36 @@ void Core::noticeMotionSilence (double now)
         pointMotionAt (*moved, "the remote one is silent, back to the rig's");
 }
 
-void Core::pointMotionAt (const Endpoint& endpoint, const std::string& why)
+void Core::pointMotionAt (const Endpoint&, const std::string&)
 {
-    motionClient = { "motion", endpoint };
-    replaceNamed (subscribers, motionClient);
-    peerHosts["motion"] = endpoint.host;
-    const auto told = sayTheWholeState();
-    say ("motion: " + why + ", now " + endpointText (endpoint) + "; replayed " + std::to_string (told) + " messages");
+    notPortedYet ("point_motion_at (Task 19)");
 }
 
 void Core::noticeDeskSilence (double now)
 {
     subscribersOwner.check ("a desk leaving");
-    bool prodjLeft = false;
-    for (const auto& host : desks.silence (now))
-    {
-        prodjLeft = deskLeaves (host) || prodjLeft;
-        say ("desk: " + host + " silent for a minute, no longer followed");
-    }
-    if (prodjLeft)
-        liveOffWhenNoProdjIsLeft();
+    if (! desks.silence (now).empty())
+        notPortedYet ("notice_desk_silence's leaving desks (Task 19)");
 }
 
-bool Core::deskLeaves (const std::string& host)
+bool Core::deskLeaves (const std::string&)
 {
-    const auto found = std::find_if (deskClients.begin(), deskClients.end(), [&] (const auto& desk) { return desk.first == host; });
-    if (found == deskClients.end())
-        return false;
-    const auto name = found->second.name;
-    deskClients.erase (found);
-    dropNamed (subscribers, name);
-    return kindOf (name) == prodjKind;
+    notPortedYet ("desk_leaves (Task 19)");
 }
 
 void Core::liveOffWhenNoProdjIsLeft()
 {
-    if (desks.hostsOfKind (prodjKind).empty() && prodjLive.nobodyLeft())
-    {
-        say ("prodj: LIVE off, no pro-DJ app left");
-        announceLive();
-    }
+    notPortedYet ("live_off_when_no_prodj_is_left (Task 19)");
 }
 
-// LIVE to every desk, Motion and StemDeck; not through the subscribers' door.
 void Core::announceLive()
 {
-    std::vector<Client> listeners;
-    for (const auto& desk : deskClients)
-        listeners.push_back (desk.second);
-    listeners.push_back (motionClient);
-    if (stemdeckClient)
-        listeners.push_back (*stemdeckClient);
-    for (const auto& deck : deckListeners())
-        listeners.push_back (deck);
-    for (const auto& client : listeners)
-        send (client, Message { truth.address ("prodj.live"), pyInt (liveValue()) });
+    notPortedYet ("announce_live (Task 19)");
 }
 
-// Each deck's own port, for a word meant for StemDeck as a whole; never twice to one host:port.
 std::vector<Client> Core::deckListeners() const
 {
-    std::vector<Endpoint> taken;
-    if (stemdeckClient && stemdeckTarget)
-        taken.push_back (*stemdeckTarget);
-    std::vector<Client> clients;
-    for (const auto& [deck, client] : deckClients)   // std::map: sorted by deck, as sorted(_deck_clients.items())
-    {
-        const Endpoint target { deckHosts.at (deck), deckPort (truth, deck) };
-        if (std::find (taken.begin(), taken.end(), target) == taken.end())
-        {
-            taken.push_back (target);
-            clients.push_back (client);
-        }
-    }
-    return clients;
+    notPortedYet ("deck_listeners (Task 19)");
 }
 
 void Core::noticeDeckPresence (double now)
@@ -395,15 +332,6 @@ void Core::tellWritten (int before, int after, const juce::File& path)
         env.fileWritten (path);
 }
 
-std::vector<Endpoint> Core::vuDestinations() const
-{
-    std::vector<Endpoint> out;
-    if (const auto remote = motion.vuDestination())
-        out.push_back (*remote);
-    for (const auto& desk : desks.vuDestinations())
-        out.push_back (desk);
-    return out;
-}
 
 //==============================================================================
 // The dispatcher.
@@ -437,11 +365,9 @@ void Core::mapHandlers()
     dispatcher.setDefault ([this] (const Endpoint& from, const OscMessage& message) { unrouted (from, message); });
 }
 
-// unrouted_handler: written down, nothing done.
-void Core::unrouted (const Endpoint& from, const OscMessage& message)
+void Core::unrouted (const Endpoint&, const OscMessage&)
 {
-    const auto peer = peerName (from.host, peerHosts, commanders);
-    trafficTable.unknown (message.address, message.args.empty() ? nullptr : &message.args.front(), peer, env.clock.monotonic());
+    notPortedYet ("unrouted_handler (Task 18)");
 }
 
 void Core::notPortedYet (const char* handler) const

@@ -19,9 +19,10 @@ namespace
 {
 struct Style
 {
-    int indent;          // < 0: compact, separators "," and ":"
+    int indent;          // < 0: on one line, separators "," and ":" -- or ", " and ": " when spaced
     bool sortKeys;
     bool asciiOnly;
+    bool spaced = false; // json.dumps's default separators (indent None)
 };
 
 void appendHex4 (std::string& out, unsigned unit)
@@ -152,6 +153,8 @@ public:
 private:
     using Member = std::pair<juce::String, juce::var>;
 
+    const char* itemSeparator() const { return style.indent < 0 && style.spaced ? ", " : ","; }
+
     void newline (int depth)
     {
         if (style.indent < 0)
@@ -191,7 +194,7 @@ private:
         for (int i = 0; i < array.size(); ++i)
         {
             if (i > 0)
-                out += ',';
+                out += itemSeparator();
             newline (depth + 1);
             append (array.getReference (i), depth + 1);
         }
@@ -217,10 +220,10 @@ private:
         for (size_t i = 0; i < members.size(); ++i)
         {
             if (i > 0)
-                out += ',';
+                out += itemSeparator();
             newline (depth + 1);
             appendString (out, members[i].first, style.asciiOnly);
-            out += style.indent < 0 ? ":" : ": ";
+            out += style.indent < 0 && ! style.spaced ? ":" : ": ";
             append (members[i].second, depth + 1);
         }
         newline (depth);
@@ -555,6 +558,11 @@ std::string pythonRepr (double value)
 std::string dumpIndented (const juce::var& value, int indent)
 {
     return Writer ({ indent, false, true }).write (value);
+}
+
+std::string dumpPython (const juce::var& value)
+{
+    return Writer ({ -1, false, true, true }).write (value);
 }
 
 bool pythonTruthy (const juce::var& value)

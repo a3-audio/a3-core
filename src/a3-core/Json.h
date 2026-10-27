@@ -24,6 +24,9 @@ std::string pythonRepr (double value);
 // json.dumps(indent=n): insertion order, ensure_ascii=True (state files use 2, network.json 1).
 std::string dumpIndented (const juce::var& value, int indent);
 
+// json.dumps(value): one line, separators ", " and ": ", insertion order, ensure_ascii=True.
+std::string dumpPython (const juce::var& value);
+
 // bool(x) of a value read from JSON.
 bool pythonTruthy (const juce::var& value);
 

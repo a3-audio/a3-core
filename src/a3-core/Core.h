@@ -101,7 +101,8 @@ private:
     void speakStems (bool full);
     void reportDecks (bool full);
 
-    // The tick's watchers.
+    // The tick's watchers. A method whose body only says notPortedYet is a path no scenario pins yet:
+    // it throws until the task named in it ports it test-first (tests/core/scenarios/README.md).
     void noticeMotionSilence (double now);
     void pointMotionAt (const Endpoint& endpoint, const std::string& why);
     void noticeDeskSilence (double now);
@@ -118,7 +119,6 @@ private:
     void unrouted (const Endpoint& from, const OscMessage& message);
     [[noreturn]] void notPortedYet (const char* handler) const;
 
-    std::vector<Endpoint> vuDestinations() const;
     int liveValue() const { return prodjLive.on() ? 1 : 0; }
 
     CoreEnvironment env;

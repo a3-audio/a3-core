@@ -24,14 +24,16 @@ const std::string coreBootId = "core-boot-0001";
 const juce::String stateMark = "<state>";
 const juce::StringArray stateFiles { "state.json", "evening.json", "seen.json" };
 
-juce::var readJson (const juce::File& file)
+juce::var parsed (const juce::String& text, const juce::File& from)
 {
     juce::String error;
-    auto value = a3core::parseJson (file.loadFileAsString(), error);
+    auto value = a3core::parseJson (text, error);
     if (error.isNotEmpty())
-        throw std::runtime_error ((file.getFullPathName() + ": " + error).toStdString());
+        throw std::runtime_error ((from.getFullPathName() + ": " + error).toStdString());
     return value;
 }
+
+juce::var readJson (const juce::File& file) { return parsed (file.loadFileAsString(), file); }
 
 std::string text (const juce::var& value) { return value.toString().toStdString(); }
 
@@ -121,7 +123,10 @@ struct Run
             [] { return coreBootId; },
             [this] { return tokenBase + ++tokens; },
             { a3core::loopbackAddress(), selfSocketPort },
-            [this] (const juce::File& written) { net.file (written.getFileName().toStdString(), readJson (written)); } };
+            [this] (const juce::File& written) {
+                const auto text = written.loadFileAsString();
+                net.file (written.getFileName().toStdString(), text, parsed (text, written));
+            } };
         core = std::make_unique<a3core::Core> (environment, coreArgs);
     }
 
@@ -137,23 +142,34 @@ struct Run
                                             [this] (const std::string& address) { return a3core::isPosition (truth, address); });
             });
             for (const auto& data : kept)
-                core->handlePacket ({ a3core::loopbackAddress(), selfSocketPort }, data.data(), data.size());
+                handle ({ a3core::loopbackAddress(), selfSocketPort }, data);
+        }
+    }
+
+    // One packet, as B1's serve loop hands it on: a handler that raises is one stderr line and the
+    // loop goes on. A port that raises where B1 raises throws with what() = Python's exception type.
+    void handle (const a3core::Endpoint& from, const std::vector<uint8_t>& data)
+    {
+        try
+        {
+            core->handlePacket (from, data.data(), data.size());
+        }
+        catch (const std::exception& problem)
+        {
+            net.journal (std::string ("handler raised: ") + problem.what(), true);
         }
     }
 
     void step (const juce::var& step)
     {
-        clock.at = static_cast<double> (step["at"]);
+        const auto at = static_cast<double> (step["at"]);
+        if (at < clock.at)
+            throw std::runtime_error ("a step at " + std::to_string (at) + " before " + std::to_string (clock.at));
+        clock.at = at;
         if (step.hasProperty ("osc"))
-        {
-            const auto data = messageOf (step["osc"]);
-            core->handlePacket (fromOf (step), data.data(), data.size());
-        }
+            handle (fromOf (step), messageOf (step["osc"]));
         else if (step.hasProperty ("packet"))
-        {
-            const auto data = base64 (step["packet"]);
-            core->handlePacket (fromOf (step), data.data(), data.size());
-        }
+            handle (fromOf (step), base64 (step["packet"]));
         else if (step.hasProperty ("vu"))
         {
             const auto data = base64 (step["vu"]);
@@ -209,11 +225,11 @@ bool sameArgs (const juce::var& expected, const juce::var& actual)
 
 bool sameEntry (const juce::var& want, const juce::var& got)
 {
-    if (want.hasProperty ("file"))
-        return got.hasProperty ("file") && want["file"].toString() == got["file"].toString()
-            && a3core::pythonEquals (want["json"], got["json"]);
     if (static_cast<double> (want["at"]) != static_cast<double> (got["at"]))
         return false;
+    if (want.hasProperty ("file"))   // the bytes on disk; the json is there for a readable difference
+        return got.hasProperty ("file") && want["file"].toString() == got["file"].toString()
+            && want["text"].toString() == got["text"].toString();
     if (want.hasProperty ("journal"))
         return got.hasProperty ("journal") && want["journal"].toString() == got["journal"].toString()
             && static_cast<bool> (want["stderr"]) == static_cast<bool> (got["stderr"]);
@@ -278,7 +294,8 @@ Outcome run (const std::string& name)
         outcome.differences.push_back (name + ".expected.json is not a list");
     if (! outcome.differences.empty())
     {
-        outcome.actualFile = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("a3-scenario-" + name + ".actual.json");
+        outcome.actualFile = juce::File::getSpecialLocation (juce::File::currentExecutableFile)
+                                 .getSiblingFile ("scenario-" + name + ".actual.json");
         outcome.actualFile.replaceWithText (juce::JSON::toString (juce::var (outcome.transcript), false));
     }
     return outcome;
