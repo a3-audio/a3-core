@@ -37,6 +37,12 @@ SKIPPED_DIRS = {"tests", "test", "a3-motion-tests", "build", "build-make",
                 "node_modules", "hardware", "docs", "cmake-build-debug",
                 "cmake-build-release", "patches"}
 
+#: Directories (repo-relative) of one repo that stay outside the guard. The C++
+#: program joined a3-core on 2026-10-27; a3-engine was never in REPOS, so its
+#: tree was never guarded. Bringing it under the guard is separate work.
+#: Not a SKIPPED_DIRS entry: other repos have a src/ that stays guarded.
+SKIPPED_REPO_DIRS = {"a3-core": ("src", "app", "bench", "host", "third_party", "tools/parity")}
+
 #: The families of our words. Not `fx`: that family became `filter` on
 #: 2026-09-30, and `/fx/` in code is REAPER's (`/track/N/fx/...`).
 OUR_WORDS = re.compile(
@@ -156,10 +162,13 @@ def literals(path):
         return
 
 
-def code_files(repo):
+def code_files(repo, name=None):
+    repo_skipped = tuple(d + "/" for d in SKIPPED_REPO_DIRS.get(name, ()))
     for path in sorted(repo.rglob("*")):
+        relative = path.relative_to(repo)
+        parts = relative.parts
         if path.suffix in CODE and path.is_file() and not path.is_symlink() \
-                and not SKIPPED_DIRS & set(path.relative_to(repo).parts):
+                and not SKIPPED_DIRS & set(parts) and not relative.as_posix().startswith(repo_skipped):
             yield path
 
 
@@ -169,7 +178,7 @@ def findings(repos, ports):
     `repos` maps a repo's name to its checkout; `ports` are the truth's."""
     found = []
     for name, root in sorted(repos.items()):
-        for path in code_files(root):
+        for path in code_files(root, name):
             label = f"{name}/{path.relative_to(root)}"
             if label in ALLOWED:
                 continue
