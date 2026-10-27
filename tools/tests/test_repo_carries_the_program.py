@@ -63,8 +63,11 @@ class RepoCarriesTheProgramTest(unittest.TestCase):
 
     def test_readme_is_a3_cores_and_program_md_the_engines(self):
         self.assertTrue((ROOT / "README.md").read_text().startswith("# A³ Core"))
+        # PROGRAM.md began as the engine's README at the move; it may grow since
+        # (a3-core --links, 2026-10-28), so its title and first paragraph are pinned.
         engine_readme = git("show", ENGINE_COMMITS[1] + ":README.md").stdout
-        self.assertEqual((ROOT / "PROGRAM.md").read_text(), engine_readme)
+        head = engine_readme.split("\n\n", 2)[:2]
+        self.assertEqual((ROOT / "PROGRAM.md").read_text().split("\n\n", 2)[:2], head)
 
     def test_dep5_covers_the_program(self):
         text = (ROOT / ".reuse/dep5").read_text()
