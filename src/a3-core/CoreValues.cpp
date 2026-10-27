@@ -3,9 +3,9 @@
 // The router of B1's a3-core.py (a3-core 7a7b2441f74e), engine mode: what arrives on Core's main port
 // and where it goes -- the values, the flags and their lamps, the relay to the other screens, the
 // engine's words, the deck ring, the aux return's ring, and the hellos and the recall that open the
-// way to the engine. The function each method comes from is named beside it. REAPER's send points
-// (osc_reaper, the IEM clients, the DualDelay, send_cue_levels, set_filters) reach nobody in engine
-// mode and are not ported (O8): where a branch only sent to them, it is empty here.
+// way to the engine. The function each method comes from is named beside it. B1's REAPER send points
+// (osc_reaper, the IEM clients, the DualDelay, send_cue_levels, set_filters) are not ported (O8):
+// where a branch only sent to them, it is empty here.
 #include "Core.h"
 
 #include <algorithm>
@@ -59,7 +59,7 @@ std::optional<long long> wholeOf (const OscArg* value)
 }
 
 constexpr int returnRingSize = 3;   // STEM, ANALOG, CUE
-const std::string reaperOnly[] { "aux-send", "gain", "eq.high", "eq.mid", "eq.low", "volume", "filter.frequency", "filter.q" };
+const std::string engineOnly[] { "aux-send", "gain", "eq.high", "eq.mid", "eq.low", "volume", "filter.frequency", "filter.q" };
 }
 
 //==============================================================================
@@ -136,7 +136,7 @@ void Core::rememberState()
     nanArrived = false;
 }
 
-// apply_3d_crossfade's memory (its gains are REAPER's), and take_deck_word's.
+// apply_3d_crossfade's memory (its gains went to REAPER and are not ported), and take_deck_word's.
 void Core::keepThreeD (int index, double value)
 {
     channels[static_cast<size_t> (index)].threeD = value;
@@ -175,9 +175,9 @@ void Core::channelHandler (const Endpoint& from, const OscMessage& message)
 
     if (parameter == "3d")
         keepThreeD (index, value);
-    else if (std::find (std::begin (reaperOnly), std::end (reaperOnly), parameter) != std::end (reaperOnly))
+    else if (std::find (std::begin (engineOnly), std::end (engineOnly), parameter) != std::end (engineOnly))
     {
-        // REAPER's: the engine heard it above, as it arrived.
+        // The engine's alone (B1 sent it to REAPER): the engine heard it above, as it arrived.
     }
     else if (parameter == "cue" || parameter == "filter")
     {

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
-// B1's main block (a3-core.py:2173-2614), engine mode, line by line where it says something; the
-// REAPER-only parts (feedback port, project saving, the replay thread) are not here (O8).
+// B1's main block (a3-core.py:2173-2614), engine mode, line by line where it says something; B1's
+// REAPER-only parts (feedback port, project saving, the replay thread) were never ported (O8).
 #include "CoreService.h"
 
 #include <pthread.h>

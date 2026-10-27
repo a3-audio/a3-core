@@ -1020,14 +1020,14 @@ TEST (CoreApi, PostingToAReadOnlyWindowIsRefusedNotACrash)
     EXPECT_EQ (problemOf (reply), "this window can only watch");
 }
 
-TEST (CoreApi, SendRefusesReaperAndGarbage)
+TEST (CoreApi, SendRefusesReaperLikeAnyUnknownTargetAndGarbage)
 {
     BenchWindow window;
     ASSERT_TRUE (window.open());
-    // REAPER is not behind the bench any more (the engine plays); the refusal says so, in English.
+    // REAPER left the Core on 2026-10-27: it is a destination like any other the bench does not know.
     auto reply = window.post (BenchWindow::request ("reaper", "/a", "1"));
     EXPECT_EQ (reply.status, 400);
-    EXPECT_EQ (problemOf (reply), "reaper is not reachable from the bench: the audio engine plays, send to self, mixer or motion");
+    EXPECT_EQ (problemOf (reply), "unknown destination: reaper");
 
     EXPECT_EQ (window.post (BenchWindow::request ("mixer", "no-slash", "1")).status, 400);
     EXPECT_EQ (problemOf (window.post (BenchWindow::request ("mixer", "no-slash", "1"))), "an address starts with /");

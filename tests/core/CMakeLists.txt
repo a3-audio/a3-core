@@ -12,3 +12,5 @@ target_compile_definitions(a3-core-tests PRIVATE
     A3_CORE_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data")
 target_compile_definitions(a3-core-tests PRIVATE
     A3_CORE_SOURCE_DIR="${CMAKE_SOURCE_DIR}/src/a3-core")
+target_compile_definitions(a3-core-tests PRIVATE
+    A3_PACKAGE_TRUTH="${CMAKE_SOURCE_DIR}/platform-config/debian-x86_64/a3-core/usr/share/a3/a3-osc.json")

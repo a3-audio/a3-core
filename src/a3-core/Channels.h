@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // What Core alone knows about a channel and about the master: the fields the state file keeps and
 // the recall answers with (a3-core.py's ChannelInfo and MasterInfo, without the track numbers --
-// those describe the rig, and the engine has no REAPER tracks).
+// those described REAPER's tracks, and the engine has none).
 #pragma once
 
 #include <optional>

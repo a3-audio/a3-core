@@ -49,7 +49,6 @@ TEST (Traffic, CoresOwnPortBreaksTheTie)
 {
     const std::map<std::string, std::string> motionAndReaper { { "mixer", "192.168.8.11" }, { "motion", "127.0.0.1" }, { "reaper", "127.0.0.1" } };
     EXPECT_EQ (peerName ("127.0.0.1", motionAndReaper, commanders), "motion");
-    EXPECT_EQ (peerName ("127.0.0.1", motionAndReaper, answerers), "reaper");
 }
 
 TEST (Traffic, ANarrowedListStillRefusesARealTie)

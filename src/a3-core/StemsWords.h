@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Port of the live part of a3_core_stems_reaper.py (B1 7a7b2441f74e; plan ruling P1): the stem
 // mirror as messages -- the desk's announcements, the settle that waits for StemDeck's reports to
-// quiet down, and the switch commands to StemDeck. The REAPER sends (analog, stems and return
-// source) are not here: the engine has no REAPER tracks.
+// quiet down, and the switch commands to StemDeck. B1's REAPER sends (analog, stems and return
+// source) were never ported: the engine has no tracks to send to.
 #pragma once
 
 #include <map>

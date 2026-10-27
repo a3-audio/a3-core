@@ -44,7 +44,8 @@ SKIPPED_DIRS = {"tests", "test", "a3-motion-tests", "build", "build-make",
 SKIPPED_REPO_DIRS = {"a3-core": ("src", "app", "bench", "host", "third_party", "tools/parity")}
 
 #: The families of our words. Not `fx`: that family became `filter` on
-#: 2026-09-30, and `/fx/` in code is REAPER's (`/track/N/fx/...`).
+#: 2026-09-30, and `/fx/` in code was REAPER's (`/track/N/fx/...`, gone from
+#: the truth since 2026-10-27).
 OUR_WORDS = re.compile(
     r"^/(channel|master|filter|aux-return|stemdeck|motion|prodj|vu|beat|tap|clockmode|state|device|core)(/|$)")
 IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")

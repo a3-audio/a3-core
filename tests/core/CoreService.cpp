@@ -344,7 +344,8 @@ public:
     std::unique_ptr<CoreService> service;
     std::string error;
 
-    Rig()
+    // `data` is the truth before its ports are moved: B0's recorded one unless a test names another.
+    explicit Rig (juce::var data = b0::truth().data())
         : dir (juce::File::getSpecialLocation (juce::File::tempDirectory).getNonexistentChildFile ("a3-core-service", "", false))
     {
         home = dir.getChildFile ("home");
@@ -355,7 +356,6 @@ public:
         share.getChildFile ("pipewire").createDirectory();
         juce::File (A3_CORE_TEST_DATA "/parity/render/aes67.conf.in").copyFileTo (share.getChildFile ("pipewire/pipewire-aes67.conf.in"));
 
-        auto data = b0::truth().data();
         setListenerPort (data, "core.vu-relay", vuPort);
         setListenerPort (data, "devices.announce", announced.port());
         setListenerPort (data, "engine.osc", engine.port());
@@ -535,6 +535,26 @@ TEST (CoreService, StartsOnEphemeralPortsAndAnswersARecall)
     EXPECT_GE (rig.mixer.messages (300).size(), told);
 }
 
+juce::var packageTruth() { return std::get<Truth> (Truth::load (juce::File (A3_PACKAGE_TRUTH), std::nullopt)).data(); }
+
+TEST (CoreService, CoreStartsOnThePackageTruth)
+{
+    // The truth that ships has no REAPER since 2026-10-27: no reaper, iem or dualdelay is a peer of
+    // Core's any more, so those names are free for a subscriber.
+    Rig rig (packageTruth());
+    const Socket reaper, iem, dualdelay;
+    auto options = rig.options();
+    options.core.subscribers = { "reaper=" + reaper.endpoint().host + ":" + std::to_string (reaper.port()),
+                                 "iem=" + iem.endpoint().host + ":" + std::to_string (iem.port()),
+                                 "dualdelay=" + dualdelay.endpoint().host + ":" + std::to_string (dualdelay.port()) };
+    ASSERT_TRUE (rig.start (options)) << rig.error;
+    EXPECT_NE (rig.port(), 0);
+    EXPECT_EQ (rig.service->vuRelayPort().port, rig.vuPort);
+    EXPECT_NE (rig.service->webPort().port, 0);
+    for (const auto* name : { "reaper", "iem", "dualdelay" })
+        EXPECT_TRUE (rig.said.find (std::string ("subscriber ") + name + " at ")) << name;
+}
+
 TEST (CoreService, TheEngineReplayComesBackThroughCoresOwnPort)
 {
     // The replay and the token recall go to Core's own port from the one socket the hello gate
@@ -637,7 +657,7 @@ TEST (CoreService, ARefusedSubscriberRefusesTheStart)
     std::string problem;
     try
     {
-        parseSubscribers ({ "nonsense" }, { "mixer", "motion", "reaper", "iem", "dualdelay" });
+        parseSubscribers ({ "nonsense" }, shipped);
     }
     catch (const SubscriberError& refused)
     {

@@ -169,7 +169,6 @@ juce::var line (double rate, double bytesPerSecond) { return objectOf ({ { "rate
 const char* directionName (Direction direction) { return direction == Direction::in ? "in" : "out"; }
 
 const std::vector<std::string> commanders { "mixer", "motion" };
-const std::vector<std::string> answerers { "reaper" };
 
 const char* pythonTypeName (const OscArg* value)
 {

@@ -57,7 +57,7 @@ std::vector<Message> lampMessages (const Truth& truth, const std::vector<Channel
 std::vector<Message> flagMessages (const Truth& truth, const std::vector<ChannelInfo>& channels, const MasterInfo& master);
 
 // The last value Core passed on, per address, in the order the controls were first touched.
-// In memory only: it cannot be older than the last message REAPER (or the engine) sent. A value is
+// In memory only: it cannot be older than the last message the engine sent. A value is
 // one argument, or a Python list -- the return's word is nine integers -- which python-osc sends as
 // several arguments.
 class Relayed

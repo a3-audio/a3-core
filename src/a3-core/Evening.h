@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Port of a3_core_evening.py (B0 f3345dc7feeb): the evening as Core saw it, written down for the
 // next start so a power cut does not cost it. `Relayed` holds what was last passed on and that is
-// REAPER's (or the engine's) own last word; it is written along and, at the next start, sent back
+// the engine's own last word; it is written along and, at the next start, sent back
 // the way a message from the desk travels.
 //
 // What does not come back is the content of this module: the lamps (status), the toggles, the

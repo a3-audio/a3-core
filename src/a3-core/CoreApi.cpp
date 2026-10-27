@@ -223,8 +223,6 @@ HttpResponse benchSends (const BenchSend& send, const HttpRequest& request)
 
     if (asked.address.empty() || asked.address.front() != '/')
         return refused ("an address starts with /");
-    if (asked.to == "reaper")
-        return refused ("reaper is not reachable from the bench: the audio engine plays, send to self, mixer or motion");
     if (asked.to != "self" && asked.to != "mixer" && asked.to != "motion")
         return refused ("unknown destination: " + asked.to);
     try

@@ -18,7 +18,7 @@
   "  relayed_to: Core passes an arrival on to these, the sender left out.",
   "  announced_to: Core says it itself, to everybody, the sender too -- a lamp",
   "  is status, so the desk's lamp follows the desk's own key.",
-  "external: vocabularies we speak but do not own (REAPER, the IEM plug-ins).",
+  "external: vocabularies we speak but do not own (the IEM plug-ins).",
   "meters: how every display moves a meter bar (decided 2026-10-07). The sources",
   "  send raw peaks; each display applies these on its own clock: attack (0 =",
   "  at once), release in dB per second, and how long the highest peak is held."
@@ -45,8 +45,6 @@
  "listeners": [
   {"name": "core.osc", "program": "core", "role": "osc", "host": "any", "port": 9000,
    "carries": "every controller's messages, and /beat from the analyzer"},
-  {"name": "core.reaper-feedback", "program": "core", "role": "reaper-feedback", "host": "local", "port": 9002,
-   "carries": "REAPER's own OSC feedback"},
   {"name": "core.vu-relay", "program": "core", "role": "vu-relay", "host": "local", "port": 9003,
    "carries": "the engine's and StemDeck's /vu bundles, forwarded unchanged to Motion, the mixer, radla, the remote Motion followed and every desk followed"},
   {"name": "core.web", "program": "core", "role": "web", "host": "any", "port": 9080,
@@ -69,16 +67,6 @@
    "carries": "the engine's and StemDeck's /vu bundles, forwarded unchanged by Core (core.vu-relay)"},
   {"name": "beat-analyzer.clock", "program": "beat-analyzer", "role": "clock", "host": "any", "port": 7775,
    "carries": "/tap, /clockmode, and /beat from Motion in clock mode 0"},
-  {"name": "reaper.osc", "program": "reaper", "role": "osc", "host": "local", "port": 9001,
-   "carries": "Core's /track/... control"},
-  {"name": "iem.multiencoder-1", "program": "iem", "role": "multiencoder-1", "host": "local", "port": 1337,
-   "carries": "/MultiEncoder/... (receiver set inside the plug-in, in the REAPER project)"},
-  {"name": "iem.multiencoder-2", "program": "iem", "role": "multiencoder-2", "host": "local", "port": 1338,
-   "carries": "/MultiEncoder/... (receiver set inside the plug-in, in the REAPER project)"},
-  {"name": "iem.multiencoder-3", "program": "iem", "role": "multiencoder-3", "host": "local", "port": 1339,
-   "carries": "/MultiEncoder/... (receiver set inside the plug-in, in the REAPER project)"},
-  {"name": "dualdelay.osc", "program": "dualdelay", "role": "osc", "host": "local", "port": 1340,
-   "carries": "/DualDelay/delayBPML|R (receiver set inside the plug-in, in the REAPER project)"},
   {"name": "engine.control", "program": "engine", "role": "control", "host": "local", "port": 9005,
    "carries": "the a3-core window's view of the engine (HTTP JSON, loopback only; not OSC)"},
   {"name": "engine.osc", "program": "engine", "role": "osc", "host": "local", "port": 9004,
@@ -122,15 +110,9 @@
   {"from": "core", "to": "desk.vu", "carries": "vu"},
   {"from": "core", "to": "mixer.osc", "carries": "vu"},
   {"from": "core", "to": "radla.vu"},
-  {"from": "core", "to": "reaper.osc"},
-  {"from": "core", "to": "iem.multiencoder-1"},
-  {"from": "core", "to": "iem.multiencoder-2"},
-  {"from": "core", "to": "iem.multiencoder-3"},
-  {"from": "core", "to": "dualdelay.osc"},
   {"from": "core", "to": "engine.osc"},
   {"from": "engine", "to": "core.osc"},
   {"from": "engine", "to": "core.vu-relay", "carries": "vu"},
-  {"from": "reaper", "to": "core.reaper-feedback"},
   {"from": "beat-analyzer", "to": "core.osc"},
   {"from": "beat-analyzer", "to": "motion.osc"},
   {"from": "beat-analyzer", "to": "mixer.osc"},
@@ -222,14 +204,11 @@
  ],
  "meters": {"attack_ms": 0, "release_db_per_second": 20, "peak_hold_seconds": 1.5},
  "external": {
-  "reaper": {"owner": "REAPER (a3-core.ReaperOSC)", "patterns": [
-   "/track/@/volume", "/track/@/mute", "/track/@/send/@/volume",
-   "/track/@/fx/@/bypass", "/track/@/fx/@/fxparam/@/value", "/action/@"]},
   "iem": {"owner": "IEM Plug-in Suite", "patterns": [
    "/MultiEncoder/azimuth{i}", "/MultiEncoder/elevation{i}",
    "/StereoEncoder/azimuth", "/StereoEncoder/elevation",
    "/EnergyVisualizer/RMS", "/DualDelay/delayBPML", "/DualDelay/delayBPMR"]}
  },
- "programs": ["core", "motion", "mixer", "desk", "prodj", "beat-analyzer", "stemdeck", "reaper", "devices",
-              "iem", "dualdelay", "engine", "x11vnc", "screencast", "radla", "prolink", "aes67", "ptp4l"]
+ "programs": ["core", "motion", "mixer", "desk", "prodj", "beat-analyzer", "stemdeck", "devices",
+              "iem", "engine", "x11vnc", "screencast", "radla", "prolink", "aes67", "ptp4l"]
 }

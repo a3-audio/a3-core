@@ -247,8 +247,8 @@ juce::var withCounts (const juce::var& registerData, const Counts& counts)
 
 juce::var registerAsJson (const juce::File& file, Traffic& traffic, double now)
 {
-    // Two tables are put in: the addresses Core understood and the ones it could not route -- REAPER's
-    // feedback fills the second and REAPER's own patterns are most of the register. The history is asked
+    // Two tables are put in: the addresses Core understood and the ones it could not route (REAPER's
+    // feedback filled the second until REAPER left the Core, 2026-10-27). The history is asked
     // for with a cutoff of now so it comes back empty: none of the ring is the catalogue's business.
     const auto snapshot = traffic.snapshot (now, now);
     const auto unknown = traffic.unknownSnapshot (now);

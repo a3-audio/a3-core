@@ -433,7 +433,7 @@ void Core::beatHandler (const Endpoint& from, const OscMessage& message)
         return;
     engineBpm = *wanted;
     sendToEngine ({ tempoMessage (truth, *wanted) });
-    // The DualDelay's two lines are REAPER's: silent in engine mode (O8).
+    // B1 also set the DualDelay's two lines inside REAPER: not ported (O8).
 }
 
 // vu_destinations: the remote Motion followed (the rig's own gets the analyzer's meters directly)

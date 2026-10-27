@@ -23,7 +23,7 @@ TEST (I3Bar, ModeByWorkspace)
         { "", "invisible" }, { "x", "invisible" },
         // test_rig_workspaces.BarPerWorkspace
         { "1:MOTION", "invisible" }, { "2:STEMDECK", "invisible" }, { "2", "invisible" },
-        { "3:ENGINE", "dock" }, { "4:QJACKCTL", "dock" }, { "5:SCARLETT", "dock" }, { "7:DESK", "dock" }, { "7", "dock" },
+        { "3:ENGINE", "dock" }, { "4", "dock" }, { "5:SCARLETT", "dock" }, { "7:DESK", "dock" }, { "7", "dock" },
         { "6:STEMDECK B", "invisible" }, { "scratch", "invisible" },
         // B1's STEMDECK rule is by name, wherever the number is, and case-sensitive
         { "9:STEMDECK C", "invisible" }, { "6: stemdeck", "dock" }, { "STEMDECK", "invisible" },
@@ -167,7 +167,7 @@ TEST (I3Bar, NoRepeatOfTheSameMode)
 {
     FakeI3 i3;
     i3.workspaces = R"([{"name":"3:ENGINE","focused":true}])";
-    i3.events = event ("focus", "3:ENGINE") + event ("focus", "4:QJACKCTL") + event ("focus", "1:MOTION")
+    i3.events = event ("focus", "3:ENGINE") + event ("focus", "4") + event ("focus", "1:MOTION")
               + "garbage\n" + event ("init", "9") + event ("focus", "2:STEMDECK") + event ("focus", "5:SCARLETT")
               + event ("focus", "6:STEMDECK B");
     runI3Bar (i3);

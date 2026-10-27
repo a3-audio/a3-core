@@ -9,7 +9,6 @@
     "motion",
     "prodj",
     "radla",
-    "reaper",
     "stemdeck"
   ],
   "directions": [
@@ -194,12 +193,6 @@
     {"address": "/StereoEncoder/elevation", "device": "iem", "direction": "both", "note": "IEM Plug-in Suite", "source": "a3-osc.json: external.iem"},
     {"address": "/EnergyVisualizer/RMS", "device": "iem", "direction": "both", "note": "IEM Plug-in Suite", "source": "a3-osc.json: external.iem"},
     {"address": "/DualDelay/delayBPML", "device": "iem", "direction": "both", "note": "IEM Plug-in Suite", "source": "a3-osc.json: external.iem"},
-    {"address": "/DualDelay/delayBPMR", "device": "iem", "direction": "both", "note": "IEM Plug-in Suite", "source": "a3-osc.json: external.iem"},
-    {"address": "/track/@/volume", "device": "reaper", "direction": "both", "note": "REAPER (a3-core.ReaperOSC)", "source": "a3-osc.json: external.reaper"},
-    {"address": "/track/@/mute", "device": "reaper", "direction": "both", "note": "REAPER (a3-core.ReaperOSC)", "source": "a3-osc.json: external.reaper"},
-    {"address": "/track/@/send/@/volume", "device": "reaper", "direction": "both", "note": "REAPER (a3-core.ReaperOSC)", "source": "a3-osc.json: external.reaper"},
-    {"address": "/track/@/fx/@/bypass", "device": "reaper", "direction": "both", "note": "REAPER (a3-core.ReaperOSC)", "source": "a3-osc.json: external.reaper"},
-    {"address": "/track/@/fx/@/fxparam/@/value", "device": "reaper", "direction": "both", "note": "REAPER (a3-core.ReaperOSC)", "source": "a3-osc.json: external.reaper"},
-    {"address": "/action/@", "device": "reaper", "direction": "both", "note": "REAPER (a3-core.ReaperOSC)", "source": "a3-osc.json: external.reaper"}
+    {"address": "/DualDelay/delayBPMR", "device": "iem", "direction": "both", "note": "IEM Plug-in Suite", "source": "a3-osc.json: external.iem"}
   ]
 }

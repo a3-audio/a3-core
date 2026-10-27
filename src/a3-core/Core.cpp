@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Ported from B1's a3-core.py (a3-core 7a7b2441f74e); the function each method comes from is named
-// beside it. Engine mode only: REAPER's send points (osc_reaper, the IEM clients, the DualDelay)
-// reach nobody there, so their sends are not ported (O8).
+// beside it. Engine mode only: B1's REAPER send points (osc_reaper, the IEM clients, the DualDelay)
+// were never ported (O8), and REAPER left the Core on 2026-10-27.
 #include "Core.h"
 
 #include <algorithm>
@@ -72,15 +72,12 @@ void Core::start()
 
 void Core::startPeers()
 {
-    peerHosts = { { "mixer", args.mixer.host }, { "motion", args.motion.host },
-                  { "reaper", truth.endpoint ("reaper", "osc").host } };
+    peerHosts = { { "mixer", args.mixer.host }, { "motion", args.motion.host } };
     // The desk is in front: its values count from its first message, hello or not.
     helloGate.trustHost (peerHosts["mixer"]);
 
     subscribers = { mixerClient, motionClient };
-    auto reserved = shipped;
-    reserved.insert (reserved.end(), { "reaper", "iem", "dualdelay" });
-    for (const auto& extra : parseSubscribers (args.subscribers, reserved))   // SubscriberError: the service refuses to start
+    for (const auto& extra : parseSubscribers (args.subscribers, shipped))   // SubscriberError: the service refuses to start
     {
         subscribers.push_back ({ extra.name, { extra.host, extra.port } });
         peerHosts[extra.name] = extra.host;
@@ -124,7 +121,7 @@ void Core::handlePacket (const Endpoint& from, const uint8_t* data, size_t size)
 // on_tick, then what B1's timers and SeenFile's thread did: the debounced writes that fell due.
 void Core::tick()
 {
-    // tidy_when_settled is REAPER mode's stem mirror: nothing in engine mode.
+    // B1's tidy_when_settled mirrored the stems into REAPER: not ported (O8).
     noticeMotionSilence (env.clock.monotonic());
     noticeDeskSilence (env.clock.monotonic());
     noticeDeckPresence (env.clock.monotonic());
@@ -246,7 +243,7 @@ void Core::say (const std::string& line, bool toStderr) { env.journal (line, toS
 
 void Core::speakRememberedState()
 {
-    // REAPER's half (remembered_reaper_messages, send_cue_levels) reaches nobody in engine mode.
+    // B1's REAPER half (remembered_reaper_messages, send_cue_levels) is not ported (O8).
     const auto messages = recallMessages (truth, channels, master, relayed);
     for (const auto& message : messages)
         for (const auto& client : subscribers)
@@ -258,7 +255,7 @@ void Core::speakRememberedState()
 
 void Core::speakStems (bool full)
 {
-    // REAPER's half (analog, stems and return-source sends) reaches nobody in engine mode.
+    // B1's REAPER half (analog, stems and return-source sends) is not ported (O8).
     for (const auto& announcement : announcements (stems, truth))
     {
         if (full)

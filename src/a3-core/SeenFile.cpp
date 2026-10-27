@@ -214,8 +214,9 @@ void SeenFile::writeIfDue (double now)
 
     const auto created = traffic.created();
     // Two conditions, and both are needed: the list has to have changed since the last write, and it has
-    // to have stopped changing since the last look -- otherwise REAPER's nineteen thousand addresses
-    // would be written once per look all the way through the burst instead of once at the end of it.
+    // to have stopped changing since the last look -- otherwise a burst like REAPER's nineteen thousand
+    // addresses (measured while it ran on the Core) would be written once per look all the way through
+    // instead of once at the end of it.
     const bool settled = polled && *polled == created;
     polled = created;
     if (settled && (! writtenAtCreated || *writtenAtCreated != created))

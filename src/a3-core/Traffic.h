@@ -29,11 +29,9 @@ enum class Direction { in, out };
 // "in" / "out", as the snapshots and the files spell them.
 const char* directionName (Direction direction);
 
-// The devices that can have sent a message on Core's main port, and the ones that can have sent on
-// REAPER's feedback port. Disjoint, which is the point: given as `only`, a shared host stops being
-// ambiguous.
+// The devices that can have sent a message on Core's main port: given as `only`, a host they share
+// with another peer stops being ambiguous.
 extern const std::vector<std::string> commanders;
-extern const std::vector<std::string> answerers;
 
 // How many bytes one message takes as an OSC packet, worked out and not measured: the address and the
 // first argument are all `seen` is handed. nullptr is a message without arguments.
@@ -127,7 +125,8 @@ public:
     // Understood addresses: A3's vocabulary is about forty, so this guards against a sender inventing
     // addresses and is no working limit.
     static constexpr size_t rowCap = 5000;
-    // Unknown addresses: one REAPER project reports 19,335 when its surface connects.
+    // Unknown addresses: one REAPER project reported 19,335 when its surface connected (measured
+    // while REAPER ran on the Core, before 2026-10-27).
     static constexpr size_t unknownCap = 50000;
 
     explicit Traffic (size_t history = historyCap, size_t rows = rowCap, size_t unknown = unknownCap);
@@ -142,7 +141,7 @@ public:
     void seenList (Direction direction, const std::string& address, const ListValue& value, const std::string& peer, double now);
 
     // Note a message Core received and could not route. A full row, not a bare count, but never part
-    // of snapshot(): REAPER alone reports 19,335 of them.
+    // of snapshot(): REAPER alone reported 19,335 of them while it ran on the Core.
     void unknown (const std::string& address, const OscArg* value, const std::string& peer, double now);
     void unknownList (const std::string& address, const ListValue& value, const std::string& peer, double now);
 
