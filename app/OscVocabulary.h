@@ -39,6 +39,8 @@ struct EngineTruth : a3bench::Truth
     juce::String helloAddress;    // "engine.hello"
     int vuRelayPort = -1;         // "core.vu-relay": where the engine's /vu bundles go (O13); -1: none in this truth
     juce::String vuRelayHost;     // its host, a wildcard reached on loopback
+    int controlPort = -1;         // "engine.control": where the window reaches the engine (loopback, HTTP); -1: none in this truth
+    juce::String controlHost;     // its host as the truth gives it
     std::vector<WordAddress> words;
 };
 

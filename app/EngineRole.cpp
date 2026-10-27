@@ -2,12 +2,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "EngineRole.h"
 
+#include <atomic>
 #include <cstdio>
 
+#include "ConfigEdits.h"
 #include "DeviceBackend.h"
+#include "EngineControlApi.h"
 #include "EngineHost.h"
 #include "JackBackend.h"
 #include "OscVocabulary.h"
+#include "SessionRestart.h"
 #include "UdpNet.h"
 
 namespace a3app
@@ -20,12 +24,17 @@ void sayEngine (const juce::String& line) { std::fprintf (stderr, "a3-engine: %s
 class ControlListener final : public juce::OSCReceiver::Listener<juce::OSCReceiver::RealtimeCallback>
 {
 public:
-    ControlListener (const StartupData& s, EngineHost& h) : data (s), host (h) {}
-    void oscMessageReceived (const juce::OSCMessage& message) override { applyEngineMessage (data.truth, host.engineConfig(), message, host.controls()); }
+    ControlListener (const StartupData& s, EngineHost& h, std::atomic<double>& lastCore) : data (s), host (h), lastMessage (lastCore) {}
+    void oscMessageReceived (const juce::OSCMessage& message) override
+    {
+        lastMessage.store (monotonicSeconds());
+        applyEngineMessage (data.truth, host.engineConfig(), message, host.controls());
+    }
 
 private:
     const StartupData& data;
     EngineHost& host;
+    std::atomic<double>& lastMessage;
 };
 }
 
@@ -43,7 +52,7 @@ public:
         host = std::make_unique<EngineHost> (data.config.engine, data.spatial, data.truth,
                                              [this] (const juce::OSCMessage& m) { coreSender.send (m); },
                                              metersSender());
-        listener = std::make_unique<ControlListener> (data, *host);
+        listener = std::make_unique<ControlListener> (data, *host, lastCoreMessage);
         if (! socket.bindToPort (data.truth.enginePort, data.truth.engineBindAddress) || ! receiver.connectToSocket (socket))
             return juce::Result::fail ("cannot listen on " + data.truth.engineBindAddress + ":" + juce::String (data.truth.enginePort));
         receiver.addListener (listener.get());
@@ -55,6 +64,16 @@ public:
         const auto opened = backend->open (*host, data.config);
         ready = opened.wasOk();
         return opened;
+    }
+
+    // Only a session that opened has a host and a backend to tick, read or ask.
+    bool isReady() const { return ready; }
+
+    // Closes the gates and waits for the 10 ms fade, so closing the backend is not a hard cut.
+    void quiet()
+    {
+        if (ready)
+            host->closeGate ([] { juce::Thread::sleep (2); }, quietPumps);
     }
 
     void close()
@@ -87,8 +106,14 @@ public:
     }
 
     BackendStatus status() const { return backend != nullptr ? backend->status() : BackendStatus {}; }
+    LiveLinks liveLinks() const { return backend != nullptr ? backend->liveLinks() : LiveLinks {}; }
+    EngineHost& engineHost() { return *host; }
+    // Seconds on the app clock of Core's last message, or a negative number before the first.
+    double lastCoreSeconds() const { return lastCoreMessage.load(); }
 
 private:
+    static constexpr int quietPumps = 25;   // 25 x 2 ms: far above the 10 ms fade
+    std::atomic<double> lastCoreMessage { -1.0 };
     // The /vu bundles to core.vu-relay on loopback (O13); a truth without that listener sends none. A send
     // that fails is dropped without a word, as the analyzer's non-blocking sendto dropped it: Core may be
     // down or restarting, and the next send is 40 ms away.
@@ -120,6 +145,119 @@ private:
     std::unique_ptr<AudioBackend> backend;
 };
 
+// What the control API sees of the running session, on the control thread. An edit is kept here until
+// Save; apply() hands it to the role, which re-creates the session.
+class EngineView final : public HostView
+{
+public:
+    EngineView (EngineRole& r, juce::File saveFile, AppConfig startConfig)
+        : role (r), file (std::move (saveFile)), edited (startConfig), startedWith (std::move (startConfig)), names (outputsOf (edited)) {}
+
+    BackendStatus status() const override { return live() ? role.session->status() : BackendStatus {}; }
+    std::vector<a3::Engine::OutputMeter> meters() override { return live() ? role.session->engineHost().meters() : std::vector<a3::Engine::OutputMeter> {}; }
+    std::vector<std::string> outputNames() const override { return names; }
+    bool coreHeard() const override { return live() && role.session->lastCoreSeconds() >= 0.0; }
+    double secondsSinceCore() const override { return live() ? monotonicSeconds() - role.session->lastCoreSeconds() : 0.0; }
+    bool gateOpen() const override { return live() && role.session->engineHost().controls().global().gateOpen.load(); }
+    a3::GateLevels gateLevels() const override { return live() ? role.session->engineHost().gateLevels() : a3::GateLevels {}; }
+    AppConfig config() const override { return edited; }
+    AppConfig running() const override { return startedWith; }
+    juce::File configFile() const override { return file; }
+    LiveLinks liveLinks() const override { return live() ? role.session->liveLinks() : LiveLinks {}; }
+    juce::String engineProblem() const override { return problem; }
+    void edit (const AppConfig& config) override { edited = config; }
+
+    // Fails when the new config did not open (the previous one is running again, or nothing is: then
+    // engineProblem() says so). Success makes the edit what runs.
+    juce::Result apply (const AppConfig& config) override
+    {
+        const auto result = role.restart (config, problem);
+        if (result.failed())
+            return result;
+        startedWith = edited = config;
+        if (auto outputs = outputsOf (config); ! outputs.empty())
+            names = std::move (outputs);
+        return juce::Result::ok();
+    }
+
+    void setFilterKind (a3::FilterKind kind) override
+    {
+        if (live())
+            role.session->engineHost().controls().global().filter.kind.store (static_cast<int> (kind));
+        edited.engine.filterKind = startedWith.engine.filterKind = kind;   // it runs now
+    }
+
+private:
+    bool live() const { return role.session != nullptr && role.session->isReady(); }
+    static std::vector<std::string> outputsOf (const AppConfig& config)
+    {
+        juce::String error;
+        const auto ports = portNamesFor (config, error);
+        return ports ? ports->outputs : std::vector<std::string> {};
+    }
+
+    EngineRole& role;
+    const juce::File file;
+    AppConfig edited, startedWith;
+    std::vector<std::string> names;
+    juce::String problem;
+
+    friend class EngineRole;
+};
+
+juce::Result EngineRole::restart (const AppConfig& config, juce::String& problem)
+{
+    juce::String error;
+    const auto spatial = a3::loadSpatialConfig (config.spatialDirectory, error);
+    if (! spatial)
+        return juce::Result::fail ("spatial: " + error);
+
+    const auto before = startup;
+    auto next = startup;
+    next.config = config;
+    next.spatial = *spatial;
+    const auto openWith = [this] (const StartupData& data)
+    {
+        startup = data;
+        session = std::make_unique<EngineSession> (startup);
+        return session->open (! args.noConnect);
+    };
+
+    RestartSteps steps;
+    steps.quietOld = [this] { if (session != nullptr) session->quiet(); };
+    steps.dropOld = [this] { session.reset(); };
+    steps.openNew = [&] { return openWith (next); };
+    steps.dropNew = [this] { session.reset(); };
+    steps.openPrevious = [&] { return openWith (before); };
+    steps.pauseMs = [] (int ms) { juce::Thread::sleep (ms); };
+
+    const auto result = runRestart (steps);
+    switch (result.outcome)
+    {
+        case RestartOutcome::applied:
+            problem = {};
+            return juce::Result::ok();
+        case RestartOutcome::previousRunning:
+            problem = {};
+            return juce::Result::fail (result.message + " (the previous setting is running again)");
+        case RestartOutcome::nothingRunning:
+            break;
+    }
+    // Keep a closed, not-ready session so the view has something to ask; tick() ignores it.
+    problem = result.message;
+    sayEngine ("NO ENGINE RUNNING: " + problem);
+    session = std::make_unique<EngineSession> (startup);
+    return juce::Result::fail (result.message);
+}
+
+// A refused or busy engine.control is said and the engine runs on: the audio never waits for its window.
+void EngineRole::serveControl()
+{
+    view = std::make_unique<EngineView> (*this, startup.saveFile, startup.config);
+    api = std::make_unique<EngineControlApi> (*view);
+    server = serveEngineControl (*api, startup.truth, [] (const std::string& line, bool) { sayEngine (line); });
+}
+
 std::variant<std::unique_ptr<EngineRole>, int> EngineRole::start (const AppArgs& args, const juce::File& home)
 {
     if (args.checkConfig)
@@ -146,6 +284,7 @@ std::variant<std::unique_ptr<EngineRole>, int> EngineRole::start (const AppArgs&
         sayEngine (opened.getErrorMessage());
         return 1;
     }
+    role->serveControl();
     const auto status = role->session->status();
     sayEngine (role->startup.configFile.getFullPathName() + ", " + juce::String (status.sampleRate, 0) + " Hz, "
                + juce::String (status.blockSize) + " frames, " + (status.connecting ? "connecting" : "no links"));
@@ -164,12 +303,18 @@ EngineRole::~EngineRole()
         const auto status = session->status();
         sayEngine ("dsp load " + juce::String (status.dspLoadPercent, 1) + " %, " + juce::String (status.xruns) + " xruns");
     }
+    if (api != nullptr)
+        api->close();   // a handler that waits for a tick that will not come lets go
+    server.reset();
+    api.reset();
+    view.reset();
     session.reset();
 }
 
 std::optional<int> EngineRole::tick (bool stopRequested)
 {
     session->tick();
+    api->tick (monotonicSeconds());
     if (session->lost())
     {
         sayEngine ("the JACK server went away");

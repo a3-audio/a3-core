@@ -225,6 +225,8 @@ std::optional<EngineTruth> parseEngineTruth (const juce::String& json, juce::Str
     truth.vuRelayHost = a3bench::listenerHostAddress (root, "core.vu-relay");
     if (truth.vuRelayHost == root["hosts"]["any"].toString())
         truth.vuRelayHost = root["hosts"]["local"].toString();
+    truth.controlPort = a3bench::listenerPort (root, "engine.control");
+    truth.controlHost = a3bench::listenerHostAddress (root, "engine.control");
     return truth;
 }
 

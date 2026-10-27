@@ -30,6 +30,10 @@ constexpr float minTrimDb = -90.0f, maxTrimDb = 6.0f;
 // Sections "engine", "backend", "io", "spatial"; a missing section takes its defaults.
 // Refuses (never clamps) a broken file, naming file and reason in `error`.
 std::optional<AppConfig> loadAppConfig (const juce::File&, juce::String& error);
+// The four sections as saveAppConfig writes them, and back (an absolute "spatial" ignores `base`, a relative
+// one is read from it). The control API carries configs in this form. `error` is the reason alone.
+juce::var toJson (const AppConfig&);
+std::optional<AppConfig> parseAppConfig (const juce::var&, const juce::File& base, juce::String& error);
 // Atomic replace. Called only from the window's Save, never by a load.
 juce::Result saveAppConfig (const AppConfig&, const juce::File&);
 inline const juce::File packageConfigFile { "/usr/share/a3-engine/engine.json" };

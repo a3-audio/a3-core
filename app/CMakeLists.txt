@@ -5,7 +5,7 @@
 # the program's command line, its roles and the supervisor): always built, the tests link them.
 add_library(a3-engine-app-lib STATIC EngineHost.cpp OscVocabulary.cpp HelloSender.cpp
     ConfigFile.cpp EnginePorts.cpp IoMap.cpp ConnectionPlan.cpp DeviceBackend.cpp AppArgs.cpp ConfigEdits.cpp SessionRestart.cpp
-    ProgramArgs.cpp Roles.cpp Supervisor.cpp
+    ProgramArgs.cpp Roles.cpp Supervisor.cpp EngineControlApi.cpp ui/RemoteHostView.cpp
     ui/AudioPage.cpp ui/StatusPage.cpp ui/MainWindow.cpp
     ui/ChannelsPage.cpp ui/ZonesPage.cpp ui/IoPage.cpp ui/CalibrationPage.cpp ui/FilterPage.cpp ui/SaveBar.cpp)
 target_include_directories(a3-engine-app-lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/ui)

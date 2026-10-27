@@ -5,6 +5,8 @@
 #include <gtest/gtest.h>
 #include <set>
 #include "EngineFixture.h"
+#include "FakeView.h"
+#include "RemoteRig.h"
 #include "AudioPage.h"
 #include "CalibrationPage.h"
 #include "ChannelsPage.h"
@@ -20,6 +22,9 @@
 
 namespace
 {
+using a3apptest::FakeView;
+using a3apptest::RemoteRig;
+
 // An audio device type with no devices: the page's selector must not probe ALSA in a test.
 class NoDevices final : public juce::AudioIODeviceType
 {
@@ -31,60 +36,6 @@ public:
     int getIndexOfDevice (juce::AudioIODevice*, bool) const override { return -1; }
     bool hasSeparateInputsAndOutputs() const override { return true; }
     juce::AudioIODevice* createDevice (const juce::String&, const juce::String&) override { return nullptr; }
-};
-
-struct FakeView final : a3app::HostView
-{
-    FakeView()
-    {
-        cfg.engine = a3test::engineConfig (4, 2);
-        cfg.spatialDirectory = a3test::shippedSpatialDirectory;
-        file = juce::File::createTempFile ("a3-pages-config");
-        runningCfg = cfg;
-        state.sampleRate = 44100;
-        state.blockSize = 128;
-        state.rateSource = "set by the JACK server";
-        state.bitDepth = 32;
-        state.connecting = true;
-        for (int i = 0; i < 6; ++i) { meterValues.push_back ({ 0.1f * (float) i, 0.05f * (float) i }); names.push_back ("out_" + std::to_string (i)); }
-    }
-    a3app::BackendStatus status() const override { return state; }
-    std::vector<a3::Engine::OutputMeter> meters() override { return meterValues; }
-    std::vector<std::string> outputNames() const override { return names; }
-    bool coreHeard() const override { return heard; }
-    double secondsSinceCore() const override { return sinceCore; }
-    bool gateOpen() const override { return open; }
-    a3::GateLevels gateLevels() const override { a3::GateLevels g; for (auto& v : g.gain) v = open ? 1.0f : 0.0f; return g; }
-    a3app::AppConfig config() const override { return cfg; }
-    a3app::AppConfig running() const override { return runningCfg; }
-    juce::String engineProblem() const override { return problem; }
-    juce::File configFile() const override { return file; }
-    a3app::LiveLinks liveLinks() const override { return links; }
-    void edit (const a3app::AppConfig& c) override { cfg = c; ++edited; }
-    juce::Result apply (const a3app::AppConfig& c) override
-    {
-        ++applied;
-        fileExistedAtApply = file.existsAsFile();
-        if (applyResult.wasOk())
-            cfg = runningCfg = c;
-        return applyResult;
-    }
-    void setFilterKind (a3::FilterKind kind) override { cfg.engine.filterKind = runningCfg.engine.filterKind = kind; ++filterSets; }
-    ~FakeView() override { file.deleteFile(); }
-
-    void runDevice() { cfg.backend.type = runningCfg.backend.type = a3app::BackendSettings::Type::device; }
-    a3app::AppConfig cfg, runningCfg;   // the pending edit and what runs
-    a3app::BackendStatus state;
-    std::vector<a3::Engine::OutputMeter> meterValues;
-    std::vector<std::string> names;
-    bool heard = true, open = true;
-    double sinceCore = 0.4;
-    juce::File file;
-    a3app::LiveLinks links;
-    juce::Result applyResult = juce::Result::ok();
-    juce::String problem;
-    bool fileExistedAtApply = false;
-    int edited = 0, applied = 0, filterSets = 0;
 };
 
 // Paints a page to an image: the snapshot of one visual state. A page that cannot paint
@@ -269,44 +220,78 @@ TEST_F (Pages, PendingEditDoesNotChangeWhatRuns)
     EXPECT_TRUE (audio.pendingLabel().getText().isEmpty());
 }
 
-TEST_F (Pages, EveryPagePaints)
+namespace
 {
-    FakeView view;
-    view.cfg.engine.trims.booth.reset();   // a zone that has no trim yet
-    view.runningCfg = view.cfg;
-    view.links = { { "system:capture_1", "a3-engine:analog_1" }, { "stranger:out", "a3-engine:analog_1" } };
+// Every page and the save bar, painted against `view` (the fake itself or the remote view of it).
+void paintEveryPage (a3app::HostView& view, const juce::String& suffix)
+{
     a3test::ScratchDirectory copy;
     {
         a3app::ChannelsPage page (view);
-        expectPainted (snapshot (page, "channels"));
+        expectPainted (snapshot (page, "channels" + suffix));
     }
     {
         a3app::ZonesPage page (view, { a3test::shippedSpatialDirectory, a3test::reaperBoothSpatialDirectory, copy.root() });
-        expectPainted (snapshot (page, "zones"));
+        expectPainted (snapshot (page, "zones" + suffix));
     }
     {
         a3app::IoPage page (view);
-        expectPainted (snapshot (page, "io-jack"));
-        view.cfg.backend.type = a3app::BackendSettings::Type::device;
-        view.cfg.io.deviceChannels["analog_1"] = 0;
+        expectPainted (snapshot (page, "io-jack" + suffix));
+        auto device = view.config();
+        device.backend.type = a3app::BackendSettings::Type::device;
+        device.io.deviceChannels["analog_1"] = 0;
+        view.edit (device);
         page.refresh (true);
-        expectPainted (snapshot (page, "io-device"));
-        view.cfg.backend.type = a3app::BackendSettings::Type::jack;
+        expectPainted (snapshot (page, "io-device" + suffix));
+        device.backend.type = a3app::BackendSettings::Type::jack;
+        view.edit (device);
     }
     {
         a3app::CalibrationPage page (view);
-        expectPainted (snapshot (page, "calibration"));
+        expectPainted (snapshot (page, "calibration" + suffix));
     }
     {
         a3app::FilterPage page (view);
-        expectPainted (snapshot (page, "filter"));
+        expectPainted (snapshot (page, "filter" + suffix));
     }
     {
-        view.cfg.engine.channels = 5;   // a pending edit: the bar says so
+        a3app::StatusPage page (view);
+        expectPainted (snapshot (page, "status" + suffix));
+    }
+    {
+        auto pending = view.config();
+        pending.engine.channels = 5;   // a pending edit: the bar says so
+        view.edit (pending);
         a3app::SaveBar bar (view);
         bar.refresh();
-        expectPainted (snapshot (bar, "savebar"));
+        expectPainted (snapshot (bar, "savebar" + suffix));
     }
+}
+
+void prepareEveryPage (FakeView& view)
+{
+    view.cfg.engine.trims.booth.reset();   // a zone that has no trim yet
+    view.runningCfg = view.cfg;
+    view.links = { { "system:capture_1", "a3-engine:analog_1" }, { "stranger:out", "a3-engine:analog_1" } };
+}
+}
+
+TEST_F (Pages, EveryPagePaints)
+{
+    FakeView view;
+    prepareEveryPage (view);
+    paintEveryPage (view, "");
+}
+
+TEST_F (Pages, EveryPagePaintsRemote)
+{
+    RemoteRig rig;
+    prepareEveryPage (rig.fake);
+    rig.tick();
+    rig.tick();
+    rig.remote->refreshNow();
+    paintEveryPage (*rig.remote, "-remote");
+    EXPECT_TRUE (rig.remote->engineProblem().isEmpty());
 }
 
 TEST_F (Pages, ChannelsEditTheConfigAndShowTheLoad)
@@ -416,6 +401,34 @@ TEST_F (Pages, CalibrationNeedsConfirmation)
     EXPECT_EQ (page.sliderRangeMax(), 6.0);
 }
 
+TEST_F (Pages, CalibrationNeedsConfirmationRemote)
+{
+    RemoteRig rig;
+    rig.fake.cfg.engine.trims.main = -3.0f;
+    rig.fake.runningCfg = rig.fake.cfg;
+    rig.tick();
+    rig.remote->refreshNow();
+    juce::String asked;
+    std::function<void()> yes;
+    a3app::CalibrationPage page (*rig.remote, [&] (const juce::String& message, std::function<void()> onYes) { asked = message; yes = std::move (onYes); });
+
+    page.proposeTrim (a3app::TrimZone::main, -6.5f);
+    EXPECT_NE (asked.indexOf ("-3.0"), -1);
+    EXPECT_NE (asked.indexOf ("-6.5"), -1);
+    rig.sync();
+    EXPECT_EQ (rig.fake.edited, 0);   // nothing is posted before the yes
+    EXPECT_EQ (rig.fake.cfg.engine.trims.main, std::optional<float> (-3.0f));
+
+    page.proposeTrim (a3app::TrimZone::main, -6.5f);
+    ASSERT_TRUE (yes);
+    yes();
+    rig.sync();
+    EXPECT_EQ (rig.fake.edited, 1);   // the engine got the confirmed trim, pending
+    EXPECT_EQ (rig.fake.cfg.engine.trims.main, std::optional<float> (-6.5f));
+    EXPECT_EQ (rig.fake.runningCfg.engine.trims.main, std::optional<float> (-3.0f));
+    EXPECT_EQ (rig.remote->config().engine.trims.main, std::optional<float> (-6.5f));
+}
+
 TEST_F (Pages, FilterKindIsLive)
 {
     FakeView view;
@@ -445,6 +458,35 @@ TEST_F (Pages, SaveWritesThenApplies)
     ASSERT_TRUE (loaded) << error;
     EXPECT_EQ (loaded->engine.channels, 6);
     EXPECT_TRUE (a3app::sameConfig (view.cfg, view.runningCfg));
+}
+
+TEST_F (Pages, SaveWritesThenAppliesRemote)
+{
+    RemoteRig rig;
+    rig.tick();
+    rig.remote->refreshNow();
+    juce::String error;
+    const auto six = a3app::withChannels (rig.remote->config(), 6, error);
+    ASSERT_TRUE (six) << error;
+    rig.remote->edit (*six);
+
+    const auto result = rig.settle ([&] { return a3app::saveEdits (*rig.remote); });
+    ASSERT_TRUE (result.wasOk()) << result.getErrorMessage();
+    EXPECT_EQ (rig.fake.applied, 1);
+    EXPECT_TRUE (rig.fake.fileExistedAtApply);   // the file first, then the rebuild
+    const auto loaded = a3app::loadAppConfig (rig.fake.file, error);
+    ASSERT_TRUE (loaded) << error;
+    EXPECT_EQ (loaded->engine.channels, 6);
+    EXPECT_TRUE (a3app::sameConfig (rig.remote->config(), rig.remote->running()));
+    EXPECT_EQ (rig.fake.runningCfg.engine.channels, 6);
+
+    rig.fake.applyResult = juce::Result::fail ("cannot open the device");
+    const auto seven = a3app::withChannels (rig.remote->config(), 7, error);
+    rig.remote->edit (*seven);
+    const auto refused = rig.settle ([&] { return a3app::saveEdits (*rig.remote); });
+    EXPECT_TRUE (refused.failed());
+    EXPECT_NE (refused.getErrorMessage().indexOf ("cannot open the device"), -1);
+    EXPECT_EQ (a3app::loadAppConfig (rig.fake.file, error)->engine.channels, 6);   // the previous file is back
 }
 
 TEST_F (Pages, SaveThatTheLoaderWouldRefuseWritesAndAppliesNothing)
