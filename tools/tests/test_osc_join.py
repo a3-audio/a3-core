@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local/lib"))
+sys.path.insert(0, str(ROOT / "tools/lib"))
 
 from a3_osc_join import canonical, fingerprint, join, read_network  # noqa: E402
 

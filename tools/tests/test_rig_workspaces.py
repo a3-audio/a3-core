@@ -3,10 +3,9 @@
 Decided 2026-09-30: 1 A3 Motion, 2 StemDeck, 3 REAPER (the engine window since 2026-10-26, renamed ENGINE), 4 QjackCtl, 5 the
 Scarlett mixer; 7 the virtual desk (A3 Desk, since 2026-10-25). The two touch UIs fill their 768x1024 screen and switch
 between each other themselves; from workspace 3 on, i3bar at the top gives
-the way back -- a3-bar-per-workspace shows it there and hides it on 1 and 2.
+the way back -- the a3-core program's i3-bar role shows it there and hides it on 1 and 2.
 """
 
-import importlib.util
 import re
 import unittest
 from pathlib import Path
@@ -14,14 +13,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core/home/aaa"
 I3_CONFIG = PACKAGE / ".local/share/a3-core/config/i3/config"
-BAR_SCRIPT = PACKAGE / ".local/bin/a3-bar-per-workspace.py"
-
-
-def load_bar_script():
-    spec = importlib.util.spec_from_file_location("a3_bar_per_workspace", BAR_SCRIPT)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def workspace_variables(config):
@@ -37,25 +28,6 @@ def workspace_of(config, criteria):
             if ref:
                 return names[ref.group(1)]
     return None
-
-
-class BarPerWorkspace(unittest.TestCase):
-    def setUp(self):
-        self.bar = load_bar_script()
-
-    def test_the_two_uis_have_the_whole_screen(self):
-        for name in ("1:MOTION", "2:STEMDECK", "1", "2"):
-            self.assertEqual(self.bar.bar_mode(name), "invisible", name)
-
-    def test_from_workspace_three_on_the_bar_shows(self):
-        for name in ("3:ENGINE", "4:QJACKCTL", "5:SCARLETT", "7:DESK", "7"):
-            self.assertEqual(self.bar.bar_mode(name), "dock", name)
-
-    def test_deck_b_has_the_whole_screen_too(self):
-        self.assertEqual(self.bar.bar_mode("6:STEMDECK B"), "invisible")
-
-    def test_a_workspace_without_a_number_keeps_the_bar_away(self):
-        self.assertEqual(self.bar.bar_mode("scratch"), "invisible")
 
 
 class WhereThingsLive(unittest.TestCase):

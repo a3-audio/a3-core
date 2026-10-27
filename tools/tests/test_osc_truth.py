@@ -24,7 +24,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core"
 TRUTH = PACKAGE / "usr/share/a3/a3-osc.json"
-sys.path.insert(0, str(PACKAGE / "home/aaa/.local/lib"))
+sys.path.insert(0, str(ROOT / "tools/lib"))
 
 import a3_osc   # noqa: E402
 
@@ -317,6 +317,13 @@ class TheVuRange(unittest.TestCase):
     def test_the_range_covers_every_meter(self):
         t = truth()
         self.assertEqual(t.index_range("vu", "n"), (1, len(t.vu_meters())))
+
+    def test_the_meaning_names_no_reaper_outputs(self):
+        """The engine measures the meters since the cut; the REAPER outputs
+        the patchbay once fed the analyzer are history, not a contract."""
+        meaning = truth().data()["addresses"]["vu"]["meaning"]
+        self.assertNotIn("REAPER out", meaning)
+        self.assertNotIn("until the cut", meaning)
 
 
 class TheCueWords(unittest.TestCase):

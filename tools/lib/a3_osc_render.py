@@ -23,7 +23,8 @@ HEADER = "# rendered from a3-osc.json by a3-osc-render -- edit the truth, not th
 #: PipeWire's AES67 instance (a3-aes67.service): its config, rendered from the
 #: package's template with the audio socket and this machine's name.
 AES67_CONF = Path(".config/pipewire/pipewire-aes67.conf")
-AES67_TEMPLATE = (Path(__file__).resolve().parent.parent
+AES67_TEMPLATE = (Path(__file__).resolve().parents[2]
+                  / "platform-config/debian-x86_64/a3-core/home/aaa/.local"
                   / "share/a3-core/pipewire/pipewire-aes67.conf.in")
 
 

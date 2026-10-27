@@ -26,7 +26,7 @@ import unittest
 from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parents[2] / "platform-config/debian-x86_64/a3-core"
-LIB = PACKAGE / "home/aaa/.local/lib"
+LIB = Path(__file__).resolve().parents[1] / "lib"
 UNITS = PACKAGE / "home/aaa/.local/share/a3-core/config/systemd/user"
 UNIT = UNITS / "a3-aes67.service"
 POSTINST = PACKAGE / "DEBIAN/postinst"

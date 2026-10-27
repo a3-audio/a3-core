@@ -41,8 +41,9 @@ def section(path, name):
 
 
 def control_field(name):
+    """The package names in a control field, without their versions."""
     match = re.search(rf"^{name}: (.*)$", CONTROL.read_text(), re.MULTILINE)
-    return [part.strip() for part in match.group(1).split(",")] if match else []
+    return [part.split("(")[0].strip() for part in match.group(1).split(",")] if match else []
 
 
 def postinst_function(name):
