@@ -6,6 +6,7 @@
 #include <functional>
 #include <juce_core/juce_core.h>
 #include <optional>
+#include <vector>
 
 namespace a3app
 {
@@ -37,6 +38,12 @@ std::optional<AppConfig> parseAppConfig (const juce::var&, const juce::File& bas
 // Atomic replace. Called only from the window's Save, never by a load.
 juce::Result saveAppConfig (const AppConfig&, const juce::File&);
 inline const juce::File packageConfigFile { "/usr/share/a3-engine/engine.json" };
+
+// The spatial directories the ZONES page may offer, in order: the user's (<configDir>/engine/spatial), the
+// package's default (AppConfig's), and the package's REAPER booth variant beside it. Existing or not.
+std::vector<juce::File> spatialCandidates (const juce::File& configDir);
+// Those of them that are directories.
+std::vector<juce::File> spatialChoices (const juce::File& configDir);
 
 // ~/.config/a3/engine/engine.json under `home`.
 juce::File userConfigFile (const juce::File& home);

@@ -33,7 +33,7 @@ void writeMonitorSwitch (const juce::File& settings, bool shown)
     settings.getParentDirectory().createDirectory();
     auto* made = new juce::DynamicObject();
     made->setProperty ("monitor", shown);
-    settings.replaceWithText (juce::JSON::toString (juce::var (made)) + "\n");
+    settings.replaceWithText (juce::JSON::toString (juce::var (made)) + "\n", false, false, "\n");
 }
 
 // The page list on the left (one radio group of keys, the monitor switch at its bottom), the shown page
@@ -178,7 +178,7 @@ private:
         const bool on = monitor.core != nullptr && monitorSwitch.getToggleState();
         written = on;
         if (monitor.core != nullptr)
-            monitor.core->setTrafficWanted (on);
+            monitor.core->setMonitorShown (on);
         for (auto& page : pages)
             if (page.monitor)
                 page.key->setVisible (on);

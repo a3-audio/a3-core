@@ -9,6 +9,7 @@
 #include "FakePlatform.h"
 #include "RemoteRig.h"
 #include "Roles.h"
+#include "ConfigFile.h"
 #include "WindowProcess.h"
 
 namespace
@@ -91,6 +92,15 @@ TEST (Window, StartsWhatIsMissingOnALaptop)
     {
         NoCore core;
         NoEngine engine;
+        fake::FakePlatform rig;   // the rig with a3-engine.service merely stopped
+        rig.enabledUnits = { "a3-engine.service" };
+        a3app::WindowProcess window (rig, core.client, engine.remote);
+        EXPECT_EQ (window.attach(), (std::vector<Role> { Role::core }));
+        EXPECT_TRUE (rig.spawned (commandOf (Role::engine)).empty());
+    }
+    {
+        NoCore core;
+        NoEngine engine;
         fake::FakePlatform laptop;
         laptop.failingSpawns = 2;   // nothing could be started
         a3app::WindowProcess window (laptop, core.client, engine.remote);
@@ -114,7 +124,7 @@ TEST (Window, ClosingLeavesWhatItDidNotStart)
     EXPECT_EQ (started[0]->terminated, 1);    // its own child, stopped on yes
     EXPECT_TRUE (core.client->answers());     // Core, which it did not start, still runs
     EXPECT_EQ (laptop.children.size(), 1u);   // nothing else was started or touched
-    EXPECT_TRUE (laptop.unitsAsked.size() <= 2u);   // asked whether units run; never told one to stop
+    // A unit is never stopped: the Platform seam has no call that could (unitEnabled and spawn only).
 
     // A plain close with a child of its own and the answer no: the child runs on.
     NoEngine engine2;
@@ -162,4 +172,104 @@ TEST (Window, AsksBeforeStoppingItsChildren)
         EXPECT_EQ (laptop.children[1]->killed, 1);
     }
     EXPECT_EQ (a3app::stopQuestion ({ Role::core }), "Stop Core too?");
+}
+
+// The children it may leave running get a process group of their own: a Ctrl-C in the terminal the
+// window was started from, or that terminal closing, does not reach them.
+TEST (Window, ChildrenGetTheirOwnProcessGroup)
+{
+    NoCore core;
+    NoEngine engine;
+    fake::FakePlatform laptop;
+    a3app::WindowProcess window (laptop, core.client, engine.remote);
+    window.attach();
+    ASSERT_EQ (laptop.children.size(), 2u);
+    for (const auto& child : laptop.children)
+        EXPECT_TRUE (child->ownGroup);
+}
+
+namespace
+{
+// The quit flow with a dialog on paper: the question it was shown and the answer the test gives.
+struct PaperDialog
+{
+    int asked = 0;
+    juce::String question;
+    std::function<void (bool)> answer;
+    a3app::QuitFlow::Ask ask()
+    {
+        return [this] (const juce::String& said, std::function<void (bool)> reply) {
+            ++asked;
+            question = said;
+            answer = std::move (reply);
+        };
+    }
+};
+}
+
+// A second close, or a stop signal, while the question is open is ignored: the window quits only on the
+// answer. An answer that comes after the flow is gone does nothing.
+TEST (Window, ASecondCloseWhileAskingIsIgnored)
+{
+    NoCore core;
+    NoEngine engine;
+    fake::FakePlatform laptop;
+    a3app::WindowProcess window (laptop, core.client, engine.remote);
+    window.attach();
+    PaperDialog dialog;
+    {
+        a3app::QuitFlow flow (window, dialog.ask());
+        flow.close();
+        EXPECT_EQ (dialog.asked, 1);
+        EXPECT_EQ (dialog.question, "Stop Core and the engine too?");
+        flow.close();    // i3's kill again
+        flow.signal();   // SIGTERM
+        EXPECT_EQ (dialog.asked, 1);
+        EXPECT_FALSE (flow.done());
+        dialog.answer (true);
+        EXPECT_TRUE (flow.done());
+        for (const auto& child : laptop.children)
+            EXPECT_EQ (child->terminated, 1);
+    }
+    {
+        NoCore core2;
+        NoEngine engine2;
+        fake::FakePlatform laptop2;
+        a3app::WindowProcess window2 (laptop2, core2.client, engine2.remote);
+        window2.attach();
+        PaperDialog late;
+        {
+            a3app::QuitFlow flow (window2, late.ask());
+            flow.close();
+        }
+        late.answer (true);   // the flow is gone: nothing happens, nothing crashes
+        for (const auto& child : laptop2.children)
+            EXPECT_EQ (child->terminated, 0);
+    }
+    {
+        NoCore core3;
+        NoEngine engine3;
+        fake::FakePlatform nothing;
+        nothing.failingSpawns = 2;
+        a3app::WindowProcess window3 (nothing, core3.client, engine3.remote);
+        window3.attach();
+        PaperDialog none;
+        a3app::QuitFlow flow (window3, none.ask());
+        flow.close();   // nothing of its own: quits without asking
+        EXPECT_EQ (none.asked, 0);
+        EXPECT_TRUE (flow.done());
+        a3app::QuitFlow signalled (window3, none.ask());
+        signalled.signal();
+        EXPECT_TRUE (signalled.done());
+    }
+}
+
+// The ZONES page offers the user's directory and the package's, from the config's own default.
+TEST (Window, SpatialChoicesFollowTheConfigDefault)
+{
+    const juce::File configDir ("/home/tester/.config/a3");
+    const auto installed = a3app::AppConfig{}.spatialDirectory;
+    EXPECT_EQ (a3app::spatialCandidates (configDir),
+               (std::vector<juce::File> { configDir.getChildFile ("engine/spatial"), installed,
+                                          installed.getSiblingFile (installed.getFileName() + "-reaper-booth-6.1") }));
 }

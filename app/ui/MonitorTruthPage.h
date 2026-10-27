@@ -16,6 +16,7 @@ public:
     ~MonitorTruthPage() override;
 
     void refresh();
+    int copies() const { return copied; }   // how often it copied from the client (the tests')
     juce::StringArray lines() const;   // what the page says, one line per row, for the tests
 
     void resized() override;
@@ -23,6 +24,8 @@ public:
 
 private:
     CoreClient& client;
+    std::uint64_t seen = 0;   // the client's generation last copied
+    int copied = 0;
     CoreSummary summary;
     juce::Label fingerprint, engine, connection;
     MonitorTable table;

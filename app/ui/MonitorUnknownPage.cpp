@@ -4,11 +4,6 @@
 
 namespace a3app
 {
-namespace
-{
-juce::String utf8 (const std::string& text) { return juce::String::fromUTF8 (text.c_str()); }
-}
-
 MonitorUnknownPage::MonitorUnknownPage (CoreClient& c)
     : client (c),
       table ({ { "ADDRESS", 3.0f }, { "PEER", 1.2f }, { "COUNT", 0.9f, true }, { "LAST VALUE", 2.0f }, { "AGE", 0.8f, true } })
@@ -26,16 +21,23 @@ void MonitorUnknownPage::fetch() { client.requestUnknown(); }
 
 void MonitorUnknownPage::refresh()
 {
-    auto latest = client.unknown();
-    if (! latest.fetched)
+    // Copies only on news: a fetch (the rows), or Core's answer (the note before a fetch).
+    const auto rowsNow = client.unknownGeneration(), summaryNow = client.summaryGeneration();
+    if (copied > 0 && rowsNow == seen && summaryNow == seenSummary)
+        return;
+    seenSummary = summaryNow;
+    if (copied == 0 || rowsNow != seen)
+    {
+        report = client.unknown();
+        seen = rowsNow;
+        ++copied;
+    }
+    if (! report.fetched)
     {
         look::say (note, client.summary().answered ? "not fetched yet: FETCH asks Core once (it can be many rows)"
                                                    : "no Core at " + client.url());
         return;
     }
-    if (latest.fetched && report.fetched && latest.fetchedAt == report.fetchedAt)
-        return;
-    report = std::move (latest);
     // The ages are as of the fetch; the note says how old the fetch is.
     look::say (note, juce::String ((int) report.rows.size()) + " addresses Core could not route, fetched at "
                          + report.fetchedAt.toString (false, true, true, true)

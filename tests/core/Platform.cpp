@@ -163,6 +163,22 @@ TEST (Platform, ASpawnedChildIsReadAndReaped)
     EXPECT_EQ (WEXITSTATUS (*status), 3);
 }
 
+// A child asked to have its own process group leads it; a plain one stays in ours.
+TEST (Platform, AChildCanHaveItsOwnProcessGroup)
+{
+    auto own = makePlatform()->spawn ({ "sleep", "30" }, false, ProcessGroup::own);
+    ASSERT_NE (own, nullptr);
+    EXPECT_EQ (::getpgid (own->pid()), own->pid());
+    own->terminate();
+    EXPECT_TRUE (own->wait (5.0).has_value());
+
+    auto plain = makePlatform()->spawn ({ "sleep", "30" }, false);
+    ASSERT_NE (plain, nullptr);
+    EXPECT_EQ (::getpgid (plain->pid()), ::getpgrp());
+    plain->terminate();
+    EXPECT_TRUE (plain->wait (5.0).has_value());
+}
+
 TEST (Platform, AChildWithoutAPipeHasNoStdoutToRead)
 {
     auto child = makePlatform()->spawn ({ "true" }, false);

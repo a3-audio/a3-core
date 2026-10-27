@@ -3,11 +3,15 @@
 #pragma once
 #include <functional>
 #include <optional>
+#include <string>
 #include <vector>
 #include "Look.h"
 
 namespace a3app
 {
+// Core's text (UTF-8 bytes in a std::string) as JUCE text.
+inline juce::String utf8 (const std::string& text) { return juce::String::fromUTF8 (text.c_str()); }
+
 // How the monitor says an age and a rate: "0.4 s", "12 s", "3 min"; "-" before there is a rate.
 juce::String ageText (double seconds);
 juce::String rateText (const std::optional<double>& perSecond);

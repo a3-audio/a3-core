@@ -16,6 +16,7 @@ public:
     ~MonitorRegisterPage() override;
 
     void refresh();
+    int copies() const { return copied; }   // how often it copied from the client (the tests')
     void fetch();
     void setDevice (const std::string& device);   // empty: every device
     void setOnlyDead (bool);
@@ -29,6 +30,9 @@ private:
     void rebuild();
 
     CoreClient& client;
+    std::uint64_t seen = 0;   // the client's generation last copied
+    std::uint64_t seenSummary = 0;
+    int copied = 0;
     RegisterReport report;
     std::vector<RegisterEntry> shown;
     juce::TextButton fetchButton { "FETCH" };

@@ -167,7 +167,7 @@ void CoreClient::run()
         {
             const std::lock_guard<std::mutex> round (roundLock);
             fetchRequested();
-            if (clock::now() >= nextSummary)
+            if (shown && clock::now() >= nextSummary)
             {
                 pollSummary();
                 nextSummary = clock::now() + std::chrono::milliseconds (summaryPeriodMillis);
@@ -185,7 +185,8 @@ void CoreClient::run()
 void CoreClient::refreshNow (int trafficWaitMillis)
 {
     const std::lock_guard<std::mutex> round (roundLock);
-    pollSummary();
+    if (shown)
+        pollSummary();
     fetchRequested();
     readTraffic (trafficWaitMillis);
 }
@@ -196,6 +197,8 @@ void CoreClient::pollSummary()
     if (! status || status->status != 200)
     {
         const std::lock_guard<std::mutex> guard (cacheLock);
+        if (summaryCache.answered)
+            ++summaryMoves;   // Core is gone: that is news
         summaryCache = {};
         return;
     }
@@ -216,6 +219,7 @@ void CoreClient::pollSummary()
         made.rig = parsedJson (rig->body);
     const std::lock_guard<std::mutex> guard (cacheLock);
     summaryCache = std::move (made);
+    ++summaryMoves;
 }
 
 void CoreClient::fetchRequested()
@@ -229,6 +233,7 @@ void CoreClient::fetchRequested()
             UnknownReport made { true, juce::Time::getCurrentTime(), rowsFromJson (body["rows"]), whole (body["evicted"]) };
             const std::lock_guard<std::mutex> guard (cacheLock);
             unknownCache = std::move (made);
+            ++unknownMoves;
         }
     }
     if (registerAsked.exchange (false))
@@ -239,6 +244,7 @@ void CoreClient::fetchRequested()
             auto made = registerFromJson (parsedJson (reply->body));
             const std::lock_guard<std::mutex> guard (cacheLock);
             registerCache = std::move (made);
+            ++registerMoves;
         }
     }
 }
@@ -248,9 +254,11 @@ void CoreClient::readTraffic (int waitMillis)
     const auto closeStream = [this] {
         stream.reset();
         const std::lock_guard<std::mutex> guard (cacheLock);
+        if (trafficCache.answered)
+            ++trafficMoves;   // the stream is lost: that is news
         trafficCache.answered = false;
     };
-    if (! wantTraffic)
+    if (! shown)
     {
         if (stream != nullptr)
             closeStream();
@@ -329,11 +337,31 @@ void CoreClient::applyEvent (const std::string& data)
         history.pop_front();
     report->history = std::move (history);
     trafficCache = std::move (*report);
+    ++trafficMoves;
 }
 
-void CoreClient::setTrafficWanted (bool wanted)
+TrafficGlance CoreClient::glance (const std::string& direction, const std::string& address, size_t limit) const
 {
-    wantTraffic = wanted;
+    const std::lock_guard<std::mutex> guard (cacheLock);
+    TrafficGlance made;
+    made.generation = trafficMoves;
+    made.answered = trafficCache.answered;
+    made.at = trafficCache.at;
+    made.rows = trafficCache.rows;
+    made.unknownAddresses = trafficCache.unknownAddresses;
+    made.unknownMessages = trafficCache.unknownMessages;
+    made.evictedRows = trafficCache.evictedRows;
+    if (address.empty())
+        for (auto entry = trafficCache.history.rbegin(); entry != trafficCache.history.rend() && made.history.size() < limit; ++entry)
+            made.history.push_back (*entry);
+    else
+        made.history = historyOf (trafficCache.history, direction, address, limit);
+    return made;
+}
+
+void CoreClient::setMonitorShown (bool wanted)
+{
+    shown = wanted;
     wake.notify_all();
 }
 

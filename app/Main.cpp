@@ -109,20 +109,26 @@ public:
         for (const auto role : process.attach())
             std::printf ("a3-core: started --role %s, it was not running\n", a3app::roleWord (role).c_str());
         std::fflush (stdout);
+        juce::LookAndFeel::setDefaultLookAndFeel (&look);   // the quit question's look
         engine->refreshNow();   // the first paint shows the engine as it is, not "no engine"
-        core->refreshNow (0);
-        window = std::make_unique<a3app::MainWindow> (*engine, pageDevices, spatialChoices (platform), false, [this] { askThenQuit(); },
+        window = std::make_unique<a3app::MainWindow> (*engine, pageDevices, a3app::spatialChoices (platform.configDir()), false,
+                                                      [this] { quitFlow.close(); },
                                                       a3app::MonitorSetup { core.get(), a3app::windowSettingsFile (platform.configDir()) });
+        core->refreshNow (0);   // the window has said whether the monitor shows: only then does this ask Core
         window->open();
     }
 
-    ~WindowRunner() override { window.reset(); }   // before the views its pages read
+    ~WindowRunner() override
+    {
+        window.reset();   // before the views its pages read
+        juce::LookAndFeel::setDefaultLookAndFeel (nullptr);
+    }
 
     std::optional<int> tick (bool stopRequested) override
     {
-        if (stopRequested && ! done)
-            done = true;   // a signal asks nobody: what it started runs on
-        return done ? std::optional<int> (0) : std::nullopt;
+        if (stopRequested)
+            quitFlow.signal();   // ignored while the question is open
+        return quitFlow.done() ? std::optional<int> (0) : std::nullopt;
     }
 
 private:
@@ -132,45 +138,32 @@ private:
         return std::make_unique<a3app::RemoteHostView> (control.host, control.port);
     }
 
-    // The directories the ZONES page offers: the user's own and the installed variants, where they exist.
-    static std::vector<juce::File> spatialChoices (const a3core::Platform& platform)
+    // The question as a card inside the window (a child of its content, so a tiling desktop does not
+    // make it a window of its own), in the window's look (the default look while the window lives: an
+    // associated component would place the card by its screen position, outside the parent). Two keys: the first answers 1, the second (and
+    // Escape) 0 -- leaving them running is the default. The callback holds no `this`: the answer is
+    // QuitFlow's, which does nothing once the flow is gone.
+    a3app::QuitFlow::Ask askOnTheWindow()
     {
-        std::vector<juce::File> choices;
-        for (const auto& directory : { platform.home().getChildFile (".config/a3/engine/spatial"), juce::File ("/usr/share/a3-engine/spatial"),
-                                       juce::File ("/usr/share/a3-engine/spatial-reaper-booth-6.1") })
-            if (directory.isDirectory())
-                choices.push_back (directory);
-        return choices;
+        return [this] (const juce::String& question, std::function<void (bool)> answer) {
+            juce::AlertWindow::showAsync (juce::MessageBoxOptions()
+                                              .withIconType (juce::MessageBoxIconType::NoIcon)
+                                              .withTitle ("a3-core")
+                                              .withMessage (question)
+                                              .withButton ("Stop")
+                                              .withButton ("Leave running")
+                                              .withParentComponent (window->getContentComponent()),
+                                          [answer = std::move (answer)] (int chosen) { answer (chosen == 1); });
+        };
     }
 
-    void askThenQuit()
-    {
-        const auto question = process.quitQuestion();
-        if (! question)
-        {
-            done = true;
-            return;
-        }
-        // Two keys: the first answers 1, the second (and Escape) 0 -- leaving them running is the default.
-        juce::AlertWindow::showAsync (juce::MessageBoxOptions()
-                                          .withIconType (juce::MessageBoxIconType::QuestionIcon)
-                                          .withTitle ("a3-core")
-                                          .withMessage (*question)
-                                          .withButton ("Stop")
-                                          .withButton ("Leave running")
-                                          .withAssociatedComponent (window.get()),   // the window's look
-                                      [this] (int answer) {
-                                          process.quit (answer == 1);
-                                          done = true;
-                                      });
-    }
-
+    a3app::Look look;
     std::unique_ptr<a3app::CoreClient> core;
     std::unique_ptr<a3app::RemoteHostView> engine;
     a3app::WindowProcess process;
+    a3app::QuitFlow quitFlow { process, askOnTheWindow() };
     juce::AudioDeviceManager pageDevices;   // only a catalogue of device types for the AUDIO page; never initialised
     std::unique_ptr<a3app::MainWindow> window;
-    bool done = false;
 };
 
 Started startWindow (const a3core::Platform& platform)

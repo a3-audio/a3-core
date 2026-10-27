@@ -11,7 +11,6 @@ namespace
 constexpr size_t historyShownMax = 120;   // the Python page's tail: the ring itself is up to 10 000
 constexpr int everyDevice = 1;
 
-juce::String utf8 (const std::string& text) { return juce::String::fromUTF8 (text.c_str()); }
 }
 
 MonitorTrafficPage::MonitorTrafficPage (CoreClient& c)
@@ -38,6 +37,7 @@ MonitorTrafficPage::MonitorTrafficPage (CoreClient& c)
         }
         else
             pickedDirection = pickedAddress = {};
+        copyFromClient();   // that row's history
         showHistory();
     };
     for (auto* child : std::initializer_list<juce::Component*> { &search, &onlyActive, &device, &status, &historyTitle, &table, &historyTable })
@@ -49,14 +49,17 @@ MonitorTrafficPage::~MonitorTrafficPage() = default;
 
 void MonitorTrafficPage::refresh()
 {
-    auto latest = client.traffic();
-    const bool changed = latest.answered != report.answered || latest.at != report.at || latest.rows.size() != report.rows.size()
-                         || latest.history.size() != report.history.size();
-    report = std::move (latest);
-    if (! report.answered)
-        look::say (status, client.summary().answered ? "waiting for Core's traffic" : "no Core at " + client.url());
-    if (changed)
-        rebuild();
+    if (copied > 0 && client.trafficGeneration() == seen)
+        return;   // nothing new: the 20 Hz tick costs a comparison
+    copyFromClient();
+    rebuild();
+}
+
+void MonitorTrafficPage::copyFromClient()
+{
+    report = client.glance (pickedDirection, pickedAddress, historyShownMax);
+    seen = report.generation;
+    ++copied;
 }
 
 TrafficFilter MonitorTrafficPage::filter() const { return current; }
@@ -129,7 +132,9 @@ void MonitorTrafficPage::rebuild()
     table.select (picked);
     rebuilding = false;
 
-    if (report.answered)
+    if (! report.answered)
+        look::say (status, client.summary().answered ? "waiting for Core's traffic" : "no Core at " + client.url());
+    else
         look::say (status, juce::String ((int) shown.size()) + " of " + juce::String ((int) report.rows.size()) + " addresses; "
                                + juce::String (report.unknownAddresses) + " not understood");
     showHistory();
@@ -147,25 +152,17 @@ void MonitorTrafficPage::selectRow (int row)
     rebuilding = true;
     table.select (row);
     rebuilding = false;
+    copyFromClient();   // that row's history
     showHistory();
 }
 
-std::vector<HistoryEntry> MonitorTrafficPage::historyShown() const { return history; }
+std::vector<HistoryEntry> MonitorTrafficPage::historyShown() const { return report.history; }
 
 void MonitorTrafficPage::showHistory()
 {
-    if (pickedAddress.empty())
-    {
-        history.assign (report.history.rbegin(), report.history.rbegin() + (long) std::min (historyShownMax, report.history.size()));
-        look::say (historyTitle, "HISTORY");
-    }
-    else
-    {
-        history = historyOf (report.history, pickedDirection, pickedAddress, historyShownMax);
-        look::say (historyTitle, "HISTORY - " + utf8 (pickedDirection + " " + pickedAddress));
-    }
-    historyTable.show ((int) history.size(), [this] (int row, int column) -> juce::String {
-        const auto& e = history[(size_t) row];
+    look::say (historyTitle, pickedAddress.empty() ? juce::String ("HISTORY") : "HISTORY - " + utf8 (pickedDirection + " " + pickedAddress));
+    historyTable.show ((int) report.history.size(), [this] (int row, int column) -> juce::String {
+        const auto& e = report.history[(size_t) row];
         switch (column)
         {
             case 0: return ageText (report.at - e.at);

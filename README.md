@@ -210,10 +210,12 @@ API, P2). The package still installs Plan 4's names until Task 28 changes it.
 - **the window** (`a3-core` without a role, Task 26): reaches Core over its HTTP API on the truth's
   `core.web` and the engine over its control API on `engine.control`, both on loopback. It asks both
   once at start; a role that does not answer and whose user unit is not enabled (a laptop) is started
-  as the window's own child (`a3-core --role core|engine`), and on the rig, where the units run them,
-  nothing is started. Closing asks once, "Stop Core and the engine too?" (naming only the ones it
-  started); Stop ends only those, Leave running (or Escape) leaves them. It never stops a role it did
-  not start and never touches a unit; SIGTERM ends the window and asks nobody. The page list on the
+  as the window's own child (`a3-core --role core|engine`, in a process group of its own, so a Ctrl-C
+  in the terminal or the terminal closing does not end it), and on the rig, where the units run them,
+  nothing is started. Closing asks once, inside the window, "Stop Core and the engine too?" (naming
+  only the ones it started); Stop ends only those, Leave running (or Escape) leaves them; a second
+  close or a SIGTERM while the question is open is ignored. It never stops a role it did not start
+  and never touches a unit; SIGTERM without a question open ends the window and asks nobody. The page list on the
   left carries the engine's pages (AUDIO … STATUS, over the remote view) and, below them, the OSC
   monitor that replaces the Python Core's HTML page: TRAFFIC (direction, address, peer, count, rate,
   last value, age; filter by address, only active = younger than 6 s, one device; the picked row's
@@ -221,9 +223,11 @@ API, P2). The package still installs Plan 4's names until Task 28 changes it.
   engine), NOT UNDERSTOOD and REGISTER (fetched with FETCH, never streamed), BENCH (to self, mixer
   or motion; the truth's `state.recall`; Core's answer or refusal). The **OSC MONITOR** switch at the
   bottom of the list shows them; it is remembered in `~/.config/a3/core/window.settings`
-  (`{"monitor": true}`), written only when it is flipped, off when the file is missing. The traffic
-  is read from Core's `/api/stream` (only while the monitor is on): `/api/traffic` would carry the
-  whole history ring every time.
+  (`{"monitor": true}`), written only when it is flipped, off when the file is missing. Only while
+  the monitor is on does the window ask Core anything: the traffic from Core's `/api/stream`
+  (`/api/traffic` would carry the whole history ring every time) and devices/status/rig once a
+  second. The pages copy from the client only when it has news, and TRAFFIC only the rows and the
+  history it shows (120 entries), never the ring.
 - Everything that asks the operating system (environment, home, host name, unit state, child
   processes) goes through `a3core::Platform` (`src/a3-core/Platform.h`, Linux only).
 - The journal: one whole line per write, flushed at once, from any thread.

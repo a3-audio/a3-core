@@ -10,7 +10,6 @@ namespace
 {
 constexpr int everyDevice = 1;
 
-juce::String utf8 (const std::string& text) { return juce::String::fromUTF8 (text.c_str()); }
 }
 
 MonitorRegisterPage::MonitorRegisterPage (CoreClient& c)
@@ -34,16 +33,26 @@ void MonitorRegisterPage::fetch() { client.requestRegister(); }
 
 void MonitorRegisterPage::refresh()
 {
-    auto latest = client.registerReport();
-    if (! latest.fetched)
+    // Copies only on news: a fetch (the entries), or Core's answer (the note before a fetch).
+    const auto entriesNow = client.registerGeneration(), summaryNow = client.summaryGeneration();
+    if (copied > 0 && entriesNow == seen && summaryNow == seenSummary)
+        return;
+    seenSummary = summaryNow;
+    const bool news = copied == 0 || entriesNow != seen;
+    if (news)
+    {
+        report = client.registerReport();
+        seen = entriesNow;
+        ++copied;
+    }
+    if (! report.fetched)
     {
         look::say (note, client.summary().answered ? "not fetched yet: FETCH holds the register against what Core has seen"
                                                    : "no Core at " + client.url());
         return;
     }
-    if (report.fetched && latest.fetchedAt == report.fetchedAt)
+    if (! news)
         return;
-    report = std::move (latest);
     const auto chosen = device.getText();
     std::set<std::string> names;
     for (const auto& entry : report.entries)

@@ -17,6 +17,7 @@ public:
     ~MonitorTrafficPage() override;
 
     void refresh();
+    int copies() const { return copied; }   // how often it copied from the client (the tests')
     void setFilter (const TrafficFilter&);
     TrafficFilter filter() const;
     const std::vector<TrafficRow>& rowsShown() const { return shown; }
@@ -30,10 +31,13 @@ public:
 private:
     void filterChanged();
     void showHistory();
+    void copyFromClient();
     void rebuild();
 
     CoreClient& client;
-    TrafficReport report;
+    std::uint64_t seen = 0;   // the client's generation last copied
+    int copied = 0;
+    TrafficGlance report;
     TrafficFilter current;
     std::vector<std::string> peers;
     bool rebuilding = false;
@@ -44,6 +48,5 @@ private:
     juce::ComboBox device;
     juce::Label status, historyTitle;
     MonitorTable table, historyTable;
-    std::vector<HistoryEntry> history;
 };
 }

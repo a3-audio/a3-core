@@ -4,16 +4,21 @@
 // thread keeps a cache; every getter reads that cache and never the network, so a page that paints on the
 // message thread cannot wait for Core (as RemoteHostView does for the engine).
 //
-//   traffic   Core's /api/stream at its own 4 Hz, while the monitor is on (setTrafficWanted). The stream
+//   traffic   Core's /api/stream at its own 4 Hz, while the monitor is shown (setMonitorShown). The stream
 //             and not GET /api/traffic: the traffic snapshot carries the whole history ring (up to 10 000
 //             entries) every time, the stream only what is new -- the flood the Python page was built to avoid.
-//   summary   /api/devices, /api/status and /api/rig once a second.
+//   summary   /api/devices, /api/status and /api/rig once a second, while the monitor is shown.
 //   unknown, register   only when asked for (requestUnknown, requestRegister): they can be tens of thousands
 //             of rows, and Core's page never streamed them either.
 //   send, recall        the bench: POST /api/send, on the caller's thread, with Core's answer or refusal.
+//
+// Each cache has a generation that moves only when something new arrived, so a page that refreshes at
+// 20 Hz copies only when there is news -- and then, for the traffic, only a glance (the rows and at most
+// a page's worth of history), never the whole ring.
 #pragma once
 
 #include <atomic>
+#include <cstdint>
 #include <condition_variable>
 #include <deque>
 #include <memory>
@@ -97,6 +102,17 @@ struct RegisterReport
     int seen = 0, unseen = 0;
 };
 
+// What the TRAFFIC page reads: the report without the ring, and only the history it shows.
+struct TrafficGlance
+{
+    std::uint64_t generation = 0;
+    bool answered = false;
+    double at = 0;
+    std::vector<TrafficRow> rows;
+    std::vector<HistoryEntry> history;   // newest first, at most the limit asked for
+    long long unknownAddresses = 0, unknownMessages = 0, evictedRows = 0;
+};
+
 // What the TRAFFIC page narrows the rows to: a piece of the address, only rows younger than
 // staleAfterSeconds, one peer. An empty field narrows nothing.
 struct TrafficFilter
@@ -139,13 +155,23 @@ public:
     bool answers() const;
     juce::String url() const;
 
-    // Off: the stream is closed and the traffic not read (the monitor is hidden).
-    void setTrafficWanted (bool);
-    bool trafficWanted() const { return wantTraffic; }
+    // The monitor's pages are shown: only then is the traffic stream open and the summary polled. Off
+    // until the window says otherwise: a hidden monitor asks Core nothing.
+    void setMonitorShown (bool);
+    bool monitorShown() const { return shown; }
     void requestUnknown();
     void requestRegister();
 
-    TrafficReport traffic() const;
+    // Move only when something new arrived (an event, a poll's answer, a fetch, a lost Core).
+    std::uint64_t trafficGeneration() const { return trafficMoves; }
+    std::uint64_t summaryGeneration() const { return summaryMoves; }
+    std::uint64_t unknownGeneration() const { return unknownMoves; }
+    std::uint64_t registerGeneration() const { return registerMoves; }
+
+    // The rows and the history of one direction and address (empty address: every address), newest first,
+    // at most `limit` entries. What a page copies.
+    TrafficGlance glance (const std::string& direction, const std::string& address, size_t limit) const;
+    TrafficReport traffic() const;   // the whole cache, the ring included: the tests', not a page's
     CoreSummary summary() const;
     UnknownReport unknown() const;
     RegisterReport registerReport() const;
@@ -168,7 +194,8 @@ private:
     const std::string host;
     const int port;
     const std::string recallPattern;
-    std::atomic<bool> wantTraffic { true }, unknownAsked { false }, registerAsked { false };
+    std::atomic<bool> shown { false }, unknownAsked { false }, registerAsked { false };
+    std::atomic<std::uint64_t> trafficMoves { 0 }, summaryMoves { 0 }, unknownMoves { 0 }, registerMoves { 0 };
     std::mutex roundLock;   // one round at a time: the thread's or refreshNow's
     std::unique_ptr<Stream> stream;
     mutable std::mutex cacheLock;

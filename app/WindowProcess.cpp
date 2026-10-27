@@ -30,7 +30,9 @@ std::vector<Role> WindowProcess::attach()
     std::vector<Role> startedNow;
     for (const auto role : startableRoles (platform, missing))
     {
-        auto child = platform.spawn (roleCommand (platform.self().getFullPathName(), role), false);
+        // Its own process group: a child the window may leave running must not die with the terminal
+        // the window was started from (Ctrl-C, or the terminal closing).
+        auto child = platform.spawn (roleCommand (platform.self().getFullPathName(), role), false, a3core::ProcessGroup::own);
         if (child == nullptr)
             continue;
         started.push_back ({ role, std::move (child) });
@@ -79,4 +81,44 @@ juce::String stopQuestion (const std::vector<Role>& children)
         return "Stop Core and the engine too?";
     return core ? "Stop Core too?" : "Stop the engine too?";
 }
+
+// Shared with the answer's callback: once the flow is gone, `process` is null and the answer does nothing.
+struct QuitFlow::State
+{
+    WindowProcess* process;
+    bool asking = false, finished = false;
+};
+
+QuitFlow::QuitFlow (WindowProcess& process, Ask askToUse) : state (std::make_shared<State> (State { &process })), ask (std::move (askToUse)) {}
+
+QuitFlow::~QuitFlow() { state->process = nullptr; }
+
+void QuitFlow::close()
+{
+    if (state->asking || state->finished)
+        return;   // the question is open: only its answer ends the window
+    const auto question = state->process->quitQuestion();
+    if (! question)
+    {
+        state->finished = true;
+        return;
+    }
+    state->asking = true;
+    ask (*question, [weak = std::weak_ptr<State> (state)] (bool stop) {
+        const auto alive = weak.lock();
+        if (alive == nullptr || alive->process == nullptr)
+            return;
+        alive->process->quit (stop);
+        alive->asking = false;
+        alive->finished = true;
+    });
+}
+
+void QuitFlow::signal()
+{
+    if (! state->asking)
+        state->finished = true;   // a signal asks nobody; what the window started runs on
+}
+
+bool QuitFlow::done() const { return state->finished; }
 }

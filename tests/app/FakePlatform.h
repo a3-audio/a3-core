@@ -22,6 +22,7 @@ struct ChildState
     int pid = 0;
     std::optional<int> status;   // set: the child has ended
     int terminated = 0, killed = 0;
+    bool ownGroup = false;   // spawned with ProcessGroup::own
     bool endsOnTerminate = true;
 };
 
@@ -81,7 +82,7 @@ public:
         return enabledUnits.count (unit) > 0;
     }
     juce::File self() const override { return juce::File ("/usr/bin/a3-core"); }
-    std::unique_ptr<a3core::Child> spawn (const std::vector<std::string>& argv, bool) const override
+    std::unique_ptr<a3core::Child> spawn (const std::vector<std::string>& argv, bool, a3core::ProcessGroup group = a3core::ProcessGroup::inherit) const override
     {
         if (failingSpawns > 0)
         {
@@ -90,6 +91,7 @@ public:
         }
         auto state = std::make_shared<ChildState>();
         state->argv = argv;
+        state->ownGroup = group == a3core::ProcessGroup::own;
         state->pid = 1000 + static_cast<int> (children.size());
         children.push_back (state);
         return std::make_unique<FakeChild> (state);

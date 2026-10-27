@@ -36,6 +36,10 @@ public:
     virtual void kill() = 0;        // SIGKILL
 };
 
+// Where a child sits among the process groups: in ours (a terminal's Ctrl-C reaches it too), or in a
+// group of its own that it leads (only we end it).
+enum class ProcessGroup { inherit, own };
+
 class Platform
 {
 public:
@@ -53,7 +57,8 @@ public:
     // argv[0] is looked up in PATH. The child starts with Python's Popen defaults: no signal blocked,
     // SIGPIPE and SIGTERM at their defaults, no descriptor but 0, 1 and 2 (1 is the pipe when
     // `pipeStdout`). nullptr when it could not be started.
-    virtual std::unique_ptr<Child> spawn (const std::vector<std::string>& argv, bool pipeStdout) const = 0;
+    virtual std::unique_ptr<Child> spawn (const std::vector<std::string>& argv, bool pipeStdout,
+                                          ProcessGroup group = ProcessGroup::inherit) const = 0;
 };
 
 using Environment = std::function<std::optional<std::string> (const std::string& name)>;

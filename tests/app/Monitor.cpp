@@ -37,6 +37,7 @@ struct Monitor : ::testing::Test
 void fetchEverything (CoreWindowRig& rig)
 {
     rig.fill();
+    rig.client->setMonitorShown (true);
     rig.client->requestUnknown();
     rig.client->requestRegister();
     rig.client->refreshNow();
@@ -136,7 +137,7 @@ TEST_F (Monitor, SwitchHidesAndRemembers)
     {
         a3app::MainWindow window (view, manager, {}, false, [] {}, { rig.client.get(), settings });
         EXPECT_FALSE (window.monitorShown());   // no file: off
-        EXPECT_FALSE (rig.client->trafficWanted());
+        EXPECT_FALSE (rig.client->monitorShown());
         auto list = window.pageList();
         EXPECT_EQ (list[list.size() - 1], "OSC MONITOR");   // the switch is at the bottom of the list
         for (const auto& name : monitorPages)
@@ -149,13 +150,18 @@ TEST_F (Monitor, SwitchHidesAndRemembers)
         for (const auto& name : monitorPages)
             EXPECT_TRUE (list.contains (name)) << name;
         EXPECT_EQ (list[list.size() - 1], "OSC MONITOR");
-        EXPECT_TRUE (rig.client->trafficWanted());
+        EXPECT_TRUE (rig.client->monitorShown());
         EXPECT_TRUE (settings.existsAsFile());
         EXPECT_TRUE (a3app::readMonitorSwitch (settings));
         expectPainted (snapshot (*window.getContentComponent(), "window-monitor"));
     }
     {
-        const auto written = settings.getLastModificationTime();
+        settings.replaceWithText ("{ \"monitor\" :  true }\n", false, false, "\n");   // as no write of ours would lay it out
+        {
+            a3app::MainWindow opened (view, manager, {}, false, [] {}, { rig.client.get(), settings });
+            EXPECT_TRUE (opened.monitorShown());
+        }
+        EXPECT_EQ (settings.loadFileAsString(), "{ \"monitor\" :  true }\n");   // opening and closing write nothing
         a3app::MainWindow window (view, manager, {}, false, [] {}, { rig.client.get(), settings });
         EXPECT_TRUE (window.monitorShown());   // remembered
         EXPECT_TRUE (window.pageList().contains ("TRAFFIC"));
@@ -164,9 +170,8 @@ TEST_F (Monitor, SwitchHidesAndRemembers)
         window.setMonitorShown (false);
         EXPECT_FALSE (window.pageList().contains ("BENCH"));
         EXPECT_NE (window.currentPage(), "BENCH");   // a hidden page is not left showing
-        EXPECT_FALSE (rig.client->trafficWanted());
+        EXPECT_FALSE (rig.client->monitorShown());
         EXPECT_FALSE (a3app::readMonitorSwitch (settings));
-        juce::ignoreUnused (written);
     }
     {
         a3app::MainWindow window (view, manager, {}, false, [] {}, {});   // no Core client: no switch at all
@@ -179,6 +184,7 @@ TEST_F (Monitor, SwitchHidesAndRemembers)
 TEST_F (Monitor, BenchShowsTheRefusal)
 {
     CoreWindowRig rig;
+    rig.client->setMonitorShown (true);
     a3app::MonitorBenchPage page (*rig.client);
 
     page.setTo ("mixer");
@@ -225,6 +231,7 @@ TEST_F (Monitor, TrafficFilters)
 {
     CoreWindowRig rig;
     rig.fill();
+    rig.client->setMonitorShown (true);
     rig.client->refreshNow();
     a3app::MonitorTrafficPage page (*rig.client);
     page.refresh();
@@ -274,6 +281,7 @@ TEST (MonitorClient, RefreshIsNotStarvedByThePoller)
     CoreWindowRig rig;
     rig.fill();
     a3app::CoreClient polling (rig.server->host(), rig.server->port(), rig.truth.pattern ("state.recall"), true);
+    polling.setMonitorShown (true);
     std::this_thread::sleep_for (std::chrono::milliseconds (300));   // the stream is open and read
     std::atomic<bool> done { false };
     std::thread asker ([&] {
@@ -285,7 +293,137 @@ TEST (MonitorClient, RefreshIsNotStarvedByThePoller)
     while (! done && std::chrono::steady_clock::now() < until)
         std::this_thread::sleep_for (std::chrono::milliseconds (10));
     EXPECT_TRUE (done) << "refreshNow waited more than 5 s for the poller's round";
-    polling.setTrafficWanted (false);   // lets a starved asker finish, so the test ends either way
+    polling.setMonitorShown (false);   // lets a starved asker finish, so the test ends either way
     asker.join();
-    EXPECT_TRUE (polling.traffic().answered || ! polling.trafficWanted());
+    EXPECT_TRUE (polling.traffic().answered || ! polling.monitorShown());
+}
+
+// A hidden monitor asks Core nothing: no stream, no summary. The window turns it on with the switch.
+TEST (MonitorClient, HiddenMonitorAsksCoreNothing)
+{
+    CoreWindowRig rig;
+    rig.fill();
+    EXPECT_FALSE (rig.client->monitorShown());   // off from the start
+    rig.client->refreshNow (300);
+    EXPECT_FALSE (rig.client->traffic().answered);
+    EXPECT_FALSE (rig.client->summary().answered);
+    EXPECT_EQ (rig.client->trafficGeneration(), 0u);
+    EXPECT_EQ (rig.client->summaryGeneration(), 0u);
+    rig.client->setMonitorShown (true);
+    rig.client->refreshNow();
+    EXPECT_TRUE (rig.client->traffic().answered);
+    EXPECT_TRUE (rig.client->summary().answered);
+}
+
+// Each cache's generation moves with news and only then; a glance carries at most the history asked for.
+TEST (MonitorClient, GenerationsMoveOnlyWithNews)
+{
+    CoreWindowRig rig;
+    rig.fill();
+    for (int i = 0; i < 200; ++i)
+        rig.seen (a3core::Direction::in, "/channel/3/volume", i * 0.001, "mixer");
+    auto& client = *rig.client;
+    client.setMonitorShown (true);
+    client.refreshNow();
+    const auto traffic = client.trafficGeneration(), summary = client.summaryGeneration();
+    EXPECT_GT (traffic, 0u);
+    EXPECT_GT (summary, 0u);
+    EXPECT_EQ (client.unknownGeneration(), 0u);
+    EXPECT_EQ (client.registerGeneration(), 0u);
+    for (int i = 0; i < 3; ++i)   // nobody asked Core anything: nothing moves
+    {
+        EXPECT_EQ (client.trafficGeneration(), traffic);
+        EXPECT_EQ (client.summaryGeneration(), summary);
+    }
+    client.requestUnknown();
+    client.refreshNow (0);
+    EXPECT_EQ (client.unknownGeneration(), 1u);
+    EXPECT_EQ (client.registerGeneration(), 0u);
+    client.requestRegister();
+    client.refreshNow (0);
+    EXPECT_EQ (client.registerGeneration(), 1u);
+    EXPECT_EQ (client.unknownGeneration(), 1u);
+
+    const auto all = client.glance ("", "", 120);
+    EXPECT_EQ (all.history.size(), 120u);   // the ring holds 204; a page gets a page's worth
+    EXPECT_EQ (all.rows.size(), 4u);
+    const auto one = client.glance ("in", "/channel/1/volume", 120);
+    ASSERT_EQ (one.history.size(), 2u);
+    EXPECT_EQ (one.history[0].value, "0.6");
+    EXPECT_EQ (one.generation, client.trafficGeneration());
+}
+
+// A page refreshed at 20 Hz copies from the client only when the client has news (Important 1, review 26).
+TEST_F (Monitor, PagesCopyOnlyWhatChanged)
+{
+    CoreWindowRig rig;
+    fetchEverything (rig);
+    a3app::MonitorTrafficPage traffic (*rig.client);
+    a3app::MonitorTruthPage truth (*rig.client);
+    a3app::MonitorUnknownPage unknown (*rig.client);
+    a3app::MonitorRegisterPage reg (*rig.client);
+    const int trafficCopies = traffic.copies(), truthCopies = truth.copies(), unknownCopies = unknown.copies(), regCopies = reg.copies();
+    EXPECT_EQ (trafficCopies, 1);
+    EXPECT_EQ (truthCopies, 1);
+    EXPECT_EQ (unknownCopies, 1);
+    EXPECT_EQ (regCopies, 1);
+    for (int tick = 0; tick < 5; ++tick)
+    {
+        traffic.refresh();
+        truth.refresh();
+        unknown.refresh();
+        reg.refresh();
+    }
+    EXPECT_EQ (traffic.copies(), trafficCopies);
+    EXPECT_EQ (truth.copies(), truthCopies);
+    EXPECT_EQ (unknown.copies(), unknownCopies);
+    EXPECT_EQ (reg.copies(), regCopies);
+
+    traffic.selectRow (0);   // a pick asks for that row's history: one glance
+    EXPECT_EQ (traffic.copies(), trafficCopies + 1);
+    rig.client->refreshNow();   // news
+    traffic.refresh();
+    truth.refresh();
+    EXPECT_EQ (traffic.copies(), trafficCopies + 2);
+    EXPECT_EQ (truth.copies(), truthCopies + 1);
+}
+
+// Keys, toggles and the quit dialog in the window's look; text a share of the key, larger than JUCE's.
+TEST_F (Monitor, LookCoversKeysTogglesAndTheDialog)
+{
+    juce::TextButton key ("STATUS");
+    juce::LookAndFeel_V4 plain;
+    for (const int height : { 60, 120 })   // a tall key (the page list): the share, past JUCE's 16 px cap
+    {
+        const auto ours = look.getTextButtonFont (key, height).getHeight();
+        EXPECT_NEAR (ours, height * a3app::keyTextShare, 0.5f) << height;
+        EXPECT_GT (ours, plain.getTextButtonFont (key, height).getHeight()) << height;
+    }
+    // A short key (the Save bar) keeps at least JUCE's size: the share alone would shrink it.
+    EXPECT_GE (look.getTextButtonFont (key, 30).getHeight(), plain.getTextButtonFont (key, 30).getHeight());
+    EXPECT_EQ (look.findColour (juce::AlertWindow::backgroundColourId), a3app::palette::raised);
+    EXPECT_EQ (look.findColour (juce::AlertWindow::textColourId), a3app::palette::text);
+
+    juce::ToggleButton toggle ("OSC MONITOR");
+    toggle.setSize (240, 60);
+    toggle.setLookAndFeel (&look);
+    const auto image = toggle.createComponentSnapshot (toggle.getLocalBounds(), false, 1.0f);
+    // The text reaches well into the toggle's height (JUCE's own stops at 15 px).
+    int top = image.getHeight(), bottom = -1;
+    for (int y = 0; y < image.getHeight(); ++y)
+        for (int x = image.getHeight(); x < image.getWidth(); ++x)
+            if (image.getPixelAt (x, y).getBrightness() > 0.5f)
+            {
+                top = juce::jmin (top, y);
+                bottom = juce::jmax (bottom, y);
+            }
+    toggle.setLookAndFeel (nullptr);
+    EXPECT_GT (bottom - top, 60 / 4) << top << ".." << bottom;
+
+    // In a narrow list the whole word is drawn, smaller, never cut to "OSC M...".
+    EXPECT_FLOAT_EQ (a3app::fittedTextHeight ("OSC MONITOR", 20.0f, 1000.0f), 20.0f);
+    const auto narrow = a3app::fittedTextHeight ("OSC MONITOR", 30.0f, 100.0f);
+    EXPECT_LT (narrow, 30.0f);
+    EXPECT_LE (juce::GlyphArrangement::getStringWidth (juce::FontOptions (narrow), "OSC MONITOR"), 100.0f);
+    EXPECT_GT (juce::GlyphArrangement::getStringWidth (juce::FontOptions (narrow), "OSC MONITOR"), 85.0f);
 }

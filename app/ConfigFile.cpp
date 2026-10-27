@@ -213,4 +213,19 @@ juce::File chooseSaveFile (const juce::String& argument, const juce::File& home)
 {
     return argument.isNotEmpty() ? juce::File (argument) : userConfigFile (home);
 }
+
+std::vector<juce::File> spatialCandidates (const juce::File& configDir)
+{
+    const auto installed = AppConfig{}.spatialDirectory;
+    return { configDir.getChildFile ("engine/spatial"), installed, installed.getSiblingFile (installed.getFileName() + "-reaper-booth-6.1") };
+}
+
+std::vector<juce::File> spatialChoices (const juce::File& configDir)
+{
+    std::vector<juce::File> choices;
+    for (const auto& directory : spatialCandidates (configDir))
+        if (directory.isDirectory())
+            choices.push_back (directory);
+    return choices;
+}
 }

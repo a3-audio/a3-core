@@ -96,7 +96,8 @@ private:
 };
 
 // Python's Popen restores signals: an empty mask, and SIGPIPE and SIGTERM at their defaults.
-bool setCleanSignals (posix_spawnattr_t& attributes)
+// With ProcessGroup::own the child leads a group of its own (setpgid (0, 0)).
+bool setCleanSignals (posix_spawnattr_t& attributes, ProcessGroup group)
 {
     sigset_t none, defaults;
     sigemptyset (&none);
@@ -105,10 +106,12 @@ bool setCleanSignals (posix_spawnattr_t& attributes)
     sigaddset (&defaults, SIGTERM);
     return posix_spawnattr_setsigmask (&attributes, &none) == 0
            && posix_spawnattr_setsigdefault (&attributes, &defaults) == 0
-           && posix_spawnattr_setflags (&attributes, POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF) == 0;
+           && (group == ProcessGroup::inherit || posix_spawnattr_setpgroup (&attributes, 0) == 0)   // 0: a group led by the child
+           && posix_spawnattr_setflags (&attributes, POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF
+                                                         | (group == ProcessGroup::own ? POSIX_SPAWN_SETPGROUP : 0)) == 0;
 }
 
-std::unique_ptr<Child> spawnProcess (const std::vector<std::string>& command, bool pipeStdout)
+std::unique_ptr<Child> spawnProcess (const std::vector<std::string>& command, bool pipeStdout, ProcessGroup group = ProcessGroup::inherit)
 {
     if (command.empty())
         return nullptr;
@@ -126,7 +129,7 @@ std::unique_ptr<Child> spawnProcess (const std::vector<std::string>& command, bo
     // the spawn.
     const bool prepared = (! pipeStdout || posix_spawn_file_actions_adddup2 (&actions, fds[1], 1) == 0)
                           && posix_spawn_file_actions_addclosefrom_np (&actions, 3) == 0
-                          && setCleanSignals (attributes);
+                          && setCleanSignals (attributes, group);
 
     std::vector<std::string> words (command);
     std::vector<char*> argv;
@@ -211,9 +214,9 @@ public:
         return WIFEXITED (*status) && WEXITSTATUS (*status) == 0;
     }
 
-    std::unique_ptr<Child> spawn (const std::vector<std::string>& argv, bool pipeStdout) const override
+    std::unique_ptr<Child> spawn (const std::vector<std::string>& argv, bool pipeStdout, ProcessGroup group) const override
     {
-        return spawnProcess (argv, pipeStdout);
+        return spawnProcess (argv, pipeStdout, group);
     }
 
 private:

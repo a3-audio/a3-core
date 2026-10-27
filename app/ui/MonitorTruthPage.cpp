@@ -8,7 +8,6 @@ namespace
 {
 constexpr int fingerprintShown = 12;   // as the Python page showed a hash
 
-juce::String utf8 (const std::string& text) { return juce::String::fromUTF8 (text.c_str()); }
 
 juce::String deviceLine (const DeviceTruth& device)
 {
@@ -37,7 +36,13 @@ MonitorTruthPage::~MonitorTruthPage() = default;
 
 void MonitorTruthPage::refresh()
 {
+    // The summary changes once a second at most: the table is rebuilt only then.
+    const auto now = client.summaryGeneration();
+    if (copied > 0 && now == seen)
+        return;
     summary = client.summary();
+    seen = now;
+    ++copied;
     if (! summary.answered)
     {
         look::failure (connection);

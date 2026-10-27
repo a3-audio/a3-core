@@ -6,6 +6,7 @@
 // its own children; it never stops a role it did not start and never touches a service.
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -57,6 +58,29 @@ private:
     RemoteHostView& engine;
     std::vector<Started> started;
     bool asked = false;
+};
+
+// How the window quits (P9) with a question on screen: a close asks once; a second close, or a stop
+// signal, while the question is open is ignored -- only the answer ends it. Without own children a close
+// or a signal ends it at once; a signal never asks (its children run on). An answer that arrives after
+// the flow is gone does nothing.
+class QuitFlow
+{
+public:
+    // Shows `question`; calls `answer (stop)` once the person chose (stop = end its own children).
+    using Ask = std::function<void (const juce::String& question, std::function<void (bool stop)> answer)>;
+
+    QuitFlow (WindowProcess&, Ask);
+    ~QuitFlow();
+
+    void close();    // the close button, or the desktop's close request
+    void signal();   // SIGTERM or SIGINT
+    bool done() const;
+
+private:
+    struct State;
+    std::shared_ptr<State> state;
+    Ask ask;
 };
 
 // "Stop Core and the engine too?" -- naming only the roles in `children`.

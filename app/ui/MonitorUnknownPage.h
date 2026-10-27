@@ -16,6 +16,7 @@ public:
     ~MonitorUnknownPage() override;
 
     void refresh();
+    int copies() const { return copied; }   // how often it copied from the client (the tests')
     void fetch();
     const std::vector<TrafficRow>& rowsShown() const { return report.rows; }
     juce::String noteText() const { return note.getText(); }
@@ -25,6 +26,9 @@ public:
 
 private:
     CoreClient& client;
+    std::uint64_t seen = 0;   // the client's generation last copied
+    std::uint64_t seenSummary = 0;
+    int copied = 0;
     UnknownReport report;
     juce::TextButton fetchButton { "FETCH" };
     juce::Label note;
