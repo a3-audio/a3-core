@@ -179,6 +179,21 @@ TEST (Platform, AChildCanHaveItsOwnProcessGroup)
     EXPECT_TRUE (plain->wait (5.0).has_value());
 }
 
+// capture_output=True swallowed i3-msg's complaint that i3 was not up yet; discard does the same.
+TEST (Platform, AChildsErrorOutputCanGoNowhere)
+{
+    const std::vector<std::string> whereIsStderr { "readlink", "/proc/self/fd/2" };
+    auto discarded = makePlatform()->spawn (whereIsStderr, true, ProcessGroup::inherit, ErrorOutput::discard);
+    ASSERT_NE (discarded, nullptr);
+    EXPECT_EQ (readAll (discarded->stdoutFd()), "/dev/null\n");
+    EXPECT_TRUE (discarded->wait (5.0).has_value());
+
+    auto inherited = makePlatform()->spawn (whereIsStderr, true);
+    ASSERT_NE (inherited, nullptr);
+    EXPECT_NE (readAll (inherited->stdoutFd()), "/dev/null\n");
+    EXPECT_TRUE (inherited->wait (5.0).has_value());
+}
+
 TEST (Platform, AChildWithoutAPipeHasNoStdoutToRead)
 {
     auto child = makePlatform()->spawn ({ "true" }, false);

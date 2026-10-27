@@ -5,8 +5,10 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <chrono>
 #include <map>
 #include <memory>
+#include <thread>
 
 #include <gtest/gtest.h>
 
@@ -51,22 +53,25 @@ namespace
 class FakeChild final : public Child
 {
 public:
-    explicit FakeChild (int fd, int status = 0) : readFd (fd), exitStatus (status) {}
+    explicit FakeChild (int fd, std::optional<int> status = 0, int heldOpen = -1) : readFd (fd), exitStatus (status), holdFd (heldOpen) {}
     ~FakeChild() override
     {
         if (readFd >= 0)
             ::close (readFd);
+        if (holdFd >= 0)
+            ::close (holdFd);
     }
     int pid() const override { return 4242; }
     int stdoutFd() const override { return readFd; }
     std::optional<int> poll() override { return exitStatus; }
-    std::optional<int> wait (double) override { return exitStatus; }
+    std::optional<int> wait (double) override { return exitStatus; }   // a nullopt status: never ends
     void terminate() override {}
     void kill() override {}
 
 private:
     int readFd;
-    int exitStatus;
+    std::optional<int> exitStatus;
+    int holdFd;   // the write end, kept open: the stream never ends
 };
 
 // An i3-msg on paper: the focused workspace and the event lines are given, every `bar mode` call is kept.
@@ -77,8 +82,12 @@ public:
     std::string events;
     bool failToStart = false;
     int eventsStatus = 0;
+    bool workspacesNeverEnd = false;             // get_workspaces keeps its pipe open
+    bool barCallsNeverEnd = false;               // an i3-msg that does not return
+    std::atomic<bool>* stopWhenBarIsSet = nullptr;
     mutable std::vector<std::string> barCalls;   // "dock" / "invisible"
     mutable std::vector<std::vector<std::string>> spawns;
+    mutable std::vector<ErrorOutput> errorOutputs;   // per spawn
 
     std::optional<std::string> environment (const std::string&) const override { return std::nullopt; }
     juce::File home() const override { return {}; }
@@ -89,9 +98,10 @@ public:
     juce::File self() const override { return {}; }
     bool unitEnabled (const std::string&) const override { return false; }
 
-    std::unique_ptr<Child> spawn (const std::vector<std::string>& argv, bool pipeStdout, ProcessGroup) const override
+    std::unique_ptr<Child> spawn (const std::vector<std::string>& argv, bool pipeStdout, ProcessGroup, ErrorOutput errors) const override
     {
         spawns.push_back (argv);
+        errorOutputs.push_back (errors);
         if (failToStart)
             return nullptr;
         if (argv.size() == 3 && argv[1] == "-q")   // {"i3-msg", "-q", "bar mode <mode> a3"}
@@ -100,19 +110,23 @@ public:
             const std::string prefix = "bar mode ", suffix = " a3";
             EXPECT_EQ (command.rfind (prefix, 0), 0u) << command;
             barCalls.push_back (command.substr (prefix.size(), command.size() - prefix.size() - suffix.size()));
-            return std::make_unique<FakeChild> (-1);
+            if (stopWhenBarIsSet != nullptr)
+                *stopWhenBarIsSet = true;
+            return std::make_unique<FakeChild> (-1, barCallsNeverEnd ? std::nullopt : std::optional<int> (0));
         }
         EXPECT_TRUE (pipeStdout);
         const bool isEvents = argv.size() == 5 && argv[2] == "subscribe";
-        return piped (isEvents ? events : workspaces, isEvents ? eventsStatus : 0);
+        return piped (isEvents ? events : workspaces, isEvents ? eventsStatus : 0, ! isEvents && workspacesNeverEnd);
     }
 
 private:
-    static std::unique_ptr<Child> piped (const std::string& text, int status)
+    static std::unique_ptr<Child> piped (const std::string& text, int status, bool keepOpen)
     {
         int fds[2];
         EXPECT_EQ (::pipe2 (fds, O_CLOEXEC | O_NONBLOCK), 0);
         EXPECT_EQ (::write (fds[1], text.data(), text.size()), static_cast<ssize_t> (text.size()));
+        if (keepOpen)
+            return std::make_unique<FakeChild> (fds[0], status, fds[1]);
         ::close (fds[1]);
         return std::make_unique<FakeChild> (fds[0], status);
     }
@@ -189,4 +203,47 @@ TEST (I3Bar, AStopEndsItAtOnce)
     FakeI3 i3;
     const std::atomic<bool> stop { true };
     EXPECT_EQ (runI3Bar (i3, &stop), 0);
+}
+
+// B1's capture_output=True swallowed get_workspaces' stderr; the events and the bar calls kept it.
+TEST (I3Bar, OnlyTheWorkspaceQueryDiscardsItsErrors)
+{
+    FakeI3 i3;
+    i3.workspaces = R"([{"name":"3","focused":true}])";
+    runI3Bar (i3);
+    ASSERT_EQ (i3.spawns.size(), i3.errorOutputs.size());
+    ASSERT_GE (i3.spawns.size(), 3u);
+    EXPECT_EQ (i3.errorOutputs[0], ErrorOutput::discard);   // get_workspaces
+    EXPECT_EQ (i3.errorOutputs[1], ErrorOutput::inherit);   // bar mode
+    EXPECT_EQ (i3.errorOutputs[2], ErrorOutput::inherit);   // subscribe
+}
+
+TEST (I3Bar, AStopEndsTheFirstQueryToo)
+{
+    FakeI3 i3;
+    i3.workspacesNeverEnd = true;
+    std::atomic<bool> stop { false };
+    std::thread later ([&] {
+        std::this_thread::sleep_for (std::chrono::milliseconds (200));
+        stop = true;
+    });
+    const auto start = std::chrono::steady_clock::now();
+    EXPECT_EQ (runI3Bar (i3, &stop), 0);
+    later.join();
+    EXPECT_LT (std::chrono::steady_clock::now() - start, std::chrono::seconds (3));
+    EXPECT_TRUE (i3.barCalls.empty());
+}
+
+TEST (I3Bar, AStopEndsABarCallThatDoesNotReturn)
+{
+    FakeI3 i3;
+    i3.workspaces = R"([{"name":"3","focused":true}])";
+    i3.barCallsNeverEnd = true;
+    std::atomic<bool> stop { false };
+    i3.stopWhenBarIsSet = &stop;   // the stop comes while that call is out
+    const auto start = std::chrono::steady_clock::now();
+    EXPECT_EQ (runI3Bar (i3, &stop), 0);
+    EXPECT_LT (std::chrono::steady_clock::now() - start, std::chrono::seconds (3));
+    for (const auto& argv : i3.spawns)
+        EXPECT_NE (argv[2], "subscribe");   // it never went on to follow the events
 }

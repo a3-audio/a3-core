@@ -162,11 +162,11 @@ public:
     std::string hostname() const override { return real->hostname(); }
     bool unitEnabled (const std::string& unit) const override { return real->unitEnabled (unit); }
     juce::File self() const override { return real->self(); }
-    std::unique_ptr<Child> spawn (const std::vector<std::string>& argv, bool pipeStdout, ProcessGroup group = ProcessGroup::inherit) const override
+    std::unique_ptr<Child> spawn (const std::vector<std::string>& argv, bool pipeStdout, ProcessGroup group = ProcessGroup::inherit, ErrorOutput errors = ErrorOutput::inherit) const override
     {
         std::lock_guard<std::mutex> lock (mutex);
         asked.push_back ({ argv, pipeStdout });
-        return real->spawn (argv, pipeStdout, group);
+        return real->spawn (argv, pipeStdout, group, errors);
     }
     std::vector<std::pair<std::vector<std::string>, bool>> spawns() const
     {

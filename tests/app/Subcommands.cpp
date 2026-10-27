@@ -6,7 +6,6 @@
 #include <gtest/gtest.h>
 
 #include <map>
-#include <regex>
 
 #include "FakePlatform.h"
 #include "Json.h"
@@ -30,14 +29,6 @@ void write (const juce::File& file, const std::string& bytes)
     ASSERT_TRUE (file.replaceWithData (bytes.data(), bytes.size()));
 }
 
-// Where the parser stopped is worded by the parser: Python's "line 1 column 1 (char 0)", ours "at byte 0"
-// (Json.cpp, shared with every reader of the truth). The reason before it is compared.
-std::string withoutParserPosition (const std::string& text)
-{
-    static const std::regex position (R"(( at byte \d+)|(: line \d+ column \d+ \(char \d+\)))");
-    return std::regex_replace (text, position, "");
-}
-
 std::string replaceAll (std::string text, const std::string& from, const std::string& to)
 {
     for (size_t at = text.find (from); at != std::string::npos; at = text.find (from, at + to.size()))
@@ -53,6 +44,8 @@ std::map<std::string, std::string> filesBelow (const juce::File& root)
         found[file.getRelativePathFrom (root).toStdString()] = read (file);
     return found;
 }
+
+fake::FakePlatform shippedTruth();
 
 struct Case
 {
@@ -136,7 +129,7 @@ void expectAsPython (const std::string& prefix, size_t expectedCases)
         const RecordedRun run (one);
         const auto recorded = data.getChildFile (juce::String (one.name));
         EXPECT_EQ (run.out(), read (recorded.getChildFile ("stdout"))) << one.name;
-        EXPECT_EQ (withoutParserPosition (run.err()), withoutParserPosition (read (recorded.getChildFile ("stderr")))) << one.name;
+        EXPECT_EQ (run.err(), read (recorded.getChildFile ("stderr"))) << one.name;
         EXPECT_EQ (run.result.exitCode, one.exitCode) << one.name;
         EXPECT_EQ (run.left(), filesBelow (recorded.getChildFile ("after"))) << one.name;
     }
@@ -155,9 +148,9 @@ TEST (Subcommands, NetworkFileOnlyOnce)
 
 TEST (Subcommands, NetworkAsPython)
 {
-    // "network-file-*" is the cases above; these three print the defaults and write nothing
+    // "network-file-*" is the cases above; these print the defaults and write nothing
     const auto cases = casesNamed ("network-");
-    ASSERT_EQ (cases.size(), 6u);
+    ASSERT_EQ (cases.size(), 8u);
     for (const auto& one : cases)
     {
         if (one.name.rfind ("network-file-", 0) == 0)
@@ -165,27 +158,38 @@ TEST (Subcommands, NetworkAsPython)
         const RecordedRun run (one);
         const auto recorded = data.getChildFile (juce::String (one.name));
         EXPECT_EQ (run.out(), read (recorded.getChildFile ("stdout"))) << one.name;
-        EXPECT_EQ (withoutParserPosition (run.err()), withoutParserPosition (read (recorded.getChildFile ("stderr")))) << one.name;
+        EXPECT_EQ (run.err(), read (recorded.getChildFile ("stderr"))) << one.name;
         EXPECT_EQ (run.result.exitCode, 0) << one.name;
         EXPECT_EQ (run.left(), filesBelow (recorded.getChildFile ("after"))) << one.name;
     }
 }
 
+// What the binary does with a wrong word: the argument parser refuses it before any subcommand runs
+// (Main prints "a3-core: <reason>" and the one usage text, exit 2 -- B1's exit code for it). So the
+// recorded usage cases are pinned at the parser, and the subcommand itself, handed a word it does not
+// know, refuses with that same usage text and 2.
 TEST (Subcommands, UnknownIsUsage)
 {
     const auto cases = casesNamed ("usage-");
     ASSERT_EQ (cases.size(), 3u);
     for (const auto& one : cases)
     {
-        const RecordedRun run (one);
-        EXPECT_EQ (run.result.exitCode, 2) << one.name;
-        EXPECT_EQ (one.exitCode, 2) << one.name;   // as B1's is
-        EXPECT_EQ (run.result.out, "") << one.name;
-        EXPECT_NE (run.result.err.find ("--render-truth user"), std::string::npos) << one.name;
-        EXPECT_NE (run.result.err.find ("--render-truth network-file"), std::string::npos) << one.name;
-        EXPECT_NE (run.result.err.find ("--render-truth network"), std::string::npos) << one.name;
-        EXPECT_TRUE (run.left().empty()) << one.name;
+        juce::StringArray commandLine ("--render-truth");
+        commandLine.addArray (one.argv);
+        juce::String error;
+        EXPECT_FALSE (a3app::parseProgramArgs (commandLine, error).has_value()) << one.name;
+        EXPECT_TRUE (error.isNotEmpty()) << one.name;
+        EXPECT_EQ (one.exitCode, 2) << one.name;   // B1's, which Main's refusal of a command line keeps
     }
+
+    auto platform = shippedTruth();
+    a3app::ProgramArgs args;
+    args.role = a3app::Role::renderTruth;
+    args.subcommand = juce::StringArray ("bogus");
+    const auto result = a3app::runSubcommand (args, platform);
+    EXPECT_EQ (result.exitCode, 2);
+    EXPECT_EQ (result.out, "");
+    EXPECT_EQ (result.err, std::string (a3app::usage));
 }
 
 namespace
@@ -198,6 +202,7 @@ a3app::SubcommandResult ask (fake::FakePlatform& platform, std::initializer_list
         args.subcommand.add (word);
     return a3app::runSubcommand (args, platform);
 }
+
 
 fake::FakePlatform shippedTruth()
 {

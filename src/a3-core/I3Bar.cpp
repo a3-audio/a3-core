@@ -81,30 +81,42 @@ bool readLines (Child& child, const std::atomic<bool>* stop, const std::function
     return true;
 }
 
-std::string focusedWorkspace (const Platform& platform, bool& started)
+// The focused workspace's name; nullopt if `stop` came first (or i3-msg could not be started: `started`).
+// B1's capture_output swallowed i3-msg's complaint that i3 was not up yet, so its stderr goes nowhere.
+std::optional<std::string> focusedWorkspace (const Platform& platform, const std::atomic<bool>* stop, bool& started)
 {
-    auto query = platform.spawn ({ "i3-msg", "-t", "get_workspaces" }, true);
+    auto query = platform.spawn ({ "i3-msg", "-t", "get_workspaces" }, true, ProcessGroup::inherit, ErrorOutput::discard);
     started = query != nullptr;
     if (! started)
-        return {};
+        return std::string();
     std::string answer;
-    readLines (*query, nullptr, [&] (const std::string& line) { answer += line + "\n"; });
+    if (! readLines (*query, stop, [&] (const std::string& line) { answer += line + "\n"; }))
+    {
+        query->terminate();
+        query->wait (2.0);
+        return std::nullopt;
+    }
     query->wait (5.0);
 
     juce::String error;
     const auto workspaces = parseJson (juce::String::fromUTF8 (answer.c_str()), error);
     if (error.isNotEmpty() || workspaces.getArray() == nullptr)
-        return {};
+        return std::string();
     for (const auto& workspace : *workspaces.getArray())
         if (static_cast<bool> (workspace.getProperty ("focused", false)))
             return nameOf (workspace);
-    return {};
+    return std::string();
 }
 
-void setBar (const Platform& platform, const std::string& mode)
+// subprocess.run waits for i3-msg; a stop ends the wait (the call is quick and reaps itself).
+void setBar (const Platform& platform, const std::string& mode, const std::atomic<bool>* stop)
 {
-    if (auto call = platform.spawn ({ "i3-msg", "-q", "bar mode " + mode + " " + i3BarId }, false))
-        call->wait (5.0);
+    auto call = platform.spawn ({ "i3-msg", "-q", "bar mode " + mode + " " + i3BarId }, false);
+    if (call == nullptr)
+        return;
+    for (int slices = 0; slices < 50 && ! stopped (stop); ++slices)
+        if (call->wait (0.1))
+            return;
 }
 }
 
@@ -130,13 +142,18 @@ std::optional<std::string> focusChange (const std::string& eventLine)
 int runI3Bar (const Platform& platform, const std::atomic<bool>* stop)
 {
     bool started = false;
-    auto shown = barMode (focusedWorkspace (platform, started));
+    const auto focused = focusedWorkspace (platform, stop, started);
     if (! started)
     {
         std::fprintf (stderr, "a3-core: i3-msg could not be started\n");
         return 1;
     }
-    setBar (platform, shown);
+    if (! focused)
+        return 0;
+    auto shown = barMode (*focused);
+    setBar (platform, shown, stop);
+    if (stopped (stop))
+        return 0;
 
     auto events = platform.spawn ({ "i3-msg", "-t", "subscribe", "-m", R"(["workspace"])" }, true);
     if (events == nullptr)
@@ -148,7 +165,7 @@ int runI3Bar (const Platform& platform, const std::atomic<bool>* stop)
         const auto mode = focusChange (line);
         if (! mode || *mode == shown)
             return;
-        setBar (platform, *mode);
+        setBar (platform, *mode, stop);
         shown = *mode;
     });
     if (! ended)

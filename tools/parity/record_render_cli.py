@@ -64,6 +64,9 @@ CASES = [
     ("network-shipped", ["network"], {}, {}),
     ("network-moved", ["network"], {"A3_NETWORK": "@HOME@/net.json"}, {"net.json": NETWORK_MOVED}),
     ("network-refused", ["network"], {"A3_NETWORK": "@HOME@/bad.json"}, {"bad.json": "not json\n"}),
+    # the parser's wording where the error is not at char 0: a trailing comma, and a later line after non-ASCII text
+    ("network-refused-comma", ["network"], {"A3_NETWORK": "@HOME@/bad.json"}, {"bad.json": '{"hosts": 1,}\n'}),
+    ("network-refused-lines", ["network"], {"A3_NETWORK": "@HOME@/bad.json"}, {"bad.json": '{\n "küche": 1,\n "b" 2}\n'}),
     ("usage-nothing", [], {}, {}),
     ("usage-unknown", ["bogus"], {}, {}),
     ("usage-two", ["user", "network"], {}, {}),

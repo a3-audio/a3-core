@@ -100,6 +100,26 @@
   "exit": 0
  },
  {
+  "name": "network-refused-comma",
+  "argv": [
+   "network"
+  ],
+  "env": {
+   "A3_NETWORK": "@HOME@/bad.json"
+  },
+  "exit": 0
+ },
+ {
+  "name": "network-refused-lines",
+  "argv": [
+   "network"
+  ],
+  "env": {
+   "A3_NETWORK": "@HOME@/bad.json"
+  },
+  "exit": 0
+ },
+ {
   "name": "usage-nothing",
   "argv": [],
   "env": {},

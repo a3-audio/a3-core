@@ -111,7 +111,8 @@ bool setCleanSignals (posix_spawnattr_t& attributes, ProcessGroup group)
                                                          | (group == ProcessGroup::own ? POSIX_SPAWN_SETPGROUP : 0)) == 0;
 }
 
-std::unique_ptr<Child> spawnProcess (const std::vector<std::string>& command, bool pipeStdout, ProcessGroup group = ProcessGroup::inherit)
+std::unique_ptr<Child> spawnProcess (const std::vector<std::string>& command, bool pipeStdout, ProcessGroup group = ProcessGroup::inherit,
+                                     ErrorOutput errors = ErrorOutput::inherit)
 {
     if (command.empty())
         return nullptr;
@@ -128,6 +129,7 @@ std::unique_ptr<Child> spawnProcess (const std::vector<std::string>& command, bo
     // a viewer's connection, or one of Core's ports, open after we closed it. So a failure refuses
     // the spawn.
     const bool prepared = (! pipeStdout || posix_spawn_file_actions_adddup2 (&actions, fds[1], 1) == 0)
+                          && (errors == ErrorOutput::inherit || posix_spawn_file_actions_addopen (&actions, 2, "/dev/null", O_WRONLY, 0) == 0)
                           && posix_spawn_file_actions_addclosefrom_np (&actions, 3) == 0
                           && setCleanSignals (attributes, group);
 
@@ -214,9 +216,9 @@ public:
         return WIFEXITED (*status) && WEXITSTATUS (*status) == 0;
     }
 
-    std::unique_ptr<Child> spawn (const std::vector<std::string>& argv, bool pipeStdout, ProcessGroup group) const override
+    std::unique_ptr<Child> spawn (const std::vector<std::string>& argv, bool pipeStdout, ProcessGroup group, ErrorOutput errors) const override
     {
-        return spawnProcess (argv, pipeStdout, group);
+        return spawnProcess (argv, pipeStdout, group, errors);
     }
 
 private:

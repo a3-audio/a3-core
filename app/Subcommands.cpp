@@ -9,19 +9,6 @@ namespace a3app
 {
 namespace
 {
-const char* const renderUsage =
-    "Write the one truth out for what cannot read JSON.\n"
-    "\n"
-    "a3-core --render-truth user\n"
-    "                        ~/.config/a3/osc.env for x11vnc, the\n"
-    "                        beat-analyzer's ~/.config/beat-analyzer/conf.d/50-a3-osc.env\n"
-    "                        and PipeWire's ~/.config/pipewire/pipewire-aes67.conf\n"
-    "a3-core --render-truth network\n"
-    "                        the default network as shell assignments, for postinst\n"
-    "a3-core --render-truth network-file\n"
-    "                        ~/.config/a3/network.json, the maintainer's network,\n"
-    "                        created once from the package's defaults\n";
-
 SubcommandResult refused (const std::string& what) { return { 1, "", "a3-core: " + what + "\n" }; }
 
 // The truth as B1's a3_osc.load() reads it, or why it cannot be.
@@ -60,9 +47,9 @@ SubcommandResult render (const juce::StringArray& words, const a3core::Platform&
         }
         else if (words == juce::StringArray ("network"))
             result.out = a3core::networkDefaults (truth);
-        else
+        else   // the argument parser refuses an unknown word first; this is for a caller that did not ask it
         {
-            result.err += renderUsage;
+            result.err += usage;
             result.exitCode = 2;
         }
     }

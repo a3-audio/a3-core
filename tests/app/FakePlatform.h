@@ -82,7 +82,8 @@ public:
         return enabledUnits.count (unit) > 0;
     }
     juce::File self() const override { return juce::File ("/usr/bin/a3-core"); }
-    std::unique_ptr<a3core::Child> spawn (const std::vector<std::string>& argv, bool, a3core::ProcessGroup group = a3core::ProcessGroup::inherit) const override
+    std::unique_ptr<a3core::Child> spawn (const std::vector<std::string>& argv, bool, a3core::ProcessGroup group = a3core::ProcessGroup::inherit,
+                                          a3core::ErrorOutput = a3core::ErrorOutput::inherit) const override
     {
         if (failingSpawns > 0)
         {
