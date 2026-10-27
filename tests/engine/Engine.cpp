@@ -339,30 +339,119 @@ TEST (Engine, DeckCueAndMixLikeAnalog)
     EXPECT_EQ (peak (stereo (run (0.0f)->phones)), 0.0);
 }
 
-TEST (Engine, StemCueLandsAfterTheDecoder)
+namespace
+{
+constexpr int cueAcns = 9;
+constexpr size_t afterStartUp = settled / 2;   // the decoder's start-up is over; the runs here last half a second
+
+// The same B-format once as a deck's stem cue, once as a channel's pre-VOLUME cue tap.
+std::unique_ptr<EngineRig> runDeckCue (const std::array<std::vector<float>, cueAcns>& signal, size_t frames, float mix,
+                                       float phonesVolume, bool asCue, float channelCueKey = 0.0f)
+{
+    auto rig = std::make_unique<EngineRig> (engineConfig (4, 2), frames);
+    for (int acn = 0; acn < cueAcns; ++acn)
+        if (asCue)
+            rig->decks[1].cue[(size_t) acn] = signal[(size_t) acn];
+        else
+            rig->decks[0].bformat[(size_t) acn] = signal[(size_t) acn];
+    if (! asCue)
+    {
+        rig->controls.channel (0).source = 1;
+        rig->controls.channel (0).cue = 1.0f;
+        rig->neutralStrip (0);
+        rig->controls.channel (0).volume = 0.0f;
+    }
+    else
+        rig->controls.channel (0).cue = channelCueKey;
+    rig->controls.global().phonesMix = mix;
+    rig->controls.global().phonesVolume = phonesVolume;
+    rig->run();
+    return rig;
+}
+
+// The channel path's TRIM/VOLUME laws sit 1.3e-4 (relative) off unity at their nominal setting, so the two
+// routes are compared relative to their level; a decoder, HRTF or ACN mistake is orders of magnitude larger.
+void expectSamePhones (const Stereo& a, const Stereo& b, const char* what)
+{
+    const double level = std::max (peak (stereo (a), afterStartUp), peak (stereo (b), afterStartUp));
+    EXPECT_GT (level, 1e-4) << what;
+    EXPECT_LT (maxDifference (stereo (a), stereo (b), afterStartUp), 5e-4 * level) << what;
+}
+
+std::array<std::vector<float>, cueAcns> noiseCue (size_t frames, uint32_t seed, int firstAcn = 0)
+{
+    std::array<std::vector<float>, cueAcns> signal;
+    for (int acn = 0; acn < cueAcns; ++acn)
+        signal[(size_t) acn] = acn < firstAcn ? mono (frames) : noise (frames, 0.1f, seed + (uint32_t) acn).l;
+    return signal;
+}
+}
+
+TEST (Engine, DeckCueIsDecodedWithThePhones)
 {
     const size_t frames = oneSecond / 2;
-    const auto signal = sine (frames, 440.0, engineRate, 0.25f).l;
-    const auto run = [&] (float mix)
+    std::array<std::vector<float>, cueAcns> dc;
+    for (auto& plane : dc)
+        plane = mono (frames);
+    dc[0] = std::vector<float> (frames, 0.5f);
+
+    const auto cue = runDeckCue (dc, frames, 0.0f, 1.0f, true);
+    EXPECT_GT (peak (cue->phones.l, afterStartUp), 1e-3);
+    EXPECT_NEAR (cue->phones.l.back(), cue->phones.r.back(), 1e-5);   // W alone has no side
+
+    // One decoder, one HRTF: a channel's cue tap with the same B-format sounds the same.
+    const auto tap = runDeckCue (dc, frames, 0.0f, 1.0f, false);
+    expectSamePhones (cue->phones, tap->phones, "W only");
+
+    const auto all = noiseCue (frames, 700);
+    expectSamePhones (runDeckCue (all, frames, 0.0f, 1.0f, true)->phones, runDeckCue (all, frames, 0.0f, 1.0f, false)->phones, "ACN 0..8");
+}
+
+TEST (Engine, DeckCueMovesOnlyWithCueMixAndPhones)
+{
+    const size_t frames = oneSecond / 2;
+    const auto signal = noiseCue (frames, 710);
+    EXPECT_GT (peak (stereo (runDeckCue (signal, frames, 0.0f, 1.0f, true)->phones), afterStartUp), 1e-3);
+    EXPECT_EQ (peak (stereo (runDeckCue (signal, frames, 1.0f, 1.0f, true)->phones)), 0.0);   // CUE end of the mix
+    EXPECT_EQ (peak (stereo (runDeckCue (signal, frames, 0.0f, 0.0f, true)->phones)), 0.0);   // PHONES 0
+
+    EXPECT_EQ (maxDifference (stereo (runDeckCue (signal, frames, 0.5f, 1.0f, true, 0.0f)->phones),
+                              stereo (runDeckCue (signal, frames, 0.5f, 1.0f, true, 1.0f)->phones)), 0.0);
+}
+
+TEST (Engine, DeckCueNeverReachesMainBoothRec)
+{
+    const size_t frames = oneSecond / 2;
+    const auto run = [&] (bool withCue)
     {
         auto rig = std::make_unique<EngineRig> (engineConfig (4, 2), frames);
-        rig->decks[1].cue[0] = signal;
-        rig->controls.global().phonesMix = mix;
+        rig->setAnalogPair (1, pinkStereo (frames, 720));
+        if (withCue)
+            for (int acn = 0; acn < cueAcns; ++acn)
+                rig->decks[1].cue[(size_t) acn] = noise (frames, 0.2f, 730 + (uint32_t) acn).l;
+        rig->controls.global().phonesMix = 0.0f;
         rig->run();
         return rig;
     };
-    const auto heard = run (0.0f);
-    const double gain = a3::laws::stageGain (0.75f) * a3::laws::cueWeight (0.0);
-    double worst = 0.0;
-    for (size_t i = 0; i < frames; ++i)
-        worst = std::max (worst, std::abs ((double) heard->phones.l[i] - gain * signal[i]));
-    EXPECT_LT (worst, 1e-5);
-    EXPECT_EQ (peak (heard->phones.r), 0.0);
-    EXPECT_EQ (peak (heard->mainOutputs()), 0.0);
-    EXPECT_EQ (peak (heard->boothOutputs()), 0.0);
-    EXPECT_EQ (peak (heard->recOutputs()), 0.0);
+    const auto cued = run (true), quiet = run (false);
+    EXPECT_GT (peak (cued->mainOutputs()), 1e-3);
+    EXPECT_EQ (maxDifference (cued->mainOutputs(), quiet->mainOutputs()), 0.0);
+    EXPECT_EQ (maxDifference (cued->boothOutputs(), quiet->boothOutputs()), 0.0);
+    EXPECT_EQ (maxDifference (cued->recOutputs(), quiet->recOutputs()), 0.0);
+    EXPECT_GT (maxDifference (stereo (cued->phones), stereo (quiet->phones)), 1e-4);
+}
 
-    EXPECT_EQ (peak (stereo (run (1.0f)->phones)), 0.0);
+// The cue carries ACN 0..8 only: each lands on its own bus channel, none on 9..15. A cue shifted by one
+// (design text counts 1..9) or spilling over would differ from the same signal as a 16-channel B-format.
+TEST (Engine, CueAcnTenToSixteenStayEmpty)
+{
+    const size_t frames = oneSecond / 2;
+    for (int first = 0; first < cueAcns; first += 4)
+    {
+        const auto signal = noiseCue (frames, 740, first);
+        expectSamePhones (runDeckCue (signal, frames, 0.0f, 1.0f, true)->phones,
+                          runDeckCue (signal, frames, 0.0f, 1.0f, false)->phones, ("first ACN " + std::to_string (first)).c_str());
+    }
 }
 
 // A deck's aux bus is B-format: its first two channels are no stereo pair, so a deck

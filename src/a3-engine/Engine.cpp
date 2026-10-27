@@ -102,6 +102,7 @@ struct Engine::Impl
     void runReturn (const EngineInputs&, int offset, int n);
     void encode (int n);
     void addDecks (int n);
+    void addStemCues (const EngineInputs&, int offset, int n);
     void decode (const EngineInputs&, const EngineOutputs&, int offset, int n);
     void pushMeters (int n);
     void buildMeters();
@@ -540,6 +541,25 @@ void Engine::Impl::addDecks (int n)
     }
 }
 
+// Every present deck's stem cue (2nd-order B-format, ACN 0..8) joins the phones bus ahead of its decoder,
+// so it shares the HRTF and PHONES with the desk's cue. ACN 9..15 stay as they are.
+void Engine::Impl::addStemCues (const EngineInputs& in, int offset, int n)
+{
+    stemCue.render (returnPlanes.getWritePointer (stemCueCurve), n);
+    if (stemCue.renderedSilence())
+        return;
+    for (int slot = 1; slot <= config.decks; ++slot)
+    {
+        const auto* deck = deckInputs (in, slot);
+        if (deck == nullptr)
+            continue;
+        for (size_t acn = 0; acn < deck->cue.size(); ++acn)
+            if (deck->cue[acn] != nullptr)
+                addWeighted (busPhones.getWritePointer ((int) acn), deck->cue[acn] + offset,
+                             returnPlanes.getReadPointer (stemCueCurve), n);
+    }
+}
+
 void Engine::Impl::decode (const EngineInputs& in, const EngineOutputs& out, int offset, int n)
 {
     for (int k = 0; k < busChannels; ++k)
@@ -547,6 +567,7 @@ void Engine::Impl::decode (const EngineInputs& in, const EngineOutputs& out, int
         juce::FloatVectorOperations::add (busMain.getWritePointer (k), busFx.getReadPointer (k), n);
         juce::FloatVectorOperations::add (busPhones.getWritePointer (k), busFx.getReadPointer (k), n);
     }
+    addStemCues (in, offset, n);
     main->process (busMain, out.main, offset, n, gates[(size_t) GatedZone::main], gateOpen);
     booth->process (busMain, out.booth, offset, n, gates[(size_t) GatedZone::booth], gateOpen);
 
@@ -559,16 +580,7 @@ void Engine::Impl::decode (const EngineInputs& in, const EngineOutputs& out, int
             juce::FloatVectorOperations::copy (out.rec[side] + offset, rec->side (side), n);
     }
 
-    // R13: every deck's stem cue, after the decoder and before PHONES.
     phones->process (busPhones, n);
-    stemCue.render (returnPlanes.getWritePointer (stemCueCurve), n);
-    if (! (stemCue.renderedSilence()))
-        for (int slot = 1; slot <= config.decks; ++slot)
-            if (const auto* deck = deckInputs (in, slot))
-                for (int side = 0; side < sides; ++side)
-                    if (deck->cue[(size_t) side] != nullptr)
-                        addWeighted (phones->side (side), deck->cue[(size_t) side] + offset,
-                                     returnPlanes.getReadPointer (stemCueCurve), n);
     float* heads[2] { phones->side (0), phones->side (1) };
     phonesStage.process (heads, n, sides);
     gates[(size_t) GatedZone::phones].process (heads, sides, n, gateOpen);

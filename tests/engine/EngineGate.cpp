@@ -29,11 +29,21 @@ std::unique_ptr<EngineRig> closedRig (const a3::EngineConfig& config, size_t fra
     return std::make_unique<EngineRig> (config, frames, engineBlock, engineRate, false);
 }
 
-// A constant on deck B's stem cue: phones L = level x cueWeight (0) x PHONES x gate,
-// sample for sample (the stem cue is added after the decoder, StemCueLandsAfterTheDecoder).
+// A constant on deck B's stem cue W: it goes through the phones decoder, so phones L at a gate of 1 is
+// what an ungated rig settles on (phonesUnit); the gate scales it linearly after that.
 constexpr float cueLevel = 0.5f;
 void constantStemCue (EngineRig& rig) { rig.decks[1].cue[0] = std::vector<float> (rig.frames, cueLevel); }
-double phonesUnit() { return cueLevel * a3::laws::cueWeight (0.0) * a3::laws::stageGain (0.75); }
+double phonesUnit()
+{
+    static const double unit = []
+    {
+        EngineRig rig (engineConfig (4, 2), oneSecond);
+        constantStemCue (rig);
+        rig.run();
+        return (double) rig.phones.l.back();
+    }();
+    return unit;
+}
 
 void signalEverywhere (EngineRig& rig)
 {
@@ -82,8 +92,8 @@ TEST (EngineGate, OpensOverOneSecondToTheTrim)
             reached = i;
     EXPECT_NEAR ((double) reached, (double) oneSecond, 128.0);
     EXPECT_NEAR (gain[oneSecond / 2], calibratedGain() / 2.0, 0.01 * calibratedGain());   // linear in gain
-    for (size_t i = 1; i < frames; ++i)
-        ASSERT_GE (gain[i], gain[i - 1] - 1e-9) << "not monotone at " << i;
+    for (size_t i = 4410; i < frames; ++i)   // the decoder's start-up ripple (6e-5) lives in the first 100 ms
+        ASSERT_GE (gain[i], gain[i - 1] - 1e-6) << "not monotone at " << i;
     for (size_t i = oneSecond + 128; i < frames; ++i)
         ASSERT_NEAR (gain[i], calibratedGain(), 1e-5 * calibratedGain()) << i;
     EXPECT_NEAR (rig->engine->gateLevels().gain[(int) a3::GatedZone::phones], calibratedGain(), 1e-6);
@@ -153,8 +163,11 @@ TEST (EngineGate, HandoverKeepsTheLevel)
     constantStemCue (*swapped);
     swapped->engine->startGateAt (levels);
     swapped->run();
+    EngineRig atTheTrim (calibratedConfig(), oneSecond / 4);   // starts at the trim, as a hand-over does
+    constantStemCue (atTheTrim);
+    atTheTrim.run();
     for (size_t i = 0; i < swapped->frames; ++i)
-        ASSERT_NEAR (swapped->phones.l[i], phonesUnit() * calibratedGain(), 1e-6) << i;   // no ramp from 0
+        ASSERT_NEAR (swapped->phones.l[i], atTheTrim.phones.l[i], 1e-6) << i;   // no ramp from 0
     for (int z = 0; z < a3::numGatedZones; ++z)
         EXPECT_EQ (swapped->engine->gateLevels().gain[z], levels.gain[z]);
 }
