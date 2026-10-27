@@ -196,22 +196,26 @@ TEST (ChannelSelect, SplitsAcrossBlocks)
     }
 }
 
-TEST (ReturnSelect, OneAtATime)
+// Analog = 0 plays the analog pair, delay = 1 shuts it and hands the delay over to RETURN.
+TEST (ReturnSelect, AnalogOrDelay)
 {
     a3::ReturnSelect ret;
     ret.prepare (rate);
     const int n = 1000;
-    std::vector<float> a (n, 0.25f), d1 (n, 0.5f), d2 (n, 0.75f), oL (n), oR (n);
+    std::vector<float> a (n, 0.25f), oL (n), oR (n), share (n, 9.0f);
     const float* analog[2] = { a.data(), a.data() };
-    std::vector<std::array<const float*, 2>> aux { { d1.data(), d1.data() }, { d2.data(), d2.data() } };
     float* out[2] = { oL.data(), oR.data() };
-    ret.process (analog, aux, out, n, 0);
-    EXPECT_FLOAT_EQ (oL[n - 1], 0.25f);
-    ret.process (analog, aux, out, n, 2);
-    EXPECT_FLOAT_EQ (oL[n - 1], 0.75f);
-    EXPECT_FLOAT_EQ (oR[n - 1], 0.75f);
-    ret.process (analog, aux, out, n, 1);
-    EXPECT_FLOAT_EQ (oL[n - 1], 0.5f);
+    ret.process (analog, out, share.data(), n, a3::ReturnSelect::analog);
+    EXPECT_EQ (oL[n - 1], 0.25f);
+    EXPECT_EQ (share[0], 0.0f);
+    EXPECT_EQ (share[n - 1], 0.0f);
+    ret.process (analog, out, share.data(), n, a3::ReturnSelect::delay);
+    EXPECT_EQ (oL[n - 1], 0.0f);
+    EXPECT_EQ (oR[n - 1], 0.0f);
+    EXPECT_EQ (share[n - 1], 1.0f);
+    ret.process (analog, out, share.data(), n, a3::ReturnSelect::analog);
+    EXPECT_EQ (oL[n - 1], 0.25f);
+    EXPECT_EQ (share[n - 1], 0.0f);
 }
 
 TEST (ReturnSelect, CrossfadeTakesTenMs)
@@ -219,14 +223,15 @@ TEST (ReturnSelect, CrossfadeTakesTenMs)
     a3::ReturnSelect ret;
     ret.prepare (rate);
     const int n = 1000;
-    std::vector<float> a (n, 1.0f), d1 (n, 0.0f), oL (n), oR (n);
+    std::vector<float> a (n, 1.0f), oL (n), oR (n), share (n);
     const float* analog[2] = { a.data(), a.data() };
-    std::vector<std::array<const float*, 2>> aux { { d1.data(), d1.data() } };
     float* out[2] = { oL.data(), oR.data() };
-    ret.process (analog, aux, out, n, 1);
+    ret.process (analog, out, share.data(), n, a3::ReturnSelect::delay);
     EXPECT_GT (oL[0], 0.99f);
     EXPECT_NEAR (oL[fade / 2], 0.5f, 0.01f);
-    EXPECT_FLOAT_EQ (oL[fade], 0.0f);
+    EXPECT_EQ (oL[fade], 0.0f);
+    for (int i = 0; i < n; ++i)
+        EXPECT_FLOAT_EQ (oL[i] + share[i], 1.0f) << i;   // linear: the two shares add up
     for (int i = 1; i < fade; ++i)
         EXPECT_LE (oL[i], oL[i - 1] + 1e-7f);
 }
@@ -236,15 +241,11 @@ TEST (ReturnSelect, NullInputIsSilence)
     a3::ReturnSelect ret;
     ret.prepare (rate);
     const int n = 1000;
-    std::vector<float> d1 (n, 0.5f), oL (n, 9.0f), oR (n, 9.0f);
-    std::vector<std::array<const float*, 2>> aux { { d1.data(), nullptr } };
+    std::vector<float> oL (n, 9.0f), oR (n, 9.0f), share (n);
     float* out[2] = { oL.data(), oR.data() };
-    ret.process (nullptr, aux, out, n, 0);   // analog missing
-    EXPECT_FLOAT_EQ (oL[n - 1], 0.0f);
-    EXPECT_FLOAT_EQ (oR[n - 1], 0.0f);
-    ret.process (nullptr, aux, out, n, 1);   // right pointer missing
-    EXPECT_FLOAT_EQ (oL[n - 1], 0.5f);
-    EXPECT_FLOAT_EQ (oR[n - 1], 0.0f);
+    ret.process (nullptr, out, share.data(), n, a3::ReturnSelect::analog);
+    EXPECT_EQ (oL[n - 1], 0.0f);
+    EXPECT_EQ (oR[n - 1], 0.0f);
 }
 
 TEST (ReturnSelect, OutOfRangeKeepsTheLast)
@@ -252,12 +253,12 @@ TEST (ReturnSelect, OutOfRangeKeepsTheLast)
     a3::ReturnSelect ret;
     ret.prepare (rate);
     const int n = 1000;
-    std::vector<float> a (n, 0.25f), d1 (n, 0.5f), oL (n), oR (n);
+    std::vector<float> a (n, 0.25f), oL (n), oR (n), share (n);
     const float* analog[2] = { a.data(), a.data() };
-    std::vector<std::array<const float*, 2>> aux { { d1.data(), d1.data() } };
     float* out[2] = { oL.data(), oR.data() };
-    ret.process (analog, aux, out, n, 1);
-    ret.process (analog, aux, out, n, 7);
-    ret.process (analog, aux, out, n, -1);
-    EXPECT_FLOAT_EQ (oL[n - 1], 0.5f);
+    ret.process (analog, out, share.data(), n, a3::ReturnSelect::delay);
+    ret.process (analog, out, share.data(), n, 2);
+    ret.process (analog, out, share.data(), n, -1);
+    EXPECT_EQ (oL[n - 1], 0.0f);
+    EXPECT_EQ (share[n - 1], 1.0f);
 }

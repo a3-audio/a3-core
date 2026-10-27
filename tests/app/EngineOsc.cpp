@@ -236,10 +236,18 @@ TEST_F (EngineOsc, SourcesOutsideTheDecksAreRefused)
     EXPECT_TRUE (apply ("/channel/1/source", 1.0f));    // a whole number as a float is still the number
     EXPECT_EQ (controls.channel (0).source.load(), 1);
 
-    EXPECT_TRUE (applyInt ("/aux-return/source", 2));
-    EXPECT_FALSE (applyInt ("/aux-return/source", 3));
+}
+
+// R1: the return is the analog pair (0) or the delay (1); anything else keeps the last.
+TEST_F (EngineOsc, ReturnSourceTwoKeepsTheLast)
+{
+    EXPECT_TRUE (applyInt ("/aux-return/source", 1));
+    EXPECT_FALSE (applyInt ("/aux-return/source", 2));
     EXPECT_FALSE (applyInt ("/aux-return/source", -1));
-    EXPECT_EQ (controls.global().returnSource.load(), 2);
+    EXPECT_FALSE (apply ("/aux-return/source", 0.5f));
+    EXPECT_EQ (controls.global().returnSource.load(), 1);
+    EXPECT_TRUE (applyInt ("/aux-return/source", 0));
+    EXPECT_EQ (controls.global().returnSource.load(), 0);
 }
 
 TEST_F (EngineOsc, AnalogIsRefusedOnADeckOnlyChannel)

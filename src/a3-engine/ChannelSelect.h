@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
-#include <array>
-#include <vector>
 
 namespace a3
 {
@@ -48,18 +46,19 @@ private:
     int analogGoal = 0, deckGoal = 0;
 };
 
-// Stereo return: analog pair or deck k's aux pair, 10 ms crossfade.
-// Source 0 = analog, k = deckAux[k-1]; outside 0..deckAux.size() keeps the last.
+// The return's source (R1): the analog return pair, or the delay. 10 ms linear crossfade.
+// out = analog pair x (1 - share); share is the delay source's weight per sample, 0 on
+// analog and 1 on delay. The engine plays the delay at (1 - share) + share x RETURN, so
+// the delay is at unity on analog and follows RETURN on delay. Any other source keeps the last.
 class ReturnSelect
 {
 public:
-    static constexpr int maxSources = 17;
+    static constexpr int analog = 0, delay = 1;
     void prepare (double sampleRate);
-    void process (const float* const* analog, const std::vector<std::array<const float*, 2>>& deckAux,
-                  float* const* out, int numSamples, int source);
+    void process (const float* const* analogPair, float* const* outPair, float* delayShare, int numSamples, int source);
 
 private:
-    int fadeSamples = 441, selected = 0;
-    std::array<int, maxSources> counts {};   // gain = count / fadeSamples
+    int fadeSamples = 441, selected = analog;
+    int shareCount = 0;   // delay share = shareCount / fadeSamples
 };
 }

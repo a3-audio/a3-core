@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <gtest/gtest.h>
 #include <cmath>
+#include "ChannelSelect.h"
 #include "EngineFixture.h"
 #include "Laws.h"
 
@@ -454,8 +455,8 @@ TEST (Engine, CueAcnTenToSixteenStayEmpty)
     }
 }
 
-// A deck's aux bus is B-format: its first two channels are no stereo pair, so a deck
-// return source plays nothing (A5 replaces the deck sources with the delay).
+// A deck's aux bus is B-format, no stereo pair: it is no return source. A source past the
+// delay (here 2) keeps the last one, the analog pair, which is silent here.
 TEST (Engine, DeckAuxIsNoReturnSource)
 {
     const size_t frames = oneSecond / 2;
@@ -465,6 +466,120 @@ TEST (Engine, DeckAuxIsNoReturnSource)
     rig.controls.global().returnSource = 2;
     rig.run();
     EXPECT_EQ (peak (rig.everyOutput()), 0.0);
+}
+
+namespace
+{
+// Channel 1 sends `dry` to the delay at AUX 1; the return pair carries `returned`.
+std::unique_ptr<EngineRig> returnRig (size_t frames, int source, float auxReturn, const std::vector<float>& dry,
+                                      const Stereo& returned, float auxSend = 1.0f)
+{
+    auto rig = std::make_unique<EngineRig> (engineConfig (4, 2), frames);
+    rig->setAnalogPair (1, both (dry));
+    rig->setAnalogPair (rig->config.returnAnalogPair, returned);
+    rig->controls.channel (0).auxSend = auxSend;
+    rig->controls.global().phonesMix = 1.0f;
+    rig->controls.global().returnSource = source;
+    rig->controls.global().auxReturn = auxReturn;
+    rig->run();
+    return rig;
+}
+
+// What the delay adds to every output: the run with AUX 1 minus the same run at AUX 0.
+std::vector<std::vector<float>> delayPart (size_t frames, int source, float auxReturn, const std::vector<float>& dry)
+{
+    const Stereo silent { std::vector<float> (frames, 0.0f), std::vector<float> (frames, 0.0f) };
+    const auto wet = returnRig (frames, source, auxReturn, dry, silent, 1.0f);
+    const auto plain = returnRig (frames, source, auxReturn, dry, silent, 0.0f);
+    const auto w = wet->everyOutput(), p = plain->everyOutput();
+    std::vector<std::vector<float>> part (w.size(), std::vector<float> (frames));
+    for (size_t c = 0; c < w.size(); ++c)
+        for (size_t i = 0; i < frames; ++i)
+            part[c][i] = (*w[c])[i] - (*p[c])[i];
+    return part;
+}
+
+std::vector<const std::vector<float>*> pointersTo (const std::vector<std::vector<float>>& channels)
+{
+    std::vector<const std::vector<float>*> list;
+    for (const auto& c : channels)
+        list.push_back (&c);
+    return list;
+}
+}
+
+// R1: on DELAY the delay's whole output (main, booth, rec, phones) follows RETURN.
+TEST (ReturnSelect, DelayModeScalesTheDelayByReturn)
+{
+    const size_t frames = oneSecond, hit = settled / 2;
+    const auto dry = impulseAt (frames, hit);
+    const auto analogMode = delayPart (frames, a3::ReturnSelect::analog, 0.5f, dry);
+    const auto delayMode = delayPart (frames, a3::ReturnSelect::delay, 0.5f, dry);
+    const auto echo = pointersTo (analogMode), scaled = pointersTo (delayMode);
+    const double from = hit + echoAfter - 1000, to = hit + echoAfter + 3000;
+    ASSERT_GT (energy (echo, (size_t) from, (size_t) to), 1e-6);
+    const double ratio = std::sqrt (energy (scaled, (size_t) from, (size_t) to) / energy (echo, (size_t) from, (size_t) to));
+    EXPECT_NEAR (ratio, a3::laws::stageGain (0.5), 1e-4);
+}
+
+TEST (ReturnSelect, DelayModeReturnZeroSilencesTheDelay)
+{
+    const size_t frames = oneSecond, hit = 1000;
+    const auto part = delayPart (frames, a3::ReturnSelect::delay, 0.0f, impulseAt (frames, hit));
+    for (size_t c = 0; c < part.size(); ++c)
+        for (size_t i = 0; i < frames; ++i)
+            ASSERT_EQ (part[c][i], 0.0f) << "output " << c << " at " << i;
+}
+
+TEST (ReturnSelect, DelayModeShutsAnalog)
+{
+    const size_t frames = oneSecond / 2;
+    const auto silent = std::vector<float> (frames, 0.0f);
+    auto tone = sine (frames, 440.0, engineRate, 0.5f);   // starts after the 10 ms crossfade, so any trace of it is a leak
+    std::fill_n (tone.l.begin(), afterTheCrossfade, 0.0f);
+    std::fill_n (tone.r.begin(), afterTheCrossfade, 0.0f);
+    const auto onDelay = returnRig (frames, a3::ReturnSelect::delay, 0.75f, silent, tone);
+    EXPECT_EQ (peak (onDelay->everyOutput()), 0.0);
+    const auto onAnalog = returnRig (frames, a3::ReturnSelect::analog, 0.75f, silent, tone);
+    EXPECT_GT (peak (onAnalog->mainOutputs(), afterTheCrossfade), 1e-2);
+}
+
+// On ANALOG the delay plays at unity whatever RETURN says, as before Plan 4's return.
+TEST (ReturnSelect, AnalogModeIsToday)
+{
+    const size_t frames = oneSecond, hit = 1000;
+    const auto dry = impulseAt (frames, hit);
+    const auto low = delayPart (frames, a3::ReturnSelect::analog, 0.2f, dry);
+    const auto high = delayPart (frames, a3::ReturnSelect::analog, 0.9f, dry);
+    EXPECT_GT (energy (pointersTo (low), hit + echoAfter - 1000, hit + echoAfter + 3000), 1e-6);
+    EXPECT_EQ (maxDifference (pointersTo (low), pointersTo (high)), 0.0);
+}
+
+TEST (ReturnSelect, SwitchIsClickFree)
+{
+    const size_t frames = oneSecond;
+    const float level = 0.5f;
+    EngineRig rig (engineConfig (4, 2), frames);
+    rig.setAnalogPair (1, sine (frames, 110.0, engineRate, level));
+    rig.setAnalogPair (rig.config.returnAnalogPair, sine (frames, 90.0, engineRate, level));
+    rig.neutralStrip (0);
+    rig.controls.channel (0).auxSend = 1.0f;
+    rig.controls.channel (0).volume = 1.0f;
+    rig.controls.global().auxReturn = 0.75f;   // -10 dB: the delay's gain moves at each switch
+    rig.controls.global().phonesMix = 1.0f;
+    rig.run (0, 0, { engineBlock }, [&] (size_t start)
+    {
+        const int quarter = (int) (start / (frames / 4));
+        rig.controls.global().returnSource = quarter == 1 || quarter == 3 ? 1 : 0;
+    });
+
+    EXPECT_GT (peak (rig.mainOutputs(), settled), 0.1);
+    for (const auto* channel : rig.mainOutputs())
+        EXPECT_LT (maxStep (*channel, settled / 4), 0.05);
+    for (const auto* channel : rig.recOutputs())
+        EXPECT_LT (maxStep (*channel, settled / 4), 0.05);
+    for (const auto* channel : stereo (rig.phones))
+        EXPECT_LT (maxStep (*channel, settled / 4), 0.05);
 }
 
 TEST (Engine, PositionsAndThreeDDoNothingOnADeckChannel)

@@ -134,9 +134,8 @@ struct Engine::Impl
 
     std::unique_ptr<std::atomic<float>[]> azimuth, elevation;   // contiguous, one per analog source
     std::vector<StereoIn> mainMoving, mainSteady, fxMoving, fxSteady, phMoving, phSteady;
-    std::vector<std::array<const float*, 2>> deckReturns;   // all nullptr: an aux bus is B-format, no stereo pair (A5)
     juce::AudioBuffer<float> busMain, busFx, busPhones;
-    enum ReturnPlane { retL, retR, retPhonesL, retPhonesR, retPhonesCurve, stemCueCurve, numReturnPlanes };
+    enum ReturnPlane { retL, retR, retPhonesL, retPhonesR, retPhonesCurve, stemCueCurve, delayCurve, returnGainCurve, numReturnPlanes };
     juce::AudioBuffer<float> returnPlanes;
     std::vector<float> zeros;
     double sampleRate = 44100.0;
@@ -144,6 +143,7 @@ struct Engine::Impl
     float fxSendPeak = 0.0f, analogEncoderPeak = 0.0f;   // this call's, published below at its end
     std::atomic<float> lastFxSendPeak { 0.0f }, lastAnalogEncoderPeak { 0.0f };
     int returnSource = 0;
+    bool delayAtUnity = true;   // this chunk's delay gain is 1 throughout (the return is on analog)
 };
 
 Engine::Impl::Impl (const EngineConfig& c, const SpatialConfig& spatial)
@@ -251,7 +251,6 @@ void Engine::Impl::prepare (double rate, int newBlockSize)
         phMoving.push_back (stereo (ch, EngineChannel::phMovingL));
         phSteady.push_back (stereo (ch, EngineChannel::phSteadyL));
     }
-    deckReturns.assign ((size_t) config.decks, { nullptr, nullptr });
 
     for (auto* bus : { &busMain, &busFx, &busPhones })
         bus->setSize (busChannels, blockSize);
@@ -289,6 +288,9 @@ void Engine::Impl::processChunk (const EngineInputs& in, const EngineOutputs& ou
     addDecks (n);
     fxSendPeak = std::max (fxSendPeak, peakOf (busFx, n));
     engine::runNode (*dualDelay, busFx, n);
+    if (! delayAtUnity)
+        for (int k = 0; k < busChannels; ++k)
+            multiply (busFx.getWritePointer (k), returnPlanes.getReadPointer (delayCurve), n);
     decode (in, out, offset, n);
     pushMeters (n);
 }
@@ -496,8 +498,18 @@ void Engine::Impl::runReturn (const EngineInputs& in, int offset, int n)
     const int first = 2 * config.returnAnalogPair - 2;
     const float* analog[2] { analogInput (in, first, offset), analogInput (in, first + 1, offset) };
     float* ret[2] { returnPlanes.getWritePointer (retL), returnPlanes.getWritePointer (retR) };
-    returnSelect.process (analog, deckReturns, ret, n, returnSource);
-    returnStage.process (ret, n, sides);
+    float* delay = returnPlanes.getWritePointer (delayCurve);
+    float* returnGain = returnPlanes.getWritePointer (returnGainCurve);
+    returnSelect.process (analog, ret, delay, n, returnSource);
+    // RETURN's gain curve rides through the stage as a third channel of ones, so the delay
+    // follows the very same ramp and silence as the analog pair.
+    std::fill (returnGain, returnGain + n, 1.0f);
+    float* staged[3] { ret[0], ret[1], returnGain };
+    returnStage.process (staged, n, 3);
+    delayAtUnity = juce::FloatVectorOperations::findMaximum (delay, n) == 0.0f;
+    if (! delayAtUnity)
+        for (int i = 0; i < n; ++i)
+            delay[i] = (1.0f - delay[i]) + delay[i] * returnGain[i];   // R1: 1 on analog, RETURN on delay
 
     returnPhones.render (returnPlanes.getWritePointer (retPhonesCurve), n);
     for (int side = 0; side < sides; ++side)

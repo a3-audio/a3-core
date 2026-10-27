@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "OscVocabulary.h"
+#include "ChannelSelect.h"
 #include <algorithm>
 #include <cmath>
 
@@ -146,7 +147,7 @@ bool applyWord (EngineWord word, const a3::EngineConfig& config, const juce::OSC
         case EngineWord::masterPhonesMix: return storeUnit (g.phonesMix, m);
         case EngineWord::masterPhonesVolume: return storeUnit (g.phonesVolume, m);
         case EngineWord::masterAuxReturn: return storeUnit (g.auxReturn, m);
-        case EngineWord::returnSource: return storeWhole (g.returnSource, m, 0, config.decks);
+        case EngineWord::returnSource: return storeWhole (g.returnSource, m, a3::ReturnSelect::analog, a3::ReturnSelect::delay);
         case EngineWord::returnCue: return storeUnit (g.returnCue, m);
         case EngineWord::delayBpm: return storeClamped (g.delayBpm, m, minBpm, maxBpm);
         case EngineWord::engineOpen:
