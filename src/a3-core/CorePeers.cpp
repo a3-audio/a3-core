@@ -451,17 +451,27 @@ std::vector<Endpoint> Core::vuDestinations() const
 }
 
 // a3_core_vu_relay.forward, one datagram: the bytes unread, to every vu destination. B1 runs it on a
-// thread of its own; here the service hands each datagram to the serve thread (P8). The engine's own
-// meters are Task 22's.
-void Core::handleVu (const Endpoint&, const uint8_t* data, size_t size)
+// thread of its own; here the service hands each datagram to the serve thread (P8). O13: the engine's
+// own meters also go to the displays the analyzer used to reach (the truth's `core` routes that carry
+// vu), each endpoint once; StemDeck's as B1 passes them. A datagram that is no meter is noted as an
+// unknown address and goes on to the followed ones as before: nothing is held back that B1 sent.
+void Core::handleVu (const Endpoint& from, const uint8_t* data, size_t size)
 {
+    const auto source = vuSourceOf (env.truth, data, size);
+    if (source == VuSource::unknown)
+        trafficTable.unknown (env.truth.pattern ("vu"), nullptr, from.host, env.clock.monotonic());
     bool handed = false;
     forward ([&]() -> std::optional<Datagram> {
                  handed = true;
                  return Datagram (data, data + size);
              },
              [this] (const Datagram& datagram, const Endpoint& to) { env.out.sendRaw (Client { "vu", to }, datagram); },
-             [this] { return vuDestinations(); },
+             [&] {
+                 auto targets = source == VuSource::engine ? engineVuTargets (env.truth) : std::vector<Endpoint> {};
+                 for (const auto& followed : vuDestinations())
+                     appendOnce (targets, followed);
+                 return targets;
+             },
              [&] { return ! handed; });
 }
 }

@@ -50,3 +50,4 @@ TEST (Scenarios, TempoToEngine) { expectAsPython ("tempo-to-engine"); }
 TEST (Scenarios, StemdeckTwoDeckReports) { expectAsPython ("stemdeck-two-deck-reports"); }
 TEST (Scenarios, StemdeckAhead) { expectAsPython ("stemdeck-ahead"); }
 TEST (Scenarios, DeviceHelloDiffers) { expectAsPython ("device-hello-differs"); }
+TEST (Scenarios, MetersToEveryoneOnce) { expectAsPython ("meters-to-everyone-once"); }

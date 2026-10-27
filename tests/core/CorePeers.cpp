@@ -47,6 +47,10 @@ std::vector<uint8_t> meterBundle()
     return { '#', 'b', 'u', 'n', 'd', 'l', 'e', 0, 0, 0, 0, 0, 0, 0, 0, 1, 0xde, 0xad };
 }
 
+// A StemDeck meter message (/vu/41, ff): a datagram Core can tell the source of. Where a test only
+// follows the bytes, meterBundle() is enough; one that asserts nothing was left unknown needs this.
+std::vector<uint8_t> stemMeterBundle() { return encodeMessage ({ "/vu/41", { pyFloat (0.5), pyFloat (0.25) } }); }
+
 // The /prodj/live sends of every client whose name starts with `prefix`, as "client host:port".
 std::vector<std::string> liveTargets (const CoreRig& rig, const std::string& prefix)
 {
@@ -973,7 +977,7 @@ TEST (CorePeers, OnAThreadOfItsOwnAtTheTruthsPort)
     EXPECT_EQ (rig.truth.endpoint ("core", "vu-relay").port, 9003);
     rig.hello (deskAt (40), "desk");
     rig.clear();
-    const auto bytes = meterBundle();
+    const auto bytes = stemMeterBundle();
     rig.vu (bytes);
     ASSERT_EQ (rig.net.transcript.size(), 1);
     EXPECT_EQ (rig.net.transcript[0]["raw"].toString(), juce::Base64::toBase64 (bytes.data(), bytes.size()));

@@ -84,7 +84,7 @@ public:
     // only once the service binds it, after the start-up spoke).
     void serveOn (int port);
     void handlePacket (const Endpoint& from, const uint8_t*, size_t);
-    void handleVu (const Endpoint& from, const uint8_t*, size_t);     // core.vu-relay datagrams (the engine's: Task 22)
+    void handleVu (const Endpoint& from, const uint8_t*, size_t);     // core.vu-relay datagrams: the engine's, StemDeck's
     void tick();                                                      // on_tick + debounce flushes, every 0.1 s
     void stop();                                                      // flush state, evening, seen
 

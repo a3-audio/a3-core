@@ -8,6 +8,7 @@
 
 #include "B0Truth.h"
 #include "Core.h"
+#include "EngineTruth.h"
 #include "FakeNet.h"
 #include "Json.h"
 #include "LatestWins.h"
@@ -99,11 +100,21 @@ void writeFiles (const juce::var& files, const juce::File& coreDir)
     }
 }
 
+// B1's truth, unless the scenario says "truth": "engine" -- the truth after O13, for the paths B1 does not have.
+const a3core::Truth& truthOf (const juce::var& scenario)
+{
+    if (! scenario.hasProperty ("truth"))
+        return b0::truth();
+    if (scenario["truth"].toString() == "engine")
+        return enginetruth::truth();
+    throw std::runtime_error ("truth: " + text (scenario["truth"]) + " is neither absent nor \"engine\"");
+}
+
 // One scenario's world: the clock, the outbox, the Core, the datagrams it sent itself.
 struct Run
 {
     explicit Run (const juce::var& scenario, const juce::File& stateDirToUse)
-        : truth (b0::truth()), net (clock), stateDir (stateDirToUse)
+        : truth (truthOf (scenario)), net (clock), stateDir (stateDirToUse)
     {
         writeFiles (scenario["files"], stateDir.getChildFile ("a3-core"));
         net.toSelf = [this] (const std::vector<uint8_t>& data) { toSelf.push_back (data); };

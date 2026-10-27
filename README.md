@@ -171,7 +171,9 @@ is small).
   `feat/plan-4b-engine-mode` (commit 63cdcbe: the engine's words `channel.source`, `aux-return.source`,
   `aux-return.cue`, `delay.bpm`, `engine.open`, `engine.hello`, and what `engine.osc` carries). The
   app's tests read the words the engine understands from `engine.osc`'s `carries` in this copy. That
-  branch moves to a3-core's `main` on merge; this reference then changes with it.
+  branch moves to a3-core's `main` on merge; this reference then changes with it. Refreshed 2026-10-27
+  from a3-core `feat/core-truth` 78230b9 (`engine.control`, the meters from the engine: Task 22);
+  `tests/core/EngineTruth.h` loads it for the suites that pin the engine's meters.
 - `a3-engine-bench` never connects anything. It reads the truth at runtime from `--truth FILE`
   (default `/usr/share/a3/a3-osc.json`).
 

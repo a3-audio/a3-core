@@ -48,6 +48,9 @@ determinism and that is a bug in `tools/parity/scenario_core.py`, not in the sce
 }
 ```
 
+- **truth** (optional): absent = B1's truth (`B0Truth.h`); `"engine"` = the truth after O13
+  (`EngineTruth.h`, a3-core feat/core-truth 78230b9, tests/engine/data/a3-osc.json). Only for paths B1 does
+  not have; every recorded scenario runs on B1's.
 - **files**: written into `$XDG_STATE_HOME/a3-core/` before Core starts. A JSON value is written as
   `json.dumps(value, indent=2)` + newline; a **string** is written verbatim — that is how a
   half-written or otherwise broken file is given. Only these three names.
@@ -166,10 +169,13 @@ and added `rigJson` (project 2's RIG STATE data, no B1 oracle) in src/a3-core/Co
 `publishView` and `sendFromBench`, belong to the serve thread and throw anywhere else; the window reads
 the copy `publishView` leaves in `Core::view()`.
 
-Not a stub, a path that does not exist yet: `handleVu` forwards every datagram to
-`vu_destinations()` (the remote Motion followed and every desk), as B1 does with the analyzer's and
-StemDeck's meters. The engine's meters (P11: an engine datagram also to the truth's `core` routes
-that carry vu, each endpoint once) are Task 22's.
+Not a stub, a path B1 does not have: Task 22 (O13). `handleVu` forwards a StemDeck datagram (first
+`/vu/n` named `stem_…`) to `vu_destinations()` (the remote Motion followed and every desk), as B1
+does; an **engine** datagram also goes to the endpoints of the truth's `core` routes that carry vu
+(`engineVuTargets`: Motion's vu port, the mixer, radla), each endpoint once, bytes unchanged. That
+needs the truth after O13 (`engine → core.vu-relay (vu)`); on B1's truth `engineVuTargets` is empty and
+Core is exactly B1's. A datagram that is no meter is noted as an unknown address and still goes to the
+followed ones, as B1 would have sent it.
 
 Task 18 ported the router (src/a3-core/CoreValues.cpp): the channel, master, filter and aux-return
 handlers, `unrouted_handler`, `values_refused`, `relay`/`broadcast` (a list too), `write_the_evening`,
@@ -188,6 +194,11 @@ Core is still saying the whole state to a Motion that moved.
 
 ## Hand-written expectations
 
-None yet. A scenario whose path the Python Core does not have (Task 22's
-`meters-to-everyone-once`, the engine's meters) gets a hand-written `.expected.json`, listed here
-with the reason, and is never re-recorded.
+A scenario whose path the Python Core does not have gets a hand-written `.expected.json`, listed here
+with the reason, and is never re-recorded. The runner compares it as strictly as a recorded one.
+
+- `meters-to-everyone-once` (Task 22, O13): the engine's meters reach the displays the analyzer
+  reached, once each. Runs on the engine truth (`"truth": "engine"`). The start-up entries (at 0.0) are
+  copied from `beat-to-remote-motion-and-desks.expected.json`, which B1 recorded for the same empty
+  start; the three `vu` entries are written by hand from the truth's routes (Motion's vu port, the
+  mixer, radla) with the datagram encoded by an independent script. B1 has no engine meters.
