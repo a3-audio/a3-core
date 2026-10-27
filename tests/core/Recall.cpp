@@ -196,6 +196,17 @@ TEST (Recall, OneAddressIsOneValueHoweverManyHearIt)
     EXPECT_EQ (relayed.size(), 1u);
 }
 
+TEST (Recall, ItSaysTheLastValueOfAnAddressAndNoneBeforeAny)
+{
+    // B1 (a3-core 7a7b2441f74e): Relayed.value, what a channel back on analog re-sends to the engine.
+    Relayed relayed;
+    EXPECT_EQ (relayed.value ("/channel/3/filter/q"), std::nullopt);
+    relayed.note ("/channel/3/filter/q", pyFloat (0.75));
+    relayed.note ("/channel/3/filter/q", pyFloat (0.5));
+    EXPECT_EQ (relayed.value ("/channel/3/filter/q"), std::optional<OscArg> (pyFloat (0.5)));
+    EXPECT_EQ (relayed.value ("/channel/3/filter/frequency"), std::nullopt);
+}
+
 TEST (Recall, ItCanSayWhetherItAlreadyHoldsAValue)
 {
     Relayed relayed;

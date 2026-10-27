@@ -123,6 +123,14 @@ void Relayed::note (const std::string& address, OscArg value)
     held.emplace_back (address, std::move (value));
 }
 
+std::optional<OscArg> Relayed::value (const std::string& address) const
+{
+    const auto found = place.find (address);
+    if (found == place.end())
+        return std::nullopt;
+    return held[found->second].second;
+}
+
 std::vector<Message> recallMessages (const Truth& truth, const std::vector<ChannelInfo>& channels, const MasterInfo& master,
                                      const Relayed& relayed)
 {

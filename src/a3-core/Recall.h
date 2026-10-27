@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Port of a3_core_recall.py (B0 f3345dc7feeb): Core says its state once more. There is no new
+// Port of a3_core_recall.py (B0 f3345dc7feeb; Relayed::value from B1 7a7b2441f74e): Core says its state once more. There is no new
 // message format for that: Core replays every value exactly as it would have been sent when it
 // changed, so the receivers that already exist take it. The answer is the lamps and the flags
 // (Core's own, read off disk), then the positions and the crossfade (Core's own, because nobody
@@ -10,6 +10,7 @@
 
 #include <array>
 #include <map>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -60,6 +61,8 @@ public:
     // Whether this is already what was last passed on (Python's ==: 1 == 1.0 == True).
     bool holds (const std::string& address, const OscArg& value) const;
     void note (const std::string& address, OscArg value);
+    // The last value passed on for this address; none before any.
+    std::optional<OscArg> value (const std::string& address) const;
     std::vector<Message> messages() const { return held; }
     size_t size() const { return held.size(); }
 
