@@ -13,6 +13,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core/home/aaa"
 I3_CONFIG = PACKAGE / ".local/share/a3-core/config/i3/config"
+#: The a3-core program's window class: JUCE's getApplicationName().
+PROGRAM_CLASS = "a3-core"
 
 
 def workspace_variables(config):
@@ -38,7 +40,7 @@ class WhereThingsLive(unittest.TestCase):
         expected = {
             '[class="A3 Motion UI"]': "1:MOTION",
             '[class="StemDeck"]': "2:STEMDECK",
-            '[class="a3-engine"]': "3:ENGINE",
+            '[class="a3-core"]': "3:ENGINE",
             '[class="REAPER"]': "3:ENGINE",
             '[class="QjackCtl"]': "4:QJACKCTL",
             '[title="Scarlett 18i20 USB"]': "5:SCARLETT",
@@ -47,6 +49,13 @@ class WhereThingsLive(unittest.TestCase):
         }
         for criteria, name in expected.items():
             self.assertEqual(workspace_of(self.config, criteria), name, criteria)
+
+    def test_the_programs_window_is_matched_by_its_application_name(self):
+        """JUCE sets WM_CLASS to getApplicationName(), which is "a3-core" for
+        the program (a3-engine app/Main.cpp); "a3-engine" is the package, and
+        no window carries that class."""
+        self.assertEqual(workspace_of(self.config, f'[class="{PROGRAM_CLASS}"]'), "3:ENGINE")
+        self.assertNotIn('class="a3-engine"', self.config)
 
     def test_the_one_deck_windows_are_main_windows_not_dialogs(self):
         # 2026-10-26: "StemDeck A" / "StemDeck B" (one deck per instance) floated
