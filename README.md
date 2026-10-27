@@ -175,6 +175,18 @@ is small).
 - `a3-engine-bench` never connects anything. It reads the truth at runtime from `--truth FILE`
   (default `/usr/share/a3/a3-osc.json`).
 
+## Core in C++
+
+`src/a3-core/` is `a3-core-lib` (namespace `a3core`), a pure library that carries the A³ Core
+logic ported from a3-core's Python. It links only `a3-engine-juce`: no audio device, no GUI. Its
+own GoogleTest runner is `build/tests/core/a3-core-tests`; `./test.sh --core [gtest args]` builds
+and runs just that, plain `./test.sh` builds everything and runs both runners (each prints its
+build timestamp). `A3_TARGET=<target> ./build.sh` builds a single target.
+
+The parity guard `tests/parity/test_cases_are_ported.py` checks `tests/core/parity/cases.tsv`
+(one row per Python test case: ported, retired or staying in Python) against the `TEST`/`TEST_F`
+names in `tests/core` and `tests/engine`. See `tools/parity/README.md`.
+
 ## Third-party code and data
 
 - **IEM Plug-in Suite** (Institute of Electronic Music and Acoustics, Graz), GPL-3.0-or-later,

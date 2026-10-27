@@ -1,0 +1,1 @@
+rendered ~/.config/pipewire/pipewire-aes67.conf
