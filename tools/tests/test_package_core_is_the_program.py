@@ -34,12 +34,13 @@ PROGRAM = "/usr/bin/a3-core"
 ENGINE_CUT = "03.0+120"
 ANALYZER_NO_VU = "03.0+64"
 
-#: Frozen with REAPER: never edited by the cut.
+#: Frozen with REAPER: never edited by the cut. The patchbay left this list
+#: when the maintainer had its dead meter sockets removed (2026-10-27);
+#: test_package_patchbay_has_no_meter_wiring pins it since.
 REAPER_FILES = (
     UNITS / "a3-reaper.service",
     UNITS / "a3-reaper.service.d/audio-engine.conf",
     LOCAL / "share/a3-core/config/REAPER",
-    LOCAL / "share/a3-core/config/rncbc.org/a3-patchbay.xml",
     LOCAL / "share/a3-core/layout.json",
     LOCAL / "share/a3-core/curves-golden.json",
 )

@@ -63,48 +63,6 @@
    <plug>out25</plug>
    <plug>out26</plug>
   </socket>
-  <socket client="REAPER" exclusive="off" name="reaper_vu_main" type="jack-audio">
-   <plug>out41</plug>
-   <plug>out42</plug>
-   <plug>out43</plug>
-   <plug>out44</plug>
-   <plug>out45</plug>
-   <plug>out46</plug>
-   <plug>out47</plug>
-   <plug>out48</plug>
-   <plug>out49</plug>
-   <plug>out50</plug>
-  </socket>
-  <socket client="REAPER" exclusive="off" name="reaper_vu_analog" type="jack-audio">
-   <plug>out31</plug>
-   <plug>out32</plug>
-   <plug>out33</plug>
-   <plug>out34</plug>
-   <plug>out35</plug>
-   <plug>out36</plug>
-   <plug>out37</plug>
-   <plug>out38</plug>
-  </socket>
-  <socket client="REAPER" exclusive="off" name="reaper_vu_channels_pre" type="jack-audio">
-   <plug>out51</plug>
-   <plug>out52</plug>
-   <plug>out53</plug>
-   <plug>out54</plug>
-   <plug>out55</plug>
-   <plug>out56</plug>
-   <plug>out57</plug>
-   <plug>out58</plug>
-  </socket>
-  <socket client="REAPER" exclusive="off" name="reaper_vu_channels_post" type="jack-audio">
-   <plug>out59</plug>
-   <plug>out60</plug>
-   <plug>out61</plug>
-   <plug>out62</plug>
-   <plug>out63</plug>
-   <plug>out64</plug>
-   <plug>out65</plug>
-   <plug>out66</plug>
-  </socket>
   <socket client="AES67\ .*\ stems" exclusive="off" name="aes67_stems_from_stemdeck" type="jack-audio">
    <plug>receive_D1L</plug>
    <plug>receive_D1R</plug>
@@ -190,72 +148,6 @@
   <socket client="beat\-analyzer" exclusive="off" name="beat-analyzer_bpm" type="jack-audio">
    <plug>bpm_1</plug>
   </socket>
-  <socket client="beat\-analyzer" exclusive="off" name="beat_analyzer_vu_main" type="jack-audio">
-   <plug>vu_main_sub</plug>
-   <plug>vu_main_top1</plug>
-   <plug>vu_main_top2</plug>
-   <plug>vu_main_top3</plug>
-   <plug>vu_main_top4</plug>
-   <plug>vu_main_top5</plug>
-   <plug>vu_main_top6</plug>
-   <plug>vu_main_top7</plug>
-   <plug>vu_main_top8</plug>
-   <plug>vu_main_top9</plug>
-  </socket>
-  <socket client="beat\-analyzer" exclusive="off" name="beat_analyzer_vu_booth" type="jack-audio">
-   <plug>vu_booth_sub</plug>
-   <plug>vu_booth_top1</plug>
-   <plug>vu_booth_top2</plug>
-   <plug>vu_booth_top3</plug>
-   <plug>vu_booth_top4</plug>
-   <plug>vu_booth_top5</plug>
-   <plug>vu_booth_top6</plug>
-   <plug>vu_booth_top7</plug>
-   <plug>vu_booth_top8</plug>
-   <plug>vu_booth_top9</plug>
-  </socket>
-  <socket client="beat\-analyzer" exclusive="off" name="beat-analyzer_vu_phones" type="jack-audio">
-   <plug>vu_phones_L</plug>
-   <plug>vu_phones_R</plug>
-  </socket>
-  <socket client="beat\-analyzer" exclusive="off" name="beat-analyzer_vu_rec" type="jack-audio">
-   <plug>vu_rec_L</plug>
-   <plug>vu_rec_R</plug>
-  </socket>
-  <socket client="beat\-analyzer" exclusive="off" name="beat\-analyzer_aux" type="jack-audio">
-   <plug>vu_aux_L</plug>
-   <plug>vu_aux_R</plug>
-  </socket>
-  <socket client="beat\-analyzer" exclusive="off" name="beat-analyzer_analog" type="jack-audio">
-   <plug>vu_analog1_L</plug>
-   <plug>vu_analog1_R</plug>
-   <plug>vu_analog2_L</plug>
-   <plug>vu_analog2_R</plug>
-   <plug>vu_analog3_L</plug>
-   <plug>vu_analog3_R</plug>
-   <plug>vu_analog4_L</plug>
-   <plug>vu_analog4_R</plug>
-  </socket>
-  <socket client="beat\-analyzer" exclusive="off" name="beat-analyzer_channels_pre" type="jack-audio">
-   <plug>vu_in1_pre_L</plug>
-   <plug>vu_in1_pre_R</plug>
-   <plug>vu_in2_pre_L</plug>
-   <plug>vu_in2_pre_R</plug>
-   <plug>vu_in3_pre_L</plug>
-   <plug>vu_in3_pre_R</plug>
-   <plug>vu_in4_pre_L</plug>
-   <plug>vu_in4_pre_R</plug>
-  </socket>
-  <socket client="beat\-analyzer" exclusive="off" name="beat-analyzer_channels_post" type="jack-audio">
-   <plug>vu_in1_post_L</plug>
-   <plug>vu_in1_post_R</plug>
-   <plug>vu_in2_post_L</plug>
-   <plug>vu_in2_post_R</plug>
-   <plug>vu_in3_post_L</plug>
-   <plug>vu_in3_post_R</plug>
-   <plug>vu_in4_post_L</plug>
-   <plug>vu_in4_post_R</plug>
-  </socket>
   <socket client="REAPER" exclusive="off" name="reaper_cue" type="jack-audio">
    <plug>in23</plug>
    <plug>in24</plug>
@@ -267,18 +159,10 @@
   <cable input="reaper_stems" output="local_stemdeck" type="jack-audio"/>
   <cable input="alsa-scarlett_main" output="reaper_main" type="jack-audio"/>
   <cable input="alsa-scarlett_booth" output="reaper_booth" type="jack-audio"/>
-  <cable input="beat_analyzer_vu_booth" output="reaper_booth" type="jack-audio"/>
   <cable input="alsa-scarlett_phones" output="reaper_phones" type="jack-audio"/>
-  <cable input="beat-analyzer_vu_phones" output="reaper_phones" type="jack-audio"/>
   <cable input="aes67_rec" output="reaper_rec" type="jack-audio"/>
   <cable input="local_stemdeck" output="reaper_rec" type="jack-audio"/>
   <cable input="beat-analyzer_bpm" output="reaper_rec" type="jack-audio"/>
-  <cable input="beat-analyzer_vu_rec" output="reaper_rec" type="jack-audio"/>
-  <cable input="beat\-analyzer_aux" output="reaper_aux" type="jack-audio"/>
-  <cable input="beat_analyzer_vu_main" output="reaper_vu_main" type="jack-audio"/>
-  <cable input="beat-analyzer_analog" output="reaper_vu_analog" type="jack-audio"/>
-  <cable input="beat-analyzer_channels_pre" output="reaper_vu_channels_pre" type="jack-audio"/>
-  <cable input="beat-analyzer_channels_post" output="reaper_vu_channels_post" type="jack-audio"/>
   <cable input="reaper_stems" output="aes67_stems_from_stemdeck" type="jack-audio"/>
   <cable input="reaper_cue" output="aes67_cue_from_stemdeck" type="jack-audio"/>
  </cables>
