@@ -1,0 +1,9 @@
+Write the one truth out for what cannot read JSON.
+
+a3-osc-render user      ~/.config/a3/osc.env for x11vnc, the
+                        beat-analyzer's ~/.config/beat-analyzer/conf.d/50-a3-osc.env
+                        and PipeWire's ~/.config/pipewire/pipewire-aes67.conf
+a3-osc-render network   the default network as shell assignments, for postinst
+a3-osc-render network-file
+                        ~/.config/a3/network.json, the maintainer's network,
+                        created once from the package's defaults

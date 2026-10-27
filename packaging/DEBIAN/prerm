@@ -1,0 +1,15 @@
+#!/bin/sh
+# The unit file is still there now (it is gone by postrm), so the links that
+# `systemctl --global enable` made can be removed cleanly. Not on upgrade: the
+# new version keeps the unit enabled.
+set -e
+
+case "$1" in
+	remove|deconfigure)
+		if command -v systemctl >/dev/null 2>&1; then
+			systemctl --global disable a3-engine.service || true
+		fi
+		;;
+esac
+
+exit 0

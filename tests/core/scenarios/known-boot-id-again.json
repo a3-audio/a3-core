@@ -1,0 +1,29 @@
+{
+ "about": "An engine that says the boot id Core has already answered is the same engine: nothing replayed, no recall, no second open -- every 2 s, all evening; a hello without an argument is only seen.",
+ "files": {
+  "evening.json": {
+   "values": {
+    "/channel/1/gain": 0.5,
+    "/channel/2/volume": 0.7,
+    "/master/volume": 0.8,
+    "/channel/3/eq/high": 0.25
+   },
+   "channel.source": [
+    1,
+    0,
+    0,
+    2
+   ]
+  }
+ },
+ "steps": [
+ {"at": 0.1, "from": ["127.0.0.1", 41000], "osc": ["/engine/hello", ["s", "boot-1"]]},
+ {"at": 0.4, "from": ["192.168.8.11", 50001], "osc": ["/channel/1/gain", ["s", "0.6"]]},
+ {"at": 2.1, "from": ["127.0.0.1", 41000], "osc": ["/engine/hello", ["s", "boot-1"]]},
+ {"at": 4.1, "from": ["127.0.0.1", 41000], "osc": ["/engine/hello", ["s", "boot-1"]]},
+ {"at": 4.2, "from": ["127.0.0.1", 41000], "osc": ["/engine/hello"]},
+ {"at": 4.3, "from": ["127.0.0.1", 41000], "osc": ["/engine/hello", ["i", 7]]},
+ {"at": 4.5, "tick": true},
+ {"at": 5.0, "flush": true}
+ ]
+}

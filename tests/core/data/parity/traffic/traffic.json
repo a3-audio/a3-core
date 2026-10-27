@@ -1,0 +1,1505 @@
+{
+ "as_json": {
+  "first_ops": [
+   {
+    "address": "/channel/0/gain",
+    "dir": "in",
+    "op": "seen",
+    "peer": "motion",
+    "t": 10.0,
+    "value": [
+     "float",
+     0.5
+    ]
+   },
+   {
+    "address": "/channel/0/gain",
+    "dir": "in",
+    "op": "seen",
+    "peer": "mixer",
+    "t": 10.25,
+    "value": [
+     "float",
+     0.75
+    ]
+   },
+   {
+    "address": "/channel/1/pfl",
+    "dir": "in",
+    "op": "seen",
+    "peer": "mixer",
+    "t": 10.5,
+    "value": [
+     "str",
+     "1"
+    ]
+   },
+   {
+    "address": "/channel/1/pfl",
+    "dir": "out",
+    "op": "seen",
+    "peer": "mixer",
+    "t": 10.75,
+    "value": [
+     "str",
+     "0"
+    ]
+   },
+   {
+    "address": "/track/3/name",
+    "op": "unknown",
+    "peer": "reaper",
+    "t": 11.0,
+    "value": [
+     "str",
+     "kick"
+    ]
+   },
+   {
+    "address": "/track/3/name",
+    "op": "unknown",
+    "peer": "reaper",
+    "t": 11.25,
+    "value": [
+     "float",
+     0.25
+    ]
+   }
+  ],
+  "looks": {
+   "first": {
+    "json": {
+     "at": 11.9375,
+     "evicted": {
+      "rows": 0,
+      "unknown": 0
+     },
+     "full": true,
+     "history": [
+      {
+       "address": "/channel/0/gain",
+       "age": 1.9375,
+       "at": 10.0,
+       "direction": "in",
+       "peer": "motion",
+       "type": "float",
+       "value": 0.5
+      },
+      {
+       "address": "/channel/0/gain",
+       "age": 1.6875,
+       "at": 10.25,
+       "direction": "in",
+       "peer": "mixer",
+       "type": "float",
+       "value": 0.75
+      },
+      {
+       "address": "/channel/1/pfl",
+       "age": 1.4375,
+       "at": 10.5,
+       "direction": "in",
+       "peer": "mixer",
+       "type": "str",
+       "value": "1"
+      },
+      {
+       "address": "/channel/1/pfl",
+       "age": 1.1875,
+       "at": 10.75,
+       "direction": "out",
+       "peer": "mixer",
+       "type": "str",
+       "value": "0"
+      }
+     ],
+     "overall": null,
+     "rows": [
+      {
+       "address": "/channel/0/gain",
+       "age": 1.6875,
+       "bytes": 48,
+       "count": 2,
+       "direction": "in",
+       "last_seen": 10.25,
+       "last_type": "float",
+       "last_value": 0.75,
+       "peer": "mixer",
+       "rate": null
+      },
+      {
+       "address": "/channel/1/pfl",
+       "age": 1.4375,
+       "bytes": 24,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 10.5,
+       "last_type": "str",
+       "last_value": "1",
+       "peer": "mixer",
+       "rate": null
+      },
+      {
+       "address": "/channel/1/pfl",
+       "age": 1.1875,
+       "bytes": 24,
+       "count": 1,
+       "direction": "out",
+       "last_seen": 10.75,
+       "last_type": "str",
+       "last_value": "0",
+       "peer": "mixer",
+       "rate": null
+      }
+     ],
+     "totals": null,
+     "unknown_addresses": 1,
+     "unknown_messages": 2
+    },
+    "t": 11.9375
+   },
+   "second_delta": {
+    "json": {
+     "at": 16.0,
+     "evicted": {
+      "rows": 0,
+      "unknown": 0
+     },
+     "full": false,
+     "history": [
+      {
+       "address": "/channel/0/gain",
+       "age": 4.0,
+       "at": 12.0,
+       "direction": "in",
+       "peer": "motion",
+       "type": "float",
+       "value": 0.875
+      },
+      {
+       "address": "/channel/0/gain",
+       "age": 3.5,
+       "at": 12.5,
+       "direction": "in",
+       "peer": "mixer",
+       "type": "float",
+       "value": 0.0625
+      },
+      {
+       "address": "/channel/2/mute",
+       "age": 3.25,
+       "at": 12.75,
+       "direction": "in",
+       "peer": "motion",
+       "type": "bool",
+       "value": true
+      },
+      {
+       "address": "/channel/2/mode",
+       "age": 3.0,
+       "at": 13.0,
+       "direction": "out",
+       "peer": "motion",
+       "type": "int",
+       "value": 3
+      },
+      {
+       "address": "/state/none",
+       "age": 2.75,
+       "at": 13.25,
+       "direction": "in",
+       "peer": "motion",
+       "type": "NoneType",
+       "value": null
+      },
+      {
+       "address": "/odd/nan",
+       "age": 2.5,
+       "at": 13.5,
+       "direction": "in",
+       "peer": "motion",
+       "type": "float",
+       "value": "nan"
+      },
+      {
+       "address": "/odd/inf",
+       "age": 2.25,
+       "at": 13.75,
+       "direction": "in",
+       "peer": "motion",
+       "type": "float",
+       "value": "inf"
+      },
+      {
+       "address": "/odd/ninf",
+       "age": 2.0,
+       "at": 14.0,
+       "direction": "in",
+       "peer": "motion",
+       "type": "float",
+       "value": "-inf"
+      },
+      {
+       "address": "/odd/bytes",
+       "age": 1.75,
+       "at": 14.25,
+       "direction": "in",
+       "peer": "motion",
+       "type": "bytes",
+       "value": "b\"a\\x01'\\n\\x00\\xff\""
+      },
+      {
+       "address": "/odd/quote",
+       "age": 1.5,
+       "at": 14.5,
+       "direction": "in",
+       "peer": "motion",
+       "type": "bytes",
+       "value": "b'a\"'"
+      },
+      {
+       "address": "/odd/both",
+       "age": 1.25,
+       "at": 14.75,
+       "direction": "in",
+       "peer": "motion",
+       "type": "bytes",
+       "value": "b'a\\'\"'"
+      },
+      {
+       "address": "/odd/midi",
+       "age": 1.0,
+       "at": 15.0,
+       "direction": "in",
+       "peer": "motion",
+       "type": "tuple",
+       "value": "(1, 144, 60, 100)"
+      },
+      {
+       "address": "/odd/text",
+       "age": 0.75,
+       "at": 15.25,
+       "direction": "in",
+       "peer": "motion",
+       "type": "str",
+       "value": "gr\u00fc\u00dfe \u266a"
+      },
+      {
+       "address": "/a\u00e4/\u00fc",
+       "age": 0.5,
+       "at": 15.5,
+       "direction": "in",
+       "peer": "10.0.0.9",
+       "type": "int",
+       "value": 7
+      }
+     ],
+     "overall": {
+      "in": {
+       "kbit": 0.09452307692307693,
+       "rate": 0.49230769230769234
+      },
+      "out": {
+       "kbit": 0.0,
+       "rate": 0.0
+      }
+     },
+     "rows": [
+      {
+       "address": "/channel/1/pfl",
+       "age": 5.5,
+       "bytes": 24,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 10.5,
+       "last_type": "str",
+       "last_value": "1",
+       "peer": "mixer",
+       "rate": 0.0
+      },
+      {
+       "address": "/channel/1/pfl",
+       "age": 5.25,
+       "bytes": 24,
+       "count": 1,
+       "direction": "out",
+       "last_seen": 10.75,
+       "last_type": "str",
+       "last_value": "0",
+       "peer": "mixer",
+       "rate": 0.0
+      },
+      {
+       "address": "/channel/0/gain",
+       "age": 3.5,
+       "bytes": 96,
+       "count": 4,
+       "direction": "in",
+       "last_seen": 12.5,
+       "last_type": "float",
+       "last_value": 0.0625,
+       "peer": "mixer",
+       "rate": 0.49230769230769234
+      },
+      {
+       "address": "/channel/2/mute",
+       "age": 3.25,
+       "bytes": 20,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 12.75,
+       "last_type": "bool",
+       "last_value": true,
+       "peer": "motion",
+       "rate": null
+      },
+      {
+       "address": "/channel/2/mode",
+       "age": 3.0,
+       "bytes": 24,
+       "count": 1,
+       "direction": "out",
+       "last_seen": 13.0,
+       "last_type": "int",
+       "last_value": 3,
+       "peer": "motion",
+       "rate": null
+      },
+      {
+       "address": "/state/none",
+       "age": 2.75,
+       "bytes": 16,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 13.25,
+       "last_type": "NoneType",
+       "last_value": null,
+       "peer": "motion",
+       "rate": null
+      },
+      {
+       "address": "/odd/nan",
+       "age": 2.5,
+       "bytes": 20,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 13.5,
+       "last_type": "float",
+       "last_value": "nan",
+       "peer": "motion",
+       "rate": null
+      },
+      {
+       "address": "/odd/inf",
+       "age": 2.25,
+       "bytes": 20,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 13.75,
+       "last_type": "float",
+       "last_value": "inf",
+       "peer": "motion",
+       "rate": null
+      },
+      {
+       "address": "/odd/ninf",
+       "age": 2.0,
+       "bytes": 20,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 14.0,
+       "last_type": "float",
+       "last_value": "-inf",
+       "peer": "motion",
+       "rate": null
+      },
+      {
+       "address": "/odd/bytes",
+       "age": 1.75,
+       "bytes": 28,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 14.25,
+       "last_type": "bytes",
+       "last_value": "b\"a\\x01'\\n\\x00\\xff\"",
+       "peer": "motion",
+       "rate": null
+      },
+      {
+       "address": "/odd/quote",
+       "age": 1.5,
+       "bytes": 24,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 14.5,
+       "last_type": "bytes",
+       "last_value": "b'a\"'",
+       "peer": "motion",
+       "rate": null
+      },
+      {
+       "address": "/odd/both",
+       "age": 1.25,
+       "bytes": 24,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 14.75,
+       "last_type": "bytes",
+       "last_value": "b'a\\'\"'",
+       "peer": "motion",
+       "rate": null
+      },
+      {
+       "address": "/odd/midi",
+       "age": 1.0,
+       "bytes": 20,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 15.0,
+       "last_type": "tuple",
+       "last_value": "(1, 144, 60, 100)",
+       "peer": "motion",
+       "rate": null
+      },
+      {
+       "address": "/odd/text",
+       "age": 0.75,
+       "bytes": 28,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 15.25,
+       "last_type": "str",
+       "last_value": "gr\u00fc\u00dfe \u266a",
+       "peer": "motion",
+       "rate": null
+      },
+      {
+       "address": "/a\u00e4/\u00fc",
+       "age": 0.5,
+       "bytes": 16,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 15.5,
+       "last_type": "int",
+       "last_value": 7,
+       "peer": "10.0.0.9",
+       "rate": null
+      }
+     ],
+     "totals": [
+      {
+       "direction": "in",
+       "kbit": 0.09452307692307693,
+       "peer": "mixer",
+       "rate": 0.49230769230769234
+      },
+      {
+       "direction": "out",
+       "kbit": 0.0,
+       "peer": "mixer",
+       "rate": 0.0
+      }
+     ],
+     "unknown_addresses": 2,
+     "unknown_messages": 3
+    },
+    "since": 11.9375,
+    "t": 16.0
+   },
+   "third_full": {
+    "json": {
+     "at": 16.5,
+     "evicted": {
+      "rows": 0,
+      "unknown": 0
+     },
+     "full": true,
+     "history": [
+      {
+       "address": "/channel/0/gain",
+       "age": 6.5,
+       "at": 10.0,
+       "direction": "in",
+       "peer": "motion",
+       "type": "float",
+       "value": 0.5
+      },
+      {
+       "address": "/channel/0/gain",
+       "age": 6.25,
+       "at": 10.25,
+       "direction": "in",
+       "peer": "mixer",
+       "type": "float",
+       "value": 0.75
+      },
+      {
+       "address": "/channel/1/pfl",
+       "age": 6.0,
+       "at": 10.5,
+       "direction": "in",
+       "peer": "mixer",
+       "type": "str",
+       "value": "1"
+      },
+      {
+       "address": "/channel/1/pfl",
+       "age": 5.75,
+       "at": 10.75,
+       "direction": "out",
+       "peer": "mixer",
+       "type": "str",
+       "value": "0"
+      },
+      {
+       "address": "/channel/0/gain",
+       "age": 4.5,
+       "at": 12.0,
+       "direction": "in",
+       "peer": "motion",
+       "type": "float",
+       "value": 0.875
+      },
+      {
+       "address": "/channel/0/gain",
+       "age": 4.0,
+       "at": 12.5,
+       "direction": "in",
+       "peer": "mixer",
+       "type": "float",
+       "value": 0.0625
+      },
+      {
+       "address": "/channel/2/mute",
+       "age": 3.75,
+       "at": 12.75,
+       "direction": "in",
+       "peer": "motion",
+       "type": "bool",
+       "value": true
+      },
+      {
+       "address": "/channel/2/mode",
+       "age": 3.5,
+       "at": 13.0,
+       "direction": "out",
+       "peer": "motion",
+       "type": "int",
+       "value": 3
+      },
+      {
+       "address": "/state/none",
+       "age": 3.25,
+       "at": 13.25,
+       "direction": "in",
+       "peer": "motion",
+       "type": "NoneType",
+       "value": null
+      },
+      {
+       "address": "/odd/nan",
+       "age": 3.0,
+       "at": 13.5,
+       "direction": "in",
+       "peer": "motion",
+       "type": "float",
+       "value": "nan"
+      },
+      {
+       "address": "/odd/inf",
+       "age": 2.75,
+       "at": 13.75,
+       "direction": "in",
+       "peer": "motion",
+       "type": "float",
+       "value": "inf"
+      },
+      {
+       "address": "/odd/ninf",
+       "age": 2.5,
+       "at": 14.0,
+       "direction": "in",
+       "peer": "motion",
+       "type": "float",
+       "value": "-inf"
+      },
+      {
+       "address": "/odd/bytes",
+       "age": 2.25,
+       "at": 14.25,
+       "direction": "in",
+       "peer": "motion",
+       "type": "bytes",
+       "value": "b\"a\\x01'\\n\\x00\\xff\""
+      },
+      {
+       "address": "/odd/quote",
+       "age": 2.0,
+       "at": 14.5,
+       "direction": "in",
+       "peer": "motion",
+       "type": "bytes",
+       "value": "b'a\"'"
+      },
+      {
+       "address": "/odd/both",
+       "age": 1.75,
+       "at": 14.75,
+       "direction": "in",
+       "peer": "motion",
+       "type": "bytes",
+       "value": "b'a\\'\"'"
+      },
+      {
+       "address": "/odd/midi",
+       "age": 1.5,
+       "at": 15.0,
+       "direction": "in",
+       "peer": "motion",
+       "type": "tuple",
+       "value": "(1, 144, 60, 100)"
+      },
+      {
+       "address": "/odd/text",
+       "age": 1.25,
+       "at": 15.25,
+       "direction": "in",
+       "peer": "motion",
+       "type": "str",
+       "value": "gr\u00fc\u00dfe \u266a"
+      },
+      {
+       "address": "/a\u00e4/\u00fc",
+       "age": 1.0,
+       "at": 15.5,
+       "direction": "in",
+       "peer": "10.0.0.9",
+       "type": "int",
+       "value": 7
+      }
+     ],
+     "overall": null,
+     "rows": [
+      {
+       "address": "/channel/1/pfl",
+       "age": 6.0,
+       "bytes": 24,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 10.5,
+       "last_type": "str",
+       "last_value": "1",
+       "peer": "mixer",
+       "rate": null
+      },
+      {
+       "address": "/channel/1/pfl",
+       "age": 5.75,
+       "bytes": 24,
+       "count": 1,
+       "direction": "out",
+       "last_seen": 10.75,
+       "last_type": "str",
+       "last_value": "0",
+       "peer": "mixer",
+       "rate": null
+      },
+      {
+       "address": "/channel/0/gain",
+       "age": 4.0,
+       "bytes": 96,
+       "count": 4,
+       "direction": "in",
+       "last_seen": 12.5,
+       "last_type": "float",
+       "last_value": 0.0625,
+       "peer": "mixer",
+       "rate": null
+      },
+      {
+       "address": "/channel/2/mute",
+       "age": 3.75,
+       "bytes": 20,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 12.75,
+       "last_type": "bool",
+       "last_value": true,
+       "peer": "motion",
+       "rate": null
+      },
+      {
+       "address": "/channel/2/mode",
+       "age": 3.5,
+       "bytes": 24,
+       "count": 1,
+       "direction": "out",
+       "last_seen": 13.0,
+       "last_type": "int",
+       "last_value": 3,
+       "peer": "motion",
+       "rate": null
+      },
+      {
+       "address": "/state/none",
+       "age": 3.25,
+       "bytes": 16,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 13.25,
+       "last_type": "NoneType",
+       "last_value": null,
+       "peer": "motion",
+       "rate": null
+      },
+      {
+       "address": "/odd/nan",
+       "age": 3.0,
+       "bytes": 20,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 13.5,
+       "last_type": "float",
+       "last_value": "nan",
+       "peer": "motion",
+       "rate": null
+      },
+      {
+       "address": "/odd/inf",
+       "age": 2.75,
+       "bytes": 20,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 13.75,
+       "last_type": "float",
+       "last_value": "inf",
+       "peer": "motion",
+       "rate": null
+      },
+      {
+       "address": "/odd/ninf",
+       "age": 2.5,
+       "bytes": 20,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 14.0,
+       "last_type": "float",
+       "last_value": "-inf",
+       "peer": "motion",
+       "rate": null
+      },
+      {
+       "address": "/odd/bytes",
+       "age": 2.25,
+       "bytes": 28,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 14.25,
+       "last_type": "bytes",
+       "last_value": "b\"a\\x01'\\n\\x00\\xff\"",
+       "peer": "motion",
+       "rate": null
+      },
+      {
+       "address": "/odd/quote",
+       "age": 2.0,
+       "bytes": 24,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 14.5,
+       "last_type": "bytes",
+       "last_value": "b'a\"'",
+       "peer": "motion",
+       "rate": null
+      },
+      {
+       "address": "/odd/both",
+       "age": 1.75,
+       "bytes": 24,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 14.75,
+       "last_type": "bytes",
+       "last_value": "b'a\\'\"'",
+       "peer": "motion",
+       "rate": null
+      },
+      {
+       "address": "/odd/midi",
+       "age": 1.5,
+       "bytes": 20,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 15.0,
+       "last_type": "tuple",
+       "last_value": "(1, 144, 60, 100)",
+       "peer": "motion",
+       "rate": null
+      },
+      {
+       "address": "/odd/text",
+       "age": 1.25,
+       "bytes": 28,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 15.25,
+       "last_type": "str",
+       "last_value": "gr\u00fc\u00dfe \u266a",
+       "peer": "motion",
+       "rate": null
+      },
+      {
+       "address": "/a\u00e4/\u00fc",
+       "age": 1.0,
+       "bytes": 16,
+       "count": 1,
+       "direction": "in",
+       "last_seen": 15.5,
+       "last_type": "int",
+       "last_value": 7,
+       "peer": "10.0.0.9",
+       "rate": null
+      }
+     ],
+     "totals": null,
+     "unknown_addresses": 2,
+     "unknown_messages": 3
+    },
+    "t": 16.5
+   }
+  },
+  "second_ops": [
+   {
+    "address": "/channel/0/gain",
+    "dir": "in",
+    "op": "seen",
+    "peer": "motion",
+    "t": 12.0,
+    "value": [
+     "float",
+     0.875
+    ]
+   },
+   {
+    "address": "/channel/0/gain",
+    "dir": "in",
+    "op": "seen",
+    "peer": "mixer",
+    "t": 12.5,
+    "value": [
+     "float",
+     0.0625
+    ]
+   },
+   {
+    "address": "/channel/2/mute",
+    "dir": "in",
+    "op": "seen",
+    "peer": "motion",
+    "t": 12.75,
+    "value": [
+     "bool",
+     true
+    ]
+   },
+   {
+    "address": "/channel/2/mode",
+    "dir": "out",
+    "op": "seen",
+    "peer": "motion",
+    "t": 13.0,
+    "value": [
+     "int",
+     3
+    ]
+   },
+   {
+    "address": "/state/none",
+    "dir": "in",
+    "op": "seen",
+    "peer": "motion",
+    "t": 13.25,
+    "value": [
+     "NoneType",
+     null
+    ]
+   },
+   {
+    "address": "/odd/nan",
+    "dir": "in",
+    "op": "seen",
+    "peer": "motion",
+    "t": 13.5,
+    "value": [
+     "float",
+     "nan"
+    ]
+   },
+   {
+    "address": "/odd/inf",
+    "dir": "in",
+    "op": "seen",
+    "peer": "motion",
+    "t": 13.75,
+    "value": [
+     "float",
+     "inf"
+    ]
+   },
+   {
+    "address": "/odd/ninf",
+    "dir": "in",
+    "op": "seen",
+    "peer": "motion",
+    "t": 14.0,
+    "value": [
+     "float",
+     "-inf"
+    ]
+   },
+   {
+    "address": "/odd/bytes",
+    "dir": "in",
+    "op": "seen",
+    "peer": "motion",
+    "t": 14.25,
+    "value": [
+     "bytes",
+     "6101270a00ff"
+    ]
+   },
+   {
+    "address": "/odd/quote",
+    "dir": "in",
+    "op": "seen",
+    "peer": "motion",
+    "t": 14.5,
+    "value": [
+     "bytes",
+     "6122"
+    ]
+   },
+   {
+    "address": "/odd/both",
+    "dir": "in",
+    "op": "seen",
+    "peer": "motion",
+    "t": 14.75,
+    "value": [
+     "bytes",
+     "612722"
+    ]
+   },
+   {
+    "address": "/odd/midi",
+    "dir": "in",
+    "op": "seen",
+    "peer": "motion",
+    "t": 15.0,
+    "value": [
+     "tuple",
+     [
+      1,
+      144,
+      60,
+      100
+     ]
+    ]
+   },
+   {
+    "address": "/odd/text",
+    "dir": "in",
+    "op": "seen",
+    "peer": "motion",
+    "t": 15.25,
+    "value": [
+     "str",
+     "gr\u00fc\u00dfe \u266a"
+    ]
+   },
+   {
+    "address": "/a\u00e4/\u00fc",
+    "dir": "in",
+    "op": "seen",
+    "peer": "10.0.0.9",
+    "t": 15.5,
+    "value": [
+     "int",
+     7
+    ]
+   },
+   {
+    "address": "/track/9/name",
+    "op": "unknown",
+    "peer": "reaper",
+    "t": 15.75,
+    "value": [
+     "float",
+     "nan"
+    ]
+   }
+  ],
+  "unknown_look": {
+   "json": {
+    "at": 17.0,
+    "evicted": 0,
+    "rows": [
+     {
+      "address": "/track/3/name",
+      "age": 5.75,
+      "count": 2,
+      "direction": "in",
+      "last_seen": 11.25,
+      "last_type": "float",
+      "last_value": 0.25,
+      "peer": "reaper",
+      "rate": null,
+      "unknown": true
+     },
+     {
+      "address": "/track/9/name",
+      "age": 1.25,
+      "count": 1,
+      "direction": "in",
+      "last_seen": 15.75,
+      "last_type": "float",
+      "last_value": "nan",
+      "peer": "reaper",
+      "rate": null,
+      "unknown": true
+     }
+    ]
+   },
+   "t": 17.0
+  }
+ },
+ "peers": [
+  {
+   "host": "192.168.43.55",
+   "name": "mixer",
+   "only": null,
+   "peers": {
+    "mixer": "192.168.43.55",
+    "motion": "192.168.43.54",
+    "reaper": "127.0.0.1"
+   }
+  },
+  {
+   "host": "127.0.0.1",
+   "name": "reaper",
+   "only": null,
+   "peers": {
+    "mixer": "192.168.43.55",
+    "motion": "192.168.43.54",
+    "reaper": "127.0.0.1"
+   }
+  },
+  {
+   "host": "10.0.0.9",
+   "name": "10.0.0.9",
+   "only": null,
+   "peers": {
+    "mixer": "192.168.43.55",
+    "motion": "192.168.43.54",
+    "reaper": "127.0.0.1"
+   }
+  },
+  {
+   "host": "a",
+   "name": "a",
+   "only": null,
+   "peers": {
+    "mixer": "192.168.43.55",
+    "motion": "192.168.43.54",
+    "reaper": "127.0.0.1"
+   }
+  },
+  {
+   "host": "192.168.43.55",
+   "name": "192.168.43.55",
+   "only": null,
+   "peers": {
+    "mixer": "127.0.0.1",
+    "motion": "127.0.0.1",
+    "reaper": "127.0.0.1"
+   }
+  },
+  {
+   "host": "127.0.0.1",
+   "name": "127.0.0.1 (mehrdeutig)",
+   "only": null,
+   "peers": {
+    "mixer": "127.0.0.1",
+    "motion": "127.0.0.1",
+    "reaper": "127.0.0.1"
+   }
+  },
+  {
+   "host": "10.0.0.9",
+   "name": "10.0.0.9",
+   "only": null,
+   "peers": {
+    "mixer": "127.0.0.1",
+    "motion": "127.0.0.1",
+    "reaper": "127.0.0.1"
+   }
+  },
+  {
+   "host": "a",
+   "name": "a",
+   "only": null,
+   "peers": {
+    "mixer": "127.0.0.1",
+    "motion": "127.0.0.1",
+    "reaper": "127.0.0.1"
+   }
+  },
+  {
+   "host": "192.168.43.55",
+   "name": "192.168.43.55",
+   "only": [
+    "mixer",
+    "motion"
+   ],
+   "peers": {
+    "mixer": "192.168.8.11",
+    "motion": "127.0.0.1",
+    "reaper": "127.0.0.1"
+   }
+  },
+  {
+   "host": "127.0.0.1",
+   "name": "motion",
+   "only": [
+    "mixer",
+    "motion"
+   ],
+   "peers": {
+    "mixer": "192.168.8.11",
+    "motion": "127.0.0.1",
+    "reaper": "127.0.0.1"
+   }
+  },
+  {
+   "host": "10.0.0.9",
+   "name": "10.0.0.9",
+   "only": [
+    "mixer",
+    "motion"
+   ],
+   "peers": {
+    "mixer": "192.168.8.11",
+    "motion": "127.0.0.1",
+    "reaper": "127.0.0.1"
+   }
+  },
+  {
+   "host": "a",
+   "name": "a",
+   "only": [
+    "mixer",
+    "motion"
+   ],
+   "peers": {
+    "mixer": "192.168.8.11",
+    "motion": "127.0.0.1",
+    "reaper": "127.0.0.1"
+   }
+  },
+  {
+   "host": "192.168.43.55",
+   "name": "192.168.43.55",
+   "only": [
+    "reaper"
+   ],
+   "peers": {
+    "mixer": "192.168.8.11",
+    "motion": "127.0.0.1",
+    "reaper": "127.0.0.1"
+   }
+  },
+  {
+   "host": "127.0.0.1",
+   "name": "reaper",
+   "only": [
+    "reaper"
+   ],
+   "peers": {
+    "mixer": "192.168.8.11",
+    "motion": "127.0.0.1",
+    "reaper": "127.0.0.1"
+   }
+  },
+  {
+   "host": "10.0.0.9",
+   "name": "10.0.0.9",
+   "only": [
+    "reaper"
+   ],
+   "peers": {
+    "mixer": "192.168.8.11",
+    "motion": "127.0.0.1",
+    "reaper": "127.0.0.1"
+   }
+  },
+  {
+   "host": "a",
+   "name": "a",
+   "only": [
+    "reaper"
+   ],
+   "peers": {
+    "mixer": "192.168.8.11",
+    "motion": "127.0.0.1",
+    "reaper": "127.0.0.1"
+   }
+  },
+  {
+   "host": "192.168.43.55",
+   "name": "192.168.43.55",
+   "only": [
+    "mixer",
+    "motion"
+   ],
+   "peers": {
+    "mixer": "127.0.0.1",
+    "motion": "127.0.0.1",
+    "reaper": "192.168.8.20"
+   }
+  },
+  {
+   "host": "127.0.0.1",
+   "name": "127.0.0.1 (mehrdeutig)",
+   "only": [
+    "mixer",
+    "motion"
+   ],
+   "peers": {
+    "mixer": "127.0.0.1",
+    "motion": "127.0.0.1",
+    "reaper": "192.168.8.20"
+   }
+  },
+  {
+   "host": "10.0.0.9",
+   "name": "10.0.0.9",
+   "only": [
+    "mixer",
+    "motion"
+   ],
+   "peers": {
+    "mixer": "127.0.0.1",
+    "motion": "127.0.0.1",
+    "reaper": "192.168.8.20"
+   }
+  },
+  {
+   "host": "a",
+   "name": "a",
+   "only": [
+    "mixer",
+    "motion"
+   ],
+   "peers": {
+    "mixer": "127.0.0.1",
+    "motion": "127.0.0.1",
+    "reaper": "192.168.8.20"
+   }
+  },
+  {
+   "host": "192.168.43.55",
+   "name": "192.168.43.55",
+   "only": [],
+   "peers": {
+    "mixer": "a",
+    "motion": "a"
+   }
+  },
+  {
+   "host": "127.0.0.1",
+   "name": "127.0.0.1",
+   "only": [],
+   "peers": {
+    "mixer": "a",
+    "motion": "a"
+   }
+  },
+  {
+   "host": "10.0.0.9",
+   "name": "10.0.0.9",
+   "only": [],
+   "peers": {
+    "mixer": "a",
+    "motion": "a"
+   }
+  },
+  {
+   "host": "a",
+   "name": "a",
+   "only": [],
+   "peers": {
+    "mixer": "a",
+    "motion": "a"
+   }
+  },
+  {
+   "host": "192.168.43.55",
+   "name": "192.168.43.55",
+   "only": [
+    "nobody"
+   ],
+   "peers": {
+    "mixer": "a"
+   }
+  },
+  {
+   "host": "127.0.0.1",
+   "name": "127.0.0.1",
+   "only": [
+    "nobody"
+   ],
+   "peers": {
+    "mixer": "a"
+   }
+  },
+  {
+   "host": "10.0.0.9",
+   "name": "10.0.0.9",
+   "only": [
+    "nobody"
+   ],
+   "peers": {
+    "mixer": "a"
+   }
+  },
+  {
+   "host": "a",
+   "name": "a",
+   "only": [
+    "nobody"
+   ],
+   "peers": {
+    "mixer": "a"
+   }
+  }
+ ],
+ "sizes": [
+  [
+   "/a",
+   [
+    "float",
+    0.5
+   ],
+   12
+  ],
+  [
+   "/abcd",
+   [
+    "int",
+    3
+   ],
+   16
+  ],
+  [
+   "/abc",
+   [
+    "float",
+    1.0
+   ],
+   16
+  ],
+  [
+   "/x",
+   [
+    "str",
+    "1"
+   ],
+   12
+  ],
+  [
+   "/x",
+   [
+    "str",
+    "hello"
+   ],
+   16
+  ],
+  [
+   "/a",
+   [
+    "NoneType",
+    null
+   ],
+   8
+  ],
+  [
+   "/a",
+   [
+    "bool",
+    true
+   ],
+   8
+  ],
+  [
+   "/a",
+   [
+    "bool",
+    false
+   ],
+   8
+  ],
+  [
+   "/a/b/c/d/e",
+   [
+    "str",
+    ""
+   ],
+   20
+  ],
+  [
+   "/\u00e4\u00fc",
+   [
+    "str",
+    "\u00fc\u00f6\u00e4"
+   ],
+   20
+  ],
+  [
+   "/b",
+   [
+    "bytes",
+    "010203"
+   ],
+   16
+  ],
+  [
+   "/b",
+   [
+    "bytes",
+    ""
+   ],
+   12
+  ],
+  [
+   "/m",
+   [
+    "tuple",
+    [
+     1,
+     2,
+     3,
+     4
+    ]
+   ],
+   12
+  ],
+  [
+   "/big",
+   [
+    "int",
+    1099511627776
+   ],
+   16
+  ]
+ ]
+}

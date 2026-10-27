@@ -39,3 +39,41 @@ License: CC-BY-SA-4.0
 Files: .github/*
 Copyright: 2026 A3 Audio <contact@a3-audio.com>
 License: CC0-1.0
+
+Files: src/* tests/* tools/parity/data/* host/* CMakeLists.txt build.sh test.sh .gitignore bench/* app/* cmake/* data/*
+ src/iem-adapter/* src/iem-nodes/*
+Copyright: 2023-2026 A³ Audio contributors
+License: GPL-3.0-or-later
+
+Files: src/a3-engine/PurestGain.* src/a3-engine/SmoothEQ3.* src/a3-engine/Isolator3.*
+Copyright: 2018 Chris Johnson
+ 2023-2026 A³ Audio contributors
+License: GPL-3.0-or-later AND MIT
+Comment: Rebuilds of the Airwindows PurestGain, SmoothEQ3 and Isolator3 algorithms.
+
+Files: tests/engine/reference/airwindows/*
+Copyright: 2018 Chris Johnson
+License: MIT
+
+Files: *.md PROGRAM.md
+Copyright: 2026 A³ Audio contributors
+License: CC-BY-SA-4.0
+
+Files: packaging/*
+Copyright: 2026 A³ Audio contributors
+License: GPL-3.0-or-later
+
+Files: third_party/IEMPluginSuite/*
+Copyright: 2017-2026 Institute of Electronic Music and Acoustics (IEM), Graz
+License: GPL-3.0-or-later
+
+Files: third_party/IEMPluginSuite/BinauralDecoder/Source/IRs/*.wav
+ third_party/IEMPluginSuite/BinauralDecoder/Source/EQ/*.wav
+Copyright: 2013 Benjamin Bernschütz, TH Köln
+ 2017-2026 Institute of Electronic Music and Acoustics (IEM), Graz
+License: GPL-3.0-or-later AND CC-BY-3.0
+Comment: HRIR data: Benjamin Bernschütz, TH Köln, "A Spherical Far Field HRIR/HRTF Compilation of the Neumann KU 100", Proceedings of the 40th Italian (AIA) Annual Conference on Acoustics and the 39th German Annual Conference on Acoustics (DAGA), Merano 2013; dataset https://zenodo.org/records/3928297, licensed CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/). Binaural IRs rendered from it by IEM (MagLS); headphone EQs by Benjamin Bernschütz.
+
+Files: third_party/IEMPluginSuite/resources/lookAndFeel/Roboto-*.ttf
+Copyright: 2012 Google
+License: Apache-2.0

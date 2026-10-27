@@ -1,0 +1,13 @@
+{
+ "about": "A device's /state/recall is answered with the whole state to every subscriber and LIVE to the asker (Motion; a followed desk), but it does not carry Core's token: the engine gets no state words and is not opened again. An old token and a stranger's recall are the same.",
+ "steps": [
+ {"at": 0.1, "from": ["127.0.0.1", 41000], "osc": ["/engine/hello", ["s", "boot-1"]]},
+ {"at": 0.2, "from": ["127.0.0.1", 40001], "osc": ["/device/hello", ["s", "motion"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+ {"at": 0.3, "from": ["127.0.0.1", 40001], "osc": ["/state/recall"]},
+ {"at": 0.4, "from": ["192.168.8.40", 7773], "osc": ["/device/hello", ["s", "desk"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+ {"at": 0.5, "from": ["192.168.8.40", 7773], "osc": ["/state/recall"]},
+ {"at": 0.6, "from": ["192.168.8.11", 50001], "osc": ["/state/recall", ["i", 1000001]]},
+ {"at": 0.7, "from": ["192.168.8.50", 9999], "osc": ["/state/recall", ["s", "x"]]},
+ {"at": 1.0, "flush": true}
+ ]
+}

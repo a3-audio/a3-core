@@ -1,0 +1,23 @@
+{
+ "about": "Motion, after its hello, sends floats: positions clamped and kept but never relayed, the 3D blend relayed and kept, a repeat dropped, number buttons are states; a NaN 3D is kept, and later messages that change nothing do not restart the state file's debounce (B1 compares the same NaN object as equal).",
+ "steps": [
+  {"at": 0.1, "from": ["127.0.0.1", 40001], "osc": ["/device/hello", ["s", "motion"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+  {"at": 0.2, "from": ["127.0.0.1", 40001], "osc": ["/channel/1/azimuth", ["f", 200.0]]},
+  {"at": 0.25, "from": ["127.0.0.1", 40001], "osc": ["/channel/1/elevation", ["f", -100.0]]},
+  {"at": 0.3, "from": ["127.0.0.1", 40001], "osc": ["/channel/1/3d", ["f", 0.62]]},
+  {"at": 0.35, "from": ["127.0.0.1", 40001], "osc": ["/channel/2/gain", ["f", 0.5]]},
+  {"at": 0.4, "from": ["127.0.0.1", 40001], "osc": ["/channel/2/gain", ["f", 0.5]]},
+  {"at": 0.45, "from": ["127.0.0.1", 40001], "osc": ["/channel/1/cue", ["T", null]]},
+  {"at": 0.5, "from": ["127.0.0.1", 40001], "osc": ["/channel/1/cue", ["f", 0.0]]},
+  {"at": 0.55, "from": ["127.0.0.1", 40001], "osc": ["/channel/2/filter", ["i", 1]]},
+  {"at": 0.6, "from": ["127.0.0.1", 40001], "osc": ["/channel/2/filter", ["i", 1]]},
+  {"at": 0.65, "from": ["127.0.0.1", 40001], "osc": ["/master/phones-mix", ["f", 0.25]]},
+  {"at": 1.0, "from": ["127.0.0.1", 40001], "osc": ["/channel/3/3d", ["f", NaN]]},
+  {"at": 1.5, "from": ["127.0.0.1", 40001], "osc": ["/channel/2/gain", ["f", 0.6]]},
+  {"at": 2.0, "from": ["127.0.0.1", 40001], "osc": ["/channel/2/gain", ["f", 0.7]]},
+  {"at": 2.5, "from": ["127.0.0.1", 40001], "osc": ["/channel/2/gain", ["f", 0.8]]},
+  {"at": 2.9, "tick": true},
+  {"at": 3.05, "tick": true},
+  {"at": 3.5, "flush": true}
+ ]
+}

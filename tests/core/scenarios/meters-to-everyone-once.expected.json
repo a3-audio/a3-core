@@ -1,0 +1,1163 @@
+[
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/1/cue/led",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/1/cue/led",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/1/filter/led",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/1/filter/led",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/2/cue/led",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/2/cue/led",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/2/filter/led",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/2/filter/led",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/3/cue/led",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/3/cue/led",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/3/filter/led",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/3/filter/led",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/4/cue/led",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/4/cue/led",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/4/filter/led",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/4/filter/led",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/filter/led",
+  "args": [
+   [
+    "s",
+    "low_pass"
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/filter/led",
+  "args": [
+   [
+    "s",
+    "low_pass"
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/aux-return/cue/led",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/aux-return/cue/led",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/1/cue",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/1/cue",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/1/filter",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/1/filter",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/2/cue",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/2/cue",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/2/filter",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/2/filter",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/3/cue",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/3/cue",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/3/filter",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/3/filter",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/4/cue",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/4/cue",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/4/filter",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/4/filter",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/filter/mode",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/filter/mode",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/1/stem",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/1/stem",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/1/stem/cursor",
+  "args": [
+   [
+    "i",
+    8
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/1/stem/cursor",
+  "args": [
+   [
+    "i",
+    8
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/2/stem",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/2/stem",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/2/stem/cursor",
+  "args": [
+   [
+    "i",
+    8
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/2/stem/cursor",
+  "args": [
+   [
+    "i",
+    8
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/3/stem",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/3/stem",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/3/stem/cursor",
+  "args": [
+   [
+    "i",
+    8
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/3/stem/cursor",
+  "args": [
+   [
+    "i",
+    8
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/4/stem",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/4/stem",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/4/stem/cursor",
+  "args": [
+   [
+    "i",
+    8
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/4/stem/cursor",
+  "args": [
+   [
+    "i",
+    8
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/aux-return/stem",
+  "args": [
+   [
+    "i",
+    1
+   ],
+   [
+    "i",
+    0
+   ],
+   [
+    "i",
+    0
+   ],
+   [
+    "i",
+    0
+   ],
+   [
+    "i",
+    0
+   ],
+   [
+    "i",
+    0
+   ],
+   [
+    "i",
+    0
+   ],
+   [
+    "i",
+    0
+   ],
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/aux-return/stem",
+  "args": [
+   [
+    "i",
+    1
+   ],
+   [
+    "i",
+    0
+   ],
+   [
+    "i",
+    0
+   ],
+   [
+    "i",
+    0
+   ],
+   [
+    "i",
+    0
+   ],
+   [
+    "i",
+    0
+   ],
+   [
+    "i",
+    0
+   ],
+   [
+    "i",
+    0
+   ],
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/aux-return/stem/mode",
+  "args": [
+   [
+    "i",
+    1
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/aux-return/stem/mode",
+  "args": [
+   [
+    "i",
+    1
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/1/source",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/1/source",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/2/source",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/2/source",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/3/source",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/3/source",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/4/source",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/4/source",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/1/source/cursor",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/1/source/cursor",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/2/source/cursor",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/2/source/cursor",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/3/source/cursor",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/3/source/cursor",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/channel/4/source/cursor",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/channel/4/source/cursor",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/stemdeck/1/present",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/stemdeck/1/present",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/stemdeck/2/present",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/stemdeck/2/present",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/stemdeck/3/present",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/stemdeck/3/present",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/stemdeck/4/present",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/stemdeck/4/present",
+  "args": [
+   [
+    "i",
+    0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "journal": "startup: spoke the remembered state, 19 messages to 2 subscribers",
+  "stderr": false
+ },
+ {
+  "at": 0.0,
+  "journal": "0 addresses remembered from <state>/seen.json",
+  "stderr": false
+ },
+ {
+  "at": 0.1,
+  "to": "vu",
+  "host": "127.0.0.1",
+  "port": 7772,
+  "raw": "I2J1bmRsZQAAAAAAAAAAAQAAABQvdnUvMQAAACxmZgA/AAAAPoAAAAAAABQvdnUvMgAAACxmZgA/AAAAPoAAAAAAABQvdnUvMwAAACxmZgA/AAAAPoAAAAAAABQvdnUvNAAAACxmZgA/AAAAPoAAAAAAABQvdnUvNQAAACxmZgA/AAAAPoAAAAAAABQvdnUvNgAAACxmZgA/AAAAPoAAAAAAABQvdnUvNwAAACxmZgA/AAAAPoAAAAAAABQvdnUvOAAAACxmZgA/AAAAPoAAAAAAABQvdnUvOQAAACxmZgA/AAAAPoAAAAAAABQvdnUvMTAAACxmZgA/AAAAPoAAAA=="
+ },
+ {
+  "at": 0.1,
+  "to": "vu",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "raw": "I2J1bmRsZQAAAAAAAAAAAQAAABQvdnUvMQAAACxmZgA/AAAAPoAAAAAAABQvdnUvMgAAACxmZgA/AAAAPoAAAAAAABQvdnUvMwAAACxmZgA/AAAAPoAAAAAAABQvdnUvNAAAACxmZgA/AAAAPoAAAAAAABQvdnUvNQAAACxmZgA/AAAAPoAAAAAAABQvdnUvNgAAACxmZgA/AAAAPoAAAAAAABQvdnUvNwAAACxmZgA/AAAAPoAAAAAAABQvdnUvOAAAACxmZgA/AAAAPoAAAAAAABQvdnUvOQAAACxmZgA/AAAAPoAAAAAAABQvdnUvMTAAACxmZgA/AAAAPoAAAA=="
+ },
+ {
+  "at": 0.1,
+  "to": "vu",
+  "host": "192.168.43.96",
+  "port": 9001,
+  "raw": "I2J1bmRsZQAAAAAAAAAAAQAAABQvdnUvMQAAACxmZgA/AAAAPoAAAAAAABQvdnUvMgAAACxmZgA/AAAAPoAAAAAAABQvdnUvMwAAACxmZgA/AAAAPoAAAAAAABQvdnUvNAAAACxmZgA/AAAAPoAAAAAAABQvdnUvNQAAACxmZgA/AAAAPoAAAAAAABQvdnUvNgAAACxmZgA/AAAAPoAAAAAAABQvdnUvNwAAACxmZgA/AAAAPoAAAAAAABQvdnUvOAAAACxmZgA/AAAAPoAAAAAAABQvdnUvOQAAACxmZgA/AAAAPoAAAAAAABQvdnUvMTAAACxmZgA/AAAAPoAAAA=="
+ }
+]

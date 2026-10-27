@@ -1,0 +1,6 @@
+{"channels": [{"toggle_fx": false, "toggle_cue": false, "three_d": 1e-05},
+              {"toggle_fx": true, "toggle_cue": false, "three_d": 1e+16},
+              {"toggle_fx": false, "toggle_cue": true, "three_d": -0.0},
+              {"toggle_fx": false, "toggle_cue": false, "three_d": 0.1}],
+ "fx_mode": 0, "phones_mix": 0.1, "return_cue": false,
+ "stems": {"empty": [], "none": {}, "big": 12345678901234, "text": "äß\"\\/", "t": true, "n": null, "f": 2.5e-07}}

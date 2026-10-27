@@ -1,0 +1,182 @@
+// SPDX-FileCopyrightText: 2026 Raphael Eismann
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include "Recall.h"
+
+#include <algorithm>
+#include <cstring>
+
+namespace a3core
+{
+namespace
+{
+bool lit (LedFlag flag, const ChannelInfo& channel) { return flag == LedFlag::cue ? channel.toggleCue : channel.toggleFx; }
+
+// Each flag's address on the wire, next to its lamp's: a lamp is a light, a flag is a setting.
+const char* flagKey (LedFlag flag) { return flag == LedFlag::cue ? "channel.cue" : "channel.filter"; }
+
+Message flagMessage (const Truth& truth, LedFlag flag, int index, const ChannelInfo& channel)
+{
+    return { truth.address (flagKey (flag), { { "ch", index + 1 } }), pyFloat (lit (flag, channel) ? 1.0 : 0.0) };
+}
+
+// Numbers as Python compares them, whatever holds them; anything else by tag and value.
+struct Number
+{
+    bool whole;
+    long long integer;
+    long double real;
+};
+
+std::optional<Number> numberOf (const OscArg& arg)
+{
+    switch (arg.tag)
+    {
+        case 'i': return Number { true, std::get<int32_t> (arg.value), 0 };
+        case 'h': case 'r': case 't': return Number { true, std::get<int64_t> (arg.value), 0 };
+        case 'T': return Number { true, 1, 0 };
+        case 'F': return Number { true, 0, 0 };
+        case 'f': case 'd':
+            if (const auto* single = std::get_if<float> (&arg.value))
+                return Number { false, 0, *single };
+            return Number { false, 0, std::get<double> (arg.value) };
+        default: return std::nullopt;
+    }
+}
+}
+
+bool sameAsPython (const OscArg& a, const OscArg& b)
+{
+    const auto left = numberOf (a);
+    const auto right = numberOf (b);
+    if (! left && ! right)
+        return a.tag == b.tag && a.value == b.value;
+    if (! left || ! right)
+        return false;
+    if (left->whole && right->whole)
+        return left->integer == right->integer;
+    const auto real = [] (const Number& n) { return n.whole ? static_cast<long double> (n.integer) : n.real; };
+    return real (*left) == real (*right);
+}
+
+const char* ledKey (LedFlag flag) { return flag == LedFlag::cue ? "channel.cue.led" : "channel.filter.led"; }
+
+Message ledMessage (const Truth& truth, LedFlag flag, int index, const ChannelInfo& channel)
+{
+    return { truth.address (ledKey (flag), { { "ch", index + 1 } }), pyFloat (lit (flag, channel) ? 1.0 : 0.0) };
+}
+
+Message returnCueLamp (const Truth& truth, const MasterInfo& master)
+{
+    return { truth.address ("aux-return.cue.led"), pyFloat (master.returnCue ? 1.0 : 0.0) };
+}
+
+std::vector<Message> rememberedMessages (const Truth& truth, const std::vector<ChannelInfo>& channels)
+{
+    std::vector<Message> out;
+    for (size_t index = 0; index < channels.size(); ++index)
+    {
+        const std::map<std::string, int> at { { "ch", static_cast<int> (index) + 1 } };
+        const auto& channel = channels[index];
+        // `is None`, not falsiness: 0.0 is the front of the room, a real position.
+        if (channel.azimuth) out.emplace_back (truth.address ("channel.azimuth", at), pyFloat (*channel.azimuth));
+        if (channel.elevation) out.emplace_back (truth.address ("channel.elevation", at), pyFloat (*channel.elevation));
+        if (channel.threeD) out.emplace_back (truth.address ("channel.3d", at), pyFloat (*channel.threeD));
+    }
+    return out;
+}
+
+std::vector<Message> lampMessages (const Truth& truth, const std::vector<ChannelInfo>& channels, const MasterInfo& master)
+{
+    std::vector<Message> out;
+    for (size_t index = 0; index < channels.size(); ++index)
+        for (const auto flag : ledFlags)
+            out.push_back (ledMessage (truth, flag, static_cast<int> (index), channels[index]));
+    out.emplace_back (truth.address ("filter.led"), pyStr (fxModeWords.at (master.fxMode)));
+    out.push_back (returnCueLamp (truth, master));
+    return out;
+}
+
+std::vector<Message> flagMessages (const Truth& truth, const std::vector<ChannelInfo>& channels, const MasterInfo& master)
+{
+    std::vector<Message> out;
+    for (size_t index = 0; index < channels.size(); ++index)
+        for (const auto flag : ledFlags)
+            out.push_back (flagMessage (truth, flag, static_cast<int> (index), channels[index]));
+    out.emplace_back (truth.address ("filter.mode"), pyFloat (fxModeNumbers.at (master.fxMode)));
+    return out;
+}
+
+bool Relayed::holds (const std::string& address, const OscArg& value) const
+{
+    const auto* found = find (address);
+    return found != nullptr && ! found->list && sameAsPython (found->args.front(), value);
+}
+
+bool Relayed::holds (const std::string& address, const std::vector<OscArg>& list) const
+{
+    const auto* found = find (address);
+    if (found == nullptr || ! found->list || found->args.size() != list.size())
+        return false;
+    return std::equal (list.begin(), list.end(), found->args.begin(), sameAsPython);
+}
+
+void Relayed::note (const std::string& address, OscArg value) { put (address, { { std::move (value) }, false }); }
+
+void Relayed::note (const std::string& address, std::vector<OscArg> list) { put (address, { std::move (list), true }); }
+
+std::optional<OscArg> Relayed::value (const std::string& address) const
+{
+    const auto* found = find (address);
+    if (found == nullptr || found->list)
+        return std::nullopt;
+    return found->args.front();
+}
+
+bool Relayed::isList (const std::string& address) const
+{
+    const auto* found = find (address);
+    return found != nullptr && found->list;
+}
+
+std::vector<OscMessage> Relayed::messages() const
+{
+    std::vector<OscMessage> out;
+    for (const auto& [address, value] : held)
+        out.push_back ({ address, value.args });
+    return out;
+}
+
+void Relayed::put (const std::string& address, Held value)
+{
+    const auto found = place.find (address);
+    if (found != place.end())
+    {
+        held[found->second].second = std::move (value);
+        return;
+    }
+    place.emplace (address, held.size());
+    held.emplace_back (address, std::move (value));
+}
+
+const Relayed::Held* Relayed::find (const std::string& address) const
+{
+    const auto found = place.find (address);
+    return found == place.end() ? nullptr : &held[found->second].second;
+}
+
+std::vector<OscMessage> recallMessages (const Truth& truth, const std::vector<ChannelInfo>& channels, const MasterInfo& master,
+                                        const Relayed& relayed)
+{
+    std::vector<OscMessage> out;
+    const auto append = [&out] (const std::vector<Message>& more) {
+        for (const auto& [address, value] : more)
+            out.push_back ({ address, { value } });
+    };
+    append (lampMessages (truth, channels, master));
+    append (flagMessages (truth, channels, master));
+    append (rememberedMessages (truth, channels));
+    for (auto& message : relayed.messages())
+        out.push_back (std::move (message));
+    return out;
+}
+}
