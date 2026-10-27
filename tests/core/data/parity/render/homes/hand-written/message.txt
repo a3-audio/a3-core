@@ -1,0 +1,1 @@
+kept ~/.config/pipewire/pipewire-aes67.conf: not rendered by a3-osc-render

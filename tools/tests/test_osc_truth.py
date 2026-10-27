@@ -68,24 +68,47 @@ class ThePorts(unittest.TestCase):
     def test_who_listens_where(self):
         t = truth()
         self.assertEqual(t.port("core", "osc"), 9000)
-        self.assertEqual(t.port("core", "reaper-feedback"), 9002)
         self.assertEqual(t.port("motion", "osc"), 7771)
         self.assertEqual(t.port("motion", "vu"), 7772)
         self.assertEqual(t.port("motion", "energy"), 7777)
         self.assertEqual(t.port("mixer", "osc"), 7772)
         self.assertEqual(t.port("beat-analyzer", "clock"), 7775)
-        self.assertEqual(t.port("reaper", "osc"), 9001)
-        self.assertEqual(t.port("dualdelay", "osc"), 1340)
         self.assertEqual(t.port("prolink", "announce"), 50000)
 
     def test_the_engine_bench_listens_on_the_first_free_port_above_core(self):
-        """9004: the lowest port above 9000 that no listener holds (2026-10-16)."""
+        """9004: the lowest port above 9000 that no listener held (2026-10-16).
+        REAPER's 9002 is free again since 2026-10-27; the engine stays where
+        every device already sends to it."""
         t = truth()
         self.assertEqual(t.port("engine", "osc"), 9004)
         self.assertIn("engine", t.programs())
         others = [l["port"] for l in t.listeners() if l["name"] != "engine.osc"]
         self.assertNotIn(9004, others)
-        self.assertEqual([p for p in range(9001, 9004) if p not in others], [])
+
+    def test_no_reaper_ports(self):
+        """REAPER left the Core on 2026-10-27, and with it the receivers that
+        lived inside its project: its own OSC port, Core's feedback port, the
+        IEM MultiEncoders' and the DualDelay's."""
+        t = truth()
+        gone = ("reaper", "dualdelay")
+        self.assertEqual([p for p in t.programs() if p in gone], [])
+        self.assertEqual([l["name"] for l in t.listeners()
+                          if l["program"] in gone or "reaper" in l["name"]
+                          or l["name"].startswith("iem.multiencoder-")], [])
+        self.assertEqual([r for r in t.routes()
+                          if r["from"] in gone or "reaper" in r["to"]
+                          or r["to"].split(".")[0] in gone
+                          or r["to"].startswith("iem.multiencoder-")], [])
+        self.assertNotIn("reaper", t.external())
+
+    def test_motion_energy_stays(self):
+        """Motion still reads its energy listener; the IEM vocabulary stays
+        with it."""
+        t = truth()
+        self.assertEqual(t.port("motion", "energy"), 7777)
+        self.assertIn({"from": "iem", "to": "motion.energy"}, t.routes())
+        self.assertIn("iem", t.programs())
+        self.assertIn("iem", t.external())
 
     def test_no_two_listeners_on_one_host_and_port(self):
         # "any", "local" and "core" are one machine: a port bound on all of

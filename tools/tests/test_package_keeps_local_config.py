@@ -11,10 +11,10 @@ added under ``etc/`` cannot quietly lose that protection.
 """
 
 import unittest
-from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config" / "debian-x86_64" / "a3-core"
-CONFFILES = PACKAGE / "DEBIAN" / "conffiles"
+from tools.tests.paths import DEBIAN, PACKAGE
+
+CONFFILES = DEBIAN / "conffiles"
 ETC = PACKAGE / "etc"
 
 

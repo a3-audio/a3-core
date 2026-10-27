@@ -1,0 +1,16 @@
+{
+ "about": "The hello gate: Motion's values before its hello are ignored (said once), a button passes; a hello with another truth keeps the gate shut and says so once; a hello with Core's own truth opens it.",
+ "steps": [
+  {"at": 0.1, "from": ["127.0.0.1", 40001], "osc": ["/channel/1/gain", ["f", 0.5]]},
+  {"at": 0.15, "from": ["127.0.0.1", 40001], "osc": ["/channel/1/gain", ["f", 0.6]]},
+  {"at": 0.2, "from": ["127.0.0.1", 40001], "osc": ["/channel/1/cue", ["f", 1.0]]},
+  {"at": 0.3, "from": ["127.0.0.1", 40001], "osc": ["/device/hello", ["s", "motion"], ["s", "000000000000000000000000000000000000000000000000000000000000beef"]]},
+  {"at": 0.35, "from": ["127.0.0.1", 40001], "osc": ["/channel/1/gain", ["f", 0.7]]},
+  {"at": 0.4, "from": ["127.0.0.1", 40001], "osc": ["/master/volume", ["f", 0.7]]},
+  {"at": 0.5, "from": ["127.0.0.1", 40001], "osc": ["/device/hello", ["s", "motion"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+  {"at": 0.55, "from": ["127.0.0.1", 40001], "osc": ["/channel/1/gain", ["f", 0.8]]},
+  {"at": 0.6, "from": ["127.0.0.1", 40001], "osc": ["/device/hello", ["s", "motion"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+  {"at": 0.65, "from": ["127.0.0.1", 40001], "osc": ["/device/hello", ["s", "motion"]]},
+  {"at": 1.0, "flush": true}
+ ]
+}

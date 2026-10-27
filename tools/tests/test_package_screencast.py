@@ -15,12 +15,13 @@ import sys
 import unittest
 from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config/debian-x86_64/a3-core"
+from tools.tests.paths import DEBIAN, PACKAGE, ROOT
+
 HOME = PACKAGE / "home/aaa/.local"
 SCRIPT = HOME / "bin/a3-screencast"
 UNIT = HOME / "share/a3-core/config/systemd/user/a3-screencast.service"
 WANTS = HOME / "share/a3-core/config/systemd/user/default.target.wants"
-CONTROL = PACKAGE / "DEBIAN/control"
+CONTROL = DEBIAN / "control"
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import a3_osc          # noqa: E402
@@ -89,7 +90,7 @@ class TheUnit(unittest.TestCase):
     def test_the_package_does_not_enable_it(self):
         self.assertIn("WantedBy=default.target", UNIT.read_text())  # so `enable` works
         self.assertFalse(list(WANTS.glob("a3-screencast*")))
-        self.assertNotIn("a3-screencast", (PACKAGE / "DEBIAN/postinst").read_text())
+        self.assertNotIn("a3-screencast", (DEBIAN / "postinst").read_text())
 
 
 class TheScript(unittest.TestCase):
@@ -109,8 +110,8 @@ class TheScript(unittest.TestCase):
 
     def test_it_defaults_to_a_core_the_audio_units_leave_free(self):
         default = re.search(r"A3_SCREENCAST_CPUS:-([^}]+)\}", SCRIPT.read_text()).group(1)
-        reaper = UNIT.with_name("a3-reaper.service").read_text()
-        audio = re.search(r"^CPUAffinity=(.*)$", reaper, re.M).group(1).split()
+        engine = (ROOT / "packaging/a3-engine.service").read_text()
+        audio = re.search(r"^CPUAffinity=(.*)$", engine, re.M).group(1).split()
         self.assertEqual("0", default)
         self.assertNotIn(default, audio)
 

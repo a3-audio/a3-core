@@ -16,12 +16,13 @@ unedited). Every key except the three we change must equal it.
 import unittest
 from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config/debian-x86_64/a3-core"
+from tools.tests.paths import DEBIAN, PACKAGE
+
 CONF = PACKAGE / "etc/linuxptp/a3-ptp4l.conf"
 DROPIN = PACKAGE / "etc/systemd/system/ptp4l@.service.d/a3.conf"
 STOCK = Path(__file__).resolve().parent / "linuxptp-stock-ptp4l.conf"
-CONFFILES = PACKAGE / "DEBIAN/conffiles"
-POSTINST = PACKAGE / "DEBIAN/postinst"
+CONFFILES = DEBIAN / "conffiles"
+POSTINST = DEBIAN / "postinst"
 
 CHANGED = {"step_threshold": "0.001", "priority1": "100", "clientOnly": "0"}
 

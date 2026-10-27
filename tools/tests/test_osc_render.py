@@ -14,12 +14,13 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config" / "debian-x86_64" / "a3-core"
+from tools.tests.paths import DEBIAN, PACKAGE
+
 LIB = Path(__file__).resolve().parents[1] / "lib"
 TRUTH_FILE = PACKAGE / "usr/share/a3/a3-osc.json"
 UNITS = PACKAGE / "home/aaa/.local/share/a3-core/config/systemd/user"
-POSTINST = PACKAGE / "DEBIAN/postinst"
-TEMPLATES = PACKAGE / "DEBIAN/templates"
+POSTINST = DEBIAN / "postinst"
+TEMPLATES = DEBIAN / "templates"
 
 sys.path.insert(0, str(LIB))
 import a3_osc          # noqa: E402

@@ -1,0 +1,18 @@
+{
+ "about": "A device names itself and the sha256 of its truth; said once when it is news: Core's own, or DIFFERS -- a desk or pro-DJ app on another truth is not followed, and the line names it by its host; a device that changes its mind is said again; a hello without its hash is only seen.",
+ "steps": [
+ {"at": 0.1, "from": ["192.168.8.11", 50001], "osc": ["/device/hello", ["s", "mixer"], ["s", "000000000000000000000000000000000000000000000000000000000000beef"]]},
+ {"at": 0.2, "from": ["192.168.8.11", 50001], "osc": ["/device/hello", ["s", "mixer"], ["s", "000000000000000000000000000000000000000000000000000000000000beef"]]},
+ {"at": 0.3, "from": ["192.168.8.11", 50001], "osc": ["/device/hello", ["s", "mixer"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+ {"at": 0.4, "from": ["192.168.8.40", 7773], "osc": ["/device/hello", ["s", "desk"], ["s", "000000000000000000000000000000000000000000000000000000000000beef"]]},
+ {"at": 0.5, "from": ["192.168.8.60", 7773], "osc": ["/device/hello", ["s", "prodj"], ["s", "000000000000000000000000000000000000000000000000000000000000beef"]]},
+ {"at": 0.6, "from": ["127.0.0.2", 6000], "osc": ["/device/hello", ["s", "stemdeck"], ["s", "000000000000000000000000000000000000000000000000000000000000beef"]]},
+ {"at": 0.7, "from": ["127.0.0.1", 40001], "osc": ["/device/hello", ["s", "motion"], ["s", "000000000000000000000000000000000000000000000000000000000000beef"]]},
+ {"at": 0.75, "from": ["127.0.0.1", 40001], "osc": ["/channel/1/gain", ["f", 0.5]]},
+ {"at": 0.8, "from": ["127.0.0.1", 40001], "osc": ["/device/hello", ["s", "motion"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+ {"at": 0.85, "from": ["192.168.8.70", 5000], "osc": ["/device/hello", ["s", "radla"]]},
+ {"at": 0.9, "from": ["192.168.8.70", 5000], "osc": ["/device/hello", ["i", 3], ["f", 1.5]]},
+ {"at": 0.95, "from": ["192.168.8.70", 5000], "osc": ["/device/hello", ["s", "radla"], ["s", "short"]]},
+ {"at": 1.5, "flush": true}
+ ]
+}

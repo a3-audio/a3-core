@@ -1,0 +1,1 @@
+network.json refused, the package's defaults are used: @HOME@/bad.json is not JSON: Expecting value: line 1 column 1 (char 0)

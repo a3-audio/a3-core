@@ -8,8 +8,8 @@ socket and the sender's name are this machine's, everything else is the
 package's.
 
 What the rig settled on (2026-10-13/14), each a test below: the sender is not
-in the PTP group -- the Scarlett drives it like REAPER, so the samples go out
-unconverted and REAPER is never pulled under PTP; received streams are in the
+in the PTP group -- the Scarlett drives it like the engine (then REAPER), so
+the samples go out unconverted and the engine is never pulled under PTP; received streams are in the
 PTP group with 12 ms of buffer; the PTP driver outranks every other driver;
 errors only in the log, or journald throttles the real errors away under the
 sender's "missing timeout" warnings.
@@ -25,11 +25,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config/debian-x86_64/a3-core"
+from tools.tests.paths import DEBIAN, PACKAGE
+
 LIB = Path(__file__).resolve().parents[1] / "lib"
 UNITS = PACKAGE / "home/aaa/.local/share/a3-core/config/systemd/user"
 UNIT = UNITS / "a3-aes67.service"
-POSTINST = PACKAGE / "DEBIAN/postinst"
+POSTINST = DEBIAN / "postinst"
 TRUTH_FILE = PACKAGE / "usr/share/a3/a3-osc.json"
 
 sys.path.insert(0, str(LIB))

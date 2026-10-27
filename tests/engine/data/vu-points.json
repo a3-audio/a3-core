@@ -1,0 +1,509 @@
+{
+ "_comment": "The /vu meters beat-analyzer measured (7dd100b16410f0aec58638db37663d99374753d1) and where the engine takes each (O13, P11; baseline Step 7). patchbay = the REAPER out a3-patchbay.xml fed the analyzer's port from (REAPER's VU outs: 1-20 out n+30, 21-36 out n-10, 51-66 out n); defaultMap = the link of Plan 4's data/engine.json (before Task 24) that fed it in engine mode, now removed. 41-50 are StemDeck's own and not the engine's.",
+ "meters": [
+  {
+   "n": 1,
+   "name": "analog1_L",
+   "analyzerPort": "vu_analog1_L",
+   "kind": "input",
+   "patchbay": "REAPER:out31 -> beat-analyzer:vu_analog1_L",
+   "defaultMap": "direct system:capture_1 -> beat-analyzer:vu_analog1_L",
+   "point": "engine input analog_1, raw, before any processing"
+  },
+  {
+   "n": 2,
+   "name": "analog1_R",
+   "analyzerPort": "vu_analog1_R",
+   "kind": "input",
+   "patchbay": "REAPER:out32 -> beat-analyzer:vu_analog1_R",
+   "defaultMap": "direct system:capture_2 -> beat-analyzer:vu_analog1_R",
+   "point": "engine input analog_2, raw, before any processing"
+  },
+  {
+   "n": 3,
+   "name": "analog2_L",
+   "analyzerPort": "vu_analog2_L",
+   "kind": "input",
+   "patchbay": "REAPER:out33 -> beat-analyzer:vu_analog2_L",
+   "defaultMap": "direct system:capture_3 -> beat-analyzer:vu_analog2_L",
+   "point": "engine input analog_3, raw, before any processing"
+  },
+  {
+   "n": 4,
+   "name": "analog2_R",
+   "analyzerPort": "vu_analog2_R",
+   "kind": "input",
+   "patchbay": "REAPER:out34 -> beat-analyzer:vu_analog2_R",
+   "defaultMap": "direct system:capture_4 -> beat-analyzer:vu_analog2_R",
+   "point": "engine input analog_4, raw, before any processing"
+  },
+  {
+   "n": 5,
+   "name": "analog3_L",
+   "analyzerPort": "vu_analog3_L",
+   "kind": "input",
+   "patchbay": "REAPER:out35 -> beat-analyzer:vu_analog3_L",
+   "defaultMap": "direct system:capture_5 -> beat-analyzer:vu_analog3_L",
+   "point": "engine input analog_5, raw, before any processing"
+  },
+  {
+   "n": 6,
+   "name": "analog3_R",
+   "analyzerPort": "vu_analog3_R",
+   "kind": "input",
+   "patchbay": "REAPER:out36 -> beat-analyzer:vu_analog3_R",
+   "defaultMap": "direct system:capture_6 -> beat-analyzer:vu_analog3_R",
+   "point": "engine input analog_6, raw, before any processing"
+  },
+  {
+   "n": 7,
+   "name": "analog4_L",
+   "analyzerPort": "vu_analog4_L",
+   "kind": "input",
+   "patchbay": "REAPER:out37 -> beat-analyzer:vu_analog4_L",
+   "defaultMap": "direct system:capture_7 -> beat-analyzer:vu_analog4_L",
+   "point": "engine input analog_7, raw, before any processing"
+  },
+  {
+   "n": 8,
+   "name": "analog4_R",
+   "analyzerPort": "vu_analog4_R",
+   "kind": "input",
+   "patchbay": "REAPER:out38 -> beat-analyzer:vu_analog4_R",
+   "defaultMap": "direct system:capture_8 -> beat-analyzer:vu_analog4_R",
+   "point": "engine input analog_8, raw, before any processing"
+  },
+  {
+   "n": 9,
+   "name": "free39",
+   "analyzerPort": "vu_free39",
+   "kind": "free",
+   "patchbay": null,
+   "defaultMap": null,
+   "point": "none: sent as 0, 0 (unwired at the analyzer)"
+  },
+  {
+   "n": 10,
+   "name": "free40",
+   "analyzerPort": "vu_free40",
+   "kind": "free",
+   "patchbay": null,
+   "defaultMap": null,
+   "point": "none: sent as 0, 0 (unwired at the analyzer)"
+  },
+  {
+   "n": 11,
+   "name": "main_sub",
+   "analyzerPort": "vu_main_sub",
+   "kind": "output",
+   "patchbay": "REAPER:out41 -> beat-analyzer:vu_main_sub",
+   "defaultMap": "a3-engine:main_sub -> beat-analyzer:vu_main_sub",
+   "point": "output main_sub as it leaves (after MASTER/BOOTH, trim and gate); 0 beyond the layout"
+  },
+  {
+   "n": 12,
+   "name": "main_top1",
+   "analyzerPort": "vu_main_top1",
+   "kind": "output",
+   "patchbay": "REAPER:out42 -> beat-analyzer:vu_main_top1",
+   "defaultMap": "a3-engine:main_top_1 -> beat-analyzer:vu_main_top1",
+   "point": "output main_top_1 as it leaves (after MASTER/BOOTH, trim and gate); 0 beyond the layout"
+  },
+  {
+   "n": 13,
+   "name": "main_top2",
+   "analyzerPort": "vu_main_top2",
+   "kind": "output",
+   "patchbay": "REAPER:out43 -> beat-analyzer:vu_main_top2",
+   "defaultMap": "a3-engine:main_top_2 -> beat-analyzer:vu_main_top2",
+   "point": "output main_top_2 as it leaves (after MASTER/BOOTH, trim and gate); 0 beyond the layout"
+  },
+  {
+   "n": 14,
+   "name": "main_top3",
+   "analyzerPort": "vu_main_top3",
+   "kind": "output",
+   "patchbay": "REAPER:out44 -> beat-analyzer:vu_main_top3",
+   "defaultMap": "a3-engine:main_top_3 -> beat-analyzer:vu_main_top3",
+   "point": "output main_top_3 as it leaves (after MASTER/BOOTH, trim and gate); 0 beyond the layout"
+  },
+  {
+   "n": 15,
+   "name": "main_top4",
+   "analyzerPort": "vu_main_top4",
+   "kind": "output",
+   "patchbay": "REAPER:out45 -> beat-analyzer:vu_main_top4",
+   "defaultMap": "a3-engine:main_top_4 -> beat-analyzer:vu_main_top4",
+   "point": "output main_top_4 as it leaves (after MASTER/BOOTH, trim and gate); 0 beyond the layout"
+  },
+  {
+   "n": 16,
+   "name": "main_top5",
+   "analyzerPort": "vu_main_top5",
+   "kind": "output",
+   "patchbay": "REAPER:out46 -> beat-analyzer:vu_main_top5",
+   "defaultMap": null,
+   "point": "output main_top_5 as it leaves (after MASTER/BOOTH, trim and gate); 0 beyond the layout"
+  },
+  {
+   "n": 17,
+   "name": "main_top6",
+   "analyzerPort": "vu_main_top6",
+   "kind": "output",
+   "patchbay": "REAPER:out47 -> beat-analyzer:vu_main_top6",
+   "defaultMap": null,
+   "point": "output main_top_6 as it leaves (after MASTER/BOOTH, trim and gate); 0 beyond the layout"
+  },
+  {
+   "n": 18,
+   "name": "main_top7",
+   "analyzerPort": "vu_main_top7",
+   "kind": "output",
+   "patchbay": "REAPER:out48 -> beat-analyzer:vu_main_top7",
+   "defaultMap": null,
+   "point": "output main_top_7 as it leaves (after MASTER/BOOTH, trim and gate); 0 beyond the layout"
+  },
+  {
+   "n": 19,
+   "name": "main_top8",
+   "analyzerPort": "vu_main_top8",
+   "kind": "output",
+   "patchbay": "REAPER:out49 -> beat-analyzer:vu_main_top8",
+   "defaultMap": null,
+   "point": "output main_top_8 as it leaves (after MASTER/BOOTH, trim and gate); 0 beyond the layout"
+  },
+  {
+   "n": 20,
+   "name": "main_top9",
+   "analyzerPort": "vu_main_top9",
+   "kind": "output",
+   "patchbay": "REAPER:out50 -> beat-analyzer:vu_main_top9",
+   "defaultMap": null,
+   "point": "output main_top_9 as it leaves (after MASTER/BOOTH, trim and gate); 0 beyond the layout"
+  },
+  {
+   "n": 21,
+   "name": "booth_sub",
+   "analyzerPort": "vu_booth_sub",
+   "kind": "output",
+   "patchbay": "REAPER:out11 -> beat-analyzer:vu_booth_sub",
+   "defaultMap": "a3-engine:booth_sub -> beat-analyzer:vu_booth_sub",
+   "point": "output booth_sub as it leaves (after MASTER/BOOTH, trim and gate); 0 beyond the layout"
+  },
+  {
+   "n": 22,
+   "name": "booth_top1",
+   "analyzerPort": "vu_booth_top1",
+   "kind": "output",
+   "patchbay": "REAPER:out12 -> beat-analyzer:vu_booth_top1",
+   "defaultMap": "a3-engine:booth_top_1 -> beat-analyzer:vu_booth_top1",
+   "point": "output booth_top_1 as it leaves (after MASTER/BOOTH, trim and gate); 0 beyond the layout"
+  },
+  {
+   "n": 23,
+   "name": "booth_top2",
+   "analyzerPort": "vu_booth_top2",
+   "kind": "output",
+   "patchbay": "REAPER:out13 -> beat-analyzer:vu_booth_top2",
+   "defaultMap": "a3-engine:booth_top_2 -> beat-analyzer:vu_booth_top2",
+   "point": "output booth_top_2 as it leaves (after MASTER/BOOTH, trim and gate); 0 beyond the layout"
+  },
+  {
+   "n": 24,
+   "name": "booth_top3",
+   "analyzerPort": "vu_booth_top3",
+   "kind": "output",
+   "patchbay": "REAPER:out14 -> beat-analyzer:vu_booth_top3",
+   "defaultMap": "a3-engine:booth_top_3 -> beat-analyzer:vu_booth_top3",
+   "point": "output booth_top_3 as it leaves (after MASTER/BOOTH, trim and gate); 0 beyond the layout"
+  },
+  {
+   "n": 25,
+   "name": "booth_top4",
+   "analyzerPort": "vu_booth_top4",
+   "kind": "output",
+   "patchbay": "REAPER:out15 -> beat-analyzer:vu_booth_top4",
+   "defaultMap": "a3-engine:booth_top_4 -> beat-analyzer:vu_booth_top4",
+   "point": "output booth_top_4 as it leaves (after MASTER/BOOTH, trim and gate); 0 beyond the layout"
+  },
+  {
+   "n": 26,
+   "name": "booth_top5",
+   "analyzerPort": "vu_booth_top5",
+   "kind": "output",
+   "patchbay": "REAPER:out16 -> beat-analyzer:vu_booth_top5",
+   "defaultMap": null,
+   "point": "output booth_top_5 as it leaves (after MASTER/BOOTH, trim and gate); 0 beyond the layout"
+  },
+  {
+   "n": 27,
+   "name": "booth_top6",
+   "analyzerPort": "vu_booth_top6",
+   "kind": "output",
+   "patchbay": "REAPER:out17 -> beat-analyzer:vu_booth_top6",
+   "defaultMap": null,
+   "point": "output booth_top_6 as it leaves (after MASTER/BOOTH, trim and gate); 0 beyond the layout"
+  },
+  {
+   "n": 28,
+   "name": "booth_top7",
+   "analyzerPort": "vu_booth_top7",
+   "kind": "output",
+   "patchbay": "REAPER:out18 -> beat-analyzer:vu_booth_top7",
+   "defaultMap": null,
+   "point": "output booth_top_7 as it leaves (after MASTER/BOOTH, trim and gate); 0 beyond the layout"
+  },
+  {
+   "n": 29,
+   "name": "booth_top8",
+   "analyzerPort": "vu_booth_top8",
+   "kind": "output",
+   "patchbay": "REAPER:out19 -> beat-analyzer:vu_booth_top8",
+   "defaultMap": null,
+   "point": "output booth_top_8 as it leaves (after MASTER/BOOTH, trim and gate); 0 beyond the layout"
+  },
+  {
+   "n": 30,
+   "name": "booth_top9",
+   "analyzerPort": "vu_booth_top9",
+   "kind": "output",
+   "patchbay": "REAPER:out20 -> beat-analyzer:vu_booth_top9",
+   "defaultMap": null,
+   "point": "output booth_top_9 as it leaves (after MASTER/BOOTH, trim and gate); 0 beyond the layout"
+  },
+  {
+   "n": 31,
+   "name": "phones_L",
+   "analyzerPort": "vu_phones_L",
+   "kind": "output",
+   "patchbay": "REAPER:out21 -> beat-analyzer:vu_phones_L",
+   "defaultMap": "a3-engine:phones_L -> beat-analyzer:vu_phones_L",
+   "point": "output phones_L as it leaves (after PHONES, trim and gate)"
+  },
+  {
+   "n": 32,
+   "name": "phones_R",
+   "analyzerPort": "vu_phones_R",
+   "kind": "output",
+   "patchbay": "REAPER:out22 -> beat-analyzer:vu_phones_R",
+   "defaultMap": "a3-engine:phones_R -> beat-analyzer:vu_phones_R",
+   "point": "output phones_R as it leaves (after PHONES, trim and gate)"
+  },
+  {
+   "n": 33,
+   "name": "rec_L",
+   "analyzerPort": "vu_rec_L",
+   "kind": "output",
+   "patchbay": "REAPER:out23 -> beat-analyzer:vu_rec_L",
+   "defaultMap": "a3-engine:rec_L -> beat-analyzer:vu_rec_L",
+   "point": "output rec_L as it leaves (after trims.rec, never gated)"
+  },
+  {
+   "n": 34,
+   "name": "rec_R",
+   "analyzerPort": "vu_rec_R",
+   "kind": "output",
+   "patchbay": "REAPER:out24 -> beat-analyzer:vu_rec_R",
+   "defaultMap": "a3-engine:rec_R -> beat-analyzer:vu_rec_R",
+   "point": "output rec_R as it leaves (after trims.rec, never gated)"
+  },
+  {
+   "n": 35,
+   "name": "aux_L",
+   "analyzerPort": "vu_aux_L",
+   "kind": "input",
+   "patchbay": "REAPER:out25 -> beat-analyzer:vu_aux_L",
+   "defaultMap": "direct system:capture_11 -> beat-analyzer:vu_aux_L",
+   "point": "engine input analog_11 (the return's analog pair, returnAnalogPair 6), raw"
+  },
+  {
+   "n": 36,
+   "name": "aux_R",
+   "analyzerPort": "vu_aux_R",
+   "kind": "input",
+   "patchbay": "REAPER:out26 -> beat-analyzer:vu_aux_R",
+   "defaultMap": "direct system:capture_12 -> beat-analyzer:vu_aux_R",
+   "point": "engine input analog_12 (the return's analog pair, returnAnalogPair 6), raw"
+  },
+  {
+   "n": 37,
+   "name": "free67",
+   "analyzerPort": "vu_free67",
+   "kind": "free",
+   "patchbay": null,
+   "defaultMap": null,
+   "point": "none: sent as 0, 0 (unwired at the analyzer)"
+  },
+  {
+   "n": 38,
+   "name": "free68",
+   "analyzerPort": "vu_free68",
+   "kind": "free",
+   "patchbay": null,
+   "defaultMap": null,
+   "point": "none: sent as 0, 0 (unwired at the analyzer)"
+  },
+  {
+   "n": 39,
+   "name": "free69",
+   "analyzerPort": "vu_free69",
+   "kind": "free",
+   "patchbay": null,
+   "defaultMap": null,
+   "point": "none: sent as 0, 0 (unwired at the analyzer)"
+  },
+  {
+   "n": 40,
+   "name": "free70",
+   "analyzerPort": "vu_free70",
+   "kind": "free",
+   "patchbay": null,
+   "defaultMap": null,
+   "point": "none: sent as 0, 0 (unwired at the analyzer)"
+  },
+  {
+   "n": 51,
+   "name": "in1_pre_L",
+   "analyzerPort": "vu_in1_pre_L",
+   "kind": "strip",
+   "patchbay": "REAPER:out51 -> beat-analyzer:vu_in1_pre_L",
+   "defaultMap": "a3-engine:ch1_pre_L -> beat-analyzer:vu_in1_pre_L",
+   "point": "channel 1's pre tap, side L (output ch1_pre_L; a deck channel: its W)"
+  },
+  {
+   "n": 52,
+   "name": "in1_pre_R",
+   "analyzerPort": "vu_in1_pre_R",
+   "kind": "strip",
+   "patchbay": "REAPER:out52 -> beat-analyzer:vu_in1_pre_R",
+   "defaultMap": "a3-engine:ch1_pre_R -> beat-analyzer:vu_in1_pre_R",
+   "point": "channel 1's pre tap, side R (output ch1_pre_R; a deck channel: its W)"
+  },
+  {
+   "n": 53,
+   "name": "in2_pre_L",
+   "analyzerPort": "vu_in2_pre_L",
+   "kind": "strip",
+   "patchbay": "REAPER:out53 -> beat-analyzer:vu_in2_pre_L",
+   "defaultMap": "a3-engine:ch2_pre_L -> beat-analyzer:vu_in2_pre_L",
+   "point": "channel 2's pre tap, side L (output ch2_pre_L; a deck channel: its W)"
+  },
+  {
+   "n": 54,
+   "name": "in2_pre_R",
+   "analyzerPort": "vu_in2_pre_R",
+   "kind": "strip",
+   "patchbay": "REAPER:out54 -> beat-analyzer:vu_in2_pre_R",
+   "defaultMap": "a3-engine:ch2_pre_R -> beat-analyzer:vu_in2_pre_R",
+   "point": "channel 2's pre tap, side R (output ch2_pre_R; a deck channel: its W)"
+  },
+  {
+   "n": 55,
+   "name": "in3_pre_L",
+   "analyzerPort": "vu_in3_pre_L",
+   "kind": "strip",
+   "patchbay": "REAPER:out55 -> beat-analyzer:vu_in3_pre_L",
+   "defaultMap": "a3-engine:ch3_pre_L -> beat-analyzer:vu_in3_pre_L",
+   "point": "channel 3's pre tap, side L (output ch3_pre_L; a deck channel: its W)"
+  },
+  {
+   "n": 56,
+   "name": "in3_pre_R",
+   "analyzerPort": "vu_in3_pre_R",
+   "kind": "strip",
+   "patchbay": "REAPER:out56 -> beat-analyzer:vu_in3_pre_R",
+   "defaultMap": "a3-engine:ch3_pre_R -> beat-analyzer:vu_in3_pre_R",
+   "point": "channel 3's pre tap, side R (output ch3_pre_R; a deck channel: its W)"
+  },
+  {
+   "n": 57,
+   "name": "in4_pre_L",
+   "analyzerPort": "vu_in4_pre_L",
+   "kind": "strip",
+   "patchbay": "REAPER:out57 -> beat-analyzer:vu_in4_pre_L",
+   "defaultMap": "a3-engine:ch4_pre_L -> beat-analyzer:vu_in4_pre_L",
+   "point": "channel 4's pre tap, side L (output ch4_pre_L; a deck channel: its W)"
+  },
+  {
+   "n": 58,
+   "name": "in4_pre_R",
+   "analyzerPort": "vu_in4_pre_R",
+   "kind": "strip",
+   "patchbay": "REAPER:out58 -> beat-analyzer:vu_in4_pre_R",
+   "defaultMap": "a3-engine:ch4_pre_R -> beat-analyzer:vu_in4_pre_R",
+   "point": "channel 4's pre tap, side R (output ch4_pre_R; a deck channel: its W)"
+  },
+  {
+   "n": 59,
+   "name": "in1_post_L",
+   "analyzerPort": "vu_in1_post_L",
+   "kind": "strip",
+   "patchbay": "REAPER:out59 -> beat-analyzer:vu_in1_post_L",
+   "defaultMap": "a3-engine:ch1_post_L -> beat-analyzer:vu_in1_post_L",
+   "point": "channel 1's post tap, side L (output ch1_post_L; a deck channel: its W)"
+  },
+  {
+   "n": 60,
+   "name": "in1_post_R",
+   "analyzerPort": "vu_in1_post_R",
+   "kind": "strip",
+   "patchbay": "REAPER:out60 -> beat-analyzer:vu_in1_post_R",
+   "defaultMap": "a3-engine:ch1_post_R -> beat-analyzer:vu_in1_post_R",
+   "point": "channel 1's post tap, side R (output ch1_post_R; a deck channel: its W)"
+  },
+  {
+   "n": 61,
+   "name": "in2_post_L",
+   "analyzerPort": "vu_in2_post_L",
+   "kind": "strip",
+   "patchbay": "REAPER:out61 -> beat-analyzer:vu_in2_post_L",
+   "defaultMap": "a3-engine:ch2_post_L -> beat-analyzer:vu_in2_post_L",
+   "point": "channel 2's post tap, side L (output ch2_post_L; a deck channel: its W)"
+  },
+  {
+   "n": 62,
+   "name": "in2_post_R",
+   "analyzerPort": "vu_in2_post_R",
+   "kind": "strip",
+   "patchbay": "REAPER:out62 -> beat-analyzer:vu_in2_post_R",
+   "defaultMap": "a3-engine:ch2_post_R -> beat-analyzer:vu_in2_post_R",
+   "point": "channel 2's post tap, side R (output ch2_post_R; a deck channel: its W)"
+  },
+  {
+   "n": 63,
+   "name": "in3_post_L",
+   "analyzerPort": "vu_in3_post_L",
+   "kind": "strip",
+   "patchbay": "REAPER:out63 -> beat-analyzer:vu_in3_post_L",
+   "defaultMap": "a3-engine:ch3_post_L -> beat-analyzer:vu_in3_post_L",
+   "point": "channel 3's post tap, side L (output ch3_post_L; a deck channel: its W)"
+  },
+  {
+   "n": 64,
+   "name": "in3_post_R",
+   "analyzerPort": "vu_in3_post_R",
+   "kind": "strip",
+   "patchbay": "REAPER:out64 -> beat-analyzer:vu_in3_post_R",
+   "defaultMap": "a3-engine:ch3_post_R -> beat-analyzer:vu_in3_post_R",
+   "point": "channel 3's post tap, side R (output ch3_post_R; a deck channel: its W)"
+  },
+  {
+   "n": 65,
+   "name": "in4_post_L",
+   "analyzerPort": "vu_in4_post_L",
+   "kind": "strip",
+   "patchbay": "REAPER:out65 -> beat-analyzer:vu_in4_post_L",
+   "defaultMap": "a3-engine:ch4_post_L -> beat-analyzer:vu_in4_post_L",
+   "point": "channel 4's post tap, side L (output ch4_post_L; a deck channel: its W)"
+  },
+  {
+   "n": 66,
+   "name": "in4_post_R",
+   "analyzerPort": "vu_in4_post_R",
+   "kind": "strip",
+   "patchbay": "REAPER:out66 -> beat-analyzer:vu_in4_post_R",
+   "defaultMap": "a3-engine:ch4_post_R -> beat-analyzer:vu_in4_post_R",
+   "point": "channel 4's post tap, side R (output ch4_post_R; a deck channel: its W)"
+  }
+ ]
+}

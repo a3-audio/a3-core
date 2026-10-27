@@ -1,0 +1,24 @@
+{
+ "about": "The deck ring in engine mode: a deck's hello (its port is the base + deck - 1), a turn moves the cursor, a push puts the deck on the channel (source to the engine, the channel's 3D to the deck), a deck channel's 3D goes to the deck and its position nowhere, back to analog the deck is told neutral and the engine gets the analog state again; presence falls after five silent seconds.",
+ "steps": [
+  {"at": 0.1, "from": ["127.0.0.1", 41000], "osc": ["/engine/hello", ["s", "boot-1"]]},
+  {"at": 0.2, "from": ["127.0.0.2", 6000], "osc": ["/stemdeck/1/hello", ["s", "x"]]},
+  {"at": 0.3, "from": ["192.168.8.11", 50001], "osc": ["/channel/3/3d", ["s", "0.4"]]},
+  {"at": 0.35, "from": ["192.168.8.11", 50001], "osc": ["/channel/3/filter/frequency", ["s", "0.25"]]},
+  {"at": 0.4, "from": ["192.168.8.11", 50001], "osc": ["/channel/3/azimuth", ["s", "40"]]},
+  {"at": 0.45, "from": ["192.168.8.11", 50001], "osc": ["/channel/3/stem/turn", ["s", "1"]]},
+  {"at": 0.5, "from": ["192.168.8.11", 50001], "osc": ["/channel/3/stem/push", ["s", "1"]]},
+  {"at": 0.55, "from": ["192.168.8.11", 50001], "osc": ["/channel/3/3d", ["s", "0.9"]]},
+  {"at": 0.6, "from": ["192.168.8.11", 50001], "osc": ["/channel/3/azimuth", ["s", "10"]]},
+  {"at": 0.65, "from": ["192.168.8.11", 50001], "osc": ["/channel/3/filter/q", ["s", "0.75"]]},
+  {"at": 0.7, "from": ["192.168.8.11", 50001], "osc": ["/channel/2/stem/turn", ["s", "1"]]},
+  {"at": 0.75, "from": ["192.168.8.11", 50001], "osc": ["/channel/2/stem/push", ["s", "1"]]},
+  {"at": 0.8, "from": ["192.168.8.11", 50001], "osc": ["/channel/2/stem/turn", ["s", "-1"]]},
+  {"at": 0.85, "from": ["192.168.8.11", 50001], "osc": ["/channel/2/stem/push", ["s", "1"]]},
+  {"at": 0.9, "from": ["192.168.8.11", 50001], "osc": ["/channel/3/stem/push", ["s", "1"]]},
+  {"at": 1.0, "from": ["127.0.0.2", 6000], "osc": ["/stemdeck/1/hello", ["s", "x"]]},
+  {"at": 1.1, "tick": true},
+  {"at": 6.5, "tick": true},
+  {"at": 7.0, "flush": true}
+ ]
+}

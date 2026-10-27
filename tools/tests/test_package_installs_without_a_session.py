@@ -1,8 +1,9 @@
 """The install works whether or not `aaa` is logged in (a3-core#70, #71, #72).
 
 Without a session, `loginctl disable-linger` stopped aaa's user manager two
-seconds into the REAPER download, and the `daemon-reload` before it raced the
-manager linger only starts. Nothing installed an ssh server for the key the
+seconds into what the postinst ran there (the REAPER download, until REAPER
+left on 2026-10-27), and the `daemon-reload` before it raced the manager
+linger only starts. Nothing installed an ssh server for the key the
 package now asks for, and every install without a key chowned a missing ~/.ssh.
 """
 
@@ -12,9 +13,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config/debian-x86_64/a3-core"
-POSTINST = PACKAGE / "DEBIAN/postinst"
-CONTROL = PACKAGE / "DEBIAN/control"
+from tools.tests.paths import DEBIAN
+
+POSTINST = DEBIAN / "postinst"
+CONTROL = DEBIAN / "control"
 
 
 def function(name):
@@ -31,7 +33,7 @@ def field(name):
             for entry in line.split(":", 1)[1].split(",") for alt in entry.split("|")}
 
 
-class TheUserInstallRunsToTheEnd(unittest.TestCase):
+class TheUserStepsRunToTheEnd(unittest.TestCase):
     """Driven with fake loginctl, systemctl, sudo and id, never the real ones."""
 
     def run_user_install(self, linger_before="no"):
@@ -73,9 +75,9 @@ class TheUserInstallRunsToTheEnd(unittest.TestCase):
         self.assertLess(self.position(calls, r"^systemctl start user@1000\.service$"),
                         self.position(calls, r"^systemctl --user daemon-reload$"))
 
-    def test_the_install_is_waited_for(self):
+    def test_nothing_is_downloaded_any_more(self):
         calls = self.run_user_install()
-        self.assertIn("systemctl --user start --wait a3-user-install.service", calls)
+        self.assertFalse([c for c in calls if "a3-user-install" in c], calls)
 
     def test_aes67_is_enabled_while_the_manager_is_up(self):
         calls = self.run_user_install()
@@ -91,9 +93,9 @@ class TheUserInstallRunsToTheEnd(unittest.TestCase):
         self.assertLess(self.position(calls, r"^enable_the_rig$"),
                         self.position(calls, r"^loginctl disable-linger aaa$"))
 
-    def test_linger_goes_only_after_the_install(self):
+    def test_linger_goes_only_after_the_retired_units_are_stopped(self):
         calls = self.run_user_install()
-        self.assertLess(self.position(calls, r"start --wait a3-user-install"),
+        self.assertLess(self.position(calls, r"^stop_retired_units$"),
                         self.position(calls, r"^loginctl disable-linger aaa$"))
 
     def test_linger_that_was_on_stays_on(self):

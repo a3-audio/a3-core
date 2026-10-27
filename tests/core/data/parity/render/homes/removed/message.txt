@@ -1,0 +1,1 @@
+removed ~/.config/pipewire/pipewire-aes67.conf: no audio port in the network

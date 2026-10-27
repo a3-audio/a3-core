@@ -14,9 +14,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config" / "debian-x86_64" / "a3-core"
-POSTINST = PACKAGE / "DEBIAN" / "postinst"
-TEMPLATES = PACKAGE / "DEBIAN" / "templates"
+from tools.tests.paths import DEBIAN
+
+POSTINST = DEBIAN / "postinst"
+TEMPLATES = DEBIAN / "templates"
 
 KEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAbCdEfGhIjKlMnOpQrStUvWxYz0123456789abcdefg admin@desk"
 OTHER = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC7 old@laptop"

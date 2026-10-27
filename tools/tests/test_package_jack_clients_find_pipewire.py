@@ -3,7 +3,7 @@
 pipewire-jack puts PipeWire's libjack in a directory of its own, out of the
 loader's way; Debian leaves the switch to the admin and ships the ld.so.conf.d
 file only as an example. The rig started with an LD_LIBRARY_PATH drop-in per
-unit -- REAPER, QjackCtl, the beat-analyzer, StemDeck -- and a JACK program
+unit -- REAPER and QjackCtl then, the beat-analyzer, StemDeck -- and a JACK program
 started by hand still found jackd's library. The package ships Debian's
 example as the real file instead, so no unit needs to know, and runs ldconfig
 so the loader's cache has it before anything starts.
@@ -11,15 +11,15 @@ so the loader's cache has it before anything starts.
 
 import re
 import unittest
-from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[2] / "platform-config/debian-x86_64/a3-core"
+from tools.tests.paths import DEBIAN, PACKAGE
+
 LD_CONF = PACKAGE / "etc/ld.so.conf.d/pipewire-jack-x86_64-linux-gnu.conf"
 PIPEWIRE_JACK = "/usr/lib/x86_64-linux-gnu/pipewire-0.3/jack"
 
 
 def maintainer_script(name):
-    return (PACKAGE / "DEBIAN" / name).read_text()
+    return (DEBIAN / name).read_text()
 
 
 class TheLoaderFindsPipeWiresLibjack(unittest.TestCase):

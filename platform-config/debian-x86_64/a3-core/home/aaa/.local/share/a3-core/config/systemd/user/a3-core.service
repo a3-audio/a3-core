@@ -1,20 +1,9 @@
 [Unit]                                                                                     
 Description=a3-core (python osc server)
 PartOf=a3-main.service
-# Before REAPER, though it no longer has to be.
-#
-# Core does not hold the channel strip -- it relays what REAPER reports, and
-# REAPER announces its whole state only when it starts. A Core that was not
-# listening then used to learn a value only when a hand moved it (a3-motion-ui
-# issue #17), so this order was load-bearing. Since 2026-09-26 Core asks REAPER
-# to say everything again once its ports are bound (action 41743, see
-# lib/a3_core_reaper.py), so either order works. It stays first because that
-# is still the order with one burst instead of two.
-#
-# The audio server still comes first: REAPER needs it, and Core reaching the
-# void for a moment costs nothing -- the previous ordering said as much.
+# The audio server comes first; Core reaching the void for a moment costs
+# nothing.
 After=pipewire.service wireplumber.service
-Before=a3-reaper.service
 
 
 [Service]

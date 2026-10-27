@@ -1,0 +1,25 @@
+{
+ "about": "The desk sends its numbers as text: read as Python's float(), relayed to Motion as f; a repeat is dropped; a text button is an edge; text that is no number raises in the handler, or is dropped by the relay and raises in the engine's words; no argument at all raises; the state file's bytes after the debounce.",
+ "steps": [
+  {"at": 0.5, "from": ["192.168.8.11", 50001], "osc": ["/channel/1/gain", ["s", "0.807429"]]},
+  {"at": 0.55, "from": ["192.168.8.11", 50001], "osc": ["/channel/2/volume", ["s", " 1e3 "]]},
+  {"at": 0.6, "from": ["192.168.8.11", 50001], "osc": ["/channel/3/eq/high", ["s", "1_0"]]},
+  {"at": 0.65, "from": ["192.168.8.11", 50001], "osc": ["/master/volume", ["s", "0.5"]]},
+  {"at": 0.7, "from": ["192.168.8.11", 50001], "osc": ["/filter/frequency", ["s", "0.25"]]},
+  {"at": 0.75, "from": ["192.168.8.11", 50001], "osc": ["/channel/1/gain", ["s", "0.807429"]]},
+  {"at": 0.8, "from": ["192.168.8.11", 50001], "osc": ["/channel/1/cue", ["s", "1"]]},
+  {"at": 0.85, "from": ["192.168.8.11", 50001], "osc": ["/channel/1/cue", ["s", "0"]]},
+  {"at": 0.9, "from": ["192.168.8.11", 50001], "osc": ["/channel/4/3d", ["s", "nan"]]},
+  {"at": 0.95, "from": ["192.168.8.11", 50001], "osc": ["/channel/1/gain", ["s", "abc"]]},
+  {"at": 1.0, "from": ["192.168.8.11", 50001], "osc": ["/filter/frequency", ["s", "abc"]]},
+  {"at": 1.05, "from": ["192.168.8.11", 50001], "osc": ["/filter/mode", ["s", "high_pass"]]},
+  {"at": 1.1, "from": ["192.168.8.11", 50001], "osc": ["/master/phones-mix", ["s", "0.3"]]},
+  {"at": 1.15, "from": ["192.168.8.11", 50001], "osc": ["/channel/2/azimuth", ["s", "-200"]]},
+  {"at": 1.2, "from": ["192.168.8.11", 50001], "osc": ["/channel/2/gain"]},
+  {"at": 1.25, "from": ["192.168.8.11", 50001], "osc": ["/channel/2/stem/turn", ["s", "1.0"]]},
+  {"at": 1.3, "from": ["192.168.8.11", 50001], "osc": ["/channel/2/enc", ["s", "1"]]},
+  {"at": 1.35, "from": ["192.168.8.11", 50001], "osc": ["/nowhere", ["s", "1"]]},
+  {"at": 3.5, "tick": true},
+  {"at": 4.0, "flush": true}
+ ]
+}

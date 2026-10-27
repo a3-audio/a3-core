@@ -1,9 +1,9 @@
 """Depends carries what a Core builds, and nothing another role builds.
 
-The one thing a Core compiles is beat-analyzer: the package's
-a3-user-install.service runs recipes/user_install.sh, which builds it from
-~/a3-system/beat-analyzer with its build.sh. What that build needs is in
-Depends.
+The one thing a Core compiled was beat-analyzer, from
+~/a3-system/beat-analyzer with its build.sh (a3-user-install.service, gone
+with REAPER on 2026-10-27; the analyzer has its own package since 2026-10-08).
+What that build needs is still in Depends.
 
 What JUCE, StemDeck and Motion UI build against is not. It was, from
 2026-10-04, because a postinst cannot run apt and a3nuc2 had needed twenty
@@ -16,10 +16,10 @@ lists live there now, and a3-core keeps only what a Core needs.
 
 import re
 import unittest
-from pathlib import Path
 
-CONTROL = (Path(__file__).resolve().parents[2]
-           / "platform-config/debian-x86_64/a3-core/DEBIAN/control")
+from tools.tests.paths import DEBIAN
+
+CONTROL = DEBIAN / "control"
 
 #: beat-analyzer's build on the Core -- see beat-analyzer's CMakeLists.txt
 #: (pkg_check_modules jack and samplerate, REQUIRED pkg-config; sndfile is

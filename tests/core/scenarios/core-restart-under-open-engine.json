@@ -1,0 +1,61 @@
+{
+ "about": "Core restarts while the engine keeps running: the engine's boot id is one this Core has never heard, so it replays the evening it left on disk (the decks' sources with it) and opens -- the engine was open all along, and that is what Python does too.",
+ "files": {
+  "state.json": {
+   "channels": [
+    {
+     "toggle_fx": true,
+     "toggle_cue": false,
+     "three_d": 0.62,
+     "azimuth": 30.0,
+     "elevation": 10.0
+    },
+    {
+     "toggle_fx": false,
+     "toggle_cue": true,
+     "three_d": null
+    },
+    {
+     "toggle_fx": false,
+     "toggle_cue": false,
+     "three_d": 0.0
+    },
+    {
+     "toggle_fx": true,
+     "toggle_cue": true,
+     "three_d": 1.0
+    }
+   ],
+   "fx_mode": 1,
+   "phones_mix": 0.3,
+   "return_cue": true
+  },
+  "evening.json": {
+   "values": {
+    "/channel/1/gain": 0.4,
+    "/channel/3/volume": 0.6,
+    "/master/phones-mix": 0.5,
+    "/filter/frequency": 0.3
+   },
+   "channel.source": [
+    0,
+    2,
+    1,
+    0
+   ]
+  },
+  "seen.json": {
+   "version": 1,
+   "addresses": []
+  }
+ },
+ "steps": [
+ {"at": 0.1, "tick": true},
+ {"at": 0.2, "from": ["127.0.0.1", 41000], "osc": ["/engine/hello", ["s", "boot-7"]]},
+ {"at": 0.25, "from": ["127.0.0.1", 40001], "osc": ["/channel/1/gain", ["f", 0.2]]},
+ {"at": 2.2, "from": ["127.0.0.1", 41000], "osc": ["/engine/hello", ["s", "boot-7"]]},
+ {"at": 2.3, "tick": true},
+ {"at": 4.5, "tick": true},
+ {"at": 5.0, "flush": true}
+ ]
+}

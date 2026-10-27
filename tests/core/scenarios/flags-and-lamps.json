@@ -1,0 +1,29 @@
+{
+ "about": "A flag said twice, both to everybody: the lamp and the flag; the desk's text key is an edge (1 toggles, 0 is its release), Motion's number a state; a state that does not change sends nothing; the state file's bytes.",
+ "files": {
+  "state.json": {
+   "channels": [
+    {"toggle_fx": false, "toggle_cue": true, "three_d": null},
+    {"toggle_fx": false, "toggle_cue": false, "three_d": null},
+    {"toggle_fx": false, "toggle_cue": false, "three_d": null},
+    {"toggle_fx": false, "toggle_cue": false, "three_d": null}
+   ],
+   "fx_mode": 0
+  }
+ },
+ "steps": [
+  {"at": 0.1, "from": ["127.0.0.1", 40001], "osc": ["/device/hello", ["s", "motion"], ["s", "16f4bb5a0501c25701f74f3e0bf5b153408a9e48ae7125e6cf94d38670352bd9"]]},
+  {"at": 0.2, "from": ["192.168.8.11", 50001], "osc": ["/channel/2/cue", ["s", "1"]]},
+  {"at": 0.25, "from": ["192.168.8.11", 50001], "osc": ["/channel/2/cue", ["s", "0"]]},
+  {"at": 0.3, "from": ["192.168.8.11", 50001], "osc": ["/channel/2/cue", ["s", "1"]]},
+  {"at": 0.35, "from": ["192.168.8.11", 50001], "osc": ["/channel/3/filter", ["s", "1"]]},
+  {"at": 0.4, "from": ["127.0.0.1", 40001], "osc": ["/channel/3/filter", ["f", 1.0]]},
+  {"at": 0.45, "from": ["127.0.0.1", 40001], "osc": ["/channel/1/cue", ["f", 0.0]]},
+  {"at": 0.5, "from": ["127.0.0.1", 40001], "osc": ["/channel/4/filter", ["F", null]]},
+  {"at": 0.55, "from": ["127.0.0.1", 40001], "osc": ["/channel/4/cue", ["f", 0.75]]},
+  {"at": 0.6, "from": ["192.168.8.11", 50001], "osc": ["/channel/4/cue", ["s", "x"]]},
+  {"at": 0.65, "from": ["192.168.8.11", 50001], "osc": ["/channel/2/cue/led", ["f", 1.0]]},
+  {"at": 3.0, "tick": true},
+  {"at": 3.5, "flush": true}
+ ]
+}

@@ -10,19 +10,34 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # The rig is Debian testing: dpkg-shlibdeps writes Depends against Debian's
+    # libraries, where an Ubuntu build would name Ubuntu's.
+    container: debian:testing
+    env:
+      CCACHE_DIR: /github/home/.ccache
 
     steps:
+      # git first: actions/checkout needs it to fetch the history and the submodule.
+      - name: Checkout tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           # The whole history: the package version is read off the tags, and a
-          # shallow clone has none.
+          # shallow clone has none. Submodules: IEM only (top level, not IEM's JUCE).
           fetch-depth: 0
+          submodules: true
 
-      - name: Install tools
+      - name: Trust the workspace
+        run: git config --global --add safe.directory '*'
+
+      - name: Build tools
         run: |
-          sudo apt update
-          sudo apt install -y dpkg-dev gnupg
+          apt-get update
+          xargs -a packaging/build-depends apt-get install -y --no-install-recommends
 
       - name: Import private key
         run: |
@@ -30,26 +45,41 @@ jobs:
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
 
-      # The last tag plus the commits since it (v03.0 + 63 commits = 03.0+63).
-      # DEBIAN/control said 1.0.0 for every package ever published, and apt
-      # compares versions, not contents: no rig saw an update. See
-      # tools/package_version.py.
-      - name: Stamp the version
-        run: |
-          VERSION=$(python3 tools/package_version.py)
-          sed -i "s/^Version: .*/Version: ${VERSION}/" platform-config/debian-x86_64/a3-core/DEBIAN/control
-          grep '^Version:' platform-config/debian-x86_64/a3-core/DEBIAN/control
+      - name: Cache JUCE
+        id: juce
+        uses: actions/cache@v4
+        with:
+          path: /opt/juce
+          key: juce-9.0.3-debian-testing-v1
 
+      - name: Build JUCE
+        if: steps.juce.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch 9.0.3 https://github.com/juce-framework/JUCE.git /tmp/JUCE
+          cmake -S /tmp/JUCE -B /tmp/JUCE/build -DCMAKE_INSTALL_PREFIX=/opt/juce -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/JUCE/build --target install -j4
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: /github/home/.ccache
+          key: ccache-${{ github.sha }}
+          restore-keys: ccache-
+
+      # The same recipe the LAN builder uses: it builds the program, stamps the
+      # version (last tag plus commits since) and
+      # prints the .deb's path as its last line.
       - name: Build .deb
         run: |
-          cd platform-config/debian-x86_64
-          dpkg-deb --build --root-owner-group a3-core
+          curl -fsSL -o "$RUNNER_TEMP/package.py" https://raw.githubusercontent.com/a3-audio/a3-system/main/installer/package.py
+          DEB=$(python3 -I "$RUNNER_TEMP/package.py" "$GITHUB_WORKSPACE" --rev HEAD --out "$RUNNER_TEMP/debs" --cache "$RUNNER_TEMP/work" --juce /opt/juce --jobs 4 | tail -n 1)
+          mkdir -p repo
+          cp "$DEB" repo/a3-core.deb
+          dpkg-deb --field repo/a3-core.deb Version Depends
+          ls -l repo/a3-core.deb
 
       - name: Generate Packages and Release
         run: |
-          mkdir -p repo
-          cp platform-config/debian-x86_64/a3-core.deb repo/
-
           dpkg-scanpackages repo /dev/null > Packages
           gzip -9c Packages > Packages.gz
 
