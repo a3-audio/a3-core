@@ -21,6 +21,8 @@
 
 namespace a3core
 {
+class Platform;
+
 using Viewer = int;   // the viewer's socket
 using Chunk = std::shared_ptr<const std::string>;
 
@@ -72,6 +74,7 @@ struct FanoutOptions
     double killAfter = 2.0;      // SIGTERM, then SIGKILL after this long
     size_t limitBytes = 4 * 1024 * 1024;
     int maxViewers = 8;
+    const Platform* platform = nullptr;   // starts the encoder; none: this machine's (makePlatform)
 
     // Seams for the tests; all optional, called on the serving thread.
     std::function<void (int port)> onListening;

@@ -17,6 +17,7 @@
 #include <gtest/gtest.h>
 
 #include "Net.h"
+#include "Platform.h"
 #include "ScreencastFanout.h"
 
 using namespace a3core;
@@ -63,6 +64,7 @@ protected:
         options.restartAfter = restartAfter;
         options.killAfter = 0.2;
         options.limitBytes = limitBytes;
+        options.platform = platform;
         std::promise<int> listening;
         auto portReady = listening.get_future();
         options.onListening = [&listening] (int bound) { listening.set_value (bound); };
@@ -145,6 +147,36 @@ protected:
     int port = 0;
     int result = -1;
     bool ran = false;
+    const Platform* platform = nullptr;   // none: the loop takes this machine's
+};
+
+// This machine's platform, counting what it was asked to start.
+class CountingPlatform final : public Platform
+{
+public:
+    std::optional<std::string> environment (const std::string& name) const override { return real->environment (name); }
+    juce::File home() const override { return real->home(); }
+    juce::File stateDir() const override { return real->stateDir(); }
+    juce::File configDir() const override { return real->configDir(); }
+    juce::File packageShare() const override { return real->packageShare(); }
+    std::string hostname() const override { return real->hostname(); }
+    bool unitEnabled (const std::string& unit) const override { return real->unitEnabled (unit); }
+    std::unique_ptr<Child> spawn (const std::vector<std::string>& argv, bool pipeStdout) const override
+    {
+        std::lock_guard<std::mutex> lock (mutex);
+        asked.push_back ({ argv, pipeStdout });
+        return real->spawn (argv, pipeStdout);
+    }
+    std::vector<std::pair<std::vector<std::string>, bool>> spawns() const
+    {
+        std::lock_guard<std::mutex> lock (mutex);
+        return asked;
+    }
+
+private:
+    std::unique_ptr<Platform> real = makePlatform();
+    mutable std::mutex mutex;
+    mutable std::vector<std::pair<std::vector<std::string>, bool>> asked;
 };
 }
 
@@ -384,4 +416,21 @@ TEST_F (ScreencastFanout, TwoViewersOneEncoder)
     EXPECT_FALSE (some.empty());
     EXPECT_EQ (some.find_first_not_of ("A3\n"), std::string::npos);
     EXPECT_EQ (startedCount(), 1u);
+}
+
+// Carried (d): the encoder is started (and so signalled and reaped) through the platform seam (O7).
+TEST_F (ScreencastFanout, TheEncoderIsStartedThroughThePlatform)
+{
+    CountingPlatform counting;
+    platform = &counting;
+    run (fakeEncoder);
+    const int viewer = connectClient();
+    EXPECT_EQ (receive (viewer, 2), "TS");
+    const auto spawns = counting.spawns();
+    ASSERT_EQ (spawns.size(), 1u);
+    EXPECT_EQ (spawns[0].first, sh (fakeEncoder));
+    EXPECT_TRUE (spawns[0].second);   // its stdout is the stream
+    stop = true;
+    thread.join();
+    platform = nullptr;
 }

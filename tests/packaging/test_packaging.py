@@ -16,7 +16,8 @@ ROOT = Path(__file__).resolve().parents[2]
 STAGE = ROOT / "packaging" / "stage"
 CONTROL = ROOT / "packaging" / "DEBIAN" / "control"
 UNIT = ROOT / "packaging" / "a3-engine.service"
-APP = ROOT / "build" / "app" / "a3-engine"
+# The program (Task 23); its engine role is what the unit runs. Staging is Task 28's.
+APP = ROOT / "build" / "app" / "a3-core"
 TRUTH = ROOT / "tests" / "engine" / "data" / "a3-osc.json"
 SHIPPED_CONFIG = ROOT / "data" / "engine.json"
 SHIPPED_SPATIAL = ROOT / "data" / "spatial"
@@ -216,7 +217,7 @@ class ControlTest(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("dpkg-shlibdeps") and shutil.which("objdump")
                          and (ROOT / "build/bench/a3-engine-bench").is_file()
-                         and (ROOT / "build/app/a3-engine").is_file(),
+                         and (ROOT / "build/app/a3-core").is_file(),
                          "needs dpkg-shlibdeps and a built bench and app")
     def test_every_needed_library_is_covered_by_shlibs(self):
         # Depends comes from dpkg-shlibdeps, so it cannot miss a NEEDED library; this pins that
@@ -224,8 +225,8 @@ class ControlTest(unittest.TestCase):
         # only dlopens for a window system are not NEEDED by either. The app also links ALSA.
         packages = {
             "build/bench/a3-engine-bench": ("libjack-jackd2-0", "libfreetype6", "libfontconfig1"),
-            "build/app/a3-engine": ("libjack-jackd2-0", "libfreetype6", "libfontconfig1",
-                                    "libasound2"),
+            "build/app/a3-core": ("libjack-jackd2-0", "libfreetype6", "libfontconfig1",
+                                  "libasound2"),
         }
         for relative, expected in packages.items():
             with self.subTest(binary=relative):
@@ -274,7 +275,7 @@ class CheckConfigBinaryTest(unittest.TestCase):
         # DISPLAY names a server that does not exist: the check must not need X (the unit runs it
         # with DISPLAY=:0 before the screen is up).
         env = dict(os.environ, HOME=str(self.tmp / "home"), DISPLAY=":87")
-        return subprocess.run([str(APP), "--check-config", "--truth", str(TRUTH), *words],
+        return subprocess.run([str(APP), "--role", "engine", "--check-config", "--truth", str(TRUTH), *words],
                               capture_output=True, text=True, env=env, timeout=60)
 
     def config_with_spatial(self, spatial):

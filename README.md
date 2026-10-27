@@ -92,6 +92,9 @@ quantum, as they do in REAPER.
 
 ## Plan 4c: the app
 
+**Superseded in part (2026-10-27):** the binary is now `a3-core`, and this engine is its
+`--role engine`, without a window (see "The program" below). The text here is Plan 4c as built.
+
 `a3-engine` (CMake option `A3_ENGINE_APP`, default ON, needs libjack) hosts the engine: it reads
 the truth (`/usr/share/a3/a3-osc.json`), `engine.json` and the spatial data, runs the signal path
 on JACK (the rig) or on a JUCE audio device (anywhere else), listens for Core on `engine.osc`,
@@ -153,6 +156,44 @@ installed, until then they are reported as missing, not an error). Left out on p
 13-24 (StemDeck's stems and AES67's cue have no engine counterpart) and the AES67 sender, whose client
 name carries the machine's host name. The engine reads the file from `~/.config/a3/engine/engine.json`
 first; the package never writes there.
+
+## The program: one binary, a3-core
+
+Since Task 23 of "A³ Core as one program" the app is **one binary, `build/app/a3-core`** (CMake
+target `a3-core-app`), with roles. Plan 4c's `a3-engine` binary is gone; its engine is the `engine`
+role, without a window (the window becomes its own role and reaches the engine over the control
+API, P2). The package still installs Plan 4's names until Task 28 changes it.
+
+    a3-core                                   the window (not built yet: says so, exit 0)
+    a3-core --headless                        the supervisor: Core and the engine as children
+    a3-core --role core [--ip HOST] [--port N] [--mixer HOST:PORT] [--motion HOST:PORT]
+                        [--subscriber NAME=HOST:PORT]... [--print-osc] [--web-bind HOST:PORT] [--no-web]
+    a3-core --role engine [--config FILE] [--spatial DIR] [--truth FILE] [--no-connect] [--timing]
+                          [--check-config]
+    a3-core --role screencast-fanout --port N [--linger SECONDS] -- COMMAND...
+    a3-core --role i3-bar                     (not built yet)
+    a3-core --render-truth user|network-file|network      (not built yet)
+    a3-core --truth host NAME | --truth port PROGRAM ROLE (not built yet)
+
+- Each role takes only its own flags; another role's flag, an unknown one or a missing value is
+  exit 2 with the usage.
+- **core**: the C++ Core (`src/a3-core`, `CoreService`). Every default is B1's: `--ip` the truth's
+  `any`, `--port` `core.osc`, `--mixer`/`--motion` their `osc` listeners, `--web-bind` `core.web`.
+  The truth is `$A3_OSC_TRUTH`, else `/usr/share/a3/a3-osc.json`; the network file `$A3_NETWORK`,
+  else `~/.config/a3/network.json` (never with an explicit truth); the state under
+  `$XDG_STATE_HOME/a3-core`, else `~/.local/state/a3-core`. SIGTERM/SIGINT write state, evening and
+  the address list and exit 0; a serve loop that ends by itself exits 1 (systemd restarts it). A
+  start that is refused says why on stderr and exits 1.
+- **engine**: Plan 4c's flags; `--no-window` and `--service` are still accepted and do nothing.
+- **screencast-fanout**: `--port` defaults to `$A3_SCREENCAST_PORT`; a port of 0 or no command is
+  refused as the Python fan-out refused it (exit 2).
+- **--headless**: starts `a3-core --role core` and `a3-core --role engine`, restarts one that ends
+  after 1 s, and on SIGTERM ends both (SIGKILL after 5 s). A role whose user unit
+  (`a3-core.service`, `a3-engine.service`) is enabled (`systemctl --user is-enabled`) is never
+  started a second time.
+- Everything that asks the operating system (environment, home, host name, unit state, child
+  processes) goes through `a3core::Platform` (`src/a3-core/Platform.h`, Linux only).
+- The journal: one whole line per write, flushed at once, from any thread.
 
 ## Build and test
 

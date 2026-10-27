@@ -29,7 +29,7 @@ add_executable(a3-engine-tests ReferenceSmoke.cpp Laws.cpp PurestGain.cpp Smooth
     ../app/ConfigFile.cpp ../app/EnginePorts.cpp ../app/ConnectionPlan.cpp
     ../app/DeviceBackend.cpp ../app/AppArgs.cpp
     ../app/Pages.cpp ../app/ConfigEdits.cpp ../app/SessionRestart.cpp
-    ../app/DefaultConfig.cpp)
+    ../app/DefaultConfig.cpp ../app/ProgramArgs.cpp ../app/Supervisor.cpp)
 target_include_directories(a3-engine-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../app)
 target_link_libraries(a3-engine-tests PRIVATE a3-engine a3-engine-bench-lib a3-engine-app-lib a3-engine-reference
     GTest::gtest GTest::gtest_main)
@@ -41,6 +41,7 @@ target_compile_definitions(a3-engine-tests PRIVATE
     A3_TRUTH_COPY="${CMAKE_CURRENT_SOURCE_DIR}/data/a3-osc.json"
     A3_DEFAULT_ENGINE_CONFIG="${CMAKE_CURRENT_SOURCE_DIR}/../../data/engine.json"
     A3_PATCHBAY_COPY="${CMAKE_CURRENT_SOURCE_DIR}/data/a3-patchbay.xml"
-    A3_REAPER_TO_ENGINE_PORTS="${CMAKE_CURRENT_SOURCE_DIR}/data/reaper-to-engine-ports.json")
+    A3_REAPER_TO_ENGINE_PORTS="${CMAKE_CURRENT_SOURCE_DIR}/data/reaper-to-engine-ports.json"
+    A3_APP_SOURCE_DIR="${CMAKE_SOURCE_DIR}/app")
 include(GoogleTest)
 gtest_discover_tests(a3-engine-tests)
