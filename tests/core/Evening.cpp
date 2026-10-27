@@ -51,6 +51,14 @@ TEST (Evening, ItIsWhatWasPassedOn)
     EXPECT_EQ (static_cast<double> (state["values"]["/master/volume"]), 0.8);
 }
 
+TEST (Evening, AListPassedOnIsWrittenAsAList)
+{
+    // B1 (a3-core 7a7b2441f74e): the return's word is noted as a list and json writes it as one.
+    Relayed relayed;
+    relayed.note ("/aux-return/stem", std::vector<OscArg> { pyInt (1), pyInt (0), pyInt (2) });
+    EXPECT_EQ (dumpIndented (eveningState (relayed), 2), "{\n  \"values\": {\n    \"/aux-return/stem\": [\n      1,\n      0,\n      2\n    ]\n  }\n}");
+}
+
 TEST (Evening, AnEmptyEveningIsAnEmptyFile)
 {
     const auto state = eveningState (Relayed());

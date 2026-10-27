@@ -89,7 +89,7 @@ private:
     void send (const Client& client, const Message& message);
     void toEverySubscriber (const OscMessage& message);
     void broadcast (const OscMessage& message);
-    void notePassedOn (const std::string& address, const OscArg& value);
+    void notePassedOn (const std::string& address, const std::vector<OscArg>& value);   // several: a Python list
     void writeTheEvening();
     bool engineHeard() const;
     void sendToEngine (const std::vector<Message>& messages);
@@ -119,6 +119,43 @@ private:
     void unrouted (const Endpoint& from, const OscMessage& message);
     [[noreturn]] void notPortedYet (const char* handler) const;
 
+    // The router (CoreValues.cpp): the handlers of Core's main port and what they share.
+    void channelHandler (const Endpoint& from, const OscMessage& message);
+    void masterHandler (const Endpoint& from, const OscMessage& message);
+    void filterHandler (const Endpoint& from, const OscMessage& message);
+    void auxReturnHandler (const Endpoint& from, const OscMessage& message);
+    void stemdeckHandler (const Endpoint& from, const OscMessage& message);
+    void deviceHello (const Endpoint& from, const OscMessage& message);
+    void engineHello (const Endpoint& from, const OscMessage& message);
+    void deckHello (const Endpoint& from, const OscMessage& message);
+    void recall (const Endpoint& from, const OscMessage& message);
+
+    using Found = std::pair<std::string, std::map<std::string, int>>;   // a truth key and its fields
+    std::optional<Found> knownAddress (const Endpoint& from, const OscMessage& message);
+    bool valuesRefused (const Endpoint& from, const OscMessage& message, const std::string& key);
+    std::string originOf (const Endpoint& from) const;
+    void seen (const OscMessage& message, const OscArg* value, const std::string& origin);
+    void relay (const std::string& address, const OscArg& raw, const std::string& origin);
+    bool takeDeckWord (const std::string& parameter, int channel, double value);
+    void selectDeck (const std::string& word, int channel, double value);
+    void sendToDeck (const std::vector<Message>& messages);
+    void announceFlag (LedFlag flag, int index);
+    void toggleReturnCue();
+    void keepThreeD (int index, double value);
+    void rememberState();
+    void sendPositionToProdj (const std::string& key, int index, double value);
+    std::vector<Client> prodjClients() const;
+    void tellProdjWhere (const std::string& device, const std::string& host);
+    void tellProdj (const Client& client);
+    std::optional<Client> askerClient (const Endpoint& from) const;
+    void stemdeckSaidHello (const std::string& host, double now);
+    void motionSaidHello (const std::string& host, double now);
+    void deskSaidHello (const std::string& host, double now, const std::string& kind);
+    void noticeStemdeckSilence (double now);
+    void sendToSelf (const std::string& address, const OscArg& value);
+    std::vector<Message> theEveningToReplay() const;
+    bool takeStemReport (const std::map<std::string, int>& fields, const OscArg* value);
+
     int liveValue() const { return prodjLive.on() ? 1 : 0; }
 
     CoreEnvironment env;
@@ -133,7 +170,7 @@ private:
     HelloGate helloGate;
     std::map<std::string, std::string> peerHosts;
 
-    Client mixerClient, motionClient, engineClient;
+    Client mixerClient, motionClient, engineClient, selfClient;
     std::vector<Client> subscribers;
     std::set<std::string> motionOwnHosts;
     MotionTarget motion;
@@ -158,6 +195,8 @@ private:
     std::optional<EngineSession> project;
     std::map<std::string, OscArg> sourcesSentToEngine;
     std::optional<double> engineBpm;
+    // A NaN was just put into the state (B1: a new float object, so the state differs from the last).
+    bool nanArrived = false;
 
     std::optional<Client> stemdeckClient;
     std::optional<Endpoint> stemdeckTarget;

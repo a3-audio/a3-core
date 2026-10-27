@@ -31,8 +31,9 @@ std::string dumpPython (const juce::var& value);
 bool pythonTruthy (const juce::var& value);
 
 // x == y as Python compares what json.loads made: numbers by value (1 == 1.0 == True), objects
-// regardless of key order, arrays element by element.
-bool pythonEquals (const juce::var& a, const juce::var& b);
+// regardless of key order, arrays element by element. `sameNan`: a NaN equals a NaN, as it does inside
+// a Python container when both are the same float object (the comparison tries identity first).
+bool pythonEquals (const juce::var& a, const juce::var& b, bool sameNan = false);
 
 // float(x) for a JSON number or boolean; nullopt for anything else (a text is not read as a number).
 std::optional<double> numberOf (const juce::var& value);

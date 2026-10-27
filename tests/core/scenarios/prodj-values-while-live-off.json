@@ -1,0 +1,17 @@
+{
+ "about": "A pro-DJ app moves nothing while LIVE is off, whatever it sends -- one without a slot too, by the kind its host last said, from the desk port only; seen as an arrival and nothing after it. The same host from another port is not read as a pro-DJ app.",
+ "steps": [
+  {"at": 0.1, "from": ["192.168.8.60", 7773], "osc": ["/device/hello", ["s", "prodj"], ["s", "000000000000000000000000000000000000000000000000000000000000beef"]]},
+  {"at": 0.2, "from": ["192.168.8.60", 7773], "osc": ["/channel/1/gain", ["f", 0.5]]},
+  {"at": 0.25, "from": ["192.168.8.60", 7773], "osc": ["/channel/1/cue", ["f", 1.0]]},
+  {"at": 0.3, "from": ["192.168.8.60", 7773], "osc": ["/channel/1/azimuth", ["f", 10.0]]},
+  {"at": 0.35, "from": ["192.168.8.60", 7773], "osc": ["/aux-return/stem/push", ["i", 1]]},
+  {"at": 0.4, "from": ["192.168.8.60", 7773], "osc": ["/filter/mode", ["f", 1.0]]},
+  {"at": 0.45, "from": ["192.168.8.60", 7773], "osc": ["/master/volume", ["f", 0.4]]},
+  {"at": 0.5, "from": ["192.168.8.60", 7773], "osc": ["/channel/1/stem/turn", ["i", 1]]},
+  {"at": 0.55, "from": ["192.168.8.60", 7000], "osc": ["/channel/2/cue", ["f", 1.0]]},
+  {"at": 0.6, "from": ["192.168.8.60", 7000], "osc": ["/channel/2/gain", ["f", 0.5]]},
+  {"at": 0.7, "from": ["192.168.8.60", 7773], "osc": ["/channel/1/gain"]},
+  {"at": 1.0, "flush": true}
+ ]
+}

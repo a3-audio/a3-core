@@ -607,7 +607,7 @@ std::optional<juce::int64> wholeOf (const juce::var& value)
 }
 }
 
-bool pythonEquals (const juce::var& a, const juce::var& b)
+bool pythonEquals (const juce::var& a, const juce::var& b, bool sameNan)
 {
     const auto left = numberOf (a);
     const auto right = numberOf (b);
@@ -619,6 +619,8 @@ bool pythonEquals (const juce::var& a, const juce::var& b)
         const auto wholeB = wholeOf (b);
         if (wholeA && wholeB)
             return *wholeA == *wholeB;
+        if (sameNan && std::isnan (*left) && std::isnan (*right))
+            return true;
         return static_cast<long double> (*left) == static_cast<long double> (*right);
     }
     if (a.isVoid() || a.isUndefined() || b.isVoid() || b.isUndefined())
@@ -631,7 +633,7 @@ bool pythonEquals (const juce::var& a, const juce::var& b)
         if (y == nullptr || x->size() != y->size())
             return false;
         for (int i = 0; i < x->size(); ++i)
-            if (! pythonEquals (x->getReference (i), y->getReference (i)))
+            if (! pythonEquals (x->getReference (i), y->getReference (i), sameNan))
                 return false;
         return true;
     }
@@ -641,7 +643,7 @@ bool pythonEquals (const juce::var& a, const juce::var& b)
         if (y == nullptr || x->getProperties().size() != y->getProperties().size())
             return false;
         for (const auto& property : x->getProperties())
-            if (! y->hasProperty (property.name) || ! pythonEquals (property.value, y->getProperty (property.name)))
+            if (! y->hasProperty (property.name) || ! pythonEquals (property.value, y->getProperty (property.name), sameNan))
                 return false;
         return true;
     }

@@ -172,7 +172,7 @@ TEST (Recall, TheLastValueWins)
     Relayed relayed;
     relayed.note ("/channel/0/gain", pyFloat (0.2));
     relayed.note ("/channel/0/gain", pyFloat (0.7));
-    EXPECT_EQ (relayed.messages(), (Messages { { "/channel/0/gain", pyFloat (0.7) } }));
+    EXPECT_EQ (relayed.messages(), (std::vector<OscMessage> { { "/channel/0/gain", { pyFloat (0.7) } } }));
 }
 
 TEST (Recall, ALaterValueDoesNotMoveItsPlace)
@@ -183,8 +183,8 @@ TEST (Recall, ALaterValueDoesNotMoveItsPlace)
     relayed.note ("/channel/0/gain", pyFloat (0.7));
     const auto messages = relayed.messages();
     ASSERT_EQ (messages.size(), 2u);
-    EXPECT_EQ (messages[0].first, "/channel/0/gain");
-    EXPECT_EQ (messages[1].first, "/channel/1/3d");
+    EXPECT_EQ (messages[0].address, "/channel/0/gain");
+    EXPECT_EQ (messages[1].address, "/channel/1/3d");
 }
 
 TEST (Recall, OneAddressIsOneValueHoweverManyHearIt)
@@ -284,6 +284,30 @@ TEST (Recall, ThePositionGoesOutLikeEverythingElse)
     EXPECT_EQ (rememberedMessages (b0::truth(), channelsWith ({ at (1.0) })), (Messages { { "/channel/1/azimuth", pyFloat (1.0) } }));
 }
 
+TEST (Recall, AListIsHeldAsAList)
+{
+    // B1 (a3-core 7a7b2441f74e): broadcast() notes the return's word, nine integers, as one list value;
+    // a recall says it again as nine arguments, as python-osc sends a list.
+    Relayed relayed;
+    const std::vector<OscArg> nine { pyInt (1), pyInt (0), pyInt (0), pyInt (0), pyInt (0), pyInt (0), pyInt (0), pyInt (0), pyInt (0) };
+    relayed.note ("/aux-return/stem", nine);
+    EXPECT_TRUE (relayed.holds ("/aux-return/stem", nine));
+    auto asFloats = nine;
+    asFloats[0] = pyFloat (1.0);   // Python: [1, 0] == [1.0, 0]
+    EXPECT_TRUE (relayed.holds ("/aux-return/stem", asFloats));
+    auto other = nine;
+    other[8] = pyInt (1);
+    EXPECT_FALSE (relayed.holds ("/aux-return/stem", other));
+    EXPECT_FALSE (relayed.holds ("/aux-return/stem", pyInt (1)));   // a list is never one number
+    EXPECT_TRUE (relayed.isList ("/aux-return/stem"));
+    EXPECT_EQ (relayed.value ("/aux-return/stem"), std::nullopt);
+    EXPECT_EQ (relayed.messages(), (std::vector<OscMessage> { { "/aux-return/stem", nine } }));
+
+    relayed.note ("/channel/1/gain", pyFloat (0.5));
+    EXPECT_FALSE (relayed.holds ("/channel/1/gain", std::vector<OscArg> { pyFloat (0.5) }));   // [0.5] != 0.5
+    EXPECT_FALSE (relayed.isList ("/channel/1/gain"));
+}
+
 // TheWholeAnswer
 
 TEST (Recall, ARecallIsTheFlagsAndThenWhatReaperSaid)
@@ -292,7 +316,7 @@ TEST (Recall, ARecallIsTheFlagsAndThenWhatReaperSaid)
     Relayed relayed;
     relayed.note ("/channel/0/gain", pyFloat (0.7));
     const auto messages = recallMessages (b0::truth(), rig.channels, rig.master, relayed);
-    EXPECT_EQ (messages.back(), (std::pair<std::string, OscArg> { "/channel/0/gain", pyFloat (0.7) }));
+    EXPECT_EQ (messages.back(), (OscMessage { "/channel/0/gain", { pyFloat (0.7) } }));
     EXPECT_EQ (messages.size(), lamps + flags + 1);
 }
 
@@ -303,8 +327,8 @@ TEST (Recall, ThePositionIsAnsweredBetweenTheFlagsAndReaper)
     Relayed relayed;
     relayed.note ("/channel/0/gain", pyFloat (0.7));
     const auto messages = recallMessages (b0::truth(), rig.channels, rig.master, relayed);
-    EXPECT_EQ (messages[lamps + flags], (std::pair<std::string, OscArg> { "/channel/2/azimuth", pyFloat (45.0) }));
-    EXPECT_EQ (messages.back(), (std::pair<std::string, OscArg> { "/channel/0/gain", pyFloat (0.7) }));
+    EXPECT_EQ (messages[lamps + flags], (OscMessage { "/channel/2/azimuth", { pyFloat (45.0) } }));
+    EXPECT_EQ (messages.back(), (OscMessage { "/channel/0/gain", { pyFloat (0.7) } }));
     EXPECT_EQ (messages.size(), lamps + flags + 1 + 1);
 }
 
@@ -317,10 +341,10 @@ TEST (Recall, AColdCoreStillAnswersWithItsOwnFlags)
 TEST (Recall, AColdCoreAnswersNoPositionEither)
 {
     auto rig = aRig();
-    for (const auto& [address, value] : recallMessages (b0::truth(), rig.channels, rig.master, Relayed()))
+    for (const auto& message : recallMessages (b0::truth(), rig.channels, rig.master, Relayed()))
     {
-        EXPECT_EQ (address.find ("azimuth"), std::string::npos);
-        EXPECT_EQ (address.find ("elevation"), std::string::npos);
+        EXPECT_EQ (message.address.find ("azimuth"), std::string::npos);
+        EXPECT_EQ (message.address.find ("elevation"), std::string::npos);
     }
 }
 
@@ -353,8 +377,9 @@ TEST (Recall, MessagesAsPython)
         for (size_t i = 0; i < got.size(); ++i)
         {
             const auto& item = *expected.getReference (static_cast<int> (i)).getArray();
-            EXPECT_EQ (got[i].first, item[0].toString().toStdString()) << label << " " << i;
-            EXPECT_EQ (got[i].second, recorded::expectedArg (item[1].toString(), item[2])) << label << " " << got[i].first;
+            EXPECT_EQ (got[i].address, item[0].toString().toStdString()) << label << " " << i;
+            ASSERT_EQ (got[i].args.size(), 1u) << label << " " << got[i].address;
+            EXPECT_EQ (got[i].args[0], recorded::expectedArg (item[1].toString(), item[2])) << label << " " << got[i].address;
         }
     }
 }

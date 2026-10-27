@@ -116,8 +116,8 @@ A JSON list, in the order things happened:
 - **A meter forward** (`vu` steps): the bytes forwarded unchanged, client name `vu`.
 
 The runner compares entry by entry: same order and count; `at`, `to`, `host`, `port`, `address`
-equal; arguments of equal tags, `f` equal as `float`, `d` as `double`, `i`/`h` as integers, `s`/`b`
-as text; journal lines and their stream equal; files byte-equal (`text`).
+equal; arguments of equal tags, `f` equal as `float`, `d` as `double` (a NaN equal to a NaN: both
+sides write it as `NaN`), `i`/`h` as integers, `s`/`b` as text; journal lines and their stream equal; files byte-equal (`text`).
 
 ## The clock and what is fixed
 
@@ -147,6 +147,11 @@ is in no transcript.
 
 ## Known differences, by decision
 
+- An **evening value that is a list** for an address Core replays (only a hand-edited
+  `evening.json` has one): B1 replays it as several arguments, the C++ `replayable` drops it (its
+  messages carry one argument). A `null` is replayed as a message without arguments on both sides
+  (`desk-first-over-replay`).
+
 - A **list-shaped** `state.json` (e.g. `[1, 2]`): B1 raises at import (`apply_stems` calls `.get`
   on it) and Core does not come up; the C++ Core reads it as no state and no stems. Left as is — a
   broken file is an empty state, never a crash (Review Focus 3); no scenario records it, since B1
@@ -160,18 +165,22 @@ ports it, test-first, with its scenario:
 
 | Stub | B1 | Task |
 |---|---|---|
-| `/channel/*`, `/master/*`, `/filter/*`, `/aux-return/*` handlers | `osc_handler_channel`, `_master`, `_filter`, `_aux_return` | 18 |
-| default handler | `unrouted_handler` | 18 |
-| `writeTheEvening` (reached once the engine's replay made the evening live) | `write_the_evening` | 18 |
-| `sendToEngine`'s sending branch (after the engine's hello) | `send_to_engine` | 18 |
-| `broadcast` of several arguments (`Relayed` holds one value) | `broadcast` → `_relayed.note` | 18 |
-| `/stemdeck/*`, `/state/recall`, `/beat`, `/device/hello`, `/engine/hello`, `/stemdeck/n/hello`, `prodj.live`, pointers | `osc_handler_stemdeck`, `_recall`, `_beat`, `_device_hello`, `_engine_hello`, `_deck_hello`, `_prodj_live`, `_pointer` | 19 |
-| `sayTheWholeState` | `say_the_whole_state` | 19 |
-| `pointMotionAt` (a remote Motion falls silent) | `point_motion_at` | 19 |
+| `/stemdeck/ahead` (the family handler's preview branch) | `forward_ahead` | 19 |
+| `/beat`, `prodj.live`, pointers | `osc_handler_beat`, `_prodj_live`, `_pointer` | 19 |
+| a desk's or pro-DJ app's hello with Core's own truth | `desk_said_hello` | 19 |
+| `pointMotionAt` (a remote Motion said hello, or fell silent) | `point_motion_at` | 19 |
 | `noticeDeskSilence`'s leaving desks, `deskLeaves`, `liveOffWhenNoProdjIsLeft` | `notice_desk_silence`, `desk_leaves`, `live_off_when_no_prodj_is_left` | 19 |
 | `announceLive`, `deckListeners` (the LIVE repeat) | `announce_live`, `deck_listeners` | 19 |
 | `handleVu` | `a3_core_vu_relay.forward`, `vu_destinations` | 19 (B1's), 22 (the engine's) |
 | `statusJson`, `rigJson` (not declared yet) | `engine_status`, project 2's rig | 21 |
+
+Task 18 ported the router (src/a3-core/CoreValues.cpp): the channel, master, filter and aux-return
+handlers, `unrouted_handler`, `values_refused`, `relay`/`broadcast` (a list too), `write_the_evening`,
+`send_to_engine`, `send_to_deck`, the deck ring, StemDeck's bus reports -- and, because its scenarios
+and B1's engine-mode tests pass through them, these of Task 19's list: `osc_handler_recall` with
+`say_the_whole_state`, `osc_handler_engine_hello` (the replay), `osc_handler_deck_hello`, and
+`osc_handler_device_hello` with `stemdeck_said_hello`, `motion_said_hello` (a Motion on this machine;
+a remote one reaches the `point_motion_at` stub) and `notice_stemdeck_silence`.
 
 The constructor still builds `MotionTarget` with B1's own-host set (`MOTION_OWN_HOSTS` + `--motion`'s
 host): it cannot be built without one, and Task 19's motion scenarios pin it.

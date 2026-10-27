@@ -30,6 +30,9 @@ bool notReplayed (const std::string& key);
 // does not have). Any other address is returned as it is.
 std::optional<std::string> currentName (const Truth& truth, const std::string& address);
 
+// One value as json writes it: a number, a text, a bool, or null for None.
+juce::var jsonOf (const OscArg& arg);
+
 // What Core last passed on, as data json can write: {"values": {address: value}}.
 juce::var eveningState (const Relayed& relayed);
 

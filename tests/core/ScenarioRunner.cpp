@@ -202,10 +202,15 @@ bool sameArg (const juce::var& expected, const juce::var& actual)
         return false;
     const auto& want = expected[1];
     const auto& got = actual[1];
-    if (tag == "f")
-        return static_cast<float> (static_cast<double> (want)) == static_cast<float> (static_cast<double> (got));
-    if (tag == "d")
-        return static_cast<double> (want) == static_cast<double> (got);
+    if (tag == "f" || tag == "d")
+    {
+        // A NaN on the wire is recorded as NaN on both sides: the same value, though NaN != NaN.
+        const auto a = static_cast<double> (want);
+        const auto b = static_cast<double> (got);
+        if (std::isnan (a) || std::isnan (b))
+            return std::isnan (a) && std::isnan (b);
+        return tag == "f" ? static_cast<float> (a) == static_cast<float> (b) : a == b;
+    }
     if (tag == "i" || tag == "h")
         return static_cast<juce::int64> (want) == static_cast<juce::int64> (got);
     if (tag == "s" || tag == "b")

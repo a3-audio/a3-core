@@ -21,3 +21,14 @@ void expectAsPython (const std::string& name)
 }
 
 TEST (Scenarios, StartupQuiet) { expectAsPython ("startup-quiet"); }
+TEST (Scenarios, DeskTextValues) { expectAsPython ("desk-text-values"); }
+TEST (Scenarios, MotionFloats) { expectAsPython ("motion-floats"); }
+TEST (Scenarios, FlagsAndLamps) { expectAsPython ("flags-and-lamps"); }
+TEST (Scenarios, FilterModeBothSpellings) { expectAsPython ("filter-mode-both-spellings"); }
+TEST (Scenarios, EngineSourceAndOpenTypes) { expectAsPython ("engine-source-and-open-types"); }
+TEST (Scenarios, DeckRing) { expectAsPython ("deck-ring"); }
+TEST (Scenarios, ReturnRing) { expectAsPython ("return-ring"); }
+TEST (Scenarios, HelloGate) { expectAsPython ("hello-gate"); }
+TEST (Scenarios, DeskFirstOverReplay) { expectAsPython ("desk-first-over-replay"); }
+TEST (Scenarios, ValuesBeforeHelloIgnored) { expectAsPython ("values-before-hello-ignored"); }
+TEST (Scenarios, ProdjValuesWhileLiveOff) { expectAsPython ("prodj-values-while-live-off"); }

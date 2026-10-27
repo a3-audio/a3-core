@@ -43,7 +43,7 @@ Core::Core (CoreEnvironment environment, CoreArgs coreArgs)
       seenFile (seenFilePath, trafficTable, SeenFile::defaultDelay, &env.clock),
       sendFailures ([this] (const std::string& line, bool toStderr) { say (line, toStderr); }),
       mixerClient { "mixer", args.mixer }, motionClient { "motion", args.motion },
-      engineClient { "engine", truth.endpoint ("engine", "osc") },
+      engineClient { "engine", truth.endpoint ("engine", "osc") }, selfClient { "self", { truth.host ("local"), args.port } },
       motionOwnHosts (ownHostsOf (truth, args.motion.host)),
       motion (args.motion, truth.port ("motion", "osc"), motionOwnHosts, truth.port ("motion", "vu")),
       desks (truth.port ("desk", "osc"), truth.port ("desk", "vu")),
@@ -158,14 +158,23 @@ void Core::send (const Client& client, const OscMessage& message)
     sendFailures.send (client.name, [&] { env.out.send (client, message); });
 }
 
-// send_message(address, value): a value of None is a message without arguments.
-void Core::send (const Client& client, const Message& message)
+namespace
 {
-    OscMessage out { message.first, {} };
-    if (message.second.tag != 'N')
-        out.args.push_back (message.second);
-    send (client, out);
+// send_message(address, value): a value of None is a message without arguments.
+OscMessage messageOf (const std::string& address, const OscArg& value)
+{
+    OscMessage out { address, {} };
+    if (value.tag != 'N')
+        out.args.push_back (value);
+    return out;
 }
+}
+
+void Core::send (const Client& client, const Message& message) { send (client, messageOf (message.first, message.second)); }
+
+// self_client: Core's own port, from the one socket the hello gate trusts. A raw client in B1, so
+// nothing in the traffic table and no send failure said.
+void Core::sendToSelf (const std::string& address, const OscArg& value) { env.out.send (selfClient, messageOf (address, value)); }
 
 void Core::toEverySubscriber (const OscMessage& message)
 {
@@ -173,29 +182,37 @@ void Core::toEverySubscriber (const OscMessage& message)
         send (client, message);
 }
 
+// A message of one argument passes on that value; one of several is a Python list (the return's
+// word), held and written as one.
 void Core::broadcast (const OscMessage& message)
 {
-    if (message.args.size() != 1)
-        throw std::logic_error ("broadcast " + message.address + ": Relayed holds one value, not a list (Task 18)");
-    const auto& value = message.args.front();
-    if (relayed.holds (message.address, value))
+    const bool list = message.args.size() != 1;
+    if (list ? relayed.holds (message.address, message.args) : relayed.holds (message.address, message.args.front()))
         return;
-    notePassedOn (message.address, value);
+    notePassedOn (message.address, message.args);
     const auto told = subscribers;   // tuple(subscribers): a send may not change who is told
     for (const auto& client : told)
         send (client, message);
 }
 
-void Core::notePassedOn (const std::string& address, const OscArg& value)
+void Core::notePassedOn (const std::string& address, const std::vector<OscArg>& value)
 {
-    relayed.note (address, value);
+    if (value.size() == 1)
+        relayed.note (address, value.front());
+    else
+        relayed.note (address, value);
     if (project && project->live)
         writeTheEvening();
 }
 
+// Written along, so a power cut does not cost the evening; the decks' places beside its values.
 void Core::writeTheEvening()
 {
-    notPortedYet ("write_the_evening (Task 18)");
+    auto state = eveningState (relayed);
+    const auto places = decks.toEvening();
+    for (const auto& entry : places.getDynamicObject()->getProperties())
+        state.getDynamicObject()->setProperty (entry.name, entry.value);
+    eveningFile.remember (state, env.clock.monotonic());
 }
 
 bool Core::engineHeard() const { return project && project->round > 0; }
@@ -204,8 +221,8 @@ void Core::sendToEngine (const std::vector<Message>& messages)
 {
     if (! engineHeard())
         return;   // Core asks, devices answer: nothing before the engine's hello
-    if (! messages.empty())
-        notPortedYet ("send_to_engine after the hello (Task 18)");
+    for (const auto& message : messages)
+        send (engineClient, message);
 }
 
 void Core::say (const std::string& line, bool toStderr) { env.journal (line, toStderr); }
@@ -225,9 +242,16 @@ void Core::speakRememberedState()
          + std::to_string (subscribers.size()) + " subscribers");
 }
 
+// Every value to every subscriber, as the messages it would have arrived as: not through broadcast(),
+// which drops a value already passed on -- a recall is somebody who knows nothing.
 int Core::sayTheWholeState()
 {
-    notPortedYet ("say_the_whole_state (Task 19)");
+    const auto messages = recallMessages (truth, channels, master, relayed);
+    for (const auto& message : messages)
+        for (const auto& client : subscribers)
+            send (client, message);
+    speakStems (true);
+    return static_cast<int> (messages.size());
 }
 
 void Core::speakStems (bool full)
@@ -338,25 +362,22 @@ void Core::tellWritten (int before, int after, const juce::File& path)
 
 void Core::mapHandlers()
 {
-    const std::vector<std::pair<const char*, const char*>> families {
-        { "channel", "osc_handler_channel (Task 18)" }, { "master", "osc_handler_master (Task 18)" },
-        { "filter", "osc_handler_filter (Task 18)" },   { "aux-return", "osc_handler_aux_return (Task 18)" },
-        { "stemdeck", "osc_handler_stemdeck (Task 19)" } };
-    for (const auto& [family, handler] : families)
-        dispatcher.map (std::string ("/") + family + "/*", [this, handler = handler] (const Endpoint&, const OscMessage&) {
-            notPortedYet (handler);
-        });
-    const std::vector<std::pair<std::string, const char*>> words {
-        { truth.address ("state.recall"), "osc_handler_recall (Task 19)" },
-        { truth.address ("beat"), "osc_handler_beat (Task 19)" },
-        { truth.address ("device.hello"), "osc_handler_device_hello (Task 19)" },
-        { truth.address ("engine.hello"), "osc_handler_engine_hello (Task 19)" } };
-    for (const auto& [address, handler] : words)
-        dispatcher.map (address, [this, handler = handler] (const Endpoint&, const OscMessage&) { notPortedYet (handler); });
+    using Method = void (Core::*) (const Endpoint&, const OscMessage&);
+    const auto to = [this] (Method method) {
+        return [this, method] (const Endpoint& from, const OscMessage& message) { (this->*method) (from, message); };
+    };
+    const std::vector<std::pair<const char*, Method>> families {
+        { "channel", &Core::channelHandler }, { "master", &Core::masterHandler }, { "filter", &Core::filterHandler },
+        { "aux-return", &Core::auxReturnHandler }, { "stemdeck", &Core::stemdeckHandler } };
+    for (const auto& [family, method] : families)
+        dispatcher.map (std::string ("/") + family + "/*", to (method));
+    dispatcher.map (truth.address ("state.recall"), to (&Core::recall));
+    dispatcher.map (truth.address ("beat"), [this] (const Endpoint&, const OscMessage&) { notPortedYet ("osc_handler_beat (Task 19)"); });
+    dispatcher.map (truth.address ("device.hello"), to (&Core::deviceHello));
+    dispatcher.map (truth.address ("engine.hello"), to (&Core::engineHello));
     const auto [firstDeck, lastDeck] = truth.indexRange ("stemdeck.deck-hello", "deck");
     for (int deck = firstDeck; deck <= lastDeck; ++deck)
-        dispatcher.map (truth.address ("stemdeck.deck-hello", { { "deck", deck } }),
-                        [this] (const Endpoint&, const OscMessage&) { notPortedYet ("osc_handler_deck_hello (Task 19)"); });
+        dispatcher.map (truth.address ("stemdeck.deck-hello", { { "deck", deck } }), to (&Core::deckHello));
     dispatcher.map (truth.address ("prodj.live"),
                     [this] (const Endpoint&, const OscMessage&) { notPortedYet ("osc_handler_prodj_live (Task 19)"); });
     for (const auto* pointer : { "stemdeck.pointer", "motion.pointer" })
@@ -365,9 +386,11 @@ void Core::mapHandlers()
     dispatcher.setDefault ([this] (const Endpoint& from, const OscMessage& message) { unrouted (from, message); });
 }
 
-void Core::unrouted (const Endpoint&, const OscMessage&)
+// unrouted_handler: what reaches the main port and no map -- written down, nothing done.
+void Core::unrouted (const Endpoint& from, const OscMessage& message)
 {
-    notPortedYet ("unrouted_handler (Task 18)");
+    trafficTable.unknown (message.address, message.args.empty() ? nullptr : &message.args.front(),
+                          peerName (from.host, peerHosts, commanders), env.clock.monotonic());
 }
 
 void Core::notPortedYet (const char* handler) const
