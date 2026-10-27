@@ -2,18 +2,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include "EnginePorts.h"
+#include "a3-links/LinkMap.h"
 #include <juce_core/juce_core.h>
 #include <map>
 #include <string>
-#include <utility>
-#include <vector>
 
 namespace a3app
 {
-struct IoMap
+// The library's link map plus what only the device backend uses.
+struct IoMap : a3::links::LinkMap
 {
-    std::map<std::string, std::vector<std::string>> jack;                  // engine port -> peer ports
-    std::vector<std::pair<std::string, std::string>> directLinks;          // foreign -> foreign, made and owned by the engine (R4)
     std::map<std::string, int> deviceChannels;                             // engine port -> device channel (0-based)
 };
 

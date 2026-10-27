@@ -3,9 +3,11 @@
 #pragma once
 #include "AudioBackend.h"
 #include "ConnectionPlan.h"
+#include "IoMap.h"
 #include "EnginePorts.h"
+#include "a3-links/JackLinker.h"
 #include <atomic>
-#include <set>
+#include <memory>
 #include <jack/jack.h>
 
 namespace a3app
@@ -43,11 +45,7 @@ private:
 
     void process (jack_nframes_t);
     bool registerPorts (const PortNames&);
-    void connect();
-    std::vector<std::string> graphPorts() const;
-    std::vector<Link> graphLinks() const;
     void rebuildOnNewQuantumOrRate();
-    void removeOwnedLinks();
 
     const bool connecting;
     jack_client_t* client = nullptr;
@@ -68,9 +66,7 @@ private:
     std::atomic<float> engineBlockMs { 0 };         // the engine's own time for the last block
     std::atomic<jack_nframes_t> lastBlockFrames { 0 };
 
-    std::vector<Link> madeByUs;
-    std::vector<std::string> missingPeers;
-    std::set<std::pair<std::string, std::string>> reportedFailures;   // say a failing link once, not every second
+    std::unique_ptr<a3::links::JackLinker> linker;   // exists while the client is open
     double lastConnectSeconds = -1.0e9;
 };
 }

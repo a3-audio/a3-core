@@ -48,6 +48,15 @@ target_include_directories(a3-engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/a3-e
 target_link_libraries(a3-engine PUBLIC a3-engine-juce a3-iem)
 target_compile_options(a3-engine PRIVATE -Wall -Wextra -Werror=switch)
 
+# The link planning and the JACK linker: juce_core and libjack only, no engine headers, so another
+# JACK client (StemDeck) can compile the same three files.
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(JACK REQUIRED IMPORTED_TARGET jack)
+add_library(a3-links STATIC src/a3-links/LinkPlan.cpp src/a3-links/LinkMap.cpp src/a3-links/JackLinker.cpp)
+target_include_directories(a3-links PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(a3-links PUBLIC a3-engine-juce PkgConfig::JACK)
+target_compile_options(a3-links PRIVATE -Wall -Wextra -Werror=switch)
+
 add_subdirectory(bench)
 add_subdirectory(app)
 
