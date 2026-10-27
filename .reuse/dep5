@@ -55,7 +55,7 @@ Files: tests/engine/reference/airwindows/*
 Copyright: 2018 Chris Johnson
 License: MIT
 
-Files: *.md PROGRAM.md
+Files: PROGRAM.md tests/core/scenarios/README.md tools/parity/README.md
 Copyright: 2026 A³ Audio contributors
 License: CC-BY-SA-4.0
 
