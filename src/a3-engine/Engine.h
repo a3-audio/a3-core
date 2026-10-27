@@ -10,6 +10,7 @@
 #include "OutputGate.h"
 #include "SpatialBus.h"
 #include "SpatialConfig.h"
+#include "VuTaps.h"
 
 namespace a3
 {
@@ -79,6 +80,15 @@ public:
     // Peaks since the last call (the call takes them; one reader), RMS now; lock-free.
     struct OutputMeter { float peak, rms; };
     std::vector<OutputMeter> outputMeters();
+
+    // The /vu meters (O13): every tap of `taps` the engine has a point for is fed in process from
+    // then on, besides the window's outputMeters (two readers, two accumulators). The points are the
+    // ones the patchbay fed beat-analyzer: analog{k}_L/R = analog inputs 2k-1/2k and aux_L/R = the
+    // return's analog pair, raw; main_sub/main_top{i}, booth_*, rec_L/R, phones_L/R = those outputs
+    // as they leave; in{c}_pre/post_L/R = channel c's pre/post taps. Control thread, before the first
+    // process (allocates); the taps outlive the Engine. Returns the names of taps it has no point for
+    // (a zone's sub or tops beyond its layout, a channel beyond N): those stay at 0.
+    std::vector<std::string> attachVuTaps (VuTaps&);
 
     // Observation (tests, diagnostics); any thread.
     int analogSourceCount() const;

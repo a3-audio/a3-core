@@ -26,6 +26,7 @@ public:
 
     ~EngineRole() override;
     std::optional<int> tick (bool stopRequested) override;
+    int tickHz() const override { return 100; }   // the /vu sends (25 Hz) are due on a 10 ms grid
 
 private:
     EngineRole (const AppArgs&, StartupData);

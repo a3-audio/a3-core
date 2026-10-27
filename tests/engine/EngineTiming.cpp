@@ -10,6 +10,7 @@
 #include "DeckStrip.h"
 #include "EngineFixture.h"
 #include "EngineStages.h"
+#include "VuTestData.h"
 
 // Regression guards, not the acceptance: the rig's 10-minute worst case decides (Settled 5).
 // Wall-clock numbers only mean something on a quiet machine (run under the build lock).
@@ -209,6 +210,11 @@ TEST (EngineTiming, FullGraphUnderOneMillisecondPer128)
     deckOnEveryChannel (analog);   // the stem cues still run
     analogOnEveryPair (analog);
     everySendOpen (analog);
+
+    // The /vu taps (O13) are part of the graph's cost since Task 24.
+    a3::VuTaps decksTaps (truthVuMeters(), a3::VuSettings {}), analogTaps (truthVuMeters(), a3::VuSettings {});
+    decks.engine->attachVuTaps (decksTaps);
+    analog.engine->attachVuTaps (analogTaps);
 
     double bestDecks = 1e9, bestAnalog = 1e9;
     for (int r = 0; r < repetitions; ++r)

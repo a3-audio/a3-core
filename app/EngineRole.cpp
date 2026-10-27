@@ -8,6 +8,7 @@
 #include "EngineHost.h"
 #include "JackBackend.h"
 #include "OscVocabulary.h"
+#include "UdpNet.h"
 
 namespace a3app
 {
@@ -40,7 +41,8 @@ public:
         if (! coreSender.connect (data.truth.coreHost, data.truth.corePort))
             return juce::Result::fail ("cannot send to " + data.truth.coreHost + ":" + juce::String (data.truth.corePort));
         host = std::make_unique<EngineHost> (data.config.engine, data.spatial, data.truth,
-                                             [this] (const juce::OSCMessage& m) { coreSender.send (m); });
+                                             [this] (const juce::OSCMessage& m) { coreSender.send (m); },
+                                             metersSender());
         listener = std::make_unique<ControlListener> (data, *host);
         if (! socket.bindToPort (data.truth.enginePort, data.truth.engineBindAddress) || ! receiver.connectToSocket (socket))
             return juce::Result::fail ("cannot listen on " + data.truth.engineBindAddress + ":" + juce::String (data.truth.enginePort));
@@ -87,9 +89,30 @@ public:
     BackendStatus status() const { return backend != nullptr ? backend->status() : BackendStatus {}; }
 
 private:
+    // The /vu bundles to core.vu-relay on loopback (O13); a truth without that listener sends none. A send
+    // that fails is dropped without a word, as the analyzer's non-blocking sendto dropped it: Core may be
+    // down or restarting, and the next send is 40 ms away.
+    std::function<void (const EngineHost::Datagram&)> metersSender()
+    {
+        if (data.truth.vuRelayPort <= 0 || data.truth.vuRelayHost.isEmpty())
+            return {};
+        const a3core::Endpoint relay { data.truth.vuRelayHost.toStdString(), data.truth.vuRelayPort };
+        return [this, relay] (const EngineHost::Datagram& bundle)
+        {
+            try
+            {
+                metersSocket.sendTo (relay, bundle);
+            }
+            catch (const a3core::OsError&)
+            {
+            }
+        };
+    }
+
     bool ready = false;
     const StartupData& data;
     juce::OSCSender coreSender;
+    a3core::UdpSocket metersSocket;
     juce::DatagramSocket socket { false };
     juce::OSCReceiver receiver;
     std::unique_ptr<EngineHost> host;

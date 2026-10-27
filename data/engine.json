@@ -70,109 +70,47 @@
     "system:capture_12"
    ],
    "main_sub": [
-    "system:playback_1",
-    "beat-analyzer:vu_main_sub"
+    "system:playback_1"
    ],
    "main_top_1": [
-    "system:playback_2",
-    "beat-analyzer:vu_main_top1"
+    "system:playback_2"
    ],
    "main_top_2": [
-    "system:playback_3",
-    "beat-analyzer:vu_main_top2"
+    "system:playback_3"
    ],
    "main_top_3": [
-    "system:playback_4",
-    "beat-analyzer:vu_main_top3"
+    "system:playback_4"
    ],
    "main_top_4": [
-    "system:playback_5",
-    "beat-analyzer:vu_main_top4"
+    "system:playback_5"
    ],
    "booth_sub": [
-    "system:playback_11",
-    "beat-analyzer:vu_booth_sub"
+    "system:playback_11"
    ],
    "booth_top_1": [
-    "system:playback_12",
-    "beat-analyzer:vu_booth_top1"
+    "system:playback_12"
    ],
    "booth_top_2": [
-    "system:playback_13",
-    "beat-analyzer:vu_booth_top2"
+    "system:playback_13"
    ],
    "booth_top_3": [
-    "system:playback_14",
-    "beat-analyzer:vu_booth_top3"
+    "system:playback_14"
    ],
    "booth_top_4": [
-    "system:playback_15",
-    "beat-analyzer:vu_booth_top4"
+    "system:playback_15"
    ],
    "rec_L": [
     "StemDeck:rec_L",
-    "beat-analyzer:bpm_1",
-    "beat-analyzer:vu_rec_L"
+    "beat-analyzer:bpm_1"
    ],
    "rec_R": [
-    "StemDeck:rec_R",
-    "beat-analyzer:vu_rec_R"
+    "StemDeck:rec_R"
    ],
    "phones_L": [
-    "system:playback_9",
-    "beat-analyzer:vu_phones_L"
+    "system:playback_9"
    ],
    "phones_R": [
-    "system:playback_10",
-    "beat-analyzer:vu_phones_R"
-   ],
-   "ch1_pre_L": [
-    "beat-analyzer:vu_in1_pre_L"
-   ],
-   "ch1_post_L": [
-    "beat-analyzer:vu_in1_post_L"
-   ],
-   "ch1_pre_R": [
-    "beat-analyzer:vu_in1_pre_R"
-   ],
-   "ch1_post_R": [
-    "beat-analyzer:vu_in1_post_R"
-   ],
-   "ch2_pre_L": [
-    "beat-analyzer:vu_in2_pre_L"
-   ],
-   "ch2_post_L": [
-    "beat-analyzer:vu_in2_post_L"
-   ],
-   "ch2_pre_R": [
-    "beat-analyzer:vu_in2_pre_R"
-   ],
-   "ch2_post_R": [
-    "beat-analyzer:vu_in2_post_R"
-   ],
-   "ch3_pre_L": [
-    "beat-analyzer:vu_in3_pre_L"
-   ],
-   "ch3_post_L": [
-    "beat-analyzer:vu_in3_post_L"
-   ],
-   "ch3_pre_R": [
-    "beat-analyzer:vu_in3_pre_R"
-   ],
-   "ch3_post_R": [
-    "beat-analyzer:vu_in3_post_R"
-   ],
-   "ch4_pre_L": [
-    "beat-analyzer:vu_in4_pre_L"
-   ],
-   "ch4_post_L": [
-    "beat-analyzer:vu_in4_post_L"
-   ],
-   "ch4_pre_R": [
-    "beat-analyzer:vu_in4_pre_R"
-   ],
-   "ch4_post_R": [
-    "beat-analyzer:vu_in4_post_R"
+    "system:playback_10"
    ],
    "deckA_1": [
     "StemDeck-A:bformat_1"
@@ -295,48 +233,7 @@
     "StemDeck-B:aux_R"
    ]
   },
-  "directLinks": [
-   [
-    "system:capture_11",
-    "beat-analyzer:vu_aux_L"
-   ],
-   [
-    "system:capture_12",
-    "beat-analyzer:vu_aux_R"
-   ],
-   [
-    "system:capture_1",
-    "beat-analyzer:vu_analog1_L"
-   ],
-   [
-    "system:capture_2",
-    "beat-analyzer:vu_analog1_R"
-   ],
-   [
-    "system:capture_3",
-    "beat-analyzer:vu_analog2_L"
-   ],
-   [
-    "system:capture_4",
-    "beat-analyzer:vu_analog2_R"
-   ],
-   [
-    "system:capture_5",
-    "beat-analyzer:vu_analog3_L"
-   ],
-   [
-    "system:capture_6",
-    "beat-analyzer:vu_analog3_R"
-   ],
-   [
-    "system:capture_7",
-    "beat-analyzer:vu_analog4_L"
-   ],
-   [
-    "system:capture_8",
-    "beat-analyzer:vu_analog4_R"
-   ]
-  ]
+  "directLinks": []
  },
  "spatial": "spatial"
 }

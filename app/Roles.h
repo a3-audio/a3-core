@@ -25,6 +25,7 @@ class RoleRunner
 public:
     virtual ~RoleRunner() = default;
     virtual std::optional<int> tick (bool stopRequested) = 0;
+    virtual int tickHz() const { return 20; }   // how often the app's timer calls tick
 };
 
 // SIGTERM and SIGINT only set a flag (nothing else is safe in a handler); the timer reads it.

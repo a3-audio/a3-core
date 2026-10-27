@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <cmath>
+#include <cstring>
 #include <vector>
 #include <gtest/gtest.h>
 #include "AppTruth.h"
@@ -22,8 +23,10 @@ struct HostRig
     a3::EngineConfig config = a3test::engineConfig();
     a3::SpatialConfig spatial = a3test::loadedSpatialConfig (a3test::shippedSpatialDirectory);
     std::vector<juce::OSCMessage> toCore;
+    std::vector<std::vector<uint8_t>> toVuRelay;
     a3app::EngineHost host { config, spatial, a3apptest::engineTruth(),
-                             [this] (const juce::OSCMessage& m) { toCore.push_back (m); } };
+                             [this] (const juce::OSCMessage& m) { toCore.push_back (m); },
+                             [this] (const std::vector<uint8_t>& d) { toVuRelay.push_back (d); } };
     bool ticking = true;
     long frame = 0;
     std::vector<float> left = std::vector<float> (maxCall), right = std::vector<float> (maxCall);
@@ -210,4 +213,42 @@ TEST (EngineHost, CloseGateFadesTheOutputsToZeroBeforeTheBackendStops)
         EXPECT_EQ (rig.host.gateLevels().gain[(int) zone], 0.0f);
     rig.callback (64);
     EXPECT_EQ (rig.lastMainPeak, 0.0f);
+}
+
+namespace
+{
+// The address of a /vu bundle's first message (after "#bundle", the timetag and its length).
+std::string firstAddressOf (const std::vector<uint8_t>& bundle)
+{
+    return bundle.size() > 20 ? std::string (reinterpret_cast<const char*> (bundle.data() + 20)) : std::string();
+}
+}
+
+// O13: the meters leave on the control tick at the analyzer's 25 Hz, each send its six bundles
+// (/vu/1-40 in blocks of ten, /vu/51-66 in two of eight), whatever the tick rate above it.
+TEST (EngineHost, SendsMetersAt25Hz)
+{
+    HostRig rig;
+    ASSERT_TRUE (rig.host.rebuild (rate, 128, false).wasOk());
+    rig.restValues();
+    rig.run (1.0, 441);   // 1 s of audio, a control tick every 20 ms
+    ASSERT_EQ (rig.toVuRelay.size(), 25u * 6u);
+    const std::vector<std::string> firsts { "/vu/1", "/vu/11", "/vu/21", "/vu/31", "/vu/51", "/vu/59" };
+    for (size_t i = 0; i < rig.toVuRelay.size(); ++i)
+    {
+        const auto& datagram = rig.toVuRelay[i];
+        ASSERT_GE (datagram.size(), 16u);
+        EXPECT_EQ (std::string (reinterpret_cast<const char*> (datagram.data()), 8), std::string ("#bundle\0", 8));
+        EXPECT_EQ (firstAddressOf (datagram), firsts[i % 6]) << i;
+    }
+    const auto& lastFirst = rig.toVuRelay[rig.toVuRelay.size() - 6];   // /vu/1: analog1_L carries the sine
+    float peak = 0.0f;
+    std::memcpy (&peak, lastFirst.data() + 20 + 12, 4);
+    peak = juce::ByteOrder::swapIfLittleEndian (peak);
+    EXPECT_NEAR (peak, 0.3f, 0.01f);
+
+    HostRig fast;   // no Engine yet: the analyzer sent its zeros at 25 Hz, too
+    for (int k = 0; k < 100; ++k)
+        fast.host.controlTick (10.0 + 0.01 * k);   // 1 s at 100 Hz
+    EXPECT_EQ (fast.toVuRelay.size(), 25u * 6u);
 }

@@ -22,8 +22,6 @@ namespace
 using a3app::Role;
 using Started = std::variant<std::unique_ptr<a3app::RoleRunner>, int>;
 
-constexpr int tickHz = 20;
-
 void sayError (const std::string& line) { std::fprintf (stderr, "%s\n", line.c_str()); }
 
 // The core role: the Core service and the rule of its stop and exit (CoreRole).
@@ -186,7 +184,7 @@ public:
         if (const auto* code = std::get_if<int> (&started))
             return finish (*code);
         runner = std::move (std::get<std::unique_ptr<a3app::RoleRunner>> (started));
-        startTimerHz (tickHz);
+        startTimerHz (runner->tickHz());
     }
 
     void shutdown() override

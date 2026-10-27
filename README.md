@@ -75,6 +75,17 @@ libraries JUCE would `dlopen` for a window are not needed.
 - **Meters.** `outputMeters()` gives peak and RMS (beat-analyzer's ballistics) per output port, in port
   order: main, booth, rec L/R, phones L/R, then per channel pre L/R and post L/R (a deck channel's
   W on both sides).
+- **The /vu meters (O13, since Task 24 of "A³ Core as one program").** The engine measures the 56 meters
+  beat-analyzer measured, at the points the patchbay fed it (`tests/engine/data/vu-points.json`):
+  `analog1_L`…`analog4_R` = analog inputs 1-8 and `aux_L/R` = the return's analog pair (11/12), raw;
+  `main_*`, `booth_*` (tops beyond the layout stay 0), `phones_L/R`, `rec_L/R` = those outputs as they
+  leave; `in{n}_pre/post_L/R` = the channel taps above. `VuTaps` (`src/a3-engine/VuTaps.h`) is
+  beat-analyzer's `VuMeter` per point (per block: raw peak kept until taken, RMS followed 0.8 / 0.2),
+  fed in `process` by `Engine::attachVuTaps`, separate from `outputMeters()` (two readers, two
+  accumulators). The host sends them on the control tick at 25 Hz as beat-analyzer's six bundles
+  (`VuBundles.h`: `/vu/1-40` in blocks of 10, `/vu/51-66` in blocks of 8, `ff` peak and rms, byte-equal
+  to its `serializeBundle`) to Core's `core.vu-relay`, which forwards them; free numbers (9-10, 37-40) are
+  sent as 0, 41-50 are StemDeck's. The default map no longer links anything to `beat-analyzer:vu_*`.
 
 **Timing guard.** `EngineTiming.FullGraphUnderOneMillisecondPer128` fails when the best of five
 repetition means exceeds 1.0 ms per 128-frame block on the build machine (a3coreV01, i5-4440). It
@@ -149,10 +160,12 @@ there.
 **The default config** (`data/engine.json`): four channels on analog pairs 1-4, return pair 6, two
 decks, trims main/booth -30.88 dB (REAPER's output faders), phones 0, rec 0, SVF filter, Step 0's delay
 modulation, the JACK backend, and the rig's connections: what `a3-patchbay.xml` connected for REAPER,
-moved to the engine's ports (analog capture, Scarlett playback, the beat-analyzer's meters, StemDeck's
-rec input), the analyzer's raw analog and aux meters as direct links, and every deck port to
+moved to the engine's ports (analog capture, Scarlett playback, StemDeck's rec input and the
+analyzer's beat input `bpm_1`), and every deck port to
 `StemDeck-A`/`StemDeck-B` (`bformat_k`, `cue_L/R`, `aux_L/R`; they exist once StemDeck's S4 is
-installed, until then they are reported as missing, not an error). Left out on purpose: REAPER's inputs
+installed, until then they are reported as missing, not an error). Since Task 24 the links into the
+analyzer's meter ports (`beat-analyzer:vu_*`, and the direct capture links that only fed them) are gone:
+the engine measures those meters itself. Left out on purpose: REAPER's inputs
 13-24 (StemDeck's stems and AES67's cue have no engine counterpart) and the AES67 sender, whose client
 name carries the machine's host name. The engine reads the file from `~/.config/a3/engine/engine.json`
 first; the package never writes there.
