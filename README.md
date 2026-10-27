@@ -59,6 +59,12 @@ The OSC register test needs the other A³ repositories checked out beside this
 one, as in [a3-system](https://github.com/a3-audio/a3-system); without them it
 skips.
 
+## Looking at the audio connections
+
+`a3-core --links` prints who is connected to whom in the JACK/PipeWire graph, in plain words
+(`capture 1–8 → analog 1–8 (channels 1–4, L/R)`), and how many configured links have no port to land
+on. Use it instead of qjackctl. Details in `PROGRAM.md`.
+
 ## Screencast for OBS
 
 `a3-screencast` streams the picture of this machine's screen (x264 on the CPU,
