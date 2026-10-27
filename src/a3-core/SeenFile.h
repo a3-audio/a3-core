@@ -19,7 +19,7 @@ namespace a3core
 // XDG_STATE_HOME if it is set (even to nothing, as Python's os.environ.get), else ~/.local/state.
 juce::File stateDirectory (const std::optional<std::string>& xdgStateHome, const juce::File& home);
 
-// The same, read from the environment and the user's home.
+// The same, as the platform seam has it (environment and home).
 juce::File stateDirectory();
 
 // <state dir>/a3-core/seen.json

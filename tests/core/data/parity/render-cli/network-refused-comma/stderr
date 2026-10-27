@@ -1,0 +1,1 @@
+network.json refused, the package's defaults are used: @HOME@/bad.json is not JSON: Illegal trailing comma before end of object: line 1 column 12 (char 11)

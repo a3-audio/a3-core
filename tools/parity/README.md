@@ -4,6 +4,9 @@
 header name: `id` (`module.Class.test`), `verdict`, `group` (`stable` or `G`), `from` (a3-core SHA
 it was ported from), `task`.
 
+Rows whose id starts with `beat-analyzer.` are beat-analyzer's own tests (`beat-analyzer.<file>.<test>`,
+`from` = its commit) for what the engine took over from it: the /vu meters (Task 24).
+
 Verdicts: `port:<Suite>.<Name>` (must exist as `TEST`/`TEST_F` in `tests/core/*.cpp` or
 `tests/engine/*.cpp`; only `TEST` and `TEST_F` count, `TEST_P` does not; commented-out, `#if 0` and
 `DISABLED_` tests do not count either), `retired:<reason>`, `stays:<reason>` (a reason is required).

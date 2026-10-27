@@ -135,7 +135,7 @@ TEST (DefaultConfig, ConnectsWhatThePatchbayConnectedForReaper)
     std::set<std::string> known (ports.inputs.begin(), ports.inputs.end());
     known.insert (ports.outputs.begin(), ports.outputs.end());
 
-    int checked = 0, direct = 0;
+    int checked = 0, direct = 0, meters = 0;
     for (const auto& link : patchbayLinks())
     {
         const bool reaperIsSource = startsWith (link.from, "REAPER:");
@@ -145,6 +145,11 @@ TEST (DefaultConfig, ConnectsWhatThePatchbayConnectedForReaper)
         const auto& peer = reaperIsSource ? link.to : link.from;
         if (droppedInput (reaperPort) || hostNamed (peer.substr (0, peer.find (':'))))
             continue;
+        if (startsWith (peer, "beat-analyzer:vu_"))   // O13: measured inside the engine (NoLinkToTheAnalyzersMeters)
+        {
+            ++meters;
+            continue;
+        }
         ASSERT_TRUE (map.getDynamicObject()->hasProperty (juce::String (reaperPort))) << reaperPort << " is not in Step 0's table";
         const auto target = map.getProperty (juce::String (reaperPort), {});
         if (target.isVoid())   // null in the table: a port the engine drops
@@ -166,8 +171,9 @@ TEST (DefaultConfig, ConnectsWhatThePatchbayConnectedForReaper)
         ASSERT_TRUE (found != config.io.jack.end()) << port << " has no peers";
         EXPECT_TRUE (contains (found->second, peer)) << port << " should link " << peer << " (as " << reaperPort << " did)";
     }
-    EXPECT_GE (checked, 45);
-    EXPECT_EQ (direct, 10);   // REAPER's raw meter outs: out25-26 and out31-38
+    EXPECT_GE (checked, 15);
+    EXPECT_EQ (meters, 50);   // every patchbay cable into beat-analyzer's vu_* ports
+    EXPECT_EQ (direct, 0);    // REAPER's raw meter outs (out25-26, out31-38) fed only those meters
 }
 
 TEST (DefaultConfig, DeckSlotsLinkToTheirStemDeck)
@@ -204,4 +210,24 @@ TEST (DefaultConfig, CalibratedZonesHaveTrims)
     ASSERT_EQ (config.engine.delayModulation.size(), 2u);
     EXPECT_EQ (config.engine.delayModulation[0].parameter, "pitchL");
     EXPECT_FLOAT_EQ (config.engine.delayModulation[0].depth, 18.0f);
+}
+
+// O13: the engine measures the meters itself, so the default map links nothing to beat-analyzer's
+// vu_* ports, and the direct capture links that only fed those meters are gone. The beat clock's
+// input (bpm_1, from rec_L as the patchbay wired it) stays.
+TEST (DefaultConfig, NoLinkToTheAnalyzersMeters)
+{
+    const auto config = loadDefault();
+    for (const auto& [port, peers] : config.io.jack)
+        for (const auto& peer : peers)
+            EXPECT_FALSE (startsWith (peer, "beat-analyzer:vu_")) << port << " -> " << peer;
+    for (const auto& [from, to] : config.io.directLinks)
+    {
+        EXPECT_FALSE (startsWith (to, "beat-analyzer:vu_")) << from << " -> " << to;
+        EXPECT_FALSE (startsWith (from, "beat-analyzer:vu_")) << from << " -> " << to;
+    }
+    EXPECT_TRUE (config.io.directLinks.empty()) << "every direct link of Plan 4's map only fed the analyzer's meters";
+    const auto rec = config.io.jack.find ("rec_L");
+    ASSERT_TRUE (rec != config.io.jack.end());
+    EXPECT_TRUE (contains (rec->second, "beat-analyzer:bpm_1"));
 }

@@ -75,6 +75,17 @@ libraries JUCE would `dlopen` for a window are not needed.
 - **Meters.** `outputMeters()` gives peak and RMS (beat-analyzer's ballistics) per output port, in port
   order: main, booth, rec L/R, phones L/R, then per channel pre L/R and post L/R (a deck channel's
   W on both sides).
+- **The /vu meters (O13, since Task 24 of "A³ Core as one program").** The engine measures the 56 meters
+  beat-analyzer measured, at the points the patchbay fed it (`tests/engine/data/vu-points.json`):
+  `analog1_L`…`analog4_R` = analog inputs 1-8 and `aux_L/R` = the return's analog pair (11/12), raw;
+  `main_*`, `booth_*` (tops beyond the layout stay 0), `phones_L/R`, `rec_L/R` = those outputs as they
+  leave; `in{n}_pre/post_L/R` = the channel taps above. `VuTaps` (`src/a3-engine/VuTaps.h`) is
+  beat-analyzer's `VuMeter` per point (per block: raw peak kept until taken, RMS followed 0.8 / 0.2),
+  fed in `process` by `Engine::attachVuTaps`, separate from `outputMeters()` (two readers, two
+  accumulators). The host sends them on the control tick at 25 Hz as beat-analyzer's six bundles
+  (`VuBundles.h`: `/vu/1-40` in blocks of 10, `/vu/51-66` in blocks of 8, `ff` peak and rms, byte-equal
+  to its `serializeBundle`) to Core's `core.vu-relay`, which forwards them; free numbers (9-10, 37-40) are
+  sent as 0, 41-50 are StemDeck's. The default map no longer links anything to `beat-analyzer:vu_*`.
 
 **Timing guard.** `EngineTiming.FullGraphUnderOneMillisecondPer128` fails when the best of five
 repetition means exceeds 1.0 ms per 128-frame block on the build machine (a3coreV01, i5-4440). It
@@ -91,6 +102,9 @@ IEM's DualDelay also sounds slightly different at different block sizes, so the 
 quantum, as they do in REAPER.
 
 ## Plan 4c: the app
+
+**Superseded in part (2026-10-27):** the binary is now `a3-core`, and this engine is its
+`--role engine`, without a window (see "The program" below). The text here is Plan 4c as built.
 
 `a3-engine` (CMake option `A3_ENGINE_APP`, default ON, needs libjack) hosts the engine: it reads
 the truth (`/usr/share/a3/a3-osc.json`), `engine.json` and the spatial data, runs the signal path
@@ -146,13 +160,77 @@ there.
 **The default config** (`data/engine.json`): four channels on analog pairs 1-4, return pair 6, two
 decks, trims main/booth -30.88 dB (REAPER's output faders), phones 0, rec 0, SVF filter, Step 0's delay
 modulation, the JACK backend, and the rig's connections: what `a3-patchbay.xml` connected for REAPER,
-moved to the engine's ports (analog capture, Scarlett playback, the beat-analyzer's meters, StemDeck's
-rec input), the analyzer's raw analog and aux meters as direct links, and every deck port to
+moved to the engine's ports (analog capture, Scarlett playback, StemDeck's rec input and the
+analyzer's beat input `bpm_1`), and every deck port to
 `StemDeck-A`/`StemDeck-B` (`bformat_k`, `cue_L/R`, `aux_L/R`; they exist once StemDeck's S4 is
-installed, until then they are reported as missing, not an error). Left out on purpose: REAPER's inputs
+installed, until then they are reported as missing, not an error). Since Task 24 the links into the
+analyzer's meter ports (`beat-analyzer:vu_*`, and the direct capture links that only fed them) are gone:
+the engine measures those meters itself. Left out on purpose: REAPER's inputs
 13-24 (StemDeck's stems and AES67's cue have no engine counterpart) and the AES67 sender, whose client
 name carries the machine's host name. The engine reads the file from `~/.config/a3/engine/engine.json`
 first; the package never writes there.
+
+## The program: one binary, a3-core
+
+Since Task 23 of "A³ Core as one program" the app is **one binary, `build/app/a3-core`** (CMake
+target `a3-core-app`), with roles. Plan 4c's `a3-engine` binary is gone; its engine is the `engine`
+role, without a window (the window becomes its own role and reaches the engine over the control
+API, P2). The package still installs Plan 4's names until Task 28 changes it.
+
+    a3-core                                   the window: attaches to Core and the engine
+    a3-core --headless                        the supervisor: Core and the engine as children
+    a3-core --role core [--ip HOST] [--port N] [--mixer HOST:PORT] [--motion HOST:PORT]
+                        [--subscriber NAME=HOST:PORT]... [--print-osc] [--web-bind HOST:PORT] [--no-web]
+    a3-core --role engine [--config FILE] [--spatial DIR] [--truth FILE] [--no-connect] [--timing]
+                          [--check-config]
+    a3-core --role screencast-fanout --port N [--linger SECONDS] -- COMMAND...
+    a3-core --role i3-bar                     (not built yet)
+    a3-core --render-truth user|network-file|network      (not built yet)
+    a3-core --truth host NAME | --truth port PROGRAM ROLE (not built yet)
+
+- Each role takes only its own flags; another role's flag, an unknown one or a missing value is
+  exit 2 with the usage.
+- **core**: the C++ Core (`src/a3-core`, `CoreService`). Every default is B1's: `--ip` the truth's
+  `any`, `--port` `core.osc`, `--mixer`/`--motion` their `osc` listeners, `--web-bind` `core.web`.
+  The truth is `$A3_OSC_TRUTH`, else `/usr/share/a3/a3-osc.json`; the network file `$A3_NETWORK`,
+  else `~/.config/a3/network.json` (never with an explicit truth); the state under
+  `$XDG_STATE_HOME/a3-core`, else `~/.local/state/a3-core`. SIGTERM/SIGINT write state, evening and
+  the address list and exit 0; a serve loop that ends by itself exits 1 (the unit decides whether to restart). A
+  start that is refused says why on stderr and exits 1.
+- **engine**: Plan 4c's flags; `--no-window` and `--service` are still accepted and do nothing.
+- **screencast-fanout**: `--port` defaults to `$A3_SCREENCAST_PORT`; a port of 0 or no command is
+  refused as the Python fan-out refused it (exit 2).
+- **--headless**: starts `a3-core --role core` and `a3-core --role engine` and keeps them as the
+  engine unit keeps the engine (Restart=on-failure, RestartSec=1, StartLimitBurst=5 in 60 s): a
+  failed child starts again after 1 s, a clean end (exit 0, SIGTERM/SIGINT/SIGHUP/SIGPIPE) is left
+  alone, a role that fails its fifth start within a minute is given up with one line. Once nothing is
+  left to run it exits (1 if a role was given up, else 0); on SIGTERM it ends both (SIGKILL after 5 s). A role whose user unit
+  (`a3-core.service`, `a3-engine.service`) is enabled (`systemctl --user is-enabled`) is never
+  started a second time.
+- **the window** (`a3-core` without a role, Task 26): reaches Core over its HTTP API on the truth's
+  `core.web` and the engine over its control API on `engine.control`, both on loopback. It asks both
+  once at start; a role that does not answer and whose user unit is not enabled (a laptop) is started
+  as the window's own child (`a3-core --role core|engine`, in a process group of its own, so a Ctrl-C
+  in the terminal or the terminal closing does not end it), and on the rig, where the units run them,
+  nothing is started. Closing asks once, inside the window, "Stop Core and the engine too?" (naming
+  only the ones it started); Stop ends only those, Leave running (or Escape) leaves them; a second
+  close or a SIGTERM while the question is open is ignored. It never stops a role it did not start
+  and never touches a unit; SIGTERM without a question open ends the window and asks nobody. The page list on the
+  left carries the engine's pages (AUDIO … STATUS, over the remote view) and, below them, the OSC
+  monitor that replaces the Python Core's HTML page: TRAFFIC (direction, address, peer, count, rate,
+  last value, age; filter by address, only active = younger than 6 s, one device; the picked row's
+  history), TRUTH & DEVICES (Core's fingerprint, each device "is Core's" or "DIFFERS", the audio
+  engine), NOT UNDERSTOOD and REGISTER (fetched with FETCH, never streamed), BENCH (to self, mixer
+  or motion; the truth's `state.recall`; Core's answer or refusal). The **OSC MONITOR** switch at the
+  bottom of the list shows them; it is remembered in `~/.config/a3/core/window.settings`
+  (`{"monitor": true}`), written only when it is flipped, off when the file is missing. Only while
+  the monitor is on does the window ask Core anything: the traffic from Core's `/api/stream`
+  (`/api/traffic` would carry the whole history ring every time) and devices/status/rig once a
+  second. The pages copy from the client only when it has news, and TRAFFIC only the rows and the
+  history it shows (120 entries), never the ring.
+- Everything that asks the operating system (environment, home, host name, unit state, child
+  processes) goes through `a3core::Platform` (`src/a3-core/Platform.h`, Linux only).
+- The journal: one whole line per write, flushed at once, from any thread.
 
 ## Build and test
 

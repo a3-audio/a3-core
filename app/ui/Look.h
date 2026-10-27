@@ -21,6 +21,19 @@ inline const juce::Colour caution     { 0xffe0a24a };
 inline const juce::Colour danger      { 0xffd9534f };
 }
 
+// A key's text as a share of the key's height (the page list, FETCH, SEND, Save): JUCE's own stops at
+// 16 px, which reads as a quarter of a tall key.
+constexpr float keyTextShare = 0.38f;
+// A toggle's tick box and text as shares of its height.
+constexpr float toggleBoxShare = 0.45f, toggleTextShare = 0.42f;
+
+// `wanted` (a share of a height), or less so that `text` fits `width` whole.
+inline float fittedTextHeight (const juce::String& text, float wanted, float width)
+{
+    const auto needs = juce::GlyphArrangement::getStringWidth (juce::FontOptions (wanted), text);
+    return needs <= width || needs <= 0.0f ? wanted : wanted * width / needs;
+}
+
 // One way to say each kind of text; the pages use these, never their own colours.
 namespace look
 {
@@ -69,6 +82,29 @@ public:
         setColour (juce::TabbedButtonBar::frontTextColourId, palette::text);
         setColour (juce::TabbedComponent::backgroundColourId, palette::surface);
         setColour (juce::TabbedComponent::outlineColourId, palette::surface);
+        // The quit question: a card (E2) on the window, text off-white, keys as everywhere.
+        setColour (juce::AlertWindow::backgroundColourId, palette::raised);
+        setColour (juce::AlertWindow::textColourId, palette::text);
+        setColour (juce::AlertWindow::outlineColourId, palette::lifted);
+    }
+
+    // The share of the key's height, never below JUCE's own (which keeps short keys as they were).
+    juce::Font getTextButtonFont (juce::TextButton& button, int buttonHeight) override
+    {
+        const auto juces = juce::LookAndFeel_V4::getTextButtonFont (button, buttonHeight).getHeight();
+        return juce::FontOptions (juce::jmax (juces, (float) buttonHeight * keyTextShare));
+    }
+
+    // JUCE's toggle stops its text at 15 px; ours is a share of the toggle's height, as a key's is.
+    void drawToggleButton (juce::Graphics& g, juce::ToggleButton& button, bool highlighted, bool down) override
+    {
+        const auto height = (float) button.getHeight();
+        const auto box = height * toggleBoxShare;
+        drawTickBox (g, button, height * 0.1f, (height - box) * 0.5f, box, box, button.getToggleState(), button.isEnabled(), highlighted, down);
+        g.setColour (button.findColour (juce::ToggleButton::textColourId).withMultipliedAlpha (button.isEnabled() ? 1.0f : 0.5f));
+        const auto text = button.getLocalBounds().withTrimmedLeft (juce::roundToInt (height * 0.1f + box * 1.4f));
+        g.setFont (juce::FontOptions (fittedTextHeight (button.getButtonText(), height * toggleTextShare, (float) text.getWidth())));
+        g.drawText (button.getButtonText(), text, juce::Justification::centredLeft, false);
     }
 };
 }

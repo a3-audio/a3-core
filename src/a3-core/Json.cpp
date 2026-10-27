@@ -262,6 +262,7 @@ public:
 
 private:
     [[noreturn]] void fail (const std::string& message) const { throw ParseError { message, pos }; }
+    [[noreturn]] void failAt (const std::string& message, size_t offset) const { throw ParseError { message, offset }; }
 
     void skipSpace()
     {
@@ -336,8 +337,12 @@ private:
             skipSpace();
             if (take ('}'))
                 return result;
+            const size_t comma = pos;
             if (! take (','))
                 fail ("Expecting ',' delimiter");
+            skipSpace();
+            if (pos < text.size() && text[pos] == '}')
+                failAt ("Illegal trailing comma before end of object", comma);
         }
     }
 
@@ -354,8 +359,12 @@ private:
             skipSpace();
             if (take (']'))
                 return juce::var (items);
+            const size_t comma = pos;
             if (! take (','))
                 fail ("Expecting ',' delimiter");
+            skipSpace();
+            if (pos < text.size() && text[pos] == ']')
+                failAt ("Illegal trailing comma before end of array", comma);
         }
     }
 
@@ -401,24 +410,24 @@ private:
 
     std::string parseString()
     {
-        ++pos;
+        const size_t opening = pos++;
         std::string out;
         for (;;)
         {
             if (pos >= text.size())
-                fail ("Unterminated string");
+                failAt ("Unterminated string starting at", opening);
             const char c = text[pos++];
             if (c == '"')
                 return out;
             if (static_cast<unsigned char> (c) < 0x20)
-                fail ("Invalid control character in string");
+                failAt ("Invalid control character at", pos - 1);
             if (c != '\\')
             {
                 out += c;
                 continue;
             }
             if (pos >= text.size())
-                fail ("Unterminated string");
+                failAt ("Unterminated string starting at", opening);
             const char escape = text[pos++];
             switch (escape)
             {
@@ -521,6 +530,26 @@ private:
 };
 }
 
+// json.JSONDecodeError's text: "<reason>: line L column C (char N)", counted in characters (code
+// points), the column from the last newline before the error.
+static std::string pythonPosition (const std::string& reason, const std::string& text, size_t offset)
+{
+    long long characters = 0, line = 1, lastNewline = -1;
+    for (size_t i = 0; i < offset && i < text.size(); ++i)
+    {
+        if ((static_cast<unsigned char> (text[i]) & 0xC0) == 0x80)
+            continue;   // a continuation byte is part of the character before it
+        if (text[i] == '\n')
+        {
+            ++line;
+            lastNewline = characters;
+        }
+        ++characters;
+    }
+    return reason + ": line " + std::to_string (line) + " column " + std::to_string (characters - lastNewline)
+           + " (char " + std::to_string (characters) + ")";
+}
+
 juce::var parseJson (const juce::String& text, juce::String& error)
 {
     error = juce::String();
@@ -531,7 +560,7 @@ juce::var parseJson (const juce::String& text, juce::String& error)
     }
     catch (const ParseError& problem)
     {
-        error = juce::String (problem.message) + " at byte " + juce::String (static_cast<juce::int64> (problem.offset));
+        error = juce::String (pythonPosition (problem.message, utf8, problem.offset));
         return juce::var();
     }
 }

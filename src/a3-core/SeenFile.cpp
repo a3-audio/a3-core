@@ -8,6 +8,7 @@
 #include <system_error>
 
 #include "Json.h"
+#include "Platform.h"
 
 namespace a3core
 {
@@ -115,9 +116,7 @@ juce::File stateDirectory (const std::optional<std::string>& xdgStateHome, const
 
 juce::File stateDirectory()
 {
-    const char* xdg = std::getenv ("XDG_STATE_HOME");
-    return stateDirectory (xdg != nullptr ? std::optional<std::string> (xdg) : std::nullopt,
-                           juce::File::getSpecialLocation (juce::File::userHomeDirectory));
+    return makePlatform()->stateDir().getParentDirectory();   // the seam's answer (O7)
 }
 
 juce::File seenPath (const juce::File& stateDir) { return stateDir.getChildFile ("a3-core/seen.json"); }

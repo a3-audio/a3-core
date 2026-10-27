@@ -2,13 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "ScreencastFanout.h"
 
-#include <fcntl.h>
 #include <netinet/in.h>
 #include <poll.h>
-#include <signal.h>
-#include <spawn.h>
 #include <sys/socket.h>
-#include <sys/wait.h>
 #include <unistd.h>
 
 #include <algorithm>
@@ -16,9 +12,8 @@
 #include <chrono>
 #include <cstdio>
 #include <cstring>
-#include <thread>
 
-extern char** environ;
+#include "Platform.h"
 
 namespace a3core
 {
@@ -131,17 +126,17 @@ void closeFd (int& fd)
     fd = -1;
 }
 
-// A juce::ChildProcess can neither be asked politely (kill() is SIGKILL only) nor read without
-// blocking, and the loop needs both; hence posix_spawn.
+// The encoder is started, signalled and reaped through the platform (O7): a juce::ChildProcess can
+// neither be asked politely (kill() is SIGKILL only) nor read without blocking, and the loop needs both.
 class Encoder
 {
 public:
-    Encoder (std::vector<std::string> commandLine, const FanoutOptions& opts)
-        : command (std::move (commandLine)), options (opts) {}
+    Encoder (std::vector<std::string> commandLine, const FanoutOptions& opts, const Platform& platformToUse)
+        : command (std::move (commandLine)), options (opts), platform (platformToUse) {}
 
-    int stdoutFd() const { return outFd; }
-    bool running() const { return pid > 0; }
-    bool reading() const { return outFd >= 0 && watching; }
+    int stdoutFd() const { return child != nullptr ? child->stdoutFd() : -1; }
+    bool running() const { return child != nullptr; }
+    bool reading() const { return stdoutFd() >= 0 && watching; }
     double restartAt = 0.0;
 
     void start (double now)
@@ -155,29 +150,28 @@ public:
 
     bool exited()
     {
-        if (pid <= 0 || reaped)
-            return pid > 0;
-        int status = 0;
-        const auto result = ::waitpid (pid, &status, WNOHANG);
-        if (result == 0 || (result < 0 && errno == EINTR))
+        if (child == nullptr || reaped)
+            return child != nullptr;
+        const auto status = child->poll();
+        if (! status)
             return false;
-        finish (result == pid ? status : 0);   // ECHILD: somebody else reaped it, it is gone
+        finish (*status);
         return true;
     }
 
     void stop()
     {
-        if (pid <= 0)
+        if (child == nullptr)
             return;
         if (! reaped)
         {
-            ::kill (pid, SIGTERM);
-            if (! waitFor (options.killAfter))
+            child->terminate();
+            if (const auto status = child->wait (options.killAfter))
+                finish (*status);
+            else
             {
-                ::kill (pid, SIGKILL);
-                int status = 0;
-                const auto result = ::waitpid (pid, &status, 0);
-                finish (result == pid ? status : 0);
+                child->kill();
+                finish (child->wait (-1.0).value_or (0));
             }
         }
         release();
@@ -185,101 +179,35 @@ public:
 
     void release()
     {
-        closeFd (outFd);
-        pid = -1;
+        child.reset();   // closes its stdout
         reaped = false;
         watching = false;
     }
 
 private:
-    // Python's Popen restores signals: an empty mask, and SIGPIPE and SIGTERM at their defaults.
-    static bool setCleanSignals (posix_spawnattr_t& attributes)
-    {
-        sigset_t none, defaults;
-        sigemptyset (&none);
-        sigemptyset (&defaults);
-        sigaddset (&defaults, SIGPIPE);
-        sigaddset (&defaults, SIGTERM);
-        return posix_spawnattr_setsigmask (&attributes, &none) == 0
-               && posix_spawnattr_setsigdefault (&attributes, &defaults) == 0
-               && posix_spawnattr_setflags (&attributes, POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF) == 0;
-    }
-
     bool spawn()
     {
-        int fds[2];
-        if (::pipe2 (fds, O_CLOEXEC) != 0)
+        child = platform.spawn (command, true);
+        if (child == nullptr)
             return false;
-
-        posix_spawn_file_actions_t actions;
-        posix_spawnattr_t attributes;
-        posix_spawn_file_actions_init (&actions);
-        posix_spawnattr_init (&attributes);
-
-        // Python's Popen closes every other descriptor (close_fds); a stray socket in the encoder
-        // would keep a viewer's connection open after we closed it. So a failure refuses the spawn.
-        const bool prepared = posix_spawn_file_actions_adddup2 (&actions, fds[1], 1) == 0
-                              && posix_spawn_file_actions_addclosefrom_np (&actions, 3) == 0
-                              && setCleanSignals (attributes);
-
-        std::vector<char*> argv;
-        for (auto& word : command)
-            argv.push_back (word.data());
-        argv.push_back (nullptr);
-
-        pid_t child = 0;
-        int error = EINVAL;
-        if (prepared && ! command.empty())
-            error = ::posix_spawnp (&child, argv[0], &actions, &attributes, argv.data(), environ);
-        else if (! prepared)
-            std::fprintf (stderr, "screencast fan-out: cannot prepare the encoder's descriptors, not starting it\n");
-        posix_spawn_file_actions_destroy (&actions);
-        posix_spawnattr_destroy (&attributes);
-        ::close (fds[1]);
-        if (error != 0)
-        {
-            ::close (fds[0]);
-            return false;
-        }
-        ::fcntl (fds[0], F_SETFL, ::fcntl (fds[0], F_GETFL) | O_NONBLOCK);
-        pid = child;
-        outFd = fds[0];
         reaped = false;
         watching = true;
         if (options.onEncoderStarted)
-            options.onEncoderStarted (pid);
+            options.onEncoderStarted (child->pid());
         return true;
-    }
-
-    bool waitFor (double seconds)
-    {
-        const auto end = Steady::now() + std::chrono::duration<double> (seconds);
-        while (true)
-        {
-            int status = 0;
-            const auto result = ::waitpid (pid, &status, WNOHANG);
-            if (result == pid || (result < 0 && errno != EINTR))
-            {
-                finish (result == pid ? status : 0);
-                return true;
-            }
-            if (Steady::now() >= end)
-                return false;
-            std::this_thread::sleep_for (std::chrono::milliseconds (5));
-        }
     }
 
     void finish (int status)
     {
         reaped = true;
         if (options.onEncoderEnded)
-            options.onEncoderEnded (pid, status);
+            options.onEncoderEnded (child->pid(), status);
     }
 
     std::vector<std::string> command;
     const FanoutOptions& options;
-    int pid = -1;
-    int outFd = -1;
+    const Platform& platform;
+    std::unique_ptr<Child> child;
     bool reaped = false;
     bool watching = false;
 };
@@ -468,7 +396,9 @@ int runFanout (int port, std::vector<std::string> encoderCommand, double linger,
     if (options.onListening)
         options.onListening (boundPort (listener, port));
 
-    Encoder encoder (std::move (encoderCommand), options);
+    std::unique_ptr<Platform> own;
+    const Platform& platform = options.platform != nullptr ? *options.platform : *(own = makePlatform());
+    Encoder encoder (std::move (encoderCommand), options, platform);
     Loop loop (listener, encoder, linger, options);
     while (! stop.load())
         loop.pass();
