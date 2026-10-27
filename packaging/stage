@@ -26,7 +26,7 @@ build() {
 files() {
     [[ $# -eq 3 ]] || usage
     local src=$1 build=$2 stage=$3
-    install -D -m 755 "$build/app/a3-engine" "$stage/usr/bin/a3-engine"
+    install -D -m 755 "$build/app/a3-core" "$stage/usr/bin/a3-core"
     install -D -m 755 "$build/bench/a3-engine-bench" "$stage/usr/bin/a3-engine-bench"
     install -D -m 644 "$src/packaging/a3-engine.service" "$stage/usr/lib/systemd/user/a3-engine.service"
     install -D -m 644 "$src/data/engine.json" "$stage/usr/share/a3-engine/engine.json"

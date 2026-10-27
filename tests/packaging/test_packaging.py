@@ -38,7 +38,7 @@ CC_BY_ATTRIBUTION = (
 
 def stub_build(build):
     """The two executables `files` takes from a build tree."""
-    for relative in ("bench/a3-engine-bench", "app/a3-engine"):
+    for relative in ("bench/a3-engine-bench", "app/a3-core"):
         (build / relative).parent.mkdir(parents=True, exist_ok=True)
         (build / relative).write_text("#!/bin/sh\n")
     return build
@@ -88,7 +88,7 @@ class StageTest(unittest.TestCase):
 
     def test_ships_the_app_the_unit_and_the_default_config(self):
         stage = self.stage_files()
-        for path in ("usr/bin/a3-engine", "usr/bin/a3-engine-bench"):
+        for path in ("usr/bin/a3-core", "usr/bin/a3-engine-bench"):
             self.assertTrue(os.access(stage / path, os.X_OK), path)
         self.assertEqual((stage / "usr/lib/systemd/user/a3-engine.service").read_bytes(), UNIT.read_bytes())
         self.assertEqual((stage / "usr/share/a3-engine/engine.json").read_bytes(),
@@ -113,6 +113,24 @@ class StageTest(unittest.TestCase):
         self.assertIn("daemon-reload", postinst)
         self.assertNotIn("restart", postinst.replace("no restart", ""))
         self.assertIn("systemctl --global disable a3-engine.service", (CONTROL.parent / "prerm").read_text())
+
+    def test_ships_a3_core_and_no_a3_engine_binary(self):
+        stage = self.stage_files()
+        self.assertTrue(os.access(stage / "usr/bin/a3-core", os.X_OK))
+        self.assertFalse((stage / "usr/bin/a3-engine").exists())
+        self.assertTrue(os.access(stage / "usr/bin/a3-engine-bench", os.X_OK))
+
+    def test_no_python_in_the_package(self):
+        self.assertNotIn("python", control_fields()["Depends"].lower())
+        for path in [*CONTROL.parent.iterdir(), STAGE, UNIT]:
+            text = path.read_text().lower()
+            self.assertNotIn("python", text, path.name)
+            self.assertNotIn("pip ", text, path.name)
+        stage = self.stage_files()
+        for shipped in (p for p in stage.rglob("*") if p.is_file()):
+            self.assertNotEqual(shipped.suffix, ".py", shipped)
+            if shipped.stat().st_size and "doc" not in shipped.parts:
+                self.assertFalse(shipped.read_bytes().startswith(b"#!/usr/bin/env python"), shipped)
 
     def test_files_installs_the_spatial_data(self):
         # The package default for the bench, and REAPER's 6.1 booth for the parity run (--spatial).
@@ -152,30 +170,27 @@ class StageTest(unittest.TestCase):
 
 
 class UnitTest(unittest.TestCase):
-    def test_the_unit_leaves_exclusivity_to_the_conditions_and_restarts_on_failure(self):
+    def test_the_unit_keeps_its_place_in_a3_main_and_restarts_on_failure(self):
         lines = unit_lines()
         for line in ("PartOf=a3-main.service",
                      "After=pipewire.service wireplumber.service",
-                     "Restart=on-failure", "RestartSec=1"):
+                     "Conflicts=a3-reaper.service",
+                     "Restart=on-failure", "RestartSec=1",
+                     "WantedBy=default.target"):
             self.assertIn(line, lines)
-        # a3-main Wants both units in one transaction; a Conflicts= between them lets systemd stop
-        # or drop REAPER even when this unit's condition skips it. The two ExecConditions
-        # (a3-engine-runs here, a3-engine-runs --reaper in REAPER's drop-in) keep them apart.
-        for line in lines:
-            self.assertFalse(line.startswith("Conflicts="), line)
-        self.assertIn("WantedBy=default.target", lines)
         # A broken open (JACK absent, a port taken) must stop visibly, not restart for ever.
         self.assertIn("StartLimitIntervalSec=60", lines)
         self.assertIn("StartLimitBurst=5", lines)
 
-    def test_the_unit_starts_the_app_only_when_the_engine_runs(self):
+    def test_the_engine_unit_runs_the_engine_role_headless(self):
         lines = unit_lines()
-        self.assertIn("ExecCondition=/home/aaa/.local/bin/a3-engine-runs", lines)
-        self.assertIn("ExecStart=/usr/bin/a3-engine --service", lines)
+        self.assertIn("ExecStart=/usr/bin/a3-core --role engine", lines)
         self.assertIn("ExecStartPre=/usr/bin/jack_wait -w", lines)
-        self.assertIn("ExecStartPre=/home/aaa/.local/bin/a3-wait-for-the-screen", lines)
-        self.assertIn("Environment=DISPLAY=:0", lines)
         self.assertIn("CPUAffinity=1 2 3", lines)
+        for line in lines:
+            for forbidden in ("DISPLAY", "a3-wait-for-the-screen", "ExecCondition",
+                              "a3-engine-runs", "--service", "/usr/bin/a3-engine "):
+                self.assertNotIn(forbidden, line)
         text = UNIT.read_text()
         self.assertNotIn("a3-audio-engine", text)
         self.assertNotIn("A3_ENGINE_BINARY", text)
@@ -255,6 +270,12 @@ class ControlTest(unittest.TestCase):
         for name in ("postinst", "prerm", "postrm"):
             script = CONTROL.parent / name
             self.assertTrue(os.access(script, os.X_OK), name)
+
+    def test_the_program_breaks_the_python_core(self):
+        self.assertRegex(control_fields()["Breaks"], r"a3-core \(<< [0-9][^)]*\)")
+
+    def test_the_program_breaks_a_metering_analyzer(self):
+        self.assertRegex(control_fields()["Breaks"], r"beat-analyzer \(<< [0-9][^)]*\)")
 
     def test_the_truth_file_comes_with_a_recommended_a3_core(self):
         self.assertIn("a3-core", control_fields().get("Recommends", ""))

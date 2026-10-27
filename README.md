@@ -143,19 +143,18 @@ is shown.
 ## Plan 4d: the package and the unit
 
 The Debian package is now `a3-engine` (it `Replaces`/`Conflicts`/`Provides` `a3-engine-bench`). It
-ships `/usr/bin/a3-engine` (the app), `/usr/bin/a3-engine-bench` (kept as a tool), both spatial
+ships `/usr/bin/a3-core` (the program; Task 28, no `/usr/bin/a3-engine`), `/usr/bin/a3-engine-bench` (kept as a tool), both spatial
 directories, `/usr/share/a3-engine/engine.json` (the default config) and the user unit
 `/usr/lib/systemd/user/a3-engine.service`. The postinst enables the unit for every user and reloads
 the running user managers; nothing is written under a home and nothing is restarted.
 
-**The unit.** `PartOf=a3-main.service`, `ExecCondition` is a3-core's `a3-engine-runs`: the engine
-runs when it is installed and `a3-engine --check-config` passes, otherwise the unit is skipped and
-REAPER runs as before. REAPER's drop-in asks the same helper (`a3-engine-runs --reaper`), so the two
-conditions keep exactly one of them on the PA. `Restart=on-failure` with a start limit of
-5 in 60 s: a failure `--check-config` cannot see (JACK absent, a port taken) restarts a few times and
-then stops visibly; there is no automatic fallback to REAPER (it is frozen). The unit's
-`LD_PRELOAD` (the JACK realtime-priority library) also reaches the condition command; it is harmless
-there.
+**The unit** (Task 28). `PartOf=a3-main.service`, `Conflicts=a3-reaper.service`, and it runs
+`/usr/bin/a3-core --role engine` after `jack_wait -w`: no window, so no `DISPLAY`, no wait for the
+screen and no `ExecCondition`. `Restart=on-failure` with a start limit of 5 in 60 s: a failure
+(JACK absent, a port taken) restarts a few times and then stops visibly; there is no automatic
+fallback to REAPER (it is frozen). `LD_PRELOAD` (the JACK realtime-priority library) and
+`CPUAffinity=1 2 3` stay. The package `Breaks: a3-core (<< 03.0+542)` (the Python Core) and
+`beat-analyzer (<< 03.0+64)` (the analyzer that still meters); it depends on no Python.
 
 **The default config** (`data/engine.json`): four channels on analog pairs 1-4, return pair 6, two
 decks, trims main/booth -30.88 dB (REAPER's output faders), phones 0, rec 0, SVF filter, Step 0's delay
@@ -175,7 +174,7 @@ first; the package never writes there.
 Since Task 23 of "A³ Core as one program" the app is **one binary, `build/app/a3-core`** (CMake
 target `a3-core-app`), with roles. Plan 4c's `a3-engine` binary is gone; its engine is the `engine`
 role, without a window (the window becomes its own role and reaches the engine over the control
-API, P2). The package still installs Plan 4's names until Task 28 changes it.
+API, P2). The package ships it as `/usr/bin/a3-core` (Task 28); there is no `/usr/bin/a3-engine`.
 
     a3-core                                   the window: attaches to Core and the engine
     a3-core --headless                        the supervisor: Core and the engine as children
