@@ -56,6 +56,11 @@ public:
     // thread), then every thread this service started is joined. Harmless to call twice.
     void stop();
 
+    // Waits up to `seconds` for the serve loop to end: nullopt while it still serves; "" once stop()
+    // ended it; the reason line when it ended on its own (a socket it can no longer wait on) -- Core is
+    // gone then, and the app exits non-zero so that systemd starts it again.
+    std::optional<std::string> waitUntilFinished (double seconds);
+
     Endpoint mainPort() const;
     Endpoint vuRelayPort() const;   // port 0: the inbox could not be bound
     Endpoint webPort() const;       // port 0: no window
@@ -80,7 +85,7 @@ private:
 
     UdpSocket selfSocket, announceSocket;
     std::optional<UdpSocket> mainSocket, vuSocket;
-    std::optional<OsError> mainRefused;
+    std::string lastReport;                    // the serve loop's last word, on the serve thread
     int mainBuffer = 0, selfBuffer = 0;
     std::unique_ptr<UdpNet> net;
     std::unique_ptr<Core> core;
@@ -92,5 +97,8 @@ private:
     std::mutex announceLock;
     std::condition_variable announceWake;
     bool announcing = false;
+    std::mutex finishLock;
+    std::condition_variable finishWake;
+    std::optional<std::string> finishedBecause;
 };
 }

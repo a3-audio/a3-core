@@ -79,6 +79,9 @@ public:
     // then the remembered state said, the address list restored, the serve thread's claim.
     void startPeers();
     void startSpeaking();
+    // Where Core's own replays go: the main port as it was bound (`--port 0` is the system's pick, known
+    // only once the service binds it, after the start-up spoke).
+    void serveOn (int port);
     void handlePacket (const Endpoint& from, const uint8_t*, size_t);
     void handleVu (const Endpoint& from, const uint8_t*, size_t);     // core.vu-relay datagrams (the engine's: Task 22)
     void tick();                                                      // on_tick + debounce flushes, every 0.1 s

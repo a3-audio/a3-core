@@ -88,23 +88,14 @@ std::optional<std::string> CoreService::startUp()
 {
     say ("audio engine: engine");
 
-    // The two sockets first, without a word: Core's replays need its main port's number (port 0 is
-    // the system's pick) and the self socket's place before Core exists. B1 bound them later; a busy
-    // main port is still said where B1 fell over.
+    // The self socket first, without a word: the hello gate trusts its place, which Core is given when
+    // it is built. It only sends, so binding it early lets nothing in. (B1 bound it after the
+    // announcer.)
     auto self = UdpSocket::bound (truth.host ("local"), 0);
     if (const auto* refused = std::get_if<OsError> (&self))
         return refusal ("cannot bind the socket of Core's own replays: " + refused->text);
     selfSocket = std::move (std::get<UdpSocket> (self));
     selfBuffer = selfSocket.widenReceiveBuffer();
-    auto main = UdpSocket::bound (options.core.ip, options.core.port);
-    if (auto* bound = std::get_if<UdpSocket> (&main))
-    {
-        mainSocket = std::move (*bound);
-        mainBuffer = mainSocket->widenReceiveBuffer();
-        options.core.port = mainSocket->local().port;
-    }
-    else
-        mainRefused = std::get<OsError> (main);
 
     net = std::make_unique<UdpNet> (selfSocket);
     core = std::make_unique<Core> (CoreEnvironment { truth, *net, clock, journal, options.stateDir, newBootId,
@@ -124,8 +115,15 @@ std::optional<std::string> CoreService::startUp()
     if (! options.noWeb)
         openTheWindow();
 
-    if (mainRefused)
-        return refusal ("cannot listen on " + options.core.ip + ":" + std::to_string (options.core.port) + ": " + mainRefused->text);
+    // The main port opens here, as B1's BlockingOSCUDPServer did: nothing sent to it while Core spoke
+    // was queued for it. A busy port ends the start where B1 fell over (with a line of ours, not a
+    // traceback).
+    auto main = UdpSocket::bound (options.core.ip, options.core.port);
+    if (const auto* refused = std::get_if<OsError> (&main))
+        return refusal ("cannot listen on " + options.core.ip + ":" + std::to_string (options.core.port) + ": " + refused->text);
+    mainSocket = std::move (std::get<UdpSocket> (main));
+    mainBuffer = mainSocket->widenReceiveBuffer();
+    core->serveOn (mainSocket->local().port);
     say ("Serving on " + pythonAddress (mainSocket->local()));
 
     if (truth.networkProblem)
@@ -211,7 +209,10 @@ void CoreService::serve()
                          return positionKey (data.data(), data.size(), [this] (const std::string& address) { return isPosition (truth, address); });
                      },
                      latestWinsLimit,
-                     [this] (const std::string& text) { say (text, true); },
+                     [this] (const std::string& text) {
+                         lastReport = text;
+                         say (text, true);
+                     },
                      [this] { return serving.load(); },
                      [this] { core->tick(); } };
     if (vuSocket)
@@ -219,7 +220,35 @@ void CoreService::serve()
                                   core->handleVu (from, data.data(), data.size());
                               } });
     a3core::serve (loop);
-    core->stop();
+
+    // Ended by stop(), or on its own: a socket it can no longer wait on. Then Core is gone and the app
+    // must hear it (waitUntilFinished), or the rig would stand there serving nothing.
+    std::string reason;
+    if (serving)
+    {
+        reason = "the serve loop ended: " + lastReport;
+        say (reason, true);
+    }
+    try
+    {
+        core->stop();
+    }
+    catch (const std::exception& problem)
+    {
+        say (std::string ("stop: state, evening or address list not written: ") + problem.what(), true);
+    }
+    {
+        const std::scoped_lock hold (finishLock);
+        finishedBecause = reason;
+    }
+    finishWake.notify_all();
+}
+
+std::optional<std::string> CoreService::waitUntilFinished (double seconds)
+{
+    std::unique_lock hold (finishLock);
+    finishWake.wait_for (hold, std::chrono::duration<double> (seconds), [this] { return finishedBecause.has_value(); });
+    return finishedBecause;
 }
 
 void CoreService::stop()

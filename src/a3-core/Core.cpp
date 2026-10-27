@@ -105,6 +105,12 @@ void Core::startSpeaking()
     subscribersOwner.claim();
 }
 
+void Core::serveOn (int port)
+{
+    args.port = port;
+    selfClient.to.port = port;
+}
+
 void Core::handlePacket (const Endpoint& from, const uint8_t* data, size_t size)
 {
     const auto messages = decodePacket (data, size);

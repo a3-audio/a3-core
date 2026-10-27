@@ -17,6 +17,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <condition_variable>
+#include <fcntl.h>
 #include <fstream>
 #include <map>
 #include <memory>
@@ -178,9 +180,36 @@ public:
     Journal journal()
     {
         return [this] (const std::string& line, bool toStderr) {
-            const std::scoped_lock hold (lock);
-            lines.push_back ({ line, toStderr, std::this_thread::get_id() });
+            {
+                const std::scoped_lock hold (lock);
+                lines.push_back ({ line, toStderr, std::this_thread::get_id() });
+            }
+            holdIfAsked (line);
         };
+    }
+
+    // The thread that says a line starting with `start` waits there until release(): a way to hold
+    // the serve thread at a known point without a hook in the service.
+    void holdAt (const std::string& start)
+    {
+        const std::scoped_lock hold (gateLock);
+        holdPrefix = start;
+        held = released = false;
+    }
+
+    bool waitUntilHeld (int millis = 3000)
+    {
+        std::unique_lock hold (gateLock);
+        return gate.wait_for (hold, std::chrono::milliseconds (millis), [this] { return held; });
+    }
+
+    void release()
+    {
+        {
+            const std::scoped_lock hold (gateLock);
+            released = true;
+        }
+        gate.notify_all();
     }
 
     std::vector<Line> all() const
@@ -241,8 +270,22 @@ public:
     }
 
 private:
+    void holdIfAsked (const std::string& line)
+    {
+        std::unique_lock hold (gateLock);
+        if (holdPrefix.empty() || line.rfind (holdPrefix, 0) != 0 || released)
+            return;
+        held = true;
+        gate.notify_all();
+        gate.wait (hold, [this] { return released; });
+    }
+
     mutable std::mutex lock;
     std::vector<Line> lines;
+    std::mutex gateLock;
+    std::condition_variable gate;
+    std::string holdPrefix;
+    bool held = false, released = false;
 };
 
 class RecordingClock final : public Clock
@@ -652,16 +695,38 @@ TEST (CoreService, TheMetersAreRelayedOnTheServeThread)
 
 TEST (CoreService, APositionFloodDoesNotDelayADeskCommand)
 {
+    // A real backlog: the serve thread is held inside a recall's handler while 5000 positions and then
+    // a desk command queue up. Released, it drains at most 1024 a pass and handles only the newest
+    // position of each pass: the engine hears one azimuth per pass, the last one the final value, and
+    // the lamp comes with the last pass instead of after 5000 handlings.
     Rig rig;
     ASSERT_TRUE (rig.start()) << rig.error;
+    const Socket engineSays;
+    engineSays.osc (rig.port(), "/engine/hello", { pyStr ("boot-1") });
+    ASSERT_TRUE (rig.engine.awaitAddress (rig.truth().address ("engine.open")).has_value());
+    rig.engine.messages (200);
     rig.mixer.messages (200);
+    rig.said.holdAt ("/state/recall: replayed ");
+    rig.mixer.osc (rig.port(), "/state/recall");
+    ASSERT_TRUE (rig.said.waitUntilHeld());
     const Socket flood;
-    for (int n = 0; n < 5000; ++n)
-        flood.osc (rig.port(), "/channel/1/azimuth", { pyFloat ((n % 360) * 1.0) });
-    const auto sent = Steady::now();
+    constexpr int positions = 5000;
+    const auto valueOf = [] (int n) { return (float) ((n % 180) - 90); };
+    for (int n = 0; n < positions; ++n)
+        flood.osc (rig.port(), "/channel/1/azimuth", { pyFloat (valueOf (n)) });
     flood.osc (rig.port(), "/channel/1/cue", { pyStr ("1") });
+    const auto released = Steady::now();
+    rig.said.release();
+
     ASSERT_TRUE (rig.mixer.awaitAddress ("/channel/1/cue/led", 3000).has_value());
-    EXPECT_LT (std::chrono::duration<double> (Steady::now() - sent).count(), 1.0);
+    EXPECT_LT (std::chrono::duration<double> (Steady::now() - released).count(), 0.5);
+    std::vector<float> azimuths;
+    for (const auto& message : rig.engine.messages (300))
+        if (message.address == "/channel/1/azimuth")
+            azimuths.push_back (std::get<float> (message.args.at (0).value));
+    ASSERT_FALSE (azimuths.empty());
+    EXPECT_LE (azimuths.size(), (size_t) ((positions + 1 + 1023) / 1024));   // one per pass at most
+    EXPECT_EQ (azimuths.back(), valueOf (positions - 1));
 }
 
 TEST (CoreService, BothPortsAreReadByABlockingServer)
@@ -1044,4 +1109,80 @@ TEST (CoreService, NoThreadingServerIsLeft)
         else if (name.startsWith ("Core") || name.startsWith ("UdpNet") || name.startsWith ("LatestWins"))
             EXPECT_EQ (count, 0) << name;
     }
+}
+
+//==============================================================================
+// Fix round 1: where the main port opens, and a serve loop that ends on its own.
+
+TEST (CoreService, TheMainPortOpensWhereB1OpensIt)
+{
+    // B1 binds the main port after the window, just before "Serving on": what arrives while it speaks
+    // the remembered state is refused by the system, not queued.
+    Rig rig;
+    auto options = rig.options();
+    options.core.port = freePort();
+    rig.said.holdAt ("window on http://");
+    std::thread starting ([&] { rig.start (options); });
+    ASSERT_TRUE (rig.said.waitUntilHeld());
+    {
+        const Socket probe (loopbackAddress(), options.core.port);
+        EXPECT_TRUE (probe.ok()) << "the main port is bound before B1 binds it";
+    }
+    rig.said.release();
+    starting.join();
+    ASSERT_TRUE (rig.service != nullptr) << rig.error;
+    EXPECT_EQ (rig.port(), options.core.port);
+}
+
+namespace
+{
+// The service's own descriptor for a UDP socket bound to `port`.
+int descriptorBoundTo (int port)
+{
+    for (const auto& entry : juce::File ("/proc/self/fd").findChildFiles (juce::File::findFilesAndDirectories, false))
+    {
+        const auto fd = entry.getFileName().getIntValue();
+        int type = 0;
+        socklen_t length = sizeof type;
+        if (::getsockopt (fd, SOL_SOCKET, SO_TYPE, &type, &length) != 0 || type != SOCK_DGRAM)
+            continue;
+        sockaddr_in at {};
+        socklen_t atLength = sizeof at;
+        if (::getsockname (fd, (sockaddr*) &at, &atLength) == 0 && at.sin_family == AF_INET && ntohs (at.sin_port) == port)
+            return fd;
+    }
+    return -1;
+}
+}
+
+TEST (CoreService, AServeLoopThatEndsOnItsOwnIsSeen)
+{
+    Rig rig;
+    auto options = rig.options();
+    options.noWeb = true;
+    ASSERT_TRUE (rig.start (options)) << rig.error;
+    EXPECT_FALSE (rig.service->waitUntilFinished (0.2).has_value());   // serving
+
+    const auto fd = descriptorBoundTo (rig.port());
+    ASSERT_GE (fd, 0);
+    ::close (fd);   // pulled from under the loop: its next poll reports POLLNVAL
+    const auto reason = rig.service->waitUntilFinished (2.0);
+    ASSERT_TRUE (reason.has_value());
+    EXPECT_EQ (*reason, "the serve loop ended: poll: the socket is not open");
+    const auto line = rig.said.find ("the serve loop ended: ");
+    ASSERT_TRUE (line.has_value());
+    EXPECT_TRUE (line->toStderr);
+    // Core's stop ran on the way out: the address list is on disk.
+    EXPECT_TRUE (rig.stateDir.getChildFile ("a3-core/seen.json").existsAsFile());
+    rig.service.reset();   // before anything here opens a descriptor that could take the closed number
+}
+
+TEST (CoreService, AStoppedServiceIsFinishedWithoutAReason)
+{
+    Rig rig;
+    ASSERT_TRUE (rig.start()) << rig.error;
+    rig.service->stop();
+    const auto reason = rig.service->waitUntilFinished (0.1);
+    ASSERT_TRUE (reason.has_value());
+    EXPECT_EQ (*reason, "");
 }
