@@ -30,7 +30,8 @@ add_executable(a3-engine-tests ReferenceSmoke.cpp Laws.cpp PurestGain.cpp Smooth
     ../app/DeviceBackend.cpp ../app/AppArgs.cpp
     ../app/Pages.cpp ../app/ConfigEdits.cpp ../app/SessionRestart.cpp
     ../app/DefaultConfig.cpp ../app/ProgramArgs.cpp ../app/Supervisor.cpp
-    ../app/EngineControlApi.cpp ../app/RemoteHostView.cpp)
+    ../app/EngineControlApi.cpp ../app/RemoteHostView.cpp
+    ../app/Monitor.cpp ../app/WindowProcess.cpp)
 target_include_directories(a3-engine-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../app)
 target_link_libraries(a3-engine-tests PRIVATE a3-engine a3-engine-bench-lib a3-engine-app-lib a3-engine-reference
     GTest::gtest GTest::gtest_main)

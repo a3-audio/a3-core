@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <chrono>
 
+#include "LoopbackHttp.h"
+
 namespace a3app
 {
 static_assert (EngineControlApi::applyWaitSeconds * 1000 < RemoteHostView::applyTimeoutMillis,
@@ -12,60 +14,9 @@ static_assert (EngineControlApi::applyWaitSeconds * 1000 < RemoteHostView::apply
 
 namespace
 {
-struct Reply
-{
-    int status = 0;
-    std::string body;
-    bool timedOut = false;   // connected and asked, no answer in time (status 0)
-};
-
-std::optional<Reply> exchange (const std::string& host, int port, const std::string& method, const std::string& path,
-                               const std::string& body, int timeoutMillis)
-{
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds (timeoutMillis);
-    const auto left = [&] { return (int) std::chrono::duration_cast<std::chrono::milliseconds> (deadline - std::chrono::steady_clock::now()).count(); };
-
-    juce::StreamingSocket socket;
-    if (! socket.connect (host, port, timeoutMillis))
-        return std::nullopt;
-    const auto request = method + " " + path + " HTTP/1.0\r\nHost: " + host + "\r\nContent-Length: " + std::to_string (body.size())
-                         + "\r\nConnection: close\r\n\r\n" + body;
-    if (socket.write (request.data(), (int) request.size()) != (int) request.size())
-        return std::nullopt;
-
-    std::string raw;
-    char buffer[16384];
-    for (;;)
-    {
-        if (left() <= 0)
-            return Reply { 0, {}, true };
-        const int ready = socket.waitUntilReady (true, juce::jmin (left(), 100));
-        if (ready < 0)
-            break;
-        if (ready == 0)
-            continue;
-        const int got = socket.read (buffer, (int) sizeof (buffer), false);
-        if (got <= 0)
-            break;
-        raw.append (buffer, (size_t) got);
-    }
-    const auto split = raw.find ("\r\n\r\n");
-    if (split == std::string::npos || raw.size() < 12)
-        return std::nullopt;
-    return Reply { std::atoi (raw.c_str() + 9), raw.substr (split + 4) };
-}
-
-juce::var parsed (const std::string& body)
-{
-    juce::var out;
-    if (juce::JSON::parse (juce::String::fromUTF8 (body.c_str(), (int) body.size()), out).failed())
-        return {};
-    return out;
-}
-
 juce::String problemOf (const std::string& body)
 {
-    const auto reply = parsed (body);
+    const auto reply = parsedJson (body);
     return reply["problem"].isString() ? reply["problem"].toString() : juce::String ("the engine refused");
 }
 }
@@ -84,6 +35,12 @@ RemoteHostView::~RemoteHostView()
     wake.notify_all();
     if (poller.joinable())
         poller.join();
+}
+
+bool RemoteHostView::answers() const
+{
+    const auto reply = httpExchange (host, port, "GET", "/api/engine/status", {}, pollTimeoutMillis);
+    return reply && reply->status == 200;
 }
 
 juce::String RemoteHostView::url() const { return "http://" + juce::String (host) + ":" + juce::String (port); }
@@ -133,10 +90,10 @@ void RemoteHostView::noEngine()
 
 void RemoteHostView::pollStatusAndMeters()
 {
-    const auto status = exchange (host, port, "GET", "/api/engine/status", {}, pollTimeoutMillis);
-    const auto meters = exchange (host, port, "GET", "/api/engine/meters", {}, pollTimeoutMillis);
-    const auto statusReport = status && status->status == 200 ? statusFromJson (parsed (status->body)) : std::nullopt;
-    const auto metersReport = meters && meters->status == 200 ? metersFromJson (parsed (meters->body)) : std::nullopt;
+    const auto status = httpExchange (host, port, "GET", "/api/engine/status", {}, pollTimeoutMillis);
+    const auto meters = httpExchange (host, port, "GET", "/api/engine/meters", {}, pollTimeoutMillis);
+    const auto statusReport = status && status->status == 200 ? statusFromJson (parsedJson (status->body)) : std::nullopt;
+    const auto metersReport = meters && meters->status == 200 ? metersFromJson (parsedJson (meters->body)) : std::nullopt;
     if (! statusReport || ! metersReport)
         return noEngine();
     const std::lock_guard<std::mutex> guard (cacheLock);
@@ -147,11 +104,11 @@ void RemoteHostView::pollStatusAndMeters()
 
 void RemoteHostView::pollConfigAndLinks()
 {
-    const auto config = exchange (host, port, "GET", "/api/engine/config", {}, pollTimeoutMillis);
-    const auto links = exchange (host, port, "GET", "/api/engine/links", {}, pollTimeoutMillis);
+    const auto config = httpExchange (host, port, "GET", "/api/engine/config", {}, pollTimeoutMillis);
+    const auto links = httpExchange (host, port, "GET", "/api/engine/links", {}, pollTimeoutMillis);
     if (! config || config->status != 200 || ! links || links->status != 200)
         return;   // pollStatusAndMeters says that no engine answers
-    const auto linksReport = linksFromJson (parsed (links->body));
+    const auto linksReport = linksFromJson (parsedJson (links->body));
 
     // postLock first, as edit() takes it: an edit of ours that is on its way must not be overwritten by the
     // engine's older pending config.
@@ -161,7 +118,7 @@ void RemoteHostView::pollConfigAndLinks()
         cache.links = *linksReport;
     if (! posts.empty() || config->body == cache.configBody)
         return;
-    const auto body = parsed (config->body);
+    const auto body = parsedJson (config->body);
     const juce::File file (body["file"].toString());
     juce::String error;
     const auto pending = parseAppConfig (body["pending"], file.getParentDirectory(), error);
@@ -185,7 +142,7 @@ void RemoteHostView::flushPosts()
                 return;
             post = posts.front();
         }
-        const auto answer = exchange (host, port, "POST", post.path, post.body, pollTimeoutMillis);
+        const auto answer = httpExchange (host, port, "POST", post.path, post.body, pollTimeoutMillis);
         const bool sent = answer && ! answer->timedOut;
         if (sent && answer->status != 200)
             forgetConfigBody();   // refused: the next poll shows what the engine really has pending
@@ -253,7 +210,7 @@ juce::Result RemoteHostView::apply (const AppConfig& config)
         const std::lock_guard<std::mutex> guard (postLock);
         dropQueuedEdits();   // the apply carries the config
     }
-    const auto answer = exchange (host, port, "POST", "/api/engine/apply", juce::JSON::toString (toJson (config), true).toStdString(),
+    const auto answer = httpExchange (host, port, "POST", "/api/engine/apply", juce::JSON::toString (toJson (config), true).toStdString(),
                                   applyTimeout);
     if (! answer)
         return juce::Result::fail ("no engine at " + url());

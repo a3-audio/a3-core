@@ -16,6 +16,8 @@
 #include "Roles.h"
 #include "ScreencastFanout.h"
 #include "Supervisor.h"
+#include "WindowProcess.h"
+#include "ui/MainWindow.h"
 
 namespace
 {
@@ -94,6 +96,104 @@ private:
     a3app::Supervisor supervisor;
 };
 
+// The window role: Core's client and the engine's remote view from the truth's core.web and engine.control,
+// the laptop rule (WindowProcess), and the window over both. Closing asks once about its own children.
+class WindowRunner final : public a3app::RoleRunner
+{
+public:
+    WindowRunner (const a3core::Platform& platform, const a3core::Truth& truth)
+        : core (a3app::coreClientFor (truth)),
+          engine (makeEngineView (truth)),
+          process (platform, *core, *engine)
+    {
+        for (const auto role : process.attach())
+            std::printf ("a3-core: started --role %s, it was not running\n", a3app::roleWord (role).c_str());
+        std::fflush (stdout);
+        engine->refreshNow();   // the first paint shows the engine as it is, not "no engine"
+        core->refreshNow (0);
+        window = std::make_unique<a3app::MainWindow> (*engine, pageDevices, spatialChoices (platform), false, [this] { askThenQuit(); },
+                                                      a3app::MonitorSetup { core.get(), a3app::windowSettingsFile (platform.configDir()) });
+        window->open();
+    }
+
+    ~WindowRunner() override { window.reset(); }   // before the views its pages read
+
+    std::optional<int> tick (bool stopRequested) override
+    {
+        if (stopRequested && ! done)
+            done = true;   // a signal asks nobody: what it started runs on
+        return done ? std::optional<int> (0) : std::nullopt;
+    }
+
+private:
+    static std::unique_ptr<a3app::RemoteHostView> makeEngineView (const a3core::Truth& truth)
+    {
+        const auto control = truth.endpoint ("engine", "control");
+        return std::make_unique<a3app::RemoteHostView> (control.host, control.port);
+    }
+
+    // The directories the ZONES page offers: the user's own and the installed variants, where they exist.
+    static std::vector<juce::File> spatialChoices (const a3core::Platform& platform)
+    {
+        std::vector<juce::File> choices;
+        for (const auto& directory : { platform.home().getChildFile (".config/a3/engine/spatial"), juce::File ("/usr/share/a3-engine/spatial"),
+                                       juce::File ("/usr/share/a3-engine/spatial-reaper-booth-6.1") })
+            if (directory.isDirectory())
+                choices.push_back (directory);
+        return choices;
+    }
+
+    void askThenQuit()
+    {
+        const auto question = process.quitQuestion();
+        if (! question)
+        {
+            done = true;
+            return;
+        }
+        // Two keys: the first answers 1, the second (and Escape) 0 -- leaving them running is the default.
+        juce::AlertWindow::showAsync (juce::MessageBoxOptions()
+                                          .withIconType (juce::MessageBoxIconType::QuestionIcon)
+                                          .withTitle ("a3-core")
+                                          .withMessage (*question)
+                                          .withButton ("Stop")
+                                          .withButton ("Leave running")
+                                          .withAssociatedComponent (window.get()),   // the window's look
+                                      [this] (int answer) {
+                                          process.quit (answer == 1);
+                                          done = true;
+                                      });
+    }
+
+    std::unique_ptr<a3app::CoreClient> core;
+    std::unique_ptr<a3app::RemoteHostView> engine;
+    a3app::WindowProcess process;
+    juce::AudioDeviceManager pageDevices;   // only a catalogue of device types for the AUDIO page; never initialised
+    std::unique_ptr<a3app::MainWindow> window;
+    bool done = false;
+};
+
+Started startWindow (const a3core::Platform& platform)
+{
+    const auto files = a3app::coreFiles (platform);
+    auto loaded = a3core::Truth::load (files.truth, files.network);
+    if (const auto* refused = std::get_if<a3core::TruthError> (&loaded))
+    {
+        sayError ("a3-core: " + refused->what);
+        return 1;
+    }
+    const auto& truth = std::get<a3core::Truth> (loaded);
+    try
+    {
+        return std::make_unique<WindowRunner> (platform, truth);
+    }
+    catch (const a3core::TruthError& missing)
+    {
+        sayError ("a3-core: the truth has no " + missing.what);
+        return 1;
+    }
+}
+
 Started startCore (const a3app::ProgramArgs& args, const a3core::Platform& platform)
 {
     auto options = a3app::coreOptions (args, platform);
@@ -149,7 +249,7 @@ Started startRole (const a3app::ProgramArgs& args, const a3core::Platform& platf
         case Role::screencastFanout: return startFanout (args, platform);
         case Role::supervisor:
             return std::make_unique<SupervisorRunner> (platform, platform.self().getFullPathName());
-        case Role::window: return notBuiltYet ("the window");
+        case Role::window: return startWindow (platform);
         case Role::i3Bar: return notBuiltYet ("--role i3-bar");
         case Role::renderTruth: return notBuiltYet ("--render-truth");
         case Role::truthQuery: return notBuiltYet ("--truth");

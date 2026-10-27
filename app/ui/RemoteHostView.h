@@ -31,6 +31,8 @@ public:
     // its first paint.
     void refreshNow();
     juce::String url() const;
+    // Whether an engine answers at all, asked now (GET /api/engine/status).
+    bool answers() const;
     void setApplyTimeoutMillis (int millis) { applyTimeout = millis; }   // the tests'
 
     BackendStatus status() const override;

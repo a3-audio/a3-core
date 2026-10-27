@@ -177,7 +177,7 @@ target `a3-core-app`), with roles. Plan 4c's `a3-engine` binary is gone; its eng
 role, without a window (the window becomes its own role and reaches the engine over the control
 API, P2). The package still installs Plan 4's names until Task 28 changes it.
 
-    a3-core                                   the window (not built yet: says so, exit 0)
+    a3-core                                   the window: attaches to Core and the engine
     a3-core --headless                        the supervisor: Core and the engine as children
     a3-core --role core [--ip HOST] [--port N] [--mixer HOST:PORT] [--motion HOST:PORT]
                         [--subscriber NAME=HOST:PORT]... [--print-osc] [--web-bind HOST:PORT] [--no-web]
@@ -207,6 +207,23 @@ API, P2). The package still installs Plan 4's names until Task 28 changes it.
   left to run it exits (1 if a role was given up, else 0); on SIGTERM it ends both (SIGKILL after 5 s). A role whose user unit
   (`a3-core.service`, `a3-engine.service`) is enabled (`systemctl --user is-enabled`) is never
   started a second time.
+- **the window** (`a3-core` without a role, Task 26): reaches Core over its HTTP API on the truth's
+  `core.web` and the engine over its control API on `engine.control`, both on loopback. It asks both
+  once at start; a role that does not answer and whose user unit is not enabled (a laptop) is started
+  as the window's own child (`a3-core --role core|engine`), and on the rig, where the units run them,
+  nothing is started. Closing asks once, "Stop Core and the engine too?" (naming only the ones it
+  started); Stop ends only those, Leave running (or Escape) leaves them. It never stops a role it did
+  not start and never touches a unit; SIGTERM ends the window and asks nobody. The page list on the
+  left carries the engine's pages (AUDIO … STATUS, over the remote view) and, below them, the OSC
+  monitor that replaces the Python Core's HTML page: TRAFFIC (direction, address, peer, count, rate,
+  last value, age; filter by address, only active = younger than 6 s, one device; the picked row's
+  history), TRUTH & DEVICES (Core's fingerprint, each device "is Core's" or "DIFFERS", the audio
+  engine), NOT UNDERSTOOD and REGISTER (fetched with FETCH, never streamed), BENCH (to self, mixer
+  or motion; the truth's `state.recall`; Core's answer or refusal). The **OSC MONITOR** switch at the
+  bottom of the list shows them; it is remembered in `~/.config/a3/core/window.settings`
+  (`{"monitor": true}`), written only when it is flipped, off when the file is missing. The traffic
+  is read from Core's `/api/stream` (only while the monitor is on): `/api/traffic` would carry the
+  whole history ring every time.
 - Everything that asks the operating system (environment, home, host name, unit state, child
   processes) goes through `a3core::Platform` (`src/a3-core/Platform.h`, Linux only).
 - The journal: one whole line per write, flushed at once, from any thread.

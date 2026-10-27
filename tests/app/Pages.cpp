@@ -6,6 +6,7 @@
 #include <set>
 #include "EngineFixture.h"
 #include "FakeView.h"
+#include "PageSnapshot.h"
 #include "RemoteRig.h"
 #include "AudioPage.h"
 #include "CalibrationPage.h"
@@ -24,50 +25,9 @@ namespace
 {
 using a3apptest::FakeView;
 using a3apptest::RemoteRig;
-
-// An audio device type with no devices: the page's selector must not probe ALSA in a test.
-class NoDevices final : public juce::AudioIODeviceType
-{
-public:
-    NoDevices() : juce::AudioIODeviceType ("none") {}
-    void scanForDevices() override {}
-    juce::StringArray getDeviceNames (bool) const override { return {}; }
-    int getDefaultDeviceIndex (bool) const override { return -1; }
-    int getIndexOfDevice (juce::AudioIODevice*, bool) const override { return -1; }
-    bool hasSeparateInputsAndOutputs() const override { return true; }
-    juce::AudioIODevice* createDevice (const juce::String&, const juce::String&) override { return nullptr; }
-};
-
-// Paints a page to an image: the snapshot of one visual state. A page that cannot paint
-// (a crash on first paint, an empty component) fails here, not on the rig.
-juce::Image snapshot (juce::Component& page, const juce::String& name)
-{
-    page.setSize (900, 640);
-    auto image = page.createComponentSnapshot (page.getLocalBounds(), false, 1.0f);
-    if (const char* dir = std::getenv ("A3_SNAPSHOT_DIR"))
-    {
-        juce::File out (juce::String (dir) + "/" + name + ".png");
-        juce::FileOutputStream stream (out);
-        if (stream.openedOk()) { stream.setPosition (0); stream.truncate(); juce::PNGImageFormat().writeImageToStream (image, stream); }
-    }
-    return image;
-}
-
-int distinctColours (const juce::Image& image)
-{
-    std::set<juce::uint32> seen;
-    for (int y = 0; y < image.getHeight(); y += 2)
-        for (int x = 0; x < image.getWidth(); x += 2)
-            seen.insert (image.getPixelAt (x, y).getARGB());
-    return (int) seen.size();
-}
-
-void expectPainted (const juce::Image& image)
-{
-    ASSERT_TRUE (image.isValid());
-    EXPECT_GT (image.getWidth(), 0);
-    EXPECT_GT (distinctColours (image), 4);   // text and faces over the ground, not a flat fill
-}
+using a3apptest::snapshot;
+using a3apptest::expectPainted;
+using a3apptest::NoDevices;
 
 struct Pages : ::testing::Test
 {
