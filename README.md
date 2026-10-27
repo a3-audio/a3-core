@@ -252,7 +252,8 @@ is small).
   `aux-return.cue`, `delay.bpm`, `engine.open`, `engine.hello`, and what `engine.osc` carries). The
   app's tests read the words the engine understands from `engine.osc`'s `carries` in this copy. That
   branch moves to a3-core's `main` on merge; this reference then changes with it. Refreshed 2026-10-27
-  from a3-core `feat/core-truth` 78230b9 (`engine.control`, the meters from the engine: Task 22);
+  from a3-core `feat/core-truth` 78230b9 (`engine.control`, the meters from the engine: Task 22),
+  then from a3-core `feat/core-cut` 62f17a5 (the `vu` meaning names no REAPER outputs);
   `tests/core/EngineTruth.h` loads it for the suites that pin the engine's meters.
 - `a3-engine-bench` never connects anything. It reads the truth at runtime from `--truth FILE`
   (default `/usr/share/a3/a3-osc.json`).
