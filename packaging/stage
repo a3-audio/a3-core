@@ -29,6 +29,7 @@ files() {
     install -D -m 755 "$build/app/a3-core" "$stage/usr/bin/a3-core"
     install -D -m 755 "$build/bench/a3-engine-bench" "$stage/usr/bin/a3-engine-bench"
     install -D -m 644 "$src/packaging/a3-engine.service" "$stage/usr/lib/systemd/user/a3-engine.service"
+    install -D -m 644 "$src/packaging/a3-core-window.service" "$stage/usr/lib/systemd/user/a3-core-window.service"
     install -D -m 644 "$src/data/engine.json" "$stage/usr/share/a3-engine/engine.json"
     install_spatial_data "$src" "$stage"
     install_copyright "$src" "$stage"

@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 STAGE = ROOT / "packaging" / "stage"
 CONTROL = ROOT / "packaging" / "DEBIAN" / "control"
 UNIT = ROOT / "packaging" / "a3-engine.service"
+WINDOW_UNIT = ROOT / "packaging" / "a3-core-window.service"
 # The program (Task 23); its engine role is what the unit runs. Staging is Task 28's.
 APP = ROOT / "build" / "app" / "a3-core"
 TRUTH = ROOT / "tests" / "engine" / "data" / "a3-osc.json"
@@ -47,6 +48,15 @@ def stub_build(build):
 def unit_lines():
     return [line.strip() for line in UNIT.read_text().splitlines()
             if line.strip() and not line.startswith("#")]
+
+
+def staged_files(case):
+    tmp = tempfile.mkdtemp(dir=SCRATCH_ROOT)
+    case.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+    build = stub_build(Path(tmp, "build"))
+    stage = Path(tmp, "stage")
+    subprocess.run([str(STAGE), "files", str(ROOT), str(build), str(stage)], check=True)
+    return stage
 
 
 def control_fields():
@@ -157,12 +167,7 @@ class StageTest(unittest.TestCase):
         self.assertIn(CC_BY_ATTRIBUTION, copyright)
 
     def stage_files(self):
-        tmp = tempfile.mkdtemp(dir=SCRATCH_ROOT)
-        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
-        build = stub_build(Path(tmp, "build"))
-        stage = Path(tmp, "stage")
-        subprocess.run([str(STAGE), "files", str(ROOT), str(build), str(stage)], check=True)
-        return stage
+        return staged_files(self)
 
     def test_unknown_mode_is_refused(self):
         result = subprocess.run([str(STAGE), "nonsense"], capture_output=True)
@@ -207,6 +212,52 @@ class UnitTest(unittest.TestCase):
         for line in lines:
             self.assertFalse(line.startswith("CPUScheduling"), line)
             self.assertNotIn("stemdeck@", line)
+
+
+class WindowUnitTest(unittest.TestCase):
+    """The window comes up at boot under a3-main. a3-main (a3-core's package) Wants it; this unit
+    has no [Install], so nothing enables it on its own."""
+
+    def lines(self):
+        return [l for l in WINDOW_UNIT.read_text().splitlines() if l.strip() and not l.startswith("#")]
+
+    def test_the_package_ships_the_window_unit(self):
+        stage = staged_files(self)
+        shipped = stage / "usr/lib/systemd/user/a3-core-window.service"
+        self.assertEqual(shipped.read_bytes(), WINDOW_UNIT.read_bytes())
+        self.assertFalse(os.access(shipped, os.X_OK))   # 644: a unit file, not a program
+
+    def test_the_window_unit_attaches_to_core_and_engine_and_follows_a3_main(self):
+        lines = self.lines()
+        self.assertIn("Description=the a3-core window", lines)
+        self.assertIn("PartOf=a3-main.service", lines)
+        self.assertIn("After=a3-core.service a3-engine.service", lines)
+
+    def test_the_window_unit_runs_the_window_role_after_the_screen_is_there(self):
+        lines = self.lines()
+        self.assertIn("Environment=DISPLAY=:0", lines)
+        self.assertIn("ExecStartPre=%h/.local/bin/a3-wait-for-the-screen", lines)
+        self.assertIn("ExecStart=/usr/bin/a3-core", lines)   # no role: the window
+        for line in lines:
+            self.assertNotIn("--role", line)
+
+    def test_a_clean_close_is_not_restarted_but_a_crash_is(self):
+        # The window exits 0 on a close and on SIGTERM (Main.cpp WindowRunner::tick), so on-failure
+        # leaves a closed window closed; a crash or a kill signal restarts it.
+        lines = self.lines()
+        self.assertIn("Restart=on-failure", lines)
+        self.assertIn("RestartSec=2", lines)
+
+    def test_the_window_unit_has_no_install_no_conflicts_and_no_home_path(self):
+        # a3-main Wants every unit in one transaction; a Conflicts= drops a start job before any
+        # condition runs (R35).
+        text = WINDOW_UNIT.read_text()
+        self.assertNotIn("[Install]", text)
+        self.assertNotIn("Conflicts=", text)
+        for line in self.lines():
+            self.assertFalse(line.startswith("Conflicts="), line)
+            self.assertNotIn("/home/", line)
+            self.assertNotIn("WantedBy", line)
 
 
 class SubmoduleTest(unittest.TestCase):

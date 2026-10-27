@@ -145,7 +145,7 @@ is shown.
 The Debian package is now `a3-engine` (it `Replaces`/`Conflicts`/`Provides` `a3-engine-bench`). It
 ships `/usr/bin/a3-core` (the program; Task 28, no `/usr/bin/a3-engine`), `/usr/bin/a3-engine-bench` (kept as a tool), both spatial
 directories, `/usr/share/a3-engine/engine.json` (the default config) and the user unit
-`/usr/lib/systemd/user/a3-engine.service`. The postinst enables the unit for every user and reloads
+`/usr/lib/systemd/user/a3-engine.service` and `a3-core-window.service`. The postinst enables the unit for every user and reloads
 the running user managers; nothing is written under a home and nothing is restarted.
 
 **The unit** (Task 28). `PartOf=a3-main.service`, and it runs `/usr/bin/a3-core --role engine`
@@ -158,6 +158,15 @@ start limit of 5 in 60 s: a failed open (a port taken) restarts a few times and 
 `LD_PRELOAD` (the JACK realtime-priority library) and `CPUAffinity=1 2 3` stay. The package `Breaks`
 the Python Core (a3-core before the cut) and the metering beat-analyzer (before no-vu); the version
 numbers are in `packaging/DEBIAN/control` only. It depends on no Python.
+
+**The window unit** (`a3-core-window.service`). `PartOf=a3-main.service`, `After=a3-core.service
+a3-engine.service`: the window attaches to the Core and the engine that are already up and never
+spawns them. It waits for the screen (`DISPLAY=:0` and `%h/.local/bin/a3-wait-for-the-screen`, a
+helper of a3-core's package, not shipped here), then runs `/usr/bin/a3-core` with no role, which is
+the window. `Restart=on-failure`, `RestartSec=2`: a close, also after the quit question, and SIGTERM
+exit 0 and stay closed; a crash or a kill signal starts it again. There is no `[Install]` section
+(a3-core's `a3-main.service` Wants the unit, so the postinst enables nothing for it) and no
+`Conflicts=`, for the reason above.
 
 **The default config** (`data/engine.json`): four channels on analog pairs 1-4, return pair 6, two
 decks, trims main/booth -30.88 dB (REAPER's output faders), phones 0, rec 0, SVF filter, Step 0's delay
