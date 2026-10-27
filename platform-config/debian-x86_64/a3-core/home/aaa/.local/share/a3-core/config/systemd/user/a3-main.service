@@ -17,7 +17,10 @@ After=graphical.target
 # The audio server is not in the group: PipeWire is the user session's, and
 # it runs whether a3-main does or not (jackd and a3-jack are gone since
 # 2026-10-14).
-Wants=qjackctl.service a3-reaper.service a3-engine.service a3-core.service beat-analyzer.service a3-motion.service
+Wants=qjackctl.service a3-reaper.service a3-engine.service a3-core.service beat-analyzer.service a3-motion.service stemdeck@A.service
+# stemdeck@A.service is the B-format deck A, started only in engine mode (see
+# stemdeck@.service.d/audio-engine.conf). Deck B is not listed: it will run on
+# a3nuc2, over AES67.
 # a3-motion is listed even though this package does not ship its unit:
 # Wants= on something absent is not an error, and on a machine that has
 # it the group is then whole. On a rig where Motion sits on its own
