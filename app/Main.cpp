@@ -3,7 +3,7 @@
 // a3-core: the one program. One JUCEApplication that runs the role its command line names (see
 // ProgramArgs.h): core (the C++ Core service), engine (Plan 4's engine without its window), the
 // screencast fan-out, the supervisor (--headless: Core and the engine as children), the window and the
-// i3 bar; --render-truth and --truth print and exit. Each role is a RoleRunner the app's
+// i3 bar; --render-truth, --truth and --links print and exit. Each role is a RoleRunner the app's
 // timer drives on the message thread; SIGTERM and SIGINT only set a flag that the next tick reads.
 #include <atomic>
 #include <cstdio>
@@ -12,6 +12,7 @@
 #include "CoreService.h"
 #include "EngineRole.h"
 #include "I3Bar.h"
+#include "LinksCommand.h"
 #include "Platform.h"
 #include "ProgramArgs.h"
 #include "Roles.h"
@@ -283,6 +284,7 @@ Started startRole (const a3app::ProgramArgs& args, const a3core::Platform& platf
         case Role::i3Bar: return std::make_unique<I3BarRunner> (platform);
         case Role::renderTruth:
         case Role::truthQuery: return sayAndExit (args, platform);
+        case Role::links: return a3app::runLinks (platform);
     }
     return 2;
 }
