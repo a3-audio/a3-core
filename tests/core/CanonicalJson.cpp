@@ -45,14 +45,6 @@ void expectHashesAsRecorded (const juce::var& recorded)
     EXPECT_EQ (bytes, decodeBase64 (recorded["canonical_b64"]));
     EXPECT_EQ (sha256Hex (bytes), recorded["fingerprint"].toString().toStdString());
 }
-
-juce::var objectOf (std::initializer_list<std::pair<const char*, juce::var>> members)
-{
-    auto* object = new juce::DynamicObject();
-    for (const auto& member : members)
-        object->setProperty (juce::Identifier (member.first), member.second);
-    return juce::var (object);
-}
 }
 
 TEST (CanonicalJson, ShippedTruthHashesAsPython)

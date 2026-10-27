@@ -198,6 +198,13 @@ SENDS = [("an int", {"to": "mixer", "address": "/channel/0/pfl", "value": "1"}),
          ("no address", {"to": "mixer", "value": "1"}),
          ("no destination", {"address": "/a", "value": "1"}),
          ("no value", {"to": "mixer", "address": "/a"}),
+         ("a space before the destination", {"to": " mixer", "address": "/a", "value": "1"}),
+         ("a list value", {"to": "mixer", "address": "/a", "value": [1, 2]}),
+         ("an object value", {"to": "mixer", "address": "/a", "value": {"a": 1, "b": [True, None, "x'y", 1.5]}}),
+         ("a true value", {"to": "mixer", "address": "/a", "value": True}),
+         ("a null value", {"to": "mixer", "address": "/a", "value": None}),
+         ("a float value", {"to": "mixer", "address": "/a", "value": 1.0}),
+         ("a list of strings", {"to": "mixer", "address": "/a", "value": ["a\"b", "c'd", "\u00fc"]}),
          ("an unknown destination", {"to": "nowhere", "address": "/a", "value": "1"})]
 
 

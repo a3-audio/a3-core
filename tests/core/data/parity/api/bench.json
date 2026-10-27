@@ -781,6 +781,160 @@
   {
    "body": {
     "address": "/a",
+    "to": " mixer",
+    "value": "1"
+   },
+   "name": "a space before the destination",
+   "reply": {
+    "problem": "unbekanntes Ziel:  mixer"
+   },
+   "sent": [],
+   "status": 400
+  },
+  {
+   "body": {
+    "address": "/a",
+    "to": "mixer",
+    "value": [
+     1,
+     2
+    ]
+   },
+   "name": "a list value",
+   "reply": {
+    "address": "/a",
+    "value": "[1, 2]"
+   },
+   "sent": [
+    [
+     "mixer",
+     "/a",
+     "[1, 2]",
+     "str"
+    ]
+   ],
+   "status": 200
+  },
+  {
+   "body": {
+    "address": "/a",
+    "to": "mixer",
+    "value": {
+     "a": 1,
+     "b": [
+      true,
+      null,
+      "x'y",
+      1.5
+     ]
+    }
+   },
+   "name": "an object value",
+   "reply": {
+    "address": "/a",
+    "value": "{'a': 1, 'b': [True, None, \"x'y\", 1.5]}"
+   },
+   "sent": [
+    [
+     "mixer",
+     "/a",
+     "{'a': 1, 'b': [True, None, \"x'y\", 1.5]}",
+     "str"
+    ]
+   ],
+   "status": 200
+  },
+  {
+   "body": {
+    "address": "/a",
+    "to": "mixer",
+    "value": true
+   },
+   "name": "a true value",
+   "reply": {
+    "address": "/a",
+    "value": "True"
+   },
+   "sent": [
+    [
+     "mixer",
+     "/a",
+     "True",
+     "str"
+    ]
+   ],
+   "status": 200
+  },
+  {
+   "body": {
+    "address": "/a",
+    "to": "mixer",
+    "value": null
+   },
+   "name": "a null value",
+   "reply": {
+    "address": "/a",
+    "value": "None"
+   },
+   "sent": [
+    [
+     "mixer",
+     "/a",
+     "None",
+     "str"
+    ]
+   ],
+   "status": 200
+  },
+  {
+   "body": {
+    "address": "/a",
+    "to": "mixer",
+    "value": 1.0
+   },
+   "name": "a float value",
+   "reply": {
+    "address": "/a",
+    "value": 1.0
+   },
+   "sent": [
+    [
+     "mixer",
+     "/a",
+     1.0,
+     "float"
+    ]
+   ],
+   "status": 200
+  },
+  {
+   "body": {
+    "address": "/a",
+    "to": "mixer",
+    "value": [
+     "a\"b",
+     "c'd",
+     "\u00fc"
+    ]
+   },
+   "name": "a list of strings",
+   "reply": {
+    "address": "/a",
+    "value": "['a\"b', \"c'd\", '\u00fc']"
+   },
+   "sent": [
+    [
+     "mixer",
+     "/a",
+     "['a\"b', \"c'd\", '\u00fc']",
+     "str"
+    ]
+   ],
+   "status": 200
+  },
+  {
+   "body": {
+    "address": "/a",
     "to": "nowhere",
     "value": "1"
    },

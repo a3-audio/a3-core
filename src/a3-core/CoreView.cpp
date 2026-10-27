@@ -11,17 +11,8 @@ namespace a3core
 {
 namespace
 {
-juce::var text (const std::string& utf8) { return juce::var (juce::String::fromUTF8 (utf8.c_str(), static_cast<int> (utf8.size()))); }
-
 juce::var textOrNull (const std::optional<std::string>& value) { return value ? text (*value) : juce::var(); }
 
-juce::var objectOf (std::initializer_list<std::pair<const char*, juce::var>> members)
-{
-    auto* made = new juce::DynamicObject();
-    for (const auto& member : members)
-        made->setProperty (juce::Identifier (member.first), member.second);
-    return juce::var (made);
-}
 }
 
 juce::var Core::statusJson() const
@@ -30,6 +21,9 @@ juce::var Core::statusJson() const
     return objectOf ({ { "audio_engine", "engine" }, { "reason", "" } });
 }
 
+// engine.open means "Core sent the engine `open` since its last new hello": heard is about the
+// hello, open about the recall after the replay, so a new boot id reads heard:true, open:false until
+// that recall has opened it.
 // Everything is seconds since the last word, not a clock reading: the page has no use for Core's
 // monotonic clock. Null when there has been none.
 juce::var Core::rigJson() const

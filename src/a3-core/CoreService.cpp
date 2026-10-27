@@ -166,7 +166,10 @@ void CoreService::openTheWindow()
     Routes routes;
     addMonitorRoutes (routes, MonitorSources { &truth, core->traffic(), &core->devices(),
                                                options.packageShare.getChildFile ("osc-register.json"), clock });
-    if (auto bench = UdpSocket::bound (truth.host ("local"), 0); std::holds_alternative<UdpSocket> (bench))
+    auto bench = UdpSocket::bound (truth.host ("local"), 0);
+    if (const auto* refused = std::get_if<OsError> (&bench))
+        say ("the bench has no socket, sends to self are refused: " + refused->text, true);
+    else
         benchSocket = std::move (std::get<UdpSocket> (bench));
     addCoreRoutes (routes, &core->view(), [this] (const std::string& to, const OscMessage& message) { benchSend (to, message); });
     auto server = std::make_unique<HttpServer> (bind, std::move (routes));
@@ -187,7 +190,9 @@ void CoreService::benchSend (const std::string& to, const OscMessage& message)
     if (to == "self")
     {
         const std::scoped_lock hold (benchLock);
-        if (! benchSocket || servedPort == 0)
+        if (! benchSocket)
+            throw SendRefused ("the bench has no socket");
+        if (servedPort == 0)
             throw SendRefused ("Core is not serving yet");
         try
         {

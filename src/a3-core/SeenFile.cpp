@@ -40,7 +40,6 @@ namespace
 {
 
 std::string utf8 (const juce::var& value) { return value.toString().toStdString(); }
-juce::var text (const std::string& value) { return juce::var (juce::String::fromUTF8 (value.data(), static_cast<int> (value.size()))); }
 
 bool isInteger (const juce::var& value) { return value.isInt() || value.isInt64() || value.isBool(); }
 bool isNumber (const juce::var& value) { return isInteger (value) || value.isDouble(); }

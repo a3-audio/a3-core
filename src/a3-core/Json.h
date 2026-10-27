@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include <initializer_list>
 #include <optional>
+#include <utility>
 #include <string>
 
 #include <juce_core/juce_core.h>
@@ -20,6 +22,17 @@ std::string sha256Hex (const std::string& bytes);
 
 // float.__repr__: shortest digits that round-trip, fixed for decimal exponent -4 <= e < 16.
 std::string pythonRepr (double value);
+
+// str.__repr__ of a Python str (UTF-8 in, UTF-8 out).
+std::string pythonStrRepr (const std::string& value);
+
+// str(x) of what json.loads made of a JSON value: a text as it is, everything else as Python prints it
+// (`[1, 2]`, `{'a': 1}`, True, False, None).
+std::string pythonStrOf (const juce::var& value);
+
+// A juce::var text from UTF-8, and a juce::var object from named members, in the order given.
+juce::var text (const std::string& utf8);
+juce::var objectOf (std::initializer_list<std::pair<const char*, juce::var>> members);
 
 // json.dumps(indent=n): insertion order, ensure_ascii=True (state files use 2, network.json 1).
 std::string dumpIndented (const juce::var& value, int indent);

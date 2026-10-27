@@ -161,31 +161,6 @@ std::optional<double> pythonFloatOf (const std::string& said)
     return std::strtod (digits->c_str(), nullptr);
 }
 
-// str(value) as Python prints what json.loads gave: the bench types everything as text, so a number or a
-// bool in the body is read as the text Python would have made of it. Nullopt for a list or an object.
-std::optional<std::string> pythonText (const juce::var& value)
-{
-    if (value.isString())
-        return value.toString().toStdString();
-    if (value.isBool())
-        return static_cast<bool> (value) ? "True" : "False";
-    if (value.isInt() || value.isInt64())
-        return std::to_string (static_cast<juce::int64> (value));
-    if (value.isDouble())
-        return pythonRepr (static_cast<double> (value));
-    if (value.isVoid())
-        return "None";
-    return std::nullopt;
-}
-
-juce::var objectOf (std::initializer_list<std::pair<const char*, juce::var>> members)
-{
-    auto* made = new juce::DynamicObject();
-    for (const auto& member : members)
-        made->setProperty (juce::Identifier (member.first), member.second);
-    return juce::var (made);
-}
-
 HttpResponse refused (const std::string& why)
 {
     auto response = jsonResponse (objectOf ({ { "problem", juce::String::fromUTF8 (why.c_str()) } }));
@@ -225,14 +200,11 @@ std::variant<BenchRequest, std::string> readBenchRequest (const std::string& bod
     {
         if (! asked.hasProperty (juce::Identifier (name)))
             return std::string ("the body has no ") + name;
-        const auto text = pythonText (asked[juce::Identifier (name)]);
-        if (! text)
-            return std::string (name) + " must be text or a number";
-        fields[name] = *text;
+        fields[name] = pythonStrOf (asked[juce::Identifier (name)]);   // B1: str(asked[name])
     }
     try
     {
-        return BenchRequest { stripped (fields["to"]), stripped (fields["address"]), parseValue (fields["value"]) };
+        return BenchRequest { fields["to"], stripped (fields["address"]), parseValue (fields["value"]) };
     }
     catch (const std::exception& problem)
     {

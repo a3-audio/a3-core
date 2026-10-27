@@ -104,34 +104,6 @@ juce::var jsonableOf (const std::optional<OscArg>& value)
     return {};
 }
 
-// str.__repr__ of a Python str.
-std::string strRepr (const std::string& value)
-{
-    const bool hasSingle = value.find ('\'') != std::string::npos;
-    const bool hasDouble = value.find ('"') != std::string::npos;
-    const char quote = hasSingle && ! hasDouble ? '"' : '\'';
-    static const char hex[] = "0123456789abcdef";
-
-    std::string out (1, quote);
-    for (const auto character : value)
-    {
-        const auto byte = static_cast<uint8_t> (character);
-        if (character == quote || character == '\\')
-            out += std::string ("\\") + character;
-        else if (character == '\t')
-            out += "\\t";
-        else if (character == '\n')
-            out += "\\n";
-        else if (character == '\r')
-            out += "\\r";
-        else if (byte < 0x20 || byte == 0x7f)
-            out += std::string ("\\x") + hex[byte >> 4] + hex[byte & 15];
-        else
-            out += character;   // UTF-8 goes through: Python prints printable non-ASCII as it is
-    }
-    return out + quote;
-}
-
 // repr() of one OSC argument as python-osc hands it on.
 std::string argRepr (const OscArg& arg)
 {
@@ -149,7 +121,7 @@ std::string argRepr (const OscArg& arg)
             break;
         case 's':
             if (const auto* text = std::get_if<std::string> (&arg.value))
-                return strRepr (*text);
+                return pythonStrRepr (*text);
             break;
         case 'T': return "True";
         case 'F': return "False";
@@ -183,16 +155,6 @@ juce::var listRepr (const ListValue& list)
 juce::var jsonableOf (const std::optional<OscArg>& value, const std::optional<ListValue>& list)
 {
     return list ? listRepr (*list) : jsonableOf (value);
-}
-
-juce::var text (const std::string& utf8) { return juce::var (juce::String::fromUTF8 (utf8.data(), static_cast<int> (utf8.size()))); }
-
-juce::var objectOf (std::initializer_list<std::pair<const char*, juce::var>> members)
-{
-    auto* made = new juce::DynamicObject();
-    for (const auto& member : members)
-        made->setProperty (juce::Identifier (member.first), member.second);
-    return juce::var (made);
 }
 
 struct PeerTotals

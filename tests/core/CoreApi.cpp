@@ -1180,8 +1180,6 @@ TEST (CoreApi, ASendOfSeveralArgumentsIsAListInTheTable)
         if (row.address == "/stemdeck/pointer" && row.direction == Direction::out)
         {
             found = true;
-            const auto json = snapshotAsJson (rig.core->traffic().snapshot (std::nullopt, rig.clock.monotonic()), nullptr);
-            (void) json;
             ASSERT_TRUE (row.lastList.has_value());
             EXPECT_EQ (row.lastType, "list");
             EXPECT_EQ (row.lastList->size(), 3u);
@@ -1319,6 +1317,18 @@ TEST (CoreApi, AnEngineThatCameBackIsNotOpenUntilTheRecallOpensIt)
     rig.core->publishView();
     EXPECT_TRUE (static_cast<bool> (property (parsedRig (rig), "engine")["open"]));
     rig.engineHello ("boot-1");   // the repeated hello changes nothing
+    rig.core->publishView();
+    EXPECT_TRUE (static_cast<bool> (property (parsedRig (rig), "engine")["open"]));
+
+    // A different boot id is a new engine: closed until the recall after the replay opens it. The rig
+    // feeds Core's own sends back at once, so the new hello is split to look between the two steps.
+    const auto hello = encodeMessage ({ "/engine/hello", { pyStr ("boot-2") } });
+    rig.core->handlePacket (rig.engine, hello.data(), hello.size());   // replay queued, recall not yet handled
+    rig.core->publishView();
+    const auto engine = property (parsedRig (rig), "engine");
+    EXPECT_EQ (engine["boot_id"].toString(), "boot-2");
+    EXPECT_FALSE (static_cast<bool> (engine["open"]));
+    rig.osc (rig.engine, "/nothing");   // feeds the queued replay and the recall back
     rig.core->publishView();
     EXPECT_TRUE (static_cast<bool> (property (parsedRig (rig), "engine")["open"]));
 }
