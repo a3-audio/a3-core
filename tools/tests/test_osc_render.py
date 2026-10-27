@@ -144,13 +144,11 @@ class TheAnalyzerTargetsAreRendered(unittest.TestCase):
             with self.subTest(route=route["to"], vu=vu):
                 self.assertEqual(targets[prefix + program], f"{host}:{port}")
 
-    def test_the_mixer_gets_its_meters(self):
-        """Once one OSC_VU_ target exists the analyzer sends /vu to those
-        only -- a program on one port for both needs its OSC_VU_ line too, or
-        its meters stop (the mixer, whose meters sit on its OSC port)."""
+    def test_the_analyzer_gets_no_meter_target(self):
+        """O13: the engine measures the meters and Core sends them on, so the
+        analyzer's conf.d carries clock targets only (no OSC_VU_ line)."""
         targets = pairs(a3_osc_render.analyzer_block(TRUTH))
-        host, port = TRUTH.endpoint("mixer", "osc")
-        self.assertEqual(targets["OSC_VU_mixer"], f"{host}:{port}")
+        self.assertEqual([k for k in targets if k.startswith("OSC_VU_")], [])
 
     def test_nothing_else_is_a_target(self):
         targets = pairs(a3_osc_render.analyzer_block(TRUTH))
