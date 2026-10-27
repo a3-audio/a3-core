@@ -1,4 +1,4 @@
 #!/bin/sh
-# The bench keeps no state and starts no service: nothing to do.
+# Nothing to do: the user's config under .config/a3/engine is the user's, not the package's.
 set -e
 exit 0

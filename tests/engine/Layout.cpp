@@ -217,6 +217,33 @@ TEST (SpatialConfig, AMissingFileIsRefusedByName)
     EXPECT_TRUE (error.contains ("rec.parameters.json")) << error;
 }
 
+TEST (SpatialConfig, RefusesMissingFxParameters)
+{
+    ScratchDirectory scratch;
+    ASSERT_TRUE (scratch.root().getChildFile ("fx.parameters.json").deleteFile());
+    juce::String error;
+    EXPECT_FALSE (a3::loadSpatialConfig (scratch.root(), error).has_value());
+    EXPECT_TRUE (error.contains ("fx.parameters.json")) << error;
+}
+
+TEST (SpatialConfig, RefusesMissingPhonesParameters)
+{
+    ScratchDirectory scratch;
+    ASSERT_TRUE (scratch.root().getChildFile ("phones.parameters.json").deleteFile());
+    juce::String error;
+    EXPECT_FALSE (a3::loadSpatialConfig (scratch.root(), error).has_value());
+    EXPECT_TRUE (error.contains ("phones.parameters.json")) << error;
+}
+
+TEST (SpatialConfig, FxAndPhonesCarryTheOrderExplicitly)
+{
+    juce::String error;
+    const auto config = a3::loadSpatialConfig (shippedDirectory, error);
+    ASSERT_TRUE (config.has_value()) << error;
+    EXPECT_EQ ((float) (double) config->fxParameters.getProperty ("orderSetting", {}), a3::iemOrderThree);
+    EXPECT_EQ ((float) (double) config->phonesParameters.getProperty ("inputOrderSetting", {}), a3::iemOrderThree);
+}
+
 TEST (SpatialConfig, AnUnknownStageKindIsRefused)
 {
     ScratchDirectory scratch;

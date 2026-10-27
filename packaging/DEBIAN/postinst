@@ -1,4 +1,15 @@
 #!/bin/sh
-# The bench keeps no state and starts no service: nothing to do.
+# Enables a3-engine's user unit for every user, and nothing else: no write into any
+# home, no restart. A running engine keeps its old binary until its next start.
 set -e
+
+if [ "$1" = "configure" ] && command -v systemctl >/dev/null 2>&1; then
+	systemctl --global enable a3-engine.service || true
+	# Every running user manager learns of the new unit file. Only a reload: reaching
+	# a user manager needs its user's name, which loginctl gives here.
+	for user in $(loginctl list-users --no-legend 2>/dev/null | awk '{print $2}'); do
+		systemctl --user --machine="$user@" daemon-reload 2>/dev/null || true
+	done
+fi
+
 exit 0

@@ -36,7 +36,8 @@ struct ZoneConfig
 };
 
 // Plain JSON files in one directory, so a tool without the engine can read them too:
-//   encoder.parameters.json, rec.parameters.json    {id: value}
+//   encoder.parameters.json, rec.parameters.json,
+//   fx.parameters.json, phones.parameters.json      {id: value}
 //   <zone>.decoder.json                             IEM decoder configuration, verbatim
 //   <zone>.parameters.json                          SimpleDecoder {id: value}
 //   encoder.inputs.json                             {"sources":[[{strip 1..4, tap moving|steady, side L|R, gain}, ...] x 8]}
@@ -44,9 +45,18 @@ struct ZoneConfig
 struct SpatialConfig
 {
     juce::var encoderParameters, recParameters;
+    juce::var fxParameters;       // DualDelay {id: value}, order set explicitly
+    juce::var phonesParameters;   // the phones BinauralDecoder {id: value}, order set explicitly
     ZoneConfig main, booth;
     std::array<std::vector<EncoderInput>, numEncoderSources> sources;   // encoder input i = sum of its entries
 };
+
+// The four fixed bed sources (the template's encoder inputs 5..8): their place and
+// gain from encoder.parameters, their side from encoder.inputs.
+constexpr int numBedSources = 4;
+constexpr int firstBedSourceInFile = 4;
+struct BedSource { float azimuth, elevation, gainDb; int side; };   // side 0 = L, 1 = R
+std::array<BedSource, numBedSources> bedFrom (const SpatialConfig&);
 
 // The files keep the template's values; here the Ambisonic order is set to 3
 // explicitly (encoder orderSetting, decoder and rec inputOrderSetting), never "auto".

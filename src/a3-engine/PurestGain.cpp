@@ -8,6 +8,11 @@
 
 namespace a3
 {
+double PurestGain::gainForA (double a)
+{
+    return std::pow (10.0, (a * 80.0 - 40.0) / 20.0);
+}
+
 void PurestGain::prepare (double)
 {
     started = false;
@@ -25,7 +30,7 @@ void PurestGain::setParameters (float a, float slowFade)
 void PurestGain::latchControlBlock()
 {
     const double targetDb = double (pendingA) * 80.0 - 40.0;
-    target = std::pow (10.0, targetDb / 20.0);
+    target = gainForA (double (pendingA));
     latchedB = pendingB;
     if (! started)
     {
@@ -41,11 +46,11 @@ void PurestGain::latchControlBlock()
     speed = std::min (speed, 2500.0);
 }
 
-void PurestGain::process (float* const* io, int numSamples)
+void PurestGain::process (float* const* io, int numSamples, int numChannels)
 {
     grid.advance (numSamples,
                   [this] { latchControlBlock(); },
-                  [this, io] (int begin, int count)
+                  [this, io, numChannels] (int begin, int count)
                   {
                       for (int i = begin; i < begin + count; ++i)
                       {
@@ -53,8 +58,8 @@ void PurestGain::process (float* const* io, int numSamples)
                           gain = (gain * speed + target) / (speed + 1.0);
                           gainB = (gainB * 4000.0 + latchedB) / 4001.0;
                           const double g = gain * gainB;
-                          io[0][i] = float (io[0][i] * g);
-                          io[1][i] = float (io[1][i] * g);
+                          for (int ch = 0; ch < numChannels; ++ch)
+                              io[ch][i] = float (io[ch][i] * g);
                       }
                   });
 }

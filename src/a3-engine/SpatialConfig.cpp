@@ -17,10 +17,14 @@ public:
         SpatialConfig config;
         auto encoder = readParameters ("encoder.parameters.json");
         auto rec = readParameters ("rec.parameters.json");
-        if (! encoder || ! rec)
+        auto fx = readParameters ("fx.parameters.json");
+        auto phones = readParameters ("phones.parameters.json");
+        if (! encoder || ! rec || ! fx || ! phones)
             return std::nullopt;
         config.encoderParameters = withOrder (*encoder, "orderSetting");
         config.recParameters = withOrder (*rec, "inputOrderSetting");
+        config.fxParameters = withOrder (*fx, "orderSetting");
+        config.phonesParameters = withOrder (*phones, "inputOrderSetting");
 
         auto main = readZone ("main");
         auto booth = readZone ("booth");
@@ -204,5 +208,21 @@ private:
 std::optional<SpatialConfig> loadSpatialConfig (const juce::File& directory, juce::String& error)
 {
     return SpatialConfigReader (directory, error).read();
+}
+
+std::array<BedSource, numBedSources> bedFrom (const SpatialConfig& config)
+{
+    const auto parameter = [&] (const char* name, int source)
+    { return (float) config.encoderParameters.getProperty (juce::Identifier (name + juce::String (source)), 0.0f); };
+
+    std::array<BedSource, numBedSources> bed {};
+    for (int k = 0; k < numBedSources; ++k)
+    {
+        const int source = firstBedSourceInFile + k;
+        const auto& inputs = config.sources[(size_t) source];
+        bed[(size_t) k] = { parameter ("azimuth", source), parameter ("elevation", source), parameter ("gain", source),
+                            inputs.empty() ? 0 : inputs.front().side };
+    }
+    return bed;
 }
 }

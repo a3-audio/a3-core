@@ -46,6 +46,114 @@ carries the MIT, CC BY 3.0 and Apache-2.0 texts (the GPL texts are Debian's
 libjack, freetype and fontconfig. IEM's editors are compiled in but never opened, so the X11
 libraries JUCE would `dlopen` for a window are not needed.
 
+## Plan 4a: the graph
+
+`a3::Engine` (`src/a3-engine/Engine.h`) is the whole A³ signal path in one object, tested offline in
+`tests/engine/Engine*.cpp`; nothing hosts it yet (the app is Plan 4c). For N channels and D deck slots
+(`EngineConfig`, any N ≥ 1):
+
+- **Channels.** Each channel selects its source: its analog pair (the stereo strip of Plan 2 plus the
+  DJ filter, into its own moving encoder source and the shared bed) or deck slot k (StemDeck's 16
+  B-format channels through the 16-channel deck strip: TRIM, EQ, filter, VOLUME). Analog ↔ deck
+  crossfades over 10 ms, deck ↔ deck dips out and in. A path at gain 0 is not processed and is reset
+  before it fades in (R14), the analog strip included. A channel without an analog pair is deck-only
+  and has no encoder source (R10). Positions, 3D, FREQ and Q do nothing on a deck channel.
+- **Buses.** `enc_main`, `enc_fx` (AUX, into IEM's DualDelay) and `enc_phones` (cue pre-VOLUME, mix
+  post-VOLUME), order 3. A deck's 16 post-VOLUME channels are added to the buses directly, AUX included
+  (R11); its stereo `aux_L/R` is a return source only. The return is the analog return pair or deck k's
+  aux pair (R12: decks are 1…D on the wire).
+- **Stem cue.** Every deck slot's `cue_L/R` is added after the phones decoder, weighted by the CUE↔MIX
+  knob only, whether the deck is on a channel or not (R13).
+- **Outputs.** main and booth: SimpleDecoder → MASTER/BOOTH → trim and gate; rec: BinauralDecoder ×
+  `trims.rec`, never gated; phones: BinauralDecoder + stem cue → PHONES → trim and gate. The
+  `fixedGainDb` stages of `data/spatial/*.zone.json` are not applied: they are the MASTER/BOOTH knobs
+  (R1). Every gain control at 0 is exact silence, every send at 0 too (R2, R18).
+- **Gate.** A fresh or re-prepared `Engine` has main, booth and phones closed (exactly 0). `gateOpen`
+  ramps each to its trim over 1 s, linear in gain; closing reaches 0 within 10 ms. A zone without a
+  trim in the config stays closed. `gateLevels()` / `startGateAt()` hand the level over to a rebuilt
+  engine.
+- **Meters.** `outputMeters()` gives peak and RMS (beat-analyzer's ballistics) per output port, in port
+  order: main, booth, rec L/R, phones L/R, then per channel pre L/R and post L/R (a deck channel's
+  W on both sides).
+
+**Timing guard.** `EngineTiming.FullGraphUnderOneMillisecondPer128` fails when the best of five
+repetition means exceeds 1.0 ms per 128-frame block on the build machine (a3coreV01, i5-4440). It
+measures the worst case: all four channels on decks, two stem cues, every send open. Background
+load only adds time, so it cannot fail the guard, but a real regression still does. 2026-10-26:
+0.84 ms (decks), 0.80 ms (analog). The two BinauralDecoders are about half of it.
+`ReportsCostPerChannelAtThirtyTwo` prints the cost of one more channel (about 43 µs analog, 44 µs
+deck). The rig's own run decides.
+
+**Known upstream allocations.** IEM's SimpleDecoder copies a `juce::Array` on every call (one small
+malloc and free per zone per block), and DualDelay resizes scratch buffers when the block size
+changes. Both are upstream and unedited; `EngineAllocation` checks that the engine adds nothing to them.
+IEM's DualDelay also sounds slightly different at different block sizes, so the echoes follow the JACK
+quantum, as they do in REAPER.
+
+## Plan 4c: the app
+
+`a3-engine` (CMake option `A3_ENGINE_APP`, default ON, needs libjack) hosts the engine: it reads
+the truth (`/usr/share/a3/a3-osc.json`), `engine.json` and the spatial data, runs the signal path
+on JACK (the rig) or on a JUCE audio device (anywhere else), listens for Core on `engine.osc`,
+says hello on `core.osc` and shows a window.
+
+    a3-engine [--config FILE] [--spatial DIR] [--truth FILE] [--no-connect] [--no-window]
+              [--service] [--timing] [--check-config]
+
+- `--config`: else `~/.config/a3/engine/engine.json`, else `/usr/share/a3-engine/engine.json`.
+  Save writes to the file the app started with. A saved file is checked the way a start checks it
+  and is refused, leaving the old file in place, if the start would refuse it.
+- `--no-connect`: the engine makes no JACK link (a run beside REAPER). `--no-window`: no window
+  (a unit without a screen). `--service`: closing the window only hides it.
+- `--check-config`: prints `ok` or `<file>: <reason>`, exit 0 or 1, opens nothing.
+
+The window has one page per job and a Save bar under them:
+
+| Page | What it edits |
+|---|---|
+| AUDIO | JACK: rate and quantum, read-only (the server owns them). Device: type, input, output, rate, block size. A choice only edits the config; it opens no device. |
+| CHANNELS | N (1..128) with the DSP load beside it |
+| ZONES | which spatial directory: the installed `spatial` and `spatial-reaper-booth-6.1`, and `~/.config/a3/engine/spatial`. No layout editor |
+| I/O | per engine port its JACK peers (editable) and the live ones the map does not name (foreign: shown, never edited), or its device channel; the direct links the engine makes between two foreign ports |
+| CALIBRATION | trim per zone, -90..+6 dB; a slider only proposes, a dialog names the old and the new value, a zone without a trim stays closed |
+| FILTER | SVF or Ladder, live: acts at once, needs no Save |
+| STATUS | what runs: mode, Core's last word, gate, load, xruns, missing peers, meters |
+
+Edits are pending until Save ("not saved" shows while the edit differs from what runs; STATUS
+keeps describing what runs). **Save** writes the file atomically, then applies it: the whole
+session is re-created (new engine, new boot id; Core replays its state through the hello). That
+holds for every change (N, layout, backend, trims, I/O map) and also works while the backend is
+stopped. If the new session does not open, the previous setting is opened again and the error
+is shown.
+
+## Plan 4d: the package and the unit
+
+The Debian package is now `a3-engine` (it `Replaces`/`Conflicts`/`Provides` `a3-engine-bench`). It
+ships `/usr/bin/a3-engine` (the app), `/usr/bin/a3-engine-bench` (kept as a tool), both spatial
+directories, `/usr/share/a3-engine/engine.json` (the default config) and the user unit
+`/usr/lib/systemd/user/a3-engine.service`. The postinst enables the unit for every user and reloads
+the running user managers; nothing is written under a home and nothing is restarted.
+
+**The unit.** `PartOf=a3-main.service`, `ExecCondition` is a3-core's `a3-engine-runs`: the engine
+runs when it is installed and `a3-engine --check-config` passes, otherwise the unit is skipped and
+REAPER runs as before. REAPER's drop-in asks the same helper (`a3-engine-runs --reaper`), so the two
+conditions keep exactly one of them on the PA. `Restart=on-failure` with a start limit of
+5 in 60 s: a failure `--check-config` cannot see (JACK absent, a port taken) restarts a few times and
+then stops visibly; there is no automatic fallback to REAPER (it is frozen). The unit's
+`LD_PRELOAD` (the JACK realtime-priority library) also reaches the condition command; it is harmless
+there.
+
+**The default config** (`data/engine.json`): four channels on analog pairs 1-4, return pair 6, two
+decks, trims main/booth -30.88 dB (REAPER's output faders), phones 0, rec 0, SVF filter, Step 0's delay
+modulation, the JACK backend, and the rig's connections: what `a3-patchbay.xml` connected for REAPER,
+moved to the engine's ports (analog capture, Scarlett playback, the beat-analyzer's meters, StemDeck's
+rec input), the analyzer's raw analog and aux meters as direct links, and every deck port to
+`StemDeck-A`/`StemDeck-B` (`bformat_k`, `cue_L/R`, `aux_L/R`; they exist once StemDeck's S4 is
+installed, until then they are reported as missing, not an error). Left out on purpose: REAPER's inputs
+13-24 (StemDeck's stems and AES67's cue have no engine counterpart) and the AES67 sender, whose client
+name carries the machine's host name. The engine reads the file from `~/.config/a3/engine/engine.json`
+first; the package never writes there.
+
 ## Build and test
 
 Prerequisites: CMake 3.16 or newer, a C++17 compiler, JUCE 9.0.3 installed as a CMake package
@@ -60,8 +168,10 @@ is small).
 
 - `tests/engine/data/curves-golden.json` is a copy from a3-core (commit 50e7997).
 - `tests/engine/data/a3-osc.json` is a copy of the OSC truth from a3-core's branch
-  `feat/engine-osc-endpoint` (commit 4014d27: the `engine.osc` listener, port 9004). That branch moves
-  to a3-core's `main` on merge; this reference then changes with it.
+  `feat/plan-4b-engine-mode` (commit 63cdcbe: the engine's words `channel.source`, `aux-return.source`,
+  `aux-return.cue`, `delay.bpm`, `engine.open`, `engine.hello`, and what `engine.osc` carries). The
+  app's tests read the words the engine understands from `engine.osc`'s `carries` in this copy. That
+  branch moves to a3-core's `main` on merge; this reference then changes with it.
 - `a3-engine-bench` never connects anything. It reads the truth at runtime from `--truth FILE`
   (default `/usr/share/a3/a3-osc.json`).
 
@@ -77,7 +187,7 @@ is small).
 - **Roboto** fonts (Google, Apache-2.0), embedded with IEM's editors, never shown.
 - **JUCE** 9.0.3, AGPLv3, as before.
 
-The package copyright (`/usr/share/doc/a3-engine-bench/copyright`) carries the CC BY 3.0 and Apache-2.0
+The package copyright (`/usr/share/doc/a3-engine/copyright`) carries the CC BY 3.0 and Apache-2.0
 licence texts and the attribution above.
 
 ## Plan 1, parked 2026-10-06

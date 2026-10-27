@@ -332,3 +332,17 @@ TEST_F (IemNull, BinauralDecoderMatchesTheVst3)
     layout.outputBuses.add (juce::AudioChannelSet::stereo());
     compareToVst3 ("BinauralDecoder", "BinauralDecoder", *node, layout, busChannels, 2, { "left", "right" });
 }
+
+TEST_F (IemNull, DualDelayMatchesTheVst3)
+{
+    const juce::File data (A3_SPATIAL_DATA);
+    auto node = a3::IemNode::create (a3::IemKind::dualDelay, busChannels, busChannels);
+    ASSERT_TRUE (node != nullptr);
+    // The data keeps the plug-in's own LFO at 0; the pitch modulation is the host's, not part of the null.
+    ASSERT_TRUE (node->setParameters (withOrder (readJson (data.getChildFile ("fx.parameters.json")),
+                                                 "orderSetting")).wasOk());
+    juce::AudioProcessor::BusesLayout layout;
+    layout.inputBuses.add (juce::AudioChannelSet::ambisonic (3));
+    layout.outputBuses.add (juce::AudioChannelSet::ambisonic (3));
+    compareToVst3 ("DualDelay", "DualDelay", *node, layout, busChannels, busChannels, numbered (busChannels));
+}

@@ -14,6 +14,7 @@ IemNode::Parts createParts (IemKind kind, int numInputs, int numOutputs)
         case IemKind::multiEncoder:    return iem::createMultiEncoder (numInputs, numOutputs);
         case IemKind::simpleDecoder:   return iem::createSimpleDecoder (numInputs, numOutputs);
         case IemKind::binauralDecoder: return iem::createBinauralDecoder (numInputs, numOutputs);
+        case IemKind::dualDelay:       return iem::createDualDelay (numInputs, numOutputs);
     }
     return {};
 }

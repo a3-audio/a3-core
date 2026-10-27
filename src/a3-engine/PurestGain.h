@@ -23,9 +23,12 @@ public:
     // always counts as "a new value arrived" (speed 700); kept for sample-exact match.
     static constexpr double unsetDb = -90.0;
 
+    // The linear gain A selects (dB = A*80-40); the one place this law lives.
+    static double gainForA (double a);
+
     void prepare (double sampleRate);
     void setParameters (float a, float slowFade);   // A: 0..1 (dB = A*80-40), B: 0..1
-    void process (float* const* io, int numSamples); // stereo, in place, any n >= 0
+    void process (float* const* io, int numSamples, int numChannels = 2); // in place (one gain for all channels), any n >= 0
 
 private:
     void latchControlBlock();

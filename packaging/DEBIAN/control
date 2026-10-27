@@ -1,4 +1,4 @@
-Package: a3-engine-bench
+Package: a3-engine
 Version: 0
 Architecture: amd64
 Maintainer: Rafjagger
@@ -6,8 +6,16 @@ Section: sound
 Priority: optional
 Depends: ${shlibs:Depends}
 Recommends: a3-core, pipewire-jack
-Description: A3 engine bench: four channel strips, IEM encoder and decoders (rec, main, booth) on JACK
- A headless JACK host for the four A3 channel strips. It reads the OSC
- address truth from /usr/share/a3/a3-osc.json (installed by a3-core, or
- pass --truth FILE) and is meant for parity and load runs next to REAPER. The speaker layouts and
- IEM data ship in /usr/share/a3-engine/spatial (override with --spatial DIR).
+Replaces: a3-engine-bench
+Conflicts: a3-engine-bench
+Provides: a3-engine-bench
+Description: A3 audio engine: channel strips, IEM encoders and decoders, JACK or ALSA device I/O
+ The A3 audio engine as a program with a window (a3-engine) and as the systemd
+ user unit a3-engine.service. It runs when it is installed and its config passes
+ a3-engine --check-config; otherwise REAPER runs as before. It reads the OSC
+ address truth from /usr/share/a3/a3-osc.json (installed by a3-core), its
+ config from ~/.config/a3/engine/engine.json or /usr/share/a3-engine/engine.json,
+ and the speaker layouts and IEM data from /usr/share/a3-engine/spatial.
+ .
+ a3-engine-bench, the headless JACK host for parity and load runs, is shipped
+ as a tool.

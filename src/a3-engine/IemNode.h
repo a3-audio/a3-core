@@ -8,7 +8,7 @@
 
 namespace a3
 {
-enum class IemKind { multiEncoder, simpleDecoder, binauralDecoder };
+enum class IemKind { multiEncoder, simpleDecoder, binauralDecoder, dualDelay };
 
 // One IEM plug-in, compiled unchanged from third_party/IEMPluginSuite, hosted
 // directly: no plug-in format, no host negotiation, IEM's OSC receiver closed.
@@ -16,7 +16,8 @@ class IemNode
 {
 public:
     // Builds the processor and sets its bus layout explicitly (no host negotiation):
-    // multiEncoder: numInputs discrete in, ambisonic order-3 out (16); decoders: 16 in, numOutputs out.
+    // multiEncoder: numInputs discrete in, ambisonic order-3 out (16); decoders: 16 in, numOutputs out;
+    // dualDelay: 16 in, 16 out (order 3 both ways).
     // Returns nullptr when the processor refuses that layout.
     static std::unique_ptr<IemNode> create (IemKind, int numInputs, int numOutputs);
     virtual ~IemNode();
