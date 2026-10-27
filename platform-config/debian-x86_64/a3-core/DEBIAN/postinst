@@ -470,7 +470,7 @@ ask_configure_network() {
 # package's defaults, never overwritten -- it is his to edit (spec
 # truth-from-core).
 create_network_file() {
-  sudo -u "$APPUSER" -H "${USER_HOME}/.local/bin/a3-osc-render" network-file \
+  sudo -u "$APPUSER" -H /usr/bin/a3-core --render-truth network-file \
     || echo "a3-core: could not create ~/.config/a3/network.json" >&2
 }
 
@@ -478,7 +478,7 @@ create_network_file() {
 # truth joined with the user's ~/.config/a3/network.json (not root's: this
 # runs as root).
 render_default_network() {
-  A3_NETWORK="${USER_HOME}/.config/a3/network.json" "${USER_HOME}/.local/bin/a3-osc-render" network
+  A3_NETWORK="${USER_HOME}/.config/a3/network.json" /usr/bin/a3-core --render-truth network
 }
 
 # Enable systemd-networkd but do NOT start it: the files take effect at boot.
@@ -559,11 +559,9 @@ apply_headless_choice "$RET" \
   "${USER_HOME}/.local/share/a3-core/x11/10-headless.conf" \
   /etc/X11/xorg.conf.d/10-headless.conf
 
-# Continue with original postinst tasks (venv, pip, chown, enable services, etc.)
+# Continue with original postinst tasks (chown, enable services, etc.)
 # --- existing operations start ---
 # (preserve previous behavior; adjust below if your original postinst differs)
-python3 -m venv "${USER_HOME}/.venv" || true
-"${USER_HOME}/.venv/bin/pip" install -r "${USER_HOME}/.local/share/a3-core/recipes/requirements.txt" || true
 
 mkdir -p /home/aaa/.config
 SHIPPED_CONFIG="${USER_HOME}/.local/share/a3-core/config"
@@ -631,8 +629,8 @@ chown -R "${APPUSER}:${APPUSER}" "${USER_HOME}/.config" || true
 
 # x11vnc's port and the beat-analyzer's targets, from a3-osc.json. A failure
 # is said out loud: they would start without their addresses.
-sudo -u "$APPUSER" -H "${USER_HOME}/.local/bin/a3-osc-render" user \
-  || echo "a3-core: a3-osc-render user failed -- x11vnc and the analyzer lack their addresses" >&2
+sudo -u "$APPUSER" -H /usr/bin/a3-core --render-truth user \
+  || echo "a3-core: a3-core --render-truth user failed -- x11vnc and the analyzer lack their addresses" >&2
 
 find "$USER_HOME/.config" -type d -exec chmod 0755 {} \;
 find "$USER_HOME/.config" -type f -exec chmod 0664 {} \;

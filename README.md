@@ -12,7 +12,7 @@ source.
 - [Configuration](https://a3-audio.github.io/a3-doc/configuration/core.html):
   installing, what the package does, the services, the files
 - [Development](https://a3-audio.github.io/a3-doc/development/core.html):
-  `a3-core.py`, the window, the OSC register
+  the Core, the window, the OSC register
 
 ## Install
 
@@ -38,12 +38,13 @@ hand:
 cd platform-config/debian-x86_64 && dpkg-deb --build --root-owner-group a3-core
 ```
 
-Tests run on a Python with the packages from
-`platform-config/debian-x86_64/a3-core/home/aaa/.local/share/a3-core/recipes/requirements.txt`
-(on a Core: `~/.venv/bin/python3`):
+The Core itself is the `a3-core` program (`/usr/bin/a3-core`), shipped by the
+`a3-engine` package; this package depends on it and runs no Python. The tests
+and the dev tools are Python on the development machine; they need only the
+standard library, and read the truth through `tools/lib/a3_osc.py`:
 
 ```sh
-~/.venv/bin/python3 -m unittest discover -s tools/tests
+python3 -m unittest discover -s tools/tests
 ```
 
 The OSC register test needs the other A³ repositories checked out beside this

@@ -99,7 +99,7 @@ def as_text(register):
 
 def main(argv):
     root = Path(__file__).resolve().parents[1]
-    sys.path.insert(0, str(root / f"{PACKAGE}/home/aaa/.local/lib"))
+    sys.path.insert(0, str(root / "tools/lib"))
     import a3_osc
 
     register = build(a3_osc.load(root / TRUTH))

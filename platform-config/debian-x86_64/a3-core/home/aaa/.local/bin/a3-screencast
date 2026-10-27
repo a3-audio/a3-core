@@ -1,23 +1,20 @@
 #!/usr/bin/env bash
 # The picture of this machine's screen as an MPEG-TS stream that OBS and the
 # pro-DJ app connect to: several viewers, one encode. ffmpeg writes to stdout
-# and a3_screencast_fanout.py copies it to every viewer; ffmpeg starts with the
+# and the a3-core program's fan-out copies it to every viewer; ffmpeg starts with the
 # first viewer and stops 10 s after the last. No sound: OBS takes it from AES67.
 #
 # Settings (~/.config/a3/screencast.env, optional, read by the unit):
 #   A3_SCREENCAST_CPUS  cores for the encoder, default 0 (the audio units have 1-3)
 #   A3_SCREENCAST_FPS   default 30
 #   A3_SCREENCAST_CRF   quality, lower is better, default 23
-#   A3_SCREENCAST_FANOUT  path of the fan-out script, default ~/.local/lib/a3_screencast_fanout.py
 # The port is A3_SCREENCAST_PORT from osc.env, rendered from a3-osc.json.
 set -euo pipefail
 
-: "${A3_SCREENCAST_PORT:?not set -- run a3-osc-render}"
+: "${A3_SCREENCAST_PORT:?not set -- run a3-core --render-truth user}"
 CPUS="${A3_SCREENCAST_CPUS:-0}"
 FPS="${A3_SCREENCAST_FPS:-30}"
 CRF="${A3_SCREENCAST_CRF:-23}"
-# Overridable so a package that installs the fan-out elsewhere can reuse this script.
-FANOUT="${A3_SCREENCAST_FANOUT:-$HOME/.local/lib/a3_screencast_fanout.py}"
 export DISPLAY="${DISPLAY:-:0}"
 
 SIZE="$(xdpyinfo | awk '/dimensions:/ { print $2 }')"
@@ -30,7 +27,7 @@ SIZE="$(xdpyinfo | awk '/dimensions:/ { print $2 }')"
 # Latency: a short grab queue (a late grab is a fresh frame, not a queued one),
 # no muxer delay (the default held PCR 0.73 s behind the picture), every packet
 # written at once.
-exec nice -n 19 taskset -c "$CPUS" python3 -I "$FANOUT" --port "$A3_SCREENCAST_PORT" -- \
+exec nice -n 19 taskset -c "$CPUS" /usr/bin/a3-core --role screencast-fanout --port "$A3_SCREENCAST_PORT" -- \
     ffmpeg -hide_banner -loglevel warning -nostdin \
     -fflags nobuffer -thread_queue_size 4 \
     -f x11grab -framerate "$FPS" -video_size "$SIZE" -draw_mouse 0 -i "$DISPLAY" \

@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
-sys.path.insert(0, str(ROOT / "platform-config/debian-x86_64/a3-core/home/aaa/.local/lib"))
+sys.path.insert(0, str(ROOT / "tools/lib"))
 
 import a3_osc          # noqa: E402
 import second_truth    # noqa: E402

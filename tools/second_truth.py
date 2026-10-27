@@ -55,8 +55,8 @@ def _is_second_truth(value):
 #: path (relative to its repo, with the repo's name first) -> why it may.
 ALLOWED = {
     # The readers of the truth: their job is to know its shape.
-    "a3-core/platform-config/debian-x86_64/a3-core/home/aaa/.local/lib/a3_osc.py":
-        "the truth's reader in Python",
+    "a3-core/tools/lib/a3_osc.py":
+        "the truth's reader in Python (dev server: tests, render, this guard)",
     "a3-motion-ui/src/a3-motion-engine/OscTruth.cc":
         "the truth's reader in Motion",
     "a3-mixer/software/scripts/a3_mixer_osc.py":
@@ -73,8 +73,6 @@ ALLOWED = {
 
 #: (path, literal) -> why this one literal may stand where it stands.
 ALLOWED_LITERALS = {
-    ("a3-core/platform-config/debian-x86_64/a3-core/home/aaa/.local/lib/a3_core_traffic.py", 50000):
-        "a count of unknown addresses, not a port",
     ("a3-mixer/software/scripts/a3_mixer_truth.py", 7790):
         "the port every device knows before it has a truth (spec truth-from-core)",
     ("a3-mixer/software/scripts/a3_mixer_truth.py", "/core/here"):
@@ -191,7 +189,7 @@ def truth_ports(truth):
 
 def main(argv):
     root = Path(__file__).resolve().parents[1]
-    sys.path.insert(0, str(root / "platform-config/debian-x86_64/a3-core/home/aaa/.local/lib"))
+    sys.path.insert(0, str(root / "tools/lib"))
     import a3_osc
     truth = a3_osc.load(root / "platform-config/debian-x86_64/a3-core/usr/share/a3/a3-osc.json")
     repos = dict(arg.split("=", 1) for arg in argv) if argv else \

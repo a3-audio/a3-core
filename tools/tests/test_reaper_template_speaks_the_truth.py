@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core"
-sys.path.insert(0, str(PACKAGE / "home/aaa/.local/lib"))
+sys.path.insert(0, str(ROOT / "tools/lib"))
 
 import a3_osc  # noqa: E402
 

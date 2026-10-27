@@ -15,13 +15,10 @@
 
 # © Copyright 2021 Raphael Eismann, Patric Schmitz
 
-# The Core's address and VNC's port come from a3-osc.json (a3-core#63).
-lib="$(dirname "${BASH_SOURCE[0]}")/../../../lib"
-read -r host port < <(A3_LIB="$lib" python3 -c '
-import os, sys
-sys.path.insert(0, os.environ["A3_LIB"])
-import a3_osc
-truth = a3_osc.load()
-print(truth.host("core"), truth.port("x11vnc", "vnc"))
-')
+# The Core's address and VNC's port come from a3-osc.json (a3-core#63), asked
+# of the a3-core program one value at a time. A3_CORE points at another
+# program (tests).
+core="${A3_CORE:-/usr/bin/a3-core}"
+host="$("$core" --truth host core)" || exit 1
+port="$("$core" --truth port x11vnc vnc)" || exit 1
 vncviewer QualityLevel 2 "${host}::${port}"

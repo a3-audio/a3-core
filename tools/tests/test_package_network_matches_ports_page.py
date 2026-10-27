@@ -21,7 +21,7 @@ PACKAGE = Path(__file__).resolve().parents[2] / "platform-config" / "debian-x86_
 POSTINST = PACKAGE / "DEBIAN" / "postinst"
 TEMPLATES = PACKAGE / "DEBIAN" / "templates"
 TRUTH = PACKAGE / "usr" / "share" / "a3" / "a3-osc.json"
-sys.path.insert(0, str(PACKAGE / "home" / "aaa" / ".local" / "lib"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import a3_osc          # noqa: E402
 import a3_osc_render   # noqa: E402
 VNC = PACKAGE / "home" / "aaa" / ".local" / "share" / "a3-core" / "recipes" / "a3vnc.sh"

@@ -51,10 +51,11 @@ PROVIDED_BY = {
     "/usr/bin/pkill": BASE_SYSTEM,
     "/usr/bin/jack_wait": "jack-example-tools",
     "/usr/bin/qjackctl": "qjackctl",
-    "/usr/bin/python3": "python3",
+    "/usr/bin/a3-core": "a3-engine",
 }
 
-_EXEC_LINE = re.compile(r"^Exec\w*=[-@:+!]*(\S+)", re.MULTILINE)
+_EXEC_LINE = re.compile(r"^(Exec\w*)=(.*)$")
+_PROGRAM = re.compile(r"^[-@:+!]*(\S+)")
 
 
 def depends():
@@ -93,11 +94,38 @@ def started_units():
     return seen
 
 
+def drop_ins(unit):
+    """The unit's drop-ins in the order systemd applies them."""
+    directory = unit.with_name(unit.name + ".d")
+    return sorted(directory.glob("*.conf")) if directory.is_dir() else []
+
+
+def exec_lines(unit):
+    """{"ExecStart": [command, ...], ...} as systemd runs the unit: its own
+    lines, then each drop-in's, an empty value resetting that key. A unit
+    switched by a drop-in (a3-core.service runs the program since the cut)
+    is counted by what it runs, not by the line the drop-in replaced."""
+    lines = {}
+    for path in (unit, *drop_ins(unit)):
+        for line in path.read_text().splitlines():
+            match = _EXEC_LINE.match(line)
+            if match is None:
+                continue
+            key, value = match.group(1), match.group(2).strip()
+            if value:
+                lines.setdefault(key, []).append(value)
+            else:
+                lines[key] = []
+    return lines
+
+
 def programs_run_by(unit_names):
     programs = {}
     for name in unit_names:
-        for program in _EXEC_LINE.findall((UNITS / name).read_text()):
-            programs.setdefault(program, set()).add(name)
+        for commands in exec_lines(UNITS / name).values():
+            for command in commands:
+                program = _PROGRAM.match(command).group(1)
+                programs.setdefault(program, set()).add(name)
     return programs
 
 

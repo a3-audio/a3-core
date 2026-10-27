@@ -107,7 +107,7 @@ def default_doc(root):
 
 def main(argv):
     root = Path(__file__).resolve().parents[1]
-    sys.path.insert(0, str(root / "platform-config/debian-x86_64/a3-core/home/aaa/.local/lib"))
+    sys.path.insert(0, str(root / "tools/lib"))
     import a3_osc
     truth = a3_osc.load(root / "platform-config/debian-x86_64/a3-core/usr/share/a3/a3-osc.json")
     doc = Path(argv[0]) if argv else default_doc(root)
