@@ -582,3 +582,68 @@ class TheInstalledTruthIsJoined(unittest.TestCase):
             joined = a3_osc.load(TRUTH)
         self.assertNotEqual(joined.fingerprint(), a3_osc.load(TRUTH).fingerprint())
         self.assertEqual(json.loads(joined.canonical())["hosts"]["mixer"], "10.9.9.9")
+
+
+B1_TRUTH = Path("/home/aaa/a3-system/wt/parity-baseline/a3-core-7a7b2441f74e") / \
+    "platform-config/debian-x86_64/a3-core/usr/share/a3/a3-osc.json"
+
+#: The vu endpoints the analyzer reached at B1 (a3-core 7a7b244): the set Core
+#: reaches now that the engine measures the meters (O13). Written out, not read
+#: from the baseline export, so the test holds where that export is absent.
+B1_ANALYZER_VU = {"motion.vu", "core.vu-relay", "mixer.osc", "radla.vu"}
+
+
+def _carries_vu(route):
+    return route["to"].endswith(".vu") or route.get("carries") == "vu"
+
+
+class TheMetersComeFromTheEngine(unittest.TestCase):
+    """O13 (2026-10-27): the engine measures /vu, Core forwards, the analyzer
+    sends no meter any more."""
+
+    def setUp(self):
+        self.truth = a3_osc.load(TRUTH)
+        self.routes = self.truth.routes()
+
+    def test_engine_control_is_loopback_http_on_its_own_port(self):
+        listener = self.truth.listener("engine", "control")
+        self.assertEqual(listener["host"], "local")
+        self.assertEqual(listener["port"], 9005)
+        self.assertEqual(listener["name"], "engine.control")
+        self.assertIn("not OSC", listener["carries"])
+        self.assertNotEqual(listener["port"], self.truth.port("engine", "osc"))
+
+    def test_the_b1_set_is_what_b1_says(self):
+        if not B1_TRUTH.exists():
+            self.skipTest("no B1 export")
+        b1 = a3_osc.load(B1_TRUTH)
+        reached = {r["to"] for r in b1.routes()
+                   if r["from"] == "beat-analyzer" and _carries_vu(r)}
+        self.assertEqual(reached, B1_ANALYZER_VU)
+
+    def test_core_sends_the_meters_the_analyzer_sent(self):
+        reached = {r["to"] for r in self.routes
+                   if r["from"] == "core" and _carries_vu(r)}
+        self.assertEqual(reached, (B1_ANALYZER_VU - {"core.vu-relay"}) | {"desk.vu"})
+
+    def test_the_engine_sends_its_meters_to_core(self):
+        self.assertIn({"from": "engine", "to": "core.vu-relay", "carries": "vu"},
+                      self.routes)
+
+    def test_the_analyzer_has_no_vu_route(self):
+        self.assertEqual([r for r in self.routes
+                          if r["from"] == "beat-analyzer" and _carries_vu(r)], [])
+        self.assertNotIn("beat-analyzer", self.truth.addresses()["vu"]["from"])
+
+    def test_vu_has_the_engine_and_stemdeck_as_senders(self):
+        self.assertEqual(self.truth.addresses()["vu"]["from"], ["engine", "stemdeck"])
+        self.assertIn("engine", self.truth.addresses()["vu"]["meaning"])
+
+    def test_vu_numbering_is_unchanged(self):
+        entry = self.truth.addresses()["vu"]
+        self.assertEqual((entry["pattern"], entry["args"], entry["n"]),
+                         ("/vu/{n}", "ff", [1, 66]))
+        self.assertEqual(len(self.truth.vu_meters()), 66)
+        if B1_TRUTH.exists():
+            self.assertEqual(self.truth.vu_meters(), a3_osc.load(B1_TRUTH).vu_meters())
+            self.assertEqual(self.truth.meters(), a3_osc.load(B1_TRUTH).meters())
