@@ -1029,3 +1029,26 @@ TEST (Engine, DeckSwitchDipsTheAuxToo)
     EXPECT_LT (*std::min_element (fx.begin() + (long) switchAt, fx.begin() + (long) (switchAt + 1000)), 1e-3f);   // the dip
     EXPECT_LE (maxStep (fx, switchAt - 100), 0.05);
 }
+
+TEST (Engine, RecDecoderNeverGetsTheEq)
+{
+    const size_t frames = oneSecond / 2;
+    const auto run = [&] (const char* model)
+    {
+        auto config = engineConfig (4, 2);
+        config.phonesHeadphoneEq = model;
+        auto rig = std::make_unique<EngineRig> (config, frames);
+        rig->setAnalogPair (1, pinkStereo (frames, 800));
+        for (int acn = 0; acn < cueAcns; ++acn)   // the stem cue is what the phones decoder hears
+            rig->decks[1].cue[(size_t) acn] = noise (frames, 0.2f, 810 + (uint32_t) acn).l;
+        rig->controls.global().phonesMix = 0.0f;
+        rig->controls.global().phonesVolume = 1.0f;
+        rig->run();
+        return rig;
+    };
+    const auto plain = run ("off"), eq = run ("AKG-K141MK2");
+    EXPECT_GT (peak (plain->recOutputs(), afterStartUp), 1e-3);
+    EXPECT_EQ (maxDifference (plain->recOutputs(), eq->recOutputs()), 0.0);   // rec parameters unchanged
+    EXPECT_GT (peak (stereo (plain->phones), afterStartUp), 1e-3);
+    EXPECT_GT (maxDifference (stereo (plain->phones), stereo (eq->phones), afterStartUp), 1e-4);   // phones are filtered
+}

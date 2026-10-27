@@ -111,6 +111,19 @@ std::optional<AppConfig> withTrim (const AppConfig& config, TrimZone zone, float
     return edited;
 }
 
+std::optional<AppConfig> withHeadphoneEq (const AppConfig& config, const juce::String& model, juce::String& error)
+{
+    if (! a3::headphoneEqChoice (model))
+    {
+        error = "unknown headphone model '" + model + "'";
+        return std::nullopt;
+    }
+    error = {};
+    auto edited = config;
+    edited.engine.phonesHeadphoneEq = model;
+    return edited;
+}
+
 bool sameConfig (const AppConfig& a, const AppConfig& b)
 {
     const auto& x = a.backend;

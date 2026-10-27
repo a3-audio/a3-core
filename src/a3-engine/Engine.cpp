@@ -18,6 +18,18 @@ namespace
 using engine::busChannels;
 constexpr int sides = 2;
 
+// The EQ is part of the decoder's parameters at build time: IEM loads its impulse response on the
+// thread that sets the parameter, so it never happens on the audio thread.
+juce::var withHeadphoneEq (const juce::var& phonesParameters, const juce::String& model)
+{
+    const auto choice = headphoneEqChoice (model);
+    if (! choice)
+        throw std::runtime_error ("unknown headphone model '" + model.toStdString() + "'");
+    auto parameters = phonesParameters.clone();
+    parameters.getDynamicObject()->setProperty ("applyHeadphoneEq", *choice);
+    return parameters;
+}
+
 bool isOn (const std::atomic<float>& key) { return key.load (std::memory_order_relaxed) >= 0.5f; }
 float load (const std::atomic<float>& value) { return value.load (std::memory_order_relaxed); }
 
@@ -183,7 +195,7 @@ Engine::Impl::Impl (const EngineConfig& c, const SpatialConfig& spatial)
     engine::require (dualDelay->setParameters (spatial.fxParameters), "fx.parameters.json");
     tempo = std::make_unique<DelayTempo> (*dualDelay);
     rec = std::make_unique<HeadphoneDecoder> (spatial.recParameters, "rec");
-    phones = std::make_unique<HeadphoneDecoder> (spatial.phonesParameters, "phones");
+    phones = std::make_unique<HeadphoneDecoder> (withHeadphoneEq (spatial.phonesParameters, config.phonesHeadphoneEq), "phones");
     main = std::make_unique<ZoneDecoder> (spatial.main, "main");
     booth = std::make_unique<ZoneDecoder> (spatial.booth, "booth");
 

@@ -209,3 +209,34 @@ TEST (EngineConfig, DelayModulationIsValidated)
     expectRefused (R"({"delayModulation": [{"base":0,"depth":1,"rateHz":1,"shape":"sine"}]})", "parameter");
     expectRefused (R"({"delayModulation": {"parameter":"q"}})", "delayModulation");
 }
+
+TEST (EngineConfig, HeadphoneEqDefaultsOff)
+{
+    juce::String error;
+    const auto c = parse ("{}", error);
+    ASSERT_TRUE (c.has_value()) << error;
+    EXPECT_EQ (c->phonesHeadphoneEq, "off");
+    EXPECT_EQ (a3::headphoneEqChoice (c->phonesHeadphoneEq), std::optional<int> (0));
+}
+
+TEST (EngineConfig, HeadphoneEqModelBecomesItsIndex)
+{
+    juce::String error;
+    const auto c = parse (R"({"phonesHeadphoneEq": "AKG-K141MK2"})", error);
+    ASSERT_TRUE (c.has_value()) << error;
+    EXPECT_EQ (c->phonesHeadphoneEq, "AKG-K141MK2");
+    EXPECT_EQ (a3::headphoneEqChoice (c->phonesHeadphoneEq), std::optional<int> (1));
+    EXPECT_EQ (a3::headphoneEqChoice ("SHURE-SRH940"), std::optional<int> (23));
+    EXPECT_EQ (a3::headphoneEqModels().size(), 23u);
+
+    const auto back = a3::parseEngineConfig (a3::toJson (*c), error);   // round trip
+    ASSERT_TRUE (back.has_value()) << error;
+    EXPECT_EQ (back->phonesHeadphoneEq, "AKG-K141MK2");
+}
+
+TEST (EngineConfig, UnknownHeadphoneEqIsRefused)
+{
+    expectRefused (R"({"phonesHeadphoneEq": "Acme-Buds"})", "Acme-Buds");
+    expectRefused (R"({"phonesHeadphoneEq": 3})", "phonesHeadphoneEq");
+    expectRefused (R"({"phonesHeadphoneEq": ""})", "phonesHeadphoneEq");
+}

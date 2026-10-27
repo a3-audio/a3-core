@@ -285,6 +285,12 @@ TEST_F (Pages, EveryPagePaints)
         expectPainted (snapshot (page, "zones"));
     }
     {
+        view.cfg.engine.phonesHeadphoneEq = "AKG-K141MK2";
+        a3app::ZonesPage page (view, { a3test::shippedSpatialDirectory });
+        expectPainted (snapshot (page, "zones-eq"));
+        view.cfg.engine.phonesHeadphoneEq = "off";
+    }
+    {
         a3app::IoPage page (view);
         expectPainted (snapshot (page, "io-jack"));
         view.cfg.backend.type = a3app::BackendSettings::Type::device;
@@ -338,6 +344,27 @@ TEST_F (Pages, ZonesPickADirectoryAndShowAFailure)
     page.choose (2);   // does not load: stays on the last good one and says why
     EXPECT_EQ (view.cfg.spatialDirectory, copy.root());
     EXPECT_NE (page.messageLabel().getText().indexOf ("/nonexistent/spatial"), -1);
+}
+
+TEST_F (Pages, ZonesPaintsTheHeadphonesChooser)
+{
+    FakeView view;
+    a3app::ZonesPage page (view, { a3test::shippedSpatialDirectory });
+    expectPainted (snapshot (page, "zones-headphones"));
+    const auto& chooser = page.headphoneChooser();
+    EXPECT_TRUE (chooser.isVisible());
+    EXPECT_GT (chooser.getHeight(), 0);
+    ASSERT_EQ (chooser.getNumItems(), 24);   // off + 23 models
+    EXPECT_EQ (chooser.getItemText (0), "off");
+    EXPECT_EQ (chooser.getItemText (1), "AKG-K141MK2");
+    EXPECT_EQ (chooser.getSelectedItemIndex(), 0);
+
+    page.chooseHeadphoneEq (1);
+    EXPECT_EQ (view.cfg.engine.phonesHeadphoneEq, "AKG-K141MK2");
+    EXPECT_EQ (view.edited, 1);
+    EXPECT_EQ (page.headphoneChooser().getSelectedItemIndex(), 1);
+    page.chooseHeadphoneEq (0);
+    EXPECT_EQ (view.cfg.engine.phonesHeadphoneEq, "off");
 }
 
 TEST_F (Pages, ForeignLinksAreShownNotEditable)

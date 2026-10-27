@@ -145,3 +145,17 @@ TEST (ConfigEdits, SaveRefusesWhatTheLoaderWouldRefuse)
     EXPECT_EQ (file.loadFileAsString(), before);
     file.deleteFile();
 }
+
+TEST (ConfigEdits, SetHeadphoneEqWritesTheModel)
+{
+    juce::String error;
+    const auto set = a3app::withHeadphoneEq (sample(), "Sennheiser-HD600", error);
+    ASSERT_TRUE (set) << error;
+    EXPECT_EQ (set->engine.phonesHeadphoneEq, "Sennheiser-HD600");
+    EXPECT_FALSE (a3app::sameConfig (sample(), *set));
+    const auto off = a3app::withHeadphoneEq (*set, "off", error);
+    ASSERT_TRUE (off) << error;
+    EXPECT_EQ (off->engine.phonesHeadphoneEq, "off");
+    EXPECT_FALSE (a3app::withHeadphoneEq (sample(), "Acme-Buds", error));
+    EXPECT_NE (error.indexOf ("Acme-Buds"), -1);
+}

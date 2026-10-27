@@ -28,6 +28,9 @@ std::optional<AppConfig> withSpatialDirectory (const AppConfig&, const juce::Fil
 enum class TrimZone { main, booth, phones, rec };
 std::optional<AppConfig> withTrim (const AppConfig&, TrimZone, float db, juce::String& error);   // refuses outside -90..+6 dB
 
+// "off" or one of a3::headphoneEqModels(); anything else is refused naming it.
+std::optional<AppConfig> withHeadphoneEq (const AppConfig&, const juce::String& model, juce::String& error);
+
 bool sameConfig (const AppConfig&, const AppConfig&);
 
 // One engine port as the I/O page shows it. `mapped` is what the config holds (editable);

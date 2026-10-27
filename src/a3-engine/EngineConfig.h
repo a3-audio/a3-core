@@ -4,6 +4,7 @@
 #include "DjFilter.h"
 #include <juce_core/juce_core.h>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace a3
@@ -31,12 +32,18 @@ struct EngineConfig
     std::vector<int> analogPairs { 1, 2, 3, 4 };
     int returnAnalogPair = 6;         // analog 11/12
     Trims trims;
+    juce::String phonesHeadphoneEq = "off";   // "off" or an IEM BinauralDecoder headphone model; never the rec decoder's
     FilterKind filterKind = FilterKind::svf;
     // The values are copied from Step 0's measurement of the REAPER template ("best reading").
     std::vector<ModulatedParameter> delayModulation {
         { "pitchL", 0.0f, 18.0f, 0.124573f, "random" },
         { "pitchR", 0.0f, 18.0f, 0.018817f, "random" } };
 };
+
+// IEM's headphone-EQ models in its own order (BinauralDecoder v1.16.0): choice 0 = off, 1... = these.
+const std::vector<juce::String>& headphoneEqModels();
+// "off" -> 0, a model -> its 1-based place, anything else nullopt.
+std::optional<int> headphoneEqChoice (const juce::String& name);
 
 bool operator== (const Trims&, const Trims&);
 bool operator== (const ModulatedParameter&, const ModulatedParameter&);
