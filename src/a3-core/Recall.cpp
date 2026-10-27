@@ -41,6 +41,7 @@ std::optional<Number> numberOf (const OscArg& arg)
         default: return std::nullopt;
     }
 }
+}
 
 bool sameAsPython (const OscArg& a, const OscArg& b)
 {
@@ -54,7 +55,6 @@ bool sameAsPython (const OscArg& a, const OscArg& b)
         return left->integer == right->integer;
     const auto real = [] (const Number& n) { return n.whole ? static_cast<long double> (n.integer) : n.real; };
     return real (*left) == real (*right);
-}
 }
 
 const char* ledKey (LedFlag flag) { return flag == LedFlag::cue ? "channel.cue.led" : "channel.filter.led"; }

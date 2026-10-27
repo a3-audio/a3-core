@@ -5,6 +5,7 @@ add_library(a3-core-lib STATIC Version.cpp Json.cpp Truth.cpp OscWire.cpp Dispat
     Presence.cpp HelloGate.cpp Devices.cpp Desks.cpp MotionTarget.cpp ProdjLive.cpp
     Buttons.cpp Tempo.cpp Ahead.cpp DeskFirst.cpp SendFailures.cpp Subscribers.cpp Announce.cpp
     StateFile.cpp CoreState.cpp Recall.cpp Evening.cpp
+    Stems.cpp StemsWords.cpp Decks.cpp EngineWords.cpp StartupRecall.cpp
     Traffic.cpp SeenFile.cpp Register.cpp Render.cpp VuRelay.cpp
     ScreencastFanout.cpp
     HttpServer.cpp CoreApi.cpp)

@@ -24,6 +24,9 @@ namespace a3core
 {
 using Message = std::pair<std::string, OscArg>;
 
+// a == b as Python compares two values an OSC message carried: numbers by value (1 == 1.0 == True), anything else by tag and value.
+bool sameAsPython (const OscArg& a, const OscArg& b);
+
 // The two flags a channel carries, and the lamp each one lights.
 enum class LedFlag { cue, fx };
 inline constexpr std::array<LedFlag, 2> ledFlags { LedFlag::cue, LedFlag::fx };
