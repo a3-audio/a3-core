@@ -161,6 +161,7 @@ public:
     juce::File packageShare() const override { return real->packageShare(); }
     std::string hostname() const override { return real->hostname(); }
     bool unitEnabled (const std::string& unit) const override { return real->unitEnabled (unit); }
+    juce::File self() const override { return real->self(); }
     std::unique_ptr<Child> spawn (const std::vector<std::string>& argv, bool pipeStdout) const override
     {
         std::lock_guard<std::mutex> lock (mutex);

@@ -26,9 +26,6 @@ namespace
 {
 using Steady = std::chrono::steady_clock;
 
-// How long `systemctl --user is-enabled` may take before the unit counts as not enabled.
-constexpr int unitQueryMillis = 5000;
-
 class LinuxChild final : public Child
 {
 public:
@@ -161,8 +158,8 @@ std::unique_ptr<Child> spawnProcess (const std::vector<std::string>& command, bo
 class LinuxPlatform final : public Platform
 {
 public:
-    LinuxPlatform (Environment env, std::string systemctlProgram)
-        : env (std::move (env)), systemctl (std::move (systemctlProgram)) {}
+    LinuxPlatform (Environment env, std::string systemctlProgram, double unitQuerySeconds)
+        : env (std::move (env)), systemctl (std::move (systemctlProgram)), unitQuerySeconds (unitQuerySeconds) {}
 
     std::optional<std::string> environment (const std::string& name) const override { return env (name); }
 
@@ -187,18 +184,31 @@ public:
         return name;
     }
 
+    juce::File self() const override { return juce::File ("/proc/self/exe").getLinkedTarget(); }
+
+    // Without systemctl there is no systemd to own a unit: not enabled. One that does not answer in
+    // time may well own it: enabled (nothing is started beside it), said once.
     bool unitEnabled (const std::string& unit) const override
     {
-        juce::ChildProcess query;
-        if (! query.start (juce::StringArray { systemctl.c_str(), "--user", "is-enabled", unit.c_str() }, juce::ChildProcess::wantStdOut))
+        auto query = spawnProcess ({ systemctl, "--user", "is-enabled", unit }, true);
+        if (query == nullptr)
             return false;
-        query.readAllProcessOutput();   // drained, so a chatty answer cannot block it
-        if (! query.waitForProcessToFinish (unitQueryMillis))
+        const auto end = Steady::now() + std::chrono::duration<double> (unitQuerySeconds);
+        std::optional<int> status;
+        while (! (status = query->poll()))
         {
-            query.kill();
-            return false;
+            drain (query->stdoutFd());   // a chatty answer must not block it on a full pipe
+            if (Steady::now() >= end)
+            {
+                query->kill();
+                query->wait (-1.0);
+                std::fprintf (stderr, "a3-core: systemctl --user is-enabled %s gave no answer within %g s: counted as enabled\n",
+                              unit.c_str(), unitQuerySeconds);
+                return true;
+            }
+            std::this_thread::sleep_for (std::chrono::milliseconds (5));
         }
-        return query.getExitCode() == 0;
+        return WIFEXITED (*status) && WEXITSTATUS (*status) == 0;
     }
 
     std::unique_ptr<Child> spawn (const std::vector<std::string>& argv, bool pipeStdout) const override
@@ -207,8 +217,17 @@ public:
     }
 
 private:
+    static void drain (int fd)
+    {
+        char buffer[256];
+        while (::read (fd, buffer, sizeof buffer) > 0)
+        {
+        }
+    }
+
     Environment env;
     std::string systemctl;
+    double unitQuerySeconds;
 };
 
 std::optional<std::string> processEnvironment (const std::string& name)
@@ -222,9 +241,9 @@ std::optional<std::string> processEnvironment (const std::string& name)
 
 std::unique_ptr<Platform> makePlatform() { return makePlatform (processEnvironment, "systemctl"); }
 
-std::unique_ptr<Platform> makePlatform (Environment env, std::string systemctl)
+std::unique_ptr<Platform> makePlatform (Environment env, std::string systemctl, double unitQuerySeconds)
 {
-    return std::make_unique<LinuxPlatform> (std::move (env), std::move (systemctl));
+    return std::make_unique<LinuxPlatform> (std::move (env), std::move (systemctl), unitQuerySeconds);
 }
 
 Journal streamJournal (std::FILE* out, std::FILE* err)

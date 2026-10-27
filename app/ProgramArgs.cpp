@@ -85,10 +85,7 @@ juce::String phraseOf (Role role)
         case Role::screencastFanout:
         case Role::i3Bar: break;
     }
-    for (const auto& known : roleNames)
-        if (known.role == role)
-            return juce::String ("--role ") + known.name;
-    return {};
+    return "--role " + roleWord (role);
 }
 
 const Flag* find (const std::vector<Flag>& flags, const juce::String& word)
@@ -365,18 +362,16 @@ bool fillRole (ProgramArgs& args, const juce::StringArray& rest, juce::String& e
     return true;
 }
 
-std::string roleWordOf (Role role)
+const char* nullIfUnset (const std::optional<std::string>& value) { return value ? value->c_str() : nullptr; }
+}
+
+std::string roleWord (Role role)
 {
     for (const auto& known : roleNames)
         if (known.role == role)
             return known.name;
     return {};
 }
-
-const char* nullIfUnset (const std::optional<std::string>& value) { return value ? value->c_str() : nullptr; }
-}
-
-std::string roleWord (Role role) { return roleWordOf (role); }
 
 std::optional<ProgramArgs> parseProgramArgs (const juce::StringArray& words, juce::String& error)
 {

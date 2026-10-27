@@ -182,13 +182,16 @@ API, P2). The package still installs Plan 4's names until Task 28 changes it.
   The truth is `$A3_OSC_TRUTH`, else `/usr/share/a3/a3-osc.json`; the network file `$A3_NETWORK`,
   else `~/.config/a3/network.json` (never with an explicit truth); the state under
   `$XDG_STATE_HOME/a3-core`, else `~/.local/state/a3-core`. SIGTERM/SIGINT write state, evening and
-  the address list and exit 0; a serve loop that ends by itself exits 1 (systemd restarts it). A
+  the address list and exit 0; a serve loop that ends by itself exits 1 (the unit decides whether to restart). A
   start that is refused says why on stderr and exits 1.
 - **engine**: Plan 4c's flags; `--no-window` and `--service` are still accepted and do nothing.
 - **screencast-fanout**: `--port` defaults to `$A3_SCREENCAST_PORT`; a port of 0 or no command is
   refused as the Python fan-out refused it (exit 2).
-- **--headless**: starts `a3-core --role core` and `a3-core --role engine`, restarts one that ends
-  after 1 s, and on SIGTERM ends both (SIGKILL after 5 s). A role whose user unit
+- **--headless**: starts `a3-core --role core` and `a3-core --role engine` and keeps them as the
+  engine unit keeps the engine (Restart=on-failure, RestartSec=1, StartLimitBurst=5 in 60 s): a
+  failed child starts again after 1 s, a clean end (exit 0, SIGTERM/SIGINT/SIGHUP/SIGPIPE) is left
+  alone, a role that fails its fifth start within a minute is given up with one line. Once nothing is
+  left to run it exits (1 if a role was given up, else 0); on SIGTERM it ends both (SIGKILL after 5 s). A role whose user unit
   (`a3-core.service`, `a3-engine.service`) is enabled (`systemctl --user is-enabled`) is never
   started a second time.
 - Everything that asks the operating system (environment, home, host name, unit state, child

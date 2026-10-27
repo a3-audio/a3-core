@@ -47,6 +47,7 @@ public:
     virtual juce::File configDir() const = 0;      // ~/.config/a3
     virtual juce::File packageShare() const = 0;   // ~/.local/share/a3-core
     virtual std::string hostname() const = 0;
+    virtual juce::File self() const = 0;           // this program's executable
     // `systemctl --user is-enabled <unit>` succeeds: systemd starts it, so nobody else may.
     virtual bool unitEnabled (const std::string& unit) const = 0;
     // argv[0] is looked up in PATH. The child starts with Python's Popen defaults: no signal blocked,
@@ -59,8 +60,8 @@ using Environment = std::function<std::optional<std::string> (const std::string&
 
 // This machine: the process's environment, `systemctl` from PATH.
 std::unique_ptr<Platform> makePlatform();
-// The same with the environment and the systemctl program given (the tests).
-std::unique_ptr<Platform> makePlatform (Environment, std::string systemctl);
+// The same with the environment, the systemctl program and how long it may take given (the tests).
+std::unique_ptr<Platform> makePlatform (Environment, std::string systemctl, double unitQuerySeconds = 5.0);
 
 // The program's journal on two streams: each line whole (one write under one lock, whichever thread
 // says it) and flushed at once, as B1's `python3 -u` printed.

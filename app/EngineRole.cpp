@@ -13,8 +13,6 @@ namespace a3app
 {
 namespace
 {
-double nowSeconds() { return juce::Time::getMillisecondCounterHiRes() * 0.001; }
-
 void sayEngine (const juce::String& line) { std::fprintf (stderr, "a3-engine: %s\n", line.toRawUTF8()); }
 
 // Core's words on engine.osc go straight into the host's controls (atomics, as the bench does).
@@ -73,7 +71,7 @@ public:
     {
         if (! ready)
             return;
-        const auto now = nowSeconds();
+        const auto now = monotonicSeconds();
         host->controlTick (now);
         backend->service (now);
     }

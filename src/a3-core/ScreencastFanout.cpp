@@ -2,9 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "ScreencastFanout.h"
 
-#include "Platform.h"
-
-#include <fcntl.h>
 #include <netinet/in.h>
 #include <poll.h>
 #include <sys/socket.h>
@@ -15,9 +12,8 @@
 #include <chrono>
 #include <cstdio>
 #include <cstring>
-#include <thread>
 
-extern char** environ;
+#include "Platform.h"
 
 namespace a3core
 {

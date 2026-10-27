@@ -4,13 +4,17 @@
 
 #include <pthread.h>
 
+#include <atomic>
 #include <csignal>
 
 namespace a3app
 {
 namespace
 {
-volatile std::sig_atomic_t stopFlag = 0;
+// Set in the handler (on whichever thread takes the signal), read on the message thread: an atomic
+// that is lock-free is both signal-safe and free of a data race; a volatile sig_atomic_t is only the first.
+std::atomic<int> stopFlag { 0 };
+static_assert (std::atomic<int>::is_always_lock_free, "the stop flag must be lock-free to be set in a signal handler");
 
 void onStopSignal (int) { stopFlag = 1; }
 }
@@ -26,6 +30,8 @@ void installStopSignals()
 }
 
 bool stopRequested() { return stopFlag != 0; }
+
+double monotonicSeconds() { return juce::Time::getMillisecondCounterHiRes() * 0.001; }
 void requestStop() { stopFlag = 1; }
 
 ScopedStopSignalsBlocked::ScopedStopSignalsBlocked()

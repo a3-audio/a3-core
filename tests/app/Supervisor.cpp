@@ -23,7 +23,7 @@ TEST (Supervisor, StartsCoreAndEngine)
 {
     fake::FakePlatform platform;
     a3app::Supervisor supervisor (platform, self);
-    supervisor.start();
+    supervisor.start (0.0);
     ASSERT_EQ (platform.children.size(), 2u);
     EXPECT_EQ (platform.children[0]->argv, coreCommand);
     EXPECT_EQ (platform.children[1]->argv, engineCommand);
@@ -36,7 +36,7 @@ TEST (Supervisor, RestartsAFailedEngineAfterOneSecond)
 {
     fake::FakePlatform platform;
     a3app::Supervisor supervisor (platform, self);
-    supervisor.start();
+    supervisor.start (0.0);
     supervisor.tick (10.0);
     platform.spawned (engineCommand)[0]->status = 1 << 8;   // exit 1
 
@@ -54,7 +54,7 @@ TEST (Supervisor, RestartsAFailedCoreAfterOneSecondToo)
 {
     fake::FakePlatform platform;
     a3app::Supervisor supervisor (platform, self);
-    supervisor.start();
+    supervisor.start (0.0);
     platform.spawned (coreCommand)[0]->status = 1 << 8;
     supervisor.tick (5.0);
     supervisor.tick (5.9);
@@ -67,7 +67,7 @@ TEST (Supervisor, StopEndsBoth)
 {
     fake::FakePlatform platform;
     a3app::Supervisor supervisor (platform, self);
-    supervisor.start();
+    supervisor.start (0.0);
     supervisor.stop();
     for (const auto& child : platform.children)
     {
@@ -83,7 +83,7 @@ TEST (Supervisor, StopKillsAChildThatIgnoresTerminate)
 {
     fake::FakePlatform platform;
     a3app::Supervisor supervisor (platform, self);
-    supervisor.start();
+    supervisor.start (0.0);
     platform.children[1]->endsOnTerminate = false;
     supervisor.stop();
     EXPECT_EQ (platform.children[1]->terminated, 1);
@@ -96,10 +96,97 @@ TEST (Supervisor, TheDestructorStopsToo)
     fake::FakePlatform platform;
     {
         a3app::Supervisor supervisor (platform, self);
-        supervisor.start();
+        supervisor.start (0.0);
     }
     for (const auto& child : platform.children)
         EXPECT_EQ (child->terminated, 1);
+}
+
+// As the engine unit: Restart=on-failure, RestartSec=1, StartLimitBurst=5 in 60 s. A role that
+// keeps failing is given up with one line; --headless ends non-zero once nothing is left to run.
+TEST (Supervisor, GivesUpAfterFiveFailuresInAMinute)
+{
+    fake::FakePlatform platform;
+    std::vector<std::string> said;
+    a3app::Supervisor supervisor (platform, self, [&said] (const std::string& line, bool) { said.push_back (line); });
+    supervisor.start (0.0);
+    double now = 0.0;
+    for (int start = 1; start <= 5; ++start)
+    {
+        ASSERT_EQ (platform.spawned (engineCommand).size(), static_cast<size_t> (start));
+        platform.spawned (engineCommand).back()->status = 1 << 8;   // exit 1
+        supervisor.tick (now += 0.5);
+        supervisor.tick (now += 1.5);
+    }
+    EXPECT_EQ (platform.spawned (engineCommand).size(), 5u);
+    supervisor.tick (now += 100.0);
+    EXPECT_EQ (platform.spawned (engineCommand).size(), 5u);
+    int givenUp = 0;
+    for (const auto& line : said)
+        givenUp += line.find ("given up") != std::string::npos ? 1 : 0;
+    EXPECT_EQ (givenUp, 1);
+    EXPECT_EQ (supervisor.finished(), std::nullopt);   // Core still runs
+
+    platform.spawned (coreCommand)[0]->status = 0;   // Core ends cleanly
+    supervisor.tick (now += 1.0);
+    EXPECT_EQ (supervisor.finished(), std::optional<int> (1));
+}
+
+TEST (Supervisor, FailuresFurtherApartThanAMinuteAreNotCounted)
+{
+    fake::FakePlatform platform;
+    a3app::Supervisor supervisor (platform, self);
+    supervisor.start (0.0);
+    double now = 0.0;
+    for (int failure = 0; failure < 8; ++failure)
+    {
+        platform.spawned (engineCommand).back()->status = 1 << 8;
+        supervisor.tick (now += 20.0);
+        supervisor.tick (now += 1.0);
+    }
+    EXPECT_EQ (platform.spawned (engineCommand).size(), 9u);
+}
+
+TEST (Supervisor, ACleanExitIsNotRestarted)
+{
+    fake::FakePlatform platform;
+    a3app::Supervisor supervisor (platform, self);
+    supervisor.start (0.0);
+    platform.spawned (engineCommand)[0]->status = 0;   // exit 0
+    supervisor.tick (1.0);
+    supervisor.tick (10.0);
+    EXPECT_EQ (platform.spawned (engineCommand).size(), 1u);
+    EXPECT_EQ (supervisor.finished(), std::nullopt);
+
+    platform.spawned (coreCommand)[0]->status = SIGTERM;   // a clean signal for systemd too
+    supervisor.tick (11.0);
+    supervisor.tick (20.0);
+    EXPECT_EQ (platform.spawned (coreCommand).size(), 1u);
+    EXPECT_EQ (supervisor.finished(), std::optional<int> (0));
+}
+
+TEST (Supervisor, ASignalOtherThanTheCleanOnesIsAFailure)
+{
+    fake::FakePlatform platform;
+    a3app::Supervisor supervisor (platform, self);
+    supervisor.start (0.0);
+    platform.spawned (engineCommand)[0]->status = SIGSEGV;
+    supervisor.tick (1.0);
+    supervisor.tick (2.0);
+    EXPECT_EQ (platform.spawned (engineCommand).size(), 2u);
+}
+
+TEST (Supervisor, AFailedStartIsTriedAgainAfterOneSecond)
+{
+    fake::FakePlatform platform;
+    platform.failingSpawns = 2;
+    a3app::Supervisor supervisor (platform, self);
+    supervisor.start (100.0);
+    EXPECT_TRUE (platform.children.empty());
+    supervisor.tick (100.5);
+    EXPECT_TRUE (platform.children.empty());
+    supervisor.tick (101.0);
+    EXPECT_EQ (platform.children.size(), 2u);
 }
 
 // Carried (g), Review Focus 4: a role whose user unit is enabled belongs to systemd; the supervisor
@@ -110,7 +197,7 @@ TEST (Roles, SpawnsNothingAUnitManages)
         fake::FakePlatform platform;
         platform.enabledUnits = { "a3-core.service" };
         a3app::Supervisor supervisor (platform, self);
-        supervisor.start();
+        supervisor.start (0.0);
         supervisor.tick (1.0);
         supervisor.tick (50.0);
         EXPECT_EQ (platform.spawned (coreCommand).size(), 0u);
@@ -121,7 +208,7 @@ TEST (Roles, SpawnsNothingAUnitManages)
         fake::FakePlatform platform;
         platform.enabledUnits = { "a3-core.service", "a3-engine.service" };
         a3app::Supervisor supervisor (platform, self);
-        supervisor.start();
+        supervisor.start (0.0);
         supervisor.tick (50.0);
         EXPECT_TRUE (platform.children.empty());
     }

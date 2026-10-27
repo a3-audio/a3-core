@@ -33,6 +33,9 @@ bool stopRequested();
 void requestStop();        // the same flag, from the message thread (a desktop's quit)
 void clearStopRequest();   // the tests'
 
+// The app's clock for ticks, in seconds (JUCE's high-resolution millisecond counter).
+double monotonicSeconds();
+
 // While it lives, SIGTERM and SIGINT are blocked on this thread, and so on every thread started
 // meanwhile: a role's threads inherit the mask, and the signal reaches the message thread only.
 class ScopedStopSignalsBlocked
@@ -56,8 +59,8 @@ std::vector<Role> startableRoles (const a3core::Platform&, const std::vector<Rol
 std::vector<std::string> roleCommand (const juce::String& self, Role);
 
 // The core role around a started CoreService: a stop signal calls its stop() here, on the message
-// thread, never in the handler; a serve loop that ended by itself (a reason) is exit 1, so that
-// systemd starts Core again; one ended by stop() is exit 0.
+// thread, never in the handler; a serve loop that ended by itself (a reason) is exit 1 -- the unit
+// decides whether to restart; one ended by stop() is exit 0.
 class CoreRole final : public RoleRunner
 {
 public:

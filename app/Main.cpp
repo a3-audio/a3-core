@@ -24,8 +24,6 @@ using Started = std::variant<std::unique_ptr<a3app::RoleRunner>, int>;
 
 constexpr int tickHz = 20;
 
-double nowSeconds() { return juce::Time::getMillisecondCounterHiRes() * 0.001; }
-
 void sayError (const std::string& line) { std::fprintf (stderr, "%s\n", line.c_str()); }
 
 // The core role: the Core service and the rule of its stop and exit (CoreRole).
@@ -81,14 +79,14 @@ public:
     SupervisorRunner (const a3core::Platform& platform, const juce::String& self)
         : supervisor (platform, self, a3core::streamJournal (stdout, stderr))
     {
-        supervisor.start();
+        supervisor.start (a3app::monotonicSeconds());
     }
     std::optional<int> tick (bool stopRequested) override
     {
         if (! stopRequested)
         {
-            supervisor.tick (nowSeconds());
-            return std::nullopt;
+            supervisor.tick (a3app::monotonicSeconds());
+            return supervisor.finished();   // nothing left to run: end as the unit would
         }
         supervisor.stop();
         return 0;
@@ -152,7 +150,7 @@ Started startRole (const a3app::ProgramArgs& args, const a3core::Platform& platf
         case Role::engine: return startEngine (args, platform);
         case Role::screencastFanout: return startFanout (args, platform);
         case Role::supervisor:
-            return std::make_unique<SupervisorRunner> (platform, juce::File::getSpecialLocation (juce::File::currentExecutableFile).getFullPathName());
+            return std::make_unique<SupervisorRunner> (platform, platform.self().getFullPathName());
         case Role::window: return notBuiltYet ("the window");
         case Role::i3Bar: return notBuiltYet ("--role i3-bar");
         case Role::renderTruth: return notBuiltYet ("--render-truth");

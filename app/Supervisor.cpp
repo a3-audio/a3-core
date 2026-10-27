@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "Supervisor.h"
 
+#include <signal.h>
 #include <sys/wait.h>
 
 #include "Roles.h"
@@ -18,6 +19,20 @@ std::string howItEnded (int status)
         return "signal " + std::to_string (WTERMSIG (status));
     return "status " + std::to_string (status);
 }
+
+// systemd's Restart=on-failure: exit 0 and the clean signals (SIGHUP, SIGINT, SIGTERM, SIGPIPE) are
+// not failures.
+bool failed (int status)
+{
+    if (WIFEXITED (status))
+        return WEXITSTATUS (status) != 0;
+    if (WIFSIGNALED (status))
+    {
+        const int signal = WTERMSIG (status);
+        return signal != SIGHUP && signal != SIGINT && signal != SIGTERM && signal != SIGPIPE;
+    }
+    return true;
+}
 }
 
 Supervisor::Supervisor (const a3core::Platform& platformToUse, juce::String selfToUse, a3core::Journal sayToUse)
@@ -29,7 +44,7 @@ Supervisor::Supervisor (const a3core::Platform& platformToUse, juce::String self
 
 Supervisor::~Supervisor() { stop(); }
 
-void Supervisor::start()
+void Supervisor::start (double now)
 {
     for (const auto role : { Role::core, Role::engine })
     {
@@ -38,10 +53,22 @@ void Supervisor::start()
             say (unitOf (role) + " is enabled: systemd runs " + name (role) + ", not started here", false);
             continue;
         }
-        slots.push_back ({ role, nullptr, std::nullopt });
+        slots.push_back ({ role, nullptr, std::nullopt, {}, false, false });
     }
     for (auto& slot : slots)
-        launch (slot, 0.0);
+        launch (slot, now);
+}
+
+std::optional<int> Supervisor::finished() const
+{
+    bool anyGivenUp = false;
+    for (const auto& slot : slots)
+    {
+        if (! slot.ended)
+            return std::nullopt;
+        anyGivenUp = anyGivenUp || slot.gaveUp;
+    }
+    return anyGivenUp ? 1 : 0;
 }
 
 void Supervisor::tick (double now)
@@ -52,17 +79,36 @@ void Supervisor::tick (double now)
     {
         if (slot.child != nullptr)
         {
-            const auto status = slot.child->poll();
-            if (! status)
-                continue;
-            say (name (slot.role) + " ended (" + howItEnded (*status) + "), starting it again in 1 s", true);
-            slot.child.reset();
-            slot.restartAt = now + restartAfter;
+            if (const auto status = slot.child->poll())
+                ended (slot, *status, now);
             continue;
         }
         if (slot.restartAt && now >= *slot.restartAt)
             launch (slot, now);
     }
+}
+
+void Supervisor::ended (Slot& slot, int status, double now)
+{
+    slot.child.reset();
+    if (! failed (status))
+    {
+        say (name (slot.role) + " ended (" + howItEnded (status) + "), not started again", false);
+        slot.ended = true;
+        return;
+    }
+    while (! slot.starts.empty() && slot.starts.front() < now - startWindow)
+        slot.starts.pop_front();
+    if (static_cast<int> (slot.starts.size()) >= startLimit)
+    {
+        say (name (slot.role) + " failed (" + howItEnded (status) + ") after " + std::to_string (startLimit) + " starts within "
+                 + std::to_string (static_cast<int> (startWindow)) + " s: given up",
+             true);
+        slot.ended = slot.gaveUp = true;
+        return;
+    }
+    say (name (slot.role) + " failed (" + howItEnded (status) + "), starting it again in 1 s", true);
+    slot.restartAt = now + restartAfter;
 }
 
 void Supervisor::stop()
@@ -87,16 +133,18 @@ void Supervisor::stop()
     }
 }
 
+// A start that cannot even spawn counts as a failed start, as systemd counts it.
 void Supervisor::launch (Slot& slot, double now)
 {
+    slot.restartAt.reset();
+    slot.starts.push_back (now);
     slot.child = platform.spawn (roleCommand (self, slot.role), false);
     if (slot.child == nullptr)
     {
-        say ("cannot start " + name (slot.role) + ", trying again in 1 s", true);
-        slot.restartAt = now + restartAfter;
+        say ("cannot start " + name (slot.role), true);
+        ended (slot, W_EXITCODE (1, 0), now);
         return;
     }
-    slot.restartAt.reset();
     say ("started " + name (slot.role) + " (pid " + std::to_string (slot.child->pid()) + ")", false);
 }
 

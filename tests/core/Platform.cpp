@@ -8,6 +8,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <chrono>
 #include <map>
 #include <set>
 #include <thread>
@@ -122,6 +123,25 @@ TEST (Platform, UnitEnabledAsksSystemctlForTheUserUnit)
     EXPECT_TRUE (platform->unitEnabled ("a3-core.service"));
     EXPECT_FALSE (platform->unitEnabled ("a3-engine.service"));
     EXPECT_EQ (asked.loadFileAsString(), "--user is-enabled a3-core.service\n--user is-enabled a3-engine.service\n");
+}
+
+// A systemctl that does not answer in time: the unit counts as managed (the conservative answer:
+// nothing is started beside a unit that may well run).
+TEST (Platform, ASystemctlThatHangsCountsAsEnabled)
+{
+    Scratch scratch;
+    const auto fake = scratch.dir.getChildFile ("systemctl");
+    fake.replaceWithText ("#!/bin/sh\nexec sleep 30\n", false, false, "\n");
+    fake.setExecutePermission (true);
+    const auto platform = makePlatform (environmentOf ({}), fake.getFullPathName().toStdString(), 0.3);
+    const auto began = std::chrono::steady_clock::now();
+    EXPECT_TRUE (platform->unitEnabled ("a3-core.service"));
+    EXPECT_LT (std::chrono::duration<double> (std::chrono::steady_clock::now() - began).count(), 3.0);
+}
+
+TEST (Platform, SelfIsThisExecutable)
+{
+    EXPECT_EQ (makePlatform()->self(), juce::File ("/proc/self/exe").getLinkedTarget());
 }
 
 TEST (Platform, AMissingSystemctlEnablesNothing)

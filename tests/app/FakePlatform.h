@@ -59,6 +59,7 @@ public:
     std::set<std::string> enabledUnits;
     mutable std::vector<std::string> unitsAsked;
     mutable std::vector<std::shared_ptr<ChildState>> children;   // every spawn, in order
+    mutable int failingSpawns = 0;                               // the next n spawns start nothing
 
     std::optional<std::string> environment (const std::string& name) const override
     {
@@ -79,8 +80,14 @@ public:
         unitsAsked.push_back (unit);
         return enabledUnits.count (unit) > 0;
     }
+    juce::File self() const override { return juce::File ("/usr/bin/a3-core"); }
     std::unique_ptr<a3core::Child> spawn (const std::vector<std::string>& argv, bool) const override
     {
+        if (failingSpawns > 0)
+        {
+            --failingSpawns;
+            return nullptr;
+        }
         auto state = std::make_shared<ChildState>();
         state->argv = argv;
         state->pid = 1000 + static_cast<int> (children.size());
