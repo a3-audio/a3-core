@@ -5400,16 +5400,16 @@
   ]
  ],
  "shipped": {
-  "entries": 165,
+  "entries": 182,
   "first": {
-   "address": "/aux-return/cue/led",
-   "device": "desk",
+   "address": "/aux-return/cue",
+   "device": "engine",
    "direction": "out",
-   "note": "the aux return's cue lamp, 1 = on",
-   "source": "a3-osc.json: aux-return.cue.led"
+   "note": "the aux return's cue in engine mode, 1 = on, 0 = off",
+   "source": "a3-osc.json: aux-return.cue"
   },
   "problem": "",
-  "truth_addresses": 48
+  "truth_addresses": 58
  },
  "with_counts": {
   "counts": {

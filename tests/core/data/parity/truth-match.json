@@ -510,6 +510,151 @@
    ]
   },
   {
+   "address": "/channel/1/source",
+   "match": [
+    "channel.source",
+    {
+     "ch": 1
+    }
+   ]
+  },
+  {
+   "address": "/channel/4/source",
+   "match": [
+    "channel.source",
+    {
+     "ch": 4
+    }
+   ]
+  },
+  {
+   "address": "/channel/5/source",
+   "match": null
+  },
+  {
+   "address": "/channel/1/source/cursor",
+   "match": [
+    "channel.source.cursor",
+    {
+     "ch": 1
+    }
+   ]
+  },
+  {
+   "address": "/channel/4/source/cursor",
+   "match": [
+    "channel.source.cursor",
+    {
+     "ch": 4
+    }
+   ]
+  },
+  {
+   "address": "/channel/5/source/cursor",
+   "match": null
+  },
+  {
+   "address": "/aux-return/source",
+   "match": [
+    "aux-return.source",
+    {}
+   ]
+  },
+  {
+   "address": "/aux-return/cue",
+   "match": [
+    "aux-return.cue",
+    {}
+   ]
+  },
+  {
+   "address": "/delay/bpm",
+   "match": [
+    "delay.bpm",
+    {}
+   ]
+  },
+  {
+   "address": "/engine/open",
+   "match": [
+    "engine.open",
+    {}
+   ]
+  },
+  {
+   "address": "/engine/hello",
+   "match": [
+    "engine.hello",
+    {}
+   ]
+  },
+  {
+   "address": "/stemdeck/1/3d",
+   "match": [
+    "stemdeck.3d",
+    {
+     "deck": 1
+    }
+   ]
+  },
+  {
+   "address": "/stemdeck/4/3d",
+   "match": [
+    "stemdeck.3d",
+    {
+     "deck": 4
+    }
+   ]
+  },
+  {
+   "address": "/stemdeck/5/3d",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/1/present",
+   "match": [
+    "stemdeck.present",
+    {
+     "deck": 1
+    }
+   ]
+  },
+  {
+   "address": "/stemdeck/4/present",
+   "match": [
+    "stemdeck.present",
+    {
+     "deck": 4
+    }
+   ]
+  },
+  {
+   "address": "/stemdeck/5/present",
+   "match": null
+  },
+  {
+   "address": "/stemdeck/1/hello",
+   "match": [
+    "stemdeck.deck-hello",
+    {
+     "deck": 1
+    }
+   ]
+  },
+  {
+   "address": "/stemdeck/4/hello",
+   "match": [
+    "stemdeck.deck-hello",
+    {
+     "deck": 4
+    }
+   ]
+  },
+  {
+   "address": "/stemdeck/5/hello",
+   "match": null
+  },
+  {
    "address": "/aux-return/cue/led",
    "match": [
     "aux-return.cue.led",
@@ -1443,6 +1588,81 @@
    "key": "aux-return.stem.mode",
    "address": "/aux-return/stem/mode",
    "ranges": {}
+  },
+  {
+   "key": "channel.source",
+   "address": "/channel/1/source",
+   "ranges": {
+    "ch": [
+     1,
+     4
+    ]
+   }
+  },
+  {
+   "key": "channel.source.cursor",
+   "address": "/channel/1/source/cursor",
+   "ranges": {
+    "ch": [
+     1,
+     4
+    ]
+   }
+  },
+  {
+   "key": "aux-return.source",
+   "address": "/aux-return/source",
+   "ranges": {}
+  },
+  {
+   "key": "aux-return.cue",
+   "address": "/aux-return/cue",
+   "ranges": {}
+  },
+  {
+   "key": "delay.bpm",
+   "address": "/delay/bpm",
+   "ranges": {}
+  },
+  {
+   "key": "engine.open",
+   "address": "/engine/open",
+   "ranges": {}
+  },
+  {
+   "key": "engine.hello",
+   "address": "/engine/hello",
+   "ranges": {}
+  },
+  {
+   "key": "stemdeck.3d",
+   "address": "/stemdeck/1/3d",
+   "ranges": {
+    "deck": [
+     1,
+     4
+    ]
+   }
+  },
+  {
+   "key": "stemdeck.present",
+   "address": "/stemdeck/1/present",
+   "ranges": {
+    "deck": [
+     1,
+     4
+    ]
+   }
+  },
+  {
+   "key": "stemdeck.deck-hello",
+   "address": "/stemdeck/1/hello",
+   "ranges": {
+    "deck": [
+     1,
+     4
+    ]
+   }
   },
   {
    "key": "aux-return.cue.led",

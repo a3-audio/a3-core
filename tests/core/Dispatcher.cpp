@@ -25,7 +25,7 @@ TEST (Dispatcher, CallsWhatPythonOscCalls)
     std::vector<int> calls;
     Dispatcher dispatcher;
     const auto& maps = *wire()["maps"].getArray();
-    ASSERT_EQ (maps.size(), 14);
+    ASSERT_EQ (maps.size(), 16);   // B1: one stemdeck.deck-hello per deck, four decks
     for (int i = 0; i < maps.size(); ++i)
         dispatcher.map (maps[i]["pattern"].toString().toStdString(), [&calls, i] (const Endpoint&, const OscMessage&) { calls.push_back (i); });
     dispatcher.setDefault ([&calls] (const Endpoint&, const OscMessage&) { calls.push_back (defaultCall); });

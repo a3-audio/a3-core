@@ -1,7 +1,7 @@
 {
  "python_osc": "1.10.2",
  "python": "3.14.8",
- "a3_core_4b": "b1be0fa26fe0884f44e88e588c7e43f630d50066",
+ "a3_core_4b": "5f753c317e55ef2db5f10553e606dc192114f4da",
  "encode": [
   {
    "address": "/int",
@@ -754,15 +754,23 @@
   },
   {
    "pattern": "/engine/hello",
-   "from": "4b b1be0fa26fe0884f44e88e588c7e43f630d50066"
+   "from": "4b 5f753c317e55ef2db5f10553e606dc192114f4da"
   },
   {
    "pattern": "/stemdeck/1/hello",
-   "from": "4b b1be0fa26fe0884f44e88e588c7e43f630d50066"
+   "from": "4b 5f753c317e55ef2db5f10553e606dc192114f4da"
   },
   {
    "pattern": "/stemdeck/2/hello",
-   "from": "4b b1be0fa26fe0884f44e88e588c7e43f630d50066"
+   "from": "4b 5f753c317e55ef2db5f10553e606dc192114f4da"
+  },
+  {
+   "pattern": "/stemdeck/3/hello",
+   "from": "4b 5f753c317e55ef2db5f10553e606dc192114f4da"
+  },
+  {
+   "pattern": "/stemdeck/4/hello",
+   "from": "4b 5f753c317e55ef2db5f10553e606dc192114f4da"
   },
   {
    "pattern": "/prodj/live",
@@ -861,20 +869,21 @@
   {
    "address": "/stemdeck/3/hello",
    "calls": [
-    4
+    4,
+    11
    ]
   },
   {
    "address": "/stemdeck/pointer",
    "calls": [
     4,
-    12
+    14
    ]
   },
   {
    "address": "/motion/pointer",
    "calls": [
-    13
+    15
    ]
   },
   {
@@ -928,7 +937,7 @@
   {
    "address": "/prodj/live",
    "calls": [
-    11
+    13
    ]
   },
   {
@@ -1019,14 +1028,18 @@
    "address": "/stemdeck/[!1]/hello",
    "calls": [
     4,
-    10
+    10,
+    11,
+    12
    ]
   },
   {
    "address": "/stemdeck/[2-9]/hello",
    "calls": [
     4,
-    10
+    10,
+    11,
+    12
    ]
   },
   {
@@ -1040,7 +1053,7 @@
   {
    "address": "/st[a-e]mdeck/pointer",
    "calls": [
-    12
+    14
    ]
   },
   {
