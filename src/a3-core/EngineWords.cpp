@@ -46,7 +46,7 @@ void addPositions (const Truth& truth, const std::vector<ChannelInfo>& channels,
 }
 }
 
-int engineReturnSource (int returnMode) { return returnMode == Stems::stemMode ? returnDeck : 0; }
+int engineReturnSource (int returnMode) { return returnMode == Stems::stemMode ? returnDelay : 0; }
 
 const std::set<std::string>& forwarded() { return sentAsTheyArrived; }
 

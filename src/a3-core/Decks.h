@@ -59,6 +59,10 @@ public:
     std::optional<int> channelOf (int deck) const;
 
     void heard (int deck, double now);
+    // The engine's report that every link of the deck's slot is live (`linked`) or that one is missing.
+    void heardAudio (int deck, bool linked, double now);
+    // A fresh hello, and the engine hears the deck's audio -- or has said nothing about it lately, which is
+    // an engine that never reports (R11).
     bool present (int deck, double now) const;
     std::optional<double> lastHeardOf (int deck) const;
 
@@ -81,6 +85,7 @@ private:
     int channelCount, deckCount;
     std::vector<int> sources, cursors;
     std::map<int, double> lastHeard;
+    std::map<int, std::pair<bool, double>> audioReports;
     std::set<int> heldBefore;
 };
 }

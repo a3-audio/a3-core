@@ -338,6 +338,10 @@ void Core::mapHandlers()
     const auto [firstDeck, lastDeck] = truth.indexRange ("stemdeck.deck-hello", "deck");
     for (int deck = firstDeck; deck <= lastDeck; ++deck)
         dispatcher.map (truth.address ("stemdeck.deck-hello", { { "deck", deck } }), to (&Core::deckHello));
+    // A truth from before the engine reported its decks' audio (the recorded B0 one) has no such word.
+    if (truth.hasAddress ("engine.deck-audio"))
+        for (int deck = firstDeck; deck <= lastDeck; ++deck)
+            dispatcher.map (truth.address ("engine.deck-audio", { { "deck", deck } }), to (&Core::engineDeckAudio));
     dispatcher.map (truth.address ("prodj.live"), to (&Core::prodjLiveHandler));
     for (const auto* pointer : { "stemdeck.pointer", "motion.pointer" })
         dispatcher.map (truth.address (pointer), to (&Core::pointerHandler));

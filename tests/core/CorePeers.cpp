@@ -1142,3 +1142,32 @@ TEST (CorePeers, EngineModeProdjLiveReachesEveryDeckOnce)
     prodjJoinsAndSwitchesLiveOn (rig);
     EXPECT_EQ (liveTargets (rig, "stemdeck"), (std::vector<std::string> { "stemdeck 127.0.0.2:7780", "stemdeck-B 127.0.0.2:7781" }));
 }
+
+namespace
+{
+// The recorded B0 truth with the one word it predates, taken from the package's truth.
+Truth b0WithDeckAudio()
+{
+    juce::String error;
+    auto data = parseJson (juce::JSON::toString (b0::truth().data()), error);
+    const auto packaged = std::get<Truth> (Truth::load (juce::File (A3_PACKAGE_TRUTH), std::nullopt)).data();
+    data["addresses"].getDynamicObject()->setProperty ("engine.deck-audio", packaged["addresses"]["engine.deck-audio"]);
+    return Truth (data);
+}
+}
+
+TEST (CorePeers, EngineDeckAudioReachesTheDeckSelector)
+{
+    const auto truth = b0WithDeckAudio();
+    CoreRig::Options options;
+    options.truth = &truth;
+    CoreRig rig (CoreRig::WithOptions {}, options);
+    rig.stemdeckHello ("127.0.0.2");
+    rig.deckHello (1, rig.deckA);
+    rig.clear();
+    rig.osc (rig.engine, "/engine/deck/1/audio", { pyInt (0) });
+    EXPECT_EQ (startingWith (rig.to ("motion"), "/stemdeck/1/present"), (std::vector<std::string> { "/stemdeck/1/present i:0" }));
+    rig.clear();
+    rig.osc (rig.engine, "/engine/deck/1/audio", { pyInt (1) });
+    EXPECT_EQ (startingWith (rig.to ("motion"), "/stemdeck/1/present"), (std::vector<std::string> { "/stemdeck/1/present i:1" }));
+}

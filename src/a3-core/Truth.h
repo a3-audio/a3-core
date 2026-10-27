@@ -68,6 +68,8 @@ public:
     std::vector<juce::var> routes() const;
 
     std::string pattern (const std::string& key) const;
+    // Whether the file has an entry for the address key (older truths, the recorded B0 one among them, lack the newer words).
+    bool hasAddress (const std::string& key) const;
     // Whether the file's entry for an address key has `property` (e.g. "relayed_to"); throws if the key has no entry.
     bool addressHas (const std::string& key, const std::string& property) const;
     // bool(entry.get(property)): present and not empty/zero/null. Throws if the key has no entry.

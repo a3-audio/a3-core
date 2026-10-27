@@ -92,10 +92,17 @@ std::optional<double> DeckSelector::lastHeardOf (int deck) const
     return found == lastHeard.end() ? std::nullopt : std::optional<double> (found->second);
 }
 
+void DeckSelector::heardAudio (int deck, bool linked, double now) { audioReports[deck] = { linked, now }; }
+
 bool DeckSelector::present (int deck, double now) const
 {
     const auto found = lastHeard.find (deck);
-    return found != lastHeard.end() && now - found->second <= presenceSeconds;
+    if (found == lastHeard.end() || now - found->second > presenceSeconds)
+        return false;
+    const auto report = audioReports.find (deck);
+    if (report == audioReports.end() || now - report->second.second > presenceSeconds)
+        return true;
+    return report->second.first;
 }
 
 std::vector<std::pair<std::string, OscArg>> DeckSelector::threeDMessages (const Truth& truth, int channel, double value) const

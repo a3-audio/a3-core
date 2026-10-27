@@ -193,6 +193,55 @@ TEST (Decks, PresenceTimesOutAfterFiveSeconds)
     EXPECT_FALSE (s.present (2, 100.0));
 }
 
+TEST (Decks, PresentWithHelloAndAudio)
+{
+    DeckSelector s;
+    s.heard (1, 100.0);
+    s.heardAudio (1, true, 100.0);
+    EXPECT_TRUE (s.present (1, 101.0));
+}
+
+TEST (Decks, AbsentWhenEngineReportsItsAudioMissing)
+{
+    DeckSelector s;
+    s.heard (1, 100.0);
+    s.heardAudio (1, false, 100.0);
+    EXPECT_FALSE (s.present (1, 101.0));
+}
+
+TEST (Decks, PresentOnHelloAloneWithoutEngineReports)
+{
+    DeckSelector s;   // an engine that never reports (an older one)
+    s.heard (1, 100.0);
+    EXPECT_TRUE (s.present (1, 101.0));
+}
+
+TEST (Decks, AudioReportOlderThanFiveSecondsIsIgnored)
+{
+    DeckSelector s;
+    s.heardAudio (1, false, 100.0);
+    s.heard (1, 105.0);
+    EXPECT_FALSE (s.present (1, 105.0));
+    s.heard (1, 105.5);
+    EXPECT_TRUE (s.present (1, 105.5));
+}
+
+TEST (Decks, AudioReportAloneDoesNotMakeADeckPresent)
+{
+    DeckSelector s;
+    s.heardAudio (1, true, 100.0);
+    EXPECT_FALSE (s.present (1, 100.0));
+}
+
+TEST (Decks, ALaterAudioReportReplacesAnEarlierOne)
+{
+    DeckSelector s;
+    s.heard (1, 100.0);
+    s.heardAudio (1, false, 100.0);
+    s.heardAudio (1, true, 101.0);
+    EXPECT_TRUE (s.present (1, 101.0));
+}
+
 TEST (Decks, AbsentDeckKeepsItsChannel)
 {
     DeckSelector s;

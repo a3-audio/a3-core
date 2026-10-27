@@ -349,12 +349,13 @@ TEST (EngineWords, AReplayOvertakenByANewHelloDoesNotCount)
 
 // TheReturnSourceFollowsTheDesksMode
 
-TEST (EngineWords, StemModeIsDeckA)
+TEST (EngineWords, StemModeReturnsTheDelay)
 {
-    EXPECT_EQ (engineReturnSource (Stems::stemMode), 1);
+    EXPECT_EQ (returnDelay, 1);
+    EXPECT_EQ (engineReturnSource (Stems::stemMode), returnDelay);
 }
 
-TEST (EngineWords, AnalogModeIsAnalog)
+TEST (EngineWords, AnalogModeReturnsAnalog)
 {
     EXPECT_EQ (engineReturnSource (Stems::analogMode), 0);
 }

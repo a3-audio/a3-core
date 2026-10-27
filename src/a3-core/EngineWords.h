@@ -31,10 +31,11 @@ namespace a3core
 // What the engine is replayed at its start: the values Core last passed on.
 using Evening = std::vector<Message>;
 
-// The deck whose AUX pair the return plays in STEM mode.
-inline constexpr int returnDeck = 1;
+// The aux-return source that plays the delay's output (R1); 0 is analog 11/12.
+inline constexpr int returnDelay = 1;
 
-// The aux return's source from the desk's own return word: STEM plays deck A's AUX pair, ANALOG analog 11/12.
+// The aux return's source from the desk's own return word: STEM (the desk's word 1, shown there as DELAY)
+// plays the delay, ANALOG analog 11/12.
 int engineReturnSource (int returnMode);
 
 // The truth names sent as they arrived.
