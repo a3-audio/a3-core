@@ -38,6 +38,9 @@ import a3_osc_render   # noqa: E402
 
 TRUTH = a3_osc.load(TRUTH_FILE)
 
+# The last commit before the deck rule; the sender part must stay byte-equal to it.
+BASELINE = "6850d35"
+
 
 class TruthWithPort:
     """The package's truth with another audio socket."""
@@ -159,10 +162,66 @@ class WhatTheRigSettledOn(unittest.TestCase):
     def test_the_sender_is_outside_the_ptp_group(self):
         self.assertNotIn("node.group", dict(settings(block(self.sink, "stream.props"))))
 
+    def rules(self):
+        """The stream.rules list: everything up to the sender module."""
+        begin = self.text.index("stream.rules")
+        return self.text[begin:self.text.index("libpipewire-module-rtp-sink")]
+
+    def rule(self, name_pattern):
+        """The stream rule whose match is `sess.name = name_pattern`."""
+        start = self.rules().index(f'sess.name = "{name_pattern}"')
+        return block(self.rules()[start:], "create-stream")
+
     def test_received_streams_are_in_the_ptp_group_with_12_ms(self):
-        create = block(self.text, "create-stream")
+        create = self.rule("~ out$")
         self.assertEqual(value(create, "node.group"), "pipewire.ptp0")
         self.assertEqual(value(create, "sess.latency.msec"), "12")
+
+    def test_deck_streams_are_received_outside_the_ptp_group(self):
+        create = self.rule("~^AES67 deck ")
+        keys = dict(settings(create))
+        self.assertNotIn("node.group", keys)
+        self.assertEqual(keys["node.virtual"], "false")
+        self.assertEqual(keys["media.class"], "Audio/Source")
+        self.assertEqual(keys["device.api"], "aes67")
+        self.assertEqual(keys["sess.latency.msec"], "12")
+
+    def test_deck_rule_receives_the_whole_packet(self):
+        # rtp-source's receive buffer is net.mtu bytes (default 1280); the
+        # deck's packet is 1365 B and was cut to 10 of 11 frames.
+        self.assertEqual(value(self.rule("~^AES67 deck "), "net.mtu"), "1500")
+
+    def test_deck_rule_leaves_the_packet_time_to_the_sdp(self):
+        # PipeWire 1.6.9 reads both from the stream props; setting both is SIGFPE.
+        keys = dict(settings(self.rule("~^AES67 deck ")))
+        self.assertNotIn("rtp.ptime", keys)
+        self.assertNotIn("rtp.framecount", keys)
+
+    def test_deck_rule_comes_before_the_catch_all(self):
+        rules = self.rules()
+        self.assertLess(rules.index("~^AES67 deck "), rules.index("~ out$"))
+        self.assertLess(rules.index("~ out$"), rules.index("sess.sap.announce"))
+
+    def test_catch_all_does_not_match_a_deck_name(self):
+        deck = re.compile(r"^AES67 deck ")
+        catch_all = re.compile(r" out$")
+        for name in ("AES67 deck A", "AES67 deck B"):
+            self.assertTrue(deck.search(name), name)
+            self.assertFalse(catch_all.search(name), name)
+        for name in ("AES67 a3nuc2 out", "AES67 a3nuc1 out"):
+            self.assertTrue(catch_all.search(name), name)
+            self.assertFalse(deck.search(name), name)
+
+    def test_sender_part_is_unchanged(self):
+        marker = "    { name = libpipewire-module-rtp-sink"
+        template = PACKAGE / "home/aaa/.local/share/a3-core/pipewire/pipewire-aes67.conf.in"
+        before = subprocess.run(
+            ["git", "show", f"{BASELINE}:{template.relative_to(PACKAGE.parents[2])}"],
+            cwd=PACKAGE, capture_output=True, text=True)
+        if before.returncode != 0:
+            self.skipTest(f"{BASELINE} is not in this clone")
+        self.assertEqual(template.read_text()[template.read_text().index(marker):],
+                         before.stdout[before.stdout.index(marker):])
 
     def test_the_ptp_driver_outranks_the_others(self):
         driver = block(self.text, "factory = spa-node-factory")
