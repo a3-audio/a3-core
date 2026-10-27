@@ -160,10 +160,11 @@ the Python Core (a3-core before the cut) and the metering beat-analyzer (before 
 numbers are in `packaging/DEBIAN/control` only. It depends on no Python.
 
 **The window unit** (`a3-core-window.service`). `PartOf=a3-main.service`, `After=a3-core.service
-a3-engine.service`: the window attaches to the Core and the engine that are already up and never
-spawns them. It waits for the screen (`DISPLAY=:0` and `%h/.local/bin/a3-wait-for-the-screen`, a
+a3-engine.service`: the window attaches to the Core and the engine that are up. It waits for the screen (`DISPLAY=:0` and `%h/.local/bin/a3-wait-for-the-screen`, a
 helper of a3-core's package, not shipped here), then runs `/usr/bin/a3-core` with no role, which is
-the window. `Restart=on-failure`, `RestartSec=2`: a close, also after the quit question, and SIGTERM
+the window. It attaches to Core and the engine and spawns a role only when no unit has it enabled or
+running (`systemctl --user is-enabled` / `is-active`; `After=` orders the start only, and Core is
+`Type=idle`). `Restart=on-failure`, `RestartSec=2`, `TimeoutStopSec=10` (the quit question can hold SIGTERM): a close, also after the quit question, and SIGTERM
 exit 0 and stay closed; a crash or a kill signal starts it again. There is no `[Install]` section
 (a3-core's `a3-main.service` Wants the unit, so the postinst enables nothing for it) and no
 `Conflicts=`, for the reason above.

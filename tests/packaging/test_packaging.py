@@ -247,6 +247,8 @@ class WindowUnitTest(unittest.TestCase):
         lines = self.lines()
         self.assertIn("Restart=on-failure", lines)
         self.assertIn("RestartSec=2", lines)
+        # The quit question can hold SIGTERM; this bounds `systemctl stop`.
+        self.assertIn("TimeoutStopSec=10", lines)
 
     def test_the_window_unit_has_no_install_no_conflicts_and_no_home_path(self):
         # a3-main Wants every unit in one transaction; a Conflicts= drops a start job before any

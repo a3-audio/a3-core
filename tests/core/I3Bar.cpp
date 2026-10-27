@@ -97,6 +97,7 @@ public:
     std::string hostname() const override { return "fake"; }
     juce::File self() const override { return {}; }
     bool unitEnabled (const std::string&) const override { return false; }
+    bool unitActive (const std::string&) const override { return false; }
 
     std::unique_ptr<Child> spawn (const std::vector<std::string>& argv, bool pipeStdout, ProcessGroup, ErrorOutput errors) const override
     {

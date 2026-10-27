@@ -92,6 +92,15 @@ TEST (Window, StartsWhatIsMissingOnALaptop)
     {
         NoCore core;
         NoEngine engine;
+        fake::FakePlatform boot;   // the boot window: both units running, neither port answering yet
+        boot.activeUnits = { "a3-core.service", "a3-engine.service" };
+        a3app::WindowProcess window (boot, core.client, engine.remote);
+        EXPECT_TRUE (window.attach().empty());
+        EXPECT_TRUE (boot.children.empty());
+    }
+    {
+        NoCore core;
+        NoEngine engine;
         fake::FakePlatform rig;   // the rig with a3-engine.service merely stopped
         rig.enabledUnits = { "a3-engine.service" };
         a3app::WindowProcess window (rig, core.client, engine.remote);

@@ -161,6 +161,7 @@ public:
     juce::File packageShare() const override { return real->packageShare(); }
     std::string hostname() const override { return real->hostname(); }
     bool unitEnabled (const std::string& unit) const override { return real->unitEnabled (unit); }
+    bool unitActive (const std::string& unit) const override { return real->unitActive (unit); }
     juce::File self() const override { return real->self(); }
     std::unique_ptr<Child> spawn (const std::vector<std::string>& argv, bool pipeStdout, ProcessGroup group = ProcessGroup::inherit, ErrorOutput errors = ErrorOutput::inherit) const override
     {

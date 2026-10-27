@@ -193,9 +193,22 @@ public:
 
     // Without systemctl there is no systemd to own a unit: not enabled. One that does not answer in
     // time may well own it: enabled (nothing is started beside it), said once.
-    bool unitEnabled (const std::string& unit) const override
+    bool unitEnabled (const std::string& unit) const override { return systemctlSucceeds ("is-enabled", unit, "enabled"); }
+
+    // The same rule for a unit that runs now: no systemctl, not active; no answer in time, active.
+    bool unitActive (const std::string& unit) const override { return systemctlSucceeds ("is-active", unit, "active"); }
+
+    std::unique_ptr<Child> spawn (const std::vector<std::string>& argv, bool pipeStdout, ProcessGroup group, ErrorOutput errors) const override
     {
-        auto query = spawnProcess ({ systemctl, "--user", "is-enabled", unit }, true);
+        return spawnProcess (argv, pipeStdout, group, errors);
+    }
+
+private:
+    // `systemctl --user <verb> <unit>` exits 0; a query that gets no answer in time counts as yes
+    // (`counted`), the conservative answer for both questions: nothing is started beside a unit.
+    bool systemctlSucceeds (const char* verb, const std::string& unit, const char* counted) const
+    {
+        auto query = spawnProcess ({ systemctl, "--user", verb, unit }, true);
         if (query == nullptr)
             return false;
         const auto end = Steady::now() + std::chrono::duration<double> (unitQuerySeconds);
@@ -207,8 +220,8 @@ public:
             {
                 query->kill();
                 query->wait (-1.0);
-                std::fprintf (stderr, "a3-core: systemctl --user is-enabled %s gave no answer within %g s: counted as enabled\n",
-                              unit.c_str(), unitQuerySeconds);
+                std::fprintf (stderr, "a3-core: systemctl --user %s %s gave no answer within %g s: counted as %s\n",
+                              verb, unit.c_str(), unitQuerySeconds, counted);
                 return true;
             }
             std::this_thread::sleep_for (std::chrono::milliseconds (5));
@@ -216,12 +229,6 @@ public:
         return WIFEXITED (*status) && WEXITSTATUS (*status) == 0;
     }
 
-    std::unique_ptr<Child> spawn (const std::vector<std::string>& argv, bool pipeStdout, ProcessGroup group, ErrorOutput errors) const override
-    {
-        return spawnProcess (argv, pipeStdout, group, errors);
-    }
-
-private:
     static void drain (int fd)
     {
         char buffer[256];

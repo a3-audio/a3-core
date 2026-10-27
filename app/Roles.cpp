@@ -68,7 +68,7 @@ std::vector<Role> startableRoles (const a3core::Platform& platform, const std::v
     for (const auto role : wanted)
     {
         const auto unit = unitOf (role);
-        if (unit.empty() || ! platform.unitEnabled (unit))
+        if (unit.empty() || ! (platform.unitEnabled (unit) || platform.unitActive (unit)))
             startable.push_back (role);
     }
     return startable;
