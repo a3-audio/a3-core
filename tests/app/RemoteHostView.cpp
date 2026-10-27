@@ -183,3 +183,22 @@ TEST (RemoteHostView, ARefusedEditLeavesNoPendingStateBehind)
     EXPECT_EQ (rig.remote->config().spatialDirectory, original.spatialDirectory);
     EXPECT_EQ (rig.fake.edited, 0);
 }
+
+// The STATUS page's DROPPED rows and the truth's note reach the window over the control API.
+TEST (RemoteHostView, SaysTheDroppedLinksAndTheTruthNote)
+{
+    RemoteRig rig;
+    rig.fake.dropped = { "deckA_cue_L -> x:y", "deckB_aux_R -> p:q" };
+    rig.fake.note = "the truth has no engine.deck-audio: deck audio reports are off";
+    rig.tick();
+    rig.remote->refreshNow();
+    EXPECT_EQ (rig.remote->droppedLinks(), rig.fake.dropped);
+    EXPECT_EQ (rig.remote->truthNote(), rig.fake.note);
+
+    rig.fake.dropped.clear();   // a Save wrote the file without them
+    rig.fake.note = {};
+    rig.tick();
+    rig.remote->refreshNow();
+    EXPECT_TRUE (rig.remote->droppedLinks().empty());
+    EXPECT_TRUE (rig.remote->truthNote().isEmpty());
+}

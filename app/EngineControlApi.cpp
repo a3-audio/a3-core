@@ -56,9 +56,11 @@ std::optional<juce::var> parseBody (const HttpRequest& request, juce::String& wh
 
 juce::var toJson (const EngineStatusReport& report)
 {
-    juce::Array<juce::var> missing, levels;
+    juce::Array<juce::var> missing, levels, dropped;
     for (const auto& peer : report.backend.missingPeers)
         missing.add (peer);
+    for (const auto& link : report.droppedLinks)
+        dropped.add (juce::String::fromUTF8 (link.c_str()));
     for (const auto gain : report.gateLevels.gain)
         levels.add ((double) gain);
     return object ({ { "sampleRate", report.backend.sampleRate },
@@ -73,7 +75,9 @@ juce::var toJson (const EngineStatusReport& report)
                      { "secondsSinceCore", report.secondsSinceCore },
                      { "gateOpen", report.gateOpen },
                      { "gateLevels", levels },
-                     { "engineProblem", report.engineProblem } });
+                     { "engineProblem", report.engineProblem },
+                     { "droppedLinks", dropped },
+                     { "truthNote", report.truthNote } });
 }
 
 std::optional<EngineStatusReport> statusFromJson (const juce::var& v)
@@ -99,6 +103,11 @@ std::optional<EngineStatusReport> statusFromJson (const juce::var& v)
     for (int i = 0; i < a3::numGatedZones; ++i)
         report.gateLevels.gain[i] = (float) (double) v["gateLevels"][i];
     report.engineProblem = v["engineProblem"].toString();
+    // An engine older than the deck-B ports sends neither: nothing dropped, no note.
+    for (int i = 0; i < v["droppedLinks"].size(); ++i)
+        report.droppedLinks.push_back (v["droppedLinks"][i].toString().toStdString());
+    if (v["truthNote"].isString())
+        report.truthNote = v["truthNote"].toString();
     return report;
 }
 
@@ -233,6 +242,8 @@ void EngineControlApi::publishStatus()
     report.gateOpen = view.gateOpen();
     report.gateLevels = view.gateLevels();
     report.engineProblem = view.engineProblem();
+    report.droppedLinks = view.droppedLinks();
+    report.truthNote = view.truthNote();
     auto text = juce::JSON::toString (toJson (report), true).toStdString();
     auto outputs = view.outputNames();
 
