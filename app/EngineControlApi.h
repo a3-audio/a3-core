@@ -52,7 +52,9 @@ class EngineControlApi
 public:
     static constexpr double statusPeriod = 0.05;   // 20 Hz: what the window polls status and meters at
     static constexpr double configPeriod = 0.5;    // 2 Hz: config and links
-    static constexpr double applyWaitSeconds = 20.0;
+    // Shorter than the window's wait (RemoteHostView::applyTimeoutMillis), so the window gets this side's
+    // "did not answer" and not a timeout of its own while the apply may still run.
+    static constexpr double applyWaitSeconds = 12.0;
 
     // `local` is read and changed on the control thread only (tick).
     explicit EngineControlApi (HostView& local);
@@ -69,6 +71,8 @@ public:
 
     // Handlers that wait for the control thread give up; nothing queued runs afterwards.
     void close();
+
+    void setApplyWaitSeconds (double seconds) { applyWait = seconds; }   // the tests'
 
 private:
     using Pending = std::shared_ptr<std::promise<juce::Result>>;
@@ -106,6 +110,7 @@ private:
     std::mutex queueLock;
     std::deque<Task> queue;
     std::atomic<bool> closing { false };
+    std::atomic<double> applyWait { applyWaitSeconds };
     double nextStatus = 0.0, nextConfig = 0.0;
     bool configDue = true;
 };

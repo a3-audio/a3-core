@@ -21,7 +21,7 @@ class RemoteHostView final : public HostView
 {
 public:
     static constexpr int pollTimeoutMillis = 500;
-    static constexpr int applyTimeoutMillis = 15000;
+    static constexpr int applyTimeoutMillis = 15000;   // longer than EngineControlApi::applyWaitSeconds
 
     // `startPolling` false: nothing polls until refreshNow() is called (the tests drive it).
     RemoteHostView (std::string host, int port, bool startPolling = true);
@@ -31,6 +31,7 @@ public:
     // its first paint.
     void refreshNow();
     juce::String url() const;
+    void setApplyTimeoutMillis (int millis) { applyTimeout = millis; }   // the tests'
 
     BackendStatus status() const override;
     std::vector<a3::Engine::OutputMeter> meters() override;
@@ -70,6 +71,7 @@ private:
     void pollStatusAndMeters();
     void pollConfigAndLinks();
     void noEngine();
+    void forgetConfigBody();
     void dropQueuedEdits();
 
     const std::string host;
@@ -79,6 +81,7 @@ private:
     Cache cache;
     std::mutex postLock;
     std::deque<Post> posts;
+    std::atomic<int> applyTimeout { applyTimeoutMillis };
     std::atomic<bool> stopping { false };
     std::mutex wakeLock;
     std::condition_variable wake;

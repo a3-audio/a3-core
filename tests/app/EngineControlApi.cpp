@@ -184,3 +184,13 @@ TEST (EngineControlApi, ABusyPortIsSaidAndTheEngineRunsOn)
     EXPECT_NE (said.back().find ("runs on"), std::string::npos);
     second.close();
 }
+
+TEST (EngineControlApi, AnApplyTheControlThreadNeverRunsIsAnsweredBeforeTheWindowGivesUp)
+{
+    static_assert (a3app::EngineControlApi::applyWaitSeconds * 1000 < a3app::RemoteHostView::applyTimeoutMillis, "server first");
+    RemoteRig rig;
+    rig.api.setApplyWaitSeconds (0.2);
+    const auto reply = httpclient::post (rig.server->port(), "/api/engine/apply", configBody (rig.fake.cfg));   // nobody ticks
+    EXPECT_EQ (reply.status, 503);
+    EXPECT_NE (parse (reply.body)["problem"].toString().indexOf ("did not answer"), -1);
+}

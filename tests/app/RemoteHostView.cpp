@@ -23,9 +23,13 @@ TEST (RemoteHostView, ReadsTheCacheNotTheNetwork)
     EXPECT_EQ (rig.remote->liveLinks().size(), 1u);
     EXPECT_TRUE (rig.remote->engineProblem().isEmpty());
 
-    rig.server.reset();   // nothing answers any more: the getters still do, at once
+    // Nothing answers any more: the port accepts and stays silent, so one network read would wait out its 500 ms.
+    const auto port = rig.server->port();
+    rig.server.reset();
+    a3apptest::StalledPort stalled;
+    ASSERT_TRUE (stalled.open (port));
     const auto start = std::chrono::steady_clock::now();
-    for (int i = 0; i < 2000; ++i)
+    for (int i = 0; i < 20; ++i)
     {
         (void) rig.remote->status();
         (void) rig.remote->meters();
@@ -33,13 +37,14 @@ TEST (RemoteHostView, ReadsTheCacheNotTheNetwork)
         (void) rig.remote->liveLinks();
         (void) rig.remote->engineProblem();
     }
-    EXPECT_LT (std::chrono::steady_clock::now() - start, std::chrono::milliseconds (250));
+    EXPECT_LT (std::chrono::steady_clock::now() - start, std::chrono::milliseconds (100));
     EXPECT_EQ (rig.remote->status().xruns, 7);
 }
 
 TEST (RemoteHostView, NoEngineIsSaid)
 {
     int port = 0;
+    std::unique_ptr<a3app::RemoteHostView> wasConnected;   // one that has seen the engine
     {
         RemoteRig rig;
         port = rig.server->port();
@@ -47,7 +52,14 @@ TEST (RemoteHostView, NoEngineIsSaid)
         rig.remote->refreshNow();
         EXPECT_TRUE (rig.remote->engineProblem().isEmpty());
         EXPECT_EQ (rig.remote->status().blockSize, 128);
+        wasConnected = std::make_unique<a3app::RemoteHostView> ("127.0.0.1", port, false);
+        wasConnected->refreshNow();
+        EXPECT_TRUE (wasConnected->engineProblem().isEmpty());
     }   // the server is gone
+
+    wasConnected->refreshNow();
+    EXPECT_EQ (wasConnected->engineProblem(), "no engine at http://127.0.0.1:" + juce::String (port));
+    EXPECT_EQ (wasConnected->status().blockSize, 0);
 
     a3app::RemoteHostView remote ("127.0.0.1", port, false);
     const juce::String said = "no engine at http://127.0.0.1:" + juce::String (port);
@@ -139,4 +151,35 @@ TEST (RemoteHostView, ThePollingThreadFillsTheCache)
         rig.settle ([] { std::this_thread::sleep_for (std::chrono::milliseconds (10)); return 0; });
     EXPECT_EQ (threaded.status().xruns, 4);
     EXPECT_TRUE (threaded.engineProblem().isEmpty());
+}
+
+TEST (RemoteHostView, AnApplyNobodyAnswersHasItsOwnMessage)
+{
+    a3apptest::StalledPort stalled;
+    ASSERT_TRUE (stalled.open());
+    a3app::RemoteHostView remote (a3core::loopbackAddress(), stalled.port(), false);
+    remote.setApplyTimeoutMillis (300);
+    const auto result = remote.apply (a3app::AppConfig {});
+    ASSERT_TRUE (result.failed());
+    EXPECT_NE (result.getErrorMessage().indexOf ("did not answer"), -1);
+    EXPECT_EQ (result.getErrorMessage().indexOf ("no engine at"), -1);   // it is there, it is only slow
+
+    a3app::RemoteHostView nobody (a3core::loopbackAddress(), 1, false);   // nothing listens on port 1
+    EXPECT_NE (nobody.apply (a3app::AppConfig {}).getErrorMessage().indexOf ("no engine at"), -1);
+}
+
+TEST (RemoteHostView, ARefusedEditLeavesNoPendingStateBehind)
+{
+    RemoteRig rig;
+    rig.tick();
+    rig.remote->refreshNow();
+    const auto original = rig.remote->config();
+    auto bad = original;
+    bad.spatialDirectory = juce::File ("/nonexistent/spatial");   // the engine refuses this body (400)
+    rig.remote->edit (bad);
+    EXPECT_EQ (rig.remote->config().spatialDirectory, bad.spatialDirectory);   // shown at once
+
+    rig.remote->refreshNow();   // posts it, is refused, reads the engine's state again
+    EXPECT_EQ (rig.remote->config().spatialDirectory, original.spatialDirectory);
+    EXPECT_EQ (rig.fake.edited, 0);
 }

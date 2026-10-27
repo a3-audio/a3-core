@@ -7,12 +7,16 @@
 
 namespace a3app
 {
+static_assert (EngineControlApi::applyWaitSeconds * 1000 < RemoteHostView::applyTimeoutMillis,
+               "the engine answers (even with a refusal to wait) before the window gives up");
+
 namespace
 {
 struct Reply
 {
     int status = 0;
     std::string body;
+    bool timedOut = false;   // connected and asked, no answer in time (status 0)
 };
 
 std::optional<Reply> exchange (const std::string& host, int port, const std::string& method, const std::string& path,
@@ -34,7 +38,7 @@ std::optional<Reply> exchange (const std::string& host, int port, const std::str
     for (;;)
     {
         if (left() <= 0)
-            return std::nullopt;
+            return Reply { 0, {}, true };
         const int ready = socket.waitUntilReady (true, juce::jmin (left(), 100));
         if (ready < 0)
             break;
@@ -113,6 +117,12 @@ void RemoteHostView::refreshNow()
     pollConfigAndLinks();
 }
 
+void RemoteHostView::forgetConfigBody()
+{
+    const std::lock_guard<std::mutex> guard (cacheLock);
+    cache.configBody.clear();
+}
+
 void RemoteHostView::noEngine()
 {
     const std::lock_guard<std::mutex> guard (cacheLock);
@@ -175,7 +185,10 @@ void RemoteHostView::flushPosts()
                 return;
             post = posts.front();
         }
-        const bool sent = exchange (host, port, "POST", post.path, post.body, pollTimeoutMillis).has_value();
+        const auto answer = exchange (host, port, "POST", post.path, post.body, pollTimeoutMillis);
+        const bool sent = answer && ! answer->timedOut;
+        if (sent && answer->status != 200)
+            forgetConfigBody();   // refused: the next poll shows what the engine really has pending
         {
             const std::lock_guard<std::mutex> guard (postLock);
             if (! sent)
@@ -241,9 +254,11 @@ juce::Result RemoteHostView::apply (const AppConfig& config)
         dropQueuedEdits();   // the apply carries the config
     }
     const auto answer = exchange (host, port, "POST", "/api/engine/apply", juce::JSON::toString (toJson (config), true).toStdString(),
-                                  applyTimeoutMillis);
+                                  applyTimeout);
     if (! answer)
         return juce::Result::fail ("no engine at " + url());
+    if (answer->timedOut)
+        return juce::Result::fail ("the engine at " + url() + " did not answer in " + juce::String (applyTimeout / 1000.0, 1) + " s; it may still be applying");
     if (answer->status != 200)
         return juce::Result::fail (problemOf (answer->body));
     const std::lock_guard<std::mutex> guard (cacheLock);

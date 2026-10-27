@@ -16,6 +16,14 @@
 
 namespace a3apptest
 {
+// A port that accepts connections (the kernel does) and never answers: what a network read would wait on.
+struct StalledPort
+{
+    juce::StreamingSocket socket;
+    bool open (int port = 0) { return socket.createListener (port, a3core::loopbackAddress()); }
+    int port() { return socket.getBoundPort(); }
+};
+
 inline a3app::EngineTruth truthOnAnyFreePort()
 {
     auto truth = engineTruth();

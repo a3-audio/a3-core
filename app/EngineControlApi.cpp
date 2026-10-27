@@ -349,7 +349,7 @@ HttpResponse EngineControlApi::apply (const HttpRequest& request)
     if (! config)
         return refusal;
     auto result = enqueue ([this, config = *config] { return view.apply (config); });
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::duration<double> (applyWaitSeconds);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::duration<double> (applyWait.load());
     while (result.wait_for (std::chrono::milliseconds (50)) != std::future_status::ready)
         if (closing || std::chrono::steady_clock::now() > deadline)
             return problem (503, "the engine did not answer");
