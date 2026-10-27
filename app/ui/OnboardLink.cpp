@@ -44,8 +44,8 @@ public:
         return *status == 0;
     }
 
-    // Onboard is the desktop's keyboard, not this program's child: its own process group, so a Ctrl-C in
-    // our terminal leaves it. The platform's children keep no descriptor but 0, 1 and 2, which StemDeck
+    // Onboard gets its own process group, so a Ctrl-C in our terminal leaves it. It is still this program's
+    // child, in the unit's cgroup: under systemd it dies with the unit. The platform's children keep no descriptor but 0, 1 and 2, which StemDeck
     // closed by hand (a crashed program must find its sockets free). The handle is kept only to reap it.
     bool launch() override
     {

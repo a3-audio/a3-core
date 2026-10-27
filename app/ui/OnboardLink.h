@@ -20,7 +20,8 @@ public:
     virtual bool installed() const = 0;
     // org.onboard.Onboard.Keyboard.<method> ("Show", "Hide", "ToggleVisible"); true when onboard took the call.
     virtual bool call (const std::string& method) = 0;
-    // Starts onboard, detached from this window's lifetime. false: it could not be started.
+    // Starts onboard in its own process group (a Ctrl-C in a terminal leaves it). It stays this program's child in the
+    // service's cgroup, so under systemd it dies with the unit. false: it could not be started.
     virtual bool launch() = 0;
 };
 

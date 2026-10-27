@@ -62,6 +62,8 @@ public:
     // The KEYS button (nullptr without a keyboard) and the one line the window says about the keyboard ("" when nothing is wrong).
     juce::TextButton* keysButton();
     juce::String keyboardNote() const;
+    // What the timer does at each tick (the tests drive it without waiting).
+    void refreshNow();
 
 private:
     void timerCallback() override;

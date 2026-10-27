@@ -175,7 +175,7 @@ private:
     {
         keyboard = std::make_unique<OnScreenKeyboard> (std::move (setup.link), setup.timings);
         keys.setMouseClickGrabsKeyboardFocus (false);
-        keys.setTooltip (keyboard->isAvailable() ? "On-screen keyboard (onboard): show or hide" : "On-screen keyboard: onboard is not installed");
+        keys.setTooltip (restingTooltip());
         keys.onClick = [this] { keyboard->keysPressed(); };
         keyboard->onHint = [this] (const juce::String& line) { sayKeyboard (line); };
         look::warning (keyboardNoteLabel);
@@ -184,9 +184,15 @@ private:
         addChildComponent (keyboardNoteLabel);
     }
 
+    // What the tooltip says when no hint is up: the same whether onboard is there or not, as the hint was.
+    juce::String restingTooltip() const
+    {
+        return keyboard->isAvailable() ? "On-screen keyboard (onboard): show or hide" : "On-screen keyboard: onboard is not installed";
+    }
+
     void sayKeyboard (const juce::String& line)
     {
-        keys.setTooltip (line.isNotEmpty() ? line : "On-screen keyboard (onboard): show or hide");
+        keys.setTooltip (line.isNotEmpty() ? line : restingTooltip());
         keyboardNoteLabel.setText (line, juce::dontSendNotification);
         keyboardNoteLabel.setVisible (line.isNotEmpty());
         noteTicksLeft = line.isNotEmpty() ? noteSeconds * refreshHz : 0;
@@ -285,8 +291,10 @@ void MainWindow::timerCallback()
 {
     if (! isVisible())
         return;
-    content->refresh();
+    refreshNow();
 }
+
+void MainWindow::refreshNow() { content->refresh(); }
 
 juce::StringArray MainWindow::pageList() const { return content->pageList(); }
 juce::String MainWindow::currentPage() const { return content->current(); }

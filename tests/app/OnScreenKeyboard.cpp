@@ -144,11 +144,19 @@ TEST_F (Keyboard, OnboardThatCannotBeStartedMakesTheKeyboardUnavailable)
 TEST_F (Keyboard, OnboardNotRunningIsStartedOnceAndThenShown)
 {
     onboard->answers = false;
-    OnScreenKeyboard keyboard (onboard, { 20, 5, 6 });
+    OnScreenKeyboard keyboard (onboard, { 20, 20, 40 });   // 800 ms of polling: ample to answer in
+    juce::String hint;
+    keyboard.onHint = [&] (const juce::String& line) { hint = line; };
     keyboard.keysPressed();
     ASSERT_TRUE (pumpUntil ([&] { return onboard->asked().size() >= 3; }));
     onboard->answers = true;   // it claims its name now
     ASSERT_TRUE (pumpUntil ([&] { return onboard->asked().size() >= 4 && onboard->asked().back() == "Show"; }));
+    // Shown means the polling stopped at the answer: nothing more is asked and no failure is reported.
+    const auto answeredAt = onboard->asked().size();
+    pumpUntil ([&] { return false; });
+    EXPECT_EQ (onboard->asked().size(), answeredAt);
+    EXPECT_LT (answeredAt, 2u + 40u);
+    EXPECT_TRUE (hint.isEmpty()) << hint;
     const auto asked = onboard->asked();
     EXPECT_EQ (std::count (asked.begin(), asked.end(), "launch"), 1);
 }
@@ -253,6 +261,18 @@ TEST_F (KeysInTheWindow, WithoutOnboardTheWindowSaysSoInOneLineWherePeopleLook)
     ASSERT_TRUE (pumpUntil ([&] { return window.keyboardNote().isNotEmpty(); }));
     EXPECT_EQ (window.keyboardNote(), "On-screen keyboard: onboard is not installed");
     expectPainted (snapshot (*window.getContentComponent(), "window-keys-hint"));
+}
+
+TEST_F (KeysInTheWindow, WhenTheHintHasExpiredTheTooltipStillSaysOnboardIsMissing)
+{
+    onboard->isInstalled = false;
+    a3app::MainWindow window (view, manager, {}, false, [] {}, {}, { onboard, quick });
+    window.keysButton()->triggerClick();
+    ASSERT_TRUE (pumpUntil ([&] { return window.keyboardNote().isNotEmpty(); }));
+    for (int tick = 0; tick < 200 && window.keyboardNote().isNotEmpty(); ++tick)
+        window.refreshNow();
+    ASSERT_TRUE (window.keyboardNote().isEmpty());
+    EXPECT_EQ (window.keysButton()->getTooltip(), "On-screen keyboard: onboard is not installed");
 }
 
 TEST_F (KeysInTheWindow, AFailedStartIsSaidInTheWindowToo)
