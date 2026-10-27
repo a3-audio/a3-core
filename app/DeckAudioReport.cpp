@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "DeckAudioReport.h"
+#include "EngineHost.h"
 #include <algorithm>
 
 namespace a3app
@@ -35,5 +36,11 @@ std::optional<std::vector<bool>> deckAudioReport (const BackendStatus& status, c
     for (const auto& peer : status.missingPeers)
         missing.push_back (peer.toStdString());
     return deckAudioLinked (map, decks, missing);
+}
+
+void reportDeckAudio (const BackendStatus& status, const IoMap& map, int decks, EngineHost& host)
+{
+    if (const auto report = deckAudioReport (status, map, decks))
+        host.setDeckAudio (*report);
 }
 }

@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <gtest/gtest.h>
 #include <algorithm>
+#include "AppTruth.h"
 #include "DeckAudioReport.h"
+#include "EngineFixture.h"
 #include "a3-links/LinkPlan.h"
 
 namespace
@@ -18,6 +20,20 @@ a3app::IoMap twoDecks()
     map.jack["deckB_aux_1"] = { "AES67 deck B:out_9" };
     map.jack["main_top_1"] = { "system:playback_1" };
     return map;
+}
+
+// What reached Core: the hello by its address, a deck's state as "address value".
+std::vector<std::string> said (const std::vector<juce::OSCMessage>& messages)
+{
+    std::vector<std::string> lines;
+    for (const auto& m : messages)
+    {
+        auto line = m.getAddressPattern().toString().toStdString();
+        if (m.size() == 1 && m[0].isInt32())
+            line += " " + std::to_string (m[0].getInt32());
+        lines.push_back (line);
+    }
+    return lines;
 }
 }
 
@@ -74,4 +90,39 @@ TEST (DeckAudioState, NothingIsReportedBeforeTheFirstLinkPlan)
 
     status.connecting = false;   // --no-connect: no links to report on
     EXPECT_FALSE (a3app::deckAudioReport (status, twoDecks(), 2).has_value());
+}
+
+// EngineRole's control tick ends with this step: the backend's link state reaches Core as
+// /engine/deck/{k}/audio with every hello and at once on a change, and not before the first link plan.
+TEST (DeckAudioReport, TheBackendsLinkStateReachesCoreWithTheHello)
+{
+    using Lines = std::vector<std::string>;
+    std::vector<juce::OSCMessage> toCore;
+    a3app::EngineHost host { a3test::engineConfig (4, 2), a3test::loadedSpatialConfig (a3test::shippedSpatialDirectory),
+                             a3apptest::engineTruth(), [&] (const juce::OSCMessage& m) { toCore.push_back (m); } };
+    const auto map = twoDecks();
+    a3app::BackendStatus status;
+    status.connecting = true;
+
+    a3app::reportDeckAudio (status, map, 2, host);
+    host.controlTick (0.0);
+    EXPECT_EQ (said (toCore), (Lines { "/engine/hello" })) << "no deck state before the first link plan";
+
+    toCore.clear();
+    status.linksPlanned = true;
+    status.missingPeers = { "AES67 deck B:out_1" };
+    a3app::reportDeckAudio (status, map, 2, host);
+    EXPECT_EQ (said (toCore), (Lines { "/engine/deck/1/audio 1", "/engine/deck/2/audio 0" })) << "the first plan goes out at once";
+
+    toCore.clear();
+    a3app::reportDeckAudio (status, map, 2, host);
+    host.controlTick (1.0);
+    EXPECT_TRUE (toCore.empty()) << "no change and no hello due: nothing";
+    host.controlTick (2.0);
+    EXPECT_EQ (said (toCore), (Lines { "/engine/hello", "/engine/deck/1/audio 1", "/engine/deck/2/audio 0" })) << "every hello repeats the states";
+
+    toCore.clear();
+    status.missingPeers.clear();
+    a3app::reportDeckAudio (status, map, 2, host);
+    EXPECT_EQ (said (toCore), (Lines { "/engine/deck/2/audio 1" })) << "the deck whose peer came back, at once";
 }

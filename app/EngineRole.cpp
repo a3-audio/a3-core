@@ -96,7 +96,9 @@ public:
         const auto now = monotonicSeconds();
         host->controlTick (now);
         backend->service (now);
-        reportDeckAudio();
+        // Core hears each deck slot's link state with the hello. A backend that makes no links has
+        // nothing to report: Core then counts the deck by its hello alone, as for an older engine.
+        reportDeckAudio (backend->status(), data.config.io, data.config.engine.decks, *host);
     }
 
     bool lost() const
@@ -114,14 +116,6 @@ public:
     double lastCoreSeconds() const { return lastCoreMessage.load(); }
 
 private:
-    // Core hears each deck slot's link state with the hello. A backend that makes no links has
-    // nothing to report: Core then counts the deck by its hello alone, as for an older engine.
-    void reportDeckAudio()
-    {
-        if (const auto report = deckAudioReport (backend->status(), data.config.io, data.config.engine.decks))
-            host->setDeckAudio (*report);
-    }
-
     static constexpr int quietPumps = 25;   // 25 x 2 ms: far above the 10 ms fade
     std::atomic<double> lastCoreMessage { -1.0 };
     // The /vu bundles to core.vu-relay on loopback (O13); a truth without that listener sends none. A send
