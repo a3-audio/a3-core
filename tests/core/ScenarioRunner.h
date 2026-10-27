@@ -20,9 +20,13 @@ struct Outcome
 };
 
 juce::File directory();
+// tests/core/rig: scenarios whose files are the rig's own, given at run time (RigFiles.cpp).
+juce::File rigDirectory();
 
 // Runs <name>.json and compares with <name>.expected.json.
 Outcome run (const std::string& name);
+// Runs a scenario given as data and compares with the given transcript; name only names the files.
+Outcome run (const std::string& name, const juce::var& scenario, const juce::var& expected);
 
 // Same order, names, hosts, ports, addresses and tags; floats equal as float32; journal lines and
 // their stream equal; files JSON-equal (Python's ==).

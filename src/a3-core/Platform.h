@@ -57,6 +57,9 @@ public:
     virtual juce::File self() const = 0;           // this program's executable
     // `systemctl --user is-enabled <unit>` succeeds: systemd starts it, so nobody else may.
     virtual bool unitEnabled (const std::string& unit) const = 0;
+    // `systemctl --user is-active <unit>` succeeds (active, activating or reloading): systemd is running
+    // it now, enabled or not (a3-main Wants a3-core.service without enabling it).
+    virtual bool unitActive (const std::string& unit) const = 0;
     // argv[0] is looked up in PATH. The child starts with Python's Popen defaults: no signal blocked,
     // SIGPIPE and SIGTERM at their defaults, no descriptor but 0, 1 and 2 (1 is the pipe when
     // `pipeStdout`; 2 is /dev/null when `errors` is discard). nullptr when it could not be started.

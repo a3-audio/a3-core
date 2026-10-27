@@ -58,9 +58,11 @@ public:
     juce::File homeDir { "/home/tester" };
     std::string host = "test-host";
     std::set<std::string> enabledUnits;
+    std::set<std::string> activeUnits;   // active, activating or reloading
     mutable std::vector<std::string> unitsAsked;
     mutable std::vector<std::shared_ptr<ChildState>> children;   // every spawn, in order
     mutable int failingSpawns = 0;                               // the next n spawns start nothing
+    std::optional<int> spawnedStatus;                            // set: every child has ended with it at once
 
     std::optional<std::string> environment (const std::string& name) const override
     {
@@ -81,6 +83,7 @@ public:
         unitsAsked.push_back (unit);
         return enabledUnits.count (unit) > 0;
     }
+    bool unitActive (const std::string& unit) const override { return activeUnits.count (unit) > 0; }
     juce::File self() const override { return juce::File ("/usr/bin/a3-core"); }
     std::unique_ptr<a3core::Child> spawn (const std::vector<std::string>& argv, bool, a3core::ProcessGroup group = a3core::ProcessGroup::inherit,
                                           a3core::ErrorOutput = a3core::ErrorOutput::inherit) const override
@@ -92,6 +95,7 @@ public:
         }
         auto state = std::make_shared<ChildState>();
         state->argv = argv;
+        state->status = spawnedStatus;
         state->ownGroup = group == a3core::ProcessGroup::own;
         state->pid = 1000 + static_cast<int> (children.size());
         children.push_back (state);

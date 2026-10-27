@@ -139,6 +139,38 @@ TEST (Platform, ASystemctlThatHangsCountsAsEnabled)
     EXPECT_LT (std::chrono::duration<double> (std::chrono::steady_clock::now() - began).count(), 3.0);
 }
 
+TEST (Platform, UnitActiveAsksSystemctlIsActive)
+{
+    Scratch scratch;
+    const auto asked = scratch.dir.getChildFile ("asked");
+    const auto fake = scratch.dir.getChildFile ("systemctl");
+    fake.replaceWithText ("#!/bin/sh\necho \"$@\" >> '" + asked.getFullPathName() + "'\n"
+                          "[ \"$3\" = a3-core.service ] && { echo active; exit 0; }\necho inactive; exit 3\n",
+                          false, false, "\n");
+    fake.setExecutePermission (true);
+    const auto platform = makePlatform (environmentOf ({}), fake.getFullPathName().toStdString());
+
+    EXPECT_TRUE (platform->unitActive ("a3-core.service"));
+    EXPECT_FALSE (platform->unitActive ("a3-engine.service"));
+    EXPECT_EQ (asked.loadFileAsString(), "--user is-active a3-core.service\n--user is-active a3-engine.service\n");
+}
+
+TEST (Platform, ASystemctlThatHangsCountsAsActive)
+{
+    Scratch scratch;
+    const auto fake = scratch.dir.getChildFile ("systemctl");
+    fake.replaceWithText ("#!/bin/sh\nexec sleep 30\n", false, false, "\n");
+    fake.setExecutePermission (true);
+    const auto platform = makePlatform (environmentOf ({}), fake.getFullPathName().toStdString(), 0.3);
+    EXPECT_TRUE (platform->unitActive ("a3-core.service"));
+}
+
+TEST (Platform, AMissingSystemctlActivatesNothing)
+{
+    const auto platform = makePlatform (environmentOf ({}), "/nonexistent/systemctl");
+    EXPECT_FALSE (platform->unitActive ("a3-core.service"));
+}
+
 TEST (Platform, SelfIsThisExecutable)
 {
     EXPECT_EQ (makePlatform()->self(), juce::File ("/proc/self/exe").getLinkedTarget());

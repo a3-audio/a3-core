@@ -7,6 +7,7 @@
 #include "ChannelsPage.h"
 #include "FilterPage.h"
 #include "IoPage.h"
+#include "OnScreenKeyboard.h"
 #include "SaveBar.h"
 #include "StatusPage.h"
 #include "ZonesPage.h"
@@ -20,6 +21,13 @@ struct MonitorSetup
 {
     CoreClient* core = nullptr;
     juce::File settings;
+};
+
+// The on-screen keyboard (for the rig's touch screen): onboard behind a link. No link: no keyboard, no KEYS button.
+struct KeyboardSetup
+{
+    std::shared_ptr<OnboardLink> link;
+    KeyboardTimings timings;
 };
 
 // ~/.config/a3/core/window.settings, {"monitor": true|false}. Read: a missing or broken file is "off".
@@ -36,7 +44,7 @@ class MainWindow final : public juce::DocumentWindow, private juce::Timer
 public:
     // `spatialChoices` are the directories the ZONES page offers.
     MainWindow (HostView&, juce::AudioDeviceManager&, std::vector<juce::File> spatialChoices, bool service, std::function<void()> quit,
-                MonitorSetup monitor = {});
+                MonitorSetup monitor = {}, KeyboardSetup keyboard = {});
     ~MainWindow() override;
     // Puts the window on the desktop (needs a display); the constructor builds it without one,
     // so the pages and the close behaviour are testable headless.
@@ -51,6 +59,11 @@ public:
     // writes the settings file (only here: a flip is the one write).
     void setMonitorShown (bool);
     bool monitorShown() const;
+    // The KEYS button (nullptr without a keyboard) and the one line the window says about the keyboard ("" when nothing is wrong).
+    juce::TextButton* keysButton();
+    juce::String keyboardNote() const;
+    // What the timer does at each tick (the tests drive it without waiting).
+    void refreshNow();
 
 private:
     void timerCallback() override;

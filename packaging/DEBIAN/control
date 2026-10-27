@@ -5,14 +5,15 @@ Maintainer: Rafjagger
 Section: sound
 Priority: optional
 Depends: ${shlibs:Depends}
-Recommends: a3-core, pipewire-jack
+Recommends: a3-core, pipewire-jack, onboard
+Breaks: a3-core (<< 03.0+542), beat-analyzer (<< 03.0+64)
 Replaces: a3-engine-bench
 Conflicts: a3-engine-bench
 Provides: a3-engine-bench
 Description: A3 audio engine: channel strips, IEM encoders and decoders, JACK or ALSA device I/O
- The A3 audio engine as a program with a window (a3-engine) and as the systemd
- user unit a3-engine.service. It runs when it is installed and its config passes
- a3-engine --check-config; otherwise REAPER runs as before. It reads the OSC
+ The A3 program /usr/bin/a3-core: the window, the Core and the audio engine as
+ roles of one binary, and the systemd user unit a3-engine.service, which runs
+ its engine role without a window. It reads the OSC
  address truth from /usr/share/a3/a3-osc.json (installed by a3-core), its
  config from ~/.config/a3/engine/engine.json or /usr/share/a3-engine/engine.json,
  and the speaker layouts and IEM data from /usr/share/a3-engine/spatial.

@@ -278,12 +278,16 @@ std::vector<std::string> compare (const juce::Array<juce::var>& expected, const 
     return differences;
 }
 
+juce::File rigDirectory() { return juce::File (A3_CORE_TEST_DATA).getSiblingFile ("rig"); }
+
 Outcome run (const std::string& name)
 {
-    const auto scenarioFile = directory().getChildFile (name + ".json");
-    const auto scenario = readJson (scenarioFile);
-    const auto expected = readJson (directory().getChildFile (name + ".expected.json"));
+    return run (name, readJson (directory().getChildFile (name + ".json")),
+                readJson (directory().getChildFile (name + ".expected.json")));
+}
 
+Outcome run (const std::string& name, const juce::var& scenario, const juce::var& expected)
+{
     auto stateDir = juce::File::getSpecialLocation (juce::File::tempDirectory).getNonexistentChildFile ("a3-scenario-" + name, "", false);
     stateDir.createDirectory();
 

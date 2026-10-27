@@ -223,6 +223,15 @@ TEST (Roles, SpawnsNothingAUnitManages)
 }
 
 // Carried (f): the engine role is Plan 4's Session without its window.
+// The boot window: a3-core.service is Type=idle and not enabled itself (a3-main Wants it), so a window
+// probing before Core's port answers must still find the unit running and spawn nothing.
+TEST (Roles, ActiveUnitIsNotStartable)
+{
+    fake::FakePlatform platform;   // no unit enabled
+    platform.activeUnits = { "a3-core.service" };
+    EXPECT_EQ (a3app::startableRoles (platform, { Role::core, Role::engine }), std::vector<Role> { Role::engine });
+}
+
 TEST (Roles, TheEngineRoleOpensNoWindow)
 {
     for (const auto* name : { "EngineRole.h", "EngineRole.cpp" })

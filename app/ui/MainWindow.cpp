@@ -15,6 +15,7 @@ namespace
 constexpr int refreshHz = 20;
 constexpr int windowWidth = 1000, windowHeight = 680;
 constexpr int pageGroup = 1;
+constexpr int noteSeconds = 6;   // how long the keyboard's line stays before the list is plain again
 const juce::String monitorSwitchName = "OSC MONITOR";
 }
 
@@ -41,9 +42,11 @@ void writeMonitorSwitch (const juce::File& settings, bool shown)
 class MainWindow::Content final : public juce::Component
 {
 public:
-    Content (HostView& view, juce::AudioDeviceManager& manager, std::vector<juce::File> spatialChoices, MonitorSetup monitorToUse)
+    Content (HostView& view, juce::AudioDeviceManager& manager, std::vector<juce::File> spatialChoices, MonitorSetup monitorToUse, KeyboardSetup keyboardSetup)
         : saveBar (view), monitor (std::move (monitorToUse))
     {
+        if (keyboardSetup.link != nullptr)
+            addKeyboard (std::move (keyboardSetup));
         addPage ("AUDIO", std::make_unique<AudioPage> (view, manager));
         addPage ("CHANNELS", std::make_unique<ChannelsPage> (view));
         addPage ("ZONES", std::make_unique<ZonesPage> (view, std::move (spatialChoices)));
@@ -101,6 +104,9 @@ public:
 
     bool monitorShown() const { return monitorSwitch.getToggleState(); }
 
+    juce::TextButton* keysButton() { return keyboard != nullptr ? &keys : nullptr; }
+    juce::String keyboardNote() const { return keyboardNoteLabel.getText(); }
+
     // A flip of the switch: the one moment the settings file is written (P10).
     void flip (bool wanted)
     {
@@ -118,6 +124,8 @@ public:
                 page.refresh();   // the engine pages keep their pending edits current even when hidden
         refreshShown();
         saveBar.refresh();
+        if (noteTicksLeft > 0 && --noteTicksLeft == 0)
+            sayKeyboard ({});
     }
 
     void resized() override
@@ -126,6 +134,15 @@ public:
         saveBar.setBounds (area.removeFromBottom (juce::jmax (36, getHeight() / 14)));
         auto list = area.removeFromLeft (juce::jmax (120, getWidth() / 6)).reduced (getWidth() / 200);
         const int key = juce::jmax (28, list.getHeight() / 14);
+        if (keyboard != nullptr)
+        {
+            keys.setBounds (list.removeFromBottom (key).reduced (0, key / 16));
+            if (keyboardNoteLabel.getText().isNotEmpty())
+            {
+                keyboardNoteLabel.setFont (juce::FontOptions ((float) key * 0.3f));
+                keyboardNoteLabel.setBounds (list.removeFromBottom (key * 3 / 2));
+            }
+        }
         if (monitor.core != nullptr)
             monitorSwitch.setBounds (list.removeFromBottom (key));
         for (auto& page : pages)
@@ -151,6 +168,36 @@ private:
         bool monitor = false;
         std::unique_ptr<juce::TextButton> key;
     };
+
+    // KEYS sits at the foot of the page list, where the hand already is. It never takes the focus: pressing it
+    // must not leave the field it is for. Without onboard the window says so, once, where the keys are.
+    void addKeyboard (KeyboardSetup setup)
+    {
+        keyboard = std::make_unique<OnScreenKeyboard> (std::move (setup.link), setup.timings);
+        keys.setMouseClickGrabsKeyboardFocus (false);
+        keys.setTooltip (restingTooltip());
+        keys.onClick = [this] { keyboard->keysPressed(); };
+        keyboard->onHint = [this] (const juce::String& line) { sayKeyboard (line); };
+        look::warning (keyboardNoteLabel);
+        keyboardNoteLabel.setMinimumHorizontalScale (1.0f);
+        addAndMakeVisible (keys);
+        addChildComponent (keyboardNoteLabel);
+    }
+
+    // What the tooltip says when no hint is up: the same whether onboard is there or not, as the hint was.
+    juce::String restingTooltip() const
+    {
+        return keyboard->isAvailable() ? "On-screen keyboard (onboard): show or hide" : "On-screen keyboard: onboard is not installed";
+    }
+
+    void sayKeyboard (const juce::String& line)
+    {
+        keys.setTooltip (line.isNotEmpty() ? line : restingTooltip());
+        keyboardNoteLabel.setText (line, juce::dontSendNotification);
+        keyboardNoteLabel.setVisible (line.isNotEmpty());
+        noteTicksLeft = line.isNotEmpty() ? noteSeconds * refreshHz : 0;
+        resized();
+    }
 
     template <class PageType>
     void addPage (const juce::String& name, std::unique_ptr<PageType> made, bool isMonitor = false)
@@ -198,15 +245,19 @@ private:
     SaveBar saveBar;
     MonitorSetup monitor;
     juce::ToggleButton monitorSwitch { monitorSwitchName };
+    juce::TextButton keys { "KEYS" };
+    juce::Label keyboardNoteLabel;
+    std::unique_ptr<OnScreenKeyboard> keyboard;
+    int noteTicksLeft = 0;
     bool written = false;   // what the settings file says, as far as this window knows
 };
 
 MainWindow::MainWindow (HostView& view, juce::AudioDeviceManager& manager, std::vector<juce::File> spatialChoices,
-                        bool serviceMode, std::function<void()> quitApp, MonitorSetup monitor)
+                        bool serviceMode, std::function<void()> quitApp, MonitorSetup monitor, KeyboardSetup keyboard)
     : juce::DocumentWindow ("a3-core", palette::ground, juce::DocumentWindow::closeButton, false), quit (std::move (quitApp)), service (serviceMode)
 {
     setLookAndFeel (&look);
-    auto page = std::make_unique<Content> (view, manager, std::move (spatialChoices), std::move (monitor));
+    auto page = std::make_unique<Content> (view, manager, std::move (spatialChoices), std::move (monitor), std::move (keyboard));
     content = page.get();
     setContentOwned (page.release(), false);
     setResizable (true, false);
@@ -240,12 +291,16 @@ void MainWindow::timerCallback()
 {
     if (! isVisible())
         return;
-    content->refresh();
+    refreshNow();
 }
+
+void MainWindow::refreshNow() { content->refresh(); }
 
 juce::StringArray MainWindow::pageList() const { return content->pageList(); }
 juce::String MainWindow::currentPage() const { return content->current(); }
 void MainWindow::showPage (const juce::String& name) { content->show (name); }
 void MainWindow::setMonitorShown (bool shown) { content->flip (shown); }
 bool MainWindow::monitorShown() const { return content->monitorShown(); }
+juce::TextButton* MainWindow::keysButton() { return content->keysButton(); }
+juce::String MainWindow::keyboardNote() const { return content->keyboardNote(); }
 }

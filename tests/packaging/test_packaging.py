@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Raphael Eismann
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Pins the Debian packaging that a3-system's installer/package.py reads:
-packaging/stage lays out the engine app, its user unit, the default config and the bench;
+packaging/stage lays out the a3-core program, its user unit, the default config and the bench;
 packaging/DEBIAN/control names the package a3-engine."""
 
 import json
@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 STAGE = ROOT / "packaging" / "stage"
 CONTROL = ROOT / "packaging" / "DEBIAN" / "control"
 UNIT = ROOT / "packaging" / "a3-engine.service"
+WINDOW_UNIT = ROOT / "packaging" / "a3-core-window.service"
 # The program (Task 23); its engine role is what the unit runs. Staging is Task 28's.
 APP = ROOT / "build" / "app" / "a3-core"
 TRUTH = ROOT / "tests" / "engine" / "data" / "a3-osc.json"
@@ -38,7 +39,7 @@ CC_BY_ATTRIBUTION = (
 
 def stub_build(build):
     """The two executables `files` takes from a build tree."""
-    for relative in ("bench/a3-engine-bench", "app/a3-engine"):
+    for relative in ("bench/a3-engine-bench", "app/a3-core"):
         (build / relative).parent.mkdir(parents=True, exist_ok=True)
         (build / relative).write_text("#!/bin/sh\n")
     return build
@@ -47,6 +48,15 @@ def stub_build(build):
 def unit_lines():
     return [line.strip() for line in UNIT.read_text().splitlines()
             if line.strip() and not line.startswith("#")]
+
+
+def staged_files(case):
+    tmp = tempfile.mkdtemp(dir=SCRATCH_ROOT)
+    case.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+    build = stub_build(Path(tmp, "build"))
+    stage = Path(tmp, "stage")
+    subprocess.run([str(STAGE), "files", str(ROOT), str(build), str(stage)], check=True)
+    return stage
 
 
 def control_fields():
@@ -88,7 +98,7 @@ class StageTest(unittest.TestCase):
 
     def test_ships_the_app_the_unit_and_the_default_config(self):
         stage = self.stage_files()
-        for path in ("usr/bin/a3-engine", "usr/bin/a3-engine-bench"):
+        for path in ("usr/bin/a3-core", "usr/bin/a3-engine-bench"):
             self.assertTrue(os.access(stage / path, os.X_OK), path)
         self.assertEqual((stage / "usr/lib/systemd/user/a3-engine.service").read_bytes(), UNIT.read_bytes())
         self.assertEqual((stage / "usr/share/a3-engine/engine.json").read_bytes(),
@@ -113,6 +123,24 @@ class StageTest(unittest.TestCase):
         self.assertIn("daemon-reload", postinst)
         self.assertNotIn("restart", postinst.replace("no restart", ""))
         self.assertIn("systemctl --global disable a3-engine.service", (CONTROL.parent / "prerm").read_text())
+
+    def test_ships_a3_core_and_no_a3_engine_binary(self):
+        stage = self.stage_files()
+        self.assertTrue(os.access(stage / "usr/bin/a3-core", os.X_OK))
+        self.assertFalse((stage / "usr/bin/a3-engine").exists())
+        self.assertTrue(os.access(stage / "usr/bin/a3-engine-bench", os.X_OK))
+
+    def test_no_python_in_the_package(self):
+        self.assertNotIn("python", control_fields()["Depends"].lower())
+        for path in [*CONTROL.parent.iterdir(), STAGE, UNIT]:
+            text = path.read_text().lower()
+            self.assertNotIn("python", text, path.name)
+            self.assertNotIn("pip ", text, path.name)
+        stage = self.stage_files()
+        for shipped in (p for p in stage.rglob("*") if p.is_file()):
+            self.assertNotEqual(shipped.suffix, ".py", shipped)
+            if shipped.stat().st_size and "doc" not in shipped.parts:
+                self.assertFalse(shipped.read_bytes().startswith(b"#!/usr/bin/env python"), shipped)
 
     def test_files_installs_the_spatial_data(self):
         # The package default for the bench, and REAPER's 6.1 booth for the parity run (--spatial).
@@ -139,12 +167,7 @@ class StageTest(unittest.TestCase):
         self.assertIn(CC_BY_ATTRIBUTION, copyright)
 
     def stage_files(self):
-        tmp = tempfile.mkdtemp(dir=SCRATCH_ROOT)
-        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
-        build = stub_build(Path(tmp, "build"))
-        stage = Path(tmp, "stage")
-        subprocess.run([str(STAGE), "files", str(ROOT), str(build), str(stage)], check=True)
-        return stage
+        return staged_files(self)
 
     def test_unknown_mode_is_refused(self):
         result = subprocess.run([str(STAGE), "nonsense"], capture_output=True)
@@ -152,30 +175,32 @@ class StageTest(unittest.TestCase):
 
 
 class UnitTest(unittest.TestCase):
-    def test_the_unit_leaves_exclusivity_to_the_conditions_and_restarts_on_failure(self):
+    def test_the_unit_keeps_its_place_in_a3_main_and_restarts_on_failure(self):
         lines = unit_lines()
         for line in ("PartOf=a3-main.service",
                      "After=pipewire.service wireplumber.service",
-                     "Restart=on-failure", "RestartSec=1"):
+                     "Restart=on-failure", "RestartSec=1",
+                     "WantedBy=default.target"):
             self.assertIn(line, lines)
-        # a3-main Wants both units in one transaction; a Conflicts= between them lets systemd stop
-        # or drop REAPER even when this unit's condition skips it. The two ExecConditions
-        # (a3-engine-runs here, a3-engine-runs --reaper in REAPER's drop-in) keep them apart.
+        # a3-main Wants a3-reaper.service and this unit in one transaction; a Conflicts= between them
+        # drops a start job before any condition runs, and then nothing may run. REAPER stays off
+        # through a3-core's own drop-in (ExecCondition a3-engine-runs --reaper), not through this unit.
         for line in lines:
             self.assertFalse(line.startswith("Conflicts="), line)
-        self.assertIn("WantedBy=default.target", lines)
-        # A broken open (JACK absent, a port taken) must stop visibly, not restart for ever.
+        # A broken open (a port taken) must stop visibly, not restart for ever.
         self.assertIn("StartLimitIntervalSec=60", lines)
         self.assertIn("StartLimitBurst=5", lines)
 
-    def test_the_unit_starts_the_app_only_when_the_engine_runs(self):
+    def test_the_engine_unit_runs_the_engine_role_headless(self):
         lines = unit_lines()
-        self.assertIn("ExecCondition=/home/aaa/.local/bin/a3-engine-runs", lines)
-        self.assertIn("ExecStart=/usr/bin/a3-engine --service", lines)
+        self.assertIn("ExecStart=/usr/bin/a3-core --role engine", lines)
         self.assertIn("ExecStartPre=/usr/bin/jack_wait -w", lines)
-        self.assertIn("ExecStartPre=/home/aaa/.local/bin/a3-wait-for-the-screen", lines)
-        self.assertIn("Environment=DISPLAY=:0", lines)
         self.assertIn("CPUAffinity=1 2 3", lines)
+        for line in lines:
+            for forbidden in ("DISPLAY", "a3-wait-for-the-screen", "ExecCondition",
+                              "a3-engine-runs", "--service", "/home/"):
+                self.assertNotIn(forbidden, line)
+            self.assertFalse(line.endswith("/usr/bin/a3-engine") or "/usr/bin/a3-engine " in line, line)
         text = UNIT.read_text()
         self.assertNotIn("a3-audio-engine", text)
         self.assertNotIn("A3_ENGINE_BINARY", text)
@@ -187,6 +212,54 @@ class UnitTest(unittest.TestCase):
         for line in lines:
             self.assertFalse(line.startswith("CPUScheduling"), line)
             self.assertNotIn("stemdeck@", line)
+
+
+class WindowUnitTest(unittest.TestCase):
+    """The window comes up at boot under a3-main. a3-main (a3-core's package) Wants it; this unit
+    has no [Install], so nothing enables it on its own."""
+
+    def lines(self):
+        return [l for l in WINDOW_UNIT.read_text().splitlines() if l.strip() and not l.startswith("#")]
+
+    def test_the_package_ships_the_window_unit(self):
+        stage = staged_files(self)
+        shipped = stage / "usr/lib/systemd/user/a3-core-window.service"
+        self.assertEqual(shipped.read_bytes(), WINDOW_UNIT.read_bytes())
+        self.assertFalse(os.access(shipped, os.X_OK))   # 644: a unit file, not a program
+
+    def test_the_window_unit_attaches_to_core_and_engine_and_follows_a3_main(self):
+        lines = self.lines()
+        self.assertIn("Description=the a3-core window", lines)
+        self.assertIn("PartOf=a3-main.service", lines)
+        self.assertIn("After=a3-core.service a3-engine.service", lines)
+
+    def test_the_window_unit_runs_the_window_role_after_the_screen_is_there(self):
+        lines = self.lines()
+        self.assertIn("Environment=DISPLAY=:0", lines)
+        self.assertIn("ExecStartPre=%h/.local/bin/a3-wait-for-the-screen", lines)
+        self.assertIn("ExecStart=/usr/bin/a3-core", lines)   # no role: the window
+        for line in lines:
+            self.assertNotIn("--role", line)
+
+    def test_a_clean_close_is_not_restarted_but_a_crash_is(self):
+        # The window exits 0 on a close and on SIGTERM (Main.cpp WindowRunner::tick), so on-failure
+        # leaves a closed window closed; a crash or a kill signal restarts it.
+        lines = self.lines()
+        self.assertIn("Restart=on-failure", lines)
+        self.assertIn("RestartSec=2", lines)
+        # The quit question can hold SIGTERM; this bounds `systemctl stop`.
+        self.assertIn("TimeoutStopSec=10", lines)
+
+    def test_the_window_unit_has_no_install_no_conflicts_and_no_home_path(self):
+        # a3-main Wants every unit in one transaction; a Conflicts= drops a start job before any
+        # condition runs (R35).
+        text = WINDOW_UNIT.read_text()
+        self.assertNotIn("[Install]", text)
+        self.assertNotIn("Conflicts=", text)
+        for line in self.lines():
+            self.assertFalse(line.startswith("Conflicts="), line)
+            self.assertNotIn("/home/", line)
+            self.assertNotIn("WantedBy", line)
 
 
 class SubmoduleTest(unittest.TestCase):
@@ -256,6 +329,18 @@ class ControlTest(unittest.TestCase):
             script = CONTROL.parent / name
             self.assertTrue(os.access(script, os.X_OK), name)
 
+    def test_the_program_breaks_the_python_core(self):
+        self.assertRegex(control_fields()["Breaks"], r"a3-core \(<< [0-9][^)]*\)")
+
+    def test_the_program_breaks_a_metering_analyzer(self):
+        self.assertRegex(control_fields()["Breaks"], r"beat-analyzer \(<< [0-9][^)]*\)")
+
+    def test_the_window_recommends_the_on_screen_keyboard_and_never_depends_on_it(self):
+        # The touch screen needs onboard to type into the window's fields; a laptop with a keyboard does not.
+        fields = control_fields()
+        self.assertIn("onboard", [name.strip() for name in fields.get("Recommends", "").split(",")])
+        self.assertNotIn("onboard", fields["Depends"])
+
     def test_the_truth_file_comes_with_a_recommended_a3_core(self):
         self.assertIn("a3-core", control_fields().get("Recommends", ""))
         self.assertIn("pipewire-jack", control_fields().get("Recommends", ""))
@@ -263,8 +348,7 @@ class ControlTest(unittest.TestCase):
 
 
 class CheckConfigBinaryTest(unittest.TestCase):
-    """The contract the unit's ExecCondition and REAPER's drop-in read: the built binary's
-    --check-config prints exactly one line and exits 0 (ok), 1 (<file>: <reason>) or 2 (bad flag)."""
+    """The built program's engine role: --check-config prints exactly one line and exits 0 (ok), 1 (<file>: <reason>) or 2 (bad flag)."""
 
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(dir=SCRATCH_ROOT))
@@ -272,8 +356,7 @@ class CheckConfigBinaryTest(unittest.TestCase):
         (self.tmp / "home").mkdir()
 
     def run_check(self, *words):
-        # DISPLAY names a server that does not exist: the check must not need X (the unit runs it
-        # with DISPLAY=:0 before the screen is up).
+        # DISPLAY names a server that does not exist: the check must not need X.
         env = dict(os.environ, HOME=str(self.tmp / "home"), DISPLAY=":87")
         return subprocess.run([str(APP), "--role", "engine", "--check-config", "--truth", str(TRUTH), *words],
                               capture_output=True, text=True, env=env, timeout=60)
