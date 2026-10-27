@@ -240,3 +240,36 @@ TEST (DefaultConfig, NoLinkToTheAnalyzersMeters)
     ASSERT_TRUE (rec != config.io.jack.end());
     EXPECT_TRUE (contains (rec->second, "beat-analyzer:bpm_1"));
 }
+
+// M10: every deck host records, and the source is always the REC bus. The default map is a3nuc1's:
+// deck A is local ("StemDeck-A" takes rec_L/R as inputs) and the Core's AES67 sender (a patchbay
+// socket "AES67 .* out", plugs send_CH1/2) carries the same bus to the other hosts.
+TEST (DefaultConfig, RecBusFeedsTheLocalStemDeck)
+{
+    const auto config = loadDefault();
+    EXPECT_TRUE (contains (config.io.jack.at ("rec_L"), "StemDeck-A:rec_L"));
+    EXPECT_TRUE (contains (config.io.jack.at ("rec_R"), "StemDeck-A:rec_R"));
+}
+
+TEST (DefaultConfig, RecBusFeedsAes67ChannelsOneAndTwo)
+{
+    const auto config = loadDefault();
+    EXPECT_TRUE (contains (config.io.jack.at ("rec_L"), "AES67 a3nuc1 out:send_CH1"));
+    EXPECT_TRUE (contains (config.io.jack.at ("rec_R"), "AES67 a3nuc1 out:send_CH2"));
+}
+
+TEST (DefaultConfig, NothingButTheRecBusFeedsARecorder)
+{
+    const auto config = loadDefault();
+    const auto isRecorder = [] (const std::string& peer)
+    {
+        return afterColon (peer) == "rec_L" || afterColon (peer) == "rec_R"
+            || startsWith (peer, "AES67 a3nuc1 out:send_CH");
+    };
+    for (const auto& [port, peers] : config.io.jack)
+        for (const auto& peer : peers)
+            if (isRecorder (peer))
+                EXPECT_TRUE (port == "rec_L" || port == "rec_R") << port << " -> " << peer;
+    for (const auto& [from, to] : config.io.directLinks)
+        EXPECT_FALSE (isRecorder (to) || isRecorder (from)) << from << " -> " << to;
+}
