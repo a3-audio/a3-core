@@ -224,6 +224,10 @@ class Relayed:
     def note(self, address, value):
         self._values[address] = value
 
+    def value(self, address):
+        """The last value passed on for this address, None before any."""
+        return self._values.get(address)
+
     def messages(self):
         """In the order the controls were first touched, so the same evening
         replays the same way twice."""

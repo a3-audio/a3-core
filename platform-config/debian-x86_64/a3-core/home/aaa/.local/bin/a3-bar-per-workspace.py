@@ -20,6 +20,8 @@ FIRST_TOOL_WORKSPACE = 3
 def bar_mode(workspace_name):
     """'dock' where the bar shows, 'invisible' where the screen is a UI's."""
     number = re.match(r"(\d+)", workspace_name or "")
+    if "STEMDECK" in (workspace_name or ""):   # deck B on 6 fills its screen like deck A on 2
+        return "invisible"
     if number and int(number.group(1)) >= FIRST_TOOL_WORKSPACE:
         return "dock"
     return "invisible"

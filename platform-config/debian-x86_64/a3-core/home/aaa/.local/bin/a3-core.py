@@ -98,6 +98,14 @@ from a3_core_desk_first import DeskFirst   # noqa: E402
 from a3_core_web import default_bind, start_window, window_address   # noqa: E402
 from a3_core_devices import Devices   # noqa: E402
 from a3_core_gate import Gate, StartupRecall, open_after_recall   # noqa: E402
+from a3_core_audio_engine import ENGINE, REAPER, engine_runs, probe   # noqa: E402
+from a3_core_decks import ANALOG, NEUTRAL_3D, DeckSelector, deck_port   # noqa: E402
+from a3_core_engine import (EngineSession, analog_again_messages,   # noqa: E402
+                            engine_channel_messages, engine_return_source,
+                            filter_mode_message, flag_message,
+                            forward_messages, open_message, position_message,
+                            return_cue_message, source_messages,
+                            state_messages, tempo_message)
 
 LAYOUT_PATH = (Path(__file__).resolve().parent.parent
                / "share/a3-core/layout.json")
@@ -238,6 +246,18 @@ class WatchedClient:
 _send_failures = SendFailures()
 
 
+class SilentClient:
+    """What osc_reaper, osc_dualdelay and the IEM clients are in engine mode:
+    the same send_message, and nothing leaves. The REAPER send points stay as
+    they are (engine plan 4, settled 8) and talk to nobody."""
+
+    def __init__(self, name):
+        self.name = name
+
+    def send_message(self, address, value):
+        pass
+
+
 osc_a3mixer = WatchedClient(SimpleUDPClient(A3MIXER_HOST, A3MIXER_PORT),
                             "mixer")
 osc_a3motion = WatchedClient(SimpleUDPClient(A3MOTION_HOST, A3MOTION_PORT),
@@ -298,6 +318,31 @@ osc_dualdelay = WatchedClient(
 #: What the delay was last told. See a3_core_tempo for why this is not simply
 #: passed through on every beat.
 _tempo = TempoFollower()
+
+#: Engine or REAPER, decided once in the start-up block below (engine plan 4,
+#: D22: the engine runs when installed and its config checks out). False
+#: until then; REAPER's paths are the ones that run while it is False.
+_engine_mode = False
+#: Why REAPER runs, when it does -- for the journal and the window.
+_engine_reason = ""
+
+#: The a3-engine's control port. Spoken to only after the engine's hello:
+#: Core asks, devices answer -- see send_to_engine.
+osc_engine = WatchedClient(
+    SimpleUDPClient(*_truth.endpoint("engine", "osc")), "engine")
+
+#: The tempo the engine's delay was last told, for its state after a recall.
+_engine_bpm = None
+
+#: Core's deck selector -- engine mode only; None while REAPER runs, whose
+#: stems stay with a3_core_stems.
+_decks = None
+#: Where each deck listens, from its hello: deck number -> host, client.
+_deck_hosts = {}
+_deck_clients = {}
+#: When the decks' presence was last looked at (once a second).
+_decks_looked_at = 0.0
+DECK_PRESENCE_EVERY_SECONDS = 1.0
 
 @dataclass
 class MasterInfo:
@@ -482,7 +527,53 @@ def note_passed_on(address, value):
 def write_the_evening():
     # Mitgeschrieben, damit ein Stromausfall den Abend nicht kostet: REAPER
     # schreibt seine Werte erst beim Beenden weg. Siehe a3_core_evening.
-    _evening_file.remember(evening_state(_relayed))
+    state = evening_state(_relayed)
+    if _decks is not None:
+        # Beside "values", which is all replayable() reads: a deck's place is
+        # Core's own, not a value anybody relays.
+        state.update(_decks.to_evening())
+    _evening_file.remember(state)
+
+
+def the_live_evening():
+    """The evening once the engine's replay is through: what Core itself has
+    passed on (desk, Motion, the replay). Never what the engine reports -- it
+    reports nothing but its hello -- so a restarted engine is replayed
+    Core's live state, never a fresh engine's zeros."""
+    return list(replayable(_truth, evening_state(_relayed)))
+
+
+def engine_heard():
+    """True once the engine has said hello: before that nothing is sent to it
+    (Core asks, devices answer)."""
+    return _engine_mode and _project.round > 0
+
+
+def send_to_engine(messages):
+    """Core's words to the a3-engine, in engine mode and after its hello."""
+    if not engine_heard():
+        return
+    for address, value in messages:
+        osc_engine.send_message(address, value)
+
+
+def send_to_deck(messages):
+    """/stemdeck/{deck}/... words, each to the host its deck said hello from;
+    a deck not heard yet gets nothing."""
+    for address, value in messages:
+        found = _truth.match(address)
+        if found is None:
+            continue
+        client = _deck_clients.get(found[1].get("deck"))
+        if client is not None:
+            client.send_message(address, value)
+
+
+def engine_status():
+    """Which audio engine runs, and why REAPER does when it does: for the
+    window's /api/status."""
+    return {"audio_engine": ENGINE if _engine_mode else REAPER,
+            "reason": _engine_reason}
 
 
 def broadcast(address, value):
@@ -586,6 +677,8 @@ def toggle_return_cue():
     master_info.return_cue = not master_info.return_cue
     broadcast(*return_cue_lamp(_truth, master_info))
     send_cue_levels()
+    if _engine_mode:
+        send_to_engine([return_cue_message(_truth, master_info.return_cue)])
 
 
 def announce_flag(flag, channel_index):
@@ -633,10 +726,97 @@ def speak_stems(full=False):
                 client.send_message(address, value)
         else:
             broadcast(address, value)
+    if _engine_mode:
+        if full:
+            _sources_sent_to_engine.clear()
+        send_to_engine(changed_messages(
+            source_messages(_truth, _decks,
+                            engine_return_source(_stems.return_mode)),
+            _sources_sent_to_engine))
+        report_decks(full)
+
+
+#: What the engine was last told of the sources, so a push sends only what it
+#: changed. Cleared by a full send: every engine hello ends in one (the
+#: recall's say_the_whole_state), so nothing dropped before it is missed.
+_sources_sent_to_engine = {}
+
+
+def report_decks(full=False):
+    """Each channel's source and selector cursor and each deck's presence, to
+    the desk and Motion: to everybody when `full`, else only what changed."""
+    now = time.monotonic()
+    messages = [(_truth.address("channel.source", ch=channel), _decks.source(channel))
+                for channel in range(1, _decks.channels + 1)]
+    messages += [(_truth.address("channel.source.cursor", ch=channel),
+                  _decks.ring(channel)[_decks.cursor(channel)])
+                 for channel in range(1, _decks.channels + 1)]
+    messages += [(_truth.address("stemdeck.present", deck=deck),
+                  1 if _decks.present(deck, now) else 0)
+                 for deck in range(1, _decks.decks + 1)]
+    for address, value in messages:
+        if full:
+            for client in subscribers:
+                client.send_message(address, value)
+        else:
+            broadcast(address, value)
+
+
+def notice_deck_presence(now):
+    """Once a second in engine mode: a deck whose hello went stale (or came
+    back) is said to the desk and Motion."""
+    global _decks_looked_at
+    if not _engine_mode or now - _decks_looked_at < DECK_PRESENCE_EVERY_SECONDS:
+        return
+    _decks_looked_at = now
+    report_decks()
+
+
+def take_deck_word(parameter, channel, value):
+    """Engine mode: True when `parameter` on wire channel `channel` is the
+    deck selector's -- the desk's ring (the same words a3_core_stems hears in
+    REAPER mode) or the 3D of a channel playing a deck, whose moving/steady
+    mix is StemDeck's: that 3D goes to the deck, not to the engine."""
+    if parameter in ("stem.turn", "stem.push"):
+        select_deck(parameter, channel, value)
+        return True
+    if parameter == "3d" and _decks.deck_channel(channel):
+        channel_infos[channel - 1].three_d = float(value)
+        send_to_deck(_decks.three_d_messages(_truth, channel, value))
+        return True
+    return False
+
+
+def select_deck(word, channel, value):
+    """The desk's input ring in engine mode: a turn moves the cursor, a push
+    puts a deck (or analog) on the channel -- to the engine, to the decks
+    whose 3D changes with it, and to the desk and Motion as the source."""
+    if word == "stem.turn":
+        _decks.turn(channel, int(value))
+        report_decks()
+        return
+    changes = _decks.push(channel)
+    leaving = _decks.leave_messages(_truth, changes)
+    if not changes:
+        return
+    arriving = []
+    for on_channel, source in changes:
+        three_d = channel_infos[on_channel - 1].three_d
+        if source != ANALOG and three_d is not None:
+            arriving += _decks.three_d_messages(_truth, on_channel, three_d)
+    speak_stems()
+    send_to_deck(leaving + arriving)
+    # The engine's analog path kept the values from before the deck came;
+    # the source word is out, so these follow it.
+    for on_channel, source in changes:
+        if source == ANALOG:
+            send_to_engine(analog_again_messages(
+                _truth, on_channel - 1, channel_infos[on_channel - 1], _relayed))
 
 
 #: Where StemDeck listens: learnt from its hello, None while it is silent.
 _stemdeck_client = None
+_stemdeck_target = None
 _stemdeck_watch = HelloWatch(
     STEMDECK_SILENCE, is_local=lambda host: is_this_machine(host, MOTION_OWN_HOSTS),
     one_at_a_time=True)
@@ -649,6 +829,8 @@ _tidy_settle = Settle(TIDY_AFTER_SECONDS)
 
 def send_to_stemdeck(commands):
     """Switch commands to StemDeck; the desk changes when StemDeck reports."""
+    if _engine_mode:
+        return      # the deck selector replaces the stem buses (spec Scope 13)
     if _stemdeck_client is None:
         return
     for address, value in command_messages(commands, _truth):
@@ -894,11 +1076,21 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
     # particular parameter. A control Core does not route yet is still a
     # control a screen may show.
     relay(address, raw, origin)
+    if _engine_mode:
+        # The value as it arrived; the engine applies the laws. A deck
+        # channel's 3D, FREQ and Q are not the engine's (a3_core_engine).
+        send_to_engine(engine_channel_messages(_truth, _decks, key, fields, value))
 
     # The wire counts channels from 1, Core's list from 0.
     channel_index = fields["ch"] - 1
     parameter: str = key[len("channel."):]
     track_input = channel_infos[channel_index].track_input
+
+    # Engine mode: the desk's ring words and a deck channel's 3D are the deck
+    # selector's, ahead of the one chain below (which stays REAPER mode's).
+    if _engine_mode and take_deck_word(parameter, fields["ch"], value):
+        remember_state()
+        return
 
     # POTENTIOMETER
 
@@ -975,6 +1167,8 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
             channel_infos[channel_index].toggle_cue = wanted
             announce_flag("cue", channel_index)
             send_cue_levels()
+            if _engine_mode:
+                send_to_engine([flag_message(_truth, "cue", channel_index, wanted)])
 
     elif parameter == "filter":
         wanted = wanted_toggle(raw, channel_infos[channel_index].toggle_fx)
@@ -982,6 +1176,8 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
             channel_infos[channel_index].toggle_fx = wanted
             announce_flag("fx", channel_index)
             set_filters()
+            if _engine_mode:
+                send_to_engine([flag_message(_truth, "filter", channel_index, wanted)])
 
     # `4d` was here: the 3D switch, as a toggle, blending a channel hard over
     # to its multi encoder and back. It is gone with the switch -- the key
@@ -1001,6 +1197,8 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
         addr = f"/MultiEncoder/azimuth{channel_index}"
         for client in udp_clients_iem:
             client.send_message(addr, az)
+        if _engine_mode and not _decks.deck_channel(fields["ch"]):
+            send_to_engine([position_message(_truth, "azimuth", channel_index, az)])
         send_position_to_prodj(key, channel_index, az)
 
     elif parameter == "elevation":
@@ -1010,6 +1208,8 @@ def osc_handler_channel(client_address: Tuple[str, int], address: str,
         addr = f"/MultiEncoder/elevation{channel_index}"
         for client in udp_clients_iem:
             client.send_message(addr, el)
+        if _engine_mode and not _decks.deck_channel(fields["ch"]):
+            send_to_engine([position_message(_truth, "elevation", channel_index, el)])
         send_position_to_prodj(key, channel_index, el)
 
     elif parameter == "filter.frequency":
@@ -1073,6 +1273,8 @@ def osc_handler_master(client_address: Tuple[str, int], address: str,
         print(address + " : " + str(value))
 
     relay(address, osc_arguments[0], origin)
+    if _engine_mode:
+        send_to_engine(forward_messages(_truth, key, {}, value))
 
     parameter: str = key[len("master."):]
 
@@ -1152,8 +1354,8 @@ def osc_handler_stemdeck(client_address: Tuple[str, int], address: str,
     if found is None:
         return
     key, fields = found
-    if key == "stemdeck.pointer":
-        return      # osc_handler_pointer's, mapped beside this family
+    if key in ("stemdeck.pointer", "stemdeck.deck-hello"):
+        return      # osc_handler_pointer's / _deck_hello's, mapped beside this family
     value = osc_arguments[0] if osc_arguments else None
     origin = peer_name(client_address[0], PEER_HOSTS)
     traffic.seen(IN, address, value, origin)
@@ -1186,6 +1388,7 @@ def on_tick():
     tidy_when_settled()
     notice_motion_silence(time.monotonic())
     notice_desk_silence(time.monotonic())
+    notice_deck_presence(time.monotonic())
     if _prodj_live.due(time.monotonic()):
         announce_live()
 
@@ -1195,6 +1398,8 @@ def tidy_when_settled():
     mirror obey the rules -- one stem per channel, the return's mode -- and
     tell StemDeck; then let the buses decide any channel that has no source
     yet (2026-10-14). Runs on the serve thread, as every handler does."""
+    if _engine_mode:
+        return      # REAPER mode's stem mirror; engine mode has the decks
     if not _tidy_settle.due(time.monotonic()) or _stemdeck_client is None:
         return
     send_to_stemdeck(_stems.tidy())
@@ -1223,6 +1428,8 @@ def osc_handler_filter(client_address: Tuple[str, int], address: str,
     # `/fx/mode` is not passed on here -- the mode branch below announces it
     # twice, to everybody, in both vocabularies. relay() knows that.
     relay(address, value, origin)
+    if _engine_mode:
+        send_to_engine(forward_messages(_truth, key, {}, value))
 
     parameter: str = key[len("filter."):]
 
@@ -1241,6 +1448,8 @@ def osc_handler_filter(client_address: Tuple[str, int], address: str,
         broadcast(_truth.address("filter.mode"),
                   FX_MODE_NUMBERS[master_info.fx_mode.name])
         set_filters()
+        if _engine_mode:
+            send_to_engine([filter_mode_message(_truth, master_info.fx_mode.value)])
 
     elif parameter == "frequency":
         val_hipass = slope_fx_freq_hipass(value)
@@ -1285,6 +1494,7 @@ def osc_handler_beat(client_address: Tuple[str, int], address: str,
     ambiguity: the analyzer runs on this box and so does Motion, and
     peer_name has only the host to go on. The address says who it was.
     """
+    global _engine_bpm
     traffic.seen(IN, address,
                  osc_arguments[2] if len(osc_arguments) > 2 else None,
                  peer_name(client_address[0], PEER_HOSTS,
@@ -1302,6 +1512,10 @@ def osc_handler_beat(client_address: Tuple[str, int], address: str,
     wanted = _tempo.wanted(osc_arguments[2])
     if wanted is NO_TEMPO:
         return
+
+    if _engine_mode:
+        _engine_bpm = wanted
+        send_to_engine([tempo_message(_truth, wanted)])
 
     # Both delay lines on the same tempo. They keep their own multipliers --
     # that is what makes the two sides a ping-pong rather than one echo --
@@ -1405,6 +1619,71 @@ def osc_handler_device_hello(client_address: Tuple[str, int], address: str,
         print(f"{label}: its a3-osc.json {verdict} ({their_hash[:12]})")
 
 
+def send_to_self(address, value):
+    """A message to Core's own port, from the one socket the hello gate
+    trusts (self_client, bound in the start-up block)."""
+    self_client.send_message(address, value)
+
+
+def osc_handler_engine_hello(client_address: Tuple[str, int], address: str,
+                             *osc_arguments: List[Any]) -> None:
+    """The a3-engine's boot id, every 2 s. A new one is an engine that has
+    just started and knows nothing: Core replays the evening through its own
+    door, then its token recall, which sends the engine its state and opens
+    it (osc_handler_recall). Not a value, so not asked of the hello gate --
+    as device.hello is not."""
+    traffic.seen(IN, address, osc_arguments[0] if osc_arguments else None,
+                 origin_of(client_address))
+    if not _engine_mode or not osc_arguments:
+        return
+    boot_id = str(osc_arguments[0])
+    if not _project.heard_hello(boot_id):
+        return
+    round_started = _project.round
+    print(f"engine: hello from {boot_id}, replaying the evening")
+
+    def replay_into_the_engine():
+        replay_evening(the_evening_to_replay(), send_to_self)
+        _startup_recall.rearm()
+        send_to_self(OSC_ADDRESS_RECALL, _startup_recall.token)
+        if _project.replayed(round_started):
+            write_the_evening()
+
+    # In a thread: the replay goes through this very loop, which must not
+    # wait for itself.
+    threading.Thread(target=replay_into_the_engine, daemon=True,
+                     name="a3-engine-replay").start()
+
+
+def osc_handler_deck_hello(client_address: Tuple[str, int], address: str,
+                           *osc_arguments: List[Any]) -> None:
+    """A StemDeck instance names the deck it plays, every 2 s: Core learns
+    where that deck listens, marks it present and tells it its 3D again.
+    Engine mode only; REAPER mode's StemDeck speaks device.hello."""
+    found = known_address(client_address, address, osc_arguments)
+    if found is None:
+        return
+    traffic.seen(IN, address, osc_arguments[0] if osc_arguments else None,
+                 peer_name(client_address[0], PEER_HOSTS))
+    if not _engine_mode:
+        return
+    deck = found[1]["deck"]
+    now = time.monotonic()
+    host = client_address[0]
+    if _deck_hosts.get(deck) != host:
+        _deck_hosts[deck] = host
+        _deck_clients[deck] = WatchedClient(
+            SimpleUDPClient(host, deck_port(_truth, deck)),
+            f"stemdeck-{chr(ord('A') + deck - 1)}")
+        print(f"stemdeck: deck {deck} at {host}")
+    _decks.heard(deck, now)
+    channel = _decks.channel_of(deck)
+    three_d = channel_infos[channel - 1].three_d if channel is not None else None
+    send_to_deck(_decks.hello_messages(
+        _truth, deck, three_d if three_d is not None else NEUTRAL_3D))
+    report_decks()
+
+
 def stemdeck_said_hello(host, now):
     """StemDeck is there. When that is news (a3_core_presence.HelloWatch),
     learn where it listens and ask it for every stem's switches -- it may have
@@ -1412,7 +1691,7 @@ def stemdeck_said_hello(host, now):
 
     Only one StemDeck may run: a hello from a second host while the first is
     alive is said once in the journal and not followed."""
-    global _stemdeck_client
+    global _stemdeck_client, _stemdeck_target
     news = _stemdeck_watch.hello(host, now)
     for rival in _stemdeck_watch.take_rivals():
         print(f"stemdeck: a second StemDeck at {rival} while following "
@@ -1422,6 +1701,7 @@ def stemdeck_said_hello(host, now):
         return
     _stemdeck_client = WatchedClient(
         SimpleUDPClient(host, _truth.endpoint("stemdeck", "osc")[1]), "stemdeck")
+    _stemdeck_target = (host, _truth.endpoint("stemdeck", "osc")[1])
     _stemdeck_client.send_message(_truth.address("stemdeck.recall"), 1)
     _stemdeck_client.send_message(_truth.address("prodj.live"), live_value())
     tell_prodj_where("stemdeck", host)
@@ -1598,8 +1878,24 @@ def announce_live():
     listeners = list(_desk_clients.values()) + [osc_a3motion]
     if _stemdeck_client is not None:
         listeners.append(_stemdeck_client)
+    listeners += deck_listeners()
     for client in listeners:
         client.send_message(_truth.address("prodj.live"), live_value())
+
+
+def deck_listeners():
+    """Engine mode: each deck's own port, for a word meant for StemDeck as a
+    whole. Deck A may be the base port itself: never twice to one host:port."""
+    if not _engine_mode:
+        return []
+    taken = {_stemdeck_target} if _stemdeck_client is not None else set()
+    clients = []
+    for deck, client in sorted(_deck_clients.items()):
+        target = (_deck_hosts[deck], deck_port(_truth, deck))
+        if target not in taken:
+            taken.add(target)
+            clients.append(client)
+    return clients
 
 
 def asker_client(client_address):
@@ -1700,6 +1996,17 @@ def osc_handler_recall(client_address: Tuple[str, int], address: str,
             tell_prodj(asker)
         else:
             asker.send_message(_truth.address("prodj.live"), live_value())
+
+    if _engine_mode:
+        # Core's own recall, after the replay into the engine: what the
+        # evening does not carry, then open. No REAPER gate in engine mode.
+        if _startup_recall.is_it(osc_arguments):
+            send_to_engine(state_messages(_truth, channel_infos, master_info,
+                                          _decks,
+                                          engine_return_source(_stems.return_mode),
+                                          _engine_bpm))
+            send_to_engine([open_message(_truth)])
+        return
 
     if _startup_recall.is_it(osc_arguments):
         threading.Thread(
@@ -1921,6 +2228,13 @@ if __name__ == "__main__":
 
     _print_osc = args.print_osc
 
+    # Engine or REAPER, once, before anything is sent (engine plan 4, D22).
+    _engine_mode, _engine_reason = engine_runs(*probe())
+    if _engine_mode:
+        print("audio engine: engine")
+    else:
+        print(f"audio engine: reaper: {_engine_reason}")
+
     PEER_HOSTS = {"mixer": args.mixer.rpartition(":")[0],
                   "motion": args.motion.rpartition(":")[0],
                   "reaper": args.reaper.rpartition(":")[0]}
@@ -1947,6 +2261,14 @@ if __name__ == "__main__":
             osc_dualdelay = client
         else:
             osc_reaper = client
+
+    # Engine mode: REAPER's send points stay, and reach nobody.
+    if _engine_mode:
+        osc_reaper = SilentClient("reaper")
+        osc_dualdelay = SilentClient("dualdelay")
+        udp_clients_iem = tuple(SilentClient("iem") for _ in udp_clients_iem)
+        _decks = DeckSelector(channels=_layout.channel_count,
+                              decks=_truth.addresses()["stemdeck.deck-hello"]["deck"][1])
 
     # Everything A3-shaped goes to every one of these, in this order. The two
     # that ship first, so a rig with no extra departments replays exactly as
@@ -2009,6 +2331,12 @@ if __name__ == "__main__":
                    needs_reply_address=True)
     dispatcher.map(_truth.address("device.hello"), osc_handler_device_hello,
                    needs_reply_address=True)
+    dispatcher.map(_truth.address("engine.hello"), osc_handler_engine_hello,
+                   needs_reply_address=True)
+    first_deck, last_deck = _truth.addresses()["stemdeck.deck-hello"]["deck"]
+    for deck in range(first_deck, last_deck + 1):
+        dispatcher.map(_truth.address("stemdeck.deck-hello", deck=deck),
+                       osc_handler_deck_hello, needs_reply_address=True)
     dispatcher.map(_truth.address("prodj.live"), osc_handler_prodj_live,
                    needs_reply_address=True)
     for pointer in ("stemdeck.pointer", "motion.pointer"):
@@ -2048,24 +2376,32 @@ if __name__ == "__main__":
     # The project holds it, and evening.json is not written again until the
     # replay is through (a3_core_reaper.ReaperProject).
     evening = list(replayable(_truth, _evening_file.load()))
-    _project = ReaperProject(evening)
+    if _engine_mode:
+        # Replayed on the engine's hello; after the first replay the evening
+        # is Core's own live one (the_live_evening).
+        _project = EngineSession(evening, current=the_live_evening)
+        _decks.from_evening(_evening_file.load())
+    else:
+        _project = ReaperProject(evening)
 
     feedback_dispatcher = osc_dispatcher.Dispatcher()
     feedback_dispatcher.set_default_handler(reaper_feedback_handler,
                                             needs_reply_address=True)
-    # One loop reads the port, one packet after another. It was a thread per
-    # packet, and a reconnect's burst was twenty-five thousand threads at once
-    # (issue #51) -- see the command server below for what that did.
-    feedback_server = osc_server.BlockingOSCUDPServer(
-        (args.ip, args.feedback_port), feedback_dispatcher)
-    # A report pass must fit while Core reads it, or its overflow is lost
-    # without a word -- the gate's mute reports among it (a3_core_receive_buffer).
-    feedback_buffer = widen_receive_buffer(feedback_server.socket)
-    threading.Thread(target=feedback_server.serve_forever,
-                     daemon=True).start()
-    print(f"listening for REAPER feedback on "
-          f"{args.ip}:{args.feedback_port}, "
-          f"buffer {feedback_buffer // 1024} KB")
+    # Engine mode: no REAPER, nobody reports on this port.
+    if not _engine_mode:
+        # One loop reads the port, one packet after another. It was a thread
+        # per packet, and a reconnect's burst was twenty-five thousand threads
+        # at once (issue #51) -- see the command server below for what that did.
+        feedback_server = osc_server.BlockingOSCUDPServer(
+            (args.ip, args.feedback_port), feedback_dispatcher)
+        # A report pass must fit while Core reads it, or its overflow is lost
+        # without a word -- the gate's mute reports among it (a3_core_receive_buffer).
+        feedback_buffer = widen_receive_buffer(feedback_server.socket)
+        threading.Thread(target=feedback_server.serve_forever,
+                         daemon=True).start()
+        print(f"listening for REAPER feedback on "
+              f"{args.ip}:{args.feedback_port}, "
+              f"buffer {feedback_buffer // 1024} KB")
 
     # The analyzer's meters, for a remote Motion and the desks (a3_core_vu_relay). They
     # arrive only if the analyzer's config has OSC_VU_core=<this port>: Core
@@ -2100,6 +2436,8 @@ if __name__ == "__main__":
     # Entscheidung des Maintainers: REAPERs eigenes periodisches Speichern
     # einschalten, oder Core seine relayten Werte selbst schreiben und beim
     # Start an REAPER zurückspielen lassen.
+    if _engine_mode:
+        args.save_project = False    # there is no REAPER project to save
     if args.save_project:
         def save_project_when_due():
             while True:
@@ -2169,7 +2507,7 @@ if __name__ == "__main__":
     # gets a line in the journal and the rig still makes sound.
     if not args.no_web:
         if start_window(traffic, args.web_bind, send=send_from_bench,
-                        devices=_devices,
+                        devices=_devices, status=engine_status,
                         truth=lambda: (_truth.canonical(), _truth.fingerprint())):
             # window_address(), not args.web_bind: --web-bind accepts port 0
             # to let the OS choose one, and printing the requested bind would
@@ -2240,6 +2578,8 @@ if __name__ == "__main__":
     self_client._sock.bind((_truth.host("local"), 0))
     _hello_gate.trust(self_client._sock.getsockname())
 
+    # Its nested send_to_self twins the module-level one; kept so this REAPER
+    # path stays byte-identical to main (REAPER frozen, D22).
     def replay_once_reaper_is_quiet():
         def send_to_self(address, value):
             self_client.send_message(address, value)
@@ -2254,12 +2594,14 @@ if __name__ == "__main__":
             write_the_evening()
 
     # Once for Core's own start, and again whenever REAPER closes its project
-    # and comes back under this Core (a3_core_reaper.ReaperProject).
-    threading.Thread(
-        target=replay_after_every_start, daemon=True, name="a3-replay",
-        args=(reaper_heard, reaper_gone,
-              lambda: osc_reaper.send_message(REFRESH_ACTION, 1.0),
-              replay_once_reaper_is_quiet)).start()
+    # and comes back under this Core (a3_core_reaper.ReaperProject). Engine
+    # mode replays on the engine's hello instead (osc_handler_engine_hello).
+    if not _engine_mode:
+        threading.Thread(
+            target=replay_after_every_start, daemon=True, name="a3-replay",
+            args=(reaper_heard, reaper_gone,
+                  lambda: osc_reaper.send_message(REFRESH_ACTION, 1.0),
+                  replay_once_reaper_is_quiet)).start()
 
     # Not serve_forever: the newest position wins (a3_core_latest). Motion
     # sends a position on every clock tick; under load the queue filled and

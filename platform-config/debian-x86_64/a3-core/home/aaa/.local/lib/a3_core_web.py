@@ -253,7 +253,7 @@ def register_as_json(register_path: Path, traffic) -> Dict[str, Any]:
 
 
 def _handler_class(traffic, send: Optional[Callable], page: Path,
-                   register_path: Path, devices=None, truth=None):
+                   register_path: Path, devices=None, truth=None, status=None):
 
     class Window(BaseHTTPRequestHandler):
         # Otherwise every request writes a line to stderr, which is the flood
@@ -322,6 +322,13 @@ def _handler_class(traffic, send: Optional[Callable], page: Path,
                 payload = {"own": devices.own_hash if devices else None,
                            "rows": devices.snapshot(time.monotonic())
                            if devices else []}
+                self._send(200, json.dumps(payload).encode(),
+                           "application/json")
+
+            elif self.path == "/api/status":
+                # Which audio engine runs and, for REAPER, why (engine plan
+                # 4, D22): a fallback has to be visible without a journal.
+                payload = status() if status is not None else {}
                 self._send(200, json.dumps(payload).encode(),
                            "application/json")
 
@@ -480,7 +487,7 @@ def default_bind(truth) -> str:
 def start_window(traffic, bind: str, send: Optional[Callable] = None,
                   page_path: Optional[Path] = None,
                   register_path: Optional[Path] = None,
-                  devices=None, truth=None) -> bool:
+                  devices=None, truth=None, status=None) -> bool:
     """Start serving, on a daemon thread. True if it is listening.
 
     Returns False rather than raising when the port is taken or the address
@@ -496,7 +503,7 @@ def start_window(traffic, bind: str, send: Optional[Callable] = None,
         host, port = _address_from(bind)
         _server = ThreadingHTTPServer(
             (host, port), _handler_class(traffic, send, page, register,
-                                         devices, truth))
+                                         devices, truth, status))
     except (OSError, ValueError, OverflowError) as problem:
         # OverflowError is what socket.bind() actually raises for a port
         # outside 0-65535 -- _address_from() already rejects that range, so
