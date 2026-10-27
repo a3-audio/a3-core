@@ -308,6 +308,7 @@ TEST (Engine, DeckAuxEchoesKeepTheDirection)
     const size_t frames = oneSecond, hit = 2000;
     EngineRig rig (engineConfig (4, 2), frames);
     rig.decks[0] = encodedDeck (rig.spatial, impulseAt (frames, hit), 90.0f);
+    rig.decks[0].aux = rig.decks[0].bformat;   // the echoes come from the aux bus
     rig.controls.channel (0).source = 1;
     rig.neutralStrip (0);
     rig.controls.channel (0).auxSend = 1.0f;
@@ -317,14 +318,6 @@ TEST (Engine, DeckAuxEchoesKeepTheDirection)
     const double echo = leftOverRightDb (rig, hit + echoAfter - 500, hit + echoAfter + 3000);
     EXPECT_GT (dry, 3.0);
     EXPECT_NEAR (echo, dry, 1.0);
-
-    // The deck's stereo aux is a return source only (R11).
-    EngineRig auxOnly (engineConfig (4, 2), frames / 4);
-    auxOnly.decks[0].aux = { noise (frames / 4, 0.3f, 5).l, noise (frames / 4, 0.3f, 6).l };
-    auxOnly.controls.channel (0).source = 1;
-    auxOnly.controls.channel (0).auxSend = 1.0f;
-    auxOnly.run (0, 0, { engineBlock }, {}, [&] { EXPECT_EQ (auxOnly.engine->lastFxSendPeak(), 0.0f); });
-    EXPECT_EQ (peak (auxOnly.everyOutput()), 0.0);   // nor anywhere behind the delay
 }
 
 TEST (Engine, DeckCueAndMixLikeAnalog)
@@ -372,22 +365,17 @@ TEST (Engine, StemCueLandsAfterTheDecoder)
     EXPECT_EQ (peak (stereo (run (1.0f)->phones)), 0.0);
 }
 
-TEST (Engine, ReturnFromDeckAux)
+// A deck's aux bus is B-format: its first two channels are no stereo pair, so a deck
+// return source plays nothing (A5 replaces the deck sources with the delay).
+TEST (Engine, DeckAuxIsNoReturnSource)
 {
-    const size_t frames = oneSecond;
-    const auto run = [&] (bool analogReturn)
-    {
-        auto rig = std::make_unique<EngineRig> (engineConfig (4, 2), frames);
-        rig->decks[1].aux = { noise (frames, 0.2f, 21).l, noise (frames, 0.2f, 22).l };
-        if (analogReturn)
-            rig->setAnalogPair (rig->config.returnAnalogPair, pinkStereo (frames, 23));
-        rig->controls.global().returnSource = 2;
-        rig->run();
-        return rig;
-    };
-    const auto withAnalog = run (true);
-    EXPECT_GT (peak (withAnalog->mainOutputs(), settled), 1e-3);
-    EXPECT_LT (maxDifference (withAnalog->everyOutput(), run (false)->everyOutput(), settled), 1e-6);
+    const size_t frames = oneSecond / 2;
+    EngineRig rig (engineConfig (4, 2), frames);
+    for (int ch = 0; ch < deckChannels; ++ch)
+        rig.decks[1].aux[(size_t) ch] = noise (frames, 0.2f, 21 + (uint32_t) ch).l;
+    rig.controls.global().returnSource = 2;
+    rig.run();
+    EXPECT_EQ (peak (rig.everyOutput()), 0.0);
 }
 
 TEST (Engine, PositionsAndThreeDDoNothingOnADeckChannel)
@@ -454,7 +442,9 @@ TEST (Engine, MissingDeckIsSilence)
         {
             for (auto& plane : rig->decks[0].bformat)
                 plane = mono (frames);
-            rig->decks[0].cue = rig->decks[0].aux = { mono (frames), mono (frames) };
+            rig->decks[0].cue = { mono (frames), mono (frames) };
+            for (auto& plane : rig->decks[0].aux)
+                plane = mono (frames);
         }
         rig->omitDecks = how == 2;
         rig->controls.channel (0).source = 1;
@@ -582,11 +572,10 @@ TEST (Engine, AnyCallSizeMatchesTheQuantum)
         pinkOnAnalogPairs (*rig);
         fillDeck (rig->decks[0], frames, 0.1f, 100);
         rig->decks[1].cue[0] = noise (frames, 0.1f, 101).l;
-        rig->decks[1].aux = { noise (frames, 0.1f, 102).l, noise (frames, 0.1f, 103).l };
+        rig->setAnalogPair (rig->config.returnAnalogPair, { noise (frames, 0.1f, 102).l, noise (frames, 0.1f, 103).l });
         rig->controls.channel (1).source = 1;
         rig->controls.channel (0).cue = 1.0f;
         rig->controls.global().phonesMix = 0.5f;
-        rig->controls.global().returnSource = 2;   // a control change would land on a different sample per call size
         rig->run (0, 0, calls);
         return rig;
     };
@@ -679,4 +668,160 @@ TEST (Engine, AnalogFadeInAfterResetIsClickFree)
         EXPECT_LE (stepIn (*x), 2.0 * inputStep);
     for (const auto* x : rig.mainOutputs())
         EXPECT_LE (stepIn (*x), 2.0 * inputStep);
+}
+
+namespace
+{
+constexpr size_t aWeightRamp = 441;   // a send weight's 10 ms at 44.1 kHz
+
+std::vector<float> constant (size_t frames, float level) { return std::vector<float> (frames, level); }
+
+// Deck 1 on channel 1 at unity, AUX 1; `setUp` feeds it and moves its controls.
+std::unique_ptr<EngineRig> deckOnChannelOne (size_t frames, const std::function<void (EngineRig&)>& setUp)
+{
+    auto rig = std::make_unique<EngineRig> (engineConfig (4, 2), frames);
+    rig->controls.channel (0).source = 1;
+    rig->neutralStrip (0);
+    rig->controls.channel (0).auxSend = 1.0f;
+    setUp (*rig);
+    return rig;
+}
+
+// The largest |sample| sent into the delay from `from` on, call by call.
+float fxSendFrom (EngineRig& rig, size_t from)
+{
+    float worst = 0.0f;
+    size_t at = 0;
+    rig.run (0, 0, { engineBlock }, [&] (size_t start) { at = start; },
+             [&] { if (at >= from) worst = std::max (worst, rig.engine->lastFxSendPeak()); });
+    return worst;
+}
+}
+
+TEST (Engine, DeckMainNeverReachesTheDelay)
+{
+    const size_t frames = oneSecond / 2;
+    auto rig = deckOnChannelOne (frames, [&] (EngineRig& r) { fillDeck (r.decks[0], frames, 0.3f, 400); });
+    rig->run (0, 0, { engineBlock }, {}, [&] { EXPECT_EQ (rig->engine->lastFxSendPeak(), 0.0f); });
+    EXPECT_GT (peak (rig->mainOutputs()), 1e-3);   // the deck does play
+}
+
+TEST (Engine, DeckAuxReachesTheDelayThroughTheStrip)
+{
+    const size_t frames = oneSecond;
+    const float level = 0.5f;
+    const auto auxDc = [&] (float volume)
+    {
+        auto rig = deckOnChannelOne (frames, [&] (EngineRig& r)
+        {
+            r.decks[0].aux[0] = constant (frames, level);
+            r.controls.channel (0).volume = volume;
+        });
+        return fxSendFrom (*rig, settled);
+    };
+    EXPECT_NEAR (auxDc (1.0f), level * a3::laws::auxSendGain (1.0), 1e-4);
+    EXPECT_EQ (auxDc (0.0f), 0.0f);
+
+    // EQ low fully down: the aux path loses the low band in the same proportion as the main path.
+    const auto low = sine (frames, 60.0, engineRate, level).l;
+    const auto onAux = [&] (float eqLow)
+    {
+        auto rig = deckOnChannelOne (frames, [&] (EngineRig& r)
+        {
+            r.decks[0].aux[0] = low;
+            r.controls.channel (0).eqLow = eqLow;
+        });
+        return (double) fxSendFrom (*rig, settled);
+    };
+    const auto onMain = [&] (float eqLow)
+    {
+        auto rig = deckOnChannelOne (frames, [&] (EngineRig& r)
+        {
+            r.decks[0].bformat[0] = low;
+            r.controls.channel (0).eqLow = eqLow;
+        });
+        rig->run();
+        return peak (rig->post[0].l, settled);   // the deck's W after VOLUME
+    };
+    const double auxRatio = onAux (0.0f) / onAux (0.5f);
+    const double mainRatio = onMain (0.0f) / onMain (0.5f);
+    EXPECT_LT (auxRatio, 0.5);
+    EXPECT_NEAR (auxRatio, mainRatio, 1e-3);
+}
+
+TEST (Engine, DeskAuxZeroIsSilenceOnTheDeckAux)
+{
+    const size_t frames = oneSecond / 2, half = frames / 2;
+    auto rig = deckOnChannelOne (frames, [&] (EngineRig& r)
+    {
+        for (int ch = 0; ch < deckChannels; ++ch)
+            r.decks[0].aux[(size_t) ch] = noise (frames, 0.3f, 500 + (uint32_t) ch).l;
+    });
+    float before = 0.0f;
+    size_t at = 0, closedAt = 0;
+    rig->run (0, 0, { engineBlock }, [&] (size_t start)
+    {
+        at = start;
+        if (start >= half && closedAt == 0)
+        {
+            rig->controls.channel (0).auxSend = 0.0f;
+            closedAt = start;
+        }
+    },
+    [&]
+    {
+        if (closedAt == 0)
+            before = std::max (before, rig->engine->lastFxSendPeak());
+        else if (at >= closedAt + aWeightRamp)
+            EXPECT_EQ (rig->engine->lastFxSendPeak(), 0.0f) << "at " << at;
+    });
+    EXPECT_GT (before, 1e-2f);
+}
+
+TEST (Engine, DeckOnNoChannelFeedsNoDelay)
+{
+    const size_t frames = oneSecond / 2;
+    const auto run = [&] (int sourceOfChannelTwo)
+    {
+        auto rig = std::make_unique<EngineRig> (engineConfig (4, 2), frames);
+        for (int ch = 0; ch < deckChannels; ++ch)
+            rig->decks[1].aux[(size_t) ch] = noise (frames, 0.3f, 600 + (uint32_t) ch).l;
+        for (int c = 0; c < 4; ++c)
+        {
+            rig->neutralStrip (c);
+            rig->controls.channel (c).auxSend = 1.0f;
+        }
+        rig->controls.channel (0).source = 1;   // deck 1, silent
+        rig->controls.channel (1).source = sourceOfChannelTwo;
+        float worst = 0.0f;
+        rig->run (0, 0, { engineBlock }, {}, [&] { worst = std::max (worst, rig->engine->lastFxSendPeak()); });
+        return worst;
+    };
+    EXPECT_EQ (run (0), 0.0f);    // deck 2 on no channel
+    EXPECT_GT (run (2), 1e-2f);   // the same deck on channel 2 does feed it
+}
+
+TEST (Engine, DeckSwitchDipsTheAuxToo)
+{
+    const size_t frames = 8192, switchAt = 4096;
+    const float levelA = 0.5f, levelB = 0.25f;
+    auto rig = deckOnChannelOne (frames, [&] (EngineRig& r)
+    {
+        r.decks[0].aux[0] = constant (frames, levelA);
+        r.decks[1].aux[0] = constant (frames, levelB);
+    });
+    std::vector<float> fx (frames, 0.0f);   // one-sample calls: each call's peak is that sample's |value|
+    size_t at = 0;
+    rig->run (0, 0, { 1 }, [&] (size_t start)
+    {
+        at = start;
+        rig->controls.channel (0).source = start < switchAt ? 1 : 2;
+    },
+    [&] { fx[at] = rig->engine->lastFxSendPeak(); });
+
+    const double aux = a3::laws::auxSendGain (1.0);
+    EXPECT_NEAR (fx[switchAt - 1], levelA * aux, 1e-4);
+    EXPECT_NEAR (fx.back(), levelB * aux, 1e-4);
+    EXPECT_LT (*std::min_element (fx.begin() + (long) switchAt, fx.begin() + (long) (switchAt + 1000)), 1e-3f);   // the dip
+    EXPECT_LE (maxStep (fx, switchAt - 100), 0.05);
 }

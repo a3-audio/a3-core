@@ -189,14 +189,16 @@ double loadAverage()
 // on the analog pairs too), two stem cues; then the same with all four analog. Judged on the
 // best of several repetition means: background load only ever adds time, so it cannot fail
 // the guard, while a regression slows every repetition.
-TEST (EngineTiming, FullGraphUnderOneMillisecondPer128)
+TEST (EngineTiming, FullGraphAnalogUnderOneDecksUnderOnePointTwoFiveMillisecondsPer128)
 {
 #ifndef NDEBUG
     GTEST_SKIP() << "timing is measured in Release only";
 #endif
     constexpr int blocks = 2000;
     constexpr int repetitions = 5;
-    constexpr double budgetMs = 1.0;
+    constexpr double analogBudgetMs = 1.0;
+    // Design 4.2 accepted one more 16-ch strip per deck channel; StemDeck A's removed cue decoder pays for it on this machine.
+    constexpr double decksBudgetMs = 1.25;
 
     EngineRig decks (engineConfig (4, 2), loopFrames, quantum);
     deckOnEveryChannel (decks);
@@ -220,14 +222,14 @@ TEST (EngineTiming, FullGraphUnderOneMillisecondPer128)
         bestDecks = std::min (bestDecks, onDecks.meanMs);
         bestAnalog = std::min (bestAnalog, onAnalog.meanMs);
     }
-    std::printf ("EngineTiming best of %d: all decks %.4f ms, all analog %.4f ms (budget %.1f)\n", repetitions, bestDecks,
-                 bestAnalog, budgetMs);
+    std::printf ("EngineTiming best of %d: all decks %.4f ms, all analog %.4f ms (budgets %.2f / %.2f)\n", repetitions, bestDecks,
+                 bestAnalog, decksBudgetMs, analogBudgetMs);
     RecordProperty ("decks_best_mean_ms", std::to_string (bestDecks));
     RecordProperty ("analog_best_mean_ms", std::to_string (bestAnalog));
     printShares (decks.spatial, bestDecks, bestAnalog, blocks);
 
-    EXPECT_LT (bestDecks, budgetMs);
-    EXPECT_LT (bestAnalog, budgetMs);
+    EXPECT_LT (bestDecks, decksBudgetMs);
+    EXPECT_LT (bestAnalog, analogBudgetMs);
 }
 
 // No channel cap (D11): what one more channel costs, at N = 32 against N = 4.

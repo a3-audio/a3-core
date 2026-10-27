@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 #include <atomic>
 #include <cstddef>
+#include <cstdio>
 #include <cstdlib>
 #include "EngineFixture.h"
 #include "EngineStages.h"
@@ -198,7 +199,8 @@ HeapCount engineAllocations (EngineRig& rig, const std::vector<int>& calls)
         for (int ch = 0; ch < deckChannels; ++ch)
             rig.decks[d].bformat[(size_t) ch] = noise (rig.frames, 0.1f, 200 + 20 * (uint32_t) d + (uint32_t) ch).l;
         rig.decks[d].cue = { noise (rig.frames, 0.1f, 300 + (uint32_t) d).l, noise (rig.frames, 0.1f, 310 + (uint32_t) d).l };
-        rig.decks[d].aux = { noise (rig.frames, 0.1f, 320 + (uint32_t) d).l, noise (rig.frames, 0.1f, 330 + (uint32_t) d).l };
+        for (int ch = 0; ch < deckChannels; ++ch)
+            rig.decks[d].aux[(size_t) ch] = noise (rig.frames, 0.1f, 320 + 20 * (uint32_t) d + (uint32_t) ch).l;
     }
     auto& g = rig.controls.global();
     g.phonesMix = 0.5f;
@@ -274,4 +276,41 @@ TEST (EngineAllocation, AtTheQuantumOnlyIemSimpleDecoderAllocates)
     EXPECT_EQ (engine.released, 2 * 344);
     const auto upstream = upstreamAllocations (rig.spatial, quantum, calls, rig.frames);
     EXPECT_EQ (engine.allocated, upstream.allocated);
+}
+
+// Four deck channels, each running its aux strip into the delay (only the aux buses carry
+// signal, so a send seen proves the aux path ran): the engine adds nothing to IEM's own.
+TEST (EngineAllocation, DeckAuxStripsDoNotAllocate)
+{
+    constexpr int blocks = 100;
+    EngineRig rig (engineConfig (4, 4), blocks * quantum, quantum, engineRate, false);
+    for (size_t d = 0; d < rig.decks.size(); ++d)
+        for (int ch = 0; ch < deckChannels; ++ch)
+            rig.decks[d].aux[(size_t) ch] = noise (rig.frames, 0.1f, 700 + 20 * (uint32_t) d + (uint32_t) ch).l;
+    for (int c = 0; c < 4; ++c)
+    {
+        rig.neutralStrip (c);
+        rig.controls.channel (c).source = c + 1;
+        rig.controls.channel (c).auxSend = 0.8f;
+        rig.controls.channel (c).filterOn = 1.0f;
+    }
+    rig.controls.global().filter.frequency = 0.7f;
+
+    HeapCount total;
+    float fxSeen = 0.0f;
+    for (size_t start = 0; start < rig.frames; start += quantum)
+    {
+        const auto in = rig.inputsAt (start);
+        const auto out = rig.outputsAt (start);
+        const auto count = countHeapDuring ([&] { rig.engine->process (in, out, quantum, rig.controls); });
+        total.allocated += count.allocated;
+        total.released += count.released;
+        fxSeen = std::max (fxSeen, rig.engine->lastFxSendPeak());
+    }
+    EXPECT_GT (fxSeen, 1e-3f);
+    const auto upstream = upstreamAllocations (rig.spatial, quantum, { quantum }, rig.frames);
+    EXPECT_EQ (total.allocated, upstream.allocated);
+    EXPECT_EQ (total.released, upstream.released);
+    std::printf ("[ recorded ] DeckAuxStripsDoNotAllocate: %d allocations, %d releases in %d blocks (IEM's own: %d)\n",
+                 total.allocated, total.released, blocks, upstream.allocated);
 }

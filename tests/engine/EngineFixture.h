@@ -37,8 +37,8 @@ inline a3::EngineConfig engineConfig (int channels = 4, int decks = 2)
 
 struct DeckSignals
 {
-    std::array<std::vector<float>, deckChannels> bformat;
-    std::array<std::vector<float>, 2> cue, aux;
+    std::array<std::vector<float>, deckChannels> bformat, aux;
+    std::array<std::vector<float>, 2> cue;
 };
 
 inline const float* pointerAt (const std::vector<float>& signal, size_t start)
@@ -178,11 +178,10 @@ public:
             a3::DeckInputs d;
             for (int ch = 0; ch < deckChannels; ++ch)
                 d.bformat[(size_t) ch] = pointerAt (deck.bformat[(size_t) ch], start);
+            for (int ch = 0; ch < deckChannels; ++ch)
+                d.aux[(size_t) ch] = pointerAt (deck.aux[(size_t) ch], start);
             for (int side = 0; side < 2; ++side)
-            {
                 d.cue[(size_t) side] = pointerAt (deck.cue[(size_t) side], start);
-                d.aux[(size_t) side] = pointerAt (deck.aux[(size_t) side], start);
-            }
             in.decks.push_back (d);
         }
         return in;

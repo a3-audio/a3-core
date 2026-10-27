@@ -76,11 +76,14 @@ libraries JUCE would `dlopen` for a window are not needed.
   order: main, booth, rec L/R, phones L/R, then per channel pre L/R and post L/R (a deck channel's
   W on both sides).
 
-**Timing guard.** `EngineTiming.FullGraphUnderOneMillisecondPer128` fails when the best of five
-repetition means exceeds 1.0 ms per 128-frame block on the build machine (a3coreV01, i5-4440). It
-measures the worst case: all four channels on decks, two stem cues, every send open. Background
-load only adds time, so it cannot fail the guard, but a real regression still does. 2026-10-26:
-0.84 ms (decks), 0.80 ms (analog). The two BinauralDecoders are about half of it.
+**Timing guard.** `EngineTiming.FullGraphAnalogUnderOneDecksUnderOnePointTwoFiveMillisecondsPer128`
+fails when the best of five repetition means exceeds its budget per 128-frame block on the build
+machine (a3coreV01, i5-4440): 1.25 ms with all four channels on decks, 1.0 ms with all four on
+analog (two stem cues, every send open in both). The deck budget is higher because each deck channel
+runs a second 16-ch strip for its aux bus (design 4.2); StemDeck A's removed cue decoder pays for it on
+the same machine. Background load only adds time, so it cannot fail the guard, but a real regression
+still does. 2026-10-26: 0.84 ms (decks), 0.80 ms (analog); 2026-10-27 with the aux strips: about
+1.0 ms (decks). The two BinauralDecoders are about half of it.
 `ReportsCostPerChannelAtThirtyTwo` prints the cost of one more channel (about 43 µs analog, 44 µs
 deck). The rig's own run decides.
 

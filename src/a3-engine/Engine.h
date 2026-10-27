@@ -40,7 +40,9 @@ struct EngineOutputs
 //               each path times its select ramp (both run during a crossfade)
 //   enc_main    analog: AmbiEncoderBus (moving/steady post-VOLUME, return post-RETURN in the bed)
 //               + deck: its 16 post-VOLUME channels added directly
-//   enc_fx      the same sources x auxSendGain (no return) -> DualDelay (tempo from delayBpm)
+//   enc_fx      analog: the same sources x auxSendGain (no return); deck: its 16-ch aux bus through
+//               a second DeckStrip on the channel's controls, post-VOLUME x auxSendGain (never its
+//               main 16) -> DualDelay (tempo from delayBpm)
 //   enc_phones  pre-VOLUME taps x cueWeight [cue on] + post-VOLUME x mixWeight,
 //               + return x (mixWeight + cueWeight [returnCue on])
 //   main/booth  (enc_fx + enc_main) -> MASTER/BOOTH -> SimpleDecoder (fixedGainDb is not applied, R1)

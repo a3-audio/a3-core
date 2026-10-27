@@ -73,10 +73,10 @@ struct EngineChannel
 
     int analogPair = 0;   // 1-based; 0 = deck only
     std::unique_ptr<ChannelStrip> strip;
-    DeckStrip deck;
+    DeckStrip deck, deckAux;   // deckAux: the deck's aux bus through the same controls, into the delay
     ChannelSelect select;
     WeightRamp aux, cue, mix;
-    juce::AudioBuffer<float> planes, deckPre, deckPost;
+    juce::AudioBuffer<float> planes, deckPre, deckPost, deckAuxPost;
     bool analogRuns = false, deckRuns = false;   // in the current chunk, with a gain above 0 somewhere
     int analogStart = 0;                         // where in the chunk the analog path starts to run
     bool resetAnalog = false;                    // it fades in from 0 there (R14)
@@ -133,7 +133,7 @@ struct Engine::Impl
 
     std::unique_ptr<std::atomic<float>[]> azimuth, elevation;   // contiguous, one per analog source
     std::vector<StereoIn> mainMoving, mainSteady, fxMoving, fxSteady, phMoving, phSteady;
-    std::vector<std::array<const float*, 2>> deckAux;
+    std::vector<std::array<const float*, 2>> deckReturns;   // all nullptr: an aux bus is B-format, no stereo pair (A5)
     juce::AudioBuffer<float> busMain, busFx, busPhones;
     enum ReturnPlane { retL, retR, retPhonesL, retPhonesR, retPhonesCurve, stemCueCurve, numReturnPlanes };
     juce::AudioBuffer<float> returnPlanes;
@@ -166,6 +166,7 @@ Engine::Impl::Impl (const EngineConfig& c, const SpatialConfig& spatial)
             analogChannelOf.push_back (i);
         }
         channel->deck.setSharedFilter (&filter);
+        channel->deckAux.setSharedFilter (&filter);
         channels.push_back (std::move (channel));
     }
 
@@ -219,15 +220,18 @@ void Engine::Impl::prepare (double rate, int newBlockSize)
         if (channel->strip != nullptr)
             channel->strip->prepare (rate, blockSize);
         channel->deck.prepare (rate, blockSize);
+        channel->deckAux.prepare (rate, blockSize);
         channel->select.prepare (rate, config.decks, channel->analogPair > 0);
         for (auto* ramp : { &channel->aux, &channel->cue, &channel->mix })
             ramp->prepare (rate);
         channel->planes.setSize (EngineChannel::numPlanes, blockSize);
         channel->deckPre.setSize (DeckStrip::channels, blockSize);
         channel->deckPost.setSize (DeckStrip::channels, blockSize);
+        channel->deckAuxPost.setSize (DeckStrip::channels, blockSize);
         channel->planes.clear();
         channel->deckPre.clear();
         channel->deckPost.clear();
+        channel->deckAuxPost.clear();
     }
 
     const auto stereo = [] (EngineChannel& ch, EngineChannel::Plane left)
@@ -246,7 +250,7 @@ void Engine::Impl::prepare (double rate, int newBlockSize)
         phMoving.push_back (stereo (ch, EngineChannel::phMovingL));
         phSteady.push_back (stereo (ch, EngineChannel::phSteadyL));
     }
-    deckAux.assign ((size_t) config.decks, { nullptr, nullptr });
+    deckReturns.assign ((size_t) config.decks, { nullptr, nullptr });
 
     for (auto* bus : { &busMain, &busFx, &busPhones })
         bus->setSize (busChannels, blockSize);
@@ -351,13 +355,16 @@ void Engine::Impl::selectPaths (EngineChannel& ch, const ChannelControls& contro
         if (s.deckFrom > 0.0f || s.deckTo > 0.0f)
         {
             if (s.resetDeck)
+            {
                 ch.deck.reset();
+                ch.deckAux.reset();
+            }
             runDeck (ch, controls, in, s.deckSlot, offset, done, length);
             ch.deckRuns = true;
         }
         else
         {
-            for (auto* taps : { &ch.deckPre, &ch.deckPost })
+            for (auto* taps : { &ch.deckPre, &ch.deckPost, &ch.deckAuxPost })
                 for (int k = 0; k < DeckStrip::channels; ++k)
                     clear (taps->getWritePointer (k) + done, length);
         }
@@ -365,7 +372,7 @@ void Engine::Impl::selectPaths (EngineChannel& ch, const ChannelControls& contro
     }
     if (! ch.deckRuns)
         return;
-    for (auto* taps : { &ch.deckPre, &ch.deckPost })
+    for (auto* taps : { &ch.deckPre, &ch.deckPost, &ch.deckAuxPost })
         for (int k = 0; k < DeckStrip::channels; ++k)
             multiply (taps->getWritePointer (k), ch.p (EngineChannel::deckGain), n);
 }
@@ -375,15 +382,19 @@ void Engine::Impl::runDeck (EngineChannel& ch, const ChannelControls& controls, 
 {
     const auto* deck = deckInputs (in, slot);
     const float* in16[DeckStrip::channels];
-    DeckTaps taps;
+    const float* aux16[DeckStrip::channels];
+    DeckTaps taps, auxTaps {};
+    const auto planeAt = [&] (const float* plane) { return plane != nullptr ? plane + offset + at : zeros.data(); };
     for (int k = 0; k < DeckStrip::channels; ++k)
     {
-        const float* plane = deck != nullptr ? deck->bformat[(size_t) k] : nullptr;
-        in16[k] = plane != nullptr ? plane + offset + at : zeros.data();
+        in16[k] = planeAt (deck != nullptr ? deck->bformat[(size_t) k] : nullptr);
+        aux16[k] = planeAt (deck != nullptr ? deck->aux[(size_t) k] : nullptr);
         taps.preVolume[k] = ch.deckPre.getWritePointer (k) + at;
         taps.postVolume[k] = ch.deckPost.getWritePointer (k) + at;
+        auxTaps.postVolume[k] = ch.deckAuxPost.getWritePointer (k) + at;
     }
     ch.deck.process (in16, taps, length, controls);
+    ch.deckAux.process (aux16, auxTaps, length, controls);
 }
 
 // R14: the analog strip runs only from where its select gain leaves 0 (reset first when
@@ -481,16 +492,10 @@ void Engine::Impl::writeMeters (EngineChannel& ch, const EngineOutputs& out, siz
 
 void Engine::Impl::runReturn (const EngineInputs& in, int offset, int n)
 {
-    for (size_t k = 0; k < deckAux.size(); ++k)
-    {
-        const auto* deck = deckInputs (in, (int) k + 1);
-        deckAux[k] = { deck != nullptr && deck->aux[0] != nullptr ? deck->aux[0] + offset : nullptr,
-                       deck != nullptr && deck->aux[1] != nullptr ? deck->aux[1] + offset : nullptr };
-    }
     const int first = 2 * config.returnAnalogPair - 2;
     const float* analog[2] { analogInput (in, first, offset), analogInput (in, first + 1, offset) };
     float* ret[2] { returnPlanes.getWritePointer (retL), returnPlanes.getWritePointer (retR) };
-    returnSelect.process (analog, deckAux, ret, n, returnSource);
+    returnSelect.process (analog, deckReturns, ret, n, returnSource);
     returnStage.process (ret, n, sides);
 
     returnPhones.render (returnPlanes.getWritePointer (retPhonesCurve), n);
@@ -508,7 +513,8 @@ void Engine::Impl::encode (int n)
     encPhones->process (phMoving, phSteady, retPhones, busPhones, n, azimuth.get(), elevation.get());
 }
 
-// R11: a deck channel's 16 post-VOLUME channels go straight into the buses, no encoder.
+// R11: a deck channel's 16 post-VOLUME channels go straight into the buses, no encoder;
+// the delay gets the deck's aux bus through its own strip instead (design 4.2).
 void Engine::Impl::addDecks (int n)
 {
     using P = EngineChannel;
@@ -525,7 +531,7 @@ void Engine::Impl::addDecks (int n)
             const float* post = ch.deckPost.getReadPointer (k);
             juce::FloatVectorOperations::add (busMain.getWritePointer (k), post, n);
             if (auxOpen)
-                addWeighted (busFx.getWritePointer (k), post, ch.p (P::auxCurve), n);
+                addWeighted (busFx.getWritePointer (k), ch.deckAuxPost.getReadPointer (k), ch.p (P::auxCurve), n);
             if (cueOpen)
                 addWeighted (busPhones.getWritePointer (k), ch.deckPre.getReadPointer (k), ch.p (P::cueCurve), n);
             if (mixOpen)
