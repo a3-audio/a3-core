@@ -1,5 +1,7 @@
 # A³ Core
 
+The C++ program `a3-core` (Core, engine, window) is built from this repository too: see `PROGRAM.md`.
+
 The 3D sound server of [A³ Audio](https://github.com/a3-audio/a3-system): a
 Debian x86_64 machine running PipeWire, REAPER and the beat-analyzer. A³ Mixer and
 A³ Motion control it over OSC. This repository *is* the deployment: the `.deb`
