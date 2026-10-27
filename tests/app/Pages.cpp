@@ -563,7 +563,8 @@ TEST_F (Pages, StatusSaysWhenNoEngineRuns)
 TEST_F (Pages, PaintsTheDeckSourceChooser)
 {
     FakeView view;
-    view.cfg.io.jack["deckB_1"] = { "AES67 deck B:receive_MAIN1" };
+    a3app::setDeckSource (view.cfg.io, 1, a3app::DeckSource::local);
+    a3app::setDeckSource (view.cfg.io, 2, a3app::DeckSource::aes67);
     a3app::IoPage page (view);
     page.setSize (900, 600);
     expectPainted (snapshot (page, "io-deck-source"));
@@ -575,4 +576,21 @@ TEST_F (Pages, PaintsTheDeckSourceChooser)
     page.deckSourceBox (2)->setSelectedId (1, juce::sendNotificationSync);
     EXPECT_EQ (view.cfg.io.jack.at ("deckB_cue_9"), std::vector<std::string> { "StemDeck-B:cue_9" });
     EXPECT_EQ (view.cfg.io.jack.at ("deckB_1"), std::vector<std::string> { "StemDeck-B:bformat_1" });
+}
+
+TEST_F (Pages, AnIncompleteDeckSlotShowsItAndOneChoiceCompletesIt)
+{
+    FakeView view;
+    for (int i = 1; i <= 16; ++i)   // what an older saved config holds: the 16 main links only
+        view.cfg.io.jack["deckA_" + std::to_string (i)] = { "StemDeck-A:bformat_" + std::to_string (i) };
+    a3app::IoPage page (view);
+    page.setSize (900, 600);
+    expectPainted (snapshot (page, "io-deck-incomplete"));
+    EXPECT_EQ (page.deckSourceBox (1)->getSelectedId(), 3);
+
+    page.deckSourceBox (1)->setSelectedId (1, juce::sendNotificationSync);
+    EXPECT_EQ (a3app::deckSourceOf (view.cfg.io, 1), a3app::DeckSource::local);
+    EXPECT_EQ (view.cfg.io.jack.at ("deckA_aux_16"), std::vector<std::string> { "StemDeck-A:aux_16" });
+    EXPECT_EQ (view.cfg.io.jack.at ("deckA_cue_9"), std::vector<std::string> { "StemDeck-A:cue_9" });
+    EXPECT_EQ (page.deckSourceBox (1)->getSelectedId(), 1);
 }

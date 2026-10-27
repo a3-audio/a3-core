@@ -27,7 +27,7 @@ public:
     void setDirectLinks (const juce::String& linesOfFromArrowTo);
     void refresh (bool force = false);   // re-reads the config and the live links (throttled unless forced)
     const juce::Label& messageLabel() const { return message; }
-    // The per-deck source chooser (1 = local StemDeck, 2 = AES67); nullptr past the config's decks.
+    // The per-deck source chooser (1 = local StemDeck, 2 = AES67, 3 = the slot holds neither complete set); nullptr past the config's decks.
     juce::ComboBox* deckSourceBox (int slotOneBased);
 
     void resized() override;

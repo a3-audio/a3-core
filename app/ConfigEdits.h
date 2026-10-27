@@ -36,8 +36,9 @@ enum class DeckSource { local, aes67 };
 // Replaces exactly the slot's 41 entries (deck{X}_1..16, _aux_1..16, _cue_1..9) with literal links;
 // every other entry stays.
 void setDeckSource (IoMap&, int slotOneBased, DeckSource);
-// Which source the slot's first main link names (local when the slot has no link).
-DeckSource deckSourceOf (const IoMap&, int slotOneBased);
+// The source whose 41 links the slot holds exactly; nullopt when it holds anything else
+// (missing, partial, or hand-edited links).
+std::optional<DeckSource> deckSourceOf (const IoMap&, int slotOneBased);
 
 bool sameConfig (const AppConfig&, const AppConfig&);
 

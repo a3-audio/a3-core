@@ -135,8 +135,9 @@ constexpr DeckBank deckBanks[] = {
 };
 }
 
-void setDeckSource (IoMap& map, int slot, DeckSource source)
+std::vector<std::pair<std::string, std::string>> deckLinks (int slot, DeckSource source)
 {
+    std::vector<std::pair<std::string, std::string>> links;
     const auto letter = deckLetters (slot);
     const auto client = source == DeckSource::local ? "StemDeck-" + letter : "AES67 deck " + letter;
     for (const auto& bank : deckBanks)
@@ -144,16 +145,31 @@ void setDeckSource (IoMap& map, int slot, DeckSource source)
         {
             const auto n = std::to_string (i);
             const auto peerPort = std::string (source == DeckSource::local ? bank.localPort : bank.aes67Port) + n;
-            map.jack["deck" + letter + bank.inputInfix + n] = { client + ":" + peerPort };
+            links.emplace_back ("deck" + letter + bank.inputInfix + n, client + ":" + peerPort);
         }
+    return links;
 }
 
-DeckSource deckSourceOf (const IoMap& map, int slot)
+void setDeckSource (IoMap& map, int slot, DeckSource source)
 {
-    const auto link = map.jack.find ("deck" + deckLetters (slot) + "_1");
-    if (link == map.jack.end() || link->second.empty())
-        return DeckSource::local;
-    return link->second.front().rfind ("AES67 deck ", 0) == 0 ? DeckSource::aes67 : DeckSource::local;
+    for (const auto& [port, peer] : deckLinks (slot, source))
+        map.jack[port] = { peer };
+}
+
+std::optional<DeckSource> deckSourceOf (const IoMap& map, int slot)
+{
+    for (const auto source : { DeckSource::local, DeckSource::aes67 })
+    {
+        const auto links = deckLinks (slot, source);
+        const bool all = std::all_of (links.begin(), links.end(), [&] (const auto& link)
+        {
+            const auto found = map.jack.find (link.first);
+            return found != map.jack.end() && found->second == std::vector<std::string> { link.second };
+        });
+        if (all)
+            return source;
+    }
+    return std::nullopt;
 }
 
 bool sameConfig (const AppConfig& a, const AppConfig& b)

@@ -191,3 +191,28 @@ TEST (ConfigEdits, DeckSourceLeavesOtherSlotsAndAnalogAlone)
     EXPECT_EQ (map.deviceChannels.at ("analog_1"), 3);
     EXPECT_EQ (map.jack.size(), 41u + 2u);
 }
+
+TEST (ConfigEdits, DeckSourceOfNeedsAllFortyOneLinks)
+{
+    a3app::IoMap map;
+    EXPECT_FALSE (a3app::deckSourceOf (map, 1));
+    a3app::setDeckSource (map, 1, a3app::DeckSource::aes67);
+    EXPECT_EQ (a3app::deckSourceOf (map, 1), a3app::DeckSource::aes67);
+    a3app::setDeckSource (map, 1, a3app::DeckSource::local);
+    EXPECT_EQ (a3app::deckSourceOf (map, 1), a3app::DeckSource::local);
+
+    auto missing = map;
+    missing.jack.erase ("deckA_cue_9");
+    EXPECT_FALSE (a3app::deckSourceOf (missing, 1));
+    auto mixed = map;
+    mixed.jack["deckA_aux_2"] = { "AES67 deck A:receive_AUX2" };
+    EXPECT_FALSE (a3app::deckSourceOf (mixed, 1));
+    auto extra = map;
+    extra.jack["deckA_1"].push_back ("other:port");
+    EXPECT_FALSE (a3app::deckSourceOf (extra, 1));
+
+    auto sixteen = a3app::IoMap {};
+    for (int i = 1; i <= 16; ++i)
+        sixteen.jack["deckA_" + std::to_string (i)] = { "StemDeck-A:bformat_" + std::to_string (i) };
+    EXPECT_FALSE (a3app::deckSourceOf (sixteen, 1));
+}

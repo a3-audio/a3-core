@@ -8,6 +8,7 @@ namespace a3app
 {
 namespace
 {
+constexpr int localDeckId = 1, aes67DeckId = 2, incompleteDeckId = 3;   // the chooser's items
 constexpr int reloadEveryTicks = 10;   // the window ticks at 20 Hz: the live links are re-read twice a second
 
 juce::String joined (const std::vector<std::string>& names)
@@ -179,10 +180,10 @@ void IoPage::chooseDeckSource (int slot)
     const auto* box = deckSourceBox (slot);
     if (box == nullptr)
         return;
-    const auto source = box->getSelectedId() == 2 ? DeckSource::aes67 : DeckSource::local;
-    auto config = view.config();
-    if (deckSourceOf (config.io, slot) == source && config.io.jack.count ("deck" + deckLetters (slot) + "_cue_9") == 1)
+    if (box->getSelectedId() == incompleteDeckId)   // only a display state; the user picks a real source
         return;
+    const auto source = box->getSelectedId() == aes67DeckId ? DeckSource::aes67 : DeckSource::local;
+    auto config = view.config();
     setDeckSource (config.io, slot, source);
     look::say (message, {});
     edit (config);
@@ -198,8 +199,9 @@ void IoPage::rebuildDeckChoosers()
         auto chooser = std::make_unique<DeckChooser>();
         look::caption (chooser->label);
         chooser->label.setText ("Deck " + juce::String (deckLetters (slot)), juce::dontSendNotification);
-        chooser->box.addItem ("Local StemDeck", 1);
-        chooser->box.addItem ("AES67 stream", 2);
+        chooser->box.addItem ("Local StemDeck", localDeckId);
+        chooser->box.addItem ("AES67 stream", aes67DeckId);
+        chooser->box.addItem ("Incomplete - pick a source", incompleteDeckId);
         chooser->box.onChange = [this, slot] { chooseDeckSource (slot); };
         addAndMakeVisible (chooser->label);
         addAndMakeVisible (chooser->box);
@@ -211,7 +213,11 @@ void IoPage::rebuildDeckChoosers()
 void IoPage::showDeckSources()
 {
     for (int slot = 1; slot <= (int) deckChoosers.size(); ++slot)
-        deckChoosers[(size_t) slot - 1]->box.setSelectedId (deckSourceOf (shown.io, slot) == DeckSource::aes67 ? 2 : 1, juce::dontSendNotification);
+    {
+        const auto source = deckSourceOf (shown.io, slot);
+        const int id = ! source ? incompleteDeckId : *source == DeckSource::aes67 ? aes67DeckId : localDeckId;
+        deckChoosers[(size_t) slot - 1]->box.setSelectedId (id, juce::dontSendNotification);
+    }
 }
 
 void IoPage::selectPort (int row)
