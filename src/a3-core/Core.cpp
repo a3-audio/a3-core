@@ -66,6 +66,12 @@ Core::Core (CoreEnvironment environment, CoreArgs coreArgs)
 // service says `audio engine: engine`, binds the sockets, opens the window and announces (Task 20).
 void Core::start()
 {
+    startPeers();
+    startSpeaking();
+}
+
+void Core::startPeers()
+{
     peerHosts = { { "mixer", args.mixer.host }, { "motion", args.motion.host },
                   { "reaper", truth.endpoint ("reaper", "osc").host } };
     // The desk is in front: its values count from its first message, hello or not.
@@ -85,7 +91,11 @@ void Core::start()
     project.emplace (replayable (truth, eveningFile.load()),
                      [this] { return replayable (truth, eveningState (relayed)); });   // the_live_evening
     decks.fromEvening (eveningFile.load());
+}
 
+// Called on the serve thread: what follows is handled there, and the claim says so.
+void Core::startSpeaking()
+{
     speakRememberedState();
 
     say (std::to_string (seenFile.restore()) + " addresses remembered from " + seenFilePath.getFullPathName().toStdString());

@@ -442,6 +442,8 @@ void Core::beatHandler (const Endpoint& from, const OscMessage& message)
 // and every desk followed.
 std::vector<Endpoint> Core::vuDestinations() const
 {
+    // The followers' state: B1 read it from the relay's own thread; here only the serve thread may (P8).
+    subscribersOwner.check ("the meters' destinations");
     std::vector<Endpoint> destinations;
     if (const auto remote = motion.vuDestination())
         destinations.push_back (*remote);

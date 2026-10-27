@@ -16,6 +16,9 @@
 
 namespace a3core
 {
+// 2 + secrets.randbelow(2 ** 30): never 0 or 1, which a device sends, and an OSC int.
+long long randomToken();
+
 class StartupRecall
 {
 public:

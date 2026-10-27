@@ -73,7 +73,12 @@ class Core
 public:
     Core (CoreEnvironment, CoreArgs);
 
-    void start();                                                     // B1's start-up, engine mode
+    void start();                                                     // B1's start-up, engine mode: both halves
+    // The halves, for the service to put its meters' line between them where B1 says it: the
+    // peers, the hello gate and the subscribers (a refused one throws SubscriberError), the evening;
+    // then the remembered state said, the address list restored, the serve thread's claim.
+    void startPeers();
+    void startSpeaking();
     void handlePacket (const Endpoint& from, const uint8_t*, size_t);
     void handleVu (const Endpoint& from, const uint8_t*, size_t);     // core.vu-relay datagrams (the engine's: Task 22)
     void tick();                                                      // on_tick + debounce flushes, every 0.1 s

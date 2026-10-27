@@ -28,11 +28,16 @@ public:
     double wall() override { return std::chrono::duration<double> (std::chrono::system_clock::now().time_since_epoch()).count(); }
 };
 
+}
+
 Clock& systemClock()
 {
     static SystemClock clock;
     return clock;
 }
+
+namespace
+{
 
 std::string utf8 (const juce::var& value) { return value.toString().toStdString(); }
 juce::var text (const std::string& value) { return juce::var (juce::String::fromUTF8 (value.data(), static_cast<int> (value.size()))); }

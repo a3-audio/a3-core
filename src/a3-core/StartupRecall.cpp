@@ -6,14 +6,10 @@
 
 namespace a3core
 {
-namespace
-{
-// 2 + secrets.randbelow(2 ** 30): never 0 or 1, which a device sends, and an OSC int.
 long long randomToken()
 {
     static std::mt19937_64 generator { std::random_device {}() };
     return 2 + static_cast<long long> (generator() % (1ULL << 30));
-}
 }
 
 long long StartupRecall::rearm (std::optional<long long> token)

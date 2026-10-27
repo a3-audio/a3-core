@@ -10,3 +10,5 @@ include(GoogleTest)
 gtest_discover_tests(a3-core-tests)
 target_compile_definitions(a3-core-tests PRIVATE
     A3_CORE_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data")
+target_compile_definitions(a3-core-tests PRIVATE
+    A3_CORE_SOURCE_DIR="${CMAKE_SOURCE_DIR}/src/a3-core")
