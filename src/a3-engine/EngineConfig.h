@@ -26,7 +26,7 @@ struct ModulatedParameter
 struct EngineConfig
 {
     int channels = 4;                 // N >= 1, no upper cap
-    int decks = 2;                    // deck slots A, B, ...; each 16 + cue 2 + aux 2 inputs
+    int decks = 2;                    // deck slots A, B, ...; each 16 + aux 16 + cue 9 inputs
     int analogInputs = 12;
     // Per channel (size == channels), 1-based pair (2p-1, 2p); 0 = deck-only, no encoder source.
     std::vector<int> analogPairs { 1, 2, 3, 4 };

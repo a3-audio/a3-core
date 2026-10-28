@@ -48,7 +48,7 @@ struct EngineOutputs
 //               + return x (mixWeight + cueWeight [returnCue on])
 //   main/booth  (enc_fx + enc_main) -> MASTER/BOOTH -> SimpleDecoder (fixedGainDb is not applied, R1)
 //   rec         BinauralDecoder (enc_fx + enc_main)
-//   phones      BinauralDecoder (enc_fx + enc_phones) + every deck's cue x cueWeight (mix) -> PHONES
+//   phones      BinauralDecoder (enc_fx + enc_phones + every deck's cue ACN 0..8 x cueWeight) -> PHONES
 //
 // A deck channel ignores its positions, 3D, FREQ and Q. Every gain control at 0 is silence (R18);
 // aux/cue/mix weights move over 10 ms (R6). The DualDelay pitch modulation runs only in
