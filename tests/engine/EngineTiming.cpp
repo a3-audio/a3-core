@@ -217,7 +217,7 @@ TEST (EngineTiming, FullGraphAnalogUnderOneDecksUnderOnePointTwoFiveMilliseconds
     for (int c = 0; c < 4; ++c)
         decks.controls.channel (c).source = c < 2 ? 1 : 2;
 
-    // The same graph with the aux strips shut (AUX 0): the difference is their share.
+    // The same graph with AUX 0: the difference is the AUX sends' share (the aux strips still feed the delay).
     EngineRig decksNoAux (decksConfig, loopFrames, quantum);
     deckOnEveryChannel (decksNoAux);
     analogOnEveryPair (decksNoAux);

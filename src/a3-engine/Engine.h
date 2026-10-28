@@ -41,9 +41,10 @@ struct EngineOutputs
 //               each path times its select ramp (both run during a crossfade)
 //   enc_main    analog: AmbiEncoderBus (moving/steady post-VOLUME) + deck: its 16 post-VOLUME channels
 //               added directly
-//   enc_fx      analog: the same sources x auxSendGain (no return); deck: its 16-ch aux bus through
-//               a second DeckStrip on the channel's controls, post-VOLUME x auxSendGain (never its
-//               main 16) -> DualDelay (tempo from delayBpm)
+//   enc_fx      analog: the same sources x auxSendGain (no return); deck: its 16 post-VOLUME
+//               channels x auxSendGain, plus its 16-ch aux bus through a second DeckStrip on the
+//               channel's controls, post-VOLUME at unity (not x auxSendGain) -> DualDelay
+//               (tempo from delayBpm)
 //   FX Return   the delay channel's master (P45): fx = DualDelay's output x RETURN
 //   enc_phones  pre-VOLUME taps x cueWeight [cue on] + post-VOLUME x mixWeight,
 //               + DualDelay's output x (RETURN x mixWeight + cueWeight [returnCue on])

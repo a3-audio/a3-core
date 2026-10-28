@@ -108,7 +108,7 @@ struct EngineChannel
 
     int analogPair = 0;   // 1-based; 0 = deck only
     std::unique_ptr<ChannelStrip> strip;
-    DeckStrip deck, deckAux;   // deckAux: the deck's aux bus through the same controls, into the delay
+    DeckStrip deck, deckAux;   // deckAux: the deck's aux bus through the same controls, into the delay at unity
     ChannelSelect select;
     WeightRamp aux, cue, mix;
     juce::AudioBuffer<float> planes, deckPre, deckPost, deckAuxPost;
@@ -578,8 +578,10 @@ void Engine::Impl::encode (int n)
     encPhones->process (phMoving, phSteady, {}, busPhones, n, azimuth.get(), elevation.get());
 }
 
-// R11: a deck channel's 16 post-VOLUME channels go straight into the buses, no encoder;
-// the delay gets the deck's aux bus through its own strip instead (design 4.2).
+// R11: a deck channel's 16 post-VOLUME channels go straight into the buses, no encoder.
+// The delay gets them like an analog channel's, times AUX; the deck's aux bus is StemDeck's own
+// send, so it goes in at unity, though through the channel's strip and select fade (design 4.2,
+// Ruling A1): a pulled fader or a deck on no channel still sends nothing.
 void Engine::Impl::addDecks (int n)
 {
     using P = EngineChannel;
@@ -595,8 +597,9 @@ void Engine::Impl::addDecks (int n)
         {
             const float* post = ch.deckPost.getReadPointer (k);
             juce::FloatVectorOperations::add (busMain.getWritePointer (k), post, n);
+            juce::FloatVectorOperations::add (busFx.getWritePointer (k), ch.deckAuxPost.getReadPointer (k), n);
             if (auxOpen)
-                addWeighted (busFx.getWritePointer (k), ch.deckAuxPost.getReadPointer (k), ch.p (P::auxCurve), n);
+                addWeighted (busFx.getWritePointer (k), post, ch.p (P::auxCurve), n);
             if (cueOpen)
                 addWeighted (busPhones.getWritePointer (k), ch.deckPre.getReadPointer (k), ch.p (P::cueCurve), n);
             if (mixOpen)
