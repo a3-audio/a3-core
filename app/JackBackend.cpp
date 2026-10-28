@@ -55,6 +55,7 @@ juce::Result JackBackend::open (EngineHost& engineHost, const AppConfig& config)
     }
     slots = bindPortSlots (engineHost.engineConfig(), engineHost.spatialConfig(), inputs, outputs);
     map = config.io;
+    addRecToAes67Sender (map, juce::SystemStats::getComputerName().toStdString());
     sampleRate = (double) jack_get_sample_rate (client);
     const auto built = engineHost.rebuild (sampleRate, (int) jack_get_buffer_size (client), false);
     if (built.failed())

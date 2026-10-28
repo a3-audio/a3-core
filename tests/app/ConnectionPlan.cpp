@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <gtest/gtest.h>
 #include "ConnectionPlan.h"
+#include "a3-links/LinkPlan.h"
+#include <algorithm>
 
 TEST (JackBackend, RefusesBesideReaperUnlessNoConnect)
 {
@@ -13,4 +15,69 @@ TEST (JackBackend, RefusesBesideReaperUnlessNoConnect)
     EXPECT_TRUE (a3app::refuseBesideReaper (withReaper, false).wasOk());
     EXPECT_TRUE (a3app::refuseBesideReaper ({ "system", "StemDeck-A", "REAPER-bridge" }, true).wasOk());
     EXPECT_TRUE (a3app::refuseBesideReaper ({}, true).wasOk());
+}
+
+namespace
+{
+bool links (const std::vector<std::string>& peers, const std::string& peer)
+{
+    return std::find (peers.begin(), peers.end(), peer) != peers.end();
+}
+
+// An engine.json saved before M10: the REC bus went to the single-instance StemDeck only.
+a3::links::LinkMap savedBeforeM10()
+{
+    a3::links::LinkMap map;
+    map.jack["rec_L"] = { "StemDeck:rec_L", "beat-analyzer:bpm_1" };
+    map.jack["rec_R"] = { "StemDeck:rec_R" };
+    map.jack["main_top_1"] = { "system:playback_1" };
+    return map;
+}
+}
+
+// Configuration 4 (P40): the Core's REC bus reaches its AES67 sender, so a deck host records it,
+// even when the saved map predates M10.
+TEST (BuiltInLinks, Configuration4RecBusReachesTheAes67SenderFromAPreM10SavedMap)
+{
+    auto map = savedBeforeM10();
+    a3app::addRecToAes67Sender (map, "a3nuc1");
+
+    EXPECT_TRUE (links (map.jack.at ("rec_L"), "AES67 a3nuc1 out:send_CH1"));
+    EXPECT_TRUE (links (map.jack.at ("rec_R"), "AES67 a3nuc1 out:send_CH2"));
+    // The saved entries stay as saved.
+    EXPECT_TRUE (links (map.jack.at ("rec_L"), "StemDeck:rec_L"));
+    EXPECT_TRUE (links (map.jack.at ("rec_L"), "beat-analyzer:bpm_1"));
+    EXPECT_EQ (map.jack.at ("main_top_1"), std::vector<std::string> { "system:playback_1" });
+
+    const std::vector<std::string> graph { "a3-engine:rec_L", "a3-engine:rec_R", "AES67 a3nuc1 out:send_CH1",
+                                           "AES67 a3nuc1 out:send_CH2" };
+    const auto plan = a3::links::planConnections (map, {}, {}, graph, { "analog_1" });
+    EXPECT_TRUE (std::find (plan.add.begin(), plan.add.end(), a3::links::Link { "a3-engine:rec_L", "AES67 a3nuc1 out:send_CH1" }) != plan.add.end());
+    EXPECT_TRUE (std::find (plan.add.begin(), plan.add.end(), a3::links::Link { "a3-engine:rec_R", "AES67 a3nuc1 out:send_CH2" }) != plan.add.end());
+}
+
+TEST (BuiltInLinks, TheSenderIsNamedAfterThisMachine)
+{
+    a3::links::LinkMap map;
+    a3app::addRecToAes67Sender (map, "a3nuc9");
+    EXPECT_EQ (map.jack.at ("rec_L"), std::vector<std::string> { "AES67 a3nuc9 out:send_CH1" });
+    EXPECT_EQ (map.jack.at ("rec_R"), std::vector<std::string> { "AES67 a3nuc9 out:send_CH2" });
+}
+
+TEST (BuiltInLinks, AMapThatHasThemAlreadyIsUnchanged)
+{
+    a3::links::LinkMap map;
+    map.jack["rec_L"] = { "AES67 a3nuc1 out:send_CH1" };
+    map.jack["rec_R"] = { "AES67 a3nuc1 out:send_CH2" };
+    const auto before = map.jack;
+    a3app::addRecToAes67Sender (map, "a3nuc1");
+    EXPECT_EQ (map.jack, before);
+}
+
+TEST (BuiltInLinks, NoHostNameNoLink)
+{
+    auto map = savedBeforeM10();
+    const auto before = map.jack;
+    a3app::addRecToAes67Sender (map, "");
+    EXPECT_EQ (map.jack, before);
 }

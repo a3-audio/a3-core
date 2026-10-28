@@ -12,4 +12,18 @@ juce::Result refuseBesideReaper (const std::vector<std::string>& clients, bool c
         return juce::Result::fail ("REAPER is running: start with --no-connect");
     return juce::Result::ok();
 }
+
+void addRecToAes67Sender (a3::links::LinkMap& map, const std::string& hostname)
+{
+    if (hostname.empty())
+        return;
+    const auto sender = "AES67 " + hostname + " out:";
+    for (const auto& [port, channel] : { std::pair<const char*, const char*> { "rec_L", "send_CH1" }, { "rec_R", "send_CH2" } })
+    {
+        auto& peers = map.jack[port];
+        const auto peer = sender + channel;
+        if (std::find (peers.begin(), peers.end(), peer) == peers.end())
+            peers.push_back (peer);
+    }
+}
 }

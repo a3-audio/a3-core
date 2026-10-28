@@ -7,7 +7,6 @@
 #include <gtest/gtest.h>
 #include <map>
 #include <set>
-#include <tuple>
 #include "ConfigFile.h"
 #include "EngineFixture.h"
 #include "EnginePorts.h"
@@ -151,7 +150,7 @@ TEST (DefaultConfig, ConnectsWhatThePatchbayConnectedForReaper)
             ++meters;
             continue;
         }
-        if (startsWith (peer, "StemDeck:rec_"))   // P20: the single-instance recorder is gone; M10 names StemDeck-A and AES67
+        if (startsWith (peer, "StemDeck:rec_"))   // P39: StemDeck links its own recorder; the engine keeps only the AES67 sender
         {
             ++singleInstanceRecorders;
             continue;
@@ -180,13 +179,13 @@ TEST (DefaultConfig, ConnectsWhatThePatchbayConnectedForReaper)
     EXPECT_GE (checked, 15);
     EXPECT_EQ (meters, 50);   // every patchbay cable into beat-analyzer's vu_* ports
     EXPECT_EQ (direct, 0);    // REAPER's raw meter outs (out25-26, out31-38) fed only those meters
-    EXPECT_EQ (singleInstanceRecorders, 2);   // rec_L/R -> StemDeck:rec_L/R, replaced by the M10 recorders below
-    for (const auto& [port, local, sender] : { std::tuple<const char*, const char*, const char*> { "rec_L", "StemDeck-A:rec_L", "AES67 a3nuc1 out:send_CH1" },
-                                               { "rec_R", "StemDeck-A:rec_R", "AES67 a3nuc1 out:send_CH2" } })
+    EXPECT_EQ (singleInstanceRecorders, 2);   // rec_L/R -> StemDeck:rec_L/R, now made by StemDeck itself
+    for (const auto& [port, sender] : { std::pair<const char*, const char*> { "rec_L", "AES67 a3nuc1 out:send_CH1" },
+                                        { "rec_R", "AES67 a3nuc1 out:send_CH2" } })
     {
-        EXPECT_TRUE (contains (config.io.jack.at (port), local)) << port;
         EXPECT_TRUE (contains (config.io.jack.at (port), sender)) << port;
-        EXPECT_FALSE (contains (config.io.jack.at (port), std::string ("StemDeck:") + port)) << port;
+        for (const auto& peer : config.io.jack.at (port))
+            EXPECT_FALSE (startsWith (peer, "StemDeck")) << port << " -> " << peer;
     }
 }
 
@@ -256,13 +255,16 @@ TEST (DefaultConfig, NoLinkToTheAnalyzersMeters)
 }
 
 // M10: every deck host records, and the source is always the REC bus. The default map is a3nuc1's:
-// deck A is local ("StemDeck-A" takes rec_L/R as inputs) and the Core's AES67 sender (a patchbay
-// socket "AES67 .* out", plugs send_CH1/2) carries the same bus to the other hosts.
-TEST (DefaultConfig, RecBusFeedsTheLocalStemDeck)
+// the Core's AES67 sender (a patchbay socket "AES67 .* out", plugs send_CH1/2) carries the bus to the
+// other hosts. P39: every StemDeck links its own rec_L/R from a3-engine:rec_L/R, so no StemDeck recorder is in this map.
+TEST (DefaultConfig, HasNoStemDeckRecorderEntries)
 {
     const auto config = loadDefault();
-    EXPECT_TRUE (contains (config.io.jack.at ("rec_L"), "StemDeck-A:rec_L"));
-    EXPECT_TRUE (contains (config.io.jack.at ("rec_R"), "StemDeck-A:rec_R"));
+    for (const auto& [port, peers] : config.io.jack)
+        for (const auto& peer : peers)
+            EXPECT_FALSE (startsWith (peer, "StemDeck") && startsWith (afterColon (peer), "rec_")) << port << " -> " << peer;
+    for (const auto& [from, to] : config.io.directLinks)
+        EXPECT_FALSE (startsWith (to, "StemDeck") && startsWith (afterColon (to), "rec_")) << from << " -> " << to;
 }
 
 TEST (DefaultConfig, RecBusFeedsAes67ChannelsOneAndTwo)
@@ -295,6 +297,6 @@ TEST (DefaultConfig, NothingButTheRecBusFeedsARecorder)
                 found.insert (peer);
         return found;
     };
-    EXPECT_EQ (recorders ("rec_L"), (std::set<std::string> { "StemDeck-A:rec_L", "AES67 a3nuc1 out:send_CH1" }));
-    EXPECT_EQ (recorders ("rec_R"), (std::set<std::string> { "StemDeck-A:rec_R", "AES67 a3nuc1 out:send_CH2" }));
+    EXPECT_EQ (recorders ("rec_L"), (std::set<std::string> { "AES67 a3nuc1 out:send_CH1" }));
+    EXPECT_EQ (recorders ("rec_R"), (std::set<std::string> { "AES67 a3nuc1 out:send_CH2" }));
 }

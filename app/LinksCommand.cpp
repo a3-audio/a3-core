@@ -6,6 +6,7 @@
 #include <jack/jack.h>
 
 #include "ConfigFile.h"
+#include "ConnectionPlan.h"
 #include "LinksOverview.h"
 #include "ProgramArgs.h"
 #include "Truth.h"
@@ -88,7 +89,11 @@ int runLinks (const a3core::Platform& platform)
     const auto map = engineMap (platform);
     std::optional<std::size_t> missing;
     if (map.known)
-        missing = a3::links::linksWithMissingTarget (map.config.io, ports);
+    {
+        auto wanted = map.config.io;   // what the engine links: the file plus its built-in links
+        addRecToAes67Sender (wanted, platform.hostname());
+        missing = a3::links::linksWithMissingTarget (wanted, ports);
+    }
 
     const LinkMeanings meanings { map.config.engine, meterNames (platform) };
     std::fputs (formatLinks ({ links, ports, missing }, meanings).c_str(), stdout);
