@@ -191,7 +191,13 @@ class TheVocabulary(unittest.TestCase):
         self.assertEqual(len(meters), 66)
         self.assertEqual(meters[0], "analog1_L")
         self.assertEqual(meters[10], "main_sub")
-        self.assertEqual(meters[39], "free70")
+        self.assertEqual(meters[39], "deck_d")
+
+    def test_each_deck_has_its_meter_on_37_to_40(self):
+        # A one-deck StemDeck sends no stem meters: the engine meters every
+        # deck slot's W, for the desk's deck bars (2026-10-28).
+        meters = truth().vu_meters()
+        self.assertEqual(meters[36:40], ["deck_a", "deck_b", "deck_c", "deck_d"])
 
     def test_every_address_names_known_programs(self):
         t = truth()
@@ -743,5 +749,10 @@ class TheMetersComeFromTheEngine(unittest.TestCase):
                          ("/vu/{n}", "ff", [1, 66]))
         self.assertEqual(len(self.truth.vu_meters()), 66)
         if B1_TRUTH.exists():
-            self.assertEqual(self.truth.vu_meters(), a3_osc.load(B1_TRUTH).vu_meters())
+            # Every meter B1 had keeps its number; a new one only takes a
+            # number B1 left free (37-40: the decks, 2026-10-28).
+            before = a3_osc.load(B1_TRUTH).vu_meters()
+            for number, (now, then) in enumerate(zip(self.truth.vu_meters(), before), 1):
+                if not then.startswith("free"):
+                    self.assertEqual(now, then, number)
             self.assertEqual(self.truth.meters(), a3_osc.load(B1_TRUTH).meters())
