@@ -108,3 +108,24 @@ TEST (CpuBench, ABlockWithEveryInputFedMakesFiniteSoundOnTheMainZone)
     EXPECT_TRUE (std::isfinite (peak));
     EXPECT_GT (peak, 1e-4f);
 }
+
+// A slot the bench feeds but the engine ignores would cost nothing and measure nothing.
+TEST (CpuBench, DecksCAndDReachTheMainOutput)
+{
+    const auto fed = rigWithDecks (4);
+    const auto cut = rigWithDecks (4);
+    float fedEnergy = 0.0f, cutEnergy = 0.0f;
+    for (int block = 0; block < 400; ++block)
+    {
+        auto withoutCD = cut->inputsAt (block);
+        for (size_t slot = 2; slot < withoutCD.decks.size(); ++slot)
+            withoutCD.decks[slot] = {};
+        fed->process (block);
+        cut->processWith (withoutCD);
+        fedEnergy = fed->mainEnergy();
+        cutEnergy = cut->mainEnergy();
+    }
+    EXPECT_GT (fedEnergy, 0.0f);
+    EXPECT_NE (fedEnergy, cutEnergy);
+    EXPECT_GT (std::abs (fedEnergy - cutEnergy), 0.01f * fedEnergy);
+}

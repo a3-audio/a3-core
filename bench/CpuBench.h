@@ -45,8 +45,10 @@ public:
     ~CpuBenchRig();
 
     void process (int block);                         // one block of options.frames, from the looped signal
+    void processWith (const a3::EngineInputs&);       // the same, with inputs the caller changed
     const a3::EngineInputs& inputsAt (int block) const;
     a3::EngineControls& controls();
+    float mainEnergy() const;                         // sum of squares on the main zone in the last block
     float mainPeak() const;                           // largest |sample| on the main zone in the last block
 
 private:

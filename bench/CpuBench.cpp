@@ -235,9 +235,20 @@ const a3::EngineInputs& CpuBenchRig::inputsAt (int block) const
     return impl->inputsPerBlock[(size_t) (block % loopBlocks)];
 }
 
-void CpuBenchRig::process (int block)
+void CpuBenchRig::process (int block) { processWith (inputsAt (block)); }
+
+void CpuBenchRig::processWith (const a3::EngineInputs& inputs)
 {
-    impl->engine->process (inputsAt (block), impl->outputs, impl->options.frames, *impl->controls);
+    impl->engine->process (inputs, impl->outputs, impl->options.frames, *impl->controls);
+}
+
+float CpuBenchRig::mainEnergy() const
+{
+    float sum = 0.0f;
+    for (const float* buffer : impl->mainBuffers)
+        for (int i = 0; i < impl->options.frames; ++i)
+            sum += buffer[i] * buffer[i];
+    return sum;
 }
 
 a3::EngineControls& CpuBenchRig::controls() { return *impl->controls; }
