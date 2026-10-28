@@ -10,7 +10,6 @@ namespace a3app
 namespace
 {
 constexpr const char* clientName = "a3-engine";
-constexpr double connectEverySeconds = 1.0;
 
 // jack_get_ports / jack_port_get_all_connections hand out a null-terminated list the caller frees.
 std::vector<std::string> takeNames (const char** names)
@@ -144,7 +143,7 @@ void JackBackend::service (double nowSeconds)
         return;
     rebuildOnNewQuantumOrRate();
     const bool portsCameOrWent = portsChanged.exchange (false);
-    if (! connecting || ! (portsCameOrWent || nowSeconds - lastConnectSeconds >= connectEverySeconds))
+    if (! linkPlanDue (connecting, portsCameOrWent, nowSeconds, lastConnectSeconds))
         return;
     lastConnectSeconds = nowSeconds;
     linker->apply (map);

@@ -21,4 +21,10 @@ void addRecToAes67Sender (a3::links::LinkMap&, const std::string& hostname);
 // What the engine links and counts: the loaded io map plus the built-in links above. `hostname` is
 // Platform::hostname(), the source a3-osc-render names the sender from.
 IoMap linkMapFor (const AppConfig&, const std::string& hostname);
+
+// Whether JackBackend::service applies the map now: at once when a port registered or went
+// (a deck host booting after the Core, a3-aes67 restarting), and once a second in case a
+// registration callback was missed. Never with --no-connect.
+constexpr double linkEverySeconds = 1.0;
+bool linkPlanDue (bool connecting, bool portsChanged, double nowSeconds, double lastLinkSeconds);
 }

@@ -102,3 +102,15 @@ TEST (BuiltInLinks, LinkMapForIsTheLoadedMapPlusTheBuiltInLinks)
     EXPECT_EQ (linked.deviceChannels, config.io.deviceChannels);
     EXPECT_EQ (config.io.jack, loaded);
 }
+
+// F1 finding 3: a deck host can boot after the Core, and a3-aes67 can restart. The engine applies
+// its map again when a port registers anywhere in the graph, and once a second as a fallback, so
+// "AES67 deck B:receive_*" appearing late is linked without restarting the engine.
+TEST (LinkPlanDue, APortRegistrationOrASecondAppliesTheMapAgain)
+{
+    EXPECT_TRUE (a3app::linkPlanDue (true, false, 0.0, -1.0e9)) << "the first service after open";
+    EXPECT_TRUE (a3app::linkPlanDue (true, true, 10.1, 10.0)) << "a port came or went: at once";
+    EXPECT_FALSE (a3app::linkPlanDue (true, false, 10.5, 10.0)) << "nothing changed within the second";
+    EXPECT_TRUE (a3app::linkPlanDue (true, false, 11.0, 10.0)) << "the periodic fallback, a missed callback heals";
+    EXPECT_FALSE (a3app::linkPlanDue (false, true, 11.0, 10.0)) << "--no-connect never links";
+}

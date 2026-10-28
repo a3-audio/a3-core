@@ -33,4 +33,11 @@ IoMap linkMapFor (const AppConfig& config, const std::string& hostname)
     addRecToAes67Sender (map, hostname);
     return map;
 }
+
+bool linkPlanDue (bool connecting, bool portsChanged, double nowSeconds, double lastLinkSeconds)
+{
+    if (! connecting)
+        return false;
+    return portsChanged || nowSeconds - lastLinkSeconds >= linkEverySeconds;
+}
 }
