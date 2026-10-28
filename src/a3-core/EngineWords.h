@@ -34,7 +34,7 @@ using Evening = std::vector<Message>;
 // The aux-return source that plays the delay's output (R1); 0 is analog 11/12.
 inline constexpr int returnDelay = 1;
 
-// The aux return's source from the desk's own return word: STEM (the desk's word 1, shown there as DELAY)
+// The aux return's source from the desk's own return word: STEM (the desk's word 1, shown there as FX RTN)
 // plays the delay, ANALOG analog 11/12.
 int engineReturnSource (int returnMode);
 

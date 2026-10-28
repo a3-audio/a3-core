@@ -670,7 +670,8 @@ class TheDeckStreams(unittest.TestCase):
         self.assertIn("0 = analog 11/12", source)
         self.assertIn("1 = the delay", source)
         self.assertNotIn("deck k's AUX", source)
-        self.assertIn("1 = DELAY", mode)
+        self.assertIn("FX Return", mode)
+        self.assertNotIn("DELAY", mode)
 
 
 B1_TRUTH = Path("/home/aaa/a3-system/wt/parity-baseline/a3-core-7a7b2441f74e") / \
