@@ -197,14 +197,13 @@ a3::EngineConfig allocationConfig()
 }
 
 // N = 4, two decks, every path running and moving: analog and deck strips, all three
-// buses, the delay, the return from both kinds of source, cue/mix/aux, the stem cues,
+// buses, the delay and its FX Return (RETURN and its cue moving), cue/mix/aux, the stem cues,
 // the filter, the gate opening and closing, source switches (analog <-> deck crossfade,
 // deck <-> deck dip). The first call is the first after prepare.
 HeapCount engineAllocations (EngineRig& rig, const std::vector<int>& calls)
 {
     for (int pair = 1; pair <= 4; ++pair)
         rig.setAnalogPair (pair, pinkStereo (rig.frames, (uint32_t) pair));
-    rig.setAnalogPair (rig.config.returnAnalogPair, pinkStereo (rig.frames, 9));
     for (size_t d = 0; d < rig.decks.size(); ++d)
     {
         for (int ch = 0; ch < deckChannels; ++ch)
@@ -215,7 +214,6 @@ HeapCount engineAllocations (EngineRig& rig, const std::vector<int>& calls)
     }
     auto& g = rig.controls.global();
     g.phonesMix = 0.5f;
-    g.returnCue = 1.0f;
     g.filter.frequency = 0.7f;
     for (int c = 0; c < 4; ++c)
     {
@@ -224,7 +222,7 @@ HeapCount engineAllocations (EngineRig& rig, const std::vector<int>& calls)
         rig.controls.channel (c).filterOn = 1.0f;
     }
 
-    // Per eighth of the run: ch1..ch4 source, return source, gate open, filter kind, filter mode.
+    // Per eighth of the run: ch1..ch4 source, return cue, gate open, filter kind, filter mode.
     const int plan[8][8] { { 0, 1, 2, 0, 0, 0, 0, 1 }, { 1, 0, 2, 0, 1, 1, 0, 1 }, { 2, 0, 1, 2, 2, 1, 1, 1 },
                            { 0, 2, 1, 2, 0, 1, 1, 0 }, { 1, 2, 0, 1, 1, 0, 0, 0 }, { 2, 1, 0, 1, 2, 1, 1, 1 },
                            { 0, 1, 2, 0, 0, 1, 0, 0 }, { 1, 0, 0, 2, 1, 1, 1, 1 } };
@@ -237,7 +235,8 @@ HeapCount engineAllocations (EngineRig& rig, const std::vector<int>& calls)
         const auto& step = plan[start * 8 / rig.frames];
         for (int c = 0; c < 4; ++c)
             rig.controls.channel (c).source = step[c];
-        g.returnSource = step[4];
+        g.returnCue = step[4] == 1 ? 1.0f : 0.0f;
+        g.auxReturn = step[4] == 2 ? 0.0f : 0.75f;
         g.gateOpen = step[5] != 0;
         g.filter.kind = step[6];
         g.filter.mode = step[7];

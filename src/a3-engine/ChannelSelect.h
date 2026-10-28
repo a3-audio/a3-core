@@ -45,20 +45,4 @@ private:
     int analogCount = 0, deckCount = 0;   // gain = count / fadeSamples
     int analogGoal = 0, deckGoal = 0;
 };
-
-// The return's source (R1): the analog return pair, or the delay. 10 ms linear crossfade.
-// out = analog pair x (1 - share); share is the delay source's weight per sample, 0 on
-// analog and 1 on delay. The engine plays the delay at (1 - share) + share x RETURN, so
-// the delay is at unity on analog and follows RETURN on delay. Any other source keeps the last.
-class ReturnSelect
-{
-public:
-    static constexpr int analog = 0, delay = 1;
-    void prepare (double sampleRate);
-    void process (const float* const* analogPair, float* const* outPair, float* delayShare, int numSamples, int source);
-
-private:
-    int fadeSamples = 441, selected = analog;
-    int shareCount = 0;   // delay share = shareCount / fadeSamples
-};
 }

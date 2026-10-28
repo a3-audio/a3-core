@@ -44,7 +44,7 @@ bool operator== (const ModulatedParameter& a, const ModulatedParameter& b)
 bool operator== (const EngineConfig& a, const EngineConfig& b)
 {
     return a.channels == b.channels && a.decks == b.decks && a.analogInputs == b.analogInputs
-        && a.analogPairs == b.analogPairs && a.returnAnalogPair == b.returnAnalogPair
+        && a.analogPairs == b.analogPairs
         && a.trims == b.trims && a.phonesHeadphoneEq == b.phonesHeadphoneEq && a.filterKind == b.filterKind && a.delayModulation == b.delayModulation;
 }
 
@@ -54,6 +54,9 @@ using jsonparse::Refusal;
 using jsonparse::refuse;
 using jsonparse::objectOf;
 using jsonparse::rejectUnknownKeys;
+
+// The analog return's pair (analog 11/12), gone with P45: accepted, never read, never written.
+constexpr const char* retiredReturnPair = "returnAnalogPair";
 
 bool isNumber (const juce::var& v) { return v.isInt() || v.isInt64() || v.isDouble(); }
 
@@ -189,8 +192,6 @@ void checkPairs (const EngineConfig& config)
         const auto channel = "analogPairs: channel " + juce::String ((int) i + 1);
         if (pair * 2 > config.analogInputs)
             refuse (channel + " is on pair " + juce::String (pair) + ", beyond the " + juce::String (config.analogInputs) + " analog inputs");
-        if (pair == config.returnAnalogPair)
-            refuse (channel + " is on the return pair " + juce::String (pair));
         if (! used.insert (pair).second)
             refuse (channel + " shares pair " + juce::String (pair) + " with another channel");
     }
@@ -199,7 +200,7 @@ void checkPairs (const EngineConfig& config)
 EngineConfig parse (const juce::var& v)
 {
     const auto& section = objectOf (v, "the engine section");
-    rejectUnknownKeys (section, { "channels", "decks", "analogInputs", "analogPairs", "returnAnalogPair",
+    rejectUnknownKeys (section, { "channels", "decks", "analogInputs", "analogPairs", retiredReturnPair,
                                   "trimsDb", "phonesHeadphoneEq", "filterKind", "delayModulation" }, "the engine section");
     EngineConfig config;
     if (section.hasProperty ("channels"))
@@ -208,11 +209,6 @@ EngineConfig parse (const juce::var& v)
         config.decks = wholeNumber (section.getProperty ("decks"), "decks", 0);
     if (section.hasProperty ("analogInputs"))
         config.analogInputs = wholeNumber (section.getProperty ("analogInputs"), "analogInputs", 0);
-    if (section.hasProperty ("returnAnalogPair"))
-        config.returnAnalogPair = wholeNumber (section.getProperty ("returnAnalogPair"), "returnAnalogPair", 1);
-    if (config.returnAnalogPair * 2 > config.analogInputs)
-        refuse ("returnAnalogPair " + juce::String (config.returnAnalogPair) + " is beyond the "
-                + juce::String (config.analogInputs) + " analog inputs");
     config.analogPairs = parsePairs (section, config);
     checkPairs (config);
     if (section.hasProperty ("trimsDb"))
@@ -231,6 +227,12 @@ void setTrim (juce::DynamicObject& trims, const char* key, const std::optional<f
     if (value)
         trims.setProperty (key, (double) *value);
 }
+}
+
+const std::vector<std::string>& retiredEngineKeys()
+{
+    static const std::vector<std::string> keys { retiredReturnPair };
+    return keys;
 }
 
 std::optional<EngineConfig> parseEngineConfig (const juce::var& engineSection, juce::String& error)
@@ -257,7 +259,6 @@ juce::var toJson (const EngineConfig& config)
     for (const int pair : config.analogPairs)
         pairs.add (pair);
     root->setProperty ("analogPairs", pairs);
-    root->setProperty ("returnAnalogPair", config.returnAnalogPair);
 
     auto* trims = new juce::DynamicObject();
     setTrim (*trims, "main", config.trims.main);

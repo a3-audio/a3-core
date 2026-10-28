@@ -39,16 +39,17 @@ struct EngineOutputs
 //
 //   channel c   ChannelSelect (source): analog pair -> ChannelStrip, or deck slot k -> DeckStrip,
 //               each path times its select ramp (both run during a crossfade)
-//   enc_main    analog: AmbiEncoderBus (moving/steady post-VOLUME, return post-RETURN in the bed)
-//               + deck: its 16 post-VOLUME channels added directly
+//   enc_main    analog: AmbiEncoderBus (moving/steady post-VOLUME) + deck: its 16 post-VOLUME channels
+//               added directly
 //   enc_fx      analog: the same sources x auxSendGain (no return); deck: its 16-ch aux bus through
 //               a second DeckStrip on the channel's controls, post-VOLUME x auxSendGain (never its
 //               main 16) -> DualDelay (tempo from delayBpm)
+//   FX Return   the delay channel's master (P45): fx = DualDelay's output x RETURN
 //   enc_phones  pre-VOLUME taps x cueWeight [cue on] + post-VOLUME x mixWeight,
-//               + return x (mixWeight + cueWeight [returnCue on])
-//   main/booth  (enc_fx + enc_main) -> MASTER/BOOTH -> SimpleDecoder (fixedGainDb is not applied, R1)
-//   rec         BinauralDecoder (enc_fx + enc_main)
-//   phones      BinauralDecoder (enc_fx + enc_phones + every deck's cue ACN 0..8 x cueWeight) -> PHONES
+//               + DualDelay's output x (RETURN x mixWeight + cueWeight [returnCue on])
+//   main/booth  (fx + enc_main) -> MASTER/BOOTH -> SimpleDecoder (fixedGainDb is not applied, R1)
+//   rec         BinauralDecoder (fx + enc_main)
+//   phones      BinauralDecoder (enc_phones + every deck's cue ACN 0..8 x cueWeight) -> PHONES
 //
 // A deck channel ignores its positions, 3D, FREQ and Q. Every gain control at 0 is silence (R18);
 // aux/cue/mix weights move over 10 ms (R6). The DualDelay pitch modulation runs only in
@@ -85,8 +86,8 @@ public:
 
     // The /vu meters (O13): every tap of `taps` the engine has a point for is fed in process from
     // then on, besides the window's outputMeters (two readers, two accumulators). The points are the
-    // ones the patchbay fed beat-analyzer: analog{k}_L/R = analog inputs 2k-1/2k and aux_L/R = the
-    // return's analog pair, raw; main_sub/main_top{i}, booth_*, rec_L/R, phones_L/R = those outputs
+    // ones the patchbay fed beat-analyzer: analog{k}_L/R = analog inputs 2k-1/2k, raw; aux_L/R = the
+    // FX Return (the delay's output after RETURN), its W on both sides (P47); main_sub/main_top{i}, booth_*, rec_L/R, phones_L/R = those outputs
     // as they leave; in{c}_pre/post_L/R = channel c's pre/post taps. Control thread, before the first
     // process (allocates); the taps outlive the Engine. Returns the names of taps it has no point for
     // (a zone's sub or tops beyond its layout, a channel beyond N): those stay at 0.

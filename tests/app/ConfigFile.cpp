@@ -183,6 +183,25 @@ TEST (ConfigFile, RetiredDeckPortsAreDroppedNotRefused)
     EXPECT_TRUE (loaded->droppedLinks.empty());
 }
 
+// P47: a file saved while the analog return existed names engine.returnAnalogPair. It loads, the key
+// is ignored and listed beside the dropped links, and a save no longer writes it.
+TEST (ConfigFile, TheRetiredReturnPairIsIgnoredNotRefused)
+{
+    Scratch scratch;
+    juce::String error;
+    const auto file = scratch.write ("old.json", withSpatial ("\"engine\":{\"decks\":2,\"returnAnalogPair\":6}"));
+    const auto config = a3app::loadAppConfig (file, error);
+    ASSERT_TRUE (config.has_value()) << error;
+    EXPECT_EQ (config->ignoredKeys, (std::vector<std::string> { "engine.returnAnalogPair" }));
+    EXPECT_TRUE (a3app::droppedLinkLines (*config).contains ("ignored retired key engine.returnAnalogPair"));
+    EXPECT_FALSE (a3app::toJson (*config)["engine"].getDynamicObject()->hasProperty ("returnAnalogPair"));
+
+    const auto clean = scratch.write ("new.json", withSpatial ("\"engine\":{\"decks\":2}"));
+    const auto loaded = a3app::loadAppConfig (clean, error);
+    ASSERT_TRUE (loaded.has_value()) << error;
+    EXPECT_TRUE (loaded->ignoredKeys.empty());
+}
+
 TEST (ConfigFile, UnknownNamesAreStillRefused)
 {
     Scratch scratch;

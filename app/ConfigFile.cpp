@@ -153,6 +153,9 @@ AppConfig parseRoot (const juce::var& root, const juce::File& base)
         config.engine = *parsed;
     else
         refuse ("engine: " + error);
+    for (const auto& key : a3::retiredEngineKeys())
+        if (engine.hasProperty (juce::Identifier (key)))
+            config.ignoredKeys.push_back ("engine." + key);
     checkTrims (config.engine.trims);
 
     if (object.hasProperty ("backend"))
@@ -213,6 +216,8 @@ juce::StringArray droppedLinkLines (const AppConfig& config)
     juce::StringArray lines;
     for (const auto& entry : config.droppedLinks)
         lines.add ("dropped retired link " + entry);
+    for (const auto& key : config.ignoredKeys)
+        lines.add ("ignored retired key " + key);
     return lines;
 }
 

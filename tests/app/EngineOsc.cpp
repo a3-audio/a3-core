@@ -100,7 +100,6 @@ std::map<juce::String, Reader> readers()
         { "master.phones-mix", global (&a3::GlobalControls::phonesMix) },
         { "master.phones-volume", global (&a3::GlobalControls::phonesVolume) },
         { "master.aux-return", global (&a3::GlobalControls::auxReturn) },
-        { "aux-return.source", [] (a3::EngineControls& c) { return (float) c.global().returnSource.load(); } },
         { "aux-return.cue", global (&a3::GlobalControls::returnCue) },
         { "delay.bpm", global (&a3::GlobalControls::delayBpm) },
         { "engine.open", [] (a3::EngineControls& c) { return c.global().gateOpen.load() ? 1.0f : 0.0f; } },
@@ -138,7 +137,7 @@ TEST_F (EngineOsc, EveryCarriedKeyIsUnderstood)
 {
     const auto root = juce::JSON::parse (a3apptest::truthText());
     const auto keys = carriedKeys (root);
-    ASSERT_EQ (keys.size(), 26u);
+    ASSERT_EQ (keys.size(), 25u);
 
     auto sorted = keys;
     auto vocabulary = a3app::engineWordKeys();
@@ -250,16 +249,10 @@ TEST_F (EngineOsc, SourcesOutsideTheDecksAreRefused)
 
 }
 
-// R1: the return is the analog pair (0) or the delay (1); anything else keeps the last.
-TEST_F (EngineOsc, ReturnSourceTwoKeepsTheLast)
+// P45: the return has no source any more; the old word is not the engine's.
+TEST_F (EngineOsc, TheReturnSourceIsNoWordAnyMore)
 {
-    EXPECT_TRUE (applyInt ("/aux-return/source", 1));
-    EXPECT_FALSE (applyInt ("/aux-return/source", 2));
-    EXPECT_FALSE (applyInt ("/aux-return/source", -1));
-    EXPECT_FALSE (apply ("/aux-return/source", 0.5f));
-    EXPECT_EQ (controls.global().returnSource.load(), 1);
-    EXPECT_TRUE (applyInt ("/aux-return/source", 0));
-    EXPECT_EQ (controls.global().returnSource.load(), 0);
+    EXPECT_FALSE (applyInt ("/aux-return/source", 1));
 }
 
 TEST_F (EngineOsc, AnalogIsRefusedOnADeckOnlyChannel)

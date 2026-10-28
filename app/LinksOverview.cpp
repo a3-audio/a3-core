@@ -178,8 +178,6 @@ std::string categoryOf (const Connection& link, const a3::EngineConfig& engine)
     if (own.base == "analog")
     {
         const int pair = (own.number + 1) / 2;
-        if (pair == engine.returnAnalogPair)
-            return "return";
         return std::find (engine.analogPairs.begin(), engine.analogPairs.end(), pair) != engine.analogPairs.end() ? "channel" : "";
     }
     if (own.base == "main")

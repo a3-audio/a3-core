@@ -71,33 +71,4 @@ ChannelSelect::Step ChannelSelect::advance (int requested, int numSamples)
 
 bool ChannelSelect::analogActive() const { return analogCount > 0 || analogGoal > 0; }
 bool ChannelSelect::deckActive() const { return deckCount > 0 || deckGoal > 0; }
-
-void ReturnSelect::prepare (double sampleRate)
-{
-    fadeSamples = fadeLength (sampleRate);
-    selected = analog;
-    shareCount = 0;
-}
-
-void ReturnSelect::process (const float* const* analogPair, float* const* outPair, float* delayShare, int numSamples,
-                            int source)
-{
-    if (source == analog || source == delay)
-        selected = source;
-    const int goal = selected == delay ? fadeSamples : 0;
-
-    for (int i = 0; i < numSamples; ++i)
-    {
-        shareCount = towards (shareCount, goal, 1);
-        // The ends are exact: 0 and 1, so analog is bit-identical to before and delay shuts analog to 0.0f.
-        const float share = shareCount == 0 ? 0.0f : shareCount == fadeSamples ? 1.0f : (float) shareCount / (float) fadeSamples;
-        const float keep = 1.0f - share;
-        delayShare[i] = share;
-        for (int side = 0; side < 2; ++side)
-        {
-            const float* in = analogPair != nullptr ? analogPair[side] : nullptr;
-            outPair[side][i] = in != nullptr ? keep * in[i] : 0.0f;
-        }
-    }
-}
 }

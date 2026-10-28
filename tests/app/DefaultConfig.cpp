@@ -105,7 +105,8 @@ TEST (DefaultConfig, LoadsAndNamesOnlyRealPorts)
     EXPECT_EQ (config.engine.channels, 4);
     EXPECT_EQ (config.engine.decks, 2);
     EXPECT_EQ (config.engine.analogPairs, (std::vector<int> { 1, 2, 3, 4 }));
-    EXPECT_EQ (config.engine.returnAnalogPair, 6);
+    EXPECT_FALSE (juce::JSON::parse (defaultConfigFile)["engine"].getDynamicObject()->hasProperty ("returnAnalogPair"));   // retired (P47)
+    EXPECT_TRUE (config.ignoredKeys.empty());
     EXPECT_EQ (config.backend.type, a3app::BackendSettings::Type::jack);
     EXPECT_FALSE (config.io.jack.empty());
 

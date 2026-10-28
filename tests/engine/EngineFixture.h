@@ -22,14 +22,18 @@ constexpr int deckChannels = 16;
 constexpr float masterAtRest = 0.680352f;   // PurestGain -12.786 dB, the template's dec_master
 constexpr float boothAtRest = 0.996100f;    // -0.156 dB, dec_booth
 
-// Channel c on analog pair c+1 while there are pairs below the return (pair 6), deck-only above.
+// The analog pairs the tests give channels: 1-5. Pair 6 (analog 11/12) was the analog return's
+// before P45 and is left free, so a channel count above five keeps its deck-only channels.
+constexpr int testAnalogPairs = 5;
+
+// Channel c on analog pair c+1 up to testAnalogPairs, deck-only above.
 inline a3::EngineConfig engineConfig (int channels = 4, int decks = 2)
 {
     a3::EngineConfig config;
     config.channels = channels;
     config.decks = decks;
     config.analogPairs.assign ((size_t) channels, 0);
-    for (int c = 0; c < channels && c + 1 < config.returnAnalogPair; ++c)
+    for (int c = 0; c < channels && c + 1 <= testAnalogPairs; ++c)
         config.analogPairs[(size_t) c] = c + 1;
     config.trims.main = config.trims.booth = config.trims.phones = 0.0f;
     return config;
@@ -89,7 +93,7 @@ public:
         auto& g = controls.global();
         g.masterVolume = masterAtRest; g.booth = boothAtRest;
         g.phonesMix = 0.0f; g.phonesVolume = 0.75f; g.auxReturn = 0.75f;
-        g.returnSource = 0; g.returnCue = 0.0f; g.delayBpm = 120.0f; g.gateOpen = true;
+        g.returnCue = 0.0f; g.delayBpm = 120.0f; g.gateOpen = true;
     }
 
     // Deck strip at unity: TRIM and VOLUME 0 dB, EQ flat.

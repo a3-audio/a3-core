@@ -57,7 +57,7 @@ TEST (LinksOverview, ParallelPortsCollapseIntoARangeWithTheirMeaning)
     const auto text = show (inputs());
     EXPECT_TRUE (hasLine (text, "Scarlett inputs → engine")) << text;
     EXPECT_TRUE (hasLine (text, "  capture 1–8   → analog 1–8   (channels 1–4, L/R)")) << text;
-    EXPECT_TRUE (hasLine (text, "  capture 11–12 → analog 11–12 (return)")) << text;
+    EXPECT_TRUE (hasLine (text, "  capture 11–12 → analog 11–12")) << text;   // no return since P45, no meaning
 }
 
 TEST (LinksOverview, OutputsNameThePaThePhonesAndTheTempo)

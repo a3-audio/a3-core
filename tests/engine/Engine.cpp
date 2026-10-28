@@ -38,10 +38,10 @@ void wOnly (DeckSignals& deck, const std::vector<float>& w)
     deck.bformat[0] = w;
 }
 
-// Every analog pair below the return carries its own pink noise.
+// Every analog pair the tests give channels carries its own pink noise.
 void pinkOnAnalogPairs (EngineRig& rig)
 {
-    for (int pair = 1; pair < rig.config.returnAnalogPair && 2 * pair <= rig.config.analogInputs; ++pair)
+    for (int pair = 1; pair <= testAnalogPairs && 2 * pair <= rig.config.analogInputs; ++pair)
         rig.setAnalogPair (pair, pinkStereo (rig.frames, (uint32_t) pair));
 }
 
@@ -177,31 +177,18 @@ TEST (Engine, CueIsPreVolumeAndMixIsPost)
     EXPECT_GT (energy (stereo (run (0.75f, 0.0f, 1.0f)->phones), settled / 4, frames), 1.0);
 }
 
-TEST (Engine, ReturnGoesToMainAndPhonesNotToFx)
+// P45: analog 11/12 is no return any more; the FX Return is the delay's master, so a signal there
+// reaches no output at any RETURN, cue or MIX.
+TEST (FxReturn, TheOldAnalogReturnPairReachesNothing)
 {
-    const size_t frames = oneSecond, hit = 1000;
-    const auto run = [&] (float auxReturn)
-    {
-        auto rig = std::make_unique<EngineRig> (engineConfig (4, 2), frames);
-        rig->setAnalogPair (rig->config.returnAnalogPair, both (impulseAt (frames, hit)));
-        for (int c = 0; c < 4; ++c)
-            rig->controls.channel (c).auxSend = 1.0f;
-        rig->controls.global().phonesMix = 1.0f;
-        rig->controls.global().auxReturn = auxReturn;
-        rig->run (0, 0, { engineBlock }, {}, [&] { EXPECT_EQ (rig->engine->lastFxSendPeak(), 0.0f); });
-        return rig;
-    };
-    const auto open = run (0.75f);
-    const double direct = energy (open->mainOutputs(), hit, hit + 2000);
-    EXPECT_GT (direct, 1e-4);
-    EXPECT_LT (energy (open->mainOutputs(), hit + echoAfter - 1000, hit + echoAfter + 3000), 1e-9 * direct);
-    EXPECT_GT (energy (stereo (open->phones), hit, hit + 2000), 1e-4);
-
-    // RETURN 0 is silence (R18), not REAPER's -40 dB.
-    const auto closed = run (0.0f);
-    EXPECT_EQ (peak (closed->mainOutputs()), 0.0);
-    EXPECT_EQ (peak (closed->recOutputs()), 0.0);
-    EXPECT_EQ (peak (stereo (closed->phones)), 0.0);
+    const size_t frames = oneSecond / 2;
+    EngineRig rig (engineConfig (4, 2), frames);
+    rig.setAnalogPair (6, sine (frames, 440.0, engineRate, 0.5f));
+    rig.controls.global().auxReturn = 1.0f;
+    rig.controls.global().returnCue = 1.0f;
+    rig.controls.global().phonesMix = 0.5f;
+    rig.run();
+    EXPECT_EQ (peak (rig.everyOutput()), 0.0);
 }
 
 TEST (Engine, MasterBoothAndPhonesAtZeroAreSilence)
@@ -457,42 +444,35 @@ TEST (Engine, CueAcnTenToSixteenStayEmpty)
     }
 }
 
-// A deck's aux bus is B-format, no stereo pair: it is no return source. A source past the
-// delay (here 2) keeps the last one, the analog pair, which is silent here.
-TEST (Engine, DeckAuxIsNoReturnSource)
-{
-    const size_t frames = oneSecond / 2;
-    EngineRig rig (engineConfig (4, 2), frames);
-    for (int ch = 0; ch < deckChannels; ++ch)
-        rig.decks[1].aux[(size_t) ch] = noise (frames, 0.2f, 21 + (uint32_t) ch).l;
-    rig.controls.global().returnSource = 2;
-    rig.run();
-    EXPECT_EQ (peak (rig.everyOutput()), 0.0);
-}
-
 namespace
 {
-// Channel 1 sends `dry` to the delay at AUX 1; the return pair carries `returned`.
-std::unique_ptr<EngineRig> returnRig (size_t frames, int source, float auxReturn, const std::vector<float>& dry,
-                                      const Stereo& returned, float auxSend = 1.0f)
+struct ReturnSettings
+{
+    float auxReturn = 1.0f;
+    float phonesMix = 1.0f;
+    bool cue = false;
+    float azimuth = 30.0f;
+};
+
+// Channel 1 sends `dry` to the delay at `auxSend`; the FX Return is set as `settings` says.
+std::unique_ptr<EngineRig> returnRig (size_t frames, const ReturnSettings& settings, const std::vector<float>& dry, float auxSend)
 {
     auto rig = std::make_unique<EngineRig> (engineConfig (4, 2), frames);
     rig->setAnalogPair (1, both (dry));
-    rig->setAnalogPair (rig->config.returnAnalogPair, returned);
     rig->controls.channel (0).auxSend = auxSend;
-    rig->controls.global().phonesMix = 1.0f;
-    rig->controls.global().returnSource = source;
-    rig->controls.global().auxReturn = auxReturn;
+    rig->controls.channel (0).azimuth = settings.azimuth;
+    rig->controls.global().phonesMix = settings.phonesMix;
+    rig->controls.global().returnCue = settings.cue ? 1.0f : 0.0f;
+    rig->controls.global().auxReturn = settings.auxReturn;
     rig->run();
     return rig;
 }
 
 // What the delay adds to every output: the run with AUX 1 minus the same run at AUX 0.
-std::vector<std::vector<float>> delayPart (size_t frames, int source, float auxReturn, const std::vector<float>& dry)
+std::vector<std::vector<float>> delayPart (size_t frames, const ReturnSettings& settings, const std::vector<float>& dry)
 {
-    const Stereo silent { std::vector<float> (frames, 0.0f), std::vector<float> (frames, 0.0f) };
-    const auto wet = returnRig (frames, source, auxReturn, dry, silent, 1.0f);
-    const auto plain = returnRig (frames, source, auxReturn, dry, silent, 0.0f);
+    const auto wet = returnRig (frames, settings, dry, 1.0f);
+    const auto plain = returnRig (frames, settings, dry, 0.0f);
     const auto w = wet->everyOutput(), p = plain->everyOutput();
     std::vector<std::vector<float>> part (w.size(), std::vector<float> (frames));
     for (size_t c = 0; c < w.size(); ++c)
@@ -508,71 +488,109 @@ std::vector<const std::vector<float>*> pointersTo (const std::vector<std::vector
         list.push_back (&c);
     return list;
 }
+
+// everyOutput's phones pair: after rec, main and booth.
+std::vector<const std::vector<float>*> phonesOf (const std::vector<std::vector<float>>& part, const EngineRig& layout)
+{
+    const size_t first = layout.out.channels.size();
+    return { &part[first], &part[first + 1] };
 }
 
-// R1: on DELAY the delay's whole output (main, booth, rec, phones) follows RETURN.
-TEST (ReturnSelect, DelayModeScalesTheDelayByReturn)
+std::vector<const std::vector<float>*> speakersOf (const std::vector<std::vector<float>>& part, const EngineRig& layout)
 {
-    const size_t frames = oneSecond, hit = settled / 2;
+    std::vector<const std::vector<float>*> list;
+    for (size_t c = 0; c < layout.out.channels.size(); ++c)
+        list.push_back (&part[c]);
+    return list;
+}
+
+constexpr size_t hit = settled / 2;
+constexpr size_t echoFrom = hit + echoAfter - 1000, echoTo = hit + echoAfter + 3000;
+
+double echoEnergy (const std::vector<const std::vector<float>*>& channels) { return energy (channels, echoFrom, echoTo); }
+}
+
+// P45: the FX Return is the delay's master. Every output's delay part is the delay bus at unity
+// RETURN, times RETURN's gain: at 0 exact silence, at 1.0 the bus itself, in between its gain.
+TEST (FxReturn, IsTheDelayBusScaledByReturn)
+{
+    const size_t frames = oneSecond;
     const auto dry = impulseAt (frames, hit);
-    const auto analogMode = delayPart (frames, a3::ReturnSelect::analog, 0.5f, dry);
-    const auto delayMode = delayPart (frames, a3::ReturnSelect::delay, 0.5f, dry);
-    const auto echo = pointersTo (analogMode), scaled = pointersTo (delayMode);
-    const double from = hit + echoAfter - 1000, to = hit + echoAfter + 3000;
-    ASSERT_GT (energy (echo, (size_t) from, (size_t) to), 1e-6);
-    const double ratio = std::sqrt (energy (scaled, (size_t) from, (size_t) to) / energy (echo, (size_t) from, (size_t) to));
-    EXPECT_NEAR (ratio, a3::laws::stageGain (0.5), 1e-4);
-}
-
-TEST (ReturnSelect, DelayModeReturnZeroSilencesTheDelay)
-{
-    const size_t frames = oneSecond, hit = 1000;
-    const auto part = delayPart (frames, a3::ReturnSelect::delay, 0.0f, impulseAt (frames, hit));
-    for (size_t c = 0; c < part.size(); ++c)
+    const auto unity = delayPart (frames, { 1.0f }, dry);
+    ASSERT_GT (echoEnergy (pointersTo (unity)), 1e-6);
+    for (const float level : { 0.5f, 0.8f })
+    {
+        const auto scaled = delayPart (frames, { level }, dry);
+        const double ratio = std::sqrt (echoEnergy (pointersTo (scaled)) / echoEnergy (pointersTo (unity)));
+        EXPECT_NEAR (ratio, a3::laws::stageGain (level), 1e-4) << level;
+    }
+    const auto closed = delayPart (frames, { 0.0f }, dry);
+    for (size_t c = 0; c < closed.size(); ++c)
         for (size_t i = 0; i < frames; ++i)
-            ASSERT_EQ (part[c][i], 0.0f) << "output " << c << " at " << i;
+            ASSERT_EQ (closed[c][i], 0.0f) << "output " << c << " at " << i;
 }
 
-TEST (ReturnSelect, DelayModeShutsAnalog)
+// An analog channel's send is encoded at the channel's position before the delay (B-format):
+// the same echo from another azimuth lands on other speakers, at the same total level.
+TEST (FxReturn, AnAnalogSendReachesTheDelayInBFormat)
 {
-    const size_t frames = oneSecond / 2;
-    const auto silent = std::vector<float> (frames, 0.0f);
-    auto tone = sine (frames, 440.0, engineRate, 0.5f);   // starts after the 10 ms crossfade, so any trace of it is a leak
-    std::fill_n (tone.l.begin(), afterTheCrossfade, 0.0f);
-    std::fill_n (tone.r.begin(), afterTheCrossfade, 0.0f);
-    const auto onDelay = returnRig (frames, a3::ReturnSelect::delay, 0.75f, silent, tone);
-    EXPECT_EQ (peak (onDelay->everyOutput()), 0.0);
-    const auto onAnalog = returnRig (frames, a3::ReturnSelect::analog, 0.75f, silent, tone);
-    EXPECT_GT (peak (onAnalog->mainOutputs(), afterTheCrossfade), 1e-2);
-}
-
-// On ANALOG the delay plays at unity whatever RETURN says, as before Plan 4's return.
-TEST (ReturnSelect, AnalogModeIsToday)
-{
-    const size_t frames = oneSecond, hit = 1000;
+    const size_t frames = oneSecond;
     const auto dry = impulseAt (frames, hit);
-    const auto low = delayPart (frames, a3::ReturnSelect::analog, 0.2f, dry);
-    const auto high = delayPart (frames, a3::ReturnSelect::analog, 0.9f, dry);
-    EXPECT_GT (energy (pointersTo (low), hit + echoAfter - 1000, hit + echoAfter + 3000), 1e-6);
-    EXPECT_EQ (maxDifference (pointersTo (low), pointersTo (high)), 0.0);
+    const EngineRig layout (engineConfig (4, 2), 64);
+    const auto front = delayPart (frames, { 1.0f, 1.0f, false, 0.0f }, dry);
+    const auto back = delayPart (frames, { 1.0f, 1.0f, false, 180.0f }, dry);
+    ASSERT_GT (echoEnergy (speakersOf (front, layout)), 1e-6);
+    double moved = 0.0;
+    for (size_t c = 0; c < layout.out.channels.size(); ++c)
+        moved = std::max (moved, std::abs (energy (front[c], echoFrom, echoTo) - energy (back[c], echoFrom, echoTo)));
+    EXPECT_GT (moved, 0.1 * echoEnergy (speakersOf (front, layout)) / (double) layout.out.channels.size());
 }
 
-TEST (ReturnSelect, SwitchIsClickFree)
+// The cue is a PFL, as a channel's: before RETURN, at cueWeight; MIX adds the return after RETURN.
+TEST (FxReturn, CueIsBeforeReturnAndMixIsAfter)
+{
+    const size_t frames = oneSecond;
+    const auto dry = impulseAt (frames, hit);
+    const EngineRig layout (engineConfig (4, 2), 64);
+
+    const auto cuedClosed = delayPart (frames, { 0.0f, 0.0f, true }, dry);
+    EXPECT_GT (echoEnergy (phonesOf (cuedClosed, layout)), 1e-6);
+    EXPECT_EQ (peak (speakersOf (cuedClosed, layout)), 0.0);
+
+    const auto cuedOpen = delayPart (frames, { 0.5f, 0.0f, true }, dry);
+    EXPECT_NEAR (std::sqrt (echoEnergy (phonesOf (cuedOpen, layout)) / echoEnergy (phonesOf (cuedClosed, layout))), 1.0, 1e-4);
+
+    const auto uncued = delayPart (frames, { 1.0f, 0.0f, false }, dry);
+    EXPECT_EQ (peak (phonesOf (uncued, layout)), 0.0);
+}
+
+TEST (FxReturn, PhonesFollowMixLikeAChannel)
+{
+    const size_t frames = oneSecond;
+    const auto dry = impulseAt (frames, hit);
+    const EngineRig layout (engineConfig (4, 2), 64);
+    const auto full = delayPart (frames, { 1.0f, 1.0f, false }, dry);
+    const auto half = delayPart (frames, { 0.5f, 0.5f, false }, dry);
+    ASSERT_GT (echoEnergy (phonesOf (full, layout)), 1e-6);
+    const double ratio = std::sqrt (echoEnergy (phonesOf (half, layout)) / echoEnergy (phonesOf (full, layout)));
+    EXPECT_NEAR (ratio, a3::laws::stageGain (0.5) * a3::laws::mixWeight (0.5), 1e-4);
+}
+
+TEST (FxReturn, ReturnMovesAreClickFree)
 {
     const size_t frames = oneSecond;
     const float level = 0.5f;
     EngineRig rig (engineConfig (4, 2), frames);
     rig.setAnalogPair (1, sine (frames, 110.0, engineRate, level));
-    rig.setAnalogPair (rig.config.returnAnalogPair, sine (frames, 90.0, engineRate, level));
     rig.neutralStrip (0);
     rig.controls.channel (0).auxSend = 1.0f;
     rig.controls.channel (0).volume = 1.0f;
-    rig.controls.global().auxReturn = 0.75f;   // -10 dB: the delay's gain moves at each switch
     rig.controls.global().phonesMix = 1.0f;
     rig.run (0, 0, { engineBlock }, [&] (size_t start)
     {
         const int quarter = (int) (start / (frames / 4));
-        rig.controls.global().returnSource = quarter == 1 || quarter == 3 ? 1 : 0;
+        rig.controls.global().auxReturn = quarter == 1 || quarter == 3 ? 1.0f : 0.5f;
+        rig.controls.global().returnCue = quarter >= 2 ? 1.0f : 0.0f;
     });
 
     EXPECT_GT (peak (rig.mainOutputs(), settled), 0.1);
@@ -768,6 +786,8 @@ TEST (Engine, DelayModulationIsNotOnTheAudioPath)
 
 // The rig's quantum is 128; any call size gives the same output once the decoders have
 // settled. Aux stays 0: IEM's DualDelay depends on the call size itself (see above).
+// The bound is float rounding in the zone decoders (main/booth, peaks ~0.1): up to 1.8e-6 since the
+// analog return's noise left this run with P45, below 1e-6 while it played.
 TEST (Engine, AnyCallSizeMatchesTheQuantum)
 {
     constexpr int quantum = 128;
@@ -778,7 +798,6 @@ TEST (Engine, AnyCallSizeMatchesTheQuantum)
         pinkOnAnalogPairs (*rig);
         fillDeck (rig->decks[0], frames, 0.1f, 100);
         rig->decks[1].cue[0] = noise (frames, 0.1f, 101).l;
-        rig->setAnalogPair (rig->config.returnAnalogPair, { noise (frames, 0.1f, 102).l, noise (frames, 0.1f, 103).l });
         rig->controls.channel (1).source = 1;
         rig->controls.channel (0).cue = 1.0f;
         rig->controls.global().phonesMix = 0.5f;
@@ -789,7 +808,7 @@ TEST (Engine, AnyCallSizeMatchesTheQuantum)
     EXPECT_GT (peak (reference->mainOutputs(), oneSecond), 1e-3);
     EXPECT_GT (peak (stereo (reference->phones), oneSecond), 1e-3);
     for (const auto& calls : std::vector<std::vector<int>> { { 64 }, { 1024 }, { 333 }, { 64, 128, 1024, 333 } })
-        EXPECT_LT (maxDifference (run (calls)->everyOutput(), reference->everyOutput(), oneSecond), 1e-6)
+        EXPECT_LT (maxDifference (run (calls)->everyOutput(), reference->everyOutput(), oneSecond), 2e-6)
             << "first call " << calls.front() << ", " << calls.size() << " sizes";
 }
 
@@ -1055,8 +1074,38 @@ TEST (Engine, RecDecoderNeverGetsTheEq)
     EXPECT_GT (maxDifference (stereo (plain->phones), stereo (eq->phones), afterStartUp), 1e-4);   // phones are filtered
 }
 
+// P47: aux_L/aux_R are the FX Return's meter: the delay's output after RETURN, its W on both sides.
+// The echo of one click reads the same on both, follows RETURN's gain, and RETURN 0 reads 0.
+TEST (FxReturn, AuxMetersReadTheReturnAfterItsLevel)
+{
+    const auto meterAt = [] (float auxReturn)
+    {
+        a3::VuTaps taps (truthVuMeters(), a3::VuSettings {});
+        EngineRig rig (engineConfig (4, 2), oneSecond);
+        rig.engine->attachVuTaps (taps);
+        rig.setAnalogPair (1, both (impulseAt (rig.frames, 1000)));
+        rig.controls.channel (0).auxSend = 1.0f;
+        rig.controls.global().auxReturn = auxReturn;
+        std::map<std::string, float> highest;
+        rig.run (0, 0, { engineBlock }, {}, [&]
+        {
+            std::vector<float> peaks, rms;
+            taps.take (peaks, rms);
+            for (size_t slot = 0; slot < taps.names().size(); ++slot)
+                highest[taps.names()[slot]] = std::max (highest[taps.names()[slot]], peaks[slot]);
+        });
+        return std::pair { highest["aux_L"], highest["aux_R"] };
+    };
+    const auto unity = meterAt (1.0f), half = meterAt (0.5f), closed = meterAt (0.0f);
+    EXPECT_GT (unity.first, 1e-3f);
+    EXPECT_EQ (unity.first, unity.second);
+    EXPECT_NEAR (half.first / unity.first, a3::laws::stageGain (0.5), 1e-4);
+    EXPECT_EQ (closed.first, 0.0f);
+    EXPECT_EQ (closed.second, 0.0f);
+}
+
 // O13: the /vu meters at the points the patchbay fed beat-analyzer. The raw inputs: an impulse into
-// analog_3 shows only on analog2_L, one into analog_12 (the return's pair) only on aux_R. The outputs and
+// analog_3 shows only on analog2_L; one into analog_12 (the old return pair, P45) on no meter. The outputs and
 // strip taps: a sine through channel 1 moves in1_pre/post, the main and booth ports and rec, each tap's
 // peak exactly what its port carried; tops beyond the layout and the other channels stay 0. The window's
 // outputMeters keeps its own peaks: taking them leaves the taps' alone.
@@ -1085,7 +1134,7 @@ TEST (Engine, MetersAtTheAnalyzersPoints)
         {
             if (! startsWith (name, "analog") && ! startsWith (name, "aux_"))
                 continue;
-            const float expected = name == "analog2_L" ? 1.0f : name == "aux_R" ? 0.5f : 0.0f;
+            const float expected = name == "analog2_L" ? 1.0f : 0.0f;
             EXPECT_EQ (meter.first, expected) << name;
         }
     }

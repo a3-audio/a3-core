@@ -18,7 +18,7 @@ enum class EngineWord
     channelAzimuth, channelElevation, channelSource,
     filterFrequency, filterResonance, filterMode,
     masterVolume, masterBooth, masterPhonesMix, masterPhonesVolume, masterAuxReturn,
-    returnSource, returnCue, delayBpm, engineOpen
+    returnCue, delayBpm, engineOpen
 };
 
 // One key of the truth the engine carries, with its address read from the truth.

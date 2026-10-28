@@ -214,7 +214,6 @@ TEST (EngineTiming, FullGraphAnalogUnderOneDecksUnderOnePointTwoFiveMilliseconds
     deckOnEveryChannel (decks);
     analogOnEveryPair (decks);
     everySendOpen (decks);
-    decks.controls.global().returnSource = 1;
     for (int c = 0; c < 4; ++c)
         decks.controls.channel (c).source = c < 2 ? 1 : 2;
 
@@ -223,7 +222,6 @@ TEST (EngineTiming, FullGraphAnalogUnderOneDecksUnderOnePointTwoFiveMilliseconds
     deckOnEveryChannel (decksNoAux);
     analogOnEveryPair (decksNoAux);
     everySendOpen (decksNoAux);
-    decksNoAux.controls.global().returnSource = 1;
     for (int c = 0; c < 4; ++c)
     {
         decksNoAux.controls.channel (c).source = c < 2 ? 1 : 2;
@@ -277,8 +275,7 @@ TEST (EngineTiming, ReportsCostPerChannelAtThirtyTwo)
     const auto config = [] (int channels, bool analog)
     {
         auto c = engineConfig (channels, 2);
-        c.analogInputs = 2 * channels + 2;
-        c.returnAnalogPair = channels + 1;
+        c.analogInputs = 2 * channels;
         for (int k = 0; k < channels; ++k)
             c.analogPairs[(size_t) k] = analog ? k + 1 : 0;
         return c;

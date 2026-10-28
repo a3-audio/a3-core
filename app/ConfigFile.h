@@ -28,6 +28,8 @@ struct AppConfig
     // Entries of the loaded file's io section that named a retired deck port ("<port> -> <peer>"),
     // left out of `io`. Only a load fills it; a save writes the map without them.
     std::vector<std::string> droppedLinks;
+    // Retired keys the loaded file named ("engine.<key>"), ignored; a save never writes them.
+    std::vector<std::string> ignoredKeys;
 };
 
 constexpr float minTrimDb = -90.0f, maxTrimDb = 6.0f;
@@ -36,7 +38,8 @@ constexpr float minTrimDb = -90.0f, maxTrimDb = 6.0f;
 // Refuses (never clamps) a broken file, naming file and reason in `error`. Links of retired
 // deck ports (EnginePorts.h) are dropped, not refused, and listed in droppedLinks.
 std::optional<AppConfig> loadAppConfig (const juce::File&, juce::String& error);
-// "dropped retired link <entry>", one line per entry of AppConfig::droppedLinks.
+// "dropped retired link <entry>" per entry of AppConfig::droppedLinks, then "ignored retired key <key>"
+// per entry of AppConfig::ignoredKeys.
 juce::StringArray droppedLinkLines (const AppConfig&);
 // The four sections as saveAppConfig writes them, and back (an absolute "spatial" ignores `base`, a relative
 // one is read from it). The control API carries configs in this form. `error` is the reason alone.

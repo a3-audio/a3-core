@@ -35,7 +35,7 @@ TEST (ConfigEdits, ChannelsFollowTheAnalogPairsAndPruneTheMap)
 
     const auto bigger = a3app::withChannels (sample(), 8, error);
     ASSERT_TRUE (bigger) << error;
-    EXPECT_EQ (bigger->engine.analogPairs, (std::vector<int> { 1, 2, 3, 4, 5, 0, 0, 0 }));   // pair 6 is the return
+    EXPECT_EQ (bigger->engine.analogPairs, (std::vector<int> { 1, 2, 3, 4, 5, 6, 0, 0 }));   // pair 6 is free since P45
 
     EXPECT_FALSE (a3app::withChannels (sample(), 0, error));
     EXPECT_NE (error, juce::String());

@@ -124,7 +124,8 @@ struct Engine::Impl
     void runDeck (EngineChannel&, const ChannelControls&, const EngineInputs&, int slot, int offset, int at, int length);
     void buildSends (EngineChannel&, int n);
     void writeMeters (EngineChannel&, const EngineOutputs&, size_t channel, int offset, int n);
-    void runReturn (const EngineInputs&, int offset, int n);
+    void runReturn (int n);
+    void playReturn (int n);
     void encode (int n);
     void addDecks (int n);
     void addStemCues (const EngineInputs&, int offset, int n);
@@ -160,26 +161,23 @@ struct Engine::Impl
 
     // The /vu taps (O13), placed by attachVuTaps; each list is read only by the audio thread.
     std::vector<std::pair<int, VuTap*>> vuInputs, vuMain, vuBooth;   // analog input / zone port, tap
-    std::array<VuTap*, 2> vuRec {}, vuPhones {};
+    std::array<VuTap*, 2> vuRec {}, vuPhones {}, vuReturn {};
     struct VuStripTap { size_t channel; EngineChannel::Plane plane; VuTap* tap; };
     std::vector<VuStripTap> vuStrips;
 
-    ReturnSelect returnSelect;
     GainStage returnStage, phonesStage;
-    WeightRamp returnPhones, stemCue;
+    WeightRamp returnMix, returnCue, stemCue;
 
     std::unique_ptr<std::atomic<float>[]> azimuth, elevation;   // contiguous, one per analog source
     std::vector<StereoIn> mainMoving, mainSteady, fxMoving, fxSteady, phMoving, phSteady;
     juce::AudioBuffer<float> busMain, busFx, busPhones;
-    enum ReturnPlane { retL, retR, retPhonesL, retPhonesR, retPhonesCurve, stemCueCurve, delayCurve, returnGainCurve, numReturnPlanes };
+    enum ReturnPlane { returnGainCurve, returnMixCurve, returnPhonesCurve, stemCueCurve, numReturnPlanes };
     juce::AudioBuffer<float> returnPlanes;
     std::vector<float> zeros;
     double sampleRate = 44100.0;
     int blockSize = 0;
     float fxSendPeak = 0.0f, analogEncoderPeak = 0.0f;   // this call's, published below at its end
     std::atomic<float> lastFxSendPeak { 0.0f }, lastAnalogEncoderPeak { 0.0f };
-    int returnSource = 0;
-    bool delayAtUnity = true;   // this chunk's delay gain is 1 throughout (the return is on analog)
 };
 
 Engine::Impl::Impl (const EngineConfig& c, const SpatialConfig& spatial)
@@ -300,10 +298,10 @@ void Engine::Impl::prepare (double rate, int newBlockSize)
     phones->prepare (rate, blockSize);
     main->prepare (rate, blockSize);
     booth->prepare (rate, blockSize);
-    returnSelect.prepare (rate);
     returnStage.prepare (rate);
     phonesStage.prepare (rate);
-    returnPhones.prepare (rate);
+    returnMix.prepare (rate);
+    returnCue.prepare (rate);
     stemCue.prepare (rate);
     for (auto& gate : gates)
         gate.prepare (rate);   // closed
@@ -319,14 +317,12 @@ void Engine::Impl::processChunk (const EngineInputs& in, const EngineOutputs& ou
         runChannel (channel, controls.channel ((int) c), in, offset, n);
         writeMeters (channel, out, c, offset, n);
     }
-    runReturn (in, offset, n);
+    runReturn (n);
     encode (n);
     addDecks (n);
     fxSendPeak = std::max (fxSendPeak, peakOf (busFx, n));
     engine::runNode (*dualDelay, busFx, n);
-    if (! delayAtUnity)
-        for (int k = 0; k < busChannels; ++k)
-            multiply (busFx.getWritePointer (k), returnPlanes.getReadPointer (delayCurve), n);
+    playReturn (n);
     decode (in, out, offset, n);
     pushMeters (n);
     pushVu (in, offset, n);
@@ -350,8 +346,8 @@ void Engine::Impl::latchGlobals (EngineControls& controls)
         channel.cue.setTarget (isOn (wire.cue) ? (float) laws::cueWeight (mix) : 0.0f);
         channel.mix.setTarget ((float) laws::mixWeight (mix));
     }
-    returnSource = g.returnSource.load (std::memory_order_relaxed);
-    returnPhones.setTarget ((float) (laws::mixWeight (mix) + (isOn (g.returnCue) ? laws::cueWeight (mix) : 0.0)));
+    returnMix.setTarget ((float) laws::mixWeight (mix));
+    returnCue.setTarget (isOn (g.returnCue) ? (float) laws::cueWeight (mix) : 0.0f);
     stemCue.setTarget ((float) laws::cueWeight (mix));
     returnStage.set (load (g.auxReturn));
     phonesStage.set (load (g.phonesVolume));
@@ -530,37 +526,45 @@ void Engine::Impl::writeMeters (EngineChannel& ch, const EngineOutputs& out, siz
     write (P::meterPostL, P::movingL, P::steadyL, ch.deckPost, out.post);
 }
 
-void Engine::Impl::runReturn (const EngineInputs& in, int offset, int n)
+// P45: the FX Return is the delay channel's master. Its curves: RETURN's gain (through the stage, so it
+// shares the stage's ramp and its exact silence at 0), and the phones' weight, which treats the delay as
+// a channel: post-RETURN x mix plus pre-RETURN x cue (PFL).
+void Engine::Impl::runReturn (int n)
 {
-    const int first = 2 * config.returnAnalogPair - 2;
-    const float* analog[2] { analogInput (in, first, offset), analogInput (in, first + 1, offset) };
-    float* ret[2] { returnPlanes.getWritePointer (retL), returnPlanes.getWritePointer (retR) };
-    float* delay = returnPlanes.getWritePointer (delayCurve);
-    float* returnGain = returnPlanes.getWritePointer (returnGainCurve);
-    returnSelect.process (analog, ret, delay, n, returnSource);
-    // RETURN's gain curve rides through the stage as a third channel of ones, so the delay
-    // follows the very same ramp and silence as the analog pair.
-    std::fill (returnGain, returnGain + n, 1.0f);
-    float* staged[3] { ret[0], ret[1], returnGain };
-    returnStage.process (staged, n, 3);
-    delayAtUnity = juce::FloatVectorOperations::findMaximum (delay, n) == 0.0f;
-    if (! delayAtUnity)
-        for (int i = 0; i < n; ++i)
-            delay[i] = (1.0f - delay[i]) + delay[i] * returnGain[i];   // R1: 1 on analog, RETURN on delay
+    float* gain = returnPlanes.getWritePointer (returnGainCurve);
+    std::fill (gain, gain + n, 1.0f);
+    float* staged[1] { gain };
+    returnStage.process (staged, n, 1);
 
-    returnPhones.render (returnPlanes.getWritePointer (retPhonesCurve), n);
-    for (int side = 0; side < sides; ++side)
-        weighted (returnPlanes.getWritePointer (retPhonesL + side), ret[side], returnPlanes.getReadPointer (retPhonesCurve), n);
+    float* mixCurve = returnPlanes.getWritePointer (returnMixCurve);
+    float* phonesCurve = returnPlanes.getWritePointer (returnPhonesCurve);
+    returnMix.render (mixCurve, n);
+    returnCue.render (phonesCurve, n);
+    for (int i = 0; i < n; ++i)
+        phonesCurve[i] += gain[i] * mixCurve[i];
+}
+
+// The delay's output into the phones bus by the phones' weight, then scaled by RETURN for main, booth and rec.
+void Engine::Impl::playReturn (int n)
+{
+    const float* gain = returnPlanes.getReadPointer (returnGainCurve);
+    const float* phonesCurve = returnPlanes.getReadPointer (returnPhonesCurve);
+    const bool phonesSilent = returnMix.renderedSilence() && returnCue.renderedSilence();
+    for (int k = 0; k < busChannels; ++k)
+    {
+        float* delay = busFx.getWritePointer (k);
+        if (! phonesSilent)
+            addWeighted (busPhones.getWritePointer (k), delay, phonesCurve, n);
+        multiply (delay, gain, n);
+    }
 }
 
 void Engine::Impl::encode (int n)
 {
-    const StereoIn ret { returnPlanes.getReadPointer (retL), returnPlanes.getReadPointer (retR) };
-    const StereoIn retPhones { returnPlanes.getReadPointer (retPhonesL), returnPlanes.getReadPointer (retPhonesR) };
-    encMain->process (mainMoving, mainSteady, ret, busMain, n, azimuth.get(), elevation.get());
+    encMain->process (mainMoving, mainSteady, {}, busMain, n, azimuth.get(), elevation.get());
     analogEncoderPeak = std::max (analogEncoderPeak, peakOf (busMain, n));
     encFx->process (fxMoving, fxSteady, {}, busFx, n, azimuth.get(), elevation.get());
-    encPhones->process (phMoving, phSteady, retPhones, busPhones, n, azimuth.get(), elevation.get());
+    encPhones->process (phMoving, phSteady, {}, busPhones, n, azimuth.get(), elevation.get());
 }
 
 // R11: a deck channel's 16 post-VOLUME channels go straight into the buses, no encoder;
@@ -612,10 +616,7 @@ void Engine::Impl::addStemCues (const EngineInputs& in, int offset, int n)
 void Engine::Impl::decode (const EngineInputs& in, const EngineOutputs& out, int offset, int n)
 {
     for (int k = 0; k < busChannels; ++k)
-    {
         juce::FloatVectorOperations::add (busMain.getWritePointer (k), busFx.getReadPointer (k), n);
-        juce::FloatVectorOperations::add (busPhones.getWritePointer (k), busFx.getReadPointer (k), n);
-    }
     addStemCues (in, offset, n);
     main->process (busMain, out.main, offset, n, gates[(size_t) GatedZone::main], gateOpen);
     booth->process (busMain, out.booth, offset, n, gates[(size_t) GatedZone::booth], gateOpen);
@@ -660,7 +661,7 @@ std::vector<std::string> Engine::Impl::attachVuTaps (VuTaps& taps)
 {
     for (auto* list : { &vuInputs, &vuMain, &vuBooth })
         list->clear();
-    vuRec = vuPhones = {};
+    vuRec = vuPhones = vuReturn = {};
     vuStrips.clear();
     std::vector<std::string> unplaced;
     for (const auto& name : taps.names())
@@ -687,7 +688,10 @@ bool Engine::Impl::placeVuTap (const std::string& name, VuTap& tap)
         if (const int pair = numberIn (name, "analog", s))
             return input (pair);
         if (name == "aux" + s)
-            return input (config.returnAnalogPair);
+        {
+            vuReturn[(size_t) side] = &tap;   // P47: the FX Return's meter
+            return true;
+        }
         if (name == "rec" + s || name == "phones" + s)
         {
             (name == "rec" + s ? vuRec : vuPhones)[(size_t) side] = &tap;
@@ -733,6 +737,8 @@ void Engine::Impl::pushVu (const EngineInputs& in, int offset, int n)
             vuRec[(size_t) side]->processMono (rec->side (side), n);
         if (vuPhones[(size_t) side] != nullptr)
             vuPhones[(size_t) side]->processMono (phones->side (side), n);
+        if (vuReturn[(size_t) side] != nullptr)
+            vuReturn[(size_t) side]->processMono (busFx.getReadPointer (0), n);   // W, after RETURN
     }
     for (const auto& strip : vuStrips)
         strip.tap->processMono (channels[strip.channel]->p (strip.plane), n);

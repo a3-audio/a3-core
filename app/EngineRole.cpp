@@ -184,6 +184,8 @@ public:
         startedWith = edited = config;
         startedWith.droppedLinks.clear();   // the saved file no longer names them
         edited.droppedLinks.clear();
+        startedWith.ignoredKeys.clear();
+        edited.ignoredKeys.clear();
         if (auto outputs = outputsOf (config); ! outputs.empty())
             names = std::move (outputs);
         return juce::Result::ok();

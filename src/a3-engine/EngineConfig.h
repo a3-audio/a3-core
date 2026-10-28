@@ -30,7 +30,6 @@ struct EngineConfig
     int analogInputs = 12;
     // Per channel (size == channels), 1-based pair (2p-1, 2p); 0 = deck-only, no encoder source.
     std::vector<int> analogPairs { 1, 2, 3, 4 };
-    int returnAnalogPair = 6;         // analog 11/12
     Trims trims;
     juce::String phonesHeadphoneEq = "off";   // "off" or an IEM BinauralDecoder headphone model; never the rec decoder's
     FilterKind filterKind = FilterKind::svf;
@@ -48,6 +47,9 @@ std::optional<int> headphoneEqChoice (const juce::String& name);
 bool operator== (const Trims&, const Trims&);
 bool operator== (const ModulatedParameter&, const ModulatedParameter&);
 bool operator== (const EngineConfig&, const EngineConfig&);
+
+// Keys an older engine section may still name: ignored on load, whatever their value, never written.
+const std::vector<std::string>& retiredEngineKeys();
 
 // Refuses with a reason in `error`; nothing is filled in for a broken or partial section.
 std::optional<EngineConfig> parseEngineConfig (const juce::var& engineSection, juce::String& error);

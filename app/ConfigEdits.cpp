@@ -22,11 +22,11 @@ bool contains (const std::vector<std::string>& list, const std::string& value)
     return std::find (list.begin(), list.end(), value) != list.end();
 }
 
-// The next analog pair no channel uses, below the return; 0 when none is left.
+// The next analog pair no channel uses; 0 when none is left.
 int nextFreePair (const a3::EngineConfig& engine, const std::vector<int>& pairs)
 {
     for (int pair = 1; pair * 2 <= engine.analogInputs; ++pair)
-        if (pair != engine.returnAnalogPair && std::find (pairs.begin(), pairs.end(), pair) == pairs.end())
+        if (std::find (pairs.begin(), pairs.end(), pair) == pairs.end())
             return pair;
     return 0;
 }
