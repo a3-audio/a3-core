@@ -1408,7 +1408,8 @@ TEST (CoreApi, TheBenchSendsMixerAndMotionAsCoreSends)
     EXPECT_THROW (rig.core->sendFromBench ("self", { "/x", {} }), std::invalid_argument);
 }
 
-// Core's deck selector counts the package truth's deck range (stemdeck.deck-hello): four decks, A-D.
+// Core's deck selector counts the package truth's deck range (stemdeck.deck-hello): four decks, A-D, and a
+// channel's input ring turns A B C D ANALOG.
 TEST (CoreApi, ThePackagesTruthGivesFourDecks)
 {
     const auto truth = std::get<Truth> (Truth::load (juce::File (A3_PACKAGE_TRUTH), std::nullopt));
@@ -1420,4 +1421,12 @@ TEST (CoreApi, ThePackagesTruthGivesFourDecks)
     ASSERT_EQ (decks.size(), 4u);
     for (int deck = 1; deck <= 4; ++deck)
         EXPECT_EQ (static_cast<int> (decks[(size_t) deck - 1]["deck"]), deck);
+
+    rig.clear();
+    for (int step = 0; step < 5; ++step)
+        rig.osc (rig.desk, "/channel/1/stem/turn", { pyStr ("1") });
+    EXPECT_EQ (corerig::startingWith (rig.to ("motion"), "/channel/1/source/cursor"),
+               (std::vector<std::string> { "/channel/1/source/cursor i:1", "/channel/1/source/cursor i:2",
+                                           "/channel/1/source/cursor i:3", "/channel/1/source/cursor i:4",
+                                           "/channel/1/source/cursor i:0" }));
 }

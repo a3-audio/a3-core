@@ -26,7 +26,7 @@ DeckSelector selectorWith (std::vector<int> sources)
         listed.add (source);
     auto* object = new juce::DynamicObject();
     object->setProperty ("channel.source", juce::var (listed));
-    DeckSelector selector;
+    DeckSelector selector (4, 2);
     selector.fromEvening (juce::var (object));
     return selector;
 }
@@ -130,7 +130,7 @@ TEST (EngineWords, SourceMessagesAreIntegers)
 // P47: the FX Return has no source; the sources are the channels' alone.
 TEST (EngineWords, NoReturnSourceIsSent)
 {
-    const auto messages = sourceMessages (truth(), DeckSelector());
+    const auto messages = sourceMessages (truth(), DeckSelector (4, 2));
     EXPECT_EQ (messages.size(), 4u);
     for (const auto& message : messages)
         EXPECT_NE (message.first, "/aux-return/source");
@@ -150,7 +150,7 @@ TEST (EngineWords, DeckChannelsSendNoPositionsThreeDFreqQToTheEngine)
 
 TEST (EngineWords, MasterWordsPassThroughTheChannelWrapper)
 {
-    EXPECT_EQ (engineChannelMessages (truth(), DeckSelector(), "master.booth", {}, 0.3),
+    EXPECT_EQ (engineChannelMessages (truth(), DeckSelector (4, 2), "master.booth", {}, 0.3),
                (std::vector<Message> { { "/master/booth", pyFloat (0.3) } }));
 }
 
@@ -176,7 +176,7 @@ TEST (EngineWords, StateCarriesFlagsModeReturnCueSourcesPositionsAndTempo)
     chans[2].toggleFx = true;
     chans[0].azimuth = 30.0;
     chans[0].elevation = 10.0;
-    const auto got = stateMessages (truth(), chans, master (FxMode::highPass, true), DeckSelector(), 126.0);
+    const auto got = stateMessages (truth(), chans, master (FxMode::highPass, true), DeckSelector (4, 2), 126.0);
     for (const auto& message : std::vector<Message> {
              { "/channel/2/cue", pyFloat (1.0) }, { "/channel/1/cue", pyFloat (0.0) }, { "/channel/3/filter", pyFloat (1.0) },
              { "/filter/mode", pyFloat (1.0) }, { "/aux-return/cue", pyFloat (1.0) }, { "/channel/1/source", pyInt (0) },
@@ -187,7 +187,7 @@ TEST (EngineWords, StateCarriesFlagsModeReturnCueSourcesPositionsAndTempo)
 
 TEST (EngineWords, UnknownPositionAndTempoAreLeftUnsaid)
 {
-    for (const auto& message : stateMessages (truth(), channels(), master(), DeckSelector(), std::nullopt))
+    for (const auto& message : stateMessages (truth(), channels(), master(), DeckSelector (4, 2), std::nullopt))
     {
         EXPECT_FALSE (mentionsPosition (message.first)) << message.first;
         EXPECT_NE (message.first, "/delay/bpm");
@@ -212,7 +212,7 @@ TEST (EngineWords, EveryWordIsInTheTruth)
     auto chans = channels();
     for (auto& c : chans)
         c.azimuth = c.elevation = 1.0;
-    auto words = stateMessages (truth(), chans, master(), DeckSelector(), 120.0);
+    auto words = stateMessages (truth(), chans, master(), DeckSelector (4, 2), 120.0);
     words.push_back (openMessage (truth()));
     for (const auto& word : words)
         EXPECT_TRUE (truth().match (word.first).has_value()) << word.first;
@@ -279,7 +279,7 @@ TEST (EngineWords, EveryEngineInputIsReplayedOrInTheState)
     for (auto& c : chans)
         c.azimuth = c.elevation = 1.0;
     std::set<std::string> state;
-    for (const auto& message : stateMessages (truth(), chans, master(), DeckSelector(), 120.0))
+    for (const auto& message : stateMessages (truth(), chans, master(), DeckSelector (4, 2), 120.0))
         state.insert (truth().match (message.first)->first);
 
     auto* values = new juce::DynamicObject();

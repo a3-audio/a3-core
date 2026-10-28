@@ -41,7 +41,7 @@ public:
     static constexpr double presenceSeconds = 5.0;
     static constexpr double neutralThreeD = 1.0;
 
-    explicit DeckSelector (int channels = 4, int decks = 2);
+    explicit DeckSelector (int channels, int decks);   // Core passes the truth's ranges
 
     int channels() const { return channelCount; }
     int decks() const { return deckCount; }
