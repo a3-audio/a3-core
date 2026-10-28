@@ -109,6 +109,12 @@ still does. 2026-10-26: 0.84 ms (decks), 0.80 ms (analog); 2026-10-27 with the a
 `ReportsCostPerChannelAtThirtyTwo` prints the cost of one more channel (about 43 µs analog, 44 µs
 deck). The rig's own run decides.
 
+**CPU per deck count.** `a3-engine-cpu-bench [--decks N] [--paced]` (`bench/CpuBenchMain.cpp`, no JACK) runs the
+whole engine offline at 128 frames and 48 kHz with every deck slot fed on its B-format, AUX and cue
+inputs and every deck on a channel, and prints mean and p99 block time as a share of the block period
+(one RESULT line). Without `--decks` it takes the truth's deck range, as the engine does. It is a
+relative tool: the numbers belong to the machine they ran on.
+
 **Known upstream allocations.** IEM's SimpleDecoder copies a `juce::Array` on every call (one small
 malloc and free per zone per block), and DualDelay resizes scratch buffers when the block size
 changes. Both are upstream and unedited; `EngineAllocation` checks that the engine adds nothing to them.
