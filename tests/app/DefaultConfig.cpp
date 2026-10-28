@@ -8,6 +8,7 @@
 #include <map>
 #include <set>
 #include "ConfigFile.h"
+#include "ConnectionPlan.h"
 #include "EngineFixture.h"
 #include "EnginePorts.h"
 #include "SpatialTestData.h"
@@ -150,7 +151,7 @@ TEST (DefaultConfig, ConnectsWhatThePatchbayConnectedForReaper)
             ++meters;
             continue;
         }
-        if (startsWith (peer, "StemDeck:rec_"))   // P39: StemDeck links its own recorder; the engine keeps only the AES67 sender
+        if (startsWith (peer, "StemDeck:rec_"))   // P39: StemDeck links its own recorder
         {
             ++singleInstanceRecorders;
             continue;
@@ -180,12 +181,15 @@ TEST (DefaultConfig, ConnectsWhatThePatchbayConnectedForReaper)
     EXPECT_EQ (meters, 50);   // every patchbay cable into beat-analyzer's vu_* ports
     EXPECT_EQ (direct, 0);    // REAPER's raw meter outs (out25-26, out31-38) fed only those meters
     EXPECT_EQ (singleInstanceRecorders, 2);   // rec_L/R -> StemDeck:rec_L/R, now made by StemDeck itself
+    // P46: the sender link is built in (named after the host), never in the file.
+    const auto linked = a3app::linkMapFor (config, "a3nuc1");
     for (const auto& [port, sender] : { std::pair<const char*, const char*> { "rec_L", "AES67 a3nuc1 out:send_CH1" },
                                         { "rec_R", "AES67 a3nuc1 out:send_CH2" } })
     {
-        EXPECT_TRUE (contains (config.io.jack.at (port), sender)) << port;
-        for (const auto& peer : config.io.jack.at (port))
-            EXPECT_FALSE (startsWith (peer, "StemDeck")) << port << " -> " << peer;
+        EXPECT_TRUE (contains (linked.jack.at (port), sender)) << port;
+        if (const auto saved = config.io.jack.find (port); saved != config.io.jack.end())
+            for (const auto& peer : saved->second)
+                EXPECT_FALSE (startsWith (peer, "StemDeck") || startsWith (peer, "AES67 ")) << port << " -> " << peer;
     }
 }
 
@@ -267,16 +271,21 @@ TEST (DefaultConfig, HasNoStemDeckRecorderEntries)
         EXPECT_FALSE (startsWith (to, "StemDeck") && startsWith (afterColon (to), "rec_")) << from << " -> " << to;
 }
 
-TEST (DefaultConfig, RecBusFeedsAes67ChannelsOneAndTwo)
+// P46: on any host the engine links the REC bus to that host's own sender, and to no other host's.
+TEST (DefaultConfig, RecBusFeedsThisHostsAes67ChannelsOneAndTwo)
 {
-    const auto config = loadDefault();
-    EXPECT_TRUE (contains (config.io.jack.at ("rec_L"), "AES67 a3nuc1 out:send_CH1"));
-    EXPECT_TRUE (contains (config.io.jack.at ("rec_R"), "AES67 a3nuc1 out:send_CH2"));
+    const auto linked = a3app::linkMapFor (loadDefault(), "a3nuc9");
+    EXPECT_TRUE (contains (linked.jack.at ("rec_L"), "AES67 a3nuc9 out:send_CH1"));
+    EXPECT_TRUE (contains (linked.jack.at ("rec_R"), "AES67 a3nuc9 out:send_CH2"));
+    for (const auto& [port, peers] : linked.jack)
+        for (const auto& peer : peers)
+            EXPECT_FALSE (startsWith (peer, "AES67 a3nuc1 out")) << port << " -> " << peer;
 }
 
 TEST (DefaultConfig, NothingButTheRecBusFeedsARecorder)
 {
-    const auto config = loadDefault();
+    auto config = loadDefault();
+    static_cast<a3app::IoMap&> (config.io) = a3app::linkMapFor (config, "a3nuc1");   // what the engine links on a3nuc1
     const auto isRecorder = [] (const std::string& peer)
     {
         return (startsWith (peer, "StemDeck") && (afterColon (peer) == "rec_L" || afterColon (peer) == "rec_R"))

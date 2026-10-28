@@ -26,4 +26,11 @@ void addRecToAes67Sender (a3::links::LinkMap& map, const std::string& hostname)
             peers.push_back (peer);
     }
 }
+
+IoMap linkMapFor (const AppConfig& config, const std::string& hostname)
+{
+    auto map = config.io;
+    addRecToAes67Sender (map, hostname);
+    return map;
+}
 }

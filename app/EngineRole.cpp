@@ -46,7 +46,7 @@ public:
     explicit EngineSession (const StartupData& startup) : data (startup) {}
     ~EngineSession() { close(); }
 
-    juce::Result open (bool connecting)
+    juce::Result open (bool connecting, const std::string& hostname)
     {
         if (! coreSender.connect (data.truth.coreHost, data.truth.corePort))
             return juce::Result::fail ("cannot send to " + data.truth.coreHost + ":" + juce::String (data.truth.corePort));
@@ -59,7 +59,7 @@ public:
         receiver.addListener (listener.get());
 
         if (data.config.backend.type == BackendSettings::Type::jack)
-            backend = std::make_unique<JackBackend> (connecting);
+            backend = std::make_unique<JackBackend> (connecting, hostname);
         else
             backend = std::make_unique<DeviceBackend>();
         const auto opened = backend->open (*host, data.config);
@@ -230,7 +230,7 @@ juce::Result EngineRole::restart (const AppConfig& config, juce::String& problem
     {
         startup = data;
         session = std::make_unique<EngineSession> (startup);
-        return session->open (! args.noConnect);
+        return session->open (! args.noConnect, args.hostname);
     };
 
     RestartSteps steps;
@@ -292,7 +292,7 @@ std::variant<std::unique_ptr<EngineRole>, int> EngineRole::start (const AppArgs&
         sayEngine (line);
 
     std::unique_ptr<EngineRole> role (new EngineRole (args, std::move (*loaded)));
-    const auto opened = role->session->open (! args.noConnect);
+    const auto opened = role->session->open (! args.noConnect, args.hostname);
     if (opened.failed())
     {
         sayEngine (opened.getErrorMessage());

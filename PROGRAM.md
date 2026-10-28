@@ -177,19 +177,21 @@ exit 0 and stay closed; a crash or a kill signal starts it again. There is no `[
 **The default config** (`data/engine.json`): four channels on analog pairs 1-4, return pair 6, two
 decks, trims main/booth -30.88 dB (REAPER's output faders), phones 0, rec 0, SVF filter, Step 0's delay
 modulation, the JACK backend, and the rig's connections: what `a3-patchbay.xml` connected for REAPER,
-moved to the engine's ports (analog capture, Scarlett playback and the analyzer's beat input `bpm_1`;
-since M10 also `rec_L/R` to the Core's AES67 sender `AES67 a3nuc1 out:send_CH1/2`, which carries the one
-recording source to the deck hosts), and every deck port to
+moved to the engine's ports (analog capture, Scarlett playback and the analyzer's beat input `bpm_1`),
+and every deck port to
 `StemDeck-A`/`StemDeck-B` (`bformat_1..16`, `aux_1..16`, `cue_1..9`; they exist once StemDeck's S4 is
 installed, until then they are reported as missing, not an error). Since Task 24 the links into the
 analyzer's meter ports (`beat-analyzer:vu_*`, and the direct capture links that only fed them) are gone:
 the engine measures those meters itself. Left out on purpose: REAPER's inputs
-13-24 (StemDeck's stems and AES67's cue have no engine counterpart) and the AES67 sender's other channels (its client
-name carries the machine's host name, so the default map names a3nuc1's: it is the Core's map, and nothing the engine reads -- the truth's `hosts` hold addresses, not the machine's name -- gives the host name, so another host copies the file to `~/.config/a3/engine/engine.json` and edits the name). No StemDeck recorder is in the map (P39): every StemDeck links its own `rec_L/R` from `a3-engine:rec_L/R`; an old
-saved map that still names `StemDeck:rec_L/R` makes the same link, which is harmless. Whatever map is loaded, the
-engine also links `rec_L/R` to `AES67 <host name> out:send_CH1/2`, its own machine's sender (P40, built in and
-applied at link time, never written to the file), so a deck host records the REC bus even with an `engine.json`
-saved before M10; STATUS reports the sender as missing like any other peer while it is not there. The engine reads the file from `~/.config/a3/engine/engine.json`
+13-24 (StemDeck's stems and AES67's cue have no engine counterpart) and every link to the AES67 sender: its
+client name carries the machine's host name (`AES67 <host name> out`, as `a3-osc-render` names it), so the
+file cannot name it for every host. Instead the engine links `rec_L/R` to its own machine's sender,
+`AES67 <host name> out:send_CH1/2`, which carries the one recording source to the deck hosts: a built-in link
+(P40, P46), named from the same host name `a3-osc-render` uses, added to whatever map is loaded at link time and
+never written to the file, so it also holds for an `engine.json` saved before M10. STATUS and `a3-core links`
+count it like any other link (missing while the sender is not there). No StemDeck recorder is in the map (P39):
+every StemDeck links its own `rec_L/R` from `a3-engine:rec_L/R`; an old saved map that still names
+`StemDeck:rec_L/R` makes the same link, which is harmless. The engine reads the file from `~/.config/a3/engine/engine.json`
 first; the package never writes there.
 
 ## The program: one binary, a3-core

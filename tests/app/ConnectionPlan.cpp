@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <gtest/gtest.h>
+#include "ConfigFile.h"
 #include "ConnectionPlan.h"
 #include "a3-links/LinkPlan.h"
 #include <algorithm>
@@ -80,4 +81,24 @@ TEST (BuiltInLinks, NoHostNameNoLink)
     const auto before = map.jack;
     a3app::addRecToAes67Sender (map, "");
     EXPECT_EQ (map.jack, before);
+}
+
+// The map the engine links (JackBackend) and counts (a3-core links): the loaded map plus the built-in
+// links; the loaded config itself stays as loaded, so a Save never writes them.
+TEST (BuiltInLinks, LinkMapForIsTheLoadedMapPlusTheBuiltInLinks)
+{
+    a3app::AppConfig config;
+    static_cast<a3::links::LinkMap&> (config.io) = savedBeforeM10();
+    config.io.directLinks = { { "system:capture_1", "beat-analyzer:in_1" } };
+    config.io.deviceChannels["rec_L"] = 3;
+    const auto loaded = config.io.jack;
+
+    const auto linked = a3app::linkMapFor (config, "a3nuc1");
+
+    EXPECT_EQ (linked.jack.at ("rec_L"), (std::vector<std::string> { "StemDeck:rec_L", "beat-analyzer:bpm_1", "AES67 a3nuc1 out:send_CH1" }));
+    EXPECT_EQ (linked.jack.at ("rec_R"), (std::vector<std::string> { "StemDeck:rec_R", "AES67 a3nuc1 out:send_CH2" }));
+    EXPECT_EQ (linked.jack.at ("main_top_1"), std::vector<std::string> { "system:playback_1" });
+    EXPECT_EQ (linked.directLinks, config.io.directLinks);
+    EXPECT_EQ (linked.deviceChannels, config.io.deviceChannels);
+    EXPECT_EQ (config.io.jack, loaded);
 }

@@ -25,7 +25,7 @@ std::vector<std::string> takeNames (const char** names)
 }
 }
 
-JackBackend::JackBackend (bool shouldConnect) : connecting (shouldConnect) {}
+JackBackend::JackBackend (bool shouldConnect, std::string hostName) : connecting (shouldConnect), hostname (std::move (hostName)) {}
 
 JackBackend::~JackBackend() { close(); }
 
@@ -54,8 +54,7 @@ juce::Result JackBackend::open (EngineHost& engineHost, const AppConfig& config)
         return juce::Result::fail ("cannot register the JACK ports");
     }
     slots = bindPortSlots (engineHost.engineConfig(), engineHost.spatialConfig(), inputs, outputs);
-    map = config.io;
-    addRecToAes67Sender (map, juce::SystemStats::getComputerName().toStdString());
+    map = linkMapFor (config, hostname);
     sampleRate = (double) jack_get_sample_rate (client);
     const auto built = engineHost.rebuild (sampleRate, (int) jack_get_buffer_size (client), false);
     if (built.failed())

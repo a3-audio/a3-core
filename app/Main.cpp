@@ -241,7 +241,9 @@ Started startCore (const a3app::ProgramArgs& args, const a3core::Platform& platf
 
 Started startEngine (const a3app::ProgramArgs& args, const a3core::Platform& platform)
 {
-    auto started = a3app::EngineRole::start (args.engine, platform.home());
+    auto engineArgs = args.engine;
+    engineArgs.hostname = platform.hostname();
+    auto started = a3app::EngineRole::start (engineArgs, platform.home());
     if (const auto* code = std::get_if<int> (&started))
         return *code;
     return std::unique_ptr<a3app::RoleRunner> (std::move (std::get<std::unique_ptr<a3app::EngineRole>> (started)));

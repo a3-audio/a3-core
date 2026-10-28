@@ -22,7 +22,9 @@ namespace a3app
 class JackBackend final : public AudioBackend
 {
 public:
-    explicit JackBackend (bool connecting);   // false: --no-connect, the plan is never applied
+    // connecting false: --no-connect, the plan is never applied. hostname: Platform::hostname(),
+    // which names this machine's AES67 sender (linkMapFor).
+    JackBackend (bool connecting, std::string hostname);
     ~JackBackend() override;
 
     juce::Result open (EngineHost&, const AppConfig&) override;
@@ -48,6 +50,7 @@ private:
     void rebuildOnNewQuantumOrRate();
 
     const bool connecting;
+    const std::string hostname;
     jack_client_t* client = nullptr;
     EngineHost* host = nullptr;
     IoMap map;

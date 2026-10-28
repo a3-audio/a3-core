@@ -89,11 +89,7 @@ int runLinks (const a3core::Platform& platform)
     const auto map = engineMap (platform);
     std::optional<std::size_t> missing;
     if (map.known)
-    {
-        auto wanted = map.config.io;   // what the engine links: the file plus its built-in links
-        addRecToAes67Sender (wanted, platform.hostname());
-        missing = a3::links::linksWithMissingTarget (wanted, ports);
-    }
+        missing = a3::links::linksWithMissingTarget (linkMapFor (map.config, platform.hostname()), ports);
 
     const LinkMeanings meanings { map.config.engine, meterNames (platform) };
     std::fputs (formatLinks ({ links, ports, missing }, meanings).c_str(), stdout);
