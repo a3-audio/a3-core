@@ -41,7 +41,9 @@ SKIPPED_DIRS = {"tests", "test", "a3-motion-tests", "build", "build-make",
 #: program joined a3-core on 2026-10-27; a3-engine was never in REPOS, so its
 #: tree was never guarded. Bringing it under the guard is separate work.
 #: Not a SKIPPED_DIRS entry: other repos have a src/ that stays guarded.
-SKIPPED_REPO_DIRS = {"a3-core": ("src", "app", "bench", "host", "third_party", "tools/parity")}
+#: StemDeck's third_party holds a3-core itself (and IEM) as a submodule.
+SKIPPED_REPO_DIRS = {"a3-core": ("src", "app", "bench", "host", "third_party", "tools/parity"),
+                     "stemdeck": ("third_party",)}
 
 #: The families of our words. Not `fx`: that family became `filter` on
 #: 2026-09-30, and `/fx/` in code was REAPER's (`/track/N/fx/...`, gone from
