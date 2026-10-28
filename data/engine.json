@@ -100,13 +100,11 @@
     "system:playback_15"
    ],
    "rec_L": [
-    "StemDeck:rec_L",
     "StemDeck-A:rec_L",
     "AES67 a3nuc1 out:send_CH1",
     "beat-analyzer:bpm_1"
    ],
    "rec_R": [
-    "StemDeck:rec_R",
     "StemDeck-A:rec_R",
     "AES67 a3nuc1 out:send_CH2"
    ],

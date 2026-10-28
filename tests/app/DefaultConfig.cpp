@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 #include <map>
 #include <set>
+#include <tuple>
 #include "ConfigFile.h"
 #include "EngineFixture.h"
 #include "EnginePorts.h"
@@ -135,7 +136,7 @@ TEST (DefaultConfig, ConnectsWhatThePatchbayConnectedForReaper)
     std::set<std::string> known (ports.inputs.begin(), ports.inputs.end());
     known.insert (ports.outputs.begin(), ports.outputs.end());
 
-    int checked = 0, direct = 0, meters = 0;
+    int checked = 0, direct = 0, meters = 0, singleInstanceRecorders = 0;
     for (const auto& link : patchbayLinks())
     {
         const bool reaperIsSource = startsWith (link.from, "REAPER:");
@@ -148,6 +149,11 @@ TEST (DefaultConfig, ConnectsWhatThePatchbayConnectedForReaper)
         if (startsWith (peer, "beat-analyzer:vu_"))   // O13: measured inside the engine (NoLinkToTheAnalyzersMeters)
         {
             ++meters;
+            continue;
+        }
+        if (startsWith (peer, "StemDeck:rec_"))   // P20: the single-instance recorder is gone; M10 names StemDeck-A and AES67
+        {
+            ++singleInstanceRecorders;
             continue;
         }
         ASSERT_TRUE (map.getDynamicObject()->hasProperty (juce::String (reaperPort))) << reaperPort << " is not in Step 0's table";
@@ -174,6 +180,14 @@ TEST (DefaultConfig, ConnectsWhatThePatchbayConnectedForReaper)
     EXPECT_GE (checked, 15);
     EXPECT_EQ (meters, 50);   // every patchbay cable into beat-analyzer's vu_* ports
     EXPECT_EQ (direct, 0);    // REAPER's raw meter outs (out25-26, out31-38) fed only those meters
+    EXPECT_EQ (singleInstanceRecorders, 2);   // rec_L/R -> StemDeck:rec_L/R, replaced by the M10 recorders below
+    for (const auto& [port, local, sender] : { std::tuple<const char*, const char*, const char*> { "rec_L", "StemDeck-A:rec_L", "AES67 a3nuc1 out:send_CH1" },
+                                               { "rec_R", "StemDeck-A:rec_R", "AES67 a3nuc1 out:send_CH2" } })
+    {
+        EXPECT_TRUE (contains (config.io.jack.at (port), local)) << port;
+        EXPECT_TRUE (contains (config.io.jack.at (port), sender)) << port;
+        EXPECT_FALSE (contains (config.io.jack.at (port), std::string ("StemDeck:") + port)) << port;
+    }
 }
 
 TEST (DefaultConfig, DeckAIsLocalDeckBIsAes67)
@@ -263,7 +277,7 @@ TEST (DefaultConfig, NothingButTheRecBusFeedsARecorder)
     const auto config = loadDefault();
     const auto isRecorder = [] (const std::string& peer)
     {
-        return afterColon (peer) == "rec_L" || afterColon (peer) == "rec_R"
+        return (startsWith (peer, "StemDeck") && (afterColon (peer) == "rec_L" || afterColon (peer) == "rec_R"))
             || startsWith (peer, "AES67 a3nuc1 out:send_CH");
     };
     for (const auto& [port, peers] : config.io.jack)
@@ -272,4 +286,15 @@ TEST (DefaultConfig, NothingButTheRecBusFeedsARecorder)
                 EXPECT_TRUE (port == "rec_L" || port == "rec_R") << port << " -> " << peer;
     for (const auto& [from, to] : config.io.directLinks)
         EXPECT_FALSE (isRecorder (to) || isRecorder (from)) << from << " -> " << to;
+
+    const auto recorders = [&] (const char* port)
+    {
+        std::set<std::string> found;
+        for (const auto& peer : config.io.jack.at (port))
+            if (isRecorder (peer))
+                found.insert (peer);
+        return found;
+    };
+    EXPECT_EQ (recorders ("rec_L"), (std::set<std::string> { "StemDeck-A:rec_L", "AES67 a3nuc1 out:send_CH1" }));
+    EXPECT_EQ (recorders ("rec_R"), (std::set<std::string> { "StemDeck-A:rec_R", "AES67 a3nuc1 out:send_CH2" }));
 }

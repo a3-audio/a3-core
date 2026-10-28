@@ -185,7 +185,7 @@ installed, until then they are reported as missing, not an error). Since Task 24
 analyzer's meter ports (`beat-analyzer:vu_*`, and the direct capture links that only fed them) are gone:
 the engine measures those meters itself. Left out on purpose: REAPER's inputs
 13-24 (StemDeck's stems and AES67's cue have no engine counterpart) and the AES67 sender's other channels (its client
-name carries the machine's host name, so the default map names a3nuc1's). The engine reads the file from `~/.config/a3/engine/engine.json`
+name carries the machine's host name, so the default map names a3nuc1's: it is the Core's map, and nothing the engine reads -- the truth's `hosts` hold addresses, not the machine's name -- gives the host name, so another host copies the file to `~/.config/a3/engine/engine.json` and edits the name). The single-instance `StemDeck:rec_L/R` links are gone: the recorders are `StemDeck-A` and the AES67 sender. The engine reads the file from `~/.config/a3/engine/engine.json`
 first; the package never writes there.
 
 ## The program: one binary, a3-core
