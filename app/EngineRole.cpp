@@ -172,7 +172,13 @@ public:
     juce::String engineProblem() const override { return problem; }
     std::vector<std::string> droppedLinks() const override { return startedWith.droppedLinks; }
     std::vector<std::string> ignoredKeys() const override { return startedWith.ignoredKeys; }
-    juce::String truthNote() const override { return a3app::truthNote (truth); }
+    juce::String truthNote() const override
+    {
+        juce::StringArray notes { a3app::truthNote (truth), unmeteredDecksNote (startedWith.engine.decks, truth.vuMeters) };
+        notes.removeEmptyStrings();
+        return notes.joinIntoString ("; ");
+    }
+    int truthDecks() const override { return truth.decks; }
     void edit (const AppConfig& config) override { edited = config; }
 
     // Fails when the new config did not open (the previous one is running again, or nothing is: then
@@ -290,6 +296,8 @@ std::variant<std::unique_ptr<EngineRole>, int> EngineRole::start (const AppArgs&
         return 1;
     }
     if (const auto note = truthNote (loaded->truth); note.isNotEmpty())
+        sayEngine (note);
+    if (const auto note = unmeteredDecksNote (loaded->config.engine.decks, loaded->truth.vuMeters); note.isNotEmpty())
         sayEngine (note);
     for (const auto& line : droppedLinkLines (loaded->config))
         sayEngine (line);

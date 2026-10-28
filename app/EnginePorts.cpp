@@ -4,14 +4,6 @@
 
 namespace a3app
 {
-std::string deckLetters (int slot)
-{
-    std::string letters;
-    for (; slot > 0; slot = (slot - 1) / 26)
-        letters.insert (letters.begin(), (char) ('A' + (slot - 1) % 26));
-    return letters;
-}
-
 namespace
 {
 void addZone (std::vector<std::string>& out, const std::string& zone, const a3::Layout& layout)

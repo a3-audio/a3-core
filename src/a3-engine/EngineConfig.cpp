@@ -43,7 +43,7 @@ bool operator== (const ModulatedParameter& a, const ModulatedParameter& b)
 
 bool operator== (const EngineConfig& a, const EngineConfig& b)
 {
-    return a.channels == b.channels && a.decks == b.decks && a.analogInputs == b.analogInputs
+    return a.channels == b.channels && a.decks == b.decks && a.decksNamed == b.decksNamed && a.analogInputs == b.analogInputs
         && a.analogPairs == b.analogPairs
         && a.trims == b.trims && a.phonesHeadphoneEq == b.phonesHeadphoneEq && a.filterKind == b.filterKind && a.delayModulation == b.delayModulation;
 }
@@ -197,7 +197,7 @@ void checkPairs (const EngineConfig& config)
     }
 }
 
-EngineConfig parse (const juce::var& v)
+EngineConfig parse (const juce::var& v, int truthDecks)
 {
     const auto& section = objectOf (v, "the engine section");
     rejectUnknownKeys (section, { "channels", "decks", "analogInputs", "analogPairs", retiredReturnPair,
@@ -205,8 +205,8 @@ EngineConfig parse (const juce::var& v)
     EngineConfig config;
     if (section.hasProperty ("channels"))
         config.channels = wholeNumber (section.getProperty ("channels"), "channels", 1);
-    if (section.hasProperty ("decks"))
-        config.decks = wholeNumber (section.getProperty ("decks"), "decks", 0);
+    config.decksNamed = section.hasProperty ("decks");
+    config.decks = config.decksNamed ? wholeNumber (section.getProperty ("decks"), "decks", 0) : truthDecks;
     if (section.hasProperty ("analogInputs"))
         config.analogInputs = wholeNumber (section.getProperty ("analogInputs"), "analogInputs", 0);
     config.analogPairs = parsePairs (section, config);
@@ -235,12 +235,12 @@ const std::vector<std::string>& retiredEngineKeys()
     return keys;
 }
 
-std::optional<EngineConfig> parseEngineConfig (const juce::var& engineSection, juce::String& error)
+std::optional<EngineConfig> parseEngineConfig (const juce::var& engineSection, juce::String& error, int truthDecks)
 {
     try
     {
         error = {};
-        return parse (engineSection);
+        return parse (engineSection, truthDecks);
     }
     catch (const Refusal& refusal)
     {
@@ -253,7 +253,8 @@ juce::var toJson (const EngineConfig& config)
 {
     auto* root = new juce::DynamicObject();
     root->setProperty ("channels", config.channels);
-    root->setProperty ("decks", config.decks);
+    if (config.decksNamed)
+        root->setProperty ("decks", config.decks);
     root->setProperty ("analogInputs", config.analogInputs);
     juce::Array<juce::var> pairs;
     for (const int pair : config.analogPairs)

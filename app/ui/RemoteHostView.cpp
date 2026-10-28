@@ -121,13 +121,15 @@ void RemoteHostView::pollConfigAndLinks()
     const auto body = parsedJson (config->body);
     const juce::File file (body["file"].toString());
     juce::String error;
-    const auto pending = parseAppConfig (body["pending"], file.getParentDirectory(), error);
-    const auto running = parseAppConfig (body["running"], file.getParentDirectory(), error);
+    const int truthDecks = body["truthDecks"];
+    const auto pending = parseAppConfig (body["pending"], file.getParentDirectory(), error, truthDecks);
+    const auto running = parseAppConfig (body["running"], file.getParentDirectory(), error, truthDecks);
     if (! pending || ! running)
         return;
     cache.pending = *pending;
     cache.running = *running;
     cache.file = file;
+    cache.truthDecks = truthDecks;
     cache.configBody = config->body;
 }
 
@@ -169,6 +171,7 @@ juce::String RemoteHostView::engineProblem() const { const std::lock_guard<std::
 std::vector<std::string> RemoteHostView::droppedLinks() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.report.droppedLinks; }
 std::vector<std::string> RemoteHostView::ignoredKeys() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.report.ignoredKeys; }
 juce::String RemoteHostView::truthNote() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.report.truthNote; }
+int RemoteHostView::truthDecks() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.truthDecks; }
 juce::File RemoteHostView::configFile() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.file; }
 LiveLinks RemoteHostView::liveLinks() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.links; }
 

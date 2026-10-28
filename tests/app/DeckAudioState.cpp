@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 #include <algorithm>
 #include "AppTruth.h"
+#include "ConfigEdits.h"
 #include "DeckAudioReport.h"
 #include "EngineFixture.h"
 #include "a3-links/LinkPlan.h"
@@ -54,6 +55,17 @@ TEST (DeckAudioState, SlotWithoutMapEntriesIsZero)
 {
     EXPECT_EQ (a3app::deckAudioLinked (twoDecks(), 3, {}), (Bits { true, true, false }));
     EXPECT_EQ (a3app::deckAudioLinked ({}, 2, {}), (Bits { false, false }));
+}
+
+// A8: one entry per slot of the count, k = 1..N, whatever N is.
+TEST (DeckAudioState, EverySlotOfTheCountIsReported)
+{
+    a3app::IoMap map;
+    for (int slot = 1; slot <= 5; ++slot)
+        a3app::setDeckSource (map, slot, slot == 2 ? a3app::DeckSource::aes67 : a3app::DeckSource::local);
+    EXPECT_EQ (a3app::deckAudioLinked (map, 5, {}), (Bits { true, true, true, true, true }));
+    EXPECT_EQ (a3app::deckAudioLinked (map, 5, { "StemDeck-E:cue_9" }), (Bits { true, true, true, true, false }));
+    EXPECT_EQ (a3app::deckAudioLinked (map, 6, { "StemDeck-C:aux_1" }), (Bits { true, true, false, true, true, false }));
 }
 
 // A peer's ports vanish (its host restarts) and come back: the plan holds the links again.
@@ -125,4 +137,25 @@ TEST (DeckAudioReport, TheBackendsLinkStateReachesCoreWithTheHello)
     status.missingPeers.clear();
     a3app::reportDeckAudio (status, map, 2, host);
     EXPECT_EQ (said (toCore), (Lines { "/engine/deck/2/audio 1" })) << "the deck whose peer came back, at once";
+}
+
+// Four slots reach Core as /engine/deck/1..4/audio, each its own state.
+TEST (DeckAudioReport, FourSlotsReachCoreAsOneToFour)
+{
+    using Lines = std::vector<std::string>;
+    std::vector<juce::OSCMessage> toCore;
+    a3app::EngineHost host { a3test::engineConfig (4, 4), a3test::loadedSpatialConfig (a3test::shippedSpatialDirectory),
+                             a3apptest::engineTruth(), [&] (const juce::OSCMessage& m) { toCore.push_back (m); } };
+    a3app::IoMap map;
+    for (int slot = 1; slot <= 4; ++slot)
+        a3app::setDeckSource (map, slot, a3app::DeckSource::local);
+    a3app::BackendStatus status;
+    status.connecting = true;
+    status.linksPlanned = true;
+    status.missingPeers = { "StemDeck-C:bformat_1" };
+    host.controlTick (0.0);
+    toCore.clear();
+    a3app::reportDeckAudio (status, map, 4, host);
+    EXPECT_EQ (said (toCore), (Lines { "/engine/deck/1/audio 1", "/engine/deck/2/audio 1", "/engine/deck/3/audio 0",
+                                       "/engine/deck/4/audio 1" }));
 }

@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 #include <map>
 #include <set>
+#include "AppTruth.h"
 #include "ConfigFile.h"
 #include "ConnectionPlan.h"
 #include "EngineFixture.h"
@@ -19,10 +20,10 @@ const juce::File defaultConfigFile { A3_DEFAULT_ENGINE_CONFIG };
 const juce::File patchbayFile { A3_PATCHBAY_COPY };
 const juce::File portMapFile { A3_REAPER_TO_ENGINE_PORTS };
 
-a3app::AppConfig loadDefault()
+a3app::AppConfig loadDefault (int truthDecks = a3apptest::truthDecks())
 {
     juce::String error;
-    const auto config = a3app::loadAppConfig (defaultConfigFile, error);
+    const auto config = a3app::loadAppConfig (defaultConfigFile, error, truthDecks);
     EXPECT_TRUE (config.has_value()) << error;
     return config.value_or (a3app::AppConfig {});
 }
@@ -103,7 +104,8 @@ TEST (DefaultConfig, LoadsAndNamesOnlyRealPorts)
     const auto config = loadDefault();
     const auto ports = portsOf (config);
     EXPECT_EQ (config.engine.channels, 4);
-    EXPECT_EQ (config.engine.decks, 2);
+    EXPECT_EQ (config.engine.decks, 4);   // A8: the truth's deck range; the shipped file names no count
+    EXPECT_FALSE (juce::JSON::parse (defaultConfigFile)["engine"].getDynamicObject()->hasProperty ("decks"));
     EXPECT_EQ (config.engine.analogPairs, (std::vector<int> { 1, 2, 3, 4 }));
     EXPECT_FALSE (juce::JSON::parse (defaultConfigFile)["engine"].getDynamicObject()->hasProperty ("returnAnalogPair"));   // retired (P47)
     EXPECT_TRUE (config.ignoredKeys.empty());
@@ -194,33 +196,40 @@ TEST (DefaultConfig, ConnectsWhatThePatchbayConnectedForReaper)
     }
 }
 
-TEST (DefaultConfig, DeckAIsLocalDeckBIsAes67)
+// Deck A is the local StemDeck, deck B the AES67 stream (named in the file); every slot the file names no
+// link of, C and D today and any the truth adds, is its local StemDeck.
+TEST (DefaultConfig, DeckAIsLocalDeckBIsAes67EveryOtherSlotLocal)
 {
-    const auto config = loadDefault();
-    const auto ports = portsOf (config);
-    int deckPorts = 0;
-    for (const auto& port : ports.inputs)
+    for (const int truthDecks : { 4, 6 })
     {
-        if (! startsWith (port, "deck"))
-            continue;
-        ++deckPorts;
-        const auto letter = port.substr (4, port.find ('_') - 4);
-        const auto tail = port.substr (port.find ('_') + 1);   // "7", "aux_3", "cue_9"
-        const auto n = tail.substr (tail.find ('_') == std::string::npos ? 0 : tail.find ('_') + 1);
-        const auto kind = std::isdigit ((unsigned char) tail[0]) ? 0 : (startsWith (tail, "aux") ? 1 : 2);
-        const std::string local[] = { "bformat_", "aux_", "cue_" };
-        const std::string remote[] = { "receive_MAIN", "receive_AUX", "receive_CUE" };
-        const auto expected = letter == "A" ? "StemDeck-A:" + local[kind] + n
-                                            : "AES67 deck " + letter + ":" + remote[kind] + n;
-        const auto found = config.io.jack.find (port);
-        ASSERT_TRUE (found != config.io.jack.end()) << port;
-        EXPECT_EQ (found->second, std::vector<std::string> { expected }) << port;
+        const auto config = loadDefault (truthDecks);
+        const auto ports = portsOf (config);
+        int deckPorts = 0;
+        for (const auto& port : ports.inputs)
+        {
+            if (! startsWith (port, "deck"))
+                continue;
+            ++deckPorts;
+            const auto letter = port.substr (4, port.find ('_') - 4);
+            const auto tail = port.substr (port.find ('_') + 1);   // "7", "aux_3", "cue_9"
+            const auto n = tail.substr (tail.find ('_') == std::string::npos ? 0 : tail.find ('_') + 1);
+            const auto kind = std::isdigit ((unsigned char) tail[0]) ? 0 : (startsWith (tail, "aux") ? 1 : 2);
+            const std::string local[] = { "bformat_", "aux_", "cue_" };
+            const std::string remote[] = { "receive_MAIN", "receive_AUX", "receive_CUE" };
+            const auto expected = letter != "B" ? "StemDeck-" + letter + ":" + local[kind] + n
+                                                : "AES67 deck " + letter + ":" + remote[kind] + n;
+            const auto found = config.io.jack.find (port);
+            ASSERT_TRUE (found != config.io.jack.end()) << port;
+            EXPECT_EQ (found->second, std::vector<std::string> { expected }) << port;
+        }
+        EXPECT_EQ (deckPorts, truthDecks * 41);
+        EXPECT_EQ (config.io.jack.at ("deckA_cue_9"), std::vector<std::string> { "StemDeck-A:cue_9" });
+        EXPECT_EQ (config.io.jack.at ("deckB_aux_1"), std::vector<std::string> { "AES67 deck B:receive_AUX1" });
+        EXPECT_EQ (config.io.jack.at ("deckC_1"), std::vector<std::string> { "StemDeck-C:bformat_1" });
+        EXPECT_EQ (config.io.jack.at ("deckD_cue_9"), std::vector<std::string> { "StemDeck-D:cue_9" });
+        for (const auto& retired : a3app::retiredDeckPorts (truthDecks))
+            EXPECT_EQ (config.io.jack.count (retired), 0u) << retired;
     }
-    EXPECT_EQ (deckPorts, 2 * 41);
-    EXPECT_EQ (config.io.jack.at ("deckA_cue_9"), std::vector<std::string> { "StemDeck-A:cue_9" });
-    EXPECT_EQ (config.io.jack.at ("deckB_aux_1"), std::vector<std::string> { "AES67 deck B:receive_AUX1" });
-    for (const auto& retired : a3app::retiredDeckPorts (2))
-        EXPECT_EQ (config.io.jack.count (retired), 0u) << retired;
 }
 
 TEST (DefaultConfig, CalibratedZonesHaveTrims)

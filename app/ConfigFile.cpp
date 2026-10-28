@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "ConfigFile.h"
+#include "ConfigEdits.h"
 #include "JsonParse.h"
 #include "SpatialConfig.h"
 #include <algorithm>
@@ -141,7 +142,7 @@ juce::var withoutRetiredPorts (const juce::var& io, const std::vector<std::strin
     return result;
 }
 
-AppConfig parseRoot (const juce::var& root, const juce::File& base)
+AppConfig parseRoot (const juce::var& root, const juce::File& base, int truthDecks)
 {
     const auto& object = objectOf (root, "the file");
     rejectUnknownKeys (object, { "engine", "backend", "io", "spatial" }, "the file");
@@ -149,7 +150,7 @@ AppConfig parseRoot (const juce::var& root, const juce::File& base)
     AppConfig config;
     juce::String error;
     const auto engine = object.hasProperty ("engine") ? object.getProperty ("engine") : juce::var (new juce::DynamicObject());
-    if (const auto parsed = a3::parseEngineConfig (engine, error))
+    if (const auto parsed = a3::parseEngineConfig (engine, error, truthDecks))
         config.engine = *parsed;
     else
         refuse ("engine: " + error);
@@ -177,18 +178,21 @@ AppConfig parseRoot (const juce::var& root, const juce::File& base)
         config.io = *map;
     else
         refuse (error);
+    // A file that names its count states its links too; one that does not cannot know the truth's slots.
+    if (! config.engine.decksNamed)
+        linkUnnamedSlotsLocally (config.io, config.engine.decks);
     return config;
 }
 
-AppConfig parse (const juce::File& file) { return parseRoot (parseFile (file), file.getParentDirectory()); }
+AppConfig parse (const juce::File& file, int truthDecks) { return parseRoot (parseFile (file), file.getParentDirectory(), truthDecks); }
 }
 
-std::optional<AppConfig> parseAppConfig (const juce::var& root, const juce::File& base, juce::String& error)
+std::optional<AppConfig> parseAppConfig (const juce::var& root, const juce::File& base, juce::String& error, int truthDecks)
 {
     try
     {
         error = {};
-        return parseRoot (root, base);
+        return parseRoot (root, base, truthDecks);
     }
     catch (const Refusal& refusal)
     {
@@ -197,12 +201,12 @@ std::optional<AppConfig> parseAppConfig (const juce::var& root, const juce::File
     }
 }
 
-std::optional<AppConfig> loadAppConfig (const juce::File& file, juce::String& error)
+std::optional<AppConfig> loadAppConfig (const juce::File& file, juce::String& error, int truthDecks)
 {
     try
     {
         error = {};
-        return parse (file);
+        return parse (file, truthDecks);
     }
     catch (const Refusal& refusal)
     {
@@ -250,7 +254,7 @@ juce::Result saveAppConfig (const AppConfig& config, const juce::File& file)
         return juce::Result::fail ("cannot write " + temporary.getFile().getFullPathName());
     // The file must be one the loader accepts: a refused write leaves the old file in place.
     juce::String refusal;
-    if (! loadAppConfig (temporary.getFile(), refusal))
+    if (! loadAppConfig (temporary.getFile(), refusal, config.engine.decks))   // a count left out is the one in use
         return juce::Result::fail ("not saved, " + refusal);
     if (! temporary.overwriteTargetFileWithTemporary())
         return juce::Result::fail ("cannot replace " + file.getFullPathName());

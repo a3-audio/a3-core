@@ -6,6 +6,7 @@
 #include "AmbiEncoderBus.h"
 #include "ChannelSelect.h"
 #include "ChannelStrip.h"
+#include "DeckLetters.h"
 #include "DeckStrip.h"
 #include "DelayModulation.h"
 #include "EngineStages.h"
@@ -66,16 +67,6 @@ int numberIn (const std::string& name, const std::string& prefix, const std::str
     if (digits.size() > 3 || ! std::all_of (digits.begin(), digits.end(), [] (char c) { return c >= '0' && c <= '9'; }))
         return 0;
     return std::stoi (digits);
-}
-
-// The deck slot (1-4) a meter name "deck_a" ... "deck_d" names; 0 for any other name.
-int deckSlotIn (const std::string& name)
-{
-    static const std::string prefix = "deck_";
-    if (name.size() != prefix.size() + 1 || name.compare (0, prefix.size(), prefix) != 0)
-        return 0;
-    const char letter = name.back();
-    return letter >= 'a' && letter <= 'd' ? letter - 'a' + 1 : 0;
 }
 
 // Linear ramp from `from` to `to` over `length` samples: the j-th value is from + (to - from) (j + 1) / length.
@@ -688,7 +679,7 @@ std::vector<std::string> Engine::Impl::attachVuTaps (VuTaps& taps)
 bool Engine::Impl::placeVuTap (const std::string& name, VuTap& tap)
 {
     using P = EngineChannel;
-    if (const int slot = deckSlotIn (name))
+    if (const int slot = deckSlotOfMeter (name))
     {
         if (slot > config.decks)
             return false;

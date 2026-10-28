@@ -156,6 +156,20 @@ void setDeckSource (IoMap& map, int slot, DeckSource source)
         map.jack[port] = { peer };
 }
 
+void linkUnnamedSlotsLocally (IoMap& map, int decks)
+{
+    for (int slot = 1; slot <= decks; ++slot)
+    {
+        const auto links = deckLinks (slot, DeckSource::local);
+        const bool named = std::any_of (links.begin(), links.end(), [&] (const auto& link)
+        {
+            return map.jack.count (link.first) > 0 || map.deviceChannels.count (link.first) > 0;
+        });
+        if (! named)
+            setDeckSource (map, slot, DeckSource::local);
+    }
+}
+
 std::optional<DeckSource> deckSourceOf (const IoMap& map, int slot)
 {
     for (const auto source : { DeckSource::local, DeckSource::aes67 })

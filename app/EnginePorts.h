@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+#include "DeckLetters.h"
 #include "Engine.h"
 #include "EngineConfig.h"
 #include "SpatialConfig.h"
@@ -18,7 +19,7 @@ struct PortNames { std::vector<std::string> inputs, outputs; };
 PortNames enginePortNames (const a3::EngineConfig&, const a3::SpatialConfig&);
 
 constexpr int deckInputChannels = 16, deckAuxChannels = 16, deckCueChannels = 9;
-std::string deckLetters (int slotOneBased);   // 1 = "A", 26 = "Z", 27 = "AA"
+using a3::deckLetters;   // 1 = "A", 26 = "Z", 27 = "AA"
 
 // The stereo pairs the slots had before aux and cue grew (deck{X}_cue_L/R, deck{X}_aux_L/R) for
 // `decks` slots: a saved config may still name them, and the loader drops those links.

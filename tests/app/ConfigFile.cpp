@@ -3,6 +3,8 @@
 #include <cmath>
 #include <set>
 #include <gtest/gtest.h>
+#include "AppTruth.h"
+#include "ConfigEdits.h"
 #include "ConfigFile.h"
 #include "EngineFixture.h"
 #include "EnginePorts.h"
@@ -71,7 +73,7 @@ TEST (ConfigFile, RoundTrips)
     ASSERT_TRUE (a3app::saveAppConfig (saved, file).wasOk());
 
     juce::String error;
-    const auto loaded = a3app::loadAppConfig (file, error);
+    const auto loaded = a3app::loadAppConfig (file, error, a3apptest::truthDecks());
     ASSERT_TRUE (loaded.has_value()) << error;
     EXPECT_EQ (loaded->engine, saved.engine);
     EXPECT_EQ (loaded->backend.type, saved.backend.type);
@@ -90,12 +92,51 @@ TEST (ConfigFile, MissingSectionsTakeTheDefaults)
 {
     Scratch scratch;
     juce::String error;
-    const auto loaded = a3app::loadAppConfig (scratch.write ("engine.json", withSpatial ("")), error);
+    const auto loaded = a3app::loadAppConfig (scratch.write ("engine.json", withSpatial ("")), error, a3apptest::truthDecks());
     ASSERT_TRUE (loaded.has_value()) << error;
-    EXPECT_EQ (loaded->engine, a3::EngineConfig {});
+    auto defaults = a3::EngineConfig {};
+    defaults.decks = a3apptest::truthDecks();
+    EXPECT_EQ (loaded->engine, defaults);
     EXPECT_EQ (loaded->backend.type, a3app::BackendSettings::Type::jack);
     EXPECT_EQ (loaded->backend.blockSize, 128);
     EXPECT_EQ (loaded->backend.sampleRate, 44100);
+    EXPECT_EQ (loaded->io.jack.size(), (size_t) defaults.decks * 41);   // only the slots' local StemDeck links
+    EXPECT_TRUE (loaded->io.directLinks.empty());
+    EXPECT_TRUE (loaded->io.deviceChannels.empty());
+}
+
+// A8: a file that names no deck count gets the truth's slots, and each slot it names no port of links to
+// its local StemDeck; a slot it names any port of stays as written.
+TEST (ConfigFile, SlotsTheFileNamesNoPortOfLinkTheirLocalStemDeck)
+{
+    Scratch scratch;
+    juce::String error;
+    const auto file = scratch.write ("engine.json", withSpatial ("\"io\":{\"jack\":{\"deckB_1\":[\"AES67 deck B:receive_MAIN1\"]}}"));
+    for (const int truthDecks : { 4, 6 })
+    {
+        const auto loaded = a3app::loadAppConfig (file, error, truthDecks);
+        ASSERT_TRUE (loaded.has_value()) << error;
+        EXPECT_EQ (loaded->engine.decks, truthDecks);
+        for (int slot = 1; slot <= truthDecks; ++slot)
+        {
+            if (slot == 2)
+                continue;
+            EXPECT_EQ (a3app::deckSourceOf (loaded->io, slot), a3app::DeckSource::local) << slot;
+        }
+        EXPECT_EQ (loaded->io.jack.at ("deckB_1"), std::vector<std::string> { "AES67 deck B:receive_MAIN1" });
+        EXPECT_EQ (loaded->io.jack.count ("deckB_2"), 0u);   // the file's own slot is not completed behind its back
+    }
+    EXPECT_EQ (file.loadFileAsString(), withSpatial ("\"io\":{\"jack\":{\"deckB_1\":[\"AES67 deck B:receive_MAIN1\"]}}"));
+}
+
+// A file that names its count is the whole statement: its unlinked slots stay unlinked.
+TEST (ConfigFile, AFileThatNamesItsDeckCountGetsNoLinksAdded)
+{
+    Scratch scratch;
+    juce::String error;
+    const auto loaded = a3app::loadAppConfig (scratch.write ("engine.json", withSpatial ("\"engine\":{\"decks\":4}")), error, 4);
+    ASSERT_TRUE (loaded.has_value()) << error;
+    EXPECT_EQ (loaded->engine.decks, 4);
     EXPECT_TRUE (loaded->io.jack.empty());
 }
 
@@ -104,24 +145,24 @@ TEST (ConfigFile, BadJsonIsRefusedWithFileAndReason)
     Scratch scratch;
     juce::String error;
     const auto broken = scratch.write ("broken.json", "{ \"engine\": ");
-    EXPECT_FALSE (a3app::loadAppConfig (broken, error).has_value());
+    EXPECT_FALSE (a3app::loadAppConfig (broken, error, a3apptest::truthDecks()).has_value());
     EXPECT_TRUE (error.contains (broken.getFullPathName())) << error;
     EXPECT_TRUE (error.containsIgnoreCase ("json")) << error;
 
     const auto missing = scratch.dir.getChildFile ("nothing.json");
-    EXPECT_FALSE (a3app::loadAppConfig (missing, error).has_value());
+    EXPECT_FALSE (a3app::loadAppConfig (missing, error, a3apptest::truthDecks()).has_value());
     EXPECT_TRUE (error.contains (missing.getFullPathName())) << error;
 
     const auto notObject = scratch.write ("list.json", "[1,2]");
-    EXPECT_FALSE (a3app::loadAppConfig (notObject, error).has_value());
+    EXPECT_FALSE (a3app::loadAppConfig (notObject, error, a3apptest::truthDecks()).has_value());
     EXPECT_TRUE (error.contains (notObject.getFullPathName())) << error;
 
     const auto badEngine = scratch.write ("engine-bad.json", withSpatial ("\"engine\":{\"channels\":0}"));
-    EXPECT_FALSE (a3app::loadAppConfig (badEngine, error).has_value());
+    EXPECT_FALSE (a3app::loadAppConfig (badEngine, error, a3apptest::truthDecks()).has_value());
     EXPECT_TRUE (error.contains (badEngine.getFullPathName()) && error.contains ("channels")) << error;
 
     const auto badSpatial = scratch.write ("spatial-bad.json", "{\"spatial\":\"" + scratch.dir.getFullPathName() + "/nowhere\"}");
-    EXPECT_FALSE (a3app::loadAppConfig (badSpatial, error).has_value());
+    EXPECT_FALSE (a3app::loadAppConfig (badSpatial, error, a3apptest::truthDecks()).has_value());
     EXPECT_TRUE (error.contains (badSpatial.getFullPathName())) << error;
 
     for (const char* section : { "\"backend\":{\"type\":\"pulse\"}", "\"backend\":{\"blockSize\":32}",
@@ -129,7 +170,7 @@ TEST (ConfigFile, BadJsonIsRefusedWithFileAndReason)
                                  "\"backend\":{\"mystery\":1}", "\"io\":{\"mystery\":1}", "\"mystery\":1" })
     {
         const auto file = scratch.write ("section.json", withSpatial (section));
-        EXPECT_FALSE (a3app::loadAppConfig (file, error).has_value()) << section;
+        EXPECT_FALSE (a3app::loadAppConfig (file, error, a3apptest::truthDecks()).has_value()) << section;
         EXPECT_TRUE (error.contains (file.getFullPathName())) << section << ": " << error;
     }
 }
@@ -139,24 +180,24 @@ TEST (ConfigFile, MapNamingAnUnknownEnginePortIsRefused)
     Scratch scratch;
     juce::String error;
     const auto unknownJack = scratch.write ("a.json", withSpatial ("\"io\":{\"jack\":{\"main_top_9\":[\"x:y\"]}}"));
-    EXPECT_FALSE (a3app::loadAppConfig (unknownJack, error).has_value());
+    EXPECT_FALSE (a3app::loadAppConfig (unknownJack, error, a3apptest::truthDecks()).has_value());
     EXPECT_TRUE (error.contains ("main_top_9") && error.contains (unknownJack.getFullPathName())) << error;
 
     const auto unknownDevice = scratch.write ("b.json", withSpatial ("\"io\":{\"deviceChannels\":{\"nope\":1}}"));
-    EXPECT_FALSE (a3app::loadAppConfig (unknownDevice, error).has_value());
+    EXPECT_FALSE (a3app::loadAppConfig (unknownDevice, error, a3apptest::truthDecks()).has_value());
     EXPECT_TRUE (error.contains ("nope")) << error;
 
     // A deck port that the config's deck count does not have.
     const auto deckBeyond = scratch.write ("c.json", withSpatial ("\"engine\":{\"decks\":1},\"io\":{\"jack\":{\"deckB_1\":[\"x:y\"]}}"));
-    EXPECT_FALSE (a3app::loadAppConfig (deckBeyond, error).has_value());
+    EXPECT_FALSE (a3app::loadAppConfig (deckBeyond, error, a3apptest::truthDecks()).has_value());
 
     const auto known = scratch.write ("d.json", withSpatial ("\"engine\":{\"decks\":2},\"io\":{\"jack\":{\"deckB_1\":[\"x:y\"]},\"deviceChannels\":{\"rec_L\":0}}"));
-    EXPECT_TRUE (a3app::loadAppConfig (known, error).has_value()) << error;
+    EXPECT_TRUE (a3app::loadAppConfig (known, error, a3apptest::truthDecks()).has_value()) << error;
 
     const auto badChannel = scratch.write ("e.json", withSpatial ("\"io\":{\"deviceChannels\":{\"rec_L\":-1}}"));
-    EXPECT_FALSE (a3app::loadAppConfig (badChannel, error).has_value());
+    EXPECT_FALSE (a3app::loadAppConfig (badChannel, error, a3apptest::truthDecks()).has_value());
     const auto badPeer = scratch.write ("f.json", withSpatial ("\"io\":{\"jack\":{\"rec_L\":[3]}}"));
-    EXPECT_FALSE (a3app::loadAppConfig (badPeer, error).has_value());
+    EXPECT_FALSE (a3app::loadAppConfig (badPeer, error, a3apptest::truthDecks()).has_value());
 }
 
 TEST (ConfigFile, RetiredDeckPortsAreDroppedNotRefused)
@@ -167,7 +208,7 @@ TEST (ConfigFile, RetiredDeckPortsAreDroppedNotRefused)
         "\"engine\":{\"decks\":2},\"io\":{\"jack\":{"
         "\"deckA_cue_L\":[\"x:y\"],\"deckB_aux_R\":[\"p:q\"],\"deckA_1\":[\"keep:1\"],\"main_top_1\":[\"system:playback_1\"]},"
         "\"deviceChannels\":{\"deckA_cue_R\":4,\"rec_L\":0}}"));
-    const auto config = a3app::loadAppConfig (file, error);
+    const auto config = a3app::loadAppConfig (file, error, a3apptest::truthDecks());
     ASSERT_TRUE (config.has_value()) << error;
     EXPECT_EQ (config->droppedLinks, (std::vector<std::string> { "deckA_cue_L -> x:y", "deckB_aux_R -> p:q", "deckA_cue_R -> device channel 4" }));
     EXPECT_EQ (config->io.jack.count ("deckA_cue_L"), 0u);
@@ -178,7 +219,7 @@ TEST (ConfigFile, RetiredDeckPortsAreDroppedNotRefused)
     EXPECT_EQ (config->io.deviceChannels.at ("rec_L"), 0);
 
     const auto clean = scratch.write ("new.json", withSpatial ("\"io\":{\"jack\":{\"main_top_1\":[\"x:y\"]}}"));
-    const auto loaded = a3app::loadAppConfig (clean, error);
+    const auto loaded = a3app::loadAppConfig (clean, error, a3apptest::truthDecks());
     ASSERT_TRUE (loaded.has_value()) << error;
     EXPECT_TRUE (loaded->droppedLinks.empty());
 }
@@ -190,14 +231,14 @@ TEST (ConfigFile, TheRetiredReturnPairIsIgnoredNotRefused)
     Scratch scratch;
     juce::String error;
     const auto file = scratch.write ("old.json", withSpatial ("\"engine\":{\"decks\":2,\"returnAnalogPair\":6}"));
-    const auto config = a3app::loadAppConfig (file, error);
+    const auto config = a3app::loadAppConfig (file, error, a3apptest::truthDecks());
     ASSERT_TRUE (config.has_value()) << error;
     EXPECT_EQ (config->ignoredKeys, (std::vector<std::string> { "engine.returnAnalogPair" }));
     EXPECT_TRUE (a3app::droppedLinkLines (*config).contains ("ignored retired key engine.returnAnalogPair"));
     EXPECT_FALSE (a3app::toJson (*config)["engine"].getDynamicObject()->hasProperty ("returnAnalogPair"));
 
     const auto clean = scratch.write ("new.json", withSpatial ("\"engine\":{\"decks\":2}"));
-    const auto loaded = a3app::loadAppConfig (clean, error);
+    const auto loaded = a3app::loadAppConfig (clean, error, a3apptest::truthDecks());
     ASSERT_TRUE (loaded.has_value()) << error;
     EXPECT_TRUE (loaded->ignoredKeys.empty());
 }
@@ -207,7 +248,7 @@ TEST (ConfigFile, UnknownNamesAreStillRefused)
     Scratch scratch;
     juce::String error;
     const auto file = scratch.write ("bad.json", withSpatial ("\"engine\":{\"decks\":2},\"io\":{\"jack\":{\"deckA_cue_10\":[\"x:y\"]}}"));
-    EXPECT_FALSE (a3app::loadAppConfig (file, error).has_value());
+    EXPECT_FALSE (a3app::loadAppConfig (file, error, a3apptest::truthDecks()).has_value());
     EXPECT_TRUE (error.contains ("deckA_cue_10")) << error;
 }
 
@@ -218,11 +259,11 @@ TEST (ConfigFile, TrimsOutsideNinetyToPlusSixAreRefusedNotClamped)
     for (const char* trim : { "\"main\":6.5", "\"booth\":-90.5", "\"phones\":100", "\"rec\":-200", "\"main\":1e999" })
     {
         const auto file = scratch.write ("trim.json", withSpatial (juce::String ("\"engine\":{\"trimsDb\":{") + trim + "}}"));
-        EXPECT_FALSE (a3app::loadAppConfig (file, error).has_value()) << trim;
+        EXPECT_FALSE (a3app::loadAppConfig (file, error, a3apptest::truthDecks()).has_value()) << trim;
         EXPECT_TRUE (error.contains (file.getFullPathName())) << trim << ": " << error;
     }
     const auto edges = scratch.write ("edges.json", withSpatial ("\"engine\":{\"trimsDb\":{\"main\":6,\"booth\":-90,\"phones\":0,\"rec\":-3}}"));
-    const auto loaded = a3app::loadAppConfig (edges, error);
+    const auto loaded = a3app::loadAppConfig (edges, error, a3apptest::truthDecks());
     ASSERT_TRUE (loaded.has_value()) << error;
     EXPECT_EQ (*loaded->engine.trims.main, 6.0f);
     EXPECT_EQ (*loaded->engine.trims.booth, -90.0f);
@@ -236,7 +277,7 @@ TEST (ConfigFile, SaveNeverWritesWithoutBeingAsked)
     const auto source = scratch.write ("elsewhere/engine.json", withSpatial (""));
 
     juce::String error;
-    EXPECT_TRUE (a3app::loadAppConfig (source, error).has_value()) << error;
+    EXPECT_TRUE (a3app::loadAppConfig (source, error, a3apptest::truthDecks()).has_value()) << error;
     a3app::chooseConfigFile ("", juce::File::getSpecialLocation (juce::File::userHomeDirectory), [] (const juce::File&) { return true; });
 
     EXPECT_FALSE (scratch.dir.getChildFile (".config").exists());

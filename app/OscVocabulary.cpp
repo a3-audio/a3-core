@@ -3,6 +3,8 @@
 #include "OscVocabulary.h"
 #include <algorithm>
 #include <cmath>
+#include <set>
+#include "DeckLetters.h"
 
 namespace a3app
 {
@@ -228,12 +230,31 @@ std::optional<EngineTruth> parseEngineTruth (const juce::String& json, juce::Str
         truth.vuRelayHost = root["hosts"]["local"].toString();
     truth.controlPort = a3bench::listenerPort (root, "engine.control");
     truth.controlHost = a3bench::listenerHostAddress (root, "engine.control");
+    const auto deckRange = addresses["stemdeck.deck-hello"]["deck"];
+    if (! deckRange.isArray() || deckRange.size() != 2 || ! (deckRange[1].isInt() || deckRange[1].isInt64()))
+        return error = "the truth has no deck range (\"stemdeck.deck-hello\" with \"deck\": [first, last])", std::nullopt;
+    truth.decks = (int) deckRange[1];
     return truth;
 }
 
 juce::String truthNote (const EngineTruth& truth)
 {
     return truth.deckAudioPattern.isEmpty() ? "the truth has no engine.deck-audio: deck audio reports are off" : juce::String();
+}
+
+juce::String unmeteredDecksNote (int decks, const std::vector<juce::String>& vuMeters)
+{
+    std::set<int> metered;
+    for (const auto& name : vuMeters)
+        metered.insert (a3::deckSlotOfMeter (name.toStdString()));
+    juce::StringArray missing;
+    for (int slot = 1; slot <= decks; ++slot)
+        if (metered.count (slot) == 0)
+            missing.add (a3::deckLetters (slot));
+    if (missing.isEmpty())
+        return {};
+    return (missing.size() == 1 ? "deck " + missing[0] + " has no meter" : "decks " + missing.joinIntoString (", ") + " have no meter")
+           + " (the truth's vu_meters name none)";
 }
 
 bool applyEngineMessage (const EngineTruth& truth, const a3::EngineConfig& config, const juce::OSCMessage& m,

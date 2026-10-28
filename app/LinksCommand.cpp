@@ -3,6 +3,7 @@
 #include "LinksCommand.h"
 
 #include <cstdio>
+#include <optional>
 #include <jack/jack.h>
 
 #include "ConfigFile.h"
@@ -41,14 +42,30 @@ std::vector<Link> audioLinks (jack_client_t* client)
     return links;
 }
 
-// The truth's level meters; an unreadable truth only costs the VU line its name.
-std::vector<std::string> meterNames (const a3core::Platform& platform)
+// What the overview takes from the truth: the level meters' names and the deck count of a config that
+// names none. An unreadable truth costs the VU line its name and the map its reading.
+struct TruthFacts
+{
+    std::vector<std::string> meters;
+    std::optional<int> decks;
+};
+
+TruthFacts truthFacts (const a3core::Platform& platform)
 {
     const auto files = coreFiles (platform);
     const auto loaded = a3core::Truth::load (files.truth, files.network);
-    if (const auto* truth = std::get_if<a3core::Truth> (&loaded))
-        return truth->vuMeters();
-    return {};
+    const auto* truth = std::get_if<a3core::Truth> (&loaded);
+    if (truth == nullptr)
+        return {};
+    TruthFacts facts { truth->vuMeters(), std::nullopt };
+    try
+    {
+        facts.decks = truth->indexRange ("stemdeck.deck-hello", "deck").second;
+    }
+    catch (const a3core::TruthError&)
+    {
+    }
+    return facts;
 }
 
 struct EngineMap
@@ -57,12 +74,17 @@ struct EngineMap
     bool known = false;
 };
 
-EngineMap engineMap (const a3core::Platform& platform)
+EngineMap engineMap (const a3core::Platform& platform, std::optional<int> truthDecks)
 {
     EngineMap map;
+    if (! truthDecks)
+    {
+        std::fputs ("a3-core: the truth gives no deck range (stemdeck.deck-hello), so the engine's map is not read\n", stderr);
+        return map;
+    }
     const auto file = chooseConfigFile ({}, platform.home(), [] (const juce::File& f) { return f.existsAsFile(); });
     juce::String error;
-    if (const auto loaded = loadAppConfig (file, error))
+    if (const auto loaded = loadAppConfig (file, error, *truthDecks))
     {
         map.config = *loaded;
         map.known = true;
@@ -86,12 +108,13 @@ int runLinks (const a3core::Platform& platform)
     const auto links = audioLinks (client);
     jack_client_close (client);
 
-    const auto map = engineMap (platform);
+    const auto facts = truthFacts (platform);
+    const auto map = engineMap (platform, facts.decks);
     std::optional<std::size_t> missing;
     if (map.known)
         missing = a3::links::linksWithMissingTarget (linkMapFor (map.config, platform.hostname()), ports);
 
-    const LinkMeanings meanings { map.config.engine, meterNames (platform) };
+    const LinkMeanings meanings { map.config.engine, facts.meters };
     std::fputs (formatLinks ({ links, ports, missing }, meanings).c_str(), stdout);
     return 0;
 }

@@ -7,6 +7,16 @@
 
 namespace
 {
+constexpr int truthDecks = 4;   // a truth whose stemdeck.deck-hello range ends at 4
+
+// What a section that names nothing parses to: the struct's defaults, but the deck count is the truth's.
+a3::EngineConfig parsedDefaults()
+{
+    a3::EngineConfig defaults;
+    defaults.decks = truthDecks;
+    return defaults;
+}
+
 juce::var section (const juce::String& json)
 {
     return juce::JSON::parse (json);
@@ -14,7 +24,7 @@ juce::var section (const juce::String& json)
 
 std::optional<a3::EngineConfig> parse (const juce::String& json, juce::String& error)
 {
-    return a3::parseEngineConfig (section (json), error);
+    return a3::parseEngineConfig (section (json), error, truthDecks);
 }
 
 void expectRefused (const juce::String& json, const juce::String& mention)
@@ -46,15 +56,46 @@ TEST (EngineConfig, DefaultsAreFourChannelsSvf)
     EXPECT_EQ (c->delayModulation[0].shape, "random");
     EXPECT_EQ (c->delayModulation[1].parameter, "pitchR");
     EXPECT_EQ (c->delayModulation[1].rateHz, 0.018817f);
-    EXPECT_EQ (*c, a3::EngineConfig {});   // the struct's defaults are the parsed defaults
+    EXPECT_EQ (*c, parsedDefaults());
 }
 
-TEST (EngineConfig, DefaultsAreTwoDecks)
+// A8: no fixed deck count. A section that names none takes the truth's deck range, whatever it is.
+TEST (EngineConfig, TheDeckCountComesFromTheTruthWhenTheSectionNamesNone)
+{
+    juce::String error;
+    for (const int range : { 4, 6, 30 })
+    {
+        const auto c = a3::parseEngineConfig (section ("{}"), error, range);
+        ASSERT_TRUE (c.has_value()) << error;
+        EXPECT_EQ (c->decks, range);
+        EXPECT_FALSE (c->decksNamed);
+    }
+}
+
+// A8: a count the user's file names is his: never raised to the truth's, never dropped.
+TEST (EngineConfig, ANamedDeckCountWinsAndIsWrittenBack)
+{
+    juce::String error;
+    for (const int named : { 0, 2, 7 })
+    {
+        const auto c = parse (R"({"decks": )" + juce::String (named) + "}", error);
+        ASSERT_TRUE (c.has_value()) << error;
+        EXPECT_EQ (c->decks, named);
+        EXPECT_TRUE (c->decksNamed);
+        EXPECT_EQ ((int) a3::toJson (*c)["decks"], named);
+    }
+}
+
+// A count the truth gave is not the user's: a save leaves it out, so the next truth decides again.
+TEST (EngineConfig, AnUnnamedDeckCountIsNotWritten)
 {
     juce::String error;
     const auto c = parse ("{}", error);
-    ASSERT_TRUE (c.has_value());
-    EXPECT_EQ (c->decks, 2);
+    ASSERT_TRUE (c.has_value()) << error;
+    EXPECT_FALSE (a3::toJson (*c).getDynamicObject()->hasProperty ("decks"));
+    const auto later = a3::parseEngineConfig (a3::toJson (*c), error, 6);   // a wider truth later
+    ASSERT_TRUE (later.has_value()) << error;
+    EXPECT_EQ (later->decks, 6);
 }
 
 TEST (EngineConfig, RoundTrips)
@@ -62,6 +103,7 @@ TEST (EngineConfig, RoundTrips)
     a3::EngineConfig c;
     c.channels = 6;
     c.decks = 3;
+    c.decksNamed = true;
     c.analogInputs = 16;
     c.analogPairs = { 1, 0, 3, 4, 0, 7 };
     c.trims.main = -12.5f;
@@ -77,9 +119,9 @@ TEST (EngineConfig, RoundTrips)
     ASSERT_TRUE (back.has_value()) << error;
     EXPECT_EQ (*back, c);
 
-    const auto defaults = parse (juce::JSON::toString (a3::toJson (a3::EngineConfig {})), error);
+    const auto defaults = parse (juce::JSON::toString (a3::toJson (parsedDefaults())), error);
     ASSERT_TRUE (defaults.has_value()) << error;
-    EXPECT_EQ (*defaults, a3::EngineConfig {});
+    EXPECT_EQ (*defaults, parsedDefaults());
 }
 
 TEST (EngineConfig, RefusedChannelsBelowOne)
@@ -128,7 +170,7 @@ TEST (EngineConfig, ReturnAnalogPairIsRetired)
         juce::String error;
         const auto c = parse (text, error);
         ASSERT_TRUE (c.has_value()) << text << ": " << error;
-        EXPECT_EQ (*c, a3::EngineConfig {}) << text;
+        EXPECT_EQ (*c, parsedDefaults()) << text;
     }
     EXPECT_EQ (a3::retiredEngineKeys(), (std::vector<std::string> { "returnAnalogPair" }));
     EXPECT_FALSE (a3::toJson (a3::EngineConfig {}).getDynamicObject()->hasProperty ("returnAnalogPair"));
@@ -165,7 +207,7 @@ TEST (EngineConfig, NonFiniteTrimIsRefused)
         auto* root = new juce::DynamicObject();
         root->setProperty ("trimsDb", juce::var (trims));
         juce::String error;
-        EXPECT_FALSE (a3::parseEngineConfig (juce::var (root), error).has_value());
+        EXPECT_FALSE (a3::parseEngineConfig (juce::var (root), error, truthDecks).has_value());
         EXPECT_TRUE (error.contains ("main")) << error;
     }
     expectRefused (R"({"trimsDb": {"phones": "loud"}})", "phones");
@@ -197,7 +239,7 @@ TEST (EngineConfig, DeckOnlyChannelsAreAllowed)
 TEST (EngineConfig, RefusedBrokenSections)
 {
     juce::String error;
-    EXPECT_FALSE (a3::parseEngineConfig (juce::var(), error).has_value());   // missing section
+    EXPECT_FALSE (a3::parseEngineConfig (juce::var(), error, truthDecks).has_value());   // missing section
     EXPECT_FALSE (error.isEmpty());
     expectRefused ("[1,2]", "object");
     expectRefused (R"({"chanels": 4})", "chanels");                  // a typo must not fall back silently
@@ -245,7 +287,7 @@ TEST (EngineConfig, HeadphoneEqModelBecomesItsIndex)
     EXPECT_EQ (a3::headphoneEqChoice ("SHURE-SRH940"), std::optional<int> (23));
     EXPECT_EQ (a3::headphoneEqModels().size(), 23u);
 
-    const auto back = a3::parseEngineConfig (a3::toJson (*c), error);   // round trip
+    const auto back = a3::parseEngineConfig (a3::toJson (*c), error, truthDecks);   // round trip
     ASSERT_TRUE (back.has_value()) << error;
     EXPECT_EQ (back->phonesHeadphoneEq, "AKG-K141MK2");
 }

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <cmath>
 #include "ChannelSelect.h"
 #include <map>
@@ -1151,6 +1152,43 @@ TEST (Engine, EachDeckMetersItsWBeforeAnyChannel)
     EXPECT_EQ (byName.at ("deck_b"), 0.5f);
     EXPECT_EQ (byName.at ("deck_c"), 0.0f);
     EXPECT_EQ (byName.at ("deck_d"), 0.0f);
+}
+
+// A8: the deck meters are wherever the truth names them, by letter. Four slots: C and D read their own W.
+// A fifth slot meters only once the truth names a deck_e (here in place of free39); the engine has no 4 of its own.
+TEST (Engine, EveryDeckSlotTheTruthNamesAMeterForIsMetered)
+{
+    auto names = truthVuMeters();
+    a3::VuTaps four (names, a3::VuSettings {});
+    EngineRig rig (engineConfig (4, 4), 4096);
+    rig.engine->attachVuTaps (four);
+    rig.decks[2].bformat[0] = impulseAt (rig.frames, 100, 0.25f);
+    rig.decks[3].bformat[0] = impulseAt (rig.frames, 100, 0.75f);
+    rig.run();
+    const auto peaksOf = [] (a3::VuTaps& taps)
+    {
+        std::vector<float> peaks, rms;
+        taps.take (peaks, rms);
+        std::map<std::string, float> byName;
+        for (size_t slot = 0; slot < taps.names().size(); ++slot)
+            byName[taps.names()[slot]] = peaks[slot];
+        return byName;
+    };
+    const auto fourPeaks = peaksOf (four);
+    EXPECT_EQ (fourPeaks.at ("deck_a"), 0.0f);
+    EXPECT_EQ (fourPeaks.at ("deck_c"), 0.25f);
+    EXPECT_EQ (fourPeaks.at ("deck_d"), 0.75f);
+
+    const auto free = std::find (names.begin(), names.end(), "free39");
+    ASSERT_NE (free, names.end());
+    *free = "deck_e";
+    a3::VuTaps five (names, a3::VuSettings {});
+    EngineRig wider (engineConfig (4, 5), 4096);
+    const auto unplaced = wider.engine->attachVuTaps (five);
+    EXPECT_EQ (std::count (unplaced.begin(), unplaced.end(), "deck_e"), 0);
+    wider.decks[4].bformat[0] = impulseAt (wider.frames, 100, 0.5f);
+    wider.run();
+    EXPECT_EQ (peaksOf (five).at ("deck_e"), 0.5f);
 }
 
 // O13: the /vu meters at the points the patchbay fed beat-analyzer. The raw inputs: an impulse into

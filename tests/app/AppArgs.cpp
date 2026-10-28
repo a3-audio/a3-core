@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 #include "AppArgs.h"
 #include "AppTruth.h"
+#include "EnginePorts.h"
 #include "SpatialTestData.h"
 
 namespace
@@ -109,6 +110,54 @@ TEST (AppArgs, CheckConfigPassesWithRetiredDeckPorts)
     EXPECT_TRUE (message.contains ("dropped retired link deckA_cue_L -> x:y")) << message;
     EXPECT_TRUE (message.contains ("dropped retired link deckB_aux_R -> p:q")) << message;
     EXPECT_TRUE (message.endsWith ("ok")) << message;
+}
+
+// A8: the deck count comes from one place. A config that names it keeps it (the rig's "decks": 2 stays 2,
+// whatever the truth says); one that names none takes the truth's deck range, 4 or more.
+TEST (AppArgs, TheDeckCountIsTheConfigsElseTheTruths)
+{
+    Home home;
+    juce::String error;
+    const auto named = home.write ("named.json", "{\"engine\":{\"decks\":2}," + spatialField() + "}");
+    const auto unnamed = home.write ("unnamed.json", "{" + spatialField() + "}");
+    const auto wideTruth = home.write ("truth-6.json", a3apptest::truthWithDeckRange (6));
+
+    const auto rig = a3app::loadStartupData (checkArgs (named), home.dir, error);
+    ASSERT_TRUE (rig.has_value()) << error;
+    EXPECT_EQ (rig->config.engine.decks, 2);
+    EXPECT_TRUE (rig->config.engine.decksNamed);
+
+    const auto four = a3app::loadStartupData (checkArgs (unnamed), home.dir, error);
+    ASSERT_TRUE (four.has_value()) << error;
+    EXPECT_EQ (four->config.engine.decks, 4);
+    EXPECT_FALSE (four->config.engine.decksNamed);
+    EXPECT_EQ (a3app::enginePortNames (four->config.engine, four->spatial).inputs.size(), 176u);   // 12 + 4 x 41
+
+    auto args = checkArgs (unnamed);
+    args.truth = wideTruth.getFullPathName();
+    const auto six = a3app::loadStartupData (args, home.dir, error);
+    ASSERT_TRUE (six.has_value()) << error;
+    EXPECT_EQ (six->config.engine.decks, 6);   // no cap
+    args = checkArgs (named);
+    args.truth = wideTruth.getFullPathName();
+    EXPECT_EQ (a3app::loadStartupData (args, home.dir, error)->config.engine.decks, 2);   // never raised
+    EXPECT_EQ (named.loadFileAsString(), "{\"engine\":{\"decks\":2}," + spatialField() + "}");   // never rewritten
+}
+
+// A slot beyond the truth's /vu deck meters (deck_a ... deck_d) has none, and --check-config says so once.
+TEST (AppArgs, CheckConfigSaysWhichDeckHasNoMeter)
+{
+    Home home;
+    auto args = checkArgs (home.write ("unnamed.json", "{" + spatialField() + "}"));
+    args.truth = home.write ("truth-5.json", a3apptest::truthWithDeckRange (5)).getFullPathName();
+    juce::String message;
+    ASSERT_TRUE (a3app::checkConfig (args, home.dir, message)) << message;
+    EXPECT_TRUE (message.contains ("deck E")) << message;
+    EXPECT_TRUE (message.endsWith ("ok")) << message;
+    EXPECT_EQ (message.indexOf ("deck E"), message.lastIndexOf ("deck E")) << message;   // once
+
+    ASSERT_TRUE (a3app::checkConfig (checkArgs (home.write ("four.json", "{" + spatialField() + "}")), home.dir, message)) << message;
+    EXPECT_EQ (message, "ok");
 }
 
 TEST (AppArgs, CheckConfigNamesFileAndReason)

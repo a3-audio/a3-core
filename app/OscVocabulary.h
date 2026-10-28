@@ -42,11 +42,16 @@ struct EngineTruth : a3bench::Truth
     juce::String vuRelayHost;     // its host, a wildcard reached on loopback
     int controlPort = -1;         // "engine.control": where the window reaches the engine (loopback, HTTP); -1: none in this truth
     juce::String controlHost;     // its host as the truth gives it
+    int decks = 0;                // "stemdeck.deck-hello"'s deck range's upper bound: the slots of a config that names no count
     std::vector<WordAddress> words;
 };
 
 // "" when the truth has everything; else a line saying what is off (no deck-audio reports).
 juce::String truthNote (const EngineTruth&);
+
+// "" when every deck slot 1..decks has a meter among the truth's vu names (deck_a, deck_b, ...); else one
+// line naming the slots that have none.
+juce::String unmeteredDecksNote (int decks, const std::vector<juce::String>& vuMeters);
 
 // The truth keys of the words above, in EngineWord order.
 const std::vector<juce::String>& engineWordKeys();

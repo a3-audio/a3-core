@@ -36,6 +36,9 @@ enum class DeckSource { local, aes67 };
 // Replaces exactly the slot's 41 entries (deck{X}_1..16, _aux_1..16, _cue_1..9) with literal links;
 // every other entry stays.
 void setDeckSource (IoMap&, int slotOneBased, DeckSource);
+// Each slot 1..decks the map names none of the 41 ports of (no JACK peer, no device channel) gets its
+// local StemDeck's links; a slot it names any port of stays as it is.
+void linkUnnamedSlotsLocally (IoMap&, int decks);
 // The source whose 41 links the slot holds exactly; nullopt when it holds anything else
 // (missing, partial, or hand-edited links).
 std::optional<DeckSource> deckSourceOf (const IoMap&, int slotOneBased);

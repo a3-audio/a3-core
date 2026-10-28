@@ -36,6 +36,7 @@ public:
     // Non-empty when the truth in use lacks a key the engine would send with (an older a3-osc.json).
     virtual juce::String truthNote() const { return {}; }
     virtual juce::File configFile() const = 0;                     // where Save writes
+    virtual int truthDecks() const = 0;                            // EngineTruth::decks: the count of a config that names none
     virtual LiveLinks liveLinks() const = 0;                       // the engine ports' live JACK links, foreign ones included
     virtual void edit (const AppConfig&) = 0;                      // stores the pending edit; nothing runs differently yet
     // After Save has written the file: makes the edit the running config. Re-creates the whole

@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <gtest/gtest.h>
 #include <set>
+#include "AppTruth.h"
 #include "EngineFixture.h"
 #include "FakeView.h"
 #include "PageSnapshot.h"
@@ -448,7 +449,7 @@ TEST_F (Pages, SaveWritesThenApplies)
     ASSERT_TRUE (result.wasOk()) << result.getErrorMessage();
     EXPECT_EQ (view.applied, 1);
     EXPECT_TRUE (view.fileExistedAtApply);   // the file first, then the rebuild
-    const auto loaded = a3app::loadAppConfig (view.file, error);
+    const auto loaded = a3app::loadAppConfig (view.file, error, a3apptest::truthDecks());
     ASSERT_TRUE (loaded) << error;
     EXPECT_EQ (loaded->engine.channels, 6);
     EXPECT_TRUE (a3app::sameConfig (view.cfg, view.runningCfg));
@@ -468,7 +469,7 @@ TEST_F (Pages, SaveWritesThenAppliesRemote)
     ASSERT_TRUE (result.wasOk()) << result.getErrorMessage();
     EXPECT_EQ (rig.fake.applied, 1);
     EXPECT_TRUE (rig.fake.fileExistedAtApply);   // the file first, then the rebuild
-    const auto loaded = a3app::loadAppConfig (rig.fake.file, error);
+    const auto loaded = a3app::loadAppConfig (rig.fake.file, error, a3apptest::truthDecks());
     ASSERT_TRUE (loaded) << error;
     EXPECT_EQ (loaded->engine.channels, 6);
     EXPECT_TRUE (a3app::sameConfig (rig.remote->config(), rig.remote->running()));
@@ -480,7 +481,7 @@ TEST_F (Pages, SaveWritesThenAppliesRemote)
     const auto refused = rig.settle ([&] { return a3app::saveEdits (*rig.remote); });
     EXPECT_TRUE (refused.failed());
     EXPECT_NE (refused.getErrorMessage().indexOf ("cannot open the device"), -1);
-    EXPECT_EQ (a3app::loadAppConfig (rig.fake.file, error)->engine.channels, 6);   // the previous file is back
+    EXPECT_EQ (a3app::loadAppConfig (rig.fake.file, error, a3apptest::truthDecks())->engine.channels, 6);   // the previous file is back
 }
 
 TEST_F (Pages, SaveThatTheLoaderWouldRefuseWritesAndAppliesNothing)
@@ -585,6 +586,29 @@ TEST_F (Pages, PaintsTheDeckSourceChooser)
     page.deckSourceBox (2)->setSelectedId (1, juce::sendNotificationSync);
     EXPECT_EQ (view.cfg.io.jack.at ("deckB_cue_9"), std::vector<std::string> { "StemDeck-B:cue_9" });
     EXPECT_EQ (view.cfg.io.jack.at ("deckB_1"), std::vector<std::string> { "StemDeck-B:bformat_1" });
+}
+
+// A8: a chooser per slot of the count, C, D and beyond as A and B.
+TEST_F (Pages, EverySlotOfTheCountHasASourceChooser)
+{
+    FakeView view;
+    view.cfg.engine = a3test::engineConfig (4, 5);
+    a3app::IoPage page (view);
+    page.setSize (900, 600);
+    for (int slot = 1; slot <= 5; ++slot)
+    {
+        ASSERT_NE (page.deckSourceBox (slot), nullptr) << slot;
+        EXPECT_EQ (page.deckSourceBox (slot)->getSelectedId(), 3) << slot;   // nothing linked yet
+    }
+    EXPECT_EQ (page.deckSourceBox (6), nullptr);
+
+    page.deckSourceBox (3)->setSelectedId (1, juce::sendNotificationSync);
+    EXPECT_EQ (view.cfg.io.jack.at ("deckC_cue_9"), std::vector<std::string> { "StemDeck-C:cue_9" });
+    page.deckSourceBox (4)->setSelectedId (2, juce::sendNotificationSync);
+    EXPECT_EQ (view.cfg.io.jack.at ("deckD_aux_16"), std::vector<std::string> { "AES67 deck D:receive_AUX16" });
+    page.deckSourceBox (5)->setSelectedId (1, juce::sendNotificationSync);
+    EXPECT_EQ (view.cfg.io.jack.at ("deckE_1"), std::vector<std::string> { "StemDeck-E:bformat_1" });
+    EXPECT_EQ (a3app::deckSourceOf (view.cfg.io, 5), a3app::DeckSource::local);
 }
 
 TEST_F (Pages, AnIncompleteDeckSlotShowsItAndOneChoiceCompletesIt)

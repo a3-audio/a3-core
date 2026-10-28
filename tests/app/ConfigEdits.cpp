@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <cmath>
 #include <gtest/gtest.h>
+#include "AppTruth.h"
 #include "ConfigEdits.h"
 #include "EngineFixture.h"
 #include "SpatialTestData.h"
@@ -48,7 +49,7 @@ TEST (ConfigEdits, EveryEditSurvivesTheLoadersChecks)
     ASSERT_TRUE (edited);
     const auto file = juce::File::createTempFile ("a3-edit");
     ASSERT_TRUE (a3app::saveAppConfig (*edited, file).wasOk());
-    EXPECT_TRUE (a3app::loadAppConfig (file, error)) << error;
+    EXPECT_TRUE (a3app::loadAppConfig (file, error, a3apptest::truthDecks())) << error;
     file.deleteFile();
 }
 

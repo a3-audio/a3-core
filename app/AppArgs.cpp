@@ -55,7 +55,7 @@ std::optional<StartupData> loadStartupData (const AppArgs& args, const juce::Fil
 
     data.configFile = chooseConfigFile (args.config, home, [] (const juce::File& f) { return f.existsAsFile(); }, args.packageConfig);
     data.saveFile = chooseSaveFile (args.config, home);
-    const auto config = loadAppConfig (data.configFile, error);   // names the file itself
+    const auto config = loadAppConfig (data.configFile, error, data.truth.decks);   // names the file itself
     if (! config)
         return std::nullopt;
     data.config = *config;
@@ -87,6 +87,8 @@ bool checkConfig (const AppArgs& args, const juce::File& home, juce::String& mes
         return false;
     }
     auto lines = droppedLinkLines (data->config);
+    if (const auto note = unmeteredDecksNote (data->config.engine.decks, data->truth.vuMeters); note.isNotEmpty())
+        lines.add (note);
     lines.add ("ok");
     message = lines.joinIntoString ("\n");
     return true;
