@@ -159,12 +159,15 @@ public:
         return lines;
     }
 
-    std::vector<std::string> journal() const
+    // Without the note a B0 truth earns (CorePeers asks for it by name).
+    std::vector<std::string> journal (bool withMissingDeckAudioNote = false) const
     {
         std::vector<std::string> lines;
         for (const auto& entry : net.transcript)
             if (entry.hasProperty ("journal"))
                 lines.push_back (entry["journal"].toString().toStdString());
+        if (! withMissingDeckAudioNote)
+            lines.erase (std::remove_if (lines.begin(), lines.end(), b0::isTheMissingDeckAudioNote), lines.end());
         return lines;
     }
 

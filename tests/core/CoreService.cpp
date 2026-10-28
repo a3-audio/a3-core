@@ -181,6 +181,8 @@ public:
     Journal journal()
     {
         return [this] (const std::string& line, bool toStderr) {
+            if (b0::isTheMissingDeckAudioNote (line))
+                return;
             {
                 const std::scoped_lock hold (lock);
                 lines.push_back ({ line, toStderr, std::this_thread::get_id() });

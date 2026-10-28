@@ -88,6 +88,8 @@ void Core::startPeers()
     project.emplace (replayable (truth, eveningFile.load()),
                      [this] { return replayable (truth, eveningState (relayed)); });   // the_live_evening
     decks.fromEvening (eveningFile.load());
+    if (! truth.hasAddress ("engine.deck-audio"))
+        say ("the truth has no engine.deck-audio word: a deck's presence rests on its hellos alone, not on what the engine hears", true);
 }
 
 // Called on the serve thread: what follows is handled there, and the claim says so.

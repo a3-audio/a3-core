@@ -128,6 +128,8 @@ struct Run
         a3core::CoreEnvironment environment {
             truth, net, clock,
             [this, stateText] (const std::string& line, bool toStderr) {
+                if (b0::isTheMissingDeckAudioNote (line))
+                    return;
                 net.journal (juce::String::fromUTF8 (line.c_str()).replace (stateText, stateMark).toStdString(), toStderr);
             },
             stateDir,

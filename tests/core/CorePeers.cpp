@@ -1171,3 +1171,41 @@ TEST (CorePeers, EngineDeckAudioReachesTheDeckSelector)
     rig.osc (rig.engine, "/engine/deck/1/audio", { pyInt (1) });
     EXPECT_EQ (startingWith (rig.to ("motion"), "/stemdeck/1/present"), (std::vector<std::string> { "/stemdeck/1/present i:1" }));
 }
+
+namespace
+{
+size_t linesAbout (const std::vector<std::string>& journal, const std::string& word)
+{
+    return static_cast<size_t> (std::count_if (journal.begin(), journal.end(),
+                                               [&] (const std::string& line) { return line.find (word) != std::string::npos; }));
+}
+}
+
+TEST (CorePeers, ATruthWithoutTheDeckAudioWordIsSaidOnceAtStart)
+{
+    CoreRig rig;   // the recorded B0 truth
+    EXPECT_EQ (linesAbout (rig.journal (true), "engine.deck-audio"), 1u);
+    EXPECT_EQ (linesAbout (rig.journal (true), "hellos alone"), 1u);
+}
+
+TEST (CorePeers, ATruthWithTheDeckAudioWordSaysNothingAboutIt)
+{
+    const auto truth = b0WithDeckAudio();
+    CoreRig::Options options;
+    options.truth = &truth;
+    CoreRig rig (CoreRig::WithOptions {}, options);
+    EXPECT_EQ (linesAbout (rig.journal (true), "engine.deck-audio"), 0u);
+}
+
+TEST (CorePeers, ThePackagesTruthMapsTheEngineDeckAudioWord)
+{
+    const auto truth = std::get<Truth> (Truth::load (juce::File (A3_PACKAGE_TRUTH), std::nullopt));
+    CoreRig::Options options;
+    options.truth = &truth;
+    CoreRig rig (CoreRig::WithOptions {}, options);
+    rig.stemdeckHello ("127.0.0.2");
+    rig.deckHello (1, rig.deckA);
+    rig.clear();
+    rig.osc (rig.engine, "/engine/deck/1/audio", { pyInt (0) });
+    EXPECT_EQ (startingWith (rig.to ("motion"), "/stemdeck/1/present"), (std::vector<std::string> { "/stemdeck/1/present i:0" }));
+}
