@@ -178,13 +178,16 @@ AppConfig parseRoot (const juce::var& root, const juce::File& base, int truthDec
         config.io = *map;
     else
         refuse (error);
-    // A file that names its count states its links too; one that does not cannot know the truth's slots.
-    if (! config.engine.decksNamed)
-        linkUnnamedSlotsLocally (config.io, config.engine.decks);
     return config;
 }
 
-AppConfig parse (const juce::File& file, int truthDecks) { return parseRoot (parseFile (file), file.getParentDirectory(), truthDecks); }
+// A9/A10: only a load from disk fills the slots the file links nowhere; a posted body keeps what the page made.
+AppConfig parse (const juce::File& file, int truthDecks)
+{
+    auto config = parseRoot (parseFile (file), file.getParentDirectory(), truthDecks);
+    linkUnnamedSlotsLocally (config.io, config.engine.decks);
+    return config;
+}
 }
 
 std::optional<AppConfig> parseAppConfig (const juce::var& root, const juce::File& base, juce::String& error, int truthDecks)

@@ -184,9 +184,11 @@ exit 0 and stay closed; a crash or a kill signal starts it again. There is no `[
 `Conflicts=`, for the reason above.
 
 **The deck count** (A8, no cap): a config that names `"decks"` keeps it (never raised, never rewritten); one
-that names none takes the truth's deck range (`stemdeck.deck-hello`'s upper bound, 4 today), a Save leaves it
-out again, and each slot whose ports it names none of links to its local `StemDeck-<X>`. Port letters run
-A…Z, AA, AB, … (`a3::deckLetters`).
+that names none takes the truth's deck range (`stemdeck.deck-hello`'s upper bound, 4 today), and a Save leaves
+it out again. When the engine loads the file from disk at start, each slot whose ports the file links nowhere
+links to its local `StemDeck-<X>`, whether or not the file names its count (A9); a slot linked anywhere stays as
+saved. A config posted from the I/O page is never filled (A10), so a slot emptied there stays empty until the
+next start. Port letters run A…Z, AA, AB, … (`a3::deckLetters`).
 
 **The default config** (`data/engine.json`): four channels on analog pairs 1-4 (pairs 5 and 6 free), no deck
 count (the truth's), trims main/booth -30.88 dB (REAPER's output faders), phones 0, rec 0, SVF filter, Step 0's delay

@@ -46,6 +46,8 @@ a3app::AppConfig sample()
     config.io.directLinks = { { "system:capture_9", "analyzer:in_1" } };
     config.io.deviceChannels["analog_1"] = 0;
     config.io.deviceChannels["main_top_1"] = 3;
+    a3app::setDeckSource (config.io, 1, a3app::DeckSource::local);   // every slot linked: a load adds nothing (A9)
+    a3app::setDeckSource (config.io, 2, a3app::DeckSource::aes67);
     config.spatialDirectory = a3test::shippedSpatialDirectory;
     return config;
 }
@@ -129,15 +131,42 @@ TEST (ConfigFile, SlotsTheFileNamesNoPortOfLinkTheirLocalStemDeck)
     EXPECT_EQ (file.loadFileAsString(), withSpatial ("\"io\":{\"jack\":{\"deckB_1\":[\"AES67 deck B:receive_MAIN1\"]}}"));
 }
 
-// A file that names its count is the whole statement: its unlinked slots stay unlinked.
-TEST (ConfigFile, AFileThatNamesItsDeckCountGetsNoLinksAdded)
+// A9: one rule whether or not the file names its count. The rig's file with "decks": 4 and only A/B linked
+// brings C and D up on their local StemDeck; A and B stay exactly as saved.
+TEST (ConfigFile, ANamedDeckCountGetsLocalLinksForSlotsItLinksNowhere)
 {
     Scratch scratch;
     juce::String error;
-    const auto loaded = a3app::loadAppConfig (scratch.write ("engine.json", withSpatial ("\"engine\":{\"decks\":4}")), error, 4);
+    const auto text = withSpatial ("\"engine\":{\"decks\":4},\"io\":{\"jack\":{\"deckA_1\":[\"StemDeck-A:bformat_1\"],"
+                                   "\"deckB_1\":[\"AES67 deck B:receive_MAIN1\"]}}");
+    const auto file = scratch.write ("engine.json", text);
+    const auto loaded = a3app::loadAppConfig (file, error, 6);
     ASSERT_TRUE (loaded.has_value()) << error;
     EXPECT_EQ (loaded->engine.decks, 4);
-    EXPECT_TRUE (loaded->io.jack.empty());
+    EXPECT_EQ (a3app::deckSourceOf (loaded->io, 3), a3app::DeckSource::local);
+    EXPECT_EQ (a3app::deckSourceOf (loaded->io, 4), a3app::DeckSource::local);
+    EXPECT_EQ (loaded->io.jack.at ("deckB_1"), std::vector<std::string> { "AES67 deck B:receive_MAIN1" });
+    EXPECT_EQ (loaded->io.jack.count ("deckA_2"), 0u);
+    EXPECT_EQ (loaded->io.jack.count ("deckB_2"), 0u);
+    EXPECT_EQ (loaded->io.jack.count ("deckE_1"), 0u);   // the named count, not the truth's
+    EXPECT_EQ (file.loadFileAsString(), text);
+}
+
+// A10: the fill belongs to the load from disk. A config body parsed from JSON (the I/O page's edit posted
+// over HTTP, the window's poll) keeps a slot the user just emptied empty.
+TEST (ConfigFile, OnlyALoadFromDiskFillsUnlinkedSlots)
+{
+    Scratch scratch;
+    juce::String error;
+    const auto text = withSpatial ("\"engine\":{\"decks\":2},\"io\":{\"jack\":{\"deckA_1\":[\"StemDeck-A:bformat_1\"]}}");
+    const auto file = scratch.write ("engine.json", text);
+    const auto posted = a3app::parseAppConfig (juce::JSON::parse (text), file.getParentDirectory(), error, 4);
+    ASSERT_TRUE (posted.has_value()) << error;
+    EXPECT_EQ (posted->io.jack.size(), 1u);
+    EXPECT_FALSE (a3app::deckSourceOf (posted->io, 2).has_value());
+    const auto loaded = a3app::loadAppConfig (file, error, 4);
+    ASSERT_TRUE (loaded.has_value()) << error;
+    EXPECT_EQ (a3app::deckSourceOf (loaded->io, 2), a3app::DeckSource::local);
 }
 
 TEST (ConfigFile, BadJsonIsRefusedWithFileAndReason)

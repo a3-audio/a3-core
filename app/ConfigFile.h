@@ -37,8 +37,8 @@ constexpr float minTrimDb = -90.0f, maxTrimDb = 6.0f;
 // Sections "engine", "backend", "io", "spatial"; a missing section takes its defaults.
 // Refuses (never clamps) a broken file, naming file and reason in `error`. Links of retired
 // deck ports (EnginePorts.h) are dropped, not refused, and listed in droppedLinks. truthDecks is the
-// deck count of a file that names none (EngineTruth::decks); such a file's slots that its io section
-// names no port of link to their local StemDeck.
+// deck count of a file that names none (EngineTruth::decks). Every slot whose ports the file links
+// nowhere links to its local StemDeck (A9); parseAppConfig does not fill (A10: a posted body is kept).
 std::optional<AppConfig> loadAppConfig (const juce::File&, juce::String& error, int truthDecks);
 // "dropped retired link <entry>" per entry of AppConfig::droppedLinks, then "ignored retired key <key>"
 // per entry of AppConfig::ignoredKeys.
