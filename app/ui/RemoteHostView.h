@@ -46,6 +46,7 @@ public:
     AppConfig running() const override;
     juce::String engineProblem() const override;
     std::vector<std::string> droppedLinks() const override;
+    std::vector<std::string> ignoredKeys() const override;
     juce::String truthNote() const override;
     juce::File configFile() const override;
     LiveLinks liveLinks() const override;

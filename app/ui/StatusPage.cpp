@@ -45,7 +45,12 @@ juce::String missingText (const std::vector<std::string>& missingPorts)
 
 juce::String droppedText (const std::vector<std::string>& droppedLinks, int maxLines)
 {
-    if (droppedLinks.empty())
+    return droppedText (droppedLinks, {}, maxLines);
+}
+
+juce::String droppedText (const std::vector<std::string>& droppedLinks, const std::vector<std::string>& ignoredKeys, int maxLines)
+{
+    if (droppedLinks.empty() && ignoredKeys.empty())
         return "none";
     // "deckA_cue_L -> x:y" joins the line of deckA; anything else keeps a line of its own.
     std::vector<std::pair<std::string, std::string>> groups;
@@ -61,15 +66,26 @@ juce::String droppedText (const std::vector<std::string>& droppedLinks, int maxL
             same = groups.insert (groups.end(), { key, "" });
         same->second += (same->second.empty() ? "" : " ") + item;
     }
-    const auto count = (int) droppedLinks.size();
-    juce::StringArray lines { juce::String (count) + (count == 1 ? " retired link dropped:" : " retired links dropped:") };
+    juce::StringArray lines;
+    if (const auto count = (int) droppedLinks.size(); count > 0)
+        lines.add (juce::String (count) + (count == 1 ? " retired link dropped:" : " retired links dropped:"));
     for (const auto& [key, items] : groups)
         lines.add (items.empty() ? juce::String (key) : juce::String (key) + ": " + items);
-    if (lines.size() > maxLines)
+    const int linkLines = ignoredKeys.empty() ? maxLines : juce::jmax (1, maxLines - 1);   // the keys keep their line
+    if (lines.size() > linkLines)
     {
-        const int hidden = lines.size() - juce::jmax (1, maxLines - 1);
-        lines.removeRange (juce::jmax (1, maxLines - 1), hidden);
+        const int hidden = lines.size() - juce::jmax (1, linkLines - 1);
+        lines.removeRange (juce::jmax (1, linkLines - 1), hidden);
         lines.add ("+" + juce::String (hidden) + " more");
+    }
+    if (! ignoredKeys.empty())
+    {
+        juce::StringArray keys;
+        for (const auto& key : ignoredKeys)
+            keys.add (key);
+        const auto count = (int) ignoredKeys.size();
+        lines.add (juce::String (count) + (count == 1 ? " retired key ignored: " : " retired keys ignored: ")
+                   + keys.joinIntoString (", "));
     }
     return lines.joinIntoString ("\n");
 }
@@ -155,6 +171,7 @@ void StatusPage::refresh()
     status = view.status();
     problem = view.engineProblem();
     dropped = view.droppedLinks();
+    ignored = view.ignoredKeys();
     truthWarning = view.truthNote();
     heard = view.coreHeard();
     sinceCore = view.secondsSinceCore();
@@ -216,11 +233,11 @@ void StatusPage::paint (juce::Graphics& g)
 
     // The dropped links take the rest of the block: a count, then one link a line.
     auto rest = area;
-    const bool none = dropped.empty();
+    const bool none = dropped.empty() && ignored.empty();
     g.setColour (palette::textMuted);
     g.drawText ("DROPPED", rest.removeFromLeft (rest.getWidth() / 4), juce::Justification::topLeft, true);
     g.setColour (none ? palette::textMuted : palette::caution);
     const int maxLines = juce::jmax (2, (int) ((float) rest.getHeight() / ((float) row * 0.65f)));
-    g.drawFittedText (droppedText (dropped, maxLines), rest, juce::Justification::topLeft, maxLines, 0.8f);
+    g.drawFittedText (droppedText (dropped, ignored, maxLines), rest, juce::Justification::topLeft, maxLines, 0.8f);
 }
 }

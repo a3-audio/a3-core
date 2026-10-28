@@ -35,6 +35,7 @@ struct FakeView final : a3app::HostView
     a3app::AppConfig running() const override { return runningCfg; }
     juce::String engineProblem() const override { return problem; }
     std::vector<std::string> droppedLinks() const override { return dropped; }
+    std::vector<std::string> ignoredKeys() const override { return ignored; }
     juce::String truthNote() const override { return note; }
     juce::File configFile() const override { return file; }
     a3app::LiveLinks liveLinks() const override { return links; }
@@ -61,7 +62,7 @@ struct FakeView final : a3app::HostView
     a3app::LiveLinks links;
     juce::Result applyResult = juce::Result::ok();
     juce::String problem;
-    std::vector<std::string> dropped;
+    std::vector<std::string> dropped, ignored;
     juce::String note;
     bool fileExistedAtApply = false;
     int edited = 0, applied = 0, filterSets = 0;

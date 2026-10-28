@@ -171,6 +171,7 @@ public:
     LiveLinks liveLinks() const override { return live() ? role.session->liveLinks() : LiveLinks {}; }
     juce::String engineProblem() const override { return problem; }
     std::vector<std::string> droppedLinks() const override { return startedWith.droppedLinks; }
+    std::vector<std::string> ignoredKeys() const override { return startedWith.ignoredKeys; }
     juce::String truthNote() const override { return a3app::truthNote (truth); }
     void edit (const AppConfig& config) override { edited = config; }
 

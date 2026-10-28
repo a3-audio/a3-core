@@ -31,6 +31,8 @@ public:
     virtual juce::String engineProblem() const { return {}; }
     // Links of retired ports the loaded file named and the load left out ("<port> -> <peer>").
     virtual std::vector<std::string> droppedLinks() const { return {}; }
+    // Retired config keys the loaded file named and the load ignored ("engine.<key>").
+    virtual std::vector<std::string> ignoredKeys() const { return {}; }
     // Non-empty when the truth in use lacks a key the engine would send with (an older a3-osc.json).
     virtual juce::String truthNote() const { return {}; }
     virtual juce::File configFile() const = 0;                     // where Save writes

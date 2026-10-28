@@ -18,6 +18,8 @@ juce::String missingText (const std::vector<std::string>& missingPorts);   // "A
 // A count, then one line per deck slot ("deckA: cue_L cue_R"), or "none"; a line past maxLines
 // becomes "+N more", so a cut is always said.
 juce::String droppedText (const std::vector<std::string>& droppedLinks, int maxLines = 1000);
+juce::String droppedText (const std::vector<std::string>& droppedLinks, const std::vector<std::string>& ignoredKeys,
+                          int maxLines = 1000);
 
 // Read-only: engine mode, Core's last word, the gate per zone, load and xruns, missing peers
 // and the per-port meters. refresh() re-reads the view (the window's timer calls it).
@@ -40,7 +42,7 @@ private:
     AppConfig config;
     BackendStatus status;
     juce::String problem;
-    std::vector<std::string> dropped;
+    std::vector<std::string> dropped, ignored;
     juce::String truthWarning;
     bool heard = false, gate = false;
     double sinceCore = 0;

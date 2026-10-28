@@ -189,16 +189,20 @@ TEST (RemoteHostView, SaysTheDroppedLinksAndTheTruthNote)
 {
     RemoteRig rig;
     rig.fake.dropped = { "deckA_cue_L -> x:y", "deckB_aux_R -> p:q" };
+    rig.fake.ignored = { "engine.returnAnalogPair" };
     rig.fake.note = "the truth has no engine.deck-audio: deck audio reports are off";
     rig.tick();
     rig.remote->refreshNow();
     EXPECT_EQ (rig.remote->droppedLinks(), rig.fake.dropped);
+    EXPECT_EQ (rig.remote->ignoredKeys(), rig.fake.ignored);
     EXPECT_EQ (rig.remote->truthNote(), rig.fake.note);
 
     rig.fake.dropped.clear();   // a Save wrote the file without them
+    rig.fake.ignored.clear();
     rig.fake.note = {};
     rig.tick();
     rig.remote->refreshNow();
     EXPECT_TRUE (rig.remote->droppedLinks().empty());
+    EXPECT_TRUE (rig.remote->ignoredKeys().empty());
     EXPECT_TRUE (rig.remote->truthNote().isEmpty());
 }

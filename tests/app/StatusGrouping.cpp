@@ -40,6 +40,15 @@ TEST (StatusGrouping, DroppedTextCountsAndGroupsBySlot)
                "4 retired links dropped:\ndeckA: cue_L cue_R\ndeckB: aux_R\nmystery -> a:b");
 }
 
+// P47: a retired config key is listed after the dropped links, on STATUS's DROPPED row.
+TEST (StatusGrouping, TheIgnoredRetiredKeysFollowTheDroppedLinks)
+{
+    EXPECT_EQ (a3app::droppedText ({}, std::vector<std::string> {}), "none");
+    EXPECT_EQ (a3app::droppedText ({}, { "engine.returnAnalogPair" }), "1 retired key ignored: engine.returnAnalogPair");
+    EXPECT_EQ (a3app::droppedText ({ "deckA_cue_L -> x:y" }, { "engine.returnAnalogPair" }),
+               "1 retired link dropped:\ndeckA: cue_L\n1 retired key ignored: engine.returnAnalogPair");
+}
+
 TEST (StatusGrouping, TheRetiredRigCaseFitsInFourLines)
 {
     std::vector<std::string> eight;

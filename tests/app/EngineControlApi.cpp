@@ -49,6 +49,26 @@ TEST (EngineControlApi, StatusAsTheHostViewSaysIt)
     EXPECT_EQ (report->engineProblem, rig.fake.problem);
 }
 
+// P47: a retired config key the loaded file named is listed beside the dropped links; an engine
+// that sends no such list (older) has none.
+TEST (EngineControlApi, TheIgnoredRetiredKeysAreServed)
+{
+    RemoteRig rig;
+    rig.fake.ignored = { "engine.returnAnalogPair" };
+    rig.tick();
+    const auto reply = httpclient::get (rig.server->port(), "/api/engine/status");
+    ASSERT_EQ (reply.status, 200);
+    const auto report = a3app::statusFromJson (parse (reply.body));
+    ASSERT_TRUE (report);
+    EXPECT_EQ (report->ignoredKeys, (std::vector<std::string> { "engine.returnAnalogPair" }));
+
+    auto older = parse (reply.body);
+    older.getDynamicObject()->removeProperty ("ignoredKeys");
+    const auto fromOlder = a3app::statusFromJson (older);
+    ASSERT_TRUE (fromOlder);
+    EXPECT_TRUE (fromOlder->ignoredKeys.empty());
+}
+
 TEST (EngineControlApi, NothingIsServedBeforeTheFirstTick)
 {
     a3apptest::FakeView fake;

@@ -56,11 +56,13 @@ std::optional<juce::var> parseBody (const HttpRequest& request, juce::String& wh
 
 juce::var toJson (const EngineStatusReport& report)
 {
-    juce::Array<juce::var> missing, levels, dropped;
+    juce::Array<juce::var> missing, levels, dropped, ignored;
     for (const auto& peer : report.backend.missingPeers)
         missing.add (peer);
     for (const auto& link : report.droppedLinks)
         dropped.add (juce::String::fromUTF8 (link.c_str()));
+    for (const auto& key : report.ignoredKeys)
+        ignored.add (juce::String::fromUTF8 (key.c_str()));
     for (const auto gain : report.gateLevels.gain)
         levels.add ((double) gain);
     return object ({ { "sampleRate", report.backend.sampleRate },
@@ -77,6 +79,7 @@ juce::var toJson (const EngineStatusReport& report)
                      { "gateLevels", levels },
                      { "engineProblem", report.engineProblem },
                      { "droppedLinks", dropped },
+                     { "ignoredKeys", ignored },
                      { "truthNote", report.truthNote } });
 }
 
@@ -106,6 +109,8 @@ std::optional<EngineStatusReport> statusFromJson (const juce::var& v)
     // An engine older than the deck-B ports sends neither: nothing dropped, no note.
     for (int i = 0; i < v["droppedLinks"].size(); ++i)
         report.droppedLinks.push_back (v["droppedLinks"][i].toString().toStdString());
+    for (int i = 0; i < v["ignoredKeys"].size(); ++i)   // an engine before P47 sends none
+        report.ignoredKeys.push_back (v["ignoredKeys"][i].toString().toStdString());
     if (v["truthNote"].isString())
         report.truthNote = v["truthNote"].toString();
     return report;
@@ -243,6 +248,7 @@ void EngineControlApi::publishStatus()
     report.gateLevels = view.gateLevels();
     report.engineProblem = view.engineProblem();
     report.droppedLinks = view.droppedLinks();
+    report.ignoredKeys = view.ignoredKeys();
     report.truthNote = view.truthNote();
     auto text = juce::JSON::toString (toJson (report), true).toStdString();
     auto outputs = view.outputNames();
