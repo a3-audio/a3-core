@@ -87,7 +87,7 @@ context.modules = [
                     # driver's. Before the catch-all, which it must not match.
                     matches = [
                         {
-                            sess.name = "~^AES67 deck "
+                            rtp.session = "~^AES67 deck "
                         }
                     ]
                     actions = {
@@ -108,7 +108,7 @@ context.modules = [
                     # Every A³ host sender is named "AES67 <host> out".
                     matches = [
                         {
-                            sess.name = "~ out$"
+                            rtp.session = "~ out$"
                         }
                     ]
                     actions = {

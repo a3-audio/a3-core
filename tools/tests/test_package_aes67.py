@@ -169,9 +169,18 @@ class WhatTheRigSettledOn(unittest.TestCase):
         return self.text[begin:self.text.index("libpipewire-module-rtp-sink")]
 
     def rule(self, name_pattern):
-        """The stream rule whose match is `sess.name = name_pattern`."""
-        start = self.rules().index(f'sess.name = "{name_pattern}"')
+        """The stream rule whose match is `rtp.session = name_pattern`."""
+        start = self.rules().index(f'rtp.session = "{name_pattern}"')
         return block(self.rules()[start:], "create-stream")
+
+    def test_no_receive_rule_matches_on_sess_name(self):
+        # PipeWire 1.6.9 module-rtp-sap matches stream.rules against the
+        # properties of the *received* session, which session_new() fills with
+        # rtp.session (the SDP s= name), node.name, media.name and rtp.*; there
+        # is no sess.name, so such a rule never matches and no stream is
+        # created (found on the rig 2026-10-28). sess.name stays valid only in
+        # the rtp-sink args, the sender side.
+        self.assertNotIn("sess.name", self.rules())
 
     def test_received_streams_are_in_the_ptp_group_with_12_ms(self):
         create = self.rule("~ out$")
