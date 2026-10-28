@@ -327,39 +327,39 @@
   },
   {
    "n": 37,
-   "name": "free67",
-   "analyzerPort": "vu_free67",
-   "kind": "free",
+   "name": "deck_a",
+   "analyzerPort": "vu_deck_a",
+   "kind": "deck",
    "patchbay": null,
    "defaultMap": null,
-   "point": "none: sent as 0, 0 (unwired at the analyzer)"
+   "point": "deck slot 1's W (bformat 1) as it reaches the engine, before any channel; was free67, unwired at the analyzer"
   },
   {
    "n": 38,
-   "name": "free68",
-   "analyzerPort": "vu_free68",
-   "kind": "free",
+   "name": "deck_b",
+   "analyzerPort": "vu_deck_b",
+   "kind": "deck",
    "patchbay": null,
    "defaultMap": null,
-   "point": "none: sent as 0, 0 (unwired at the analyzer)"
+   "point": "deck slot 2's W (bformat 1) as it reaches the engine, before any channel; was free68, unwired at the analyzer"
   },
   {
    "n": 39,
-   "name": "free69",
-   "analyzerPort": "vu_free69",
-   "kind": "free",
+   "name": "deck_c",
+   "analyzerPort": "vu_deck_c",
+   "kind": "deck",
    "patchbay": null,
    "defaultMap": null,
-   "point": "none: sent as 0, 0 (unwired at the analyzer)"
+   "point": "deck slot 3's W (bformat 1) as it reaches the engine, before any channel; was free69, unwired at the analyzer"
   },
   {
    "n": 40,
-   "name": "free70",
-   "analyzerPort": "vu_free70",
-   "kind": "free",
+   "name": "deck_d",
+   "analyzerPort": "vu_deck_d",
+   "kind": "deck",
    "patchbay": null,
    "defaultMap": null,
-   "point": "none: sent as 0, 0 (unwired at the analyzer)"
+   "point": "deck slot 4's W (bformat 1) as it reaches the engine, before any channel; was free70, unwired at the analyzer"
   },
   {
    "n": 51,

@@ -1105,6 +1105,28 @@ TEST (FxReturn, AuxMetersReadTheReturnAfterItsLevel)
     EXPECT_EQ (closed.second, 0.0f);
 }
 
+// deck_a ... deck_d: each deck's W as it reaches the engine, before any channel and whether or not a
+// channel plays it -- the desk's deck bars (2026-10-28: a one-deck StemDeck sends no stem meters). Every
+// channel on analog here: deck B's W still reads its own peak, its other planes and deck A read 0.
+TEST (Engine, EachDeckMetersItsWBeforeAnyChannel)
+{
+    a3::VuTaps taps (truthVuMeters(), a3::VuSettings {});
+    EngineRig rig (engineConfig (4, 2), 4096);
+    rig.engine->attachVuTaps (taps);
+    rig.decks[1].bformat[0] = impulseAt (rig.frames, 100, 0.5f);
+    rig.decks[1].bformat[1] = impulseAt (rig.frames, 200, 0.9f);
+    rig.run();
+    std::vector<float> peaks, rms;
+    taps.take (peaks, rms);
+    std::map<std::string, float> byName;
+    for (size_t slot = 0; slot < taps.names().size(); ++slot)
+        byName[taps.names()[slot]] = peaks[slot];
+    EXPECT_EQ (byName.at ("deck_a"), 0.0f);
+    EXPECT_EQ (byName.at ("deck_b"), 0.5f);
+    EXPECT_EQ (byName.at ("deck_c"), 0.0f);
+    EXPECT_EQ (byName.at ("deck_d"), 0.0f);
+}
+
 // O13: the /vu meters at the points the patchbay fed beat-analyzer. The raw inputs: an impulse into
 // analog_3 shows only on analog2_L; one into analog_12 (the old return pair, P45) on no meter. The outputs and
 // strip taps: a sine through channel 1 moves in1_pre/post, the main and booth ports and rec, each tap's

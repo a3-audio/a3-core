@@ -118,8 +118,8 @@ TEST (VuTaps, EachBlockByItsReaperOutput)
     EXPECT_EQ (names[31], "phones_R");
     EXPECT_EQ (names[32], "rec_L");
     EXPECT_EQ (names[35], "aux_R");
-    EXPECT_EQ (names[36], "free67");
-    EXPECT_EQ (names[39], "free70");
+    EXPECT_EQ (names[36], "deck_a");
+    EXPECT_EQ (names[39], "deck_d");
 }
 
 TEST (VuTaps, TheStereoChannelMetersFollowTheForty)
@@ -215,6 +215,8 @@ TEST (VuTaps, EveryAnalyzerPortHasItsPoint)
     for (size_t top = booth.topChannels.size() + 1; top <= 9; ++top)
         beyond.insert ("booth_top" + std::to_string (top));
     ASSERT_FALSE (beyond.empty());
+    for (const char* deck : { "deck_c", "deck_d" })   // two deck slots configured: C and D stay 0
+        beyond.insert (deck);
     EXPECT_EQ (std::set<std::string> (unplaced.begin(), unplaced.end()), beyond);
 }
 
@@ -225,7 +227,7 @@ TEST (VuTaps, FreeNumbersAreZero)
     for (const auto& name : taps.names())
         if (auto* tap = taps.tapFor (name))
             tap->processMono (loud.data(), (int) loud.size());
-    for (const char* free : { "free39", "free40", "free67", "free68", "free69", "free70" })
+    for (const char* free : { "free39", "free40" })
         EXPECT_EQ (taps.tapFor (free), nullptr) << free;
 
     std::vector<float> peaks, rms;
@@ -234,7 +236,7 @@ TEST (VuTaps, FreeNumbersAreZero)
     for (int slot = 0; slot < 56; ++slot)
     {
         const int n = a3::VuTaps::vuNumber (slot);
-        const bool free = (n >= 9 && n <= 10) || (n >= 37 && n <= 40);
+        const bool free = n >= 9 && n <= 10;
         if (free)
         {
             EXPECT_EQ (peaks[(size_t) slot], 0.0f) << n;

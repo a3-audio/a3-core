@@ -88,9 +88,10 @@ public:
     // then on, besides the window's outputMeters (two readers, two accumulators). The points are the
     // ones the patchbay fed beat-analyzer: analog{k}_L/R = analog inputs 2k-1/2k, raw; aux_L/R = the
     // FX Return (the delay's output after RETURN), its W on both sides (P47); main_sub/main_top{i}, booth_*, rec_L/R, phones_L/R = those outputs
-    // as they leave; in{c}_pre/post_L/R = channel c's pre/post taps. Control thread, before the first
-    // process (allocates); the taps outlive the Engine. Returns the names of taps it has no point for
-    // (a zone's sub or tops beyond its layout, a channel beyond N): those stay at 0.
+    // as they leave; in{c}_pre/post_L/R = channel c's pre/post taps; deck_a ... deck_d = deck slot 1-4's W
+    // as it arrives, before any channel. Control thread, before the first process (allocates); the taps
+    // outlive the Engine. Returns the names of taps it has no point for (a zone's sub or tops beyond its
+    // layout, a channel or deck slot beyond the config): those stay at 0.
     std::vector<std::string> attachVuTaps (VuTaps&);
 
     // Observation (tests, diagnostics); any thread.

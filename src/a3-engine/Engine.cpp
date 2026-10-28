@@ -68,6 +68,16 @@ int numberIn (const std::string& name, const std::string& prefix, const std::str
     return std::stoi (digits);
 }
 
+// The deck slot (1-4) a meter name "deck_a" ... "deck_d" names; 0 for any other name.
+int deckSlotIn (const std::string& name)
+{
+    static const std::string prefix = "deck_";
+    if (name.size() != prefix.size() + 1 || name.compare (0, prefix.size(), prefix) != 0)
+        return 0;
+    const char letter = name.back();
+    return letter >= 'a' && letter <= 'd' ? letter - 'a' + 1 : 0;
+}
+
 // Linear ramp from `from` to `to` over `length` samples: the j-th value is from + (to - from) (j + 1) / length.
 void fillRamp (float* curve, float from, float to, int length)
 {
@@ -161,6 +171,7 @@ struct Engine::Impl
 
     // The /vu taps (O13), placed by attachVuTaps; each list is read only by the audio thread.
     std::vector<std::pair<int, VuTap*>> vuInputs, vuMain, vuBooth;   // analog input / zone port, tap
+    std::vector<std::pair<int, VuTap*>> vuDecks;                      // deck slot (1-based), tap of its W
     std::array<VuTap*, 2> vuRec {}, vuPhones {}, vuReturn {};
     struct VuStripTap { size_t channel; EngineChannel::Plane plane; VuTap* tap; };
     std::vector<VuStripTap> vuStrips;
@@ -659,7 +670,7 @@ void Engine::Impl::pushMeters (int n)
 
 std::vector<std::string> Engine::Impl::attachVuTaps (VuTaps& taps)
 {
-    for (auto* list : { &vuInputs, &vuMain, &vuBooth })
+    for (auto* list : { &vuInputs, &vuMain, &vuBooth, &vuDecks })
         list->clear();
     vuRec = vuPhones = vuReturn = {};
     vuStrips.clear();
@@ -674,6 +685,13 @@ std::vector<std::string> Engine::Impl::attachVuTaps (VuTaps& taps)
 bool Engine::Impl::placeVuTap (const std::string& name, VuTap& tap)
 {
     using P = EngineChannel;
+    if (const int slot = deckSlotIn (name))
+    {
+        if (slot > config.decks)
+            return false;
+        vuDecks.emplace_back (slot, &tap);
+        return true;
+    }
     for (int side = 0; side < sides; ++side)
     {
         const std::string s = side == 0 ? "_L" : "_R";
@@ -742,6 +760,12 @@ void Engine::Impl::pushVu (const EngineInputs& in, int offset, int n)
     }
     for (const auto& strip : vuStrips)
         strip.tap->processMono (channels[strip.channel]->p (strip.plane), n);
+    for (const auto& [slot, tap] : vuDecks)
+    {
+        const auto* deck = deckInputs (in, slot);
+        const float* w = deck != nullptr ? deck->bformat[0] : nullptr;
+        tap->processMono (w != nullptr ? w + offset : zeros.data(), n);
+    }
 }
 
 const float* Engine::Impl::analogInput (const EngineInputs& in, int index, int offset) const
