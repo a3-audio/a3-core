@@ -35,7 +35,7 @@ TEST (ConfigEdits, ChannelsFollowTheAnalogPairsAndPruneTheMap)
 
     const auto bigger = a3app::withChannels (sample(), 8, error);
     ASSERT_TRUE (bigger) << error;
-    EXPECT_EQ (bigger->engine.analogPairs, (std::vector<int> { 1, 2, 3, 4, 5, 0, 0, 0 }));   // pair 6 is the return
+    EXPECT_EQ (bigger->engine.analogPairs, (std::vector<int> { 1, 2, 3, 4, 5, 6, 0, 0 }));   // pair 6 is free since P45
 
     EXPECT_FALSE (a3app::withChannels (sample(), 0, error));
     EXPECT_NE (error, juce::String());
@@ -144,4 +144,75 @@ TEST (ConfigEdits, SaveRefusesWhatTheLoaderWouldRefuse)
     EXPECT_TRUE (a3app::saveAppConfig (bad, file).failed());
     EXPECT_EQ (file.loadFileAsString(), before);
     file.deleteFile();
+}
+
+TEST (ConfigEdits, SetHeadphoneEqWritesTheModel)
+{
+    juce::String error;
+    const auto set = a3app::withHeadphoneEq (sample(), "Sennheiser-HD600", error);
+    ASSERT_TRUE (set) << error;
+    EXPECT_EQ (set->engine.phonesHeadphoneEq, "Sennheiser-HD600");
+    EXPECT_FALSE (a3app::sameConfig (sample(), *set));
+    const auto off = a3app::withHeadphoneEq (*set, "off", error);
+    ASSERT_TRUE (off) << error;
+    EXPECT_EQ (off->engine.phonesHeadphoneEq, "off");
+    EXPECT_FALSE (a3app::withHeadphoneEq (sample(), "Acme-Buds", error));
+    EXPECT_NE (error.indexOf ("Acme-Buds"), -1);
+}
+
+TEST (ConfigEdits, DeckSourceWritesFortyOneLinks)
+{
+    a3app::IoMap map;
+    a3app::setDeckSource (map, 2, a3app::DeckSource::aes67);
+    EXPECT_EQ (map.jack.size(), 41u);
+    EXPECT_EQ (map.jack.at ("deckB_1"), std::vector<std::string> { "AES67 deck B:receive_MAIN1" });
+    EXPECT_EQ (map.jack.at ("deckB_16"), std::vector<std::string> { "AES67 deck B:receive_MAIN16" });
+    EXPECT_EQ (map.jack.at ("deckB_aux_16"), std::vector<std::string> { "AES67 deck B:receive_AUX16" });
+    EXPECT_EQ (map.jack.at ("deckB_cue_9"), std::vector<std::string> { "AES67 deck B:receive_CUE9" });
+    a3app::setDeckSource (map, 2, a3app::DeckSource::local);
+    EXPECT_EQ (map.jack.size(), 41u);
+    EXPECT_EQ (map.jack.at ("deckB_1"), std::vector<std::string> { "StemDeck-B:bformat_1" });
+    EXPECT_EQ (map.jack.at ("deckB_aux_3"), std::vector<std::string> { "StemDeck-B:aux_3" });
+    EXPECT_EQ (map.jack.at ("deckB_cue_9"), std::vector<std::string> { "StemDeck-B:cue_9" });
+}
+
+TEST (ConfigEdits, DeckSourceLeavesOtherSlotsAndAnalogAlone)
+{
+    a3app::IoMap map;
+    map.jack["analog_1"] = { "system:capture_1" };
+    map.jack["deckA_1"] = { "StemDeck-A:bformat_1" };
+    map.jack["deckB_1"] = { "old:thing", "second:peer" };
+    map.deviceChannels["analog_1"] = 3;
+    a3app::setDeckSource (map, 2, a3app::DeckSource::aes67);
+    EXPECT_EQ (map.jack.at ("analog_1"), std::vector<std::string> { "system:capture_1" });
+    EXPECT_EQ (map.jack.at ("deckA_1"), std::vector<std::string> { "StemDeck-A:bformat_1" });
+    EXPECT_EQ (map.jack.at ("deckB_1"), std::vector<std::string> { "AES67 deck B:receive_MAIN1" });
+    EXPECT_EQ (map.jack.count ("deckA_2"), 0u);
+    EXPECT_EQ (map.deviceChannels.at ("analog_1"), 3);
+    EXPECT_EQ (map.jack.size(), 41u + 2u);
+}
+
+TEST (ConfigEdits, DeckSourceOfNeedsAllFortyOneLinks)
+{
+    a3app::IoMap map;
+    EXPECT_FALSE (a3app::deckSourceOf (map, 1));
+    a3app::setDeckSource (map, 1, a3app::DeckSource::aes67);
+    EXPECT_EQ (a3app::deckSourceOf (map, 1), a3app::DeckSource::aes67);
+    a3app::setDeckSource (map, 1, a3app::DeckSource::local);
+    EXPECT_EQ (a3app::deckSourceOf (map, 1), a3app::DeckSource::local);
+
+    auto missing = map;
+    missing.jack.erase ("deckA_cue_9");
+    EXPECT_FALSE (a3app::deckSourceOf (missing, 1));
+    auto mixed = map;
+    mixed.jack["deckA_aux_2"] = { "AES67 deck A:receive_AUX2" };
+    EXPECT_FALSE (a3app::deckSourceOf (mixed, 1));
+    auto extra = map;
+    extra.jack["deckA_1"].push_back ("other:port");
+    EXPECT_FALSE (a3app::deckSourceOf (extra, 1));
+
+    auto sixteen = a3app::IoMap {};
+    for (int i = 1; i <= 16; ++i)
+        sixteen.jack["deckA_" + std::to_string (i)] = { "StemDeck-A:bformat_" + std::to_string (i) };
+    EXPECT_FALSE (a3app::deckSourceOf (sixteen, 1));
 }

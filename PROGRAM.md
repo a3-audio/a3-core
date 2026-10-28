@@ -59,13 +59,20 @@ libraries JUCE would `dlopen` for a window are not needed.
   before it fades in (R14), the analog strip included. A channel without an analog pair is deck-only
   and has no encoder source (R10). Positions, 3D, FREQ and Q do nothing on a deck channel.
 - **Buses.** `enc_main`, `enc_fx` (AUX, into IEM's DualDelay) and `enc_phones` (cue pre-VOLUME, mix
-  post-VOLUME), order 3. A deck's 16 post-VOLUME channels are added to the buses directly, AUX included
-  (R11); its stereo `aux_L/R` is a return source only. The return is the analog return pair or deck k's
-  aux pair (R12: decks are 1…D on the wire).
-- **Stem cue.** Every deck slot's `cue_L/R` is added after the phones decoder, weighted by the CUE↔MIX
-  knob only, whether the deck is on a channel or not (R13).
+  post-VOLUME), order 3. A deck's 16 post-VOLUME channels are added to `enc_main` directly; its 16-channel
+  `aux` bus runs through a second deck strip on the channel's controls and, post-VOLUME times the AUX
+  send, joins `enc_fx` (never the main 16). Decks are 1…D on the wire (R12).
+- **FX Return (P45/P47).** The master of the delay channel, like a channel strip whose input is the
+  delay's output: RETURN scales it into main, booth and rec (0 is silence); the phones take it as a
+  channel, post-RETURN times MIX plus pre-RETURN times CUE (a PFL, `aux-return.cue`). Every analog
+  channel reaches the delay through its AUX send, encoded at its position (B-format); there is no analog
+  return input and no return source any more. A saved `engine.returnAnalogPair` is a retired key: it
+  loads, is ignored and listed (`ignored retired key engine.returnAnalogPair`), and is never written.
+- **Stem cue.** Every deck slot's 9 `cue` channels (second-order B-format, ACN 0..8) are added to
+  `enc_phones` ahead of the phones decoder, weighted by the CUE↔MIX knob only, whether the deck is on
+  a channel or not (R13); they share the HRTF and PHONES with the desk's cue.
 - **Outputs.** main and booth: SimpleDecoder → MASTER/BOOTH → trim and gate; rec: BinauralDecoder ×
-  `trims.rec`, never gated; phones: BinauralDecoder + stem cue → PHONES → trim and gate. The
+  `trims.rec`, never gated; phones: BinauralDecoder (`enc_fx` + `enc_phones`, which carries the stem cue) → PHONES → trim and gate. The
   `fixedGainDb` stages of `data/spatial/*.zone.json` are not applied: they are the MASTER/BOOTH knobs
   (R1). Every gain control at 0 is exact silence, every send at 0 too (R2, R18).
 - **Gate.** A fresh or re-prepared `Engine` has main, booth and phones closed (exactly 0). `gateOpen`
@@ -77,7 +84,7 @@ libraries JUCE would `dlopen` for a window are not needed.
   W on both sides).
 - **The /vu meters (O13, since Task 24 of "A³ Core as one program").** The engine measures the 56 meters
   beat-analyzer measured, at the points the patchbay fed it (`tests/engine/data/vu-points.json`):
-  `analog1_L`…`analog4_R` = analog inputs 1-8 and `aux_L/R` = the return's analog pair (11/12), raw;
+  `analog1_L`…`analog4_R` = analog inputs 1-8, raw; `aux_L/R` = the FX Return after RETURN, its W on both sides;
   `main_*`, `booth_*` (tops beyond the layout stay 0), `phones_L/R`, `rec_L/R` = those outputs as they
   leave; `in{n}_pre/post_L/R` = the channel taps above. `VuTaps` (`src/a3-engine/VuTaps.h`) is
   beat-analyzer's `VuMeter` per point (per block: raw peak kept until taken, RMS followed 0.8 / 0.2),
@@ -87,11 +94,14 @@ libraries JUCE would `dlopen` for a window are not needed.
   to its `serializeBundle`) to Core's `core.vu-relay`, which forwards them; free numbers (9-10, 37-40) are
   sent as 0, 41-50 are StemDeck's. The default map no longer links anything to `beat-analyzer:vu_*`.
 
-**Timing guard.** `EngineTiming.FullGraphUnderOneMillisecondPer128` fails when the best of five
-repetition means exceeds 1.0 ms per 128-frame block on the build machine (a3coreV01, i5-4440). It
-measures the worst case: all four channels on decks, two stem cues, every send open. Background
-load only adds time, so it cannot fail the guard, but a real regression still does. 2026-10-26:
-0.84 ms (decks), 0.80 ms (analog). The two BinauralDecoders are about half of it.
+**Timing guard.** `EngineTiming.FullGraphAnalogUnderOneDecksUnderOnePointTwoFiveMillisecondsPer128`
+fails when the best of five repetition means exceeds its budget per 128-frame block on the build
+machine (a3coreV01, i5-4440): 1.25 ms with all four channels on decks, 1.0 ms with all four on
+analog (two stem cues, every send open in both). The deck budget is higher because each deck channel
+runs a second 16-ch strip for its aux bus (design 4.2); StemDeck A's removed cue decoder pays for it on
+the same machine. Background load only adds time, so it cannot fail the guard, but a real regression
+still does. 2026-10-26: 0.84 ms (decks), 0.80 ms (analog); 2026-10-27 with the aux strips: about
+1.0 ms (decks). The two BinauralDecoders are about half of it.
 `ReportsCostPerChannelAtThirtyTwo` prints the cost of one more channel (about 43 µs analog, 44 µs
 deck). The rig's own run decides.
 
@@ -169,17 +179,24 @@ exit 0 and stay closed; a crash or a kill signal starts it again. There is no `[
 (a3-core's `a3-main.service` Wants the unit, so the postinst enables nothing for it) and no
 `Conflicts=`, for the reason above.
 
-**The default config** (`data/engine.json`): four channels on analog pairs 1-4, return pair 6, two
+**The default config** (`data/engine.json`): four channels on analog pairs 1-4 (pairs 5 and 6 free), two
 decks, trims main/booth -30.88 dB (REAPER's output faders), phones 0, rec 0, SVF filter, Step 0's delay
 modulation, the JACK backend, and the rig's connections: what `a3-patchbay.xml` connected for REAPER,
-moved to the engine's ports (analog capture, Scarlett playback, StemDeck's rec input and the
-analyzer's beat input `bpm_1`), and every deck port to
-`StemDeck-A`/`StemDeck-B` (`bformat_k`, `cue_L/R`, `aux_L/R`; they exist once StemDeck's S4 is
+moved to the engine's ports (analog capture, Scarlett playback and the analyzer's beat input `bpm_1`),
+and every deck port to
+`StemDeck-A`/`StemDeck-B` (`bformat_1..16`, `aux_1..16`, `cue_1..9`; they exist once StemDeck's S4 is
 installed, until then they are reported as missing, not an error). Since Task 24 the links into the
 analyzer's meter ports (`beat-analyzer:vu_*`, and the direct capture links that only fed them) are gone:
 the engine measures those meters itself. Left out on purpose: REAPER's inputs
-13-24 (StemDeck's stems and AES67's cue have no engine counterpart) and the AES67 sender, whose client
-name carries the machine's host name. The engine reads the file from `~/.config/a3/engine/engine.json`
+13-24 (StemDeck's stems and AES67's cue have no engine counterpart) and every link to the AES67 sender: its
+client name carries the machine's host name (`AES67 <host name> out`, as `a3-osc-render` names it), so the
+file cannot name it for every host. Instead the engine links `rec_L/R` to its own machine's sender,
+`AES67 <host name> out:send_CH1/2`, which carries the one recording source to the deck hosts: a built-in link
+(P40, P46), named from the same host name `a3-osc-render` uses, added to whatever map is loaded at link time and
+never written to the file, so it also holds for an `engine.json` saved before M10. STATUS and `a3-core links`
+count it like any other link (missing while the sender is not there). No StemDeck recorder is in the map (P39):
+every StemDeck links its own `rec_L/R` from `a3-engine:rec_L/R`; an old saved map that still names
+`StemDeck:rec_L/R` makes the same link, which is harmless. The engine reads the file from `~/.config/a3/engine/engine.json`
 first; the package never writes there.
 
 ## The program: one binary, a3-core
@@ -214,8 +231,8 @@ API, P2). The package ships it as `/usr/bin/a3-core` (Task 28); there is no `/us
 - **--links**: replaces looking at qjackctl. Prints the audio connections of the running graph, grouped
   by the two programs they join (`Scarlett inputs → engine`, `engine → Scarlett`, `StemDeck A →
   engine`, ...). Ports that run in parallel on both sides are one range (`capture 1–8 → analog 1–8`),
-  each with what it is for: a channel, the return, the PA, the booth, the phones, the tempo. The
-  meanings are the engine's own port names and config (`analogPairs`, `returnAnalogPair`) and the
+  each with what it is for: a channel, the PA, the booth, the phones, the tempo. The
+  meanings are the engine's own port names and config (`analogPairs`) and the
   truth's `vu_meters`; level-meter feeds to the analyzer are counted on one line. The last line counts
   the links that `io.jack` of `engine.json` names but whose port is not in the graph, and points to the
   window's STATUS page, which lists them. It only reads: no JACK server is exit 1 with one line on

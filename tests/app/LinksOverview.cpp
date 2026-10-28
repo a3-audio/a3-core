@@ -57,7 +57,7 @@ TEST (LinksOverview, ParallelPortsCollapseIntoARangeWithTheirMeaning)
     const auto text = show (inputs());
     EXPECT_TRUE (hasLine (text, "Scarlett inputs → engine")) << text;
     EXPECT_TRUE (hasLine (text, "  capture 1–8   → analog 1–8   (channels 1–4, L/R)")) << text;
-    EXPECT_TRUE (hasLine (text, "  capture 11–12 → analog 11–12 (return)")) << text;
+    EXPECT_TRUE (hasLine (text, "  capture 11–12 → analog 11–12")) << text;   // no return since P45, no meaning
 }
 
 TEST (LinksOverview, OutputsNameThePaThePhonesAndTheTempo)
@@ -95,14 +95,18 @@ TEST (LinksOverview, AGapOrACrossingOnEitherSideBreaksTheRange)
 TEST (LinksOverview, StemDeckSlotsAreNamedAndItsDeckPortsExplained)
 {
     Graph graph;
+    // A slot's 41 inputs, in the engine's order: B-format 16, aux 16, cue 9.
     for (int n = 1; n <= 16; ++n)
         graph.link ("StemDeck-A:bformat_" + std::to_string (n), "a3-engine:deckA_" + std::to_string (n));
-    graph.link ("StemDeck-A:cue_L", "a3-engine:deckA_cue_L");
-    graph.link ("StemDeck-A:cue_R", "a3-engine:deckA_cue_R");
+    for (int n = 1; n <= 16; ++n)
+        graph.link ("StemDeck-A:aux_" + std::to_string (n), "a3-engine:deckA_aux_" + std::to_string (n));
+    for (int n = 1; n <= 9; ++n)
+        graph.link ("StemDeck-A:cue_" + std::to_string (n), "a3-engine:deckA_cue_" + std::to_string (n));
     const auto text = show (graph);
     EXPECT_TRUE (hasLine (text, "StemDeck A → engine")) << text;
-    EXPECT_TRUE (hasLine (text, "  bformat 1–16 → deck A 1–16    (B-format)")) << text;
-    EXPECT_TRUE (hasLine (text, "  cue L/R      → deck A cue L/R (cue)")) << text;
+    EXPECT_TRUE (hasLine (text, "  bformat 1–16 → deck A 1–16     (B-format)")) << text;
+    EXPECT_TRUE (hasLine (text, "  aux 1–16     → deck A aux 1–16 (aux)")) << text;
+    EXPECT_TRUE (hasLine (text, "  cue 1–9      → deck A cue 1–9  (cue)")) << text;
 }
 
 TEST (LinksOverview, TheCardsLongAlsaNameAndSystemAreBothTheScarlett)
@@ -133,7 +137,7 @@ TEST (LinksOverview, LevelMeterFeedsAreCountedNotListed)
 TEST (LinksOverview, GroupsRunInputsThenOutputsThenTheRest)
 {
     Graph graph;
-    graph.link ("StemDeck-A:cue_L", "a3-engine:deckA_cue_L");
+    graph.link ("StemDeck-A:cue_1", "a3-engine:deckA_cue_1");
     graph.link ("a3-engine:rec_L", "beat-analyzer:bpm_1");
     graph.link ("a3-engine:phones_L", "system:playback_9");
     graph.link ("system:capture_1", "a3-engine:analog_1");

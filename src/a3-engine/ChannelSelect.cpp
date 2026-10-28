@@ -71,39 +71,4 @@ ChannelSelect::Step ChannelSelect::advance (int requested, int numSamples)
 
 bool ChannelSelect::analogActive() const { return analogCount > 0 || analogGoal > 0; }
 bool ChannelSelect::deckActive() const { return deckCount > 0 || deckGoal > 0; }
-
-void ReturnSelect::prepare (double sampleRate)
-{
-    fadeSamples = fadeLength (sampleRate);
-    selected = 0;
-    counts.fill (0);
-    counts[0] = fadeSamples;
-}
-
-void ReturnSelect::process (const float* const* analog, const std::vector<std::array<const float*, 2>>& deckAux,
-                            float* const* out, int numSamples, int source)
-{
-    const int available = std::min ((int) deckAux.size(), maxSources - 1);
-    if (source >= 0 && source <= available)
-        selected = source;
-
-    for (int i = 0; i < numSamples; ++i)
-    {
-        float l = 0.0f, r = 0.0f;
-        for (int k = 0; k <= available; ++k)
-        {
-            int& count = counts[(size_t) k];
-            count = towards (count, k == selected ? fadeSamples : 0, 1);
-            if (count == 0)
-                continue;
-            const float* inL = k == 0 ? (analog != nullptr ? analog[0] : nullptr) : deckAux[(size_t) k - 1][0];
-            const float* inR = k == 0 ? (analog != nullptr ? analog[1] : nullptr) : deckAux[(size_t) k - 1][1];
-            const float g = count == fadeSamples ? 1.0f : (float) count / (float) fadeSamples;
-            if (inL != nullptr) l += g * inL[i];
-            if (inR != nullptr) r += g * inR[i];
-        }
-        out[0][i] = l;
-        out[1][i] = r;
-    }
-}
 }

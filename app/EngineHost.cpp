@@ -133,6 +133,7 @@ void EngineHost::sendMetersWhenDue (double nowSeconds)
 }
 
 a3::EngineControls& EngineHost::controls() { return wire; }
+void EngineHost::setDeckAudio (const std::vector<bool>& linked) { hello.setDeckAudio (linked); }
 juce::String EngineHost::bootId() const { return hello.bootId(); }
 const a3::EngineConfig& EngineHost::engineConfig() const { return config; }
 const a3::SpatialConfig& EngineHost::spatialConfig() const { return spatial; }

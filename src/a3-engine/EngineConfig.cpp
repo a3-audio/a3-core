@@ -2,11 +2,34 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "EngineConfig.h"
 #include "JsonParse.h"
+#include <algorithm>
 #include <cmath>
 #include <set>
 
 namespace a3
 {
+const std::vector<juce::String>& headphoneEqModels()
+{
+    static const std::vector<juce::String> models {
+        "AKG-K141MK2", "AKG-K240DF", "AKG-K240MK2", "AKG-K271MK2", "AKG-K271STUDIO", "AKG-K601", "AKG-K701",
+        "AKG-K702", "AKG-K1000-Closed", "AKG-K1000-Open", "AudioTechnica-ATH-M50", "Beyerdynamic-DT250",
+        "Beyerdynamic-DT770PRO-250Ohms", "Beyerdynamic-DT880", "Beyerdynamic-DT990PRO", "Presonus-HD7",
+        "Sennheiser-HD430", "Sennheiser-HD480", "Sennheiser-HD560ovationII", "Sennheiser-HD565ovation",
+        "Sennheiser-HD600", "Sennheiser-HD650", "SHURE-SRH940" };
+    return models;
+}
+
+std::optional<int> headphoneEqChoice (const juce::String& name)
+{
+    if (name == "off")
+        return 0;
+    const auto& models = headphoneEqModels();
+    const auto it = std::find (models.begin(), models.end(), name);
+    if (it == models.end())
+        return std::nullopt;
+    return (int) (it - models.begin()) + 1;
+}
+
 bool operator== (const Trims& a, const Trims& b)
 {
     return a.main == b.main && a.booth == b.booth && a.phones == b.phones && a.rec == b.rec;
@@ -21,8 +44,8 @@ bool operator== (const ModulatedParameter& a, const ModulatedParameter& b)
 bool operator== (const EngineConfig& a, const EngineConfig& b)
 {
     return a.channels == b.channels && a.decks == b.decks && a.analogInputs == b.analogInputs
-        && a.analogPairs == b.analogPairs && a.returnAnalogPair == b.returnAnalogPair
-        && a.trims == b.trims && a.filterKind == b.filterKind && a.delayModulation == b.delayModulation;
+        && a.analogPairs == b.analogPairs
+        && a.trims == b.trims && a.phonesHeadphoneEq == b.phonesHeadphoneEq && a.filterKind == b.filterKind && a.delayModulation == b.delayModulation;
 }
 
 namespace
@@ -31,6 +54,9 @@ using jsonparse::Refusal;
 using jsonparse::refuse;
 using jsonparse::objectOf;
 using jsonparse::rejectUnknownKeys;
+
+// The analog return's pair (analog 11/12), gone with P45: accepted, never read, never written.
+constexpr const char* retiredReturnPair = "returnAnalogPair";
 
 bool isNumber (const juce::var& v) { return v.isInt() || v.isInt64() || v.isDouble(); }
 
@@ -70,6 +96,16 @@ Trims parseTrims (const juce::var& v)
     if (const auto rec = optionalTrim (object, "rec"))
         trims.rec = *rec;
     return trims;
+}
+
+juce::String parseHeadphoneEq (const juce::var& v)
+{
+    if (! v.isString())
+        refuse ("phonesHeadphoneEq must be \"off\" or a headphone model name");
+    const auto name = v.toString();
+    if (! headphoneEqChoice (name))
+        refuse ("phonesHeadphoneEq: unknown headphone model '" + name + "'");
+    return name;
 }
 
 FilterKind parseFilterKind (const juce::var& v)
@@ -156,8 +192,6 @@ void checkPairs (const EngineConfig& config)
         const auto channel = "analogPairs: channel " + juce::String ((int) i + 1);
         if (pair * 2 > config.analogInputs)
             refuse (channel + " is on pair " + juce::String (pair) + ", beyond the " + juce::String (config.analogInputs) + " analog inputs");
-        if (pair == config.returnAnalogPair)
-            refuse (channel + " is on the return pair " + juce::String (pair));
         if (! used.insert (pair).second)
             refuse (channel + " shares pair " + juce::String (pair) + " with another channel");
     }
@@ -166,8 +200,8 @@ void checkPairs (const EngineConfig& config)
 EngineConfig parse (const juce::var& v)
 {
     const auto& section = objectOf (v, "the engine section");
-    rejectUnknownKeys (section, { "channels", "decks", "analogInputs", "analogPairs", "returnAnalogPair",
-                                  "trimsDb", "filterKind", "delayModulation" }, "the engine section");
+    rejectUnknownKeys (section, { "channels", "decks", "analogInputs", "analogPairs", retiredReturnPair,
+                                  "trimsDb", "phonesHeadphoneEq", "filterKind", "delayModulation" }, "the engine section");
     EngineConfig config;
     if (section.hasProperty ("channels"))
         config.channels = wholeNumber (section.getProperty ("channels"), "channels", 1);
@@ -175,15 +209,12 @@ EngineConfig parse (const juce::var& v)
         config.decks = wholeNumber (section.getProperty ("decks"), "decks", 0);
     if (section.hasProperty ("analogInputs"))
         config.analogInputs = wholeNumber (section.getProperty ("analogInputs"), "analogInputs", 0);
-    if (section.hasProperty ("returnAnalogPair"))
-        config.returnAnalogPair = wholeNumber (section.getProperty ("returnAnalogPair"), "returnAnalogPair", 1);
-    if (config.returnAnalogPair * 2 > config.analogInputs)
-        refuse ("returnAnalogPair " + juce::String (config.returnAnalogPair) + " is beyond the "
-                + juce::String (config.analogInputs) + " analog inputs");
     config.analogPairs = parsePairs (section, config);
     checkPairs (config);
     if (section.hasProperty ("trimsDb"))
         config.trims = parseTrims (section.getProperty ("trimsDb"));
+    if (section.hasProperty ("phonesHeadphoneEq"))
+        config.phonesHeadphoneEq = parseHeadphoneEq (section.getProperty ("phonesHeadphoneEq"));
     if (section.hasProperty ("filterKind"))
         config.filterKind = parseFilterKind (section.getProperty ("filterKind"));
     if (section.hasProperty ("delayModulation"))
@@ -196,6 +227,12 @@ void setTrim (juce::DynamicObject& trims, const char* key, const std::optional<f
     if (value)
         trims.setProperty (key, (double) *value);
 }
+}
+
+const std::vector<std::string>& retiredEngineKeys()
+{
+    static const std::vector<std::string> keys { retiredReturnPair };
+    return keys;
 }
 
 std::optional<EngineConfig> parseEngineConfig (const juce::var& engineSection, juce::String& error)
@@ -222,7 +259,6 @@ juce::var toJson (const EngineConfig& config)
     for (const int pair : config.analogPairs)
         pairs.add (pair);
     root->setProperty ("analogPairs", pairs);
-    root->setProperty ("returnAnalogPair", config.returnAnalogPair);
 
     auto* trims = new juce::DynamicObject();
     setTrim (*trims, "main", config.trims.main);
@@ -231,6 +267,7 @@ juce::var toJson (const EngineConfig& config)
     trims->setProperty ("rec", (double) config.trims.rec);
     root->setProperty ("trimsDb", juce::var (trims));
 
+    root->setProperty ("phonesHeadphoneEq", config.phonesHeadphoneEq);
     root->setProperty ("filterKind", config.filterKind == FilterKind::ladder ? "ladder" : "svf");
     juce::Array<juce::var> modulations;
     for (const auto& m : config.delayModulation)

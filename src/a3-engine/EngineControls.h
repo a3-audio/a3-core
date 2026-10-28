@@ -21,7 +21,6 @@ struct GlobalControls
 {
     FilterControls filter;
     std::atomic<float> masterVolume { 0.0f }, booth { 0.0f }, phonesMix { 0.0f }, phonesVolume { 0.0f }, auxReturn { 0.0f };
-    std::atomic<int> returnSource { 0 };   // 0 = the analog return pair, k = deck k's aux pair
     std::atomic<float> returnCue { 0.0f }, delayBpm { 120.0f };
     std::atomic<bool> gateOpen { false };
 };

@@ -1,53 +1,30 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
-#include "IoMap.h"
+#include "ConfigFile.h"
+#include "a3-links/LinkMap.h"
 #include <juce_core/juce_core.h>
 #include <string>
 #include <vector>
 
 namespace a3app
 {
-// One JACK link, full port names, from the output (source) to the input (sink).
-struct Link
-{
-    std::string from, to;
-    bool operator== (const Link& other) const { return from == other.from && to == other.to; }
-};
-
-struct ConnectionPlan
-{
-    std::vector<Link> add, remove;
-    std::vector<std::string> missingPeers;   // ports a wanted link needs that the graph does not have now
-};
-
-// What the I/O map wants (spec D9): every io.jack entry as a link between the engine's
-// port ("client:port") and its peer, in the port's direction, plus every direct link.
-// add: a wanted link whose ports both exist and that is not live. remove: a link the
-// engine made that is live and no longer wanted. A link the engine did not make is
-// never removed, however it touches the engine's ports.
-ConnectionPlan planConnections (const IoMap& wanted, const std::vector<Link>& live, const std::vector<Link>& madeByUs,
-                                const std::vector<std::string>& existingPorts, const std::string& client = "a3-engine");
-
-// How many of the configured links have a port that is not in the graph. The engine's own ports do not
-// count: with the engine absent they all are, and that is a different thing to say.
-std::size_t linksWithMissingTarget (const IoMap& wanted, const std::vector<std::string>& existingPorts,
-                                    const std::string& client = "a3-engine");
-
-// The links the engine still owns: the ones it made that are still live. A link that
-// died with a peer's port is no one's; when it is made again it is owned again.
-std::vector<Link> stillOwned (const std::vector<Link>& madeByUs, const std::vector<Link>& live);
-
-// What a jack_connect result means for ownership. Only a link the engine itself made is
-// owned (0). EEXIST (JACK2 returns it positive, others negated) means someone else made it
-// after the graph was read: foreign, not an error. Anything else failed.
-enum class ConnectOutcome { owned, foreign, failed };
-ConnectOutcome connectOutcome (int jackConnectResult);
-
-// The client names in a list of "client:port" names, each once.
-std::vector<std::string> clientNamesOf (const std::vector<std::string>& ports);
-
 // Spec 4b: with connecting on, a client named REAPER beside the engine would put a second
 // engine on the PA through the default map; refuse. --no-connect makes no link and runs.
 juce::Result refuseBesideReaper (const std::vector<std::string>& clients, bool connecting);
+
+// P40: rec_L/R -> "AES67 <hostname> out:send_CH1/2" (the name a3-osc-render gives this machine's sender),
+// added to whatever map was loaded, so a deck host records the REC bus even from an engine.json saved
+// before M10. Applied at link time only: the user's file is never rewritten. No host name, no link.
+void addRecToAes67Sender (a3::links::LinkMap&, const std::string& hostname);
+
+// What the engine links and counts: the loaded io map plus the built-in links above. `hostname` is
+// Platform::hostname(), the source a3-osc-render names the sender from.
+IoMap linkMapFor (const AppConfig&, const std::string& hostname);
+
+// Whether JackBackend::service applies the map now: at once when a port registered or went
+// (a deck host booting after the Core, a3-aes67 restarting), and once a second in case a
+// registration callback was missed. Never with --no-connect.
+constexpr double linkEverySeconds = 1.0;
+bool linkPlanDue (bool connecting, bool portsChanged, double nowSeconds, double lastLinkSeconds);
 }

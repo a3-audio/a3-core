@@ -46,7 +46,14 @@ ZonesPage::ZonesPage (HostView& v, std::vector<juce::File> choices)
                   "(~/.config/a3/engine/spatial). Layouts are edited as files, not here. Save restarts the engine.",
                   juce::dontSendNotification);
     list.setRowHeight (juce::jmax (28, 640 / 14));
-    for (auto* child : std::initializer_list<juce::Component*> { &title, &message, &note, &list })
+    look::caption (headphonesCaption);
+    headphonesCaption.setText ("PHONES HEADPHONE EQ", juce::dontSendNotification);
+    headphones.addItem ("off", 1);
+    int id = 2;
+    for (const auto& model : a3::headphoneEqModels())
+        headphones.addItem (model, id++);
+    headphones.onChange = [this] { chooseHeadphoneEq (headphones.getSelectedItemIndex()); };
+    for (auto* child : std::initializer_list<juce::Component*> { &title, &message, &note, &list, &headphonesCaption, &headphones })
         addAndMakeVisible (child);
     refresh();
 }
@@ -71,8 +78,23 @@ void ZonesPage::choose (int row)
     refresh();
 }
 
+void ZonesPage::chooseHeadphoneEq (int item)
+{
+    const auto& models = a3::headphoneEqModels();
+    if (item < 0 || item > (int) models.size())
+        return;
+    juce::String error;
+    const auto edited = withHeadphoneEq (view.config(), item == 0 ? juce::String ("off") : models[(size_t) item - 1], error);
+    look::say (message, edited ? juce::String() : error);
+    if (edited && ! sameConfig (*edited, view.config()))
+        view.edit (*edited);
+    refresh();
+}
+
 void ZonesPage::refresh()
 {
+    const auto choice = a3::headphoneEqChoice (view.config().engine.phonesHeadphoneEq);
+    headphones.setSelectedItemIndex (choice.value_or (0), juce::dontSendNotification);
     const int row = selectedRow();
     if (row >= 0)
         list.selectRow (row, true, true);
@@ -90,6 +112,9 @@ void ZonesPage::resized()
     title.setBounds (area.removeFromTop (row));
     note.setBounds (area.removeFromBottom (row * 2));
     message.setBounds (area.removeFromBottom (row));
+    auto eqRow = area.removeFromBottom (row);
+    headphonesCaption.setBounds (eqRow.removeFromLeft (eqRow.getWidth() / 3));
+    headphones.setBounds (eqRow.removeFromLeft (eqRow.getWidth() / 2));
     list.setBounds (area);
 }
 }

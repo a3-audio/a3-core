@@ -33,7 +33,6 @@ TEST (EngineConfig, DefaultsAreFourChannelsSvf)
     EXPECT_EQ (c->channels, 4);
     EXPECT_EQ (c->analogInputs, 12);
     EXPECT_EQ (c->analogPairs, (std::vector<int> { 1, 2, 3, 4 }));
-    EXPECT_EQ (c->returnAnalogPair, 6);
     EXPECT_EQ (c->filterKind, a3::FilterKind::svf);
     EXPECT_FALSE (c->trims.main.has_value());
     EXPECT_FALSE (c->trims.booth.has_value());
@@ -65,7 +64,6 @@ TEST (EngineConfig, RoundTrips)
     c.decks = 3;
     c.analogInputs = 16;
     c.analogPairs = { 1, 0, 3, 4, 0, 7 };
-    c.returnAnalogPair = 8;
     c.trims.main = -12.5f;
     c.trims.booth = 0.0f;
     c.trims.phones = -3.25f;
@@ -107,15 +105,33 @@ TEST (EngineConfig, RefusedPairBeyondInputs)
 {
     expectRefused (R"({"analogPairs": [1,2,3,7]})", "analogPairs");      // pair 7 = inputs 13/14 of 12
     expectRefused (R"({"analogPairs": [1,2,3,-1]})", "analogPairs");
-    expectRefused (R"({"analogInputs": 8})", "returnAnalogPair");        // return pair 6 beyond 8 inputs
-    expectRefused (R"({"returnAnalogPair": 7})", "returnAnalogPair");
     expectRefused (R"({"analogPairs": [1,1,3,4]})", "analogPairs");      // one pair, two channels
     expectRefused (R"({"channels": 2, "analogPairs": [1,2,3]})", "analogPairs");
 }
 
-TEST (EngineConfig, RefusedChannelOnTheReturnPair)
+// P45/P47: the analog return is gone, so pair 6 is a channel's like any other; returnAnalogPair is a
+// retired key: a saved file naming it (with any value) still loads, and the key is never written again.
+TEST (EngineConfig, PairSixIsAChannelPair)
 {
-    expectRefused (R"({"analogPairs": [1,2,3,6]})", "return");
+    juce::String error;
+    const auto c = parse (R"({"analogPairs": [1,2,3,6]})", error);
+    ASSERT_TRUE (c.has_value()) << error;
+    EXPECT_EQ (c->analogPairs, (std::vector<int> { 1, 2, 3, 6 }));
+    const auto eight = parse (R"({"analogInputs": 8})", error);
+    EXPECT_TRUE (eight.has_value()) << error;
+}
+
+TEST (EngineConfig, ReturnAnalogPairIsRetired)
+{
+    for (const auto* text : { R"({"returnAnalogPair": 6})", R"({"returnAnalogPair": 7})", R"({"returnAnalogPair": "six"})" })
+    {
+        juce::String error;
+        const auto c = parse (text, error);
+        ASSERT_TRUE (c.has_value()) << text << ": " << error;
+        EXPECT_EQ (*c, a3::EngineConfig {}) << text;
+    }
+    EXPECT_EQ (a3::retiredEngineKeys(), (std::vector<std::string> { "returnAnalogPair" }));
+    EXPECT_FALSE (a3::toJson (a3::EngineConfig {}).getDynamicObject()->hasProperty ("returnAnalogPair"));
 }
 
 TEST (EngineConfig, RefusedUnknownFilterKind)
@@ -208,4 +224,35 @@ TEST (EngineConfig, DelayModulationIsValidated)
     expectRefused (R"({"delayModulation": [{"parameter":"q","base":0,"depth":1,"rateHz":-1,"shape":"sine"}]})", "rateHz");
     expectRefused (R"({"delayModulation": [{"base":0,"depth":1,"rateHz":1,"shape":"sine"}]})", "parameter");
     expectRefused (R"({"delayModulation": {"parameter":"q"}})", "delayModulation");
+}
+
+TEST (EngineConfig, HeadphoneEqDefaultsOff)
+{
+    juce::String error;
+    const auto c = parse ("{}", error);
+    ASSERT_TRUE (c.has_value()) << error;
+    EXPECT_EQ (c->phonesHeadphoneEq, "off");
+    EXPECT_EQ (a3::headphoneEqChoice (c->phonesHeadphoneEq), std::optional<int> (0));
+}
+
+TEST (EngineConfig, HeadphoneEqModelBecomesItsIndex)
+{
+    juce::String error;
+    const auto c = parse (R"({"phonesHeadphoneEq": "AKG-K141MK2"})", error);
+    ASSERT_TRUE (c.has_value()) << error;
+    EXPECT_EQ (c->phonesHeadphoneEq, "AKG-K141MK2");
+    EXPECT_EQ (a3::headphoneEqChoice (c->phonesHeadphoneEq), std::optional<int> (1));
+    EXPECT_EQ (a3::headphoneEqChoice ("SHURE-SRH940"), std::optional<int> (23));
+    EXPECT_EQ (a3::headphoneEqModels().size(), 23u);
+
+    const auto back = a3::parseEngineConfig (a3::toJson (*c), error);   // round trip
+    ASSERT_TRUE (back.has_value()) << error;
+    EXPECT_EQ (back->phonesHeadphoneEq, "AKG-K141MK2");
+}
+
+TEST (EngineConfig, UnknownHeadphoneEqIsRefused)
+{
+    expectRefused (R"({"phonesHeadphoneEq": "Acme-Buds"})", "Acme-Buds");
+    expectRefused (R"({"phonesHeadphoneEq": 3})", "phonesHeadphoneEq");
+    expectRefused (R"({"phonesHeadphoneEq": ""})", "phonesHeadphoneEq");
 }

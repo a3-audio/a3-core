@@ -10,7 +10,6 @@ namespace a3app
 namespace
 {
 constexpr const char* clientName = "a3-engine";
-constexpr double connectEverySeconds = 1.0;
 
 // jack_get_ports / jack_port_get_all_connections hand out a null-terminated list the caller frees.
 std::vector<std::string> takeNames (const char** names)
@@ -25,7 +24,7 @@ std::vector<std::string> takeNames (const char** names)
 }
 }
 
-JackBackend::JackBackend (bool shouldConnect) : connecting (shouldConnect) {}
+JackBackend::JackBackend (bool shouldConnect, std::string hostName) : connecting (shouldConnect), hostname (std::move (hostName)) {}
 
 JackBackend::~JackBackend() { close(); }
 
@@ -40,21 +39,21 @@ juce::Result JackBackend::open (EngineHost& engineHost, const AppConfig& config)
     if (client == nullptr)
         return juce::Result::fail ((status & JackNameNotUnique) != 0 ? "a JACK client named a3-engine is already running"
                                                                      : "no JACK server running");
-    const auto refused = refuseBesideReaper (clientNamesOf (graphPorts()), connecting);
+    const auto names = enginePortNames (engineHost.engineConfig(), engineHost.spatialConfig());
+    linker = std::make_unique<a3::links::JackLinker> (client, clientName, names.inputs);
+    const auto refused = refuseBesideReaper (a3::links::clientNamesOf (linker->graphPorts()), connecting);
     if (refused.failed())
     {
         close();
         return refused;
     }
-
-    const auto names = enginePortNames (engineHost.engineConfig(), engineHost.spatialConfig());
     if (! registerPorts (names))
     {
         close();
         return juce::Result::fail ("cannot register the JACK ports");
     }
     slots = bindPortSlots (engineHost.engineConfig(), engineHost.spatialConfig(), inputs, outputs);
-    map = config.io;
+    map = linkMapFor (config, hostname);
     sampleRate = (double) jack_get_sample_rate (client);
     const auto built = engineHost.rebuild (sampleRate, (int) jack_get_buffer_size (client), false);
     if (built.failed())
@@ -76,7 +75,10 @@ juce::Result JackBackend::open (EngineHost& engineHost, const AppConfig& config)
         return juce::Result::fail ("cannot activate the JACK client");
     }
     if (connecting)
-        connect();
+    {
+        linker->apply (map);
+        linksPlanned = true;
+    }
     return juce::Result::ok();
 }
 
@@ -86,16 +88,17 @@ void JackBackend::close()
         return;
     if (! serverGone.load())
     {
-        removeOwnedLinks();   // the direct links would outlive the engine's ports otherwise
+        linker->removeOwned();   // the direct links would outlive the engine's ports otherwise
         jack_deactivate (client);
     }
+    linker.reset();
+    linksPlanned = false;
     jack_client_close (client);
     client = nullptr;
     host = nullptr;
     inputPorts.clear();
     outputPorts.clear();
     slots = {};
-    madeByUs.clear();
 }
 
 BackendStatus JackBackend::status() const
@@ -104,9 +107,11 @@ BackendStatus JackBackend::status() const
     s.rateSource = "PipeWire (pw-metadata -n settings; a3-core's pipewire config)";
     s.bitDepth = 32;
     s.connecting = connecting;
+    s.linksPlanned = linksPlanned;
     s.xruns = xruns.load();
-    for (const auto& peer : missingPeers)
-        s.missingPeers.push_back (juce::String (peer));
+    if (linker != nullptr)
+        for (const auto& peer : linker->missingPeers())
+            s.missingPeers.push_back (juce::String (peer));
     if (client == nullptr || serverGone.load())
         return s;
 
@@ -138,10 +143,11 @@ void JackBackend::service (double nowSeconds)
         return;
     rebuildOnNewQuantumOrRate();
     const bool portsCameOrWent = portsChanged.exchange (false);
-    if (! connecting || ! (portsCameOrWent || nowSeconds - lastConnectSeconds >= connectEverySeconds))
+    if (! linkPlanDue (connecting, portsCameOrWent, nowSeconds, lastConnectSeconds))
         return;
     lastConnectSeconds = nowSeconds;
-    connect();
+    linker->apply (map);
+    linksPlanned = true;
 }
 
 bool JackBackend::lost() const { return serverGone.load(); }
@@ -224,58 +230,5 @@ bool JackBackend::registerPorts (const PortNames& names)
         if (outputPorts.emplace_back (add (name, JackPortIsOutput)) == nullptr)
             return false;
     return true;
-}
-
-// The plan against the graph as it is now. Only links it made itself are ever removed;
-// a link it made that died with a peer's port is forgotten and made again when the port is back.
-void JackBackend::connect()
-{
-    const auto live = graphLinks();
-    madeByUs = stillOwned (madeByUs, live);
-    const auto plan = planConnections (map, live, madeByUs, graphPorts(), jack_get_client_name (client));
-    for (const auto& link : plan.add)
-    {
-        switch (connectOutcome (jack_connect (client, link.from.c_str(), link.to.c_str())))
-        {
-            case ConnectOutcome::owned:
-                madeByUs.push_back (link);
-                break;
-            case ConnectOutcome::foreign:   // made by someone else since the graph was read: theirs (R4)
-                break;
-            case ConnectOutcome::failed:
-                if (reportedFailures.insert ({ link.from, link.to }).second)
-                    std::fprintf (stderr, "a3-engine: cannot connect %s -> %s\n", link.from.c_str(), link.to.c_str());
-                break;
-        }
-    }
-    for (const auto& link : plan.remove)
-        if (jack_disconnect (client, link.from.c_str(), link.to.c_str()) == 0)
-            madeByUs.erase (std::find (madeByUs.begin(), madeByUs.end(), link));
-    missingPeers = plan.missingPeers;
-}
-
-std::vector<std::string> JackBackend::graphPorts() const
-{
-    return takeNames (jack_get_ports (client, nullptr, nullptr, 0));
-}
-
-std::vector<Link> JackBackend::graphLinks() const
-{
-    std::vector<Link> links;
-    for (const auto& from : takeNames (jack_get_ports (client, nullptr, nullptr, JackPortIsOutput)))
-        if (auto* port = jack_port_by_name (client, from.c_str()))
-            for (auto& to : takeNames (jack_port_get_all_connections (client, port)))
-                links.push_back ({ from, std::move (to) });
-    return links;
-}
-
-// Against the graph as it is now, as connect() does: a link of ours that died since the last pass is
-// forgotten, not disconnected. (One that died and was made again by someone else still looks like ours.)
-void JackBackend::removeOwnedLinks()
-{
-    madeByUs = stillOwned (madeByUs, graphLinks());
-    for (const auto& link : madeByUs)
-        jack_disconnect (client, link.from.c_str(), link.to.c_str());
-    madeByUs.clear();
 }
 }

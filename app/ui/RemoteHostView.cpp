@@ -166,6 +166,9 @@ a3::GateLevels RemoteHostView::gateLevels() const { const std::lock_guard<std::m
 AppConfig RemoteHostView::config() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.pending; }
 AppConfig RemoteHostView::running() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.running; }
 juce::String RemoteHostView::engineProblem() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.problem; }
+std::vector<std::string> RemoteHostView::droppedLinks() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.report.droppedLinks; }
+std::vector<std::string> RemoteHostView::ignoredKeys() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.report.ignoredKeys; }
+juce::String RemoteHostView::truthNote() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.report.truthNote; }
 juce::File RemoteHostView::configFile() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.file; }
 LiveLinks RemoteHostView::liveLinks() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.links; }
 

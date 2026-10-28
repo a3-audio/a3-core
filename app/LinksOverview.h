@@ -4,14 +4,16 @@
 // they join, ports collapsed into ranges, each range with what it is for. Pure: the graph comes in as
 // names, the text goes out; reading the graph is LinksCommand's job.
 #pragma once
-#include "ConnectionPlan.h"
 #include "EngineConfig.h"
+#include "a3-links/LinkPlan.h"
 #include <optional>
 #include <string>
 #include <vector>
 
 namespace a3app
 {
+using a3::links::Link;
+
 // What the program already knows about its ports: which analog inputs are channels and which the
 // return (the engine's own config), and which level meters the truth lists (a3-osc.json vu_meters).
 struct LinkMeanings

@@ -6,6 +6,7 @@
 #include <cstdio>
 
 #include "ConfigEdits.h"
+#include "DeckAudioReport.h"
 #include "DeviceBackend.h"
 #include "EngineControlApi.h"
 #include "EngineHost.h"
@@ -45,7 +46,7 @@ public:
     explicit EngineSession (const StartupData& startup) : data (startup) {}
     ~EngineSession() { close(); }
 
-    juce::Result open (bool connecting)
+    juce::Result open (bool connecting, const std::string& hostname)
     {
         if (! coreSender.connect (data.truth.coreHost, data.truth.corePort))
             return juce::Result::fail ("cannot send to " + data.truth.coreHost + ":" + juce::String (data.truth.corePort));
@@ -58,7 +59,7 @@ public:
         receiver.addListener (listener.get());
 
         if (data.config.backend.type == BackendSettings::Type::jack)
-            backend = std::make_unique<JackBackend> (connecting);
+            backend = std::make_unique<JackBackend> (connecting, hostname);
         else
             backend = std::make_unique<DeviceBackend>();
         const auto opened = backend->open (*host, data.config);
@@ -95,6 +96,9 @@ public:
         const auto now = monotonicSeconds();
         host->controlTick (now);
         backend->service (now);
+        // Core hears each deck slot's link state with the hello. A backend that makes no links has
+        // nothing to report: Core then counts the deck by its hello alone, as for an older engine.
+        reportDeckAudio (backend->status(), data.config.io, data.config.engine.decks, *host);
     }
 
     bool lost() const
@@ -150,8 +154,9 @@ private:
 class EngineView final : public HostView
 {
 public:
-    EngineView (EngineRole& r, juce::File saveFile, AppConfig startConfig)
-        : role (r), file (std::move (saveFile)), edited (startConfig), startedWith (std::move (startConfig)), names (outputsOf (edited)) {}
+    EngineView (EngineRole& r, juce::File saveFile, AppConfig startConfig, EngineTruth engineTruth)
+        : role (r), file (std::move (saveFile)), edited (startConfig), startedWith (std::move (startConfig)), truth (std::move (engineTruth)),
+          names (outputsOf (edited)) {}
 
     BackendStatus status() const override { return live() ? role.session->status() : BackendStatus {}; }
     std::vector<a3::Engine::OutputMeter> meters() override { return live() ? role.session->engineHost().meters() : std::vector<a3::Engine::OutputMeter> {}; }
@@ -165,6 +170,9 @@ public:
     juce::File configFile() const override { return file; }
     LiveLinks liveLinks() const override { return live() ? role.session->liveLinks() : LiveLinks {}; }
     juce::String engineProblem() const override { return problem; }
+    std::vector<std::string> droppedLinks() const override { return startedWith.droppedLinks; }
+    std::vector<std::string> ignoredKeys() const override { return startedWith.ignoredKeys; }
+    juce::String truthNote() const override { return a3app::truthNote (truth); }
     void edit (const AppConfig& config) override { edited = config; }
 
     // Fails when the new config did not open (the previous one is running again, or nothing is: then
@@ -175,6 +183,10 @@ public:
         if (result.failed())
             return result;
         startedWith = edited = config;
+        startedWith.droppedLinks.clear();   // the saved file no longer names them
+        edited.droppedLinks.clear();
+        startedWith.ignoredKeys.clear();
+        edited.ignoredKeys.clear();
         if (auto outputs = outputsOf (config); ! outputs.empty())
             names = std::move (outputs);
         return juce::Result::ok();
@@ -199,6 +211,7 @@ private:
     EngineRole& role;
     const juce::File file;
     AppConfig edited, startedWith;
+    EngineTruth truth;
     std::vector<std::string> names;
     juce::String problem;
 
@@ -220,7 +233,7 @@ juce::Result EngineRole::restart (const AppConfig& config, juce::String& problem
     {
         startup = data;
         session = std::make_unique<EngineSession> (startup);
-        return session->open (! args.noConnect);
+        return session->open (! args.noConnect, args.hostname);
     };
 
     RestartSteps steps;
@@ -253,7 +266,7 @@ juce::Result EngineRole::restart (const AppConfig& config, juce::String& problem
 // A refused or busy engine.control is said and the engine runs on: the audio never waits for its window.
 void EngineRole::serveControl()
 {
-    view = std::make_unique<EngineView> (*this, startup.saveFile, startup.config);
+    view = std::make_unique<EngineView> (*this, startup.saveFile, startup.config, startup.truth);
     api = std::make_unique<EngineControlApi> (*view);
     server = serveEngineControl (*api, startup.truth, [] (const std::string& line, bool) { sayEngine (line); });
 }
@@ -276,9 +289,13 @@ std::variant<std::unique_ptr<EngineRole>, int> EngineRole::start (const AppArgs&
         sayEngine (error);
         return 1;
     }
+    if (const auto note = truthNote (loaded->truth); note.isNotEmpty())
+        sayEngine (note);
+    for (const auto& line : droppedLinkLines (loaded->config))
+        sayEngine (line);
 
     std::unique_ptr<EngineRole> role (new EngineRole (args, std::move (*loaded)));
-    const auto opened = role->session->open (! args.noConnect);
+    const auto opened = role->session->open (! args.noConnect, args.hostname);
     if (opened.failed())
     {
         sayEngine (opened.getErrorMessage());

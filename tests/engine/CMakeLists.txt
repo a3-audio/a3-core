@@ -24,11 +24,11 @@ add_executable(a3-engine-tests ReferenceSmoke.cpp Laws.cpp PurestGain.cpp Smooth
     Isolator3.cpp Meters.cpp DjFilter.cpp ChannelStrip.cpp DeckStrip.cpp ChannelSelect.cpp StripTiming.cpp Bench.cpp
     JuceEnvironment.cpp IemCompileTrial.cpp IemNode.cpp Layout.cpp SpatialBus.cpp SpatialTiming.cpp
     SpatialAllocation.cpp EngineConfig.cpp DualDelay.cpp DelayModulation.cpp AmbiEncoderBus.cpp Engine.cpp
-    EngineGate.cpp EngineAllocation.cpp EngineTiming.cpp VuTaps.cpp VuBundles.cpp
+    EngineGate.cpp EngineAllocation.cpp EngineTiming.cpp VuTaps.cpp VuBundles.cpp LinkPlan.cpp LinkMap.cpp
     ../app/EngineOsc.cpp ../app/HelloSender.cpp ../app/EngineHost.cpp
     ../app/ConfigFile.cpp ../app/EnginePorts.cpp ../app/ConnectionPlan.cpp
     ../app/DeviceBackend.cpp ../app/AppArgs.cpp
-    ../app/Pages.cpp ../app/ConfigEdits.cpp ../app/SessionRestart.cpp
+    ../app/Pages.cpp ../app/StatusGrouping.cpp ../app/DeckAudioState.cpp ../app/ConfigEdits.cpp ../app/SessionRestart.cpp
     ../app/DefaultConfig.cpp ../app/ProgramArgs.cpp ../app/Supervisor.cpp
     ../app/EngineControlApi.cpp ../app/RemoteHostView.cpp
     ../app/Monitor.cpp ../app/KeyboardPolicy.cpp ../app/OnScreenKeyboard.cpp ../app/WindowProcess.cpp ../app/Subcommands.cpp

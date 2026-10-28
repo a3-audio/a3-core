@@ -20,6 +20,7 @@ struct BackendStatus
     int bitDepth = 0;                        // JACK: 32 (float samples); a device: what it reports
     std::vector<juce::String> missingPeers;  // ports the I/O map names that the graph lacks now
     bool connecting = false;                 // false with --no-connect: the engine makes no link
+    bool linksPlanned = false;               // the first link plan has run since the open; missingPeers means something only then
 };
 
 // The load STATUS shows: the larger of the backend's own figure (JACK: the whole graph; a device:

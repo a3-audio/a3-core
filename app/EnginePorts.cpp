@@ -39,8 +39,10 @@ PortNames enginePortNames (const a3::EngineConfig& config, const a3::SpatialConf
         const auto deck = "deck" + deckLetters (slot);
         for (int i = 1; i <= deckInputChannels; ++i)
             ports.inputs.push_back (deck + "_" + std::to_string (i));
-        addPair (ports.inputs, deck + "_cue");
-        addPair (ports.inputs, deck + "_aux");
+        for (int i = 1; i <= deckAuxChannels; ++i)
+            ports.inputs.push_back (deck + "_aux_" + std::to_string (i));
+        for (int i = 1; i <= deckCueChannels; ++i)
+            ports.inputs.push_back (deck + "_cue_" + std::to_string (i));
     }
 
     addZone (ports.outputs, "main", spatial.main.layout);
@@ -54,6 +56,15 @@ PortNames enginePortNames (const a3::EngineConfig& config, const a3::SpatialConf
         addPair (ports.outputs, channel + "_post");
     }
     return ports;
+}
+
+std::vector<std::string> retiredDeckPorts (int decks)
+{
+    std::vector<std::string> names;
+    for (int slot = 1; slot <= decks; ++slot)
+        for (const char* base : { "_cue", "_aux" })
+            addPair (names, "deck" + deckLetters (slot) + base);
+    return names;
 }
 
 bool isEngineInputPort (const std::string& name)
@@ -87,9 +98,10 @@ PortSlots bindPortSlots (const a3::EngineConfig& config, const a3::SpatialConfig
     {
         for (auto& channel : deck.bformat)
             slots.inputs.push_back (&channel);
-        for (auto* pair : { &deck.cue, &deck.aux })
-            for (auto& side : *pair)
-                slots.inputs.push_back (&side);
+        for (auto& channel : deck.aux)
+            slots.inputs.push_back (&channel);
+        for (auto& channel : deck.cue)
+            slots.inputs.push_back (&channel);
     }
 
     bindZone (slots, out.main, spatial.main.layout);

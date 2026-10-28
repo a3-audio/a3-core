@@ -67,7 +67,7 @@ void readNumber (Port& port, const std::string& name)
         port.base.pop_back();
 }
 
-// "deckA_cue_L" -> "deck A" + "cue_L"
+// "deckA_cue_1" -> "deck A" + "cue_1"
 bool splitDeck (const std::string& name, std::string& deck, std::string& rest)
 {
     if (! startsWith (name, "deck"))
@@ -178,8 +178,6 @@ std::string categoryOf (const Connection& link, const a3::EngineConfig& engine)
     if (own.base == "analog")
     {
         const int pair = (own.number + 1) / 2;
-        if (pair == engine.returnAnalogPair)
-            return "return";
         return std::find (engine.analogPairs.begin(), engine.analogPairs.end(), pair) != engine.analogPairs.end() ? "channel" : "";
     }
     if (own.base == "main")

@@ -14,6 +14,7 @@ struct AppArgs
     bool noWindow = false, noConnect = false, service = false, timing = false, checkConfig = false;
     juce::String config, spatial, truth = "/usr/share/a3/a3-osc.json";
     juce::File packageConfig = packageConfigFile;   // not a flag: the tests point it at a copy
+    std::string hostname;                           // not a flag: Platform::hostname(), for linkMapFor
 };
 
 // Refuses an unknown flag and a value flag without its value, naming it in `error`.

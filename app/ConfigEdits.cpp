@@ -3,6 +3,7 @@
 #include "ConfigEdits.h"
 #include "SpatialConfig.h"
 #include <algorithm>
+#include <string>
 #include <cmath>
 #include <set>
 
@@ -21,11 +22,11 @@ bool contains (const std::vector<std::string>& list, const std::string& value)
     return std::find (list.begin(), list.end(), value) != list.end();
 }
 
-// The next analog pair no channel uses, below the return; 0 when none is left.
+// The next analog pair no channel uses; 0 when none is left.
 int nextFreePair (const a3::EngineConfig& engine, const std::vector<int>& pairs)
 {
     for (int pair = 1; pair * 2 <= engine.analogInputs; ++pair)
-        if (pair != engine.returnAnalogPair && std::find (pairs.begin(), pairs.end(), pair) == pairs.end())
+        if (std::find (pairs.begin(), pairs.end(), pair) == pairs.end())
             return pair;
     return 0;
 }
@@ -109,6 +110,66 @@ std::optional<AppConfig> withTrim (const AppConfig& config, TrimZone zone, float
         case TrimZone::rec: trims.rec = db; break;
     }
     return edited;
+}
+
+std::optional<AppConfig> withHeadphoneEq (const AppConfig& config, const juce::String& model, juce::String& error)
+{
+    if (! a3::headphoneEqChoice (model))
+    {
+        error = "unknown headphone model '" + model + "'";
+        return std::nullopt;
+    }
+    error = {};
+    auto edited = config;
+    edited.engine.phonesHeadphoneEq = model;
+    return edited;
+}
+
+namespace
+{
+struct DeckBank { const char* inputInfix; const char* localPort; const char* aes67Port; int count; };
+constexpr DeckBank deckBanks[] = {
+    { "_",     "bformat_", "receive_MAIN", deckInputChannels },
+    { "_aux_", "aux_",     "receive_AUX",  deckAuxChannels },
+    { "_cue_", "cue_",     "receive_CUE",  deckCueChannels },
+};
+}
+
+std::vector<std::pair<std::string, std::string>> deckLinks (int slot, DeckSource source)
+{
+    std::vector<std::pair<std::string, std::string>> links;
+    const auto letter = deckLetters (slot);
+    const auto client = source == DeckSource::local ? "StemDeck-" + letter : "AES67 deck " + letter;
+    for (const auto& bank : deckBanks)
+        for (int i = 1; i <= bank.count; ++i)
+        {
+            const auto n = std::to_string (i);
+            const auto peerPort = std::string (source == DeckSource::local ? bank.localPort : bank.aes67Port) + n;
+            links.emplace_back ("deck" + letter + bank.inputInfix + n, client + ":" + peerPort);
+        }
+    return links;
+}
+
+void setDeckSource (IoMap& map, int slot, DeckSource source)
+{
+    for (const auto& [port, peer] : deckLinks (slot, source))
+        map.jack[port] = { peer };
+}
+
+std::optional<DeckSource> deckSourceOf (const IoMap& map, int slot)
+{
+    for (const auto source : { DeckSource::local, DeckSource::aes67 })
+    {
+        const auto links = deckLinks (slot, source);
+        const bool all = std::all_of (links.begin(), links.end(), [&] (const auto& link)
+        {
+            const auto found = map.jack.find (link.first);
+            return found != map.jack.end() && found->second == std::vector<std::string> { link.second };
+        });
+        if (all)
+            return source;
+    }
+    return std::nullopt;
 }
 
 bool sameConfig (const AppConfig& a, const AppConfig& b)

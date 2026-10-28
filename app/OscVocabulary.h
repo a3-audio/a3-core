@@ -18,7 +18,7 @@ enum class EngineWord
     channelAzimuth, channelElevation, channelSource,
     filterFrequency, filterResonance, filterMode,
     masterVolume, masterBooth, masterPhonesMix, masterPhonesVolume, masterAuxReturn,
-    returnSource, returnCue, delayBpm, engineOpen
+    returnCue, delayBpm, engineOpen
 };
 
 // One key of the truth the engine carries, with its address read from the truth.
@@ -37,12 +37,16 @@ struct EngineTruth : a3bench::Truth
     int corePort = -1;
     juce::String coreHost;        // "core.osc"'s host; a wildcard listener is reached on loopback, as Core's endpoint()
     juce::String helloAddress;    // "engine.hello"
+    juce::String deckAudioPattern;   // "engine.deck-audio", "{deck}" still in it; empty in a truth without the key
     int vuRelayPort = -1;         // "core.vu-relay": where the engine's /vu bundles go (O13); -1: none in this truth
     juce::String vuRelayHost;     // its host, a wildcard reached on loopback
     int controlPort = -1;         // "engine.control": where the window reaches the engine (loopback, HTTP); -1: none in this truth
     juce::String controlHost;     // its host as the truth gives it
     std::vector<WordAddress> words;
 };
+
+// "" when the truth has everything; else a line saying what is off (no deck-audio reports).
+juce::String truthNote (const EngineTruth&);
 
 // The truth keys of the words above, in EngineWord order.
 const std::vector<juce::String>& engineWordKeys();
@@ -53,7 +57,7 @@ std::optional<EngineTruth> parseEngineTruth (const juce::String& json, juce::Str
 
 // Core's message into the controls, read and clamped as Core and the bench do:
 // positions +-180 / +-90 degrees, 0..1 values, the source 0..decks (analog refused on a
-// deck-only channel), the return source 0..decks, delay.bpm 20..400, filter.mode a
+// deck-only channel), the return source 0 analog / 1 delay, delay.bpm 20..400, filter.mode a
 // number (> 0.5 high-pass) or "high_pass"/"low_pass", engine.open 1 opens and 0 closes.
 // The channel is the truth's range within 1..config.channels. false, and nothing
 // changed: an address the engine does not carry, not exactly one argument, a

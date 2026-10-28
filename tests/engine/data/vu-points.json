@@ -311,55 +311,55 @@
    "n": 35,
    "name": "aux_L",
    "analyzerPort": "vu_aux_L",
-   "kind": "input",
+   "kind": "return",
    "patchbay": "REAPER:out25 -> beat-analyzer:vu_aux_L",
    "defaultMap": "direct system:capture_11 -> beat-analyzer:vu_aux_L",
-   "point": "engine input analog_11 (the return's analog pair, returnAnalogPair 6), raw"
+   "point": "the FX Return: the delay's output after RETURN, its W (P47; was analog_11, the analog return)"
   },
   {
    "n": 36,
    "name": "aux_R",
    "analyzerPort": "vu_aux_R",
-   "kind": "input",
+   "kind": "return",
    "patchbay": "REAPER:out26 -> beat-analyzer:vu_aux_R",
    "defaultMap": "direct system:capture_12 -> beat-analyzer:vu_aux_R",
-   "point": "engine input analog_12 (the return's analog pair, returnAnalogPair 6), raw"
+   "point": "the FX Return: the delay's output after RETURN, its W (P47; was analog_12, the analog return)"
   },
   {
    "n": 37,
-   "name": "free67",
-   "analyzerPort": "vu_free67",
-   "kind": "free",
+   "name": "deck_a",
+   "analyzerPort": "vu_deck_a",
+   "kind": "deck",
    "patchbay": null,
    "defaultMap": null,
-   "point": "none: sent as 0, 0 (unwired at the analyzer)"
+   "point": "deck slot 1's W (bformat 1) as it reaches the engine, before any channel; was free67, unwired at the analyzer"
   },
   {
    "n": 38,
-   "name": "free68",
-   "analyzerPort": "vu_free68",
-   "kind": "free",
+   "name": "deck_b",
+   "analyzerPort": "vu_deck_b",
+   "kind": "deck",
    "patchbay": null,
    "defaultMap": null,
-   "point": "none: sent as 0, 0 (unwired at the analyzer)"
+   "point": "deck slot 2's W (bformat 1) as it reaches the engine, before any channel; was free68, unwired at the analyzer"
   },
   {
    "n": 39,
-   "name": "free69",
-   "analyzerPort": "vu_free69",
-   "kind": "free",
+   "name": "deck_c",
+   "analyzerPort": "vu_deck_c",
+   "kind": "deck",
    "patchbay": null,
    "defaultMap": null,
-   "point": "none: sent as 0, 0 (unwired at the analyzer)"
+   "point": "deck slot 3's W (bformat 1) as it reaches the engine, before any channel; was free69, unwired at the analyzer"
   },
   {
    "n": 40,
-   "name": "free70",
-   "analyzerPort": "vu_free70",
-   "kind": "free",
+   "name": "deck_d",
+   "analyzerPort": "vu_deck_d",
+   "kind": "deck",
    "patchbay": null,
    "defaultMap": null,
-   "point": "none: sent as 0, 0 (unwired at the analyzer)"
+   "point": "deck slot 4's W (bformat 1) as it reaches the engine, before any channel; was free70, unwired at the analyzer"
   },
   {
    "n": 51,

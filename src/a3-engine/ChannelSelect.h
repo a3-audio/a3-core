@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
-#include <array>
-#include <vector>
 
 namespace a3
 {
@@ -46,20 +44,5 @@ private:
     int slot = 0;             // deck slot loaded in the deck path (0 = none)
     int analogCount = 0, deckCount = 0;   // gain = count / fadeSamples
     int analogGoal = 0, deckGoal = 0;
-};
-
-// Stereo return: analog pair or deck k's aux pair, 10 ms crossfade.
-// Source 0 = analog, k = deckAux[k-1]; outside 0..deckAux.size() keeps the last.
-class ReturnSelect
-{
-public:
-    static constexpr int maxSources = 17;
-    void prepare (double sampleRate);
-    void process (const float* const* analog, const std::vector<std::array<const float*, 2>>& deckAux,
-                  float* const* out, int numSamples, int source);
-
-private:
-    int fadeSamples = 441, selected = 0;
-    std::array<int, maxSources> counts {};   // gain = count / fadeSamples
 };
 }

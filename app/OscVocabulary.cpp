@@ -34,7 +34,6 @@ const WordKey wordKeys[] {
     { EngineWord::masterPhonesMix, "master.phones-mix" },
     { EngineWord::masterPhonesVolume, "master.phones-volume" },
     { EngineWord::masterAuxReturn, "master.aux-return" },
-    { EngineWord::returnSource, "aux-return.source" },
     { EngineWord::returnCue, "aux-return.cue" },
     { EngineWord::delayBpm, "delay.bpm" },
     { EngineWord::engineOpen, "engine.open" },
@@ -146,7 +145,6 @@ bool applyWord (EngineWord word, const a3::EngineConfig& config, const juce::OSC
         case EngineWord::masterPhonesMix: return storeUnit (g.phonesMix, m);
         case EngineWord::masterPhonesVolume: return storeUnit (g.phonesVolume, m);
         case EngineWord::masterAuxReturn: return storeUnit (g.auxReturn, m);
-        case EngineWord::returnSource: return storeWhole (g.returnSource, m, 0, config.decks);
         case EngineWord::returnCue: return storeUnit (g.returnCue, m);
         case EngineWord::delayBpm: return storeClamped (g.delayBpm, m, minBpm, maxBpm);
         case EngineWord::engineOpen:
@@ -215,6 +213,9 @@ std::optional<EngineTruth> parseEngineTruth (const juce::String& json, juce::Str
     truth.helloAddress = addresses["engine.hello"]["pattern"].toString();
     if (truth.helloAddress.isEmpty())
         return error = "the truth has no address \"engine.hello\"", std::nullopt;
+    truth.deckAudioPattern = addresses["engine.deck-audio"]["pattern"].toString();   // an older truth has none: no reports then
+    if (! truth.deckAudioPattern.contains ("{deck}"))
+        truth.deckAudioPattern.clear();
     truth.corePort = a3bench::listenerPort (root, "core.osc");
     truth.coreHost = a3bench::listenerHostAddress (root, "core.osc");
     if (truth.coreHost == root["hosts"]["any"].toString())   // a wildcard listener is reached on loopback (a3_osc endpoint)
@@ -228,6 +229,11 @@ std::optional<EngineTruth> parseEngineTruth (const juce::String& json, juce::Str
     truth.controlPort = a3bench::listenerPort (root, "engine.control");
     truth.controlHost = a3bench::listenerHostAddress (root, "engine.control");
     return truth;
+}
+
+juce::String truthNote (const EngineTruth& truth)
+{
+    return truth.deckAudioPattern.isEmpty() ? "the truth has no engine.deck-audio: deck audio reports are off" : juce::String();
 }
 
 bool applyEngineMessage (const EngineTruth& truth, const a3::EngineConfig& config, const juce::OSCMessage& m,

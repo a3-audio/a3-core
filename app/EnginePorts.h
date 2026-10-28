@@ -14,11 +14,15 @@ struct PortNames { std::vector<std::string> inputs, outputs; };
 // The engine's ports as the backend registers them. Outputs are in exactly the
 // order of Engine::outputMeters(): main (sub?, tops), booth (sub?, tops), rec L/R,
 // phones L/R, then per channel pre L/R, post L/R. Inputs: analog_1..A, then per
-// deck slot (letter A, B, ... in names, R12): deck{X}_1..16, cue L/R, aux L/R.
+// deck slot (letter A, B, ... in names, R12): deck{X}_1..16, deck{X}_aux_1..16, deck{X}_cue_1..9.
 PortNames enginePortNames (const a3::EngineConfig&, const a3::SpatialConfig&);
 
-constexpr int deckInputChannels = 16;
+constexpr int deckInputChannels = 16, deckAuxChannels = 16, deckCueChannels = 9;
 std::string deckLetters (int slotOneBased);   // 1 = "A", 26 = "Z", 27 = "AA"
+
+// The stereo pairs the slots had before aux and cue grew (deck{X}_cue_L/R, deck{X}_aux_L/R) for
+// `decks` slots: a saved config may still name them, and the loader drops those links.
+std::vector<std::string> retiredDeckPorts (int decks);
 
 // Whether a name of enginePortNames is one of the engine's inputs (analog_*, deck*_*),
 // which tells a link's direction: a peer feeds an input, an output feeds a peer.

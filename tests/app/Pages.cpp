@@ -101,6 +101,12 @@ TEST_F (Pages, StatusPagePaintsEveryState)
     view.state.missingPeers = { "system:capture_1", "StemDeck-A:out_1" };
     view.state.xruns = 3; view.state.dspLoadPercent = 71.5f;
     paint ("status-missing-peer");
+    for (int i = 1; i <= 41; ++i)
+        view.state.missingPeers.push_back ("AES67 deck B:out_" + juce::String (i));
+    view.dropped = { "deckA_cue_L -> x:y", "deckA_cue_R -> x:y", "deckB_aux_L -> p:q", "deckB_aux_R -> p:q", "deckB_cue_L -> r:s" };
+    view.dropped.push_back ("deckC_cue_L -> r:s");
+    view.note = "the truth has no engine.deck-audio: deck audio reports are off";
+    paint ("status-grouped-and-dropped");
     view.state.connecting = false;
     view.runDevice();
     paint ("status-no-connect");
@@ -194,6 +200,13 @@ void paintEveryPage (a3app::HostView& view, const juce::String& suffix)
         a3app::ZonesPage page (view, { a3test::shippedSpatialDirectory, a3test::reaperBoothSpatialDirectory, copy.root() });
         expectPainted (snapshot (page, "zones" + suffix));
     }
+    if (auto* fake = dynamic_cast<FakeView*> (&view))   // the headphone EQ state is set on the fake's fields
+    {
+        fake->cfg.engine.phonesHeadphoneEq = "AKG-K141MK2";
+        a3app::ZonesPage page (view, { a3test::shippedSpatialDirectory });
+        expectPainted (snapshot (page, "zones-eq" + suffix));
+        fake->cfg.engine.phonesHeadphoneEq = "off";
+    }
     {
         a3app::IoPage page (view);
         expectPainted (snapshot (page, "io-jack" + suffix));
@@ -283,6 +296,27 @@ TEST_F (Pages, ZonesPickADirectoryAndShowAFailure)
     page.choose (2);   // does not load: stays on the last good one and says why
     EXPECT_EQ (view.cfg.spatialDirectory, copy.root());
     EXPECT_NE (page.messageLabel().getText().indexOf ("/nonexistent/spatial"), -1);
+}
+
+TEST_F (Pages, ZonesPaintsTheHeadphonesChooser)
+{
+    FakeView view;
+    a3app::ZonesPage page (view, { a3test::shippedSpatialDirectory });
+    expectPainted (snapshot (page, "zones-headphones"));
+    const auto& chooser = page.headphoneChooser();
+    EXPECT_TRUE (chooser.isVisible());
+    EXPECT_GT (chooser.getHeight(), 0);
+    ASSERT_EQ (chooser.getNumItems(), 24);   // off + 23 models
+    EXPECT_EQ (chooser.getItemText (0), "off");
+    EXPECT_EQ (chooser.getItemText (1), "AKG-K141MK2");
+    EXPECT_EQ (chooser.getSelectedItemIndex(), 0);
+
+    page.chooseHeadphoneEq (1);
+    EXPECT_EQ (view.cfg.engine.phonesHeadphoneEq, "AKG-K141MK2");
+    EXPECT_EQ (view.edited, 1);
+    EXPECT_EQ (page.headphoneChooser().getSelectedItemIndex(), 1);
+    page.chooseHeadphoneEq (0);
+    EXPECT_EQ (view.cfg.engine.phonesHeadphoneEq, "off");
 }
 
 TEST_F (Pages, ForeignLinksAreShownNotEditable)
@@ -533,4 +567,39 @@ TEST_F (Pages, StatusSaysWhenNoEngineRuns)
     EXPECT_NE (page.modeLine().indexOf ("NO ENGINE RUNNING"), -1);
     EXPECT_NE (page.modeLine().indexOf ("device gone"), -1);
     expectPainted (snapshot (page, "status-no-engine"));
+}
+
+TEST_F (Pages, PaintsTheDeckSourceChooser)
+{
+    FakeView view;
+    a3app::setDeckSource (view.cfg.io, 1, a3app::DeckSource::local);
+    a3app::setDeckSource (view.cfg.io, 2, a3app::DeckSource::aes67);
+    a3app::IoPage page (view);
+    page.setSize (900, 600);
+    expectPainted (snapshot (page, "io-deck-source"));
+    ASSERT_NE (page.deckSourceBox (2), nullptr);
+    EXPECT_EQ (page.deckSourceBox (2)->getSelectedId(), 2);   // AES67
+    EXPECT_EQ (page.deckSourceBox (1)->getSelectedId(), 1);   // local
+    EXPECT_GT (page.deckSourceBox (2)->getHeight(), 0);
+
+    page.deckSourceBox (2)->setSelectedId (1, juce::sendNotificationSync);
+    EXPECT_EQ (view.cfg.io.jack.at ("deckB_cue_9"), std::vector<std::string> { "StemDeck-B:cue_9" });
+    EXPECT_EQ (view.cfg.io.jack.at ("deckB_1"), std::vector<std::string> { "StemDeck-B:bformat_1" });
+}
+
+TEST_F (Pages, AnIncompleteDeckSlotShowsItAndOneChoiceCompletesIt)
+{
+    FakeView view;
+    for (int i = 1; i <= 16; ++i)   // what an older saved config holds: the 16 main links only
+        view.cfg.io.jack["deckA_" + std::to_string (i)] = { "StemDeck-A:bformat_" + std::to_string (i) };
+    a3app::IoPage page (view);
+    page.setSize (900, 600);
+    expectPainted (snapshot (page, "io-deck-incomplete"));
+    EXPECT_EQ (page.deckSourceBox (1)->getSelectedId(), 3);
+
+    page.deckSourceBox (1)->setSelectedId (1, juce::sendNotificationSync);
+    EXPECT_EQ (a3app::deckSourceOf (view.cfg.io, 1), a3app::DeckSource::local);
+    EXPECT_EQ (view.cfg.io.jack.at ("deckA_aux_16"), std::vector<std::string> { "StemDeck-A:aux_16" });
+    EXPECT_EQ (view.cfg.io.jack.at ("deckA_cue_9"), std::vector<std::string> { "StemDeck-A:cue_9" });
+    EXPECT_EQ (page.deckSourceBox (1)->getSelectedId(), 1);
 }

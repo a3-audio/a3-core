@@ -44,6 +44,18 @@ class TheGuardSees(unittest.TestCase):
             labels = {label for label, _, _ in second_truth.findings(repos, PORTS)}
         self.assertEqual(labels, {"a3-mixer/src/net.cpp"})
 
+    def test_stemdecks_submodule_stays_outside_the_guard(self):
+        # StemDeck carries a3-core as third_party/a3-core: a3-core's own tree,
+        # not StemDeck's code.
+        with tempfile.TemporaryDirectory() as tmp:
+            stemdeck = Path(tmp) / "stemdeck"
+            for relative in ("third_party/a3-core/src/net.cpp", "Source/net.cpp"):
+                path = stemdeck / relative
+                path.parent.mkdir(parents=True)
+                path.write_text('auto core = "192.168.8.10";\n')
+            labels = {label for label, _, _ in second_truth.findings({"stemdeck": stemdeck}, PORTS)}
+        self.assertEqual(labels, {"stemdeck/Source/net.cpp"})
+
     def test_an_address_in_python(self):
         self.assertTrue(self.found_in("desk.py", 'send("/channel/1/volume", 0.5)\n'))
 

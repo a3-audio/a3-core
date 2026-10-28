@@ -28,6 +28,18 @@ std::optional<AppConfig> withSpatialDirectory (const AppConfig&, const juce::Fil
 enum class TrimZone { main, booth, phones, rec };
 std::optional<AppConfig> withTrim (const AppConfig&, TrimZone, float db, juce::String& error);   // refuses outside -90..+6 dB
 
+// "off" or one of a3::headphoneEqModels(); anything else is refused naming it.
+std::optional<AppConfig> withHeadphoneEq (const AppConfig&, const juce::String& model, juce::String& error);
+
+// Where a deck slot's 41 inputs come from: its local StemDeck, or the AES67 stream of that deck.
+enum class DeckSource { local, aes67 };
+// Replaces exactly the slot's 41 entries (deck{X}_1..16, _aux_1..16, _cue_1..9) with literal links;
+// every other entry stays.
+void setDeckSource (IoMap&, int slotOneBased, DeckSource);
+// The source whose 41 links the slot holds exactly; nullopt when it holds anything else
+// (missing, partial, or hand-edited links).
+std::optional<DeckSource> deckSourceOf (const IoMap&, int slotOneBased);
+
 bool sameConfig (const AppConfig&, const AppConfig&);
 
 // One engine port as the I/O page shows it. `mapped` is what the config holds (editable);

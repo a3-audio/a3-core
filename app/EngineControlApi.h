@@ -31,6 +31,9 @@ struct EngineStatusReport
     bool gateOpen = false;
     a3::GateLevels gateLevels;
     juce::String engineProblem;
+    std::vector<std::string> droppedLinks;   // HostView::droppedLinks
+    std::vector<std::string> ignoredKeys;    // HostView::ignoredKeys
+    juce::String truthNote;                  // HostView::truthNote
 };
 juce::var toJson (const EngineStatusReport&);
 std::optional<EngineStatusReport> statusFromJson (const juce::var&);

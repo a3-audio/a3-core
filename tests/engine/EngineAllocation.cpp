@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 #include <atomic>
 #include <cstddef>
+#include <cstdio>
 #include <cstdlib>
 #include "EngineFixture.h"
 #include "EngineStages.h"
@@ -187,25 +188,32 @@ HeapCount upstreamAllocations (const a3::SpatialConfig& spatial, int prepared, c
 
 constexpr int quantum = 128;
 
+// The headphone EQ (a convolution on the phones decoder) is on, so the counts cover it too.
+a3::EngineConfig allocationConfig()
+{
+    auto config = engineConfig (4, 2);
+    config.phonesHeadphoneEq = "Sennheiser-HD600";
+    return config;
+}
+
 // N = 4, two decks, every path running and moving: analog and deck strips, all three
-// buses, the delay, the return from both kinds of source, cue/mix/aux, the stem cues,
+// buses, the delay and its FX Return (RETURN and its cue moving), cue/mix/aux, the stem cues,
 // the filter, the gate opening and closing, source switches (analog <-> deck crossfade,
 // deck <-> deck dip). The first call is the first after prepare.
 HeapCount engineAllocations (EngineRig& rig, const std::vector<int>& calls)
 {
     for (int pair = 1; pair <= 4; ++pair)
         rig.setAnalogPair (pair, pinkStereo (rig.frames, (uint32_t) pair));
-    rig.setAnalogPair (rig.config.returnAnalogPair, pinkStereo (rig.frames, 9));
     for (size_t d = 0; d < rig.decks.size(); ++d)
     {
         for (int ch = 0; ch < deckChannels; ++ch)
             rig.decks[d].bformat[(size_t) ch] = noise (rig.frames, 0.1f, 200 + 20 * (uint32_t) d + (uint32_t) ch).l;
         rig.decks[d].cue = { noise (rig.frames, 0.1f, 300 + (uint32_t) d).l, noise (rig.frames, 0.1f, 310 + (uint32_t) d).l };
-        rig.decks[d].aux = { noise (rig.frames, 0.1f, 320 + (uint32_t) d).l, noise (rig.frames, 0.1f, 330 + (uint32_t) d).l };
+        for (int ch = 0; ch < deckChannels; ++ch)
+            rig.decks[d].aux[(size_t) ch] = noise (rig.frames, 0.1f, 320 + 20 * (uint32_t) d + (uint32_t) ch).l;
     }
     auto& g = rig.controls.global();
     g.phonesMix = 0.5f;
-    g.returnCue = 1.0f;
     g.filter.frequency = 0.7f;
     for (int c = 0; c < 4; ++c)
     {
@@ -214,7 +222,7 @@ HeapCount engineAllocations (EngineRig& rig, const std::vector<int>& calls)
         rig.controls.channel (c).filterOn = 1.0f;
     }
 
-    // Per eighth of the run: ch1..ch4 source, return source, gate open, filter kind, filter mode.
+    // Per eighth of the run: ch1..ch4 source, return cue, gate open, filter kind, filter mode.
     const int plan[8][8] { { 0, 1, 2, 0, 0, 0, 0, 1 }, { 1, 0, 2, 0, 1, 1, 0, 1 }, { 2, 0, 1, 2, 2, 1, 1, 1 },
                            { 0, 2, 1, 2, 0, 1, 1, 0 }, { 1, 2, 0, 1, 1, 0, 0, 0 }, { 2, 1, 0, 1, 2, 1, 1, 1 },
                            { 0, 1, 2, 0, 0, 1, 0, 0 }, { 1, 0, 0, 2, 1, 1, 1, 1 } };
@@ -227,7 +235,8 @@ HeapCount engineAllocations (EngineRig& rig, const std::vector<int>& calls)
         const auto& step = plan[start * 8 / rig.frames];
         for (int c = 0; c < 4; ++c)
             rig.controls.channel (c).source = step[c];
-        g.returnSource = step[4];
+        g.returnCue = step[4] == 1 ? 1.0f : 0.0f;
+        g.auxReturn = step[4] == 2 ? 0.0f : 0.75f;
         g.gateOpen = step[5] != 0;
         g.filter.kind = step[6];
         g.filter.mode = step[7];
@@ -258,7 +267,7 @@ HeapCount engineAllocations (EngineRig& rig, const std::vector<int>& calls)
 TEST (EngineAllocation, ProcessAddsNoAllocationBeyondIemsOwn)
 {
     const std::vector<int> calls { quantum, 1, 7, 333, 2048, 64, 128, 65 };
-    EngineRig rig (engineConfig (4, 2), 3 * 44100, quantum, engineRate, false);
+    EngineRig rig (allocationConfig(), 3 * 44100, quantum, engineRate, false);
     const auto engine = engineAllocations (rig, calls);
     const auto upstream = upstreamAllocations (rig.spatial, quantum, calls, rig.frames);
     EXPECT_EQ (engine.allocated, upstream.allocated);
@@ -271,10 +280,47 @@ TEST (EngineAllocation, ProcessAddsNoAllocationBeyondIemsOwn)
 TEST (EngineAllocation, AtTheQuantumOnlyIemSimpleDecoderAllocates)
 {
     const std::vector<int> calls { quantum };
-    EngineRig rig (engineConfig (4, 2), 344 * quantum, quantum, engineRate, false);
+    EngineRig rig (allocationConfig(), 344 * quantum, quantum, engineRate, false);
     const auto engine = engineAllocations (rig, calls);
     EXPECT_EQ (engine.allocated, 2 * 344);
     EXPECT_EQ (engine.released, 2 * 344);
     const auto upstream = upstreamAllocations (rig.spatial, quantum, calls, rig.frames);
     EXPECT_EQ (engine.allocated, upstream.allocated);
+}
+
+// Four deck channels, each running its aux strip into the delay (only the aux buses carry
+// signal, so a send seen proves the aux path ran): the engine adds nothing to IEM's own.
+TEST (EngineAllocation, DeckAuxStripsDoNotAllocate)
+{
+    constexpr int blocks = 100;
+    EngineRig rig (engineConfig (4, 4), blocks * quantum, quantum, engineRate, false);
+    for (size_t d = 0; d < rig.decks.size(); ++d)
+        for (int ch = 0; ch < deckChannels; ++ch)
+            rig.decks[d].aux[(size_t) ch] = noise (rig.frames, 0.1f, 700 + 20 * (uint32_t) d + (uint32_t) ch).l;
+    for (int c = 0; c < 4; ++c)
+    {
+        rig.neutralStrip (c);
+        rig.controls.channel (c).source = c + 1;
+        rig.controls.channel (c).auxSend = 0.8f;
+        rig.controls.channel (c).filterOn = 1.0f;
+    }
+    rig.controls.global().filter.frequency = 0.7f;
+
+    HeapCount total;
+    float fxSeen = 0.0f;
+    for (size_t start = 0; start < rig.frames; start += quantum)
+    {
+        const auto in = rig.inputsAt (start);
+        const auto out = rig.outputsAt (start);
+        const auto count = countHeapDuring ([&] { rig.engine->process (in, out, quantum, rig.controls); });
+        total.allocated += count.allocated;
+        total.released += count.released;
+        fxSeen = std::max (fxSeen, rig.engine->lastFxSendPeak());
+    }
+    EXPECT_GT (fxSeen, 1e-3f);
+    const auto upstream = upstreamAllocations (rig.spatial, quantum, { quantum }, rig.frames);
+    EXPECT_EQ (total.allocated, upstream.allocated);
+    EXPECT_EQ (total.released, upstream.released);
+    std::printf ("[ recorded ] DeckAuxStripsDoNotAllocate: %d allocations, %d releases in %d blocks (IEM's own: %d)\n",
+                 total.allocated, total.released, blocks, upstream.allocated);
 }
