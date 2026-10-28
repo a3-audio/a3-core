@@ -300,8 +300,10 @@ TEST (CoreValues, AReportOfTheWrongTypeChangesNothing)
     EXPECT_EQ (rig.sends(), 0u);
     EXPECT_EQ (rig.unknownCount ("/stemdeck/1/2/buses"), 8);
     EXPECT_EQ (rig.unknownCount ("/stemdeck/3/1/buses"), 1);
+    // A 64-bit int is an int: taken, not unknown, and the first announcement after it follows.
     rig.osc (rig.deckA, "/stemdeck/1/2/buses", { OscArg { 'h', int64_t { 16 } } });
-    EXPECT_GT (rig.sends(), 0u);
+    EXPECT_EQ (rig.unknownCount ("/stemdeck/1/2/buses"), 8);
+    EXPECT_TRUE (has (rig.to ("mixer"), "/channel/2/stem i:0"));
 }
 
 TEST (CoreValues, AReturningStemdeckIsAskedForEverything)

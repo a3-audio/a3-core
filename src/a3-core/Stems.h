@@ -77,8 +77,9 @@ public:
     // Decide every undecided channel from the buses as they are now; a decided source is never touched.
     void adoptSources();
 
+    // `index` is a channel, 0-3: the FX Return has no ring (P47).
     void turn (int index, int steps);
-    // The commands to StemDeck a push on place `index` means.
+    // The commands to StemDeck a push on channel `index` means.
     std::vector<Command> push (int index, bool connected = true);
     // The commands that make the mirror obey the rules, applied at once. A second call returns none.
     std::vector<Command> tidy();

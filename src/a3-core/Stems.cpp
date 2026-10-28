@@ -122,8 +122,6 @@ void Stems::adoptSources()
 
 void Stems::turn (int index, int steps)
 {
-    if (index == returnIndex)
-        return;   // P47: the FX Return has no ring
     const auto positions = ring (index);
     auto& cursor = cursors[static_cast<size_t> (index)];
     const auto place = contains (positions, cursor) ? indexIn (positions, cursor) : indexIn (positions, analogInput);
@@ -132,8 +130,6 @@ void Stems::turn (int index, int steps)
 
 std::vector<Command> Stems::push (int index, bool connected)
 {
-    if (index == returnIndex)
-        return {};   // P47: the FX Return's push is its cue, which is Core's, not the mirror's
     const auto cursor = cursors[static_cast<size_t> (index)];
     if (! contains (ring (index), cursor))
         return {};

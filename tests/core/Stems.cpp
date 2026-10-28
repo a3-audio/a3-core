@@ -449,19 +449,6 @@ TEST (Stems, TheRulesHoldAndAnOffStemStaysOff)
     }
 }
 
-// P47: the FX Return has no ring, no mode and no cursor; a turn or push on it changes and commands nothing.
-TEST (Stems, TheReturnHasNoRing)
-{
-    auto s = stemsWith ({ { 1, bit (1) }, { 2, bit (aux) } });
-    const auto masks = s.masks;
-    const auto cursors = s.cursors;
-    s.turn (returnIndex, +1);
-    EXPECT_EQ (s.push (returnIndex), Commands());
-    EXPECT_EQ (s.push (returnIndex, false), Commands());
-    EXPECT_EQ (s.masks, masks);
-    EXPECT_EQ (s.cursors, cursors);
-}
-
 TEST (Stems, APutsNothingOnAux)
 {
     // Until 2026-10-14 A released the stem onto AUX.
