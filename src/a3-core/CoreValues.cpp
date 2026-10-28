@@ -168,9 +168,12 @@ void Core::channelHandler (const Endpoint& from, const OscMessage& message)
     const auto parameter = key.substr (std::string ("channel.").size());
     if (takeDeckWord (parameter, channel, value))
     {
+        followDeckTempo();   // a deck put on or taken off a channel
         rememberState();
         return;
     }
+    if (parameter == "volume")
+        followDeckTempo();
 
     if (parameter == "3d")
         keepThreeD (index, value);
@@ -294,8 +297,8 @@ void Core::stemdeckHandler (const Endpoint& from, const OscMessage& message)
     if (! found)
         return;
     const auto& [key, fields] = *found;
-    if (key == "stemdeck.pointer" || key == "stemdeck.deck-hello")
-        return;   // osc_handler_pointer's / _deck_hello's, mapped beside this family
+    if (key == "stemdeck.pointer" || key == "stemdeck.deck-hello" || key == "stemdeck.tempo")
+        return;   // osc_handler_pointer's / _deck_hello's / deckTempo's, mapped beside this family
     const auto* value = firstOrNone (message);
     const auto origin = peerName (from.host, peerHosts);
     seen (message, value, origin);

@@ -33,7 +33,7 @@
 #include "Recall.h"
 #include "SeenFile.h"
 #include "SendFailures.h"
-#include "Tempo.h"
+#include "TempoSource.h"
 #include "StartupRecall.h"
 #include "StateFile.h"
 #include "Stems.h"
@@ -132,6 +132,7 @@ private:
     void announceLive();
     std::vector<Client> deckListeners() const;
     void noticeDeckPresence (double now);
+    void lookAtTheTempo (double now);
     void flushIfDue (StateFile& file, const juce::File& path, double now);
     void tellWritten (int before, int after, const juce::File& path);
 
@@ -153,10 +154,14 @@ private:
     void engineDeckAudio (const Endpoint& from, const OscMessage& message);
     void recall (const Endpoint& from, const OscMessage& message);
     void beatHandler (const Endpoint& from, const OscMessage& message);
+    void deckTempo (const Endpoint& from, const OscMessage& message);
     void prodjLiveHandler (const Endpoint& from, const OscMessage& message);
     void pointerHandler (const Endpoint& from, const OscMessage& message);
     void forwardAhead (const OscMessage& message, const std::string& origin);
     std::vector<Endpoint> vuDestinations() const;
+    void followDeckTempo();
+    std::optional<double> faderOfDeck (int deck) const;
+    void sendTempo (double bpm);
 
     using Found = std::pair<std::string, std::map<std::string, int>>;   // a truth key and its fields
     std::optional<Found> knownAddress (const Endpoint& from, const OscMessage& message);
@@ -226,7 +231,8 @@ private:
     double decksLookedAt = 0.0;
     std::optional<EngineSession> project;
     std::map<std::string, OscArg> sourcesSentToEngine;
-    TempoFollower tempo;
+    TempoSource tempo;
+    double tempoLookedAt = 0.0;
     std::optional<double> engineBpm;
     // A NaN was just put into the state (B1: a new float object, so the state differs from the last).
     bool nanArrived = false;

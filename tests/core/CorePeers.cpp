@@ -1209,3 +1209,106 @@ TEST (CorePeers, ThePackagesTruthMapsTheEngineDeckAudioWord)
     rig.osc (rig.engine, "/engine/deck/1/audio", { pyInt (0) });
     EXPECT_EQ (startingWith (rig.to ("motion"), "/stemdeck/1/present"), (std::vector<std::string> { "/stemdeck/1/present i:0" }));
 }
+
+//==============================================================================
+// The delay's tempo from the decks (Ruling A4), on the package's truth: B0's has no stemdeck.tempo.
+
+namespace
+{
+const Truth& packageTruth()
+{
+    static const auto truth = std::get<Truth> (Truth::load (juce::File (A3_PACKAGE_TRUTH), std::nullopt));
+    return truth;
+}
+
+CoreRig::Options onThePackagesTruth()
+{
+    CoreRig::Options options;
+    options.truth = &packageTruth();
+    return options;
+}
+
+std::vector<std::string> temposSent (const CoreRig& rig) { return startingWith (rig.to ("engine"), "/delay/bpm"); }
+
+void deckTempo (CoreRig& rig, const Endpoint& from, int deck, double bpm, int playing, int master)
+{
+    rig.osc (from, "/stemdeck/" + std::to_string (deck) + "/tempo", { pyFloat (bpm), pyInt (playing), pyInt (master) });
+}
+}
+
+TEST (CorePeers, ADeckTempoReachesTheEngineWithoutABeatClock)
+{
+    CoreRig rig (CoreRig::WithOptions {}, onThePackagesTruth());
+    rig.engineHello ("boot-1");
+    rig.clear();
+    deckTempo (rig, rig.deckA, 1, 126.0, 1, 1);
+    EXPECT_EQ (temposSent (rig), (std::vector<std::string> { "/delay/bpm f:126" }));
+    EXPECT_TRUE (rig.seenIn ("/stemdeck/1/tempo"));
+    EXPECT_EQ (rig.unknownRows(), 0u);
+}
+
+TEST (CorePeers, AOneDeckInstanceOnADeckHostReportsToo)
+{
+    CoreRig rig (CoreRig::WithOptions {}, onThePackagesTruth());
+    rig.engineHello ("boot-1");
+    rig.clear();
+    deckTempo (rig, { "192.168.8.31", 6003 }, 4, 124.0, 1, 0);
+    EXPECT_EQ (temposSent (rig), (std::vector<std::string> { "/delay/bpm f:124" }));
+}
+
+TEST (CorePeers, TheDeckOnTheLoudestChannelSetsTheTempo)
+{
+    CoreRig rig (CoreRig::WithOptions {}, onThePackagesTruth());
+    rig.engineHello ("boot-1");
+    putDeckOnChannel (rig, 1, 1);
+    putDeckOnChannel (rig, 2, 2);
+    rig.osc (rig.desk, "/channel/1/volume", { pyFloat (0.9) });
+    rig.osc (rig.desk, "/channel/2/volume", { pyFloat (0.4) });
+    rig.clear();
+    deckTempo (rig, rig.deckA, 1, 130.0, 1, 0);
+    deckTempo (rig, deckB, 2, 126.0, 1, 0);
+    rig.osc (rig.desk, "/channel/2/volume", { pyFloat (1.0) });   // a fader alone moves the choice
+    EXPECT_EQ (temposSent (rig), (std::vector<std::string> { "/delay/bpm f:130", "/delay/bpm f:126" }));
+}
+
+TEST (CorePeers, AStoppedBeatClockHandsOverToTheDecksOnATick)
+{
+    CoreRig rig (CoreRig::WithOptions {}, onThePackagesTruth());
+    rig.at (10.0);
+    rig.engineHello ("boot-1");
+    rig.clear();
+    for (const double at : { 10.0, 10.5, 11.0, 11.5 })
+    {
+        rig.at (at);
+        rig.beat ({ pyInt (1), pyInt (1), pyFloat (120.0) });
+    }
+    rig.at (12.0);
+    deckTempo (rig, rig.deckA, 1, 126.0, 1, 1);   // the beat clock still runs
+    rig.at (14.5);
+    rig.tick();
+    EXPECT_EQ (temposSent (rig), (std::vector<std::string> { "/delay/bpm f:120" }));
+    rig.at (15.5);
+    rig.tick();   // no message arrived: the tick alone hands over
+    EXPECT_EQ (temposSent (rig), (std::vector<std::string> { "/delay/bpm f:120", "/delay/bpm f:126" }));
+}
+
+TEST (CorePeers, TheEnginesHelloGetsTheDecksTempoAgain)
+{
+    CoreRig rig (CoreRig::WithOptions {}, onThePackagesTruth());
+    rig.engineHello ("boot-1");
+    deckTempo (rig, rig.deckA, 1, 126.0, 1, 1);
+    rig.clear();
+    rig.engineHello ("boot-2");
+    EXPECT_EQ (temposSent (rig), (std::vector<std::string> { "/delay/bpm f:126" }));
+}
+
+TEST (CorePeers, AMalformedDeckTempoIsShownAsUnknownAndMovesNothing)
+{
+    CoreRig rig (CoreRig::WithOptions {}, onThePackagesTruth());
+    rig.engineHello ("boot-1");
+    rig.clear();
+    rig.osc (rig.deckA, "/stemdeck/1/tempo", { pyStr ("fast"), pyInt (1), pyInt (1) });
+    rig.osc (rig.deckA, "/stemdeck/1/tempo", { pyFloat (126.0), pyInt (1) });
+    EXPECT_TRUE (temposSent (rig).empty());
+    EXPECT_EQ (rig.unknownCount ("/stemdeck/1/tempo"), 2);
+}

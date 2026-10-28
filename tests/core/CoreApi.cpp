@@ -1430,3 +1430,17 @@ TEST (CoreApi, ThePackagesTruthGivesFourDecks)
                                            "/channel/1/source/cursor i:3", "/channel/1/source/cursor i:4",
                                            "/channel/1/source/cursor i:0" }));
 }
+
+// Where the delay's tempo comes from, as the last look chose it (Ruling A4).
+TEST (CoreApi, RigNamesWhereTheDelaysTempoComesFrom)
+{
+    const auto truth = std::get<Truth> (Truth::load (juce::File (A3_PACKAGE_TRUTH), std::nullopt));
+    CoreRig::Options options;
+    options.truth = &truth;
+    CoreRig rig (CoreRig::WithOptions {}, options);
+    rig.core->publishView();
+    EXPECT_EQ (property (parsedRig (rig), "tempo_source").toString(), "held");
+    rig.osc ({ "127.0.0.3", 6001 }, "/stemdeck/2/tempo", { pyFloat (126.0), pyInt (1), pyInt (1) });
+    rig.core->publishView();
+    EXPECT_EQ (property (parsedRig (rig), "tempo_source").toString(), "master deck 2");
+}

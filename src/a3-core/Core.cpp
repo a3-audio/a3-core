@@ -127,6 +127,7 @@ void Core::tick()
     noticeMotionSilence (env.clock.monotonic());
     noticeDeskSilence (env.clock.monotonic());
     noticeDeckPresence (env.clock.monotonic());
+    lookAtTheTempo (env.clock.monotonic());
     if (prodjLive.due (env.clock.monotonic()))
         announceLive();
 
@@ -297,6 +298,16 @@ void Core::reportDecks (bool full)
 //==============================================================================
 // The tick's watchers.
 
+// Once a second: a beat clock that stopped hands over to the decks with no message arriving.
+void Core::lookAtTheTempo (double now)
+{
+    constexpr double everySeconds = 1.0;
+    if (now - tempoLookedAt < everySeconds)
+        return;
+    tempoLookedAt = now;
+    followDeckTempo();
+}
+
 void Core::noticeDeckPresence (double now)
 {
     constexpr double everySeconds = 1.0;   // DECK_PRESENCE_EVERY_SECONDS
@@ -344,6 +355,13 @@ void Core::mapHandlers()
     if (truth.hasAddress ("engine.deck-audio"))
         for (int deck = firstDeck; deck <= lastDeck; ++deck)
             dispatcher.map (truth.address ("engine.deck-audio", { { "deck", deck } }), to (&Core::engineDeckAudio));
+    // Nor did it know the decks' tempo; without the word the delay follows the beat clock alone.
+    if (truth.hasAddress ("stemdeck.tempo"))
+    {
+        const auto [firstReporting, lastReporting] = truth.indexRange ("stemdeck.tempo", "deck");
+        for (int deck = firstReporting; deck <= lastReporting; ++deck)
+            dispatcher.map (truth.address ("stemdeck.tempo", { { "deck", deck } }), to (&Core::deckTempo));
+    }
     dispatcher.map (truth.address ("prodj.live"), to (&Core::prodjLiveHandler));
     for (const auto* pointer : { "stemdeck.pointer", "motion.pointer" })
         dispatcher.map (truth.address (pointer), to (&Core::pointerHandler));
