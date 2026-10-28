@@ -531,7 +531,7 @@ TEST (FxReturn, IsTheDelayBusScaledByReturn)
 }
 
 // An analog channel's send is encoded at the channel's position before the delay (B-format):
-// the same echo from another azimuth lands on other speakers, at the same total level.
+// the same echo from another azimuth lands on other speakers.
 TEST (FxReturn, AnAnalogSendReachesTheDelayInBFormat)
 {
     const size_t frames = oneSecond;
@@ -786,8 +786,8 @@ TEST (Engine, DelayModulationIsNotOnTheAudioPath)
 
 // The rig's quantum is 128; any call size gives the same output once the decoders have
 // settled. Aux stays 0: IEM's DualDelay depends on the call size itself (see above).
-// The bound is float rounding in the zone decoders (main/booth, peaks ~0.1): up to 1.8e-6 since the
-// analog return's noise left this run with P45, below 1e-6 while it played.
+// The bound is float rounding in the zone decoders, relative to the level: 1.8e-6 at peaks ~0.11
+// (1.6e-5 of the peak) once the analog return's noise left this run with P45.
 TEST (Engine, AnyCallSizeMatchesTheQuantum)
 {
     constexpr int quantum = 128;
@@ -805,10 +805,11 @@ TEST (Engine, AnyCallSizeMatchesTheQuantum)
         return rig;
     };
     const auto reference = run ({ quantum });
+    const double bound = 5e-5 * peak (reference->everyOutput(), oneSecond);
     EXPECT_GT (peak (reference->mainOutputs(), oneSecond), 1e-3);
     EXPECT_GT (peak (stereo (reference->phones), oneSecond), 1e-3);
     for (const auto& calls : std::vector<std::vector<int>> { { 64 }, { 1024 }, { 333 }, { 64, 128, 1024, 333 } })
-        EXPECT_LT (maxDifference (run (calls)->everyOutput(), reference->everyOutput(), oneSecond), 2e-6)
+        EXPECT_LT (maxDifference (run (calls)->everyOutput(), reference->everyOutput(), oneSecond), bound)
             << "first call " << calls.front() << ", " << calls.size() << " sizes";
 }
 
