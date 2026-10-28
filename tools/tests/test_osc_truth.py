@@ -656,6 +656,13 @@ class TheDeckStreams(unittest.TestCase):
                          ("engine.deck-audio", {"deck": 2}))
         self.assertIsNone(self.truth.match("/engine/deck/5/audio"))
 
+    def test_present_means_hello_and_audio(self):
+        """Since C2c (R11) Core says 0 while the engine reports the deck's audio
+        missing, not only when its hello is stale."""
+        meaning = self.truth.addresses()["stemdeck.present"]["meaning"]
+        self.assertIn("hello is fresh", meaning)
+        self.assertIn("engine.deck-audio", meaning)
+
     def test_return_source_means_analog_or_delay(self):
         words = self.truth.addresses()
         source = words["aux-return.source"]["meaning"]
