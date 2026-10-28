@@ -1407,3 +1407,17 @@ TEST (CoreApi, TheBenchSendsMixerAndMotionAsCoreSends)
     EXPECT_THROW (rig.core->sendFromBench ("reaper", { "/x", {} }), std::invalid_argument);
     EXPECT_THROW (rig.core->sendFromBench ("self", { "/x", {} }), std::invalid_argument);
 }
+
+// Core's deck selector counts the package truth's deck range (stemdeck.deck-hello): four decks, A-D.
+TEST (CoreApi, ThePackagesTruthGivesFourDecks)
+{
+    const auto truth = std::get<Truth> (Truth::load (juce::File (A3_PACKAGE_TRUTH), std::nullopt));
+    CoreRig::Options options;
+    options.truth = &truth;
+    CoreRig rig (CoreRig::WithOptions {}, options);
+    rig.core->publishView();
+    const auto decks = rowsOf (property (parsedRig (rig), "decks"));
+    ASSERT_EQ (decks.size(), 4u);
+    for (int deck = 1; deck <= 4; ++deck)
+        EXPECT_EQ (static_cast<int> (decks[(size_t) deck - 1]["deck"]), deck);
+}
