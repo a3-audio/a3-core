@@ -115,6 +115,21 @@ void Core::deckHello (const Endpoint& from, const OscMessage& message)
     reportDecks (false);
 }
 
+// osc_handler_engine_deck_audio: the engine's word on whether it hears a deck's audio, with each hello and on
+// change. A deck the engine does not hear is not present, however fresh its own hello (R11).
+void Core::engineDeckAudio (const Endpoint& from, const OscMessage& message)
+{
+    const auto found = knownAddress (from, message);
+    if (! found)
+        return;
+    seen (message, firstOrNone (message), peerName (from.host, peerHosts));
+    const auto linked = message.args.empty() ? std::nullopt : pythonFloat (message.args[0]);
+    if (! linked)
+        return;
+    decks.heardAudio (found->second.at ("deck"), *linked != 0.0, env.clock.monotonic());
+    reportDecks (false);
+}
+
 //==============================================================================
 // StemDeck.
 

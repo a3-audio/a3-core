@@ -11,7 +11,6 @@ namespace
 constexpr int allBuses = (1 << Stems::aux) - 1;
 // The width a report may have: a StemDeck from before 2026-10-07 still had a sixth bus, its CUE.
 constexpr int reportBuses = (1 << (Stems::aux + 1)) - 1;
-constexpr std::array<int, 3> returnRing { Stems::stemMode, Stems::analogMode, Stems::cueField };
 
 int bitOf (int bus) { return 1 << (bus - 1); }
 
@@ -72,16 +71,6 @@ std::optional<std::array<int, Stems::channels>> cursorsOf (const juce::var& data
     }
     return cursors;
 }
-
-// The value of data[name] if it is a whole number and one of `allowed`.
-template <typename Range>
-std::optional<int> allowedWhole (const juce::var& data, const char* name, const Range& allowed)
-{
-    const auto whole = wholeNumber (data[juce::Identifier (name)]);
-    if (whole && contains (allowed, *whole))
-        return whole;
-    return std::nullopt;
-}
 }
 
 std::array<int, 3> ring (int index) { return { index, Stems::stemsPerDeck + index, Stems::analogInput }; }
@@ -133,12 +122,6 @@ void Stems::adoptSources()
 
 void Stems::turn (int index, int steps)
 {
-    if (index == returnIndex)
-    {
-        const auto place = indexIn (returnRing, returnCursor);
-        returnCursor = returnRing[static_cast<size_t> (wrapped (place + steps, static_cast<int> (returnRing.size())))];
-        return;
-    }
     const auto positions = ring (index);
     auto& cursor = cursors[static_cast<size_t> (index)];
     const auto place = contains (positions, cursor) ? indexIn (positions, cursor) : indexIn (positions, analogInput);
@@ -147,13 +130,6 @@ void Stems::turn (int index, int steps)
 
 std::vector<Command> Stems::push (int index, bool connected)
 {
-    if (index == returnIndex)
-    {
-        if (returnCursor == cueField)
-            return {};
-        returnMode = returnCursor;
-        return connected ? tidy() : std::vector<Command> {};
-    }
     const auto cursor = cursors[static_cast<size_t> (index)];
     if (! contains (ring (index), cursor))
         return {};
@@ -281,8 +257,6 @@ juce::var Stems::asData() const
     auto* object = new juce::DynamicObject();
     object->setProperty ("cursors", juce::var (cursorList));
     object->setProperty ("sources", juce::var (sourceList));
-    object->setProperty ("return_cursor", returnCursor);
-    object->setProperty ("return_mode", returnMode);
     return juce::var (object);
 }
 
@@ -299,10 +273,6 @@ Stems Stems::fromData (const juce::var& data)
         }
     if (auto sources = sourcesOf (data["sources"]))
         s.sources = *sources;
-    if (auto cursor = allowedWhole (data, "return_cursor", returnRing))
-        s.returnCursor = *cursor;
-    if (auto mode = allowedWhole (data, "return_mode", std::array<int, 2> { analogMode, stemMode }))
-        s.returnMode = *mode;
     return s;
 }
 }

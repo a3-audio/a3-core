@@ -25,6 +25,13 @@ inline const a3core::Truth& truth()
     return loaded;
 }
 
+// B0 predates the engine.deck-audio word, so Core says so at start; the suites that pin B0's journal
+// ignore that line (CorePeers tests it).
+inline bool isTheMissingDeckAudioNote (const std::string& line)
+{
+    return line.rfind ("the truth has no engine.deck-audio word", 0) == 0;
+}
+
 inline std::vector<std::string> strings (const juce::var& list)
 {
     std::vector<std::string> out;

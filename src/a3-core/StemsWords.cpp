@@ -21,11 +21,6 @@ std::vector<OscMessage> announcements (const Stems& stems, const Truth& truth)
         out.push_back ({ truth.address ("channel.stem", { { "ch", c + 1 } }), { pyInt (plays) } });
         out.push_back ({ truth.address ("channel.stem.cursor", { { "ch", c + 1 } }), { pyInt (stems.cursors[static_cast<size_t> (c)]) } });
     }
-    std::vector<OscArg> onReturn { pyInt (stems.returnCursor) };
-    for (int pair = 1; pair <= Stems::pairs; ++pair)
-        onReturn.push_back (pyInt (stems.playsOnReturn (pair) ? 1 : 0));
-    out.push_back ({ truth.address ("aux-return.stem"), onReturn });
-    out.push_back ({ truth.address ("aux-return.stem.mode"), { pyInt (stems.returnMode) } });
     return out;
 }
 

@@ -191,7 +191,13 @@ class TheVocabulary(unittest.TestCase):
         self.assertEqual(len(meters), 66)
         self.assertEqual(meters[0], "analog1_L")
         self.assertEqual(meters[10], "main_sub")
-        self.assertEqual(meters[39], "free70")
+        self.assertEqual(meters[39], "deck_d")
+
+    def test_each_deck_has_its_meter_on_37_to_40(self):
+        # A one-deck StemDeck sends no stem meters: the engine meters every
+        # deck slot's W, for the desk's deck bars (2026-10-28).
+        meters = truth().vu_meters()
+        self.assertEqual(meters[36:40], ["deck_a", "deck_b", "deck_c", "deck_d"])
 
     def test_every_address_names_known_programs(self):
         t = truth()
@@ -374,30 +380,24 @@ class TheStemWords(unittest.TestCase):
 
     def test_the_desk_turns_and_pushes(self):
         self.assertEqual(self.t.address("channel.stem.turn", ch=2), "/channel/2/stem/turn")
-        self.assertEqual(self.t.address("aux-return.stem.turn"), "/aux-return/stem/turn")
         self.assertEqual(self.t.address("aux-return.stem.push"), "/aux-return/stem/push")
 
     def test_core_says_what_is_where(self):
         self.assertEqual(self.t.address("channel.stem", ch=4), "/channel/4/stem")
-        self.assertEqual(self.t.address("aux-return.stem"), "/aux-return/stem")
 
     def test_who_speaks_and_who_hears(self):
         a = self.t.addresses()
-        for key in ("channel.stem.turn", "aux-return.stem.turn", "aux-return.stem.push"):
+        for key in ("channel.stem.turn", "aux-return.stem.push"):
             self.assertEqual((a[key]["from"], a[key]["to"]), (["mixer", "desk", "prodj"], ["core"]), key)
-        for key in ("channel.stem", "aux-return.stem"):
-            self.assertEqual((a[key]["from"], a[key]["to"]), (["core"], ["mixer", "desk", "motion"]), key)
-
-    def test_the_return_carries_its_cursor_and_all_eight_pairs(self):
-        self.assertEqual(self.t.addresses()["aux-return.stem"]["args"], "i" * 9)
+        self.assertEqual((a["channel.stem"]["from"], a["channel.stem"]["to"]), (["core"], ["mixer", "desk", "motion"]))
 
     def test_a_turn_is_matched_back(self):
         self.assertEqual(self.t.match("/channel/3/stem/turn"), ("channel.stem.turn", {"ch": 3}))
 
 
 class TheReturnCue(unittest.TestCase):
-    """The aux return's own cue (spec return-cue, 2026-10-04): a third field
-    on its cursor, and a lamp Core announces."""
+    """The FX Return's own cue (spec return-cue, 2026-10-04; P47: its encoder's
+    push, no cursor), and a lamp Core announces."""
 
     def setUp(self):
         self.t = truth()
@@ -410,9 +410,6 @@ class TheReturnCue(unittest.TestCase):
         entry = self.t.addresses()["aux-return.cue.led"]
         self.assertEqual((entry["args"], entry["from"], entry["to"]),
                          ("f", ["core"], ["mixer", "desk", "motion"]))
-
-    def test_the_cursor_names_its_third_field(self):
-        self.assertIn("2 = cue", self.t.addresses()["aux-return.stem"]["meaning"])
 
 
 if __name__ == "__main__":
@@ -480,7 +477,6 @@ class TheEngineSpeaks(unittest.TestCase):
 
     ENGINE_WORDS = {
         "channel.source": ("/channel/{ch}/source", "i", ["core"], ["engine", "mixer", "desk", "motion"]),
-        "aux-return.source": ("/aux-return/source", "i", ["core"], ["engine"]),
         "aux-return.cue": ("/aux-return/cue", "i", ["core"], ["engine"]),
         "delay.bpm": ("/delay/bpm", "f", ["core"], ["engine"]),
         "engine.open": ("/engine/open", "i", ["core"], ["engine"]),
@@ -509,7 +505,7 @@ class TheEngineSpeaks(unittest.TestCase):
 
     def test_the_engine_lists_what_core_sends_it(self):
         carries = self.truth.listener("engine", "osc")["carries"]
-        for word in ("source", "aux-return.source/cue", "delay.bpm", "engine.open",
+        for word in ("source", "aux-return.cue", "delay.bpm", "engine.open",
                      "master.*"):
             with self.subTest(word=word):
                 self.assertIn(word, carries)
@@ -554,7 +550,7 @@ class TheEngineSpeaks(unittest.TestCase):
 
     def test_engine_mode_words_say_deck_four_is_D_and_reaper_words_keep_two(self):
         words = self.truth.addresses()
-        for key in ("channel.source", "channel.source.cursor", "aux-return.source"):
+        for key in ("channel.source", "channel.source.cursor"):
             with self.subTest(key=key):
                 self.assertIn("4 = D", words[key]["meaning"])
         for key in ("stemdeck.bus", "stemdeck.buses"):
@@ -612,6 +608,84 @@ class TheInstalledTruthIsJoined(unittest.TestCase):
             joined = a3_osc.load(TRUTH)
         self.assertNotEqual(joined.fingerprint(), a3_osc.load(TRUTH).fingerprint())
         self.assertEqual(json.loads(joined.canonical())["hosts"]["mixer"], "10.9.9.9")
+
+
+class TheDeckStreams(unittest.TestCase):
+    """Deck B over AES67 (2026-10-27): each StemDeck host sends its deck's 41
+    channels as one stream; the engine tells Core whether its links are live."""
+
+    def setUp(self):
+        self.truth = a3_osc.load(TRUTH)
+
+    def test_deck_groups_are_in_the_aes67_range(self):
+        # 239.69.x.x is the AES67 range the Core's own group already sits in.
+        core = self.truth.host("aes67-core")
+        for name, group in (("aes67-deck-a", "239.69.150.244"),
+                            ("aes67-deck-b", "239.69.150.245")):
+            with self.subTest(name=name):
+                self.assertEqual(self.truth.host(name), group)
+                self.assertTrue(group.startswith("239.69."))
+        hosts = [self.truth.host(n) for n in ("aes67-core", "aes67-deck-a", "aes67-deck-b")]
+        self.assertEqual(len(set(hosts)), 3, core)
+
+    def test_deck_stream_listener_names_41_channels(self):
+        listener = self.truth.listener("aes67", "deck")
+        self.assertEqual((listener["name"], listener["host"], listener["port"]),
+                         ("aes67.deck", "aes67-deck-{deck}", 5004))
+        carries = listener["carries"]
+        for word in ("41 channels", "MAIN1-16", "AUX1-16", "CUE1-9", "L24",
+                     "44.1 kHz", "ptime 0.25 ms", 'sess.name "AES67 deck <X>"',
+                     "net.mtu = 1500"):
+            with self.subTest(word=word):
+                self.assertIn(word, carries)
+        for letter in "ab":
+            self.assertIn(f"aes67-deck-{letter}", self.truth._data["hosts"])
+
+    def test_engine_deck_audio_is_engine_to_core(self):
+        entry = self.truth.addresses()["engine.deck-audio"]
+        self.assertEqual((entry["pattern"], entry["args"], entry["deck"],
+                          entry["from"], entry["to"]),
+                         ("/engine/deck/{deck}/audio", "i", [1, 4], ["engine"], ["core"]))
+        self.assertEqual(self.truth.address("engine.deck-audio", deck=3),
+                         "/engine/deck/3/audio")
+        self.assertEqual(self.truth.match("/engine/deck/2/audio"),
+                         ("engine.deck-audio", {"deck": 2}))
+        self.assertIsNone(self.truth.match("/engine/deck/5/audio"))
+
+    def test_present_means_hello_and_audio(self):
+        """Since C2c (R11) Core says 0 while the engine reports the deck's audio
+        missing, not only when its hello is stale."""
+        meaning = self.truth.addresses()["stemdeck.present"]["meaning"]
+        self.assertIn("hello is fresh", meaning)
+        self.assertIn("engine.deck-audio", meaning)
+
+    def test_the_fx_return_has_no_source(self):
+        """P45/P47: the FX Return is the delay channel's master; no source,
+        no mode, no cursor -- only its level, its meter and its cue."""
+        words = self.truth.addresses()
+        for gone in ("aux-return.source", "aux-return.stem.mode",
+                     "aux-return.stem", "aux-return.stem.turn"):
+            with self.subTest(key=gone):
+                self.assertNotIn(gone, words)
+        engine = next(l for l in self.truth._data["listeners"] if l["name"] == "engine.osc")
+        self.assertIn("aux-return.cue,", engine["carries"])
+        self.assertNotIn("source/cue", engine["carries"])
+
+    def test_the_fx_return_push_toggles_its_cue(self):
+        entry = self.truth.addresses()["aux-return.stem.push"]
+        self.assertEqual((entry["from"], entry["to"]), (["mixer", "desk", "prodj"], ["core"]))
+        self.assertIn("toggles the FX Return's cue", entry["meaning"])
+        self.assertNotIn("cursor", entry["meaning"])
+
+    def test_the_fx_return_is_the_delays_master(self):
+        words = self.truth.addresses()
+        self.assertIn("master of the delay channel", words["master.aux-return"]["meaning"])
+        self.assertIn("before RETURN", words["aux-return.cue"]["meaning"])
+
+    def test_the_aux_meters_are_the_fx_return(self):
+        meaning = self.truth.addresses()["vu"]["meaning"]
+        self.assertIn("35-36 aux_L, aux_R the FX Return", meaning)
+        self.assertNotIn("returnAnalogPair", meaning)
 
 
 B1_TRUTH = Path("/home/aaa/a3-system/wt/parity-baseline/a3-core-7a7b2441f74e") / \
@@ -675,5 +749,10 @@ class TheMetersComeFromTheEngine(unittest.TestCase):
                          ("/vu/{n}", "ff", [1, 66]))
         self.assertEqual(len(self.truth.vu_meters()), 66)
         if B1_TRUTH.exists():
-            self.assertEqual(self.truth.vu_meters(), a3_osc.load(B1_TRUTH).vu_meters())
+            # Every meter B1 had keeps its number; a new one only takes a
+            # number B1 left free (37-40: the decks, 2026-10-28).
+            before = a3_osc.load(B1_TRUTH).vu_meters()
+            for number, (now, then) in enumerate(zip(self.truth.vu_meters(), before), 1):
+                if not then.startswith("free"):
+                    self.assertEqual(now, then, number)
             self.assertEqual(self.truth.meters(), a3_osc.load(B1_TRUTH).meters())

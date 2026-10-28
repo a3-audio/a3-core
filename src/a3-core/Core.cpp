@@ -88,6 +88,8 @@ void Core::startPeers()
     project.emplace (replayable (truth, eveningFile.load()),
                      [this] { return replayable (truth, eveningState (relayed)); });   // the_live_evening
     decks.fromEvening (eveningFile.load());
+    if (! truth.hasAddress ("engine.deck-audio"))
+        say ("the truth has no engine.deck-audio word: a deck's presence rests on its hellos alone, not on what the engine hears", true);
 }
 
 // Called on the serve thread: what follows is handled there, and the claim says so.
@@ -267,7 +269,7 @@ void Core::speakStems (bool full)
         sourcesSentToEngine.clear();
     // Marked as told even before the engine's hello: changed_messages runs whether send_to_engine
     // sends or not, as in B1.
-    sendToEngine (changedMessages (sourceMessages (truth, decks, engineReturnSource (stems.returnMode)), sourcesSentToEngine));
+    sendToEngine (changedMessages (sourceMessages (truth, decks), sourcesSentToEngine));
     reportDecks (full);
 }
 
@@ -338,6 +340,10 @@ void Core::mapHandlers()
     const auto [firstDeck, lastDeck] = truth.indexRange ("stemdeck.deck-hello", "deck");
     for (int deck = firstDeck; deck <= lastDeck; ++deck)
         dispatcher.map (truth.address ("stemdeck.deck-hello", { { "deck", deck } }), to (&Core::deckHello));
+    // A truth from before the engine reported its decks' audio (the recorded B0 one) has no such word.
+    if (truth.hasAddress ("engine.deck-audio"))
+        for (int deck = firstDeck; deck <= lastDeck; ++deck)
+            dispatcher.map (truth.address ("engine.deck-audio", { { "deck", deck } }), to (&Core::engineDeckAudio));
     dispatcher.map (truth.address ("prodj.live"), to (&Core::prodjLiveHandler));
     for (const auto* pointer : { "stemdeck.pointer", "motion.pointer" })
         dispatcher.map (truth.address (pointer), to (&Core::pointerHandler));

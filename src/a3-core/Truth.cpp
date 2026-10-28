@@ -435,6 +435,12 @@ juce::var Truth::entry (const std::string& key) const
     return object->getProperty (key.c_str());
 }
 
+bool Truth::hasAddress (const std::string& key) const
+{
+    auto* object = truth.getProperty ("addresses", juce::var()).getDynamicObject();
+    return object != nullptr && object->hasProperty (key.c_str());
+}
+
 bool Truth::addressHas (const std::string& key, const std::string& property) const
 {
     const auto found = entry (key);

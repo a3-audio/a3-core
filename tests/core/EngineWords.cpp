@@ -114,7 +114,7 @@ TEST (EngineWords, OpenIsTheIntegerOne)
 
 TEST (EngineWords, SourcesComeFromTheDeckSelector)
 {
-    const auto got = sourceMessages (truth(), selectorWith ({ 0, 2, 0, 1 }), 0);
+    const auto got = sourceMessages (truth(), selectorWith ({ 0, 2, 0, 1 }));
     EXPECT_EQ (std::vector<Message> (got.begin(), got.begin() + 4),
                (std::vector<Message> { { "/channel/1/source", pyInt (0) }, { "/channel/2/source", pyInt (2) },
                                        { "/channel/3/source", pyInt (0) }, { "/channel/4/source", pyInt (1) } }));
@@ -123,15 +123,17 @@ TEST (EngineWords, SourcesComeFromTheDeckSelector)
 TEST (EngineWords, SourceMessagesAreIntegers)
 {
     // The engine refuses a fraction where a whole number is due: 'i', never 'f' (Review Focus 2).
-    for (const auto& message : sourceMessages (truth(), selectorWith ({ 0, 2, 0, 1 }), 1))
+    for (const auto& message : sourceMessages (truth(), selectorWith ({ 0, 2, 0, 1 })))
         EXPECT_EQ (message.second.tag, 'i') << message.first;
 }
 
-TEST (EngineWords, ReturnSourceNamesADeck)
+// P47: the FX Return has no source; the sources are the channels' alone.
+TEST (EngineWords, NoReturnSourceIsSent)
 {
-    EXPECT_EQ (sourceMessages (truth(), DeckSelector(), 2).back(), (Message { "/aux-return/source", pyInt (2) }));
-    EXPECT_EQ (sourceMessages (truth(), DeckSelector(), 0).back(), (Message { "/aux-return/source", pyInt (0) }));
-    EXPECT_EQ (sourceMessages (truth(), DeckSelector(), 0).size(), 5u);
+    const auto messages = sourceMessages (truth(), DeckSelector());
+    EXPECT_EQ (messages.size(), 4u);
+    for (const auto& message : messages)
+        EXPECT_NE (message.first, "/aux-return/source");
 }
 
 TEST (EngineWords, DeckChannelsSendNoPositionsThreeDFreqQToTheEngine)
@@ -174,18 +176,18 @@ TEST (EngineWords, StateCarriesFlagsModeReturnCueSourcesPositionsAndTempo)
     chans[2].toggleFx = true;
     chans[0].azimuth = 30.0;
     chans[0].elevation = 10.0;
-    const auto got = stateMessages (truth(), chans, master (FxMode::highPass, true), DeckSelector(), 0, 126.0);
+    const auto got = stateMessages (truth(), chans, master (FxMode::highPass, true), DeckSelector(), 126.0);
     for (const auto& message : std::vector<Message> {
              { "/channel/2/cue", pyFloat (1.0) }, { "/channel/1/cue", pyFloat (0.0) }, { "/channel/3/filter", pyFloat (1.0) },
              { "/filter/mode", pyFloat (1.0) }, { "/aux-return/cue", pyFloat (1.0) }, { "/channel/1/source", pyInt (0) },
-             { "/aux-return/source", pyInt (0) }, { "/channel/1/azimuth", pyFloat (30.0) }, { "/channel/1/elevation", pyFloat (10.0) },
+             { "/channel/1/azimuth", pyFloat (30.0) }, { "/channel/1/elevation", pyFloat (10.0) },
              { "/delay/bpm", pyFloat (126.0) } })
         EXPECT_TRUE (contains (got, message)) << message.first;
 }
 
 TEST (EngineWords, UnknownPositionAndTempoAreLeftUnsaid)
 {
-    for (const auto& message : stateMessages (truth(), channels(), master(), DeckSelector(), 0, std::nullopt))
+    for (const auto& message : stateMessages (truth(), channels(), master(), DeckSelector(), std::nullopt))
     {
         EXPECT_FALSE (mentionsPosition (message.first)) << message.first;
         EXPECT_NE (message.first, "/delay/bpm");
@@ -197,7 +199,7 @@ TEST (EngineWords, DeckChannelsHaveNoPositionsInTheState)
     auto chans = channels();
     for (auto& c : chans)
         c.azimuth = c.elevation = 5.0;
-    const auto got = stateMessages (truth(), chans, master(), selectorWith ({ 0, 1, 0, 0 }), 0, std::nullopt);
+    const auto got = stateMessages (truth(), chans, master(), selectorWith ({ 0, 1, 0, 0 }), std::nullopt);
     for (const auto& message : got)
         EXPECT_FALSE (startsWith (message.first, "/channel/2/") && mentionsPosition (message.first)) << message.first;
     EXPECT_TRUE (contains (got, { "/channel/1/azimuth", pyFloat (5.0) }));
@@ -210,7 +212,7 @@ TEST (EngineWords, EveryWordIsInTheTruth)
     auto chans = channels();
     for (auto& c : chans)
         c.azimuth = c.elevation = 1.0;
-    auto words = stateMessages (truth(), chans, master(), DeckSelector(), 1, 120.0);
+    auto words = stateMessages (truth(), chans, master(), DeckSelector(), 120.0);
     words.push_back (openMessage (truth()));
     for (const auto& word : words)
         EXPECT_TRUE (truth().match (word.first).has_value()) << word.first;
@@ -277,7 +279,7 @@ TEST (EngineWords, EveryEngineInputIsReplayedOrInTheState)
     for (auto& c : chans)
         c.azimuth = c.elevation = 1.0;
     std::set<std::string> state;
-    for (const auto& message : stateMessages (truth(), chans, master(), DeckSelector(), 1, 120.0))
+    for (const auto& message : stateMessages (truth(), chans, master(), DeckSelector(), 120.0))
         state.insert (truth().match (message.first)->first);
 
     auto* values = new juce::DynamicObject();
@@ -295,7 +297,9 @@ TEST (EngineWords, EveryEngineInputIsReplayedOrInTheState)
         EXPECT_TRUE (carried.count (needed)) << needed;
     for (const auto& key : carried)
     {
-        if (key == "engine.open" || key == "channel.3d")   // channel.3d is Motion's live word, never replayed or stated
+        // channel.3d is Motion's live word, never replayed or stated; aux-return.source is retired (P47) but
+        // still in B0's carries.
+        if (key == "engine.open" || key == "channel.3d" || key == "aux-return.source")
             continue;
         EXPECT_TRUE (replayed.count (key) || state.count (key)) << key;
     }
@@ -347,14 +351,3 @@ TEST (EngineWords, AReplayOvertakenByANewHelloDoesNotCount)
     EXPECT_EQ (s.evening(), file);
 }
 
-// TheReturnSourceFollowsTheDesksMode
-
-TEST (EngineWords, StemModeIsDeckA)
-{
-    EXPECT_EQ (engineReturnSource (Stems::stemMode), 1);
-}
-
-TEST (EngineWords, AnalogModeIsAnalog)
-{
-    EXPECT_EQ (engineReturnSource (Stems::analogMode), 0);
-}

@@ -60,6 +60,11 @@ class TheTables(unittest.TestCase):
         for listener in TRUTH.listeners():
             self.assertIn(f"| {listener['program']} | {listener['role']} |", table)
 
+    def test_a_per_deck_host_shows_each_decks_group(self):
+        row = next(line for line in render_docs.ports_table(TRUTH).splitlines()
+                   if line.startswith("| aes67 | deck |"))
+        self.assertIn("aes67-deck-{deck} (239.69.150.244, 239.69.150.245)", row)
+
     def test_every_route_is_a_row(self):
         table = render_docs.routes_table(TRUTH)
         for route in TRUTH.routes():

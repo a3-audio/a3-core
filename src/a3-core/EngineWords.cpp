@@ -46,8 +46,6 @@ void addPositions (const Truth& truth, const std::vector<ChannelInfo>& channels,
 }
 }
 
-int engineReturnSource (int returnMode) { return returnMode == Stems::stemMode ? returnDeck : 0; }
-
 const std::set<std::string>& forwarded() { return sentAsTheyArrived; }
 
 std::vector<Message> forwardMessages (const Truth& truth, const std::string& key, const std::map<std::string, int>& fields, double value)
@@ -104,23 +102,22 @@ Message tempoMessage (const Truth& truth, double bpm) { return { truth.address (
 
 Message openMessage (const Truth& truth) { return { truth.address ("engine.open"), pyInt (1) }; }
 
-std::vector<Message> sourceMessages (const Truth& truth, const DeckSelector& selector, int returnSource)
+std::vector<Message> sourceMessages (const Truth& truth, const DeckSelector& selector)
 {
     std::vector<Message> messages;
     for (int channel = 1; channel <= selector.channels(); ++channel)
         messages.push_back ({ truth.address ("channel.source", { { "ch", channel } }), pyInt (selector.source (channel)) });
-    messages.push_back ({ truth.address ("aux-return.source"), pyInt (returnSource) });
     return messages;
 }
 
 std::vector<Message> stateMessages (const Truth& truth, const std::vector<ChannelInfo>& channels, const MasterInfo& master,
-                                    const DeckSelector& selector, int returnSource, std::optional<double> bpm)
+                                    const DeckSelector& selector, std::optional<double> bpm)
 {
     std::vector<Message> messages;
     addFlags (truth, channels, messages);
     messages.push_back (filterModeMessage (truth, static_cast<int> (master.fxMode)));
     messages.push_back (returnCueMessage (truth, master.returnCue));
-    for (auto& message : sourceMessages (truth, selector, returnSource))
+    for (auto& message : sourceMessages (truth, selector))
         messages.push_back (std::move (message));
     addPositions (truth, channels, selector, messages);
     if (bpm)

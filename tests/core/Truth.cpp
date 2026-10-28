@@ -588,6 +588,8 @@ TEST (Truth, LoadedFingerprintIsPythons)
 TEST (Truth, AnAddressEntryCanBeAskedForAProperty)
 {
     const auto& truth = b0::truth();
+    EXPECT_TRUE (truth.hasAddress ("channel.volume"));
+    EXPECT_FALSE (truth.hasAddress ("no.such.word"));
     EXPECT_TRUE (truth.addressHas ("channel.volume", "relayed_to"));
     EXPECT_FALSE (truth.addressHas ("channel.cue", "relayed_to"));
     EXPECT_FALSE (truth.addressHas ("channel.volume", "no-such-property"));

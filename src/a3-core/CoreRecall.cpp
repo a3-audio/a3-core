@@ -44,7 +44,7 @@ void Core::recall (const Endpoint& from, const OscMessage& message)
     }
     if (startupRecall.isIt (message.args))
     {
-        sendToEngine (stateMessages (truth, channels, master, decks, engineReturnSource (stems.returnMode), engineBpm));
+        sendToEngine (stateMessages (truth, channels, master, decks, engineBpm));
         sendToEngine ({ openMessage (truth) });
         engineOpen = engineHeard();
     }

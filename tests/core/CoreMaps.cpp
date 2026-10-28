@@ -25,7 +25,7 @@ TEST (CoreMaps, EveryDefinedHandlerIsMapped)
         { "/channel/1/gain", { pyStr ("0.5") } },               // osc_handler_channel
         { "/master/volume", { pyStr ("0.5") } },                // osc_handler_master
         { "/filter/frequency", { pyStr ("0.5") } },             // osc_handler_filter
-        { "/aux-return/stem/turn", { pyStr ("1") } },           // osc_handler_aux_return
+        { "/aux-return/stem/push", { pyStr ("1") } },           // osc_handler_aux_return
         { "/stemdeck/1/1/buses", { pyInt (1) } },               // osc_handler_stemdeck
         { "/state/recall", {} },                                // osc_handler_recall
         { "/beat", { pyInt (1), pyInt (1), pyFloat (120.0) } }, // osc_handler_beat
@@ -58,7 +58,7 @@ TEST (CoreMaps, TheDefaultHandlerIsTheUnrouted)
     EXPECT_EQ (rig.unknownCount ("/nothing/here"), 2);
     EXPECT_EQ (rig.unknownCount ("/beat/extra"), 1);
     EXPECT_FALSE (rig.seenIn ("/nothing/here"));
-    EXPECT_EQ (rig.sends(), 82u);   // only start-up's remembered state: the stranger moved nothing
+    EXPECT_EQ (rig.sends(), 78u);   // only start-up's remembered state: the stranger moved nothing
 }
 
 TEST (CoreMaps, TheWordIsMapped)

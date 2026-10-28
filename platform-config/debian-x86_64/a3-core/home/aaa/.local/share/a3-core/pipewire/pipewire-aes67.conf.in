@@ -82,9 +82,33 @@ context.modules = [
 
             stream.rules = [
                 {
+                    # A deck host's stream (a3-aes67-deck, one per deck): no node.group, so it
+                    # rate-matches into the sound card's clock instead of the PTP
+                    # driver's. Before the catch-all, which it must not match.
                     matches = [
                         {
-                            rtp.session = "~.*"
+                            rtp.session = "~^AES67 deck "
+                        }
+                    ]
+                    actions = {
+                        create-stream = {
+                            node.virtual = false
+                            media.class = "Audio/Source"
+                            device.api = aes67
+                            sess.latency.msec = 12
+                            # rtp-source's receive buffer is net.mtu bytes (default 1280);
+                            # the deck's packet is 1365 B and was cut to 10 of 11 frames.
+                            net.mtu = 1500
+                            # No rtp.ptime/rtp.framecount: the SDP sets the packet time,
+                            # and PipeWire 1.6.9 dies of SIGFPE with both set.
+                        }
+                    }
+                },
+                {
+                    # Every A³ host sender is named "AES67 <host> out".
+                    matches = [
+                        {
+                            rtp.session = "~ out$"
                         }
                     ]
                     actions = {
