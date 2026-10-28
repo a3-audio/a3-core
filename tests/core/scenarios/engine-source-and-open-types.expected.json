@@ -706,122 +706,6 @@
   "to": "mixer",
   "host": "192.168.8.11",
   "port": 7772,
-  "address": "/aux-return/stem",
-  "args": [
-   [
-    "i",
-    1
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ]
-  ]
- },
- {
-  "at": 0.0,
-  "to": "motion",
-  "host": "127.0.0.1",
-  "port": 7771,
-  "address": "/aux-return/stem",
-  "args": [
-   [
-    "i",
-    1
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ]
-  ]
- },
- {
-  "at": 0.0,
-  "to": "mixer",
-  "host": "192.168.8.11",
-  "port": 7772,
-  "address": "/aux-return/stem/mode",
-  "args": [
-   [
-    "i",
-    1
-   ]
-  ]
- },
- {
-  "at": 0.0,
-  "to": "motion",
-  "host": "127.0.0.1",
-  "port": 7771,
-  "address": "/aux-return/stem/mode",
-  "args": [
-   [
-    "i",
-    1
-   ]
-  ]
- },
- {
-  "at": 0.0,
-  "to": "mixer",
-  "host": "192.168.8.11",
-  "port": 7772,
   "address": "/channel/1/source",
   "args": [
    [
@@ -2074,122 +1958,6 @@
  },
  {
   "at": 0.5,
-  "to": "mixer",
-  "host": "192.168.8.11",
-  "port": 7772,
-  "address": "/aux-return/stem",
-  "args": [
-   [
-    "i",
-    1
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ]
-  ]
- },
- {
-  "at": 0.5,
-  "to": "motion",
-  "host": "127.0.0.1",
-  "port": 7771,
-  "address": "/aux-return/stem",
-  "args": [
-   [
-    "i",
-    1
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ]
-  ]
- },
- {
-  "at": 0.5,
-  "to": "mixer",
-  "host": "192.168.8.11",
-  "port": 7772,
-  "address": "/aux-return/stem/mode",
-  "args": [
-   [
-    "i",
-    1
-   ]
-  ]
- },
- {
-  "at": 0.5,
-  "to": "motion",
-  "host": "127.0.0.1",
-  "port": 7771,
-  "address": "/aux-return/stem/mode",
-  "args": [
-   [
-    "i",
-    1
-   ]
-  ]
- },
- {
-  "at": 0.5,
   "to": "engine",
   "host": "127.0.0.1",
   "port": 9004,
@@ -2237,19 +2005,6 @@
    [
     "i",
     0
-   ]
-  ]
- },
- {
-  "at": 0.5,
-  "to": "engine",
-  "host": "127.0.0.1",
-  "port": 9004,
-  "address": "/aux-return/source",
-  "args": [
-   [
-    "i",
-    1
    ]
   ]
  },
@@ -2762,19 +2517,6 @@
    [
     "i",
     0
-   ]
-  ]
- },
- {
-  "at": 0.5,
-  "to": "engine",
-  "host": "127.0.0.1",
-  "port": 9004,
-  "address": "/aux-return/source",
-  "args": [
-   [
-    "i",
-    1
    ]
   ]
  },
@@ -3417,122 +3159,6 @@
  },
  {
   "at": 0.8,
-  "to": "mixer",
-  "host": "192.168.8.11",
-  "port": 7772,
-  "address": "/aux-return/stem",
-  "args": [
-   [
-    "i",
-    1
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ]
-  ]
- },
- {
-  "at": 0.8,
-  "to": "motion",
-  "host": "127.0.0.1",
-  "port": 7771,
-  "address": "/aux-return/stem",
-  "args": [
-   [
-    "i",
-    1
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ],
-   [
-    "i",
-    0
-   ]
-  ]
- },
- {
-  "at": 0.8,
-  "to": "mixer",
-  "host": "192.168.8.11",
-  "port": 7772,
-  "address": "/aux-return/stem/mode",
-  "args": [
-   [
-    "i",
-    1
-   ]
-  ]
- },
- {
-  "at": 0.8,
-  "to": "motion",
-  "host": "127.0.0.1",
-  "port": 7771,
-  "address": "/aux-return/stem/mode",
-  "args": [
-   [
-    "i",
-    1
-   ]
-  ]
- },
- {
-  "at": 0.8,
   "to": "engine",
   "host": "127.0.0.1",
   "port": 9004,
@@ -3664,7 +3290,7 @@
  {
   "at": 3.2,
   "file": "state.json",
-  "text": "{\n  \"channels\": [\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": null\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": null\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": true,\n      \"three_d\": null\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": null\n    }\n  ],\n  \"fx_mode\": 1,\n  \"phones_mix\": 0.2,\n  \"return_cue\": false,\n  \"stems\": {\n    \"cursors\": [\n      8,\n      8,\n      8,\n      8\n    ],\n    \"sources\": [\n      null,\n      null,\n      null,\n      null\n    ],\n    \"return_cursor\": 1,\n    \"return_mode\": 1\n  }\n}\n",
+  "text": "{\n  \"channels\": [\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": null\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": null\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": true,\n      \"three_d\": null\n    },\n    {\n      \"toggle_fx\": false,\n      \"toggle_cue\": false,\n      \"three_d\": null\n    }\n  ],\n  \"fx_mode\": 1,\n  \"phones_mix\": 0.2,\n  \"return_cue\": false,\n  \"stems\": {\n    \"cursors\": [\n      8,\n      8,\n      8,\n      8\n    ],\n    \"sources\": [\n      null,\n      null,\n      null,\n      null\n    ]\n  }\n}\n",
   "json": {
    "channels": [
     {
@@ -3703,16 +3329,14 @@
      null,
      null,
      null
-    ],
-    "return_cursor": 1,
-    "return_mode": 1
+    ]
    }
   }
  },
  {
   "at": 3.2,
   "file": "evening.json",
-  "text": "{\n  \"values\": {\n    \"/channel/2/gain\": 0.4000000059604645,\n    \"/channel/1/gain\": 0.30000001192092896,\n    \"/master/volume\": 0.800000011920929,\n    \"/channel/3/gain\": 0.5,\n    \"/channel/3/cue/led\": 1.0,\n    \"/channel/3/cue\": 1.0,\n    \"/channel/1/source\": 4,\n    \"/channel/2/source\": 2,\n    \"/channel/3/source\": 0,\n    \"/channel/4/source\": 0,\n    \"/channel/1/source/cursor\": 4,\n    \"/channel/2/source/cursor\": 2,\n    \"/channel/3/source/cursor\": 0,\n    \"/channel/4/source/cursor\": 0,\n    \"/stemdeck/1/present\": 0,\n    \"/stemdeck/2/present\": 0,\n    \"/stemdeck/3/present\": 0,\n    \"/stemdeck/4/present\": 0,\n    \"/channel/1/stem\": 0,\n    \"/channel/1/stem/cursor\": 8,\n    \"/channel/2/stem\": 0,\n    \"/channel/2/stem/cursor\": 8,\n    \"/channel/3/stem\": 0,\n    \"/channel/3/stem/cursor\": 8,\n    \"/channel/4/stem\": 0,\n    \"/channel/4/stem/cursor\": 8,\n    \"/aux-return/stem\": [\n      1,\n      0,\n      0,\n      0,\n      0,\n      0,\n      0,\n      0,\n      0\n    ],\n    \"/aux-return/stem/mode\": 1,\n    \"/filter/led\": \"high_pass\",\n    \"/filter/mode\": 1.0,\n    \"/master/phones-mix\": 0.2\n  },\n  \"channel.source\": [\n    4,\n    2,\n    0,\n    0\n  ]\n}\n",
+  "text": "{\n  \"values\": {\n    \"/channel/2/gain\": 0.4000000059604645,\n    \"/channel/1/gain\": 0.30000001192092896,\n    \"/master/volume\": 0.800000011920929,\n    \"/channel/3/gain\": 0.5,\n    \"/channel/3/cue/led\": 1.0,\n    \"/channel/3/cue\": 1.0,\n    \"/channel/1/source\": 4,\n    \"/channel/2/source\": 2,\n    \"/channel/3/source\": 0,\n    \"/channel/4/source\": 0,\n    \"/channel/1/source/cursor\": 4,\n    \"/channel/2/source/cursor\": 2,\n    \"/channel/3/source/cursor\": 0,\n    \"/channel/4/source/cursor\": 0,\n    \"/stemdeck/1/present\": 0,\n    \"/stemdeck/2/present\": 0,\n    \"/stemdeck/3/present\": 0,\n    \"/stemdeck/4/present\": 0,\n    \"/channel/1/stem\": 0,\n    \"/channel/1/stem/cursor\": 8,\n    \"/channel/2/stem\": 0,\n    \"/channel/2/stem/cursor\": 8,\n    \"/channel/3/stem\": 0,\n    \"/channel/3/stem/cursor\": 8,\n    \"/channel/4/stem\": 0,\n    \"/channel/4/stem/cursor\": 8,\n    \"/filter/led\": \"high_pass\",\n    \"/filter/mode\": 1.0,\n    \"/master/phones-mix\": 0.2\n  },\n  \"channel.source\": [\n    4,\n    2,\n    0,\n    0\n  ]\n}\n",
   "json": {
    "values": {
     "/channel/2/gain": 0.4000000059604645,
@@ -3741,18 +3365,6 @@
     "/channel/3/stem/cursor": 8,
     "/channel/4/stem": 0,
     "/channel/4/stem/cursor": 8,
-    "/aux-return/stem": [
-     1,
-     0,
-     0,
-     0,
-     0,
-     0,
-     0,
-     0,
-     0
-    ],
-    "/aux-return/stem/mode": 1,
     "/filter/led": "high_pass",
     "/filter/mode": 1.0,
     "/master/phones-mix": 0.2
@@ -3768,7 +3380,7 @@
  {
   "at": 3.5,
   "file": "seen.json",
-  "text": "{\"version\": 1, \"at\": 1800000003.5, \"rows\": [[\"in\", \"/channel/1/gain\", 1, \"motion\", 1800000000.5], [\"in\", \"/master/volume\", 1, \"motion\", 1800000000.5], [\"in\", \"/channel/2/gain\", 2, \"motion\", 1800000000.5], [\"in\", \"/state/recall\", 1, \"motion\", 1800000000.5], [\"out\", \"/channel/1/cue/led\", 4, \"motion\", 1800000000.5], [\"out\", \"/channel/1/filter/led\", 4, \"motion\", 1800000000.5], [\"out\", \"/channel/2/cue/led\", 4, \"motion\", 1800000000.5], [\"out\", \"/channel/2/filter/led\", 4, \"motion\", 1800000000.5], [\"out\", \"/channel/3/filter/led\", 4, \"motion\", 1800000000.5], [\"out\", \"/channel/4/cue/led\", 4, \"motion\", 1800000000.5], [\"out\", \"/channel/4/filter/led\", 4, \"motion\", 1800000000.5], [\"out\", \"/aux-return/cue/led\", 4, \"motion\", 1800000000.5], [\"out\", \"/channel/2/gain\", 5, \"motion\", 1800000000.5], [\"out\", \"/channel/1/gain\", 4, \"motion\", 1800000000.5], [\"out\", \"/master/volume\", 4, \"motion\", 1800000000.5], [\"out\", \"/prodj/live\", 1, \"motion\", 1800000000.5], [\"out\", \"/channel/1/cue\", 5, \"engine\", 1800000000.5], [\"out\", \"/channel/1/filter\", 5, \"engine\", 1800000000.5], [\"out\", \"/channel/2/cue\", 5, \"engine\", 1800000000.5], [\"out\", \"/channel/2/filter\", 5, \"engine\", 1800000000.5], [\"out\", \"/channel/3/filter\", 5, \"engine\", 1800000000.5], [\"out\", \"/channel/4/cue\", 5, \"engine\", 1800000000.5], [\"out\", \"/channel/4/filter\", 5, \"engine\", 1800000000.5], [\"out\", \"/aux-return/cue\", 1, \"engine\", 1800000000.5], [\"out\", \"/aux-return/source\", 2, \"engine\", 1800000000.5], [\"out\", \"/engine/open\", 1, \"engine\", 1800000000.5], [\"in\", \"/channel/3/gain\", 1, \"mixer\", 1800000000.6], [\"out\", \"/channel/3/gain\", 2, \"engine\", 1800000000.6], [\"in\", \"/channel/3/azimuth\", 1, \"mixer\", 1800000000.65], [\"out\", \"/channel/3/azimuth\", 1, \"engine\", 1800000000.65], [\"in\", \"/channel/3/cue\", 1, \"mixer\", 1800000000.7], [\"out\", \"/channel/3/cue/led\", 6, \"motion\", 1800000000.7], [\"out\", \"/channel/3/cue\", 8, \"engine\", 1800000000.7], [\"in\", \"/channel/1/stem/turn\", 1, \"mixer\", 1800000000.75], [\"out\", \"/channel/2/source\", 8, \"motion\", 1800000000.75], [\"out\", \"/channel/3/source\", 8, \"motion\", 1800000000.75], [\"out\", \"/channel/4/source\", 8, \"motion\", 1800000000.75], [\"out\", \"/channel/1/source/cursor\", 6, \"motion\", 1800000000.75], [\"out\", \"/channel/2/source/cursor\", 6, \"motion\", 1800000000.75], [\"out\", \"/channel/3/source/cursor\", 6, \"motion\", 1800000000.75], [\"out\", \"/channel/4/source/cursor\", 6, \"motion\", 1800000000.75], [\"out\", \"/stemdeck/1/present\", 6, \"motion\", 1800000000.75], [\"out\", \"/stemdeck/2/present\", 6, \"motion\", 1800000000.75], [\"out\", \"/stemdeck/3/present\", 6, \"motion\", 1800000000.75], [\"out\", \"/stemdeck/4/present\", 6, \"motion\", 1800000000.75], [\"in\", \"/channel/1/stem/push\", 1, \"mixer\", 1800000000.8], [\"out\", \"/channel/1/stem\", 6, \"motion\", 1800000000.8], [\"out\", \"/channel/1/stem/cursor\", 6, \"motion\", 1800000000.8], [\"out\", \"/channel/2/stem\", 6, \"motion\", 1800000000.8], [\"out\", \"/channel/2/stem/cursor\", 6, \"motion\", 1800000000.8], [\"out\", \"/channel/3/stem\", 6, \"motion\", 1800000000.8], [\"out\", \"/channel/3/stem/cursor\", 6, \"motion\", 1800000000.8], [\"out\", \"/channel/4/stem\", 6, \"motion\", 1800000000.8], [\"out\", \"/channel/4/stem/cursor\", 6, \"motion\", 1800000000.8], [\"out\", \"/aux-return/stem\", 6, \"motion\", 1800000000.8], [\"out\", \"/aux-return/stem/mode\", 6, \"motion\", 1800000000.8], [\"out\", \"/channel/1/source\", 11, \"motion\", 1800000000.8], [\"in\", \"/filter/mode\", 1, \"mixer\", 1800000000.85], [\"out\", \"/filter/led\", 6, \"motion\", 1800000000.85], [\"out\", \"/filter/mode\", 8, \"engine\", 1800000000.85], [\"in\", \"/master/phones-mix\", 1, \"mixer\", 1800000000.9], [\"out\", \"/master/phones-mix\", 2, \"engine\", 1800000000.9], [\"in\", \"/engine/hello\", 2, \"motion\", 1800000001.0]], \"unknown\": []}",
+  "text": "{\"version\": 1, \"at\": 1800000003.5, \"rows\": [[\"in\", \"/channel/1/gain\", 1, \"motion\", 1800000000.5], [\"in\", \"/master/volume\", 1, \"motion\", 1800000000.5], [\"in\", \"/channel/2/gain\", 2, \"motion\", 1800000000.5], [\"in\", \"/state/recall\", 1, \"motion\", 1800000000.5], [\"out\", \"/channel/1/cue/led\", 4, \"motion\", 1800000000.5], [\"out\", \"/channel/1/filter/led\", 4, \"motion\", 1800000000.5], [\"out\", \"/channel/2/cue/led\", 4, \"motion\", 1800000000.5], [\"out\", \"/channel/2/filter/led\", 4, \"motion\", 1800000000.5], [\"out\", \"/channel/3/filter/led\", 4, \"motion\", 1800000000.5], [\"out\", \"/channel/4/cue/led\", 4, \"motion\", 1800000000.5], [\"out\", \"/channel/4/filter/led\", 4, \"motion\", 1800000000.5], [\"out\", \"/aux-return/cue/led\", 4, \"motion\", 1800000000.5], [\"out\", \"/channel/2/gain\", 5, \"motion\", 1800000000.5], [\"out\", \"/channel/1/gain\", 4, \"motion\", 1800000000.5], [\"out\", \"/master/volume\", 4, \"motion\", 1800000000.5], [\"out\", \"/prodj/live\", 1, \"motion\", 1800000000.5], [\"out\", \"/channel/1/cue\", 5, \"engine\", 1800000000.5], [\"out\", \"/channel/1/filter\", 5, \"engine\", 1800000000.5], [\"out\", \"/channel/2/cue\", 5, \"engine\", 1800000000.5], [\"out\", \"/channel/2/filter\", 5, \"engine\", 1800000000.5], [\"out\", \"/channel/3/filter\", 5, \"engine\", 1800000000.5], [\"out\", \"/channel/4/cue\", 5, \"engine\", 1800000000.5], [\"out\", \"/channel/4/filter\", 5, \"engine\", 1800000000.5], [\"out\", \"/aux-return/cue\", 1, \"engine\", 1800000000.5], [\"out\", \"/engine/open\", 1, \"engine\", 1800000000.5], [\"in\", \"/channel/3/gain\", 1, \"mixer\", 1800000000.6], [\"out\", \"/channel/3/gain\", 2, \"engine\", 1800000000.6], [\"in\", \"/channel/3/azimuth\", 1, \"mixer\", 1800000000.65], [\"out\", \"/channel/3/azimuth\", 1, \"engine\", 1800000000.65], [\"in\", \"/channel/3/cue\", 1, \"mixer\", 1800000000.7], [\"out\", \"/channel/3/cue/led\", 6, \"motion\", 1800000000.7], [\"out\", \"/channel/3/cue\", 8, \"engine\", 1800000000.7], [\"in\", \"/channel/1/stem/turn\", 1, \"mixer\", 1800000000.75], [\"out\", \"/channel/2/source\", 8, \"motion\", 1800000000.75], [\"out\", \"/channel/3/source\", 8, \"motion\", 1800000000.75], [\"out\", \"/channel/4/source\", 8, \"motion\", 1800000000.75], [\"out\", \"/channel/1/source/cursor\", 6, \"motion\", 1800000000.75], [\"out\", \"/channel/2/source/cursor\", 6, \"motion\", 1800000000.75], [\"out\", \"/channel/3/source/cursor\", 6, \"motion\", 1800000000.75], [\"out\", \"/channel/4/source/cursor\", 6, \"motion\", 1800000000.75], [\"out\", \"/stemdeck/1/present\", 6, \"motion\", 1800000000.75], [\"out\", \"/stemdeck/2/present\", 6, \"motion\", 1800000000.75], [\"out\", \"/stemdeck/3/present\", 6, \"motion\", 1800000000.75], [\"out\", \"/stemdeck/4/present\", 6, \"motion\", 1800000000.75], [\"in\", \"/channel/1/stem/push\", 1, \"mixer\", 1800000000.8], [\"out\", \"/channel/1/stem\", 6, \"motion\", 1800000000.8], [\"out\", \"/channel/1/stem/cursor\", 6, \"motion\", 1800000000.8], [\"out\", \"/channel/2/stem\", 6, \"motion\", 1800000000.8], [\"out\", \"/channel/2/stem/cursor\", 6, \"motion\", 1800000000.8], [\"out\", \"/channel/3/stem\", 6, \"motion\", 1800000000.8], [\"out\", \"/channel/3/stem/cursor\", 6, \"motion\", 1800000000.8], [\"out\", \"/channel/4/stem\", 6, \"motion\", 1800000000.8], [\"out\", \"/channel/4/stem/cursor\", 6, \"motion\", 1800000000.8], [\"out\", \"/channel/1/source\", 11, \"motion\", 1800000000.8], [\"in\", \"/filter/mode\", 1, \"mixer\", 1800000000.85], [\"out\", \"/filter/led\", 6, \"motion\", 1800000000.85], [\"out\", \"/filter/mode\", 8, \"engine\", 1800000000.85], [\"in\", \"/master/phones-mix\", 1, \"mixer\", 1800000000.9], [\"out\", \"/master/phones-mix\", 2, \"engine\", 1800000000.9], [\"in\", \"/engine/hello\", 2, \"motion\", 1800000001.0]], \"unknown\": []}",
   "json": {
    "version": 1,
    "at": 1800000003.5,
@@ -3938,13 +3550,6 @@
      "out",
      "/aux-return/cue",
      1,
-     "engine",
-     1800000000.5
-    ],
-    [
-     "out",
-     "/aux-return/source",
-     2,
      "engine",
      1800000000.5
     ],
@@ -4147,20 +3752,6 @@
     [
      "out",
      "/channel/4/stem/cursor",
-     6,
-     "motion",
-     1800000000.8
-    ],
-    [
-     "out",
-     "/aux-return/stem",
-     6,
-     "motion",
-     1800000000.8
-    ],
-    [
-     "out",
-     "/aux-return/stem/mode",
      6,
      "motion",
      1800000000.8

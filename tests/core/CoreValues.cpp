@@ -237,15 +237,16 @@ TEST (CoreValues, TheHelloOpensOnlyOnCoresOwnFingerprint)
 //==============================================================================
 // test_core_stems_wiring (engine mode)
 
+// P47: the FX Return has no mode and no cursor any more; Core speaks the channels' stems only.
 TEST (CoreValues, RecallAndStartSpeakTheStems)
 {
     CoreRig rig;
     EXPECT_TRUE (has (rig.to ("mixer"), "/channel/1/stem/cursor i:8"));
-    EXPECT_TRUE (has (rig.to ("mixer"), "/aux-return/stem/mode i:1"));
+    EXPECT_TRUE (startingWith (rig.to ("mixer"), "/aux-return/stem").empty());
     rig.clear();
     rig.osc (rig.motion, "/state/recall", { pyInt (1) });   // said whole, though nothing changed
     EXPECT_TRUE (has (rig.to ("mixer"), "/channel/1/stem/cursor i:8"));
-    EXPECT_TRUE (has (rig.to ("motion"), "/aux-return/stem/mode i:1"));
+    EXPECT_TRUE (startingWith (rig.to ("motion"), "/aux-return/stem").empty());
 }
 
 TEST (CoreValues, TheChannelTurnHasItsBranch)
@@ -261,8 +262,8 @@ TEST (CoreValues, TheReturnFamilyIsMapped)
 {
     CoreRig rig;
     rig.clear();
-    rig.osc (rig.desk, "/aux-return/stem/turn", { pyInt (1) });
-    EXPECT_EQ (startingWith (rig.to ("mixer"), "/aux-return/stem i:0").size(), 1u);
+    rig.osc (rig.desk, "/aux-return/stem/push", { pyInt (1) });
+    EXPECT_TRUE (has (rig.to ("mixer"), "/aux-return/cue/led f:1"));
     EXPECT_EQ (rig.unknownRows(), 0u);
 }
 
@@ -280,8 +281,8 @@ TEST (CoreValues, AReportIsAnnounced)
     rig.clear();
     rig.osc (rig.deckA, "/stemdeck/1/1/buses", { pyInt (16) });
     // The first announcement not at start-up passes on every word (nothing was noted as passed on yet).
-    EXPECT_EQ (startingWith (rig.to ("mixer"), "/aux-return/stem i:"),
-               (std::vector<std::string> { "/aux-return/stem i:1 i:1 i:0 i:0 i:0 i:0 i:0 i:0 i:0" }));
+    EXPECT_TRUE (has (rig.to ("mixer"), "/channel/1/stem/cursor i:8"));
+    EXPECT_TRUE (startingWith (rig.to ("mixer"), "/aux-return/stem").empty());
 }
 
 TEST (CoreValues, AReportOfTheWrongTypeChangesNothing)
@@ -300,8 +301,7 @@ TEST (CoreValues, AReportOfTheWrongTypeChangesNothing)
     EXPECT_EQ (rig.unknownCount ("/stemdeck/1/2/buses"), 8);
     EXPECT_EQ (rig.unknownCount ("/stemdeck/3/1/buses"), 1);
     rig.osc (rig.deckA, "/stemdeck/1/2/buses", { OscArg { 'h', int64_t { 16 } } });
-    EXPECT_EQ (startingWith (rig.to ("mixer"), "/aux-return/stem i:"),
-               (std::vector<std::string> { "/aux-return/stem i:1 i:0 i:1 i:0 i:0 i:0 i:0 i:0 i:0" }));
+    EXPECT_GT (rig.sends(), 0u);
 }
 
 TEST (CoreValues, AReturningStemdeckIsAskedForEverything)
@@ -390,10 +390,10 @@ TEST (CoreValues, TheMasterHandlerRemembers)
     EXPECT_EQ (static_cast<double> (rig.json ("state.json")["phones_mix"]), 0.75);
 }
 
+// P47: the FX Return's push is its cue button; there is no cursor to move first.
 TEST (CoreValues, APushOnCueTogglesIt)
 {
     CoreRig rig;
-    rig.osc (rig.desk, "/aux-return/stem/turn", { pyInt (-1) });   // STEM -> CUE on the ring
     rig.clear();
     rig.osc (rig.desk, "/aux-return/stem/push", { pyInt (1) });
     EXPECT_TRUE (has (rig.to ("mixer"), "/aux-return/cue/led f:1"));
@@ -403,7 +403,6 @@ TEST (CoreValues, AToggleFlipsLightsAndSounds)
 {
     CoreRig rig;
     rig.engineHello ("boot-1");
-    rig.osc (rig.desk, "/aux-return/stem/turn", { pyInt (-1) });
     rig.clear();
     rig.osc (rig.desk, "/aux-return/stem/push", { pyInt (1) });
     rig.osc (rig.desk, "/aux-return/stem/push", { pyInt (1) });
@@ -415,19 +414,21 @@ TEST (CoreValues, AToggleFlipsLightsAndSounds)
 TEST (CoreValues, TheReturnHandlerRemembers)
 {
     CoreRig rig;
-    rig.osc (rig.desk, "/aux-return/stem/turn", { pyInt (1) });   // STEM -> ANALOG
     rig.osc (rig.desk, "/aux-return/stem/push", { pyInt (1) });
     rig.stop();
-    EXPECT_EQ (static_cast<int> (rig.json ("state.json")["stems"]["return_mode"]), Stems::analogMode);
+    EXPECT_TRUE (static_cast<bool> (rig.json ("state.json")["return_cue"]));
 }
 
+// P47: the FX Return's encoder turn does nothing; B0's truth still names it, so it reaches the
+// return's handler and is noted as unknown, like the lamp Core alone may say.
 TEST (CoreValues, TheLastElseNotesItAsUnknown)
 {
     CoreRig rig;
     rig.osc (rig.desk, "/aux-return/stem/turn", { pyInt (1) });
     rig.osc (rig.desk, "/aux-return/cue/led", { pyFloat (1.0) });
+    EXPECT_EQ (rig.unknownCount ("/aux-return/stem/turn"), 1);
     EXPECT_EQ (rig.unknownCount ("/aux-return/cue/led"), 1);
-    EXPECT_EQ (rig.unknownRows(), 1u);
+    EXPECT_EQ (rig.unknownRows(), 2u);
 }
 
 TEST (CoreValues, APushIsSaidWithOrWithoutStemdeck)
@@ -449,20 +450,18 @@ TEST (CoreValues, APushLoads)
     EXPECT_EQ (rig.to ("engine"), (std::vector<std::string> { "/channel/2/source i:1" }));
 }
 
-TEST (CoreValues, APushTellsStemsWhetherStemdeckIsThere)
+// P47: the FX Return's push is its cue alone; it no longer tidies the stems, with or without StemDeck.
+TEST (CoreValues, AReturnPushLeavesTheStemsAlone)
 {
-    // A return push tidies the mirror only while StemDeck is there (connected); without it the
-    // mirror stays as StemDeck last reported it. Engine mode sends StemDeck no command either way.
     for (const bool withStemdeck : { false, true })
     {
         CoreRig rig;
         if (withStemdeck)
             rig.stemdeckHello ("127.0.0.2");
         rig.osc (rig.deckA, "/stemdeck/1/1/buses", { pyInt (0b0110) });   // stem 1 on buses 2 and 3: against the rules
-        rig.osc (rig.desk, "/aux-return/stem/push", { pyInt (1) });
         rig.clear();
-        rig.osc (rig.motion, "/state/recall", { pyInt (1) });
-        EXPECT_EQ (has (rig.to ("mixer"), "/channel/2/stem i:0"), withStemdeck) << withStemdeck;
+        rig.osc (rig.desk, "/aux-return/stem/push", { pyInt (1) });
+        EXPECT_TRUE (startingWith (rig.to ("mixer"), "/channel/").empty()) << withStemdeck;
         EXPECT_EQ (rig.to ("stemdeck").size(), 0u);
     }
 }
@@ -488,15 +487,14 @@ TEST (CoreValues, ATurnOnlySelects)
     EXPECT_TRUE (rig.to ("engine").empty());
 }
 
-TEST (CoreValues, TheReturnSwitchesItsModeWithOrWithoutStemdeck)
+TEST (CoreValues, TheReturnPushOnlyCues)
 {
     CoreRig rig;
     rig.engineHello ("boot-1");
-    rig.osc (rig.desk, "/aux-return/stem/turn", { pyInt (1) });
     rig.clear();
     rig.osc (rig.desk, "/aux-return/stem/push", { pyInt (1) });
-    EXPECT_TRUE (has (rig.to ("mixer"), "/aux-return/stem/mode i:0"));
-    EXPECT_EQ (rig.to ("engine"), (std::vector<std::string> { "/aux-return/source i:0" }));
+    EXPECT_TRUE (startingWith (rig.to ("mixer"), "/aux-return/stem").empty());
+    EXPECT_EQ (rig.to ("engine"), (std::vector<std::string> { "/aux-return/cue f:1" }));
 }
 
 TEST (CoreValues, AStateWithoutStemsStartsOnA)
@@ -514,15 +512,15 @@ TEST (CoreValues, TheChannelSourcesSurviveTheRoundTrip)
     EXPECT_EQ (dumpPython (rig.json ("state.json")["stems"]["sources"]), "[1, 0, 1, 0]");
 }
 
-TEST (CoreValues, TheCursorsAndModeAreWrittenDown)
+// P47: the return's cursor and mode are gone from the state; the channels' cursors stay.
+TEST (CoreValues, TheCursorsAreWrittenDown)
 {
     CoreRig rig;
-    rig.osc (rig.desk, "/aux-return/stem/turn", { pyInt (1) });
     rig.osc (rig.desk, "/aux-return/stem/push", { pyInt (1) });
     rig.stop();
     const auto stems = rig.json ("state.json")["stems"];
-    EXPECT_EQ (static_cast<int> (stems["return_mode"]), Stems::analogMode);
-    EXPECT_EQ (static_cast<int> (stems["return_cursor"]), Stems::analogMode);
+    EXPECT_FALSE (stems.hasProperty ("return_mode"));
+    EXPECT_FALSE (stems.hasProperty ("return_cursor"));
     EXPECT_EQ (dumpPython (stems["cursors"]), "[8, 8, 8, 8]");
 }
 
@@ -579,7 +577,8 @@ TEST (CoreValues, TheTokenRecallSendsTheStateThenOpens)
     rig.engineHello ("boot-1");
     const auto engine = rig.to ("engine");
     ASSERT_FALSE (engine.empty());
-    EXPECT_TRUE (has (engine, "/aux-return/source i:1"));
+    EXPECT_TRUE (startingWith (engine, "/aux-return/source").empty());
+    EXPECT_TRUE (has (engine, "/aux-return/cue f:0"));
     EXPECT_TRUE (has (engine, "/channel/1/cue f:0"));
     EXPECT_EQ (engine.back(), "/engine/open i:1");
 }
@@ -591,16 +590,6 @@ TEST (CoreValues, ADeviceRecallDoesNotOpen)
     rig.clear();
     rig.osc (rig.motion, "/state/recall", { pyInt (1) });
     EXPECT_FALSE (has (rig.to ("engine"), "/engine/open i:1"));
-}
-
-TEST (CoreValues, TheReturnFollowsTheDesksMode)
-{
-    CoreRig rig;
-    rig.engineHello ("boot-1");
-    rig.osc (rig.desk, "/aux-return/stem/turn", { pyInt (1) });   // STEM -> ANALOG on the ring
-    rig.clear();
-    rig.osc (rig.desk, "/aux-return/stem/push", { pyInt (1) });
-    EXPECT_EQ (rig.to ("engine"), (std::vector<std::string> { "/aux-return/source i:0" }));
 }
 
 TEST (CoreValues, NoStemBusCommandReachesStemdeck)
@@ -728,7 +717,6 @@ TEST (CoreValues, EverySendPointHasItsEngineBranch)
     rig.osc (rig.desk, "/filter/resonance", { pyStr ("0.5") });
     rig.osc (rig.desk, "/channel/1/stem/turn", { pyInt (1) });
     rig.osc (rig.desk, "/channel/1/stem/push", { pyInt (1) });
-    rig.osc (rig.desk, "/aux-return/stem/turn", { pyInt (-1) });
     rig.osc (rig.desk, "/aux-return/stem/push", { pyInt (1) });
     EXPECT_EQ (rig.to ("engine"), (std::vector<std::string> { "/channel/1/volume f:0.5", "/master/booth f:0.5", "/filter/resonance f:0.5",
                                                                "/channel/1/source i:1", "/aux-return/cue f:1" }));
@@ -771,7 +759,6 @@ TEST (CoreValues, NothingReachesTheEngineBeforeItsHelloEverySendPointHasItsEngin
     rig.osc (rig.desk, "/filter/mode", { pyStr ("high_pass") });
     rig.osc (rig.desk, "/channel/1/stem/turn", { pyInt (1) });
     rig.osc (rig.desk, "/channel/1/stem/push", { pyInt (1) });
-    rig.osc (rig.desk, "/aux-return/stem/turn", { pyInt (-1) });
     rig.osc (rig.desk, "/aux-return/stem/push", { pyInt (1) });
     EXPECT_TRUE (rig.to ("engine").empty());
 }
@@ -800,10 +787,9 @@ TEST (CoreValues, TheOtherWords)
     rig.osc (rig.desk, "/master/phones-mix", { pyStr ("0.25") });
     rig.osc (rig.desk, "/filter/frequency", { pyStr ("0.75") });
     rig.osc (rig.desk, "/filter/mode", { pyStr ("high_pass") });
-    rig.osc (rig.desk, "/aux-return/stem/turn", { pyInt (1) });
     rig.osc (rig.desk, "/aux-return/stem/push", { pyInt (1) });
     EXPECT_EQ (rig.to ("engine"), (std::vector<std::string> { "/master/phones-mix f:0.25", "/filter/frequency f:0.75", "/filter/mode f:1",
-                                                               "/aux-return/source i:0" }));
+                                                               "/aux-return/cue f:1" }));
 }
 
 TEST (CoreValues, EngineHelloIsMapped)
@@ -821,7 +807,7 @@ TEST (CoreValues, TheEngineRecallSendsStateThenOpenAndNoReaperGate)
     const auto engine = rig.to ("engine");
     ASSERT_GE (engine.size(), 2u);
     EXPECT_EQ (engine.back(), "/engine/open i:1");
-    EXPECT_EQ (engine[engine.size() - 2], "/aux-return/source i:1");
+    EXPECT_TRUE (startingWith (engine, "/aux-return/source").empty());
     for (const auto& entry : rig.net.transcript)
         EXPECT_NE (entry["to"].toString(), "reaper");
 }
@@ -935,33 +921,17 @@ TEST (CoreValues, ThreeDOnADeckChannelGoesToTheDeck)
     EXPECT_EQ (static_cast<double> (rig.json ("state.json")["channels"][2]["three_d"]), 0.6);
 }
 
-TEST (CoreValues, TheReturnSourceComesFromTheDesksMode)
+// P47: an older state's return mode and cursor are ignored; no source reaches the engine.
+TEST (CoreValues, AnOldReturnModeIsIgnored)
 {
     CoreRig rig ({ { "state.json", R"({"stems": {"return_mode": 0, "return_cursor": 0}})" } });
     rig.engineHello ("boot-1");
-    EXPECT_TRUE (has (rig.to ("engine"), "/aux-return/source i:0"));
-    EXPECT_FALSE (has (rig.to ("engine"), "/aux-return/source i:1"));
+    EXPECT_TRUE (startingWith (rig.to ("engine"), "/aux-return/source").empty());
+    EXPECT_TRUE (startingWith (rig.to ("mixer"), "/aux-return/stem").empty());
 }
 
 //==============================================================================
 // Carried from the earlier reviews (Task 17): a list passed on, a NaN kept.
-
-TEST (CoreValues, AListIsPassedOnAndWrittenAsAList)
-{
-    // The return's word is nine integers: broadcast as nine arguments, held and written as one list.
-    CoreRig rig;
-    rig.engineHello ("boot-1");
-    rig.clear();
-    rig.osc (rig.desk, "/aux-return/stem/turn", { pyInt (1) });
-    rig.osc (rig.desk, "/aux-return/stem/turn", { pyInt (-1) });
-    rig.osc (rig.desk, "/aux-return/stem/turn", { pyInt (1) });
-    EXPECT_EQ (startingWith (rig.to ("mixer"), "/aux-return/stem i:"),
-               (std::vector<std::string> { "/aux-return/stem i:0 i:0 i:0 i:0 i:0 i:0 i:0 i:0 i:0",
-                                           "/aux-return/stem i:1 i:0 i:0 i:0 i:0 i:0 i:0 i:0 i:0",
-                                           "/aux-return/stem i:0 i:0 i:0 i:0 i:0 i:0 i:0 i:0 i:0" }));
-    rig.stop();
-    EXPECT_EQ (dumpPython (rig.json ("evening.json")["values"]["/aux-return/stem"]), "[0, 0, 0, 0, 0, 0, 0, 0, 0]");
-}
 
 TEST (CoreValues, ASteadyNanDoesNotPutTheStateFileOff)
 {

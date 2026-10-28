@@ -59,13 +59,13 @@ TEST (StemsWords, AChannelOnAnalogShowsAWhateverIsOnItsBus)
     EXPECT_EQ (said (s)["/channel/1/stem"], ints ({ 0 }));
 }
 
-TEST (StemsWords, TheReturnIsCursorThenAuxFlags)
+// P47: the FX Return has no cursor and no mode: nothing on /aux-return/stem, whatever is on AUX.
+TEST (StemsWords, TheReturnSaysNothing)
 {
     Stems s;
     s.report (3, 1 << 4);   // AUX
-    const auto args = said (s)["/aux-return/stem"];
-    ASSERT_EQ (args.size(), 9u);
-    EXPECT_EQ (std::vector<OscArg> (args.begin() + 1, args.end()), ints ({ 0, 0, 1, 0, 0, 0, 0, 0 }));
+    for (const auto& [address, args] : said (s))
+        EXPECT_NE (address.rfind ("/aux-return", 0), 0u) << address;
 }
 
 TEST (StemsWords, EachChannelSaysItsCursor)
@@ -79,16 +79,6 @@ TEST (StemsWords, EachChannelSaysItsCursor)
         EXPECT_FALSE (address.size() >= 10 && address.compare (address.size() - 10, 10, "/stem/menu") == 0) << address;
         EXPECT_FALSE (address.size() >= 14 && address.compare (address.size() - 14, 14, "/stem/selected") == 0) << address;
     }
-}
-
-TEST (StemsWords, TheReturnSaysItsCursorFirstAndItsMode)
-{
-    Stems s;
-    s.returnCursor = 0;
-    s.returnMode = 1;
-    const auto msgs = said (s);
-    EXPECT_EQ (msgs.at ("/aux-return/stem")[0], pyInt (0));
-    EXPECT_EQ (msgs.at ("/aux-return/stem/mode"), ints ({ 1 }));
 }
 
 // TheTidySettles

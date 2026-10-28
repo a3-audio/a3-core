@@ -269,7 +269,7 @@ void Core::speakStems (bool full)
         sourcesSentToEngine.clear();
     // Marked as told even before the engine's hello: changed_messages runs whether send_to_engine
     // sends or not, as in B1.
-    sendToEngine (changedMessages (sourceMessages (truth, decks, engineReturnSource (stems.returnMode)), sourcesSentToEngine));
+    sendToEngine (changedMessages (sourceMessages (truth, decks), sourcesSentToEngine));
     reportDecks (full);
 }
 

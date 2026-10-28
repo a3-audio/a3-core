@@ -31,13 +31,6 @@ namespace a3core
 // What the engine is replayed at its start: the values Core last passed on.
 using Evening = std::vector<Message>;
 
-// The aux-return source that plays the delay's output (R1); 0 is analog 11/12.
-inline constexpr int returnDelay = 1;
-
-// The aux return's source from the desk's own return word: STEM (the desk's word 1, shown there as FX RTN)
-// plays the delay, ANALOG analog 11/12.
-int engineReturnSource (int returnMode);
-
 // The truth names sent as they arrived.
 const std::set<std::string>& forwarded();
 
@@ -61,12 +54,12 @@ Message positionMessage (const Truth& truth, Position word, int channelIndex, do
 Message returnCueMessage (const Truth& truth, bool on);
 Message tempoMessage (const Truth& truth, double bpm);
 Message openMessage (const Truth& truth);   // engine.open as the integer 1
-// Every channel's source from the deck selector, then the return's: integers.
-std::vector<Message> sourceMessages (const Truth& truth, const DeckSelector& selector, int returnSource);
+// Every channel's source from the deck selector, as integers. The FX Return has none (P45).
+std::vector<Message> sourceMessages (const Truth& truth, const DeckSelector& selector);
 
 // What the engine needs that the evening's replay does not carry.
 std::vector<Message> stateMessages (const Truth& truth, const std::vector<ChannelInfo>& channels, const MasterInfo& master,
-                                    const DeckSelector& selector, int returnSource, std::optional<double> bpm);
+                                    const DeckSelector& selector, std::optional<double> bpm);
 
 // Whether what the engine reports is the evening. A boot id not heard before is an engine that has
 // just started and knows nothing: it gets the replay. The same id again is its repeated hello.

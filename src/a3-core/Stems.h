@@ -59,14 +59,10 @@ public:
     static constexpr int analogInput = pairs;
     // A channel's source: which of its two sends is open. nullopt = undecided.
     static constexpr int analogSource = 0, stemSource = 1;
-    // The aux return's two modes; its cursor runs over both and the CUE field, a switch of its own.
-    static constexpr int analogMode = 0, stemMode = 1, cueField = 2;
 
     std::array<int, pairs> masks {};
     std::array<int, channels> cursors { analogInput, analogInput, analogInput, analogInput };
     std::array<std::optional<int>, channels> sources {};
-    int returnCursor = stemMode;
-    int returnMode = stemMode;
 
     // StemDeck's word for one stem; false for a damaged one. The rules are applied later (tidy),
     // once the reports have settled. A mask may be six bits wide (an older StemDeck's CUE); that bit is dropped.
@@ -87,9 +83,10 @@ public:
     // The commands that make the mirror obey the rules, applied at once. A second call returns none.
     std::vector<Command> tidy();
 
-    // The cursors, sources and return mode as they are written down.
+    // The cursors and sources as they are written down.
     juce::var asData() const;
-    // The remembered cursors, sources and return mode, or the defaults; never fails.
+    // The remembered cursors and sources, or the defaults; never fails (an older file's return mode
+    // and cursor are ignored, P47).
     static Stems fromData (const juce::var& data);
 
 private:

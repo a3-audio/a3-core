@@ -19,9 +19,6 @@ namespace
 constexpr int aux = Stems::aux;
 constexpr int analogSource = Stems::analogSource;
 constexpr int stemSource = Stems::stemSource;
-constexpr int analogMode = Stems::analogMode;
-constexpr int stemMode = Stems::stemMode;
-constexpr int cueField = Stems::cueField;
 constexpr int analogInput = Stems::analogInput;
 constexpr int returnIndex = Stems::returnIndex;
 using Source = std::optional<int>;
@@ -37,10 +34,9 @@ Stems stemsWith (std::initializer_list<std::pair<int, int>> masks)
 }
 
 // A mirror that already obeys the rules, as StemDeck leaves it.
-Stems tidied (int mode, std::initializer_list<std::pair<int, int>> masks)
+Stems tidied (std::initializer_list<std::pair<int, int>> masks)
 {
     auto s = stemsWith (masks);
-    s.returnMode = mode;
     s.tidy();
     return s;
 }
@@ -148,7 +144,6 @@ TEST (Stems, TurningSwitchesNothing)
 TEST (Stems, PushOnAStemMakesItTheOnlyInput)
 {
     auto s = stemsWith ({ { 5, bit (1) } });
-    s.returnMode = analogMode;
     s.cursors[0] = 0;   // D1, stem 1 = pair 1
     const auto commands = s.push (0);
     ASSERT_GE (commands.size(), 2u);
@@ -161,7 +156,6 @@ TEST (Stems, PushOnAStemMakesItTheOnlyInput)
 TEST (Stems, ChannelOnesSecondStemIsCursor4)
 {
     Stems s;
-    s.returnMode = analogMode;
     s.cursors[0] = 4;   // D2, stem 1 = pair 5
     s.push (0);
     EXPECT_EQ (s.placeOf (5), Source (0));
@@ -170,7 +164,7 @@ TEST (Stems, ChannelOnesSecondStemIsCursor4)
 TEST (Stems, PushOnWhatPlaysChangesNothing)
 {
     // Until 2026-10-14 it released the stem to AUX; analog is A's now, and A leaves StemDeck alone.
-    auto s = tidied (stemMode, { { 1, bit (1) } });
+    auto s = tidied ({ { 1, bit (1) } });
     s.sources[0] = stemSource;
     s.cursors[0] = 0;
     EXPECT_EQ (s.push (0), Commands());
@@ -181,7 +175,7 @@ TEST (Stems, PushOnWhatPlaysChangesNothing)
 TEST (Stems, PushOnTheStemOnTheBusWhileAnalogPlaysHearsIt)
 {
     // The stem stayed on bus 1 while A played: a push only opens the stems send, StemDeck has nothing to do.
-    auto s = tidied (stemMode, { { 1, bit (1) } });
+    auto s = tidied ({ { 1, bit (1) } });
     s.cursors[0] = 0;
     EXPECT_EQ (s.push (0), Commands());
     EXPECT_EQ (s.sources[0], Source (stemSource));
@@ -190,7 +184,6 @@ TEST (Stems, PushOnTheStemOnTheBusWhileAnalogPlaysHearsIt)
 TEST (Stems, TheOtherDecksStemNMovesToAux)
 {
     auto s = stemsWith ({ { 1, bit (1) } });
-    s.returnMode = analogMode;
     s.cursors[0] = 4;   // pair 5
     const auto commands = s.push (0);
     EXPECT_EQ (sorted (commands), sorted ({ { 5, 1, true }, { 5, aux, false }, { 1, 1, false }, { 1, aux, true } }));
@@ -249,20 +242,17 @@ TEST (Stems, AOnAnUndecidedChannelDecidesAnalog)
 
 TEST (Stems, APushOnASendsNothingToStemdeck)
 {
-    for (int mode : { analogMode, stemMode })
-    {
-        auto s = tidied (mode, { { 3, bit (1) } });
-        s.sources[0] = stemSource;
-        const auto masks = s.masks;
-        EXPECT_EQ (pushA (s), Commands()) << mode;
-        EXPECT_EQ (s.masks, masks) << mode;
-        EXPECT_EQ (s.sources[0], Source (analogSource)) << mode;
-    }
+    auto s = tidied ({ { 3, bit (1) } });
+    s.sources[0] = stemSource;
+    const auto masks = s.masks;
+    EXPECT_EQ (pushA (s), Commands());
+    EXPECT_EQ (s.masks, masks);
+    EXPECT_EQ (s.sources[0], Source (analogSource));
 }
 
 TEST (Stems, TheStemStaysOnItsBusAndOffAux)
 {
-    auto s = tidied (stemMode, { { 1, bit (1) } });
+    auto s = tidied ({ { 1, bit (1) } });
     select (s, 0, 1);
     pushA (s);
     EXPECT_EQ (s.placeOf (1), Source (0));
@@ -280,7 +270,7 @@ TEST (Stems, ASwitchesWithoutStemdeckToo)
 
 TEST (Stems, AOnOneChannelLeavesTheOthersAlone)
 {
-    auto s = tidied (analogMode, { { 1, bit (1) }, { 6, bit (2) } });
+    auto s = tidied ({ { 1, bit (1) }, { 6, bit (2) } });
     s.sources = { stemSource, stemSource, stemSource, stemSource };
     pushA (s);
     EXPECT_EQ (s.sources, (std::array<Source, 4> { analogSource, stemSource, stemSource, stemSource }));
@@ -290,7 +280,6 @@ TEST (Stems, AOnOneChannelLeavesTheOthersAlone)
 TEST (Stems, AStemAfterAIsHeardAgain)
 {
     Stems s;
-    s.returnMode = analogMode;
     select (s, 0, 1);
     pushA (s);
     EXPECT_EQ (select (s, 0, 1), Commands());
@@ -317,7 +306,7 @@ TEST (Stems, NoStemIsRemembered)
     select (s, 0, 1);
     const auto data = s.asData();
     EXPECT_FALSE (data.hasProperty ("last_stems"));
-    EXPECT_EQ (data.getDynamicObject()->getProperties().size(), 4);
+    EXPECT_EQ (data.getDynamicObject()->getProperties().size(), 2);   // cursors, sources
 }
 
 // WithoutStemDeck
@@ -355,21 +344,11 @@ TEST (Stems, ADoesNotTouchTheMirrorEither)
     EXPECT_EQ (s.channelMask (0), 1);
 }
 
-TEST (Stems, TheReturnModeSwitchesWithoutCommands)
-{
-    auto s = stemsWith ({ { 2, bit (aux) } });
-    s.returnCursor = analogMode;
-    EXPECT_EQ (s.push (returnIndex, false), Commands());
-    EXPECT_EQ (s.returnMode, analogMode);
-    EXPECT_TRUE (s.playsOnReturn (2));
-}
-
 // OnePerChannel
 
 TEST (Stems, TwoStemsOnABusKeepTheLowestWhateverTheirDeck)
 {
     auto s = stemsWith ({ { 5, bit (1) }, { 1, bit (1) } });
-    s.returnMode = analogMode;
     const auto commands = s.tidy();
     Commands onChannels;
     for (const auto& c : commands)
@@ -412,7 +391,7 @@ TEST (Stems, TidyTwiceIsNothing)
     EXPECT_EQ (s.tidy(), Commands());
 }
 
-// ReturnModes
+// TheRules
 
 TEST (Stems, AStemOnNoBusStaysOff)
 {
@@ -430,28 +409,23 @@ TEST (Stems, AStemOnAChannelLeavesAux)
     EXPECT_TRUE (has (s.tidy(), { 1, aux, false }));
 }
 
-TEST (Stems, AnalogModeTakesAStemOnAChannelOffAuxToo)
+TEST (Stems, AStemOnAChannelLeavesAuxAndOneOnNoChannelStays)
 {
-    // One stem per bus whatever the mode: Core switches the return's source, so AUX is silent on
-    // the return in ANALOG mode.
     auto s = stemsWith ({ { 1, bit (1) | bit (aux) }, { 2, bit (aux) } });
-    s.returnMode = analogMode;
     EXPECT_EQ (sorted (s.tidy()), (Commands { { 1, aux, false } }));
     EXPECT_EQ (s.channelMask (0), 1);
     EXPECT_TRUE (s.playsOnReturn (2));
 }
 
-TEST (Stems, InBothModesTheRulesHoldAndAnOffStemStaysOff)
+TEST (Stems, TheRulesHoldAndAnOffStemStaysOff)
 {
     std::mt19937 rng (20261007);
-    for (int mode : { analogMode, stemMode })
     {
         for (int round = 0; round < 300; ++round)
         {
             Stems s;
             for (int pair = 1; pair <= Stems::pairs; ++pair)
                 s.report (pair, static_cast<int> (rng() % (1u << aux)));
-            s.returnMode = mode;
             std::vector<int> off;
             for (int pair = 1; pair <= Stems::pairs; ++pair)
                 if (s.masks[pair - 1] == 0)
@@ -469,94 +443,36 @@ TEST (Stems, InBothModesTheRulesHoldAndAnOffStemStaysOff)
                     EXPECT_FALSE (s.playsOnReturn (pair));
             }
             for (int pair : off)
-                EXPECT_EQ (s.masks[pair - 1], 0) << mode << " " << pair;
+                EXPECT_EQ (s.masks[pair - 1], 0) << pair;
             EXPECT_EQ (s.tidy(), Commands());
         }
     }
 }
 
-TEST (Stems, TheEncoderRunsARingOfThree)
-{
-    // The display's order, left to right: STEM, ANALOG, CUE, and round again (spec return-cue, 2026-10-04).
-    Stems s;
-    EXPECT_EQ (s.returnCursor, stemMode);
-    s.turn (returnIndex, +1);
-    EXPECT_EQ (s.returnCursor, analogMode);
-    s.turn (returnIndex, +1);
-    EXPECT_EQ (s.returnCursor, cueField);
-    s.turn (returnIndex, +1);
-    EXPECT_EQ (s.returnCursor, stemMode);
-}
-
-TEST (Stems, LeftFromStemIsCue)
-{
-    Stems s;
-    s.turn (returnIndex, -1);
-    EXPECT_EQ (s.returnCursor, cueField);
-}
-
-TEST (Stems, AFastTurnCountsEveryClick)
-{
-    Stems s;
-    s.turn (returnIndex, +2);
-    EXPECT_EQ (s.returnCursor, cueField);
-    s.turn (returnIndex, -4);
-    EXPECT_EQ (s.returnCursor, analogMode);
-}
-
-TEST (Stems, PushOnCueSwitchesNothingAndKeepsTheMode)
+// P47: the FX Return has no ring, no mode and no cursor; a turn or push on it changes and commands nothing.
+TEST (Stems, TheReturnHasNoRing)
 {
     auto s = stemsWith ({ { 1, bit (1) }, { 2, bit (aux) } });
-    s.returnMode = analogMode;
-    s.returnCursor = cueField;
     const auto masks = s.masks;
+    const auto cursors = s.cursors;
+    s.turn (returnIndex, +1);
     EXPECT_EQ (s.push (returnIndex), Commands());
-    EXPECT_EQ (s.returnMode, analogMode);
+    EXPECT_EQ (s.push (returnIndex, false), Commands());
     EXPECT_EQ (s.masks, masks);
-}
-
-TEST (Stems, PushSwitchesTheModeAndNoStem)
-{
-    // The mode chooses the return's source; StemDeck's switches stay as they are.
-    for (const auto& [start, target] : std::vector<std::pair<int, int>> { { stemMode, analogMode }, { analogMode, stemMode } })
-    {
-        auto s = tidied (start, { { 1, bit (1) }, { 6, bit (3) } });
-        const auto masks = s.masks;
-        s.returnCursor = target;
-        EXPECT_EQ (s.push (returnIndex), Commands());
-        EXPECT_EQ (s.returnMode, target);
-        EXPECT_EQ (s.masks, masks);
-    }
+    EXPECT_EQ (s.cursors, cursors);
 }
 
 TEST (Stems, APutsNothingOnAux)
 {
     // Until 2026-10-14 A released the stem onto AUX.
-    auto s = tidied (stemMode, { { 1, bit (1) } });
+    auto s = tidied ({ { 1, bit (1) } });
     s.cursors[0] = analogInput;
     EXPECT_EQ (s.push (0), Commands());
     EXPECT_FALSE (s.playsOnReturn (1));
 }
 
-TEST (Stems, AnalogModeLeavesTheStemsOnNoBusOff)
-{
-    auto s = stemsWith ({ { 1, bit (1) }, { 2, bit (2) }, { 3, bit (3) }, { 4, bit (4) } });   // 1-4 on channels 1-4
-    s.returnMode = analogMode;
-    EXPECT_EQ (s.tidy(), Commands());
-    s.returnCursor = stemMode;
-    EXPECT_EQ (s.push (returnIndex), Commands());
-}
-
 // TheCueLeavesStemDeckAlone: the mirror has no cue commands and no C switch to clear -- there is
 // nothing to call, which a compiler enforces better than a test; only the report is pinned.
-
-TEST (Stems, TheMirrorHasNoCueCommands)
-{
-    // A push on the return's CUE field is the only cue the mirror knows, and it says nothing.
-    Stems s;
-    s.returnCursor = cueField;
-    EXPECT_EQ (s.push (returnIndex), Commands());
-}
 
 TEST (Stems, ThereIsNoCSwitchToClear)
 {
@@ -629,16 +545,14 @@ TEST (Stems, GarbledSourcesAreUndecided)
         EXPECT_EQ (Stems::fromData (parsed ((std::string (R"({"sources": )") + sources + "}").c_str())).sources, undecided()) << sources;
 }
 
-TEST (Stems, CursorsAndModeAreKept)
+TEST (Stems, CursorsAreKept)
 {
     Stems s;
     s.cursors = { analogInput, 1, 2, 7 };
-    s.returnCursor = analogMode;
-    s.returnMode = analogMode;
-    const auto back = Stems::fromData (s.asData());
-    EXPECT_EQ (back.cursors, s.cursors);
-    EXPECT_EQ (back.returnCursor, analogMode);
-    EXPECT_EQ (back.returnMode, analogMode);
+    const auto data = s.asData();
+    EXPECT_EQ (Stems::fromData (data).cursors, s.cursors);
+    EXPECT_FALSE (data.hasProperty ("return_mode"));
+    EXPECT_FALSE (data.hasProperty ("return_cursor"));
 }
 
 TEST (Stems, AStoredCursorOutsideTheRingFallsBackToA)
@@ -646,17 +560,12 @@ TEST (Stems, AStoredCursorOutsideTheRingFallsBackToA)
     EXPECT_EQ (Stems::fromData (parsed (R"({"cursors": [0, 0, 6, 7]})")).cursors, (std::array<int, 4> { 0, analogInput, 6, 7 }));
 }
 
-TEST (Stems, TheCursorOnCueIsKept)
+// P47: a file written while the return had a mode and a cursor still loads; both are ignored.
+TEST (Stems, AnOldReturnModeAndCursorAreIgnored)
 {
-    Stems s;
-    s.returnCursor = cueField;
-    EXPECT_EQ (Stems::fromData (s.asData()).returnCursor, cueField);
-}
-
-TEST (Stems, CueIsNeverAMode)
-{
-    EXPECT_EQ (Stems::fromData (parsed (R"({"return_mode": 2})")).returnMode, stemMode);
-    EXPECT_EQ (Stems::fromData (parsed (R"({"return_cursor": 3})")).returnCursor, stemMode);
+    const auto s = Stems::fromData (parsed (R"({"return_mode": 0, "return_cursor": 2, "cursors": [8, 8, 8, 7]})"));
+    EXPECT_EQ (s.cursors, (std::array<int, 4> { analogInput, analogInput, analogInput, 7 }));
+    EXPECT_FALSE (s.asData().hasProperty ("return_mode"));
 }
 
 TEST (Stems, AnOldFileWithLastStemsStillLoads)
@@ -673,6 +582,5 @@ TEST (Stems, AnOldOrGarbledFileNeverRaises)
     {
         const auto s = Stems::fromData (parsed (data));
         EXPECT_EQ (s.cursors, (std::array<int, 4> { analogInput, analogInput, analogInput, analogInput })) << data;
-        EXPECT_EQ (s.returnMode, stemMode) << data;
     }
 }

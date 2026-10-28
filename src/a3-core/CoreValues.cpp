@@ -58,7 +58,6 @@ std::optional<long long> wholeOf (const OscArg* value)
     }
 }
 
-constexpr int returnRingSize = 3;   // STEM, ANALOG, CUE
 const std::string engineOnly[] { "aux-send", "gain", "eq.high", "eq.mid", "eq.low", "volume", "filter.frequency", "filter.q" };
 }
 
@@ -267,8 +266,7 @@ void Core::filterHandler (const Endpoint& from, const OscMessage& message)
     rememberState();
 }
 
-// osc_handler_aux_return: turn moves the cursor over STEM, ANALOG and CUE; push switches the mode, or
-// on CUE toggles the return's cue.
+// The FX Return's encoder (P47): its push toggles the return's cue; it has nothing else to choose.
 void Core::auxReturnHandler (const Endpoint& from, const OscMessage& message)
 {
     const auto found = knownAddress (from, message);
@@ -278,21 +276,12 @@ void Core::auxReturnHandler (const Endpoint& from, const OscMessage& message)
     const auto* value = firstOrNone (message);
     const auto origin = originOf (from);
     seen (message, value, origin);
-    if (key == "aux-return.stem.turn")
-        stems.turn (Stems::returnIndex, turnSteps (floatOf (firstOf (message)), returnRingSize));
-    else if (key == "aux-return.stem.push")
-    {
-        // Its commands would go to StemDeck, which engine mode never sends (send_to_stemdeck).
-        stems.push (Stems::returnIndex, stemdeckClient.has_value());
-        if (stems.returnCursor == Stems::cueField)
-            toggleReturnCue();
-    }
-    else
+    if (key != "aux-return.stem.push")
     {
         trafficTable.unknown (message.address, value, origin, env.clock.monotonic());
         return;
     }
-    speakStems (false);
+    toggleReturnCue();
     rememberState();
 }
 

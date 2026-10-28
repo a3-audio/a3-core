@@ -255,7 +255,7 @@ TEST (CorePeers, ChannelOriginComesFromOriginOf)
     rig.motionHello();
     const Endpoint deskBesideMotion { "127.0.0.1", 7773 };
     rig.hello (deskBesideMotion, "desk");
-    for (const auto* address : { "/channel/1/volume", "/master/volume", "/aux-return/stem/turn", "/filter/frequency" })
+    for (const auto* address : { "/channel/1/volume", "/master/volume", "/aux-return/stem/push", "/filter/frequency" })
     {
         rig.osc (deskBesideMotion, address, { pyStr ("1") });
         EXPECT_EQ (rig.peerOf (address), "desk@127.0.0.1") << address;
