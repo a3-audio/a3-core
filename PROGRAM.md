@@ -59,9 +59,11 @@ libraries JUCE would `dlopen` for a window are not needed.
   before it fades in (R14), the analog strip included. A channel without an analog pair is deck-only
   and has no encoder source (R10). Positions, 3D, FREQ and Q do nothing on a deck channel.
 - **Buses.** `enc_main`, `enc_fx` (AUX, into IEM's DualDelay) and `enc_phones` (cue pre-VOLUME, mix
-  post-VOLUME), order 3. A deck's 16 post-VOLUME channels are added to `enc_main` directly; its 16-channel
-  `aux` bus runs through a second deck strip on the channel's controls and, post-VOLUME times the AUX
-  send, joins `enc_fx` (never the main 16). Decks are 1…D on the wire (R12).
+  post-VOLUME), order 3. A deck's 16 post-VOLUME channels are added to `enc_main` directly and, times the
+  channel's AUX send (post-fader, like an analog channel's), to `enc_fx`. Its 16-channel `aux` bus
+  (StemDeck's own send) runs through a second deck strip on the channel's controls and joins `enc_fx`
+  after the select fade and VOLUME at unity, not times the AUX send: a pulled fader or a deck on no
+  channel sends nothing. Decks are 1…D on the wire (R12).
 - **FX Return (P45/P47).** The master of the delay channel, like a channel strip whose input is the
   delay's output: RETURN scales it into main, booth and rec (0 is silence); the phones take it as a
   channel, post-RETURN times MIX plus pre-RETURN times CUE (a PFL, `aux-return.cue`). Every analog

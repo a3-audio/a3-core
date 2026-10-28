@@ -1013,6 +1013,21 @@ TEST (Engine, DeskAuxMovesLeaveTheDeckAuxAlone)
     const auto open = sends (false);
     EXPECT_GT (*std::max_element (open.begin(), open.end()), 1e-2f);
     EXPECT_EQ (sends (true), open);
+
+    // With the deck main playing too: what the send carries beyond main x AUX is the aux bus, at unity.
+    const float auxLevel = 0.5f, mainLevel = 0.2f;
+    const auto auxShare = [&] (float auxSend)
+    {
+        auto rig = deckOnChannelOne (oneSecond, [&] (EngineRig& r)
+        {
+            r.decks[0].aux[0] = constant (oneSecond, auxLevel);
+            r.decks[0].bformat[0] = constant (oneSecond, mainLevel);
+            r.controls.channel (0).auxSend = auxSend;
+        });
+        return (double) fxSendFrom (*rig, settled) - mainLevel * a3::laws::auxSendGain (auxSend);
+    };
+    for (float auxSend : { 0.0f, 0.5f, 1.0f })
+        EXPECT_NEAR (auxShare (auxSend), auxLevel, 1e-4) << "AUX " << auxSend;
 }
 
 TEST (Engine, DeckOnNoChannelFeedsNoDelay)
