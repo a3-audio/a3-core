@@ -80,6 +80,11 @@ double blockSharePercent (double blockMs, int frames, double rate)
     return 100.0 * blockMs / (1000.0 * frames / rate);
 }
 
+int benchSourceOfChannel (int channel, int decks)
+{
+    return channel < decks ? channel + 1 : 0;
+}
+
 struct CpuBenchRig::Impl
 {
     CpuBenchOptions options;
@@ -179,7 +184,7 @@ struct CpuBenchRig::Impl
             ch.gain = 0.75f; ch.volume = 0.75f;
             ch.eqHigh = ch.eqMid = ch.eqLow = 0.5f;
             ch.frequency = 0.5f; ch.q = 0.5f; ch.threeD = 1.0f;
-            ch.source = 1 + c % config.decks;   // every deck on a channel, the channels all on decks
+            ch.source = benchSourceOfChannel (c, config.decks);
             ch.cue = 1.0f; ch.auxSend = 0.5f; ch.filterOn = 1.0f;
             ch.azimuth = 30.0f * (float) c; ch.elevation = 0.0f;
         }

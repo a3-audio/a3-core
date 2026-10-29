@@ -34,9 +34,13 @@ int deckCountOfTruth (const juce::String& truthJson);
 
 double blockSharePercent (double blockMs, int frames, double rate);
 
-// The worst case of the revision: every deck slot has signal on its B-format, AUX and cue inputs
-// and every deck sits on a channel (as far as the channels reach); every channel has its AUX send,
-// cue and filter open, PHONES MIX half open, the headphone model on.
+// The source channel `channel` (0-based) holds in the bench: deck channel+1 while there are decks
+// for it, else analog (0). One deck per channel at most, as Core's DeckSelector allows.
+int benchSourceOfChannel (int channel, int decks);
+
+// The worst case of the revision: every deck slot has signal on its B-format, AUX and cue inputs,
+// every deck sits on its own channel (as far as the channels reach), the other channels on analog;
+// every channel has its AUX send, cue and filter open, PHONES MIX half open, the headphone model on.
 class CpuBenchRig
 {
 public:

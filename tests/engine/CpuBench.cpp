@@ -84,16 +84,30 @@ TEST (CpuBench, EveryDeckSlotIsFedOnEveryOneOfItsInputs)
     }
 }
 
-TEST (CpuBench, EveryDeckSitsOnAChannelWhenThereAreChannelsForThem)
+// Core's DeckSelector puts a deck on one channel at most, so the bench may not either: two decks
+// leave two channels on analog, and the deck channels are the first ones.
+TEST (CpuBench, EachDeckSitsOnOneChannelAndTheRestAreAnalog)
+{
+    EXPECT_EQ (benchSourceOfChannel (0, 2), 1);
+    EXPECT_EQ (benchSourceOfChannel (1, 2), 2);
+    EXPECT_EQ (benchSourceOfChannel (2, 2), 0);
+    EXPECT_EQ (benchSourceOfChannel (3, 2), 0);
+    for (int c = 0; c < 4; ++c)
+        EXPECT_EQ (benchSourceOfChannel (c, 4), c + 1);
+    EXPECT_EQ (benchSourceOfChannel (3, 5), 4);   // a fifth deck sits on no channel of four
+}
+
+TEST (CpuBench, TheRigsChannelsHoldTheDecksAsTheDeskCan)
 {
     for (int decks : { 2, 4 })
     {
         const auto rig = rigWithDecks (decks);
-        std::set<int> held;
+        std::multiset<int> held;
         for (int c = 0; c < 4; ++c)
             held.insert (rig->controls().channel (c).source.load());
-        EXPECT_EQ ((int) held.size(), decks);
-        EXPECT_EQ (held.count (0), 0u) << "a channel on analog would not run a deck";
+        for (int deck = 1; deck <= decks; ++deck)
+            EXPECT_EQ (held.count (deck), 1u) << "deck " << deck;
+        EXPECT_EQ ((int) held.count (0), 4 - decks);
         EXPECT_GT (rig->controls().channel (0).auxSend.load(), 0.0f);
         EXPECT_GT (rig->controls().channel (0).cue.load(), 0.0f);
     }
