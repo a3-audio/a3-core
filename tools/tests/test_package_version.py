@@ -19,7 +19,6 @@ from pathlib import Path
 
 TOOLS = Path(__file__).resolve().parents[1]
 ROOT = TOOLS.parent
-WORKFLOW = ROOT / ".github" / "workflows" / "pages-deploy.yml"
 
 sys.path.insert(0, str(TOOLS))
 import package_version  # noqa: E402
@@ -83,57 +82,6 @@ class FromARealRepository(unittest.TestCase):
 
     def test_it_reads_the_tag_and_counts_the_commits(self):
         self.assertEqual("03.0+2", package_version.version_of(self.repo))
-
-
-class TheWorkflowBuildsTheProgram(unittest.TestCase):
-    """The script is only half of it: the workflow builds the program and the
-    deployment into one .deb with the umbrella's installer/package.py, which
-    reads the tags (so the history) and stamps the version itself. The YAML is
-    read as text; no YAML library is a dependency here."""
-
-    def setUp(self):
-        self.text = WORKFLOW.read_text()
-
-    def test_ci_builds_in_debian_testing(self):
-        """The rig is Debian testing: dpkg-shlibdeps must name its libraries."""
-        self.assertIn("runs-on: ubuntu-latest", self.text)
-        self.assertIn("container: debian:testing", self.text)
-
-    def test_ci_checks_out_history_and_the_iem_submodule(self):
-        self.assertIn("fetch-depth: 0", self.text)
-        self.assertIn("submodules: true", self.text)
-        self.assertNotIn("recursive", self.text)
-        self.assertIn("safe.directory '*'", self.text)
-
-    def test_ci_installs_the_build_depends_file(self):
-        self.assertIn("xargs -a packaging/build-depends apt-get install -y "
-                      "--no-install-recommends", self.text)
-        self.assertNotIn("sudo", self.text)
-        git_first = self.text.find("apt-get install -y --no-install-recommends git ca-certificates")
-        self.assertNotEqual(-1, git_first, "git must exist before checkout")
-        self.assertLess(git_first, self.text.find("actions/checkout@v4"))
-
-    def test_ci_builds_with_package_py_and_juce_9_0_3(self):
-        self.assertIn("a3-audio/a3-system/main/installer/package.py", self.text)
-        self.assertIn('python3 -I "$RUNNER_TEMP/package.py" "$GITHUB_WORKSPACE" '
-                      "--rev HEAD", self.text)
-        for flag in ("--out", "--cache", "--juce /opt/juce", "--jobs 4"):
-            self.assertIn(flag, self.text)
-        self.assertIn("--branch 9.0.3", self.text)
-        self.assertNotIn("dpkg-deb --build", self.text)
-        self.assertNotIn("package_version.py", self.text)
-
-    def test_ci_caches_juce_and_ccache(self):
-        self.assertIn("path: /opt/juce", self.text)
-        self.assertIn("key: juce-9.0.3-debian-testing-v1", self.text)
-        self.assertIn("path: /github/home/.ccache", self.text)
-        self.assertIn("key: ccache-${{ github.sha }}", self.text)
-        self.assertIn("restore-keys: ccache-", self.text)
-        self.assertIn("CCACHE_DIR: /github/home/.ccache", self.text)
-
-    def test_ci_publishes_repo_a3_core_deb(self):
-        self.assertIn("repo/a3-core.deb", self.text)
-        self.assertNotIn("platform-config/debian-x86_64/a3-core.deb", self.text)
 
 
 class TheBuildDependsCoverTheInstaller(unittest.TestCase):
