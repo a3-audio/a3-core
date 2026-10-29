@@ -166,6 +166,14 @@ function(a3_add_iem_nodes SUFFIX JUCE_TARGET)
         ${A3_IEM_PATCH_DIR}/DualDelay-crossfade.patch)
     a3_iem_add_plugin("${SUFFIX}" ${JUCE_TARGET} StereoEncoder ${A3_IEM_NODES_DIR}/StereoEncoderNode.cpp)
 
+    # AllRADecoder for the window's speaker map: its processor designs the decoder, its editor is the
+    # SPEAKERS page; it never processes audio. IEM's Versions.cmake spells this one's version VERISON.
+    set(AllRADecoder_VERSION ${AllRADecoder_VERISON})
+    a3_iem_add_plugin("${SUFFIX}" ${JUCE_TARGET} AllRADecoder ${A3_IEM_NODES_DIR}/AllRadDesign.cpp)
+    target_sources(${AllRADecoder_TARGET} PRIVATE ${A3_IEM_DIR}/resources/NewtonApple/NewtonApple_hull3D.cpp)
+    set_source_files_properties(${A3_IEM_DIR}/resources/NewtonApple/NewtonApple_hull3D.cpp
+        TARGET_DIRECTORY ${AllRADecoder_TARGET} PROPERTIES COMPILE_OPTIONS -w)
+
     # parseLayout reads decoder files through IEM's ConfigurationHelper, so it
     # lives beside the IEM sources and sees IEM's environment.
     add_library(a3-iem-layout${SUFFIX} STATIC ${A3_IEM_NODES_DIR}/Layout.cpp)
@@ -179,6 +187,6 @@ function(a3_add_iem_nodes SUFFIX JUCE_TARGET)
     target_include_directories(a3-iem${SUFFIX} PUBLIC ${A3_IEM_PUBLIC_INCLUDE_DIR})
     target_include_directories(a3-iem${SUFFIX} PRIVATE ${A3_IEM_NODES_DIR})
     target_link_libraries(a3-iem${SUFFIX} PUBLIC ${JUCE_TARGET} a3-iem-layout${SUFFIX} PRIVATE ${MultiEncoder_TARGET} ${SimpleDecoder_TARGET} ${BinauralDecoder_TARGET} ${DualDelay_TARGET}
-        ${StereoEncoder_TARGET})
+        ${StereoEncoder_TARGET} ${AllRADecoder_TARGET})
     target_compile_options(a3-iem${SUFFIX} PRIVATE -Wall -Wextra -Werror=switch)
 endfunction()
