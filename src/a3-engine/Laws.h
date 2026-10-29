@@ -10,8 +10,16 @@ namespace a3::laws
 // 0..1 -> PurestGain A, 0..0.5 (Core: np.interp [0,1] -> [0,0.5]).
 double slopeVolume (double control);
 
-// 0..1 -> SmoothEQ3 0..0.6 through Core's ten-point table, re-aimed so that control 0.5 (the knob centre)
-// is exactly unity (SmoothEQ3 0.5); 0 and 1 keep full cut and maximum boost.
+// The EQ knob, after the DJM-A9's isolator mode (2026-10-29): kill at 0, 0 dB at the centre detent 0.5,
+// +6 dB at 1, even in dB on each half. Below eqKillTaperBelow the gain fades linearly in amplitude from
+// eqDeepestCutDb to silence, so the last bit of the knob reaches the kill without a jump.
+constexpr double eqMaxBoostDb = 6.0;
+constexpr double eqDeepestCutDb = -26.0;
+constexpr double eqKillTaperBelow = 0.1;
+double eqDb (double control);   // -infinity at the kill
+
+// 0..1 -> the SmoothEQ3 parameter (all bands alike) that gives eqDb (control): its gain law is
+// (1 + x^3)^2 with x = 2 (p - 0.5), inverted here. Control 0.5 is exactly 0.5 (flat).
 double slopeEq (double control);
 
 // 3D 0..1 -> PurestGain A for the moving band (Core: a3_core_crossfade._band_gain).

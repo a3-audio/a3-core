@@ -25,18 +25,23 @@ void expectMatches (const char* name, double (*law) (double))
 }
 
 TEST (Laws, VolumeMatchesCore)  { expectMatches ("slope_volume", a3::laws::slopeVolume); }
-// The golden slope_eq rows were re-recorded when unity moved from control 0.4 to the knob centre 0.5
-// (the desk's detent sends exactly 0.5); the old rows are Core's former law.
-TEST (Laws, EqMatchesGolden)    { expectMatches ("slope_eq", a3::laws::slopeEq); }
+// The EQ follows the DJM-A9's isolator mode (2026-10-29): kill at the left stop, 0 dB at the centre detent,
+// +6 dB at the right stop, even in dB in between. Core's old slope_eq table is gone: its boost half reached
+// +0.14 dB, so the upper half of the knob did nothing.
+TEST (Laws, EqDbFollowsTheIsolatorCurve)
+{
+    EXPECT_EQ (a3::laws::eqDb (0.0), -std::numeric_limits<double>::infinity());
+    EXPECT_NEAR (a3::laws::eqDb (a3::laws::eqKillTaperBelow), a3::laws::eqDeepestCutDb, 1e-9);
+    EXPECT_NEAR (a3::laws::eqDb (0.3), -13.0, 1e-9);
+    EXPECT_DOUBLE_EQ (a3::laws::eqDb (0.5), 0.0);
+    EXPECT_NEAR (a3::laws::eqDb (0.75), 3.0, 1e-9);
+    EXPECT_NEAR (a3::laws::eqDb (1.0), 6.0, 1e-9);
+}
 
 // SmoothEQ3 parameter 0.5 is flat (gain 1.0), so control 0.5 must land exactly there.
 TEST (Laws, EqUnityIsExactlyAtTheKnobCentre) { EXPECT_DOUBLE_EQ (a3::laws::slopeEq (0.5), 0.5); }
 
-TEST (Laws, EqEndPointsKeepFullCutAndMaximumBoost)
-{
-    EXPECT_DOUBLE_EQ (a3::laws::slopeEq (0.0), 0.0);
-    EXPECT_DOUBLE_EQ (a3::laws::slopeEq (1.0), 0.6);
-}
+TEST (Laws, EqLeftStopIsAKill) { EXPECT_DOUBLE_EQ (a3::laws::slopeEq (0.0), 0.0); }
 
 TEST (Laws, EqIsMonotonicOnBothHalves)
 {
