@@ -70,6 +70,23 @@ Message returnCueLamp (const Truth& truth, const MasterInfo& master)
     return { truth.address ("aux-return.cue.led"), pyFloat (master.returnCue ? 1.0 : 0.0) };
 }
 
+std::optional<Message> delayWordMessage (const Truth& truth, DelayWord word, const DelaySteps& steps, std::optional<double> tempo)
+{
+    if (! truth.hasAddress (delayValueKey (word)))
+        return std::nullopt;
+    const auto value = word == DelayWord::beat ? announcedBeat (steps, tempo) : delayValue (steps, word);
+    return Message { truth.address (delayValueKey (word)), pyFloat (value) };
+}
+
+std::vector<Message> delayWordMessages (const Truth& truth, const DelaySteps& steps, std::optional<double> tempo)
+{
+    std::vector<Message> out;
+    for (const auto word : delayWords)
+        if (auto message = delayWordMessage (truth, word, steps, tempo))
+            out.push_back (std::move (*message));
+    return out;
+}
+
 std::vector<Message> rememberedMessages (const Truth& truth, const std::vector<ChannelInfo>& channels)
 {
     std::vector<Message> out;

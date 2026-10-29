@@ -252,6 +252,15 @@ private:
     std::vector<std::vector<uint8_t>> toSelf;
 };
 
+// The package's own truth (the delay page's words are in it; B1's has none of them).
+inline CoreRig::Options onThePackage()
+{
+    static const auto truth = std::get<Truth> (Truth::load (juce::File (A3_PACKAGE_TRUTH), std::nullopt));
+    CoreRig::Options options;
+    options.truth = &truth;
+    return options;
+}
+
 inline bool has (const std::vector<std::string>& lines, const std::string& line)
 {
     return std::find (lines.begin(), lines.end(), line) != lines.end();

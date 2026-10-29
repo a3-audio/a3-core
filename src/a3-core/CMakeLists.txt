@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # The Core as a pure library (namespace a3core): no audio device, no GUI.
 add_library(a3-core-lib STATIC Version.cpp Json.cpp Truth.cpp OscWire.cpp Dispatcher.cpp LatestWins.cpp
-    Presence.cpp HelloGate.cpp Devices.cpp Desks.cpp MotionTarget.cpp ProdjLive.cpp
+    Presence.cpp DelayValues.cpp HelloGate.cpp Devices.cpp Desks.cpp MotionTarget.cpp ProdjLive.cpp
     Buttons.cpp Tempo.cpp TempoSource.cpp Ahead.cpp DeskFirst.cpp SendFailures.cpp Subscribers.cpp Announce.cpp
     StateFile.cpp CoreState.cpp Recall.cpp Evening.cpp
     Stems.cpp StemsWords.cpp Decks.cpp EngineWords.cpp StartupRecall.cpp
@@ -12,5 +12,5 @@ add_library(a3-core-lib STATIC Version.cpp Json.cpp Truth.cpp OscWire.cpp Dispat
     Core.cpp CoreView.cpp CoreValues.cpp CorePython.cpp CorePeers.cpp CoreRecall.cpp
     UdpNet.cpp CoreService.cpp PlatformLinux.cpp)
 target_include_directories(a3-core-lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(a3-core-lib PUBLIC a3-engine-juce)
+target_link_libraries(a3-core-lib PUBLIC a3-engine-juce a3-delay)
 target_compile_options(a3-core-lib PRIVATE -Wall -Wextra -Werror=switch)

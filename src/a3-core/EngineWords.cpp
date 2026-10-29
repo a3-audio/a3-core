@@ -98,6 +98,22 @@ Message positionMessage (const Truth& truth, Position word, int channelIndex, do
 
 Message returnCueMessage (const Truth& truth, bool on) { return { truth.address ("aux-return.cue"), pyFloat (on ? 1.0 : 0.0) }; }
 
+std::optional<Message> delayEngineMessage (const Truth& truth, DelayWord word, const DelaySteps& steps)
+{
+    if (! truth.hasAddress (delayValueKey (word)))
+        return std::nullopt;
+    return Message { truth.address (delayValueKey (word)), pyFloat (delayValue (steps, word)) };
+}
+
+std::vector<Message> delayEngineMessages (const Truth& truth, const DelaySteps& steps)
+{
+    std::vector<Message> out;
+    for (const auto word : delayWords)
+        if (auto message = delayEngineMessage (truth, word, steps))
+            out.push_back (std::move (*message));
+    return out;
+}
+
 Message tempoMessage (const Truth& truth, double bpm) { return { truth.address ("delay.bpm"), pyFloat (bpm) }; }
 
 Message openMessage (const Truth& truth) { return { truth.address ("engine.open"), pyInt (1) }; }
@@ -117,6 +133,8 @@ std::vector<Message> stateMessages (const Truth& truth, const std::vector<Channe
     addFlags (truth, channels, messages);
     messages.push_back (filterModeMessage (truth, static_cast<int> (master.fxMode)));
     messages.push_back (returnCueMessage (truth, master.returnCue));
+    for (auto& message : delayEngineMessages (truth, master.delay))
+        messages.push_back (std::move (message));
     for (auto& message : sourceMessages (truth, selector))
         messages.push_back (std::move (message));
     addPositions (truth, channels, selector, messages);

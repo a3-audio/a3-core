@@ -46,6 +46,11 @@ Message ledMessage (const Truth& truth, LedFlag flag, int index, const ChannelIn
 // The aux return's cue lamp: the toggle and the recall say it through this one function.
 Message returnCueLamp (const Truth& truth, const MasterInfo& master);
 
+// The delay page's values as the desk is told: BEAT as the beat that plays at `tempo` (R16), the
+// rest as they are. Nothing for a word the truth does not have (an older truth).
+std::optional<Message> delayWordMessage (const Truth& truth, DelayWord word, const DelaySteps& steps, std::optional<double> tempo);
+std::vector<Message> delayWordMessages (const Truth& truth, const DelaySteps& steps, std::optional<double> tempo);
+
 // What Core holds for each channel because nobody else can be asked, as the messages that set it:
 // azimuth, elevation, 3d. A value never seen is left out rather than sent as 0.0.
 std::vector<Message> rememberedMessages (const Truth& truth, const std::vector<ChannelInfo>& channels);

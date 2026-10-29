@@ -269,7 +269,8 @@ void Core::filterHandler (const Endpoint& from, const OscMessage& message)
     rememberState();
 }
 
-// The FX Return's encoder (P47): its push toggles the return's cue; it has nothing else to choose.
+// The FX Return's encoder: its push toggles the return's cue, its turn (BEAT, FEEDBK, COLOR, SPREAD,
+// whichever page the desk is on) steps that page's value.
 void Core::auxReturnHandler (const Endpoint& from, const OscMessage& message)
 {
     const auto found = knownAddress (from, message);
@@ -279,12 +280,15 @@ void Core::auxReturnHandler (const Endpoint& from, const OscMessage& message)
     const auto* value = firstOrNone (message);
     const auto origin = originOf (from);
     seen (message, value, origin);
-    if (key != "aux-return.stem.push")
+    if (key == "aux-return.stem.push")
+        toggleReturnCue();
+    else if (const auto word = delayWordOfTurnKey (key); word && wholeOf (value))
+        stepDelay (*word, *wholeOf (value));
+    else
     {
         trafficTable.unknown (message.address, value, origin, env.clock.monotonic());
         return;
     }
-    toggleReturnCue();
     rememberState();
 }
 
@@ -352,6 +356,50 @@ void Core::toggleReturnCue()
     const auto lamp = returnCueLamp (truth, master);
     broadcast ({ lamp.first, { lamp.second } });
     sendToEngine ({ returnCueMessage (truth, master.returnCue) });
+}
+
+// A turn of the delay page: the step moves, and the value is said to the engine and announced to every
+// subscriber even when the step stayed at its end (the desk shows what Core says, not what it expects).
+void Core::stepDelay (DelayWord word, long long clicks)
+{
+    a3core::turnDelay (master.delay, word, clicks);
+    announceDelayWord (word);
+}
+
+// The desk is told the beat that plays (R16); the engine gets the selected one and fits it itself.
+// A truth without the delay words (an older one) has nothing to say.
+void Core::announceDelayWord (DelayWord word)
+{
+    tellTheDeskDelayWord (word);
+    if (const auto asked = delayEngineMessage (truth, word, master.delay))
+        sendToEngine ({ *asked });
+}
+
+void Core::tellTheDeskDelayWord (DelayWord word)
+{
+    const auto told = delayWordMessage (truth, word, master.delay, engineBpm);
+    if (! told)
+        return;
+    toEverySubscriber (OscMessage { told->first, { told->second } });
+    if (word == DelayWord::beat)
+        beatAnnounced = announcedBeat (master.delay, engineBpm);
+}
+
+// The whole page said again, to every subscriber (a recall, the start).
+void Core::announceDelayRecall()
+{
+    for (const auto& message : delayWordMessages (truth, master.delay, engineBpm))
+        toEverySubscriber (OscMessage { message.first, { message.second } });
+    if (truth.hasAddress (delayValueKey (DelayWord::beat)))
+        beatAnnounced = announcedBeat (master.delay, engineBpm);
+}
+
+// R16: when the tempo changes which beat plays, the desk is told again (the engine already fits it
+// to the tempo it was sent); a tempo that moves nothing is not announced.
+void Core::reannounceBeatIfItPlaysDifferently()
+{
+    if (beatAnnounced && announcedBeat (master.delay, engineBpm) != *beatAnnounced)
+        tellTheDeskDelayWord (DelayWord::beat);
 }
 
 // take_deck_word: the desk's ring words, and the 3D of a channel playing a deck, are the deck selector's.

@@ -251,6 +251,7 @@ void Core::speakRememberedState()
     for (const auto& message : messages)
         for (const auto& client : subscribers)
             send (client, message);
+    announceDelayRecall();
     speakStems (true);
     say ("startup: spoke the remembered state, " + std::to_string (messages.size()) + " messages to "
          + std::to_string (subscribers.size()) + " subscribers");

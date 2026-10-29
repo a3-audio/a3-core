@@ -21,6 +21,7 @@ namespace a3core
 // The fields of a channel and of the master this keeps, and nothing else.
 inline const std::vector<std::string> channelFields { "toggle_fx", "toggle_cue", "three_d" };
 inline const std::vector<std::string> masterFields { "phones_mix", "return_cue" };
+// The delay page's values are kept beside them, each only while it differs from its default.
 
 // Everything worth remembering, as data json can write. `stemsData` (the stem mirror's own
 // as_data()) is carried through under "stems" when given.

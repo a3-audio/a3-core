@@ -52,6 +52,23 @@ void applyChannel (ChannelInfo& channel, const juce::var& remembered)
         setCrossfade (channel.threeD, object->getProperty ("three_d"));
 }
 
+// Only what moved: a file without them is the defaults, and stays the layout the Python Core wrote.
+void keepDelaySteps (juce::DynamicObject& state, const DelaySteps& steps)
+{
+    const DelaySteps defaults;
+    for (const auto word : delayWords)
+        if (steps.at (word) != defaults.at (word))
+            state.setProperty (delayStateKey (word), delayValue (steps, word));
+}
+
+void applyDelaySteps (DelaySteps& steps, const juce::DynamicObject& state)
+{
+    for (const auto word : delayWords)
+        if (state.hasProperty (delayStateKey (word)))
+            if (const auto read = numberOf (state.getProperty (delayStateKey (word))))
+                setDelayFromValue (steps, word, *read);
+}
+
 void applyFxMode (MasterInfo& master, const juce::var& value)
 {
     const auto number = numberOf (value);
@@ -79,6 +96,7 @@ juce::var stateOf (const std::vector<ChannelInfo>& channels, const MasterInfo& m
     state->setProperty ("fx_mode", static_cast<int> (master.fxMode));
     state->setProperty ("phones_mix", master.phonesMix);
     state->setProperty ("return_cue", master.returnCue);
+    keepDelaySteps (*state, master.delay);
     if (stemsData != nullptr)
         state->setProperty ("stems", stemsData->clone());
     return juce::var (state);
@@ -98,6 +116,7 @@ void applyState (const juce::var& state, std::vector<ChannelInfo>& channels, Mas
         setNumber (master.phonesMix, object->getProperty ("phones_mix"));
     if (object->hasProperty ("return_cue"))
         setFlag (master.returnCue, object->getProperty ("return_cue"));
+    applyDelaySteps (master.delay, *object);
     if (object->hasProperty ("fx_mode"))
         applyFxMode (master, object->getProperty ("fx_mode"));
 }

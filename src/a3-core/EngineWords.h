@@ -52,6 +52,11 @@ Message flagMessage (const Truth& truth, EngineFlag flag, int channelIndex, bool
 Message filterModeMessage (const Truth& truth, int modeNumber);
 Message positionMessage (const Truth& truth, Position word, int channelIndex, double degrees);
 Message returnCueMessage (const Truth& truth, bool on);
+// The delay page's values as the engine is told: the selected ones (the engine fits BEAT to its line
+// itself, with the same function Core announces by). Nothing for a word the truth does not have.
+std::optional<Message> delayEngineMessage (const Truth& truth, DelayWord word, const DelaySteps& steps);
+std::vector<Message> delayEngineMessages (const Truth& truth, const DelaySteps& steps);
+
 Message tempoMessage (const Truth& truth, double bpm);
 Message openMessage (const Truth& truth);   // engine.open as the integer 1
 // Every channel's source from the deck selector, as integers. The FX Return has none (P45).
