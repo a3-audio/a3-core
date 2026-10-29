@@ -11,7 +11,7 @@ namespace a3app
 // 3D view and energy map, on a processor here that never gets audio, loaded from the pending config's
 // <zone>.decoder.json. Beside it our bar: the zone, the sub channel and crossover (SimpleDecoder's), and
 // SAVE TO ZONE: IEM's calculateDecoder and saveConfigurationToFile make the file, withZoneDecoder writes the
-// user variant and makes it the pending edit; Save restarts the engine. A noise button plays a 1 s pink-noise
+// user variant and makes it the pending edit for the shown zone only; Save restarts the engine. A noise button plays a 1 s pink-noise
 // burst in the shown zone of the running engine (its running decoder), before its level stage and gate.
 class SpeakersPage final : public juce::Component
 {

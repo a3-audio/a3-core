@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "ZonesPage.h"
+#include "ConfigEdits.h"
 #include "DecoderSummary.h"
 #include <algorithm>
 
@@ -45,6 +46,30 @@ juce::String zoneSummary (a3::SpeakerZone zone, const juce::File& directory)
            + (summary->subChannel > 0 ? "sub ch " + juce::String (summary->subChannel) : juce::String ("no sub")) + "  ·  "
            + crossoverText (*summary) + "\n" + speakerList (summary->loudspeakers);
 }
+
+bool holdsAVariant (const juce::File& directory) { return directory.getChildFile ("main.decoder.json").existsAsFile(); }
+
+void confirmWithBox (const juce::String& question, std::function<void()> onYes)
+{
+    const auto options = juce::MessageBoxOptions().withIconType (juce::MessageBoxIconType::WarningIcon)
+                             .withTitle ("Delete variant").withMessage (question).withButton ("DELETE").withButton ("Cancel");
+    juce::AlertWindow::showAsync (options, [onYes = std::move (onYes)] (int result) { if (result == 1 && onYes) onYes(); });
+}
+
+void askNameWithBox (const juce::String& current, std::function<void (const juce::String&)> onName)
+{
+    auto* box = new juce::AlertWindow ("Rename variant", "A new name for " + current
+                                           + " (no slash, not starting with a dot, not one that exists).",
+                                       juce::MessageBoxIconType::NoIcon);
+    box->addTextEditor ("name", current);
+    box->addButton ("RENAME", 1, juce::KeyPress (juce::KeyPress::returnKey));
+    box->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+    box->enterModalState (true, juce::ModalCallbackFunction::create ([box, onName = std::move (onName)] (int result)
+    {
+        if (result == 1 && onName)
+            onName (box->getTextEditorContents ("name"));
+    }), true);   // deleted once dismissed, after this callback
+}
 }
 
 class ZonesPage::Model final : public juce::ListBoxModel
@@ -60,32 +85,46 @@ public:
         if (selected)
             g.fillAll (palette::lifted);
         const auto& directory = page.directories[(size_t) row];
-        g.setFont ((float) height * 0.5f);
+        g.setFont ((float) height * 0.45f);
         g.setColour (selected ? palette::text : palette::textMuted);
-        g.drawText (directory.getFileName(), width / 40, 0, width / 3, height, juce::Justification::centredLeft);
+        g.drawText (directory.getFileName(), width / 40, 0, width / 2, height, juce::Justification::centredLeft);
         g.setColour (palette::textMuted);
-        g.drawText (directory.getParentDirectory().getFullPathName(), width / 3 + width / 20, 0, width * 2 / 3 - width / 20, height,
-                    juce::Justification::centredLeft);
+        const bool own = isUserVariant (directory, page.userRoot);
+        g.drawText (own ? juce::String ("yours") : directory.getParentDirectory().getFullPathName(), width / 2 + width / 20, 0,
+                    width / 2 - width / 10, height, juce::Justification::centredRight);
     }
 
-    void listBoxItemClicked (int row, const juce::MouseEvent&) override { page.choose (row); }
+    void listBoxItemClicked (int row, const juce::MouseEvent&) override { page.selectVariant (row); }
 
 private:
     ZonesPage& page;
 };
 
-ZonesPage::ZonesPage (HostView& v, std::vector<juce::File> choices)
-    : view (v), directories (std::move (choices)), model (std::make_unique<Model> (*this)), list ("zones", model.get())
+ZonesPage::ZonesPage (HostView& v, std::vector<juce::File> choices, juce::File root, Dialogs d)
+    : view (v), installedChoices (std::move (choices)), userRoot (std::move (root)), dialogs (std::move (d)),
+      model (std::make_unique<Model> (*this)), list ("variants", model.get())
 {
-    const auto current = view.config().spatialDirectory;
-    if (std::find (directories.begin(), directories.end(), current) == directories.end())
-        directories.insert (directories.begin(), current);
+    if (! dialogs.confirm)
+        dialogs.confirm = confirmWithBox;
+    if (! dialogs.askName)
+        dialogs.askName = askNameWithBox;
     look::caption (title);
     look::failure (message);
     title.setText ("ZONES", juce::dontSendNotification);
-    look::help ("The spatial data: decoders, layouts and zone stages. Installed variants and your own "
-                "(~/.config/a3/engine/spatial). Layouts are edited on SPEAKERS. Save restarts the engine.",
-                { &title, &list, &openSpeakers });
+    look::help ("The spatial data per zone: decoders, layouts and zone stages. MAIN's variant also gives the files both "
+                "zones share (encoder, rec, fx, phones). Installed variants and your own (~/.config/a3/engine/spatial). "
+                "Layouts are edited on SPEAKERS. Save restarts the engine.",
+                { &title, &mainBox, &boothBox });
+    look::help ("Pick a variant to see what it holds; RENAME and DELETE (in the footer) act on it, only on your own and "
+                "only on one neither what runs nor the pending edit uses.", { &list });
+    const std::pair<juce::Label*, const char*> captions[] = { { &mainCaption, "MAIN" }, { &boothCaption, "BOOTH" },
+                                                              { &headphonesCaption, "PHONES" } };
+    for (const auto& [label, text] : captions)
+    {
+        look::caption (*label);
+        label->setText (text, juce::dontSendNotification);
+    }
+    headphonesCaption.setTooltip ("The phones decoder's headphone EQ (never the rec decoder's)");
     for (auto* summary : { &mainSummary, &boothSummary })
     {
         look::value (*summary);
@@ -93,38 +132,93 @@ ZonesPage::ZonesPage (HostView& v, std::vector<juce::File> choices)
         summary->setMinimumHorizontalScale (1.0f);
     }
     openSpeakers.onClick = [this] { if (onOpenSpeakers) onOpenSpeakers(); };
-    list.setRowHeight (juce::jmax (28, 640 / 14));
-    look::caption (headphonesCaption);
-    headphonesCaption.setText ("PHONES HEADPHONE EQ", juce::dontSendNotification);
+    mainBox.onChange = [this] { chooseZone (a3::SpeakerZone::main, mainBox.getSelectedItemIndex()); };
+    boothBox.onChange = [this] { chooseZone (a3::SpeakerZone::booth, boothBox.getSelectedItemIndex()); };
     headphones.addItem ("off", 1);
     int id = 2;
-    for (const auto& model : a3::headphoneEqModels())
-        headphones.addItem (model, id++);
+    for (const auto& name : a3::headphoneEqModels())
+        headphones.addItem (name, id++);
     headphones.onChange = [this] { chooseHeadphoneEq (headphones.getSelectedItemIndex()); };
-    for (auto* child : std::initializer_list<juce::Component*> { &title, &message, &list, &headphonesCaption, &headphones,
-                                                                 &mainSummary, &boothSummary, &openSpeakers })
+    for (auto* child : std::initializer_list<juce::Component*> { &title, &openSpeakers, &mainCaption, &mainBox, &boothCaption, &boothBox,
+                                                                 &headphonesCaption, &headphones, &message, &list, &mainSummary, &boothSummary })
         addAndMakeVisible (child);
+    selected = view.config().spatialDirectory;
+    rescan();
     refresh();
 }
 
 ZonesPage::~ZonesPage() { list.setModel (nullptr); }
 
-int ZonesPage::selectedRow() const
+juce::File ZonesPage::variantAt (int row) const
 {
-    const auto it = std::find (directories.begin(), directories.end(), view.config().spatialDirectory);
+    return row >= 0 && row < rowCount() ? directories[(size_t) row] : juce::File();
+}
+
+int ZonesPage::rowOf (const juce::File& directory) const
+{
+    const auto it = std::find (directories.begin(), directories.end(), directory);
     return it == directories.end() ? -1 : (int) (it - directories.begin());
 }
 
-void ZonesPage::choose (int row)
+// The installed choices, the user's variants by name, and whatever the configs name that neither holds.
+void ZonesPage::rescan()
+{
+    std::vector<juce::File> found = installedChoices;
+    const auto add = [&] (const juce::File& directory)
+    {
+        if (directory != juce::File() && std::find (found.begin(), found.end(), directory) == found.end())
+            found.push_back (directory);
+    };
+    if (userRoot.isDirectory())
+    {
+        auto children = userRoot.findChildFiles (juce::File::findDirectories, false);
+        children.sort();
+        for (const auto& child : children)
+            if (isUserVariant (child, userRoot) && holdsAVariant (child))
+                add (child);
+    }
+    for (const auto& config : { view.config(), view.running() })
+        for (const auto zone : { a3::SpeakerZone::main, a3::SpeakerZone::booth })
+            add (zoneSpatialDirectory (config, zone));
+    scannedAt = userRoot.getLastModificationTime();
+    if (found == directories)
+        return;
+    directories = std::move (found);
+    list.updateContent();
+    fillZoneChoosers();
+    if (rowOf (selected) < 0)
+        selected = view.config().spatialDirectory;
+}
+
+void ZonesPage::fillZoneChoosers()
+{
+    for (auto* box : { &mainBox, &boothBox })
+    {
+        box->clear (juce::dontSendNotification);
+        for (size_t row = 0; row < directories.size(); ++row)
+            box->addItem (directories[row].getFileName() + (isUserVariant (directories[row], userRoot) ? "  (yours)" : ""), (int) row + 1);
+    }
+}
+
+void ZonesPage::chooseZone (a3::SpeakerZone zone, int row)
 {
     if (row < 0 || row >= rowCount())
         return;
     juce::String error;
-    const auto edited = withSpatialDirectory (view.config(), directories[(size_t) row], error);
+    const auto edited = withZoneSpatialDirectory (view.config(), zone, directories[(size_t) row], error);
     look::say (message, edited ? juce::String() : error);
     if (edited && ! sameConfig (*edited, view.config()))
         view.edit (*edited);
     refresh();
+}
+
+void ZonesPage::selectVariant (int row)
+{
+    if (row < 0 || row >= rowCount())
+        return;
+    selected = directories[(size_t) row];
+    list.selectRow (row, true, true);
+    summarise();
 }
 
 void ZonesPage::chooseHeadphoneEq (int item)
@@ -140,37 +234,85 @@ void ZonesPage::chooseHeadphoneEq (int item)
     refresh();
 }
 
+juce::String ZonesPage::deleteRefusal() const
+{
+    return a3app::deleteRefusal (selected, userRoot, view.running(), view.config());
+}
+
+juce::String ZonesPage::renameRefusal() const { return a3app::renameRefusal (selected, userRoot, view.running()); }
+
+void ZonesPage::askDelete()
+{
+    if (const auto why = deleteRefusal(); why.isNotEmpty())
+        return look::say (message, "not deleted: " + why);
+    const auto target = selected;
+    dialogs.confirm ("Delete " + target.getFullPathName() + "? Its files are gone for good.",
+                     [safe = juce::Component::SafePointer<ZonesPage> (this), target]
+    {
+        if (safe == nullptr)
+            return;
+        const auto deleted = deleteVariant (target, safe->userRoot, safe->view.running(), safe->view.config());
+        look::say (safe->message, deleted.failed() ? "not deleted: " + deleted.getErrorMessage() : juce::String());
+        safe->rescan();
+        safe->refresh();
+    });
+}
+
+void ZonesPage::askRename()
+{
+    if (const auto why = renameRefusal(); why.isNotEmpty())
+        return look::say (message, "not renamed: " + why);
+    const auto from = selected;
+    dialogs.askName (from.getFileName(), [safe = juce::Component::SafePointer<ZonesPage> (this), from] (const juce::String& name)
+    {
+        if (safe == nullptr)
+            return;
+        juce::String error;
+        const auto to = renameVariant (from, name, safe->userRoot, safe->view.running(), error);
+        if (! to)
+            return look::say (safe->message, "not renamed: " + error);
+        look::say (safe->message, {});
+        if (usesVariant (safe->view.config(), from))
+            safe->view.edit (withRenamedVariant (safe->view.config(), from, *to));   // the pending edit follows
+        safe->selected = *to;
+        safe->rescan();
+        safe->refresh();
+    });
+}
+
 juce::String ZonesPage::summaryText (a3::SpeakerZone zone) const
 {
     return (zone == a3::SpeakerZone::main ? mainSummary : boothSummary).getText();
 }
 
-// The running directory and when its zone files last changed: a variant saved in place shows after the restart.
+// The selected variant and when its zone files last changed: a variant saved in place shows at once.
 juce::String ZonesPage::summaryKey() const
 {
-    const auto directory = view.running().spatialDirectory;
-    auto key = directory.getFullPathName();
+    auto key = selected.getFullPathName();
     for (const auto* name : { "main.decoder.json", "main.parameters.json", "booth.decoder.json", "booth.parameters.json" })
-        key << "|" << directory.getChildFile (name).getLastModificationTime().toMilliseconds();
+        key << "|" << selected.getChildFile (name).getLastModificationTime().toMilliseconds();
     return key;
 }
 
-// What plays: the running directory's files, read again only when they change.
 void ZonesPage::summarise()
 {
-    summarisedFrom = view.running().spatialDirectory;
     summarisedKey = summaryKey();
-    look::say (mainSummary, zoneSummary (a3::SpeakerZone::main, summarisedFrom));
-    look::say (boothSummary, zoneSummary (a3::SpeakerZone::booth, summarisedFrom));
+    look::say (mainSummary, zoneSummary (a3::SpeakerZone::main, selected));
+    look::say (boothSummary, zoneSummary (a3::SpeakerZone::booth, selected));
 }
 
 void ZonesPage::refresh()
 {
+    if (userRoot.getLastModificationTime() != scannedAt || rowOf (zoneSpatialDirectory (view.config(), a3::SpeakerZone::main)) < 0
+        || rowOf (zoneSpatialDirectory (view.config(), a3::SpeakerZone::booth)) < 0)
+        rescan();
     if (summaryKey() != summarisedKey)
         summarise();
+    mainBox.setSelectedItemIndex (rowOf (zoneSpatialDirectory (view.config(), a3::SpeakerZone::main)), juce::dontSendNotification);
+    boothBox.setSelectedItemIndex (rowOf (zoneSpatialDirectory (view.config(), a3::SpeakerZone::booth)), juce::dontSendNotification);
     const auto choice = a3::headphoneEqChoice (view.config().engine.phonesHeadphoneEq);
     headphones.setSelectedItemIndex (choice.value_or (0), juce::dontSendNotification);
-    const int row = selectedRow();
+    const int row = rowOf (selected);
     if (row >= 0)
         list.selectRow (row, true, true);
     else
@@ -179,23 +321,32 @@ void ZonesPage::refresh()
 
 void ZonesPage::paint (juce::Graphics& g) { g.fillAll (palette::surface); }
 
+// Dropdowns first (MAIN, BOOTH, PHONES), the message, then the list over the info viewer.
 void ZonesPage::resized()
 {
     auto area = getLocalBounds().reduced (getWidth() / 40);
     const int row = look::rowHeight (*this);
-    list.setRowHeight (row);
-    title.setBounds (area.removeFromTop (row));
-    message.setBounds (area.removeFromBottom (row));
-    auto eqRow = area.removeFromBottom (row);
-    headphonesCaption.setBounds (eqRow.removeFromLeft (eqRow.getWidth() / 3));
-    headphones.setBounds (eqRow.removeFromLeft (eqRow.getWidth() / 2));
-    openSpeakers.setBounds (eqRow.reduced (row / 8, 0));
-    const auto summaryFont = juce::FontOptions ((float) row * 0.32f);
+    auto top = area.removeFromTop (row);
+    openSpeakers.setBounds (top.removeFromRight (top.getWidth() / 3).reduced (row / 16));
+    title.setBounds (top);
+    const auto chooserRow = [&] (juce::Label& caption, juce::ComboBox& box)
+    {
+        auto line = area.removeFromTop (row).reduced (0, row / 16);
+        caption.setBounds (line.removeFromLeft (line.getWidth() / 5));
+        box.setBounds (line);
+    };
+    chooserRow (mainCaption, mainBox);
+    chooserRow (boothCaption, boothBox);
+    chooserRow (headphonesCaption, headphones);
+    message.setBounds (area.removeFromTop (row));
+    const auto summaryFont = juce::FontOptions ((float) row * 0.3f);
     for (auto* summary : { &boothSummary, &mainSummary })
     {
         summary->setFont (summaryFont);
         summary->setBounds (area.removeFromBottom (row * 2));   // five lines of the summary at its font
     }
+    area.removeFromBottom (row / 4);
+    list.setRowHeight (row * 3 / 4);
     list.setBounds (area);
 }
 }

@@ -59,12 +59,18 @@ public:
              KeyboardSetup keyboardSetup, juce::File userSpatialRoot)
         : saveBar (view), monitor (std::move (monitorToUse))
     {
+        const auto userRoot = userSpatialRoot;
         if (keyboardSetup.link != nullptr)
             addKeyboard (std::move (keyboardSetup));
         addPage ("AUDIO", std::make_unique<AudioPage> (view, manager));
         addPage ("CHANNELS", std::make_unique<ChannelsPage> (view));
-        auto zones = std::make_unique<ZonesPage> (view, std::move (spatialChoices));
+        auto zones = std::make_unique<ZonesPage> (view, std::move (spatialChoices), userRoot);
         zones->onOpenSpeakers = [this] { show ("SPEAKERS"); };
+        zonesPage = zones.get();
+        renameKey.onClick = [this] { zonesPage->askRename(); };
+        deleteKey.onClick = [this] { zonesPage->askDelete(); };
+        addChildComponent (renameKey);
+        addChildComponent (deleteKey);
         addPage ("ZONES", std::move (zones));
         addPage ("SPEAKERS", std::make_unique<SpeakersPage> (view, std::move (userSpatialRoot)));
         addPage ("I/O", std::make_unique<IoPage> (view));
@@ -118,6 +124,7 @@ public:
                 pages[j].key->setToggleState (j == i, juce::dontSendNotification);
             }
             refreshShown();
+            showZonesKeys();
             return;
         }
     }
@@ -156,6 +163,7 @@ public:
             if (! page.monitor)
                 page.refresh();   // the engine pages keep their pending edits current even when hidden
         refreshShown();
+        showZonesKeys();
         saveBar.refresh();
         if (noteTicksLeft > 0 && --noteTicksLeft == 0)
             sayKeyboard ({});
@@ -280,7 +288,29 @@ private:
         if (monitor.core != nullptr)
             monitorSwitch.setBounds (left.removeFromLeft (getWidth() / 5));
         tooltipSwitch.setBounds (left.removeFromLeft (getWidth() / 7));
+        if (renameKey.isVisible())
+        {
+            renameKey.setBounds (left.removeFromLeft (getWidth() / 8).reduced (left.getHeight() / 16, 0));
+            deleteKey.setBounds (left.removeFromLeft (getWidth() / 8).reduced (left.getHeight() / 16, 0));
+        }
         saveBar.setBounds (footer.withLeft (left.getX()));
+    }
+
+    // RENAME and DELETE belong to ZONES: shown on it only, each disabled with the reason as its tooltip.
+    void showZonesKeys()
+    {
+        const bool onZones = ! pages.empty() && pages[(size_t) shown].component.get() == zonesPage;
+        const auto deleteWhy = onZones ? zonesPage->deleteRefusal() : juce::String();
+        const auto renameWhy = onZones ? zonesPage->renameRefusal() : juce::String();
+        deleteKey.setEnabled (deleteWhy.isEmpty());
+        deleteKey.setTooltip (deleteWhy.isEmpty() ? "Delete the variant picked in the list (asks first)" : "Cannot delete: " + deleteWhy);
+        renameKey.setEnabled (renameWhy.isEmpty());
+        renameKey.setTooltip (renameWhy.isEmpty() ? "Rename the variant picked in the list" : "Cannot rename: " + renameWhy);
+        if (renameKey.isVisible() == onZones)
+            return;
+        renameKey.setVisible (onZones);
+        deleteKey.setVisible (onZones);
+        resized();
     }
 
     void applyTooltips (bool on)
@@ -315,6 +345,8 @@ private:
     MonitorSetup monitor;
     juce::ToggleButton monitorSwitch { monitorSwitchName };
     juce::ToggleButton tooltipSwitch { tooltipSwitchName };
+    ZonesPage* zonesPage = nullptr;
+    juce::TextButton renameKey { "RENAME" }, deleteKey { "DELETE" };
     std::unique_ptr<juce::TooltipWindow> tooltipWindow;
     WindowBands bands;
     juce::TextButton keys { "KEYS" };

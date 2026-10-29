@@ -114,7 +114,7 @@ void SpeakersPage::showZone (a3::SpeakerZone zone)
 // picks a new table up on its own timer; a new one shows it at once).
 void SpeakersPage::load()
 {
-    loadedFrom = view.config().spatialDirectory;
+    loadedFrom = zoneSpatialDirectory (view.config(), shown);
     const juce::String name = a3::zoneName (shown);
     const auto decoderFile = loadedFrom.getChildFile (name + ".decoder.json");
     parameters = juce::JSON::parse (loadedFrom.getChildFile (name + ".parameters.json").loadFileAsString());
@@ -182,7 +182,7 @@ void SpeakersPage::saveToZone()
     if (! edited)
         return sayOutcome (message, error, false);
     view.edit (*edited);
-    loadedFrom = edited->spatialDirectory;   // what the editor shows is what was written
+    loadedFrom = zoneSpatialDirectory (*edited, shown);   // what the editor shows is what was written
     parameters = values;
     sayOutcome (message, juce::String (a3::zoneName (shown)).toUpperCase() + " saved to " + loadedFrom.getFullPathName()
                              + ". Save restarts the engine with it.", true);
@@ -190,7 +190,7 @@ void SpeakersPage::saveToZone()
 
 void SpeakersPage::refresh()
 {
-    if (view.config().spatialDirectory != loadedFrom)
+    if (zoneSpatialDirectory (view.config(), shown) != loadedFrom)
         load();
 }
 

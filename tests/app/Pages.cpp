@@ -342,19 +342,24 @@ TEST_F (Pages, DecksEditTheConfigBesideTheChannels)
     EXPECT_NE (page.decksRunningLabel().getText().indexOf ("running: 4"), -1);
 }
 
-TEST_F (Pages, ZonesPickADirectoryAndShowAFailure)
+// MAIN and BOOTH each pick a variant from their own dropdown; one that does not load is refused with the reason.
+TEST_F (Pages, ZonesPickAVariantPerZoneAndShowAFailure)
 {
     FakeView view;
     a3test::ScratchDirectory copy;
     a3app::ZonesPage page (view, { a3test::shippedSpatialDirectory, copy.root(), juce::File ("/nonexistent/spatial") });
     EXPECT_EQ (page.rowCount(), 3);
-    EXPECT_EQ (page.selectedRow(), 0);
-    page.choose (1);
-    EXPECT_EQ (view.cfg.spatialDirectory, copy.root());
+    EXPECT_EQ (page.zoneChooser (a3::SpeakerZone::main).getSelectedItemIndex(), 0);
+    EXPECT_EQ (page.zoneChooser (a3::SpeakerZone::booth).getSelectedItemIndex(), 0);
+    page.chooseZone (a3::SpeakerZone::booth, 1);
+    EXPECT_EQ (a3app::zoneSpatialDirectory (view.cfg, a3::SpeakerZone::booth), copy.root());
+    EXPECT_EQ (a3app::zoneSpatialDirectory (view.cfg, a3::SpeakerZone::main), a3test::shippedSpatialDirectory);   // its own
     EXPECT_EQ (view.edited, 1);
-    page.choose (2);   // does not load: stays on the last good one and says why
-    EXPECT_EQ (view.cfg.spatialDirectory, copy.root());
+    EXPECT_EQ (page.zoneChooser (a3::SpeakerZone::booth).getSelectedItemIndex(), 1);
+    page.chooseZone (a3::SpeakerZone::main, 2);   // does not load: stays on the last good one and says why
+    EXPECT_EQ (view.cfg.spatialDirectory, a3test::shippedSpatialDirectory);
     EXPECT_NE (page.messageLabel().getText().indexOf ("/nonexistent/spatial"), -1);
+    EXPECT_EQ (page.zoneChooser (a3::SpeakerZone::main).getSelectedItemIndex(), 0);
 }
 
 TEST_F (Pages, ZonesPaintsTheHeadphonesChooser)
@@ -744,10 +749,15 @@ struct SpeakerRig
 };
 }
 
-TEST_F (Pages, ZonesSummariseWhatEachZonePlays)
+// The info viewer shows the variant picked in the list, and only that one.
+TEST_F (Pages, ZonesSummariseTheVariantPickedInTheList)
 {
     FakeView view;
-    a3app::ZonesPage page (view, { a3test::shippedSpatialDirectory });
+    a3test::ScratchDirectory broken;
+    broken.root().getChildFile ("booth.decoder.json").replaceWithText ("{");
+    a3app::ZonesPage page (view, { a3test::shippedSpatialDirectory, broken.root() });
+    page.selectVariant (0);
+    EXPECT_EQ (page.selectedVariant(), a3test::shippedSpatialDirectory);
     for (const auto zone : { a3::SpeakerZone::main, a3::SpeakerZone::booth })
     {
         const auto text = page.summaryText (zone);
@@ -759,10 +769,8 @@ TEST_F (Pages, ZonesSummariseWhatEachZonePlays)
     EXPECT_TRUE (page.summaryText (a3::SpeakerZone::booth).startsWith ("BOOTH"));
     expectPainted (snapshot (page, "zones-summary"));
 
-    a3test::ScratchDirectory broken;
-    broken.root().getChildFile ("booth.decoder.json").replaceWithText ("{");
-    view.runningCfg.spatialDirectory = broken.root();
-    page.refresh();
+    page.selectVariant (1);   // picking in the list edits nothing
+    EXPECT_EQ (view.edited, 0);
     EXPECT_TRUE (page.summaryText (a3::SpeakerZone::booth).contains ("booth.decoder.json")) << page.summaryText (a3::SpeakerZone::booth);
     EXPECT_TRUE (page.summaryText (a3::SpeakerZone::main).contains ("order 3"));
     expectPainted (snapshot (page, "zones-summary-unreadable"));
@@ -827,7 +835,8 @@ TEST_F (Pages, SpeakersSaveToZoneWritesAUserVariant)
     EXPECT_EQ (rig.view.edited, 1);
     ASSERT_EQ (rig.variants().size(), 1u);
     const auto variant = rig.variants().front();
-    EXPECT_EQ (rig.view.cfg.spatialDirectory, variant);
+    EXPECT_EQ (a3app::zoneSpatialDirectory (rig.view.cfg, a3::SpeakerZone::booth), variant);   // for the booth only
+    EXPECT_EQ (a3app::zoneSpatialDirectory (rig.view.cfg, a3::SpeakerZone::main), rig.installed.root());
     EXPECT_FALSE (a3app::sameConfig (rig.view.cfg, rig.view.runningCfg));   // Save restarts on it
     const auto parameters = juce::JSON::parse (variant.getChildFile ("booth.parameters.json").loadFileAsString());
     EXPECT_EQ ((double) parameters["lowPassFrequency"], 120.0);
@@ -899,7 +908,8 @@ TEST_F (Pages, SpeakersSaveTwiceKeepsBothVariants)
     page.setCrossover (100.0f);
     page.saveToZone();
     EXPECT_EQ (rig.view.edited, 2);
-    EXPECT_NE (rig.view.cfg.spatialDirectory, first);
+    EXPECT_EQ (rig.view.cfg.spatialDirectory, first);   // MAIN keeps the first
+    EXPECT_NE (a3app::zoneSpatialDirectory (rig.view.cfg, a3::SpeakerZone::booth), first);
     EXPECT_EQ (rig.variants().size(), 2u);
     EXPECT_TRUE (first.getChildFile ("booth.parameters.json").existsAsFile());
 }
@@ -1168,4 +1178,129 @@ TEST_F (Pages, FilterKeysDescribeTheFiltersAndALineSaysWhy)
     EXPECT_FLOAT_EQ (look.getTextButtonFont (*svf.front(), svf.front()->getHeight()).getHeight(),
                      look.getTextButtonFont (*ladder.front(), ladder.front()->getHeight()).getHeight());   // one size
     expectPainted (a3apptest::snapshotAt (page, "filter-described", page.getWidth(), page.getHeight()));
+}
+
+namespace
+{
+// The ZONES page over a user root holding "spare" and "club"; MAIN runs from "club". The dialogs answer at once.
+struct ZonesRig
+{
+    SpeakerRig speakers;
+    juce::File spare = speakers.userRoot.getChildFile ("spare"), club = speakers.userRoot.getChildFile ("club");
+    std::vector<juce::String> asked;
+    juce::String answer = "spare-renamed";
+    bool agree = true;
+    a3app::ZonesPage::Dialogs dialogs {
+        [this] (const juce::String& question, std::function<void()> onYes) { asked.push_back (question); if (agree) onYes(); },
+        [this] (const juce::String& current, std::function<void (const juce::String&)> onName) { asked.push_back (current); onName (answer); } };
+    ZonesRig()
+    {
+        for (const auto& variant : { spare, club })
+            speakers.installed.root().copyDirectoryTo (variant);
+        speakers.view.cfg.spatialDirectory = club;
+        speakers.view.runningCfg = speakers.view.cfg;
+    }
+    int rowOf (a3app::ZonesPage& page, const juce::File& directory) const
+    {
+        for (int row = 0; row < page.rowCount(); ++row)
+            if (page.variantAt (row) == directory)
+                return row;
+        return -1;
+    }
+};
+}
+
+// The list holds the installed choices and the user's variants; RENAME and DELETE touch only an unused one of
+// the user's, DELETE after asking.
+TEST_F (Pages, ZonesRenameAndDeleteOnlyAnUnusedUserVariant)
+{
+    ZonesRig rig;
+    a3app::ZonesPage page (rig.speakers.view, { rig.speakers.installed.root() }, rig.speakers.userRoot, rig.dialogs);
+    ASSERT_GE (rig.rowOf (page, rig.spare), 0);
+    ASSERT_GE (rig.rowOf (page, rig.club), 0);
+
+    page.selectVariant (rig.rowOf (page, rig.club));
+    EXPECT_TRUE (page.deleteRefusal().contains ("runs")) << page.deleteRefusal();
+    page.askDelete();
+    EXPECT_TRUE (rig.asked.empty());   // refused before anything is asked
+    EXPECT_TRUE (rig.club.isDirectory());
+    page.selectVariant (rig.rowOf (page, rig.speakers.installed.root()));
+    EXPECT_FALSE (page.deleteRefusal().isEmpty());
+    EXPECT_FALSE (page.renameRefusal().isEmpty());
+
+    page.selectVariant (rig.rowOf (page, rig.spare));
+    EXPECT_TRUE (page.renameRefusal().isEmpty());
+    page.askRename();
+    const auto renamed = rig.speakers.userRoot.getChildFile ("spare-renamed");
+    EXPECT_TRUE (renamed.isDirectory());
+    EXPECT_FALSE (rig.spare.exists());
+    EXPECT_EQ (page.selectedVariant(), renamed);   // the list follows
+
+    rig.agree = false;
+    page.askDelete();
+    EXPECT_TRUE (renamed.isDirectory());   // not without a yes
+    rig.agree = true;
+    page.askDelete();
+    EXPECT_FALSE (renamed.exists());
+    EXPECT_EQ (rig.rowOf (page, renamed), -1);
+    expectPainted (a3apptest::snapshotAt (page, "zones-after-delete", a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4));
+}
+
+// A rename the page refuses (a bad name) changes nothing and says why; renaming what the pending edit uses follows it.
+TEST_F (Pages, ZonesRenameFollowsThePendingEditAndRefusesABadName)
+{
+    ZonesRig rig;
+    rig.speakers.view.cfg.boothSpatialDirectory = rig.spare;   // pending: BOOTH on spare
+    a3app::ZonesPage page (rig.speakers.view, { rig.speakers.installed.root() }, rig.speakers.userRoot, rig.dialogs);
+    page.selectVariant (rig.rowOf (page, rig.spare));
+    EXPECT_TRUE (page.deleteRefusal().contains ("pending")) << page.deleteRefusal();
+    rig.answer = "../escape";
+    page.askRename();
+    EXPECT_TRUE (rig.spare.isDirectory());
+    EXPECT_TRUE (page.messageLabel().getText().contains ("slash")) << page.messageLabel().getText();
+    rig.answer = "dome";
+    page.askRename();
+    EXPECT_EQ (a3app::zoneSpatialDirectory (rig.speakers.view.cfg, a3::SpeakerZone::booth), rig.speakers.userRoot.getChildFile ("dome"));
+    EXPECT_EQ (rig.speakers.view.cfg.spatialDirectory, rig.club);
+}
+
+// Portrait: MAIN, BOOTH and PHONES dropdowns first, then the list and the info viewer; RENAME and DELETE in
+// the footer beside Save, on ZONES only.
+TEST_F (Pages, ZonesDropdownsFirstAndRenameDeleteInTheFooter)
+{
+    ZonesRig rig;
+    a3app::MainWindow window (rig.speakers.view, manager, { rig.speakers.installed.root() }, false, [] {}, {}, {}, rig.speakers.userRoot);
+    window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    auto& content = *window.getContentComponent();
+    window.showPage ("ZONES");
+    auto* page = dynamic_cast<a3app::ZonesPage*> (shownPage (window));
+    ASSERT_NE (page, nullptr);
+    const auto& mainBox = page->zoneChooser (a3::SpeakerZone::main);
+    const auto& boothBox = page->zoneChooser (a3::SpeakerZone::booth);
+    const auto& phonesBox = page->headphoneChooser();
+    EXPECT_LT (mainBox.getY(), boothBox.getY());
+    EXPECT_LT (boothBox.getY(), phonesBox.getY());
+    auto* list = firstDescendant<juce::ListBox> (*page);
+    ASSERT_NE (list, nullptr);
+    EXPECT_GE (list->getY(), phonesBox.getBottom());   // the dropdowns come first
+    for (const auto& name : { "RENAME", "DELETE" })
+    {
+        const auto keys = buttonsLabelled (content, name);
+        ASSERT_EQ (keys.size(), 1u) << name;
+        EXPECT_TRUE (keys.front()->isVisible()) << name;
+        EXPECT_TRUE (window.bands().footer.contains (areaIn (content, *keys.front()))) << name;
+    }
+    page->selectVariant (rig.rowOf (*page, rig.club));
+    window.refreshNow();
+    auto* deleteKey = buttonsLabelled (content, "DELETE").front();
+    EXPECT_FALSE (deleteKey->isEnabled());   // what runs uses it
+    EXPECT_TRUE (deleteKey->getTooltip().contains ("runs")) << deleteKey->getTooltip();
+    expectPainted (a3apptest::snapshotAt (content, "portrait-zones-refused", content.getWidth(), content.getHeight()));
+    page->selectVariant (rig.rowOf (*page, rig.spare));
+    window.refreshNow();
+    EXPECT_TRUE (deleteKey->isEnabled());
+
+    window.showPage ("STATUS");
+    EXPECT_FALSE (buttonsLabelled (content, "RENAME").front()->isVisible());
+    EXPECT_FALSE (deleteKey->isVisible());
 }
