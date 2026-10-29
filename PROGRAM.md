@@ -111,7 +111,7 @@ deck). The rig's own run decides.
 
 **CPU per deck count.** `a3-engine-cpu-bench [--decks N] [--paced]` (`bench/CpuBenchMain.cpp`, no JACK) runs the
 whole engine offline at 128 frames and 48 kHz with every deck slot fed on its B-format, AUX and cue
-inputs and every deck on a channel, and prints mean and p99 block time as a share of the block period
+inputs and each deck on its own channel (the others analog, as Core's deck selector allows), and prints mean and p99 block time as a share of the block period
 (one RESULT line). Without `--decks` it takes the truth's deck range, as the engine does. It is a
 relative tool: the numbers belong to the machine they ran on.
 
