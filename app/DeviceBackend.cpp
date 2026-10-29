@@ -142,6 +142,27 @@ float combinedLoadPercent (float backendPercent, float engineBlockMs, int frames
     return std::max (backendPercent, own);
 }
 
+RoundTrip estimatedRoundTrip (const BackendStatus& status)
+{
+    RoundTrip trip;
+    if (status.sampleRate <= 0)
+        return trip;
+    trip.sampleRate = status.sampleRate;
+    trip.captureSamples = status.captureLatency;
+    trip.processingSamples = status.blockSize;
+    trip.playbackSamples = status.playbackLatency;
+    return trip;
+}
+
+juce::String roundTripText (const RoundTrip& trip)
+{
+    if (trip.sampleRate <= 0)
+        return "Round trip   no engine runs";
+    const auto ms = [&] (int samples) { return juce::String (trip.ms (samples), 1); };
+    return "Round trip (estimated)   " + ms (trip.totalSamples()) + " ms (" + juce::String (trip.totalSamples()) + " samples) = capture "
+           + ms (trip.captureSamples) + " + processing " + ms (trip.processingSamples) + " + playback " + ms (trip.playbackSamples) + " ms";
+}
+
 BackendStatus DeviceBackend::status() const
 {
     BackendStatus s;
@@ -153,6 +174,8 @@ BackendStatus DeviceBackend::status() const
         s.blockSize = device->getCurrentBufferSizeSamples();
         s.bitDepth = device->getCurrentBitDepth();   // AudioDeviceSetup has no bit-depth field: read only
         s.xruns = device->getXRunCount();
+        s.captureLatency = device->getInputLatencyInSamples();
+        s.playbackLatency = device->getOutputLatencyInSamples();
     }
     s.dspLoadPercent = combinedLoadPercent ((float) (manager.getCpuUsage() * 100.0), engineBlockMs.load(),
                                             lastBlockFrames.load(), s.sampleRate);

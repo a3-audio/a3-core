@@ -101,6 +101,23 @@ void JackBackend::close()
     slots = {};
 }
 
+namespace
+{
+// The largest latency JACK reports for `mode` over `ports` (the max of each range): the path through the
+// longest of the engine's links to a converter. A port with no link reports 0.
+int largestLatency (const std::vector<jack_port_t*>& ports, jack_latency_callback_mode_t mode)
+{
+    jack_nframes_t largest = 0;
+    for (auto* port : ports)
+    {
+        jack_latency_range_t range { 0, 0 };
+        jack_port_get_latency_range (port, mode, &range);
+        largest = std::max (largest, range.max);
+    }
+    return (int) largest;
+}
+}
+
 BackendStatus JackBackend::status() const
 {
     BackendStatus s;
@@ -117,6 +134,8 @@ BackendStatus JackBackend::status() const
 
     s.sampleRate = (double) jack_get_sample_rate (client);
     s.blockSize = (int) jack_get_buffer_size (client);
+    s.captureLatency = largestLatency (inputPorts, JackCaptureLatency);
+    s.playbackLatency = largestLatency (outputPorts, JackPlaybackLatency);
     // jack_cpu_load is the whole graph's load and already holds the engine's time; the engine's
     // own block time against the period shows when the engine alone is the heavy part.
     s.dspLoadPercent = combinedLoadPercent (jack_cpu_load (client), engineBlockMs.load(), (int) lastBlockFrames.load(), s.sampleRate);

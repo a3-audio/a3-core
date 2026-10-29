@@ -83,3 +83,41 @@ TEST (DeviceBackend, LoadIsTheLargerOfBackendAndEngineShare)
     EXPECT_EQ (a3app::combinedLoadPercent (12.0f, 0.0f, 0, 48000.0), 12.0f);
     EXPECT_EQ (a3app::combinedLoadPercent (12.0f, 5.0f, 128, 0.0), 12.0f);
 }
+
+// The estimated round trip: capture latency + one period of the engine + playback latency.
+TEST (DeviceBackend, RoundTripIsCaptureOnePeriodAndPlayback)
+{
+    a3app::BackendStatus status;
+    status.sampleRate = 48000.0;
+    status.blockSize = 128;
+    status.captureLatency = 256;
+    status.playbackLatency = 384;
+    const auto trip = a3app::estimatedRoundTrip (status);
+    EXPECT_EQ (trip.captureSamples, 256);
+    EXPECT_EQ (trip.processingSamples, 128);
+    EXPECT_EQ (trip.playbackSamples, 384);
+    EXPECT_EQ (trip.totalSamples(), 768);
+    EXPECT_DOUBLE_EQ (trip.totalMs(), 16.0);
+    EXPECT_DOUBLE_EQ (trip.ms (trip.processingSamples), 128.0 / 48.0);
+
+    status.blockSize = 256;   // a new quantum: the processing part follows
+    EXPECT_EQ (a3app::estimatedRoundTrip (status).totalSamples(), 896);
+    status.sampleRate = 96000.0;   // a new rate: the same samples are fewer ms
+    EXPECT_DOUBLE_EQ (a3app::estimatedRoundTrip (status).totalMs(), 896.0 / 96.0);
+
+    status.sampleRate = 0.0;   // no engine runs: nothing to estimate
+    EXPECT_DOUBLE_EQ (a3app::estimatedRoundTrip (status).totalMs(), 0.0);
+    EXPECT_TRUE (a3app::roundTripText (a3app::estimatedRoundTrip (status)).contains ("no engine"));
+}
+
+TEST (DeviceBackend, RoundTripTextSaysEstimatedAndItsParts)
+{
+    a3app::BackendStatus status;
+    status.sampleRate = 48000.0;
+    status.blockSize = 128;
+    status.captureLatency = 256;
+    status.playbackLatency = 384;
+    const auto text = a3app::roundTripText (a3app::estimatedRoundTrip (status));
+    for (const auto* part : { "estimated", "16.0 ms", "768 samples", "capture 5.3", "processing 2.7", "playback 8.0" })
+        EXPECT_TRUE (text.contains (part)) << part << " in " << text;
+}

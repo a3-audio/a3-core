@@ -63,6 +63,33 @@ TEST_F (Pages, AudioPagePaintsForJackAndDevice)
     EXPECT_NE (page.bitDepthLabel().getText().indexOf ("set by the device"), -1);
 }
 
+// AUDIO shows the estimated round trip and its parts, for JACK and for a device, and follows a new quantum.
+TEST_F (Pages, AudioShowsTheEstimatedRoundTrip)
+{
+    FakeView view;
+    view.state.captureLatency = 256;
+    view.state.playbackLatency = 384;
+    {
+        a3app::AudioPage page (view, manager);
+        page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
+        const auto text = page.roundTripLabel().getText();
+        EXPECT_TRUE (text.contains ("estimated")) << text;
+        EXPECT_TRUE (text.contains ("768 samples")) << text;   // 256 + 128 + 384
+        EXPECT_TRUE (page.roundTripLabel().isVisible());
+        EXPECT_TRUE (page.getLocalBounds().contains (page.roundTripLabel().getBounds()));
+        expectPainted (a3apptest::snapshotAt (page, "audio-roundtrip-jack", page.getWidth(), page.getHeight()));
+        view.state.blockSize = 256;
+        page.refresh();
+        EXPECT_TRUE (page.roundTripLabel().getText().contains ("896 samples")) << page.roundTripLabel().getText();
+    }
+    view.runDevice();
+    a3app::AudioPage page (view, manager);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
+    EXPECT_TRUE (page.roundTripLabel().isVisible());
+    EXPECT_TRUE (page.getLocalBounds().contains (page.roundTripLabel().getBounds()));
+    expectPainted (a3apptest::snapshotAt (page, "audio-roundtrip-device", page.getWidth(), page.getHeight()));
+}
+
 TEST_F (Pages, JackRateIsReadOnly)
 {
     FakeView view;

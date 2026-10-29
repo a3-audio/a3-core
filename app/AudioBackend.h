@@ -21,7 +21,24 @@ struct BackendStatus
     std::vector<juce::String> missingPeers;  // ports the I/O map names that the graph lacks now
     bool connecting = false;                 // false with --no-connect: the engine makes no link
     bool linksPlanned = false;               // the first link plan has run since the open; missingPeers means something only then
+    // Samples between the converters and the engine's ports. JACK: the largest of the engine's ports' latency
+    // ranges (capture on its inputs, playback on its outputs); a device: what the driver reports.
+    int captureLatency = 0, playbackLatency = 0;
 };
+
+// The input-to-output round trip as the backend reports its parts: an estimate (a driver's figures can be
+// off, and a converter's own delay is in them only when the driver says so).
+struct RoundTrip
+{
+    double sampleRate = 0;
+    int captureSamples = 0, processingSamples = 0, playbackSamples = 0;   // processing: one period of the engine
+    int totalSamples() const { return captureSamples + processingSamples + playbackSamples; }
+    double ms (int samples) const { return sampleRate > 0 ? 1000.0 * samples / sampleRate : 0.0; }
+    double totalMs() const { return ms (totalSamples()); }
+};
+RoundTrip estimatedRoundTrip (const BackendStatus&);
+// "estimated round trip 16.0 ms (768 samples) = capture 5.3 + processing 2.7 + playback 8.0 ms".
+juce::String roundTripText (const RoundTrip&);
 
 // The load STATUS shows: the larger of the backend's own figure (JACK: the whole graph; a device:
 // JUCE's callback load) and the engine's own time for the last block against its period.

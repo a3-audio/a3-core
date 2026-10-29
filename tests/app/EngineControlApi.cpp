@@ -24,6 +24,8 @@ TEST (EngineControlApi, StatusAsTheHostViewSaysIt)
     RemoteRig rig;
     rig.fake.state.dspLoadPercent = 12.5f;
     rig.fake.state.xruns = 3;
+    rig.fake.state.captureLatency = 256;
+    rig.fake.state.playbackLatency = 384;
     rig.fake.state.missingPeers = { "system:capture_9" };
     rig.fake.heard = true;
     rig.fake.sinceCore = 1.25;
@@ -41,6 +43,8 @@ TEST (EngineControlApi, StatusAsTheHostViewSaysIt)
     EXPECT_FLOAT_EQ (report->backend.dspLoadPercent, 12.5f);
     EXPECT_EQ (report->backend.xruns, 3);
     EXPECT_EQ (report->backend.bitDepth, 32);
+    EXPECT_EQ (report->backend.captureLatency, 256);   // the round trip's parts reach the window
+    EXPECT_EQ (report->backend.playbackLatency, 384);
     EXPECT_TRUE (report->backend.connecting);
     ASSERT_EQ (report->backend.missingPeers.size(), 1u);
     EXPECT_EQ (report->backend.missingPeers[0], "system:capture_9");
@@ -69,6 +73,11 @@ TEST (EngineControlApi, TheIgnoredRetiredKeysAreServed)
     const auto fromOlder = a3app::statusFromJson (older);
     ASSERT_TRUE (fromOlder);
     EXPECT_TRUE (fromOlder->ignoredKeys.empty());
+    older.getDynamicObject()->removeProperty ("captureLatency");   // an engine before the round trip
+    older.getDynamicObject()->removeProperty ("playbackLatency");
+    const auto beforeLatency = a3app::statusFromJson (older);
+    ASSERT_TRUE (beforeLatency);
+    EXPECT_EQ (beforeLatency->backend.captureLatency, 0);
 }
 
 TEST (EngineControlApi, NothingIsServedBeforeTheFirstTick)

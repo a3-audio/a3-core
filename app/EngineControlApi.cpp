@@ -71,6 +71,8 @@ juce::var toJson (const EngineStatusReport& report)
                      { "dspLoadPercent", (double) report.backend.dspLoadPercent },
                      { "xruns", report.backend.xruns },
                      { "bitDepth", report.backend.bitDepth },
+                     { "captureLatency", report.backend.captureLatency },
+                     { "playbackLatency", report.backend.playbackLatency },
                      { "missingPeers", missing },
                      { "connecting", report.backend.connecting },
                      { "coreHeard", report.coreHeard },
@@ -98,6 +100,9 @@ std::optional<EngineStatusReport> statusFromJson (const juce::var& v)
     report.backend.xruns = (int) *xruns;
     report.backend.bitDepth = (int) *depth;
     report.backend.connecting = (bool) v["connecting"];
+    // An engine before the round trip sends neither: 0, the round trip is then the period alone.
+    report.backend.captureLatency = (int) number (v["captureLatency"]).value_or (0.0);
+    report.backend.playbackLatency = (int) number (v["playbackLatency"]).value_or (0.0);
     for (int i = 0; i < v["missingPeers"].size(); ++i)
         report.backend.missingPeers.push_back (v["missingPeers"][i].toString());
     report.coreHeard = (bool) v["coreHeard"];

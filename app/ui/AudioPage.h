@@ -9,7 +9,7 @@ namespace a3app
 {
 // The audio page. JACK: rate and quantum are read-only (the server owns them) with where they
 // come from. Device: choosers for device type, input and output device, rate and block size, and
-// the bit depth as the device reports it. Every choice only edits the pending config (HostView::edit);
+// the bit depth as the device reports it. Both: the estimated input-to-output round trip and its parts. Every choice only edits the pending config (HostView::edit);
 // Save applies it through the backend. The page opens no device: the manager is a catalogue of
 // device types and is never initialised.
 class AudioPage final : public juce::Component
@@ -27,6 +27,7 @@ public:
     const juce::Label& rateSourceLabel() const { return rateSource; }
     const juce::Label& bitDepthLabel() const { return bitDepth; }
     const juce::Label& pendingLabel() const { return pending; }
+    const juce::Label& roundTripLabel() const { return roundTrip; }
 
     void resized() override;
     void paint (juce::Graphics&) override;
@@ -35,10 +36,11 @@ private:
     void rebuildForBackend();
     void fillChoosers();
     void editDevice();
+    void layoutRoundTrip (juce::Rectangle<int>& area, int row);
 
     HostView& view;
     juce::AudioDeviceManager& manager;
-    juce::Label title, backendCaption, rate, quantum, rateSource, bitDepth, applyMessage, pending;
+    juce::Label title, backendCaption, rate, quantum, rateSource, bitDepth, roundTrip, applyMessage, pending;
     juce::TextButton jackButton { "JACK" }, deviceButton { "Device" };
     juce::Label typeCaption, inputCaption, outputCaption, rateCaption, blockCaption;
     juce::ComboBox typeBox, inputBox, outputBox, rateBox, blockBox;

@@ -22,8 +22,12 @@ AudioPage::AudioPage (HostView& v, juce::AudioDeviceManager& m) : view (v), mana
     title.setColour (juce::Label::textColourId, palette::textMuted);
     backendCaption.setText ("Backend", juce::dontSendNotification);
     backendCaption.setColour (juce::Label::textColourId, palette::textMuted);
-    for (auto* label : { &rate, &quantum, &rateSource, &bitDepth })
+    for (auto* label : { &rate, &quantum, &rateSource, &bitDepth, &roundTrip })
         styleValue (*label);
+    roundTrip.setMinimumHorizontalScale (1.0f);
+    look::help ("Estimated input-to-output round trip of what runs: the capture latency the backend reports for the "
+                "engine's inputs, one period of the engine's processing, and the playback latency it reports for its "
+                "outputs. A converter's own delay is included only as far as the driver reports it.", { &roundTrip });
     applyMessage.setColour (juce::Label::textColourId, palette::danger);
     pending.setColour (juce::Label::textColourId, palette::caution);
     rateSource.setColour (juce::Label::textColourId, palette::textMuted);
@@ -37,7 +41,7 @@ AudioPage::AudioPage (HostView& v, juce::AudioDeviceManager& m) : view (v), mana
     deviceButton.onClick = [this] { chooseBackend (BackendSettings::Type::device); };
 
     for (auto* child : std::initializer_list<juce::Component*> { &title, &backendCaption, &rate, &quantum, &rateSource, &bitDepth,
-                                                                &applyMessage, &pending, &jackButton, &deviceButton })
+                                                                &roundTrip, &applyMessage, &pending, &jackButton, &deviceButton })
         addAndMakeVisible (child);
     const std::pair<juce::Label*, const char*> captions[] = { { &typeCaption, "Device type" }, { &inputCaption, "Input device" },
         { &outputCaption, "Output device" }, { &rateCaption, "Sample rate" }, { &blockCaption, "Block size" } };
@@ -176,11 +180,20 @@ void AudioPage::refresh()
     rateSource.setText (status.rateSource, juce::dontSendNotification);
     bitDepth.setText ("Bit depth   " + juce::String (status.bitDepth) + (runsDevice ? "  -  set by the device" : "  -  float samples, set by JACK"),
                       juce::dontSendNotification);
+    roundTrip.setText (roundTripText (estimatedRoundTrip (status)), juce::dontSendNotification);
     if (device != deviceChoosers)
         rebuildForBackend();
 }
 
 void AudioPage::paint (juce::Graphics& g) { g.fillAll (palette::surface); }
+
+// The round trip's line, its text shrunk to the width so the parts are never cut off.
+void AudioPage::layoutRoundTrip (juce::Rectangle<int>& area, int row)
+{
+    const auto line = area.removeFromTop (row);
+    roundTrip.setFont (juce::FontOptions (fittedTextHeight (roundTrip.getText(), (float) row * 0.4f, (float) line.getWidth() * 0.95f)));
+    roundTrip.setBounds (line);
+}
 
 void AudioPage::resized()
 {
@@ -210,11 +223,13 @@ void AudioPage::resized()
         line (blockCaption, blockBox);
         rateSource.setBounds (area.removeFromTop (row));
         bitDepth.setBounds (area.removeFromTop (row));
+        layoutRoundTrip (area, row);
         return;
     }
     rate.setBounds (area.removeFromTop (row));
     quantum.setBounds (area.removeFromTop (row));
     rateSource.setBounds (area.removeFromTop (row));
     bitDepth.setBounds (area.removeFromTop (row));
+    layoutRoundTrip (area, row);
 }
 }
