@@ -10,7 +10,8 @@ namespace a3::laws
 // 0..1 -> PurestGain A, 0..0.5 (Core: np.interp [0,1] -> [0,0.5]).
 double slopeVolume (double control);
 
-// 0..1 -> SmoothEQ3 0..0.6 through Core's ten-point table.
+// 0..1 -> SmoothEQ3 0..0.6 through Core's ten-point table, re-aimed so that control 0.5 (the knob centre)
+// is exactly unity (SmoothEQ3 0.5); 0 and 1 keep full cut and maximum boost.
 double slopeEq (double control);
 
 // 3D 0..1 -> PurestGain A for the moving band (Core: a3_core_crossfade._band_gain).
