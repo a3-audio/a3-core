@@ -724,8 +724,9 @@ enable_aes67() {
   user_systemctl enable a3-aes67.service || true
 }
 
-# The engine role's user unit, enabled for every user (it came from the
-# a3-engine package until this one carried the program). Before aaa's user
+# The engine role's user unit, which a3-core-app ships, enabled for every
+# user here: the Core machine's package enables it, the app enables nothing
+# (a laptop starts its units by hand or from the Canvas). Before aaa's user
 # manager is started and a3-main enabled below, so that manager already sees
 # the unit. No restart: a running engine keeps its old binary until its next start.
 if [ "$1" = "configure" ] && command -v systemctl >/dev/null 2>&1; then

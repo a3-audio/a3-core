@@ -1,7 +1,7 @@
 #!/bin/sh
-# The unit file is still there now (it is gone by postrm), so the links that
-# `systemctl --global enable` made can be removed cleanly. Not on upgrade: the
-# new version keeps the unit enabled.
+# a3-core-app ships the unit and stays when this package goes, so the links
+# that this package's `systemctl --global enable` made are removed here. Not on
+# upgrade: the new version keeps the unit enabled.
 set -e
 
 case "$1" in
