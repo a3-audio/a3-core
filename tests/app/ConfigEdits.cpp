@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <cmath>
 #include <gtest/gtest.h>
+#include "AllRadDesign.h"
 #include "AppTruth.h"
 #include "ConfigEdits.h"
 #include "EngineFixture.h"
@@ -312,39 +313,110 @@ juce::var boothParametersWithCrossover (const ZoneEdit& edit, double hz)
 }
 }
 
+// The user's variants under the root, without the hidden staging area.
+std::vector<juce::File> variantsUnder (const juce::File& root)
+{
+    std::vector<juce::File> found;
+    for (const auto& child : root.findChildFiles (juce::File::findDirectories, false))
+        if (! child.getFileName().startsWithChar ('.'))
+            found.push_back (child);
+    return found;
+}
+
+juce::String filesOf (const juce::File& directory)
+{
+    juce::String all;
+    auto files = directory.findChildFiles (juce::File::findFiles, false);
+    files.sort();
+    for (const auto& file : files)
+        all << file.getFileName() << "\n" << file.loadFileAsString() << "\n";
+    return all;
+}
+
+const juce::Time saveTime (2026, 9, 29, 21, 5, 7);   // 29 Oct 2026 21:05:07 (months count from 0)
+
 TEST (ConfigEdits, AZoneDecoderBecomesAUserVariantBesideTheInstalledFiles)
 {
     ZoneEdit edit;
-    const auto before = edit.installedFile ("booth.parameters.json");
+    const auto before = filesOf (edit.installed.root());
     const auto decoder = edit.installedFile ("main.decoder.json");   // any valid decoder: main's quad on the booth
     juce::String error;
     const auto edited = a3app::withZoneDecoder (edit.config(), a3::SpeakerZone::booth, decoder,
-                                                boothParametersWithCrossover (edit, 120.0), edit.userRoot, error);
+                                                boothParametersWithCrossover (edit, 120.0), edit.userRoot, error, saveTime);
     ASSERT_TRUE (edited) << error;
 
-    const auto variant = edit.userRoot.getChildFile (edit.installed.root().getFileName());
+    const auto variant = edit.userRoot.getChildFile (edit.installed.root().getFileName() + "-20261029-210507");
     EXPECT_EQ (edited->spatialDirectory, variant);
+    EXPECT_FALSE (a3app::sameConfig (*edited, edit.config()));   // Save restarts the engine on it
     EXPECT_EQ (variant.getChildFile ("booth.decoder.json").loadFileAsString(), decoder);
     EXPECT_EQ ((double) juce::JSON::parse (variant.getChildFile ("booth.parameters.json").loadFileAsString())["lowPassFrequency"], 120.0);
     EXPECT_EQ (variant.getChildFile ("main.decoder.json").loadFileAsString(), edit.installedFile ("main.decoder.json"));
     EXPECT_EQ (variant.getChildFile ("encoder.inputs.json").loadFileAsString(), edit.installedFile ("encoder.inputs.json"));
-    EXPECT_EQ (edit.installedFile ("booth.parameters.json"), before);   // never written
+    EXPECT_EQ (filesOf (edit.installed.root()), before);   // never written
     EXPECT_TRUE (a3::loadSpatialConfig (variant, error)) << error;
     EXPECT_EQ (edit.userRoot.findChildFiles (juce::File::findDirectories, false).size(), 1);   // no staging left
 }
 
-TEST (ConfigEdits, AUserVariantIsEditedInPlace)
+// B1/S3: a variant is never rewritten or deleted. The second save makes a new one, Save restarts on it,
+// and the first stays as the way back.
+TEST (ConfigEdits, ASecondSaveMakesANewVariantAndKeepsTheFirst)
 {
     ZoneEdit edit;
-    const auto mine = edit.userRoot.getChildFile ("mine");
-    ASSERT_TRUE (edit.installed.root().copyDirectoryTo (mine));
+    juce::String error;
+    const auto first = a3app::withZoneDecoder (edit.config(), a3::SpeakerZone::booth, edit.installedFile ("main.decoder.json"),
+                                               boothParametersWithCrossover (edit, 120.0), edit.userRoot, error, saveTime);
+    ASSERT_TRUE (first) << error;
+    const auto firstFiles = filesOf (first->spatialDirectory);
+
+    const auto running = *first;   // Save applied it
+    auto mainParameters = juce::JSON::parse (edit.installedFile ("main.parameters.json")).clone();
+    mainParameters.getDynamicObject()->setProperty ("lowPassFrequency", 90.0);
+    const auto second = a3app::withZoneDecoder (running, a3::SpeakerZone::main, edit.installedFile ("main.decoder.json"),
+                                                mainParameters, edit.userRoot, error, saveTime + juce::RelativeTime::minutes (3));
+    ASSERT_TRUE (second) << error;
+    EXPECT_NE (second->spatialDirectory, first->spatialDirectory);
+    EXPECT_EQ (second->spatialDirectory.getFileName(), edit.installed.root().getFileName() + "-20261029-210807");   // no stacked stamps
+    EXPECT_FALSE (a3app::sameConfig (*second, running));
+    EXPECT_EQ (filesOf (first->spatialDirectory), firstFiles);
+    EXPECT_EQ ((double) juce::JSON::parse (second->spatialDirectory.getChildFile ("booth.parameters.json").loadFileAsString())["lowPassFrequency"], 120.0);
+    EXPECT_EQ ((double) juce::JSON::parse (second->spatialDirectory.getChildFile ("main.parameters.json").loadFileAsString())["lowPassFrequency"], 90.0);
+    EXPECT_EQ (variantsUnder (edit.userRoot).size(), 2u);
+}
+
+TEST (ConfigEdits, TwoSavesInOneSecondGetTwoVariants)
+{
+    ZoneEdit edit;
+    juce::String error;
+    const auto save = [&]
+    {
+        return a3app::withZoneDecoder (edit.config(), a3::SpeakerZone::main, edit.installedFile ("main.decoder.json"),
+                                       juce::JSON::parse (edit.installedFile ("main.parameters.json")), edit.userRoot, error, saveTime);
+    };
+    const auto one = save(), two = save();
+    ASSERT_TRUE (one && two) << error;
+    EXPECT_NE (one->spatialDirectory, two->spatialDirectory);
+    EXPECT_EQ (variantsUnder (edit.userRoot).size(), 2u);
+}
+
+// S2: the user root itself as the current directory: its own files are copied, never its variants or staging.
+TEST (ConfigEdits, SavingFromTheUserRootDoesNotRecurse)
+{
+    ZoneEdit edit;
+    ASSERT_TRUE (edit.userRoot.createDirectory());
+    for (const auto& file : edit.installed.root().findChildFiles (juce::File::findFiles, false))
+        ASSERT_TRUE (file.copyFileTo (edit.userRoot.getChildFile (file.getFileName())));
+    const auto older = edit.userRoot.getChildFile ("club-20261001-120000");
+    ASSERT_TRUE (edit.installed.root().copyDirectoryTo (older));
     auto config = edit.config();
-    config.spatialDirectory = mine;
+    config.spatialDirectory = edit.userRoot;
     juce::String error;
     const auto edited = a3app::withZoneDecoder (config, a3::SpeakerZone::main, edit.installedFile ("main.decoder.json"),
-                                                juce::JSON::parse (edit.installedFile ("main.parameters.json")), edit.userRoot, error);
+                                                juce::JSON::parse (edit.installedFile ("main.parameters.json")), edit.userRoot, error, saveTime);
     ASSERT_TRUE (edited) << error;
-    EXPECT_EQ (edited->spatialDirectory, mine);
+    EXPECT_EQ (edited->spatialDirectory, edit.userRoot.getChildFile (edit.userRoot.getFileName() + "-20261029-210507"));
+    EXPECT_TRUE (edited->spatialDirectory.findChildFiles (juce::File::findDirectories, false).isEmpty());
+    EXPECT_TRUE (older.getChildFile ("main.decoder.json").existsAsFile());
+    EXPECT_TRUE (a3::loadSpatialConfig (edited->spatialDirectory, error)) << error;
 }
 
 TEST (ConfigEdits, AZoneDecoderTheEngineWouldRefuseWritesNothing)
@@ -358,12 +430,41 @@ TEST (ConfigEdits, AZoneDecoderTheEngineWouldRefuseWritesNothing)
     EXPECT_TRUE (edit.userRoot.findChildFiles (juce::File::findFilesAndDirectories, true).isEmpty());
 }
 
-TEST (ConfigEdits, TheVariantOfAnInstalledDirectoryIsNamedAfterIt)
+TEST (ConfigEdits, TheVariantIsNamedAfterItsBaseAndTheTime)
 {
     a3app::AppConfig config;
     config.spatialDirectory = juce::File ("/usr/share/a3-engine/spatial");
     const juce::File root ("/home/tester/.config/a3/engine/spatial");
-    EXPECT_EQ (a3app::zoneVariantDirectory (config, root), root.getChildFile ("spatial"));
+    EXPECT_EQ (a3app::zoneVariantDirectory (config, root, saveTime), root.getChildFile ("spatial-20261029-210507"));
+    config.spatialDirectory = root.getChildFile ("club-20261001-120000");
+    EXPECT_EQ (a3app::zoneVariantDirectory (config, root, saveTime), root.getChildFile ("club-20261029-210507"));
     config.spatialDirectory = root.getChildFile ("club");
-    EXPECT_EQ (a3app::zoneVariantDirectory (config, root), root.getChildFile ("club"));
+    EXPECT_EQ (a3app::zoneVariantDirectory (config, root, saveTime), root.getChildFile ("club-20261029-210507"));
+}
+
+// S1: the zone's topDirections follow the new layout, so a different count of real speakers loads.
+TEST (ConfigEdits, ASixPointOneBoothSavedThroughTheEditLoads)
+{
+    ZoneEdit edit;
+    const std::vector<std::pair<float, float>> tops { { 29.5f, 0 }, { -29.5f, 0 }, { -90, 0 }, { -150.5f, 0 }, { 150.5f, 0 }, { 90, 0 } };
+    const int channels[] { 2, 3, 4, 5, 6, 9 };
+    std::vector<a3::Loudspeaker> speakers;
+    for (size_t k = 0; k < tops.size(); ++k)
+        speakers.push_back ({ tops[k].first, tops[k].second, 1.0f, false, channels[k] });
+    speakers.push_back ({ 0, 90, 1.0f, true, 11 });
+    speakers.push_back ({ 0, -90, 1.0f, true, 12 });
+    juce::String error;
+    const auto designed = a3::designDecoder (speakers, a3::AmbisonicWeights::inPhase, error);
+    ASSERT_TRUE (designed) << error;
+
+    const auto edited = a3app::withZoneDecoder (edit.config(), a3::SpeakerZone::booth, *designed,
+                                                juce::JSON::parse (edit.installedFile ("booth.parameters.json")), edit.userRoot, error, saveTime);
+    ASSERT_TRUE (edited) << error;
+    const auto loaded = a3::loadSpatialConfig (edited->spatialDirectory, error);
+    ASSERT_TRUE (loaded) << error;
+    EXPECT_EQ (loaded->booth.layout.topChannels, (std::vector<int> { 2, 3, 4, 5, 6, 9 }));
+    EXPECT_EQ (loaded->booth.topDirections, tops);
+    EXPECT_EQ (loaded->main.topDirections.size(), 4u);   // the other zone as it was
+    const auto zone = juce::JSON::parse (edited->spatialDirectory.getChildFile ("booth.zone.json").loadFileAsString());
+    EXPECT_EQ (juce::JSON::toString (zone["stages"]), juce::JSON::toString (juce::JSON::parse (edit.installedFile ("booth.zone.json"))["stages"]));
 }

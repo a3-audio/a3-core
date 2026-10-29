@@ -31,16 +31,18 @@ constexpr int maxDecksOnPage = 26;
 std::optional<AppConfig> withDecks (const AppConfig&, int decks, juce::String& error);
 std::optional<AppConfig> withSpatialDirectory (const AppConfig&, const juce::File& directory, juce::String& error);
 
-// The one edit that writes files (the SPEAKERS page's SAVE TO ZONE): a user variant of the config's
-// spatial directory, zoneVariantDirectory, holding a copy of it with the zone's <zone>.decoder.json
-// (verbatim) and <zone>.parameters.json replaced, chosen as the spatial directory. It is staged beside
-// the variant and replaces it only once it loads; a refusal names the file and leaves nothing behind.
-// Installed directories are never written: the variant always lies under `userRoot`.
+// The one edit that writes files (the SPEAKERS page's SAVE TO ZONE): a new user variant, zoneVariantDirectory,
+// holding a copy of the config's spatial directory's files with the zone's <zone>.decoder.json (verbatim) and
+// <zone>.parameters.json replaced and its <zone>.zone.json topDirections taken from the decoder's layout. It is
+// staged in <userRoot>/.staging, moved into place only once it loads, and chosen as the spatial directory, so
+// Save restarts the engine on it. No directory is ever rewritten or deleted: the previous one stays the way
+// back. A refusal names the file and leaves nothing behind.
 std::optional<AppConfig> withZoneDecoder (const AppConfig&, a3::SpeakerZone, const juce::String& decoderJson,
-                                          const juce::var& parameters, const juce::File& userRoot, juce::String& error);
-// The config's spatial directory when it lies under `userRoot` (a user variant is edited in place),
-// else userRoot/<its name>.
-juce::File zoneVariantDirectory (const AppConfig&, const juce::File& userRoot);
+                                          const juce::var& parameters, const juce::File& userRoot, juce::String& error,
+                                          juce::Time now = juce::Time::getCurrentTime());
+// <userRoot>/<base>-YYYYMMDD-HHMMSS, base being the config's directory name without an earlier stamp; "-2", "-3"
+// ... when that exists.
+juce::File zoneVariantDirectory (const AppConfig&, const juce::File& userRoot, juce::Time now);
 
 enum class TrimZone { main, booth, phones, rec };
 std::optional<AppConfig> withTrim (const AppConfig&, TrimZone, float db, juce::String& error);   // refuses outside -90..+6 dB

@@ -704,7 +704,15 @@ struct SpeakerRig
         view.runningCfg = view.cfg;
     }
     ~SpeakerRig() { userRoot.deleteRecursively(); }
-    juce::File variant() const { return userRoot.getChildFile (installed.root().getFileName()); }
+    // The user's variants under the root (the hidden staging area aside).
+    std::vector<juce::File> variants() const
+    {
+        std::vector<juce::File> found;
+        for (const auto& child : userRoot.findChildFiles (juce::File::findDirectories, false))
+            if (! child.getFileName().startsWithChar ('.'))
+                found.push_back (child);
+        return found;
+    }
 };
 }
 
@@ -789,12 +797,15 @@ TEST_F (Pages, SpeakersSaveToZoneWritesAUserVariant)
     page.setCrossover (120.0f);
     page.saveToZone();
     EXPECT_EQ (rig.view.edited, 1);
-    EXPECT_EQ (rig.view.cfg.spatialDirectory, rig.variant());
-    const auto parameters = juce::JSON::parse (rig.variant().getChildFile ("booth.parameters.json").loadFileAsString());
+    ASSERT_EQ (rig.variants().size(), 1u);
+    const auto variant = rig.variants().front();
+    EXPECT_EQ (rig.view.cfg.spatialDirectory, variant);
+    EXPECT_FALSE (a3app::sameConfig (rig.view.cfg, rig.view.runningCfg));   // Save restarts on it
+    const auto parameters = juce::JSON::parse (variant.getChildFile ("booth.parameters.json").loadFileAsString());
     EXPECT_EQ ((double) parameters["lowPassFrequency"], 120.0);
     EXPECT_EQ ((double) parameters["highPassFrequency"], 120.0);
     EXPECT_EQ ((double) parameters["weights"], 2.0);   // inPhase, as the file says
-    const auto decoder = juce::JSON::parse (rig.variant().getChildFile ("booth.decoder.json").loadFileAsString());
+    const auto decoder = juce::JSON::parse (variant.getChildFile ("booth.decoder.json").loadFileAsString());
     EXPECT_TRUE (decoder["Description"].toString().contains ("AllRADecoder")) << decoder["Description"].toString();
     EXPECT_EQ (decoder["LoudspeakerLayout"]["Loudspeakers"].size(), 6);
     EXPECT_EQ (rig.installed.root().getChildFile ("booth.decoder.json").loadFileAsString(), installedBooth);
@@ -813,7 +824,7 @@ TEST_F (Pages, SpeakersSaveRefusesWhatIemRefuses)
     listener->buttonClicked (clear.front());   // IEM's CLEAR: no loudspeakers left
     page.saveToZone();
     EXPECT_EQ (rig.view.edited, 0);
-    EXPECT_FALSE (rig.variant().exists());
+    EXPECT_TRUE (rig.variants().empty());
     EXPECT_TRUE (page.messageLabel().getText().contains ("no loudspeakers")) << page.messageLabel().getText();
     expectPainted (snapshot (page, "speakers-refused"));
 }
@@ -829,7 +840,7 @@ TEST_F (Pages, SpeakersSubChannelIsCheckedLikeTheEngine)
     page.setSubChannel (0);   // no sub
     page.saveToZone();
     EXPECT_EQ (rig.view.edited, 1);
-    const auto parameters = juce::JSON::parse (rig.variant().getChildFile ("main.parameters.json").loadFileAsString());
+    const auto parameters = juce::JSON::parse (rig.view.cfg.spatialDirectory.getChildFile ("main.parameters.json").loadFileAsString());
     EXPECT_EQ ((double) parameters["swMode"], 0.0);
 }
 
@@ -845,4 +856,22 @@ TEST_F (Pages, ZonesOpenTheWindowsSpeakersPage)
     EXPECT_EQ (window.currentPage(), "SPEAKERS");
     window.refreshNow();
     expectPainted (snapshot (*window.getContentComponent(), "window-speakers"));
+}
+
+// Saving twice from the page: two variants, the page follows the newer, the older stays.
+TEST_F (Pages, SpeakersSaveTwiceKeepsBothVariants)
+{
+    SpeakerRig rig;
+    a3app::SpeakersPage page (rig.view, rig.userRoot);
+    page.showZone (a3::SpeakerZone::main);
+    page.saveToZone();
+    const auto first = rig.view.cfg.spatialDirectory;
+    page.refresh();
+    page.showZone (a3::SpeakerZone::booth);
+    page.setCrossover (100.0f);
+    page.saveToZone();
+    EXPECT_EQ (rig.view.edited, 2);
+    EXPECT_NE (rig.view.cfg.spatialDirectory, first);
+    EXPECT_EQ (rig.variants().size(), 2u);
+    EXPECT_TRUE (first.getChildFile ("booth.parameters.json").existsAsFile());
 }

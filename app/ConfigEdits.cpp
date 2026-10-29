@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <string>
 #include <cmath>
+#include <regex>
 #include <set>
 
 namespace a3app
@@ -107,14 +108,30 @@ std::optional<AppConfig> withSpatialDirectory (const AppConfig& config, const ju
     return pruned (std::move (edited), error);
 }
 
-juce::File zoneVariantDirectory (const AppConfig& config, const juce::File& userRoot)
-{
-    const auto current = config.spatialDirectory;
-    return current.isAChildOf (userRoot) ? current : userRoot.getChildFile (current.getFileName());
-}
-
 namespace
 {
+const juce::String stagingName = ".staging";
+
+// "club-20261001-120000" (or "...-2") -> "club": a variant of a variant is named after the same base.
+juce::String variantBase (const juce::String& name)
+{
+    static const std::regex stamped ("^(.+)-[0-9]{8}-[0-9]{6}(-[0-9]+)?$");
+    std::smatch match;
+    const auto text = name.toStdString();
+    return std::regex_match (text, match, stamped) ? juce::String (match[1].str()) : name;
+}
+
+// A spatial directory is flat: its own files, never its subdirectories (the user root holds the variants).
+bool copyFiles (const juce::File& from, const juce::File& to)
+{
+    if (! from.isDirectory() || ! to.createDirectory())
+        return false;
+    for (const auto& file : from.findChildFiles (juce::File::findFiles, false))
+        if (! file.copyFileTo (to.getChildFile (file.getFileName())))
+            return false;
+    return true;
+}
+
 juce::Result writeZoneFiles (const juce::File& directory, a3::SpeakerZone zone, const juce::String& decoderJson, const juce::var& parameters)
 {
     const juce::String name = a3::zoneName (zone);
@@ -126,38 +143,83 @@ juce::Result writeZoneFiles (const juce::File& directory, a3::SpeakerZone zone, 
         return juce::Result::fail ("cannot write " + values.getFullPathName());
     return juce::Result::ok();
 }
+
+// <zone>.zone.json's topDirections from the decoder's own layout, one per top in Routing order (the order the
+// engine numbers the tops in); its stages stay. A decoder without a LoudspeakerLayout keeps the directions.
+juce::Result writeTopDirections (const juce::File& directory, a3::SpeakerZone zone, const juce::String& decoderJson)
+{
+    const auto decoder = juce::JSON::parse (decoderJson);
+    const auto speakers = decoder["LoudspeakerLayout"]["Loudspeakers"];
+    const auto routing = decoder["Decoder"]["Routing"];
+    if (! speakers.isArray() || ! routing.isArray())
+        return juce::Result::ok();
+
+    const juce::String name = a3::zoneName (zone);
+    juce::Array<juce::var> directions;
+    for (int top = 0; top < routing.size(); ++top)
+    {
+        const int channel = (int) routing[top];
+        juce::var found;
+        for (int i = 0; i < speakers.size() && found.isVoid(); ++i)
+            if (! (bool) speakers[i]["IsImaginary"] && (int) speakers[i]["Channel"] == channel)
+                found = juce::Array<juce::var> { speakers[i]["Azimuth"], speakers[i]["Elevation"] };
+        if (found.isVoid())
+            return juce::Result::fail (name + ".decoder.json: its LoudspeakerLayout has no real loudspeaker on channel "
+                                       + juce::String (channel) + ", which its Routing uses");
+        directions.add (found);
+    }
+    const auto zoneFile = directory.getChildFile (name + ".zone.json");
+    auto zoneJson = juce::JSON::parse (zoneFile.loadFileAsString());
+    if (! zoneJson.isObject())
+        zoneJson = juce::var (new juce::DynamicObject());
+    zoneJson.getDynamicObject()->setProperty ("topDirections", directions);
+    if (! zoneFile.replaceWithText (juce::JSON::toString (zoneJson) + "\n", false, false, "\n"))
+        return juce::Result::fail ("cannot write " + zoneFile.getFullPathName());
+    return juce::Result::ok();
+}
+}
+
+juce::File zoneVariantDirectory (const AppConfig& config, const juce::File& userRoot, juce::Time now)
+{
+    const auto name = variantBase (config.spatialDirectory.getFileName()) + "-" + now.formatted ("%Y%m%d-%H%M%S");
+    auto variant = userRoot.getChildFile (name);
+    for (int n = 2; variant.exists(); ++n)
+        variant = userRoot.getChildFile (name + "-" + juce::String (n));
+    return variant;
 }
 
 std::optional<AppConfig> withZoneDecoder (const AppConfig& config, a3::SpeakerZone zone, const juce::String& decoderJson,
-                                          const juce::var& parameters, const juce::File& userRoot, juce::String& error)
+                                          const juce::var& parameters, const juce::File& userRoot, juce::String& error,
+                                          juce::Time now)
 {
-    const auto variant = zoneVariantDirectory (config, userRoot);
-    if (! variant.isAChildOf (userRoot))
-    {
-        error = variant.getFullPathName() + " is not under " + userRoot.getFullPathName();
-        return std::nullopt;
-    }
-    const auto staging = variant.getSiblingFile ("." + variant.getFileName() + ".saving");
-    staging.deleteRecursively();
+    const auto variant = zoneVariantDirectory (config, userRoot, now);
+    const auto stagingRoot = userRoot.getChildFile (stagingName);
+    const auto staging = stagingRoot.getChildFile (variant.getFileName());
+    staging.deleteRecursively();   // only ever a leftover of an interrupted save of this very name
     const auto discard = [&] (const juce::String& why) -> std::optional<AppConfig>
     {
         staging.deleteRecursively();
+        if (stagingRoot.findChildFiles (juce::File::findFilesAndDirectories, false).isEmpty())
+            stagingRoot.deleteFile();
         error = why;
         return std::nullopt;
     };
 
-    if (! config.spatialDirectory.copyDirectoryTo (staging))
+    if (! copyFiles (config.spatialDirectory, staging))
         return discard ("cannot copy " + config.spatialDirectory.getFullPathName() + " to " + staging.getFullPathName());
     if (const auto written = writeZoneFiles (staging, zone, decoderJson, parameters); written.failed())
         return discard (written.getErrorMessage());
+    if (const auto directions = writeTopDirections (staging, zone, decoderJson); directions.failed())
+        return discard (directions.getErrorMessage());
     juce::String refusal;
     auto edited = withSpatialDirectory (config, staging, refusal);   // loads it: the engine would refuse what fails here
     if (! edited)
         return discard (refusal);
 
-    variant.deleteRecursively();
     if (! staging.moveFileTo (variant))
         return discard ("cannot move " + staging.getFullPathName() + " to " + variant.getFullPathName());
+    if (stagingRoot.findChildFiles (juce::File::findFilesAndDirectories, false).isEmpty())
+        stagingRoot.deleteFile();
     edited->spatialDirectory = variant;
     error = {};
     return edited;
