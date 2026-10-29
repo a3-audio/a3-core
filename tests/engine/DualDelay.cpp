@@ -135,3 +135,11 @@ TEST (DualDelay, TheShippedDataRotatesAtTheDefaultSpread)
              { "HPcutOffL", 233.0f }, { "HPcutOffR", 233.0f }, { "LPcutOffL", 8000.0f }, { "LPcutOffR", 8000.0f } })
         EXPECT_FLOAT_EQ (node->rawParameter (id)->load(), value) << id;
 }
+
+// The line's floor in DelayParameters is DualDelay's own: its legal delayBPM starts there.
+TEST (DualDelay, TheLineIsAsLongAsDelayParametersSays)
+{
+    auto node = makeDualDelay();
+    EXPECT_FLOAT_EQ (node->legalValue ("delayBPML", 0.0f), a3::delay::lowestDelayBpm);
+    EXPECT_FLOAT_EQ (node->legalValue ("delayMultL", 0.0f), 1.0f);
+}

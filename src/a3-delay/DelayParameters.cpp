@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
-#include "DelayParameters.h"
+#include "a3-delay/DelayParameters.h"
 #include <algorithm>
 #include <cmath>
 

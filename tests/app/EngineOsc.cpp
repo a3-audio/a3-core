@@ -367,8 +367,8 @@ TEST_F (EngineOsc, TheDelayValuesAreSnappedAndClamped)
     EXPECT_FLOAT_EQ (g.delayColor.load(), 0.0f);
     EXPECT_FLOAT_EQ (g.delaySpread.load(), 60.0f);
 
-    const std::pair<float, float> beats[] { { 0.3f, 0.25f }, { 0.6f, 0.5f }, { 0.62f, 0.75f }, { 3.0f, 4.0f },
-                                            { 100.0f, 4.0f }, { 0.0f, 0.125f }, { -1.0f, 0.125f } };
+    const std::pair<float, float> beats[] { { 0.3f, 0.25f }, { 0.6f, 0.5f }, { 0.62f, 0.75f }, { 1.5f, 2.0f },
+                                            { 4.0f, 2.0f }, { 100.0f, 2.0f }, { 0.0f, 0.125f }, { -1.0f, 0.125f } };
     for (const auto& [sent, stored] : beats)
     {
         EXPECT_TRUE (apply ("/aux-return/delay/beat", sent));

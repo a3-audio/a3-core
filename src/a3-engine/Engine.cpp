@@ -184,7 +184,7 @@ struct Engine::Impl
 };
 
 Engine::Impl::Impl (const EngineConfig& c, const SpatialConfig& spatial)
-    : config (c), modulation (c.delayModulation)
+    : config (c), modulation (withoutOwnedParameters (c.delayModulation))
 {
     if (config.channels < 1)
         throw std::runtime_error ("channels must be at least 1");

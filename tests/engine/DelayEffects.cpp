@@ -4,9 +4,11 @@
 // echo, FEEDBK sets the repeat ratio, COLOR moves the spectrum, SPREAD turns each repeat, and a change
 // of any of them while a tail rings adds no step of its own.
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <cmath>
 #include <functional>
-#include <iostream>
+#include <string>
+#include <tuple>
 #include <stdexcept>
 #include <juce_dsp/juce_dsp.h>
 #include "DelayModulation.h"
@@ -98,13 +100,24 @@ std::vector<float> noiseBurst (size_t length, double seconds, float level = 0.5f
     return x;
 }
 
-// A plane wave from azimuth 0 at first order (SN3D): W = X = s.
-Channels fromTheFront (const std::vector<float>& s)
+// A plane wave from `degrees` azimuth at first order (SN3D): W = s, Y = sin s, X = cos s.
+Channels fromAzimuth (const std::vector<float>& s, double degrees)
 {
     Channels in ((size_t) acnX + 1, std::vector<float> (s.size(), 0.0f));
-    in[acnW] = in[acnX] = s;
+    const double radians = degrees * pi / 180.0;
+    for (size_t i = 0; i < s.size(); ++i)
+    {
+        in[acnW][i] = s[i];
+        in[acnY][i] = (float) std::sin (radians) * s[i];
+        in[acnX][i] = (float) std::cos (radians) * s[i];
+    }
     return in;
 }
+
+Channels fromTheFront (const std::vector<float>& s) { return fromAzimuth (s, 0.0); }
+
+// A measurement for the report: in the test's XML (--gtest_output=xml), not on stdout.
+void measured (const std::string& name, const std::string& value) { ::testing::Test::RecordProperty (name, value); }
 
 float peakIn (const std::vector<float>& x, size_t from, size_t to)
 {
@@ -123,13 +136,18 @@ size_t peakAt (const std::vector<float>& x, size_t from, size_t to)
     return best;
 }
 
-// The largest sample-to-sample step over every channel in [from, to).
-float largestStep (const Channels& out, size_t from, size_t to)
+// The largest sample-to-sample step in [from, to) over `channels` (none named: every channel).
+float largestStep (const Channels& out, size_t from, size_t to, const std::vector<int>& channels = {})
 {
     float step = 0.0f;
-    for (const auto& x : out)
+    for (size_t ch = 0; ch < out.size(); ++ch)
+    {
+        if (! channels.empty() && std::find (channels.begin(), channels.end(), (int) ch) == channels.end())
+            continue;
+        const auto& x = out[ch];
         for (size_t i = std::max<size_t> (from, 1); i < std::min (to, x.size()); ++i)
             step = std::max (step, std::abs (x[i] - x[i - 1]));
+    }
     return step;
 }
 
@@ -175,7 +193,7 @@ TEST (DelayEffects, BeatPlacesTheFirstEchoAtItsTime)
 {
     const std::vector<std::pair<float, float>> cases { { 120.0f, 0.125f }, { 120.0f, 0.25f }, { 120.0f, 0.5f },
                                                        { 120.0f, 0.75f }, { 120.0f, 1.0f }, { 120.0f, 2.0f },
-                                                       { 120.0f, 4.0f }, { 200.0f, 4.0f } };
+                                                       { 92.0f, 2.0f }, { 91.0f, 2.0f } };
     for (const auto& [tempo, beats] : cases)
     {
         DelayRig rig;
@@ -225,7 +243,7 @@ TEST (DelayEffects, ColorLowersTheCentroidStrictly)
         const auto d = (size_t) echoSamples (rig.tempo, rig.beats);
         const auto out = rig.render (2 * d, { noiseBurst (frames (0.05), 0.05) });
         const double centroid = spectralCentroid (out[acnW], d - 64);
-        std::cout << "COLOR " << c << ": centroid " << centroid << " Hz\n";
+        measured ("COLOR " + std::to_string (c) + " centroid Hz", std::to_string (centroid));
         EXPECT_LT (centroid, previous) << c;
         previous = centroid;
     }
@@ -255,27 +273,28 @@ TEST (DelayEffects, SpreadTurnsEachRepeatBySDegrees)
 
 namespace
 {
-// A tail of a 60 ms 1 kHz burst from the front rings at 0.95 (a repeat every 125 ms); `change`
-// happens in the middle of the fourth repeat, while the tone passes the loop. The largest
-// sample-to-sample step over every channel from the change on, over the largest step of the
-// first three repeats (the ringing's own). Not per repeat relative to its peak: the loop's filters
-// raise a repeat's step / peak with every pass by themselves (0.13 -> 0.20 on the rotation-free W
-// by the tenth, the same for a spread up or down).
-double stepRatioOnChange (const std::function<void (DelayRig&)>& change, const char* name)
+// A tail of a 60 ms 1 kHz burst from 30 degrees (so the lines' opposite turns do not cancel in Y)
+// rings at 0.95 (a repeat every 125 ms); `change` happens in the middle of the fourth repeat, while
+// the tone passes the loop. The largest sample-to-sample step on `channels` from the change on,
+// over the largest step of the first three repeats there (the ringing's own). Not per repeat
+// relative to its peak: the loop's filters raise a repeat's step / peak with every pass by
+// themselves (0.13 -> 0.20 on W by the tenth).
+double stepRatioOnChange (const std::function<void (DelayRig&)>& change, const char* name, const std::vector<int>& channels = {})
 {
     DelayRig rig;
     rig.feedback = 0.95f;
     rig.settle();
     const auto d = (size_t) echoSamples (rig.tempo, rig.beats);
     const size_t burst = frames (0.06), changeAt = 4 * d + burst / 2;
-    const auto ringing = rig.render (changeAt, fromTheFront (toneBurst (burst, 0.06, 1000.0)));
-    const float before = largestStep (ringing, 0, 3 * d + burst + 4 * block);
+    const auto ringing = rig.render (changeAt, fromAzimuth (toneBurst (burst, 0.06, 1000.0), 30.0));
+    const float before = largestStep (ringing, 0, 3 * d + burst + 4 * block, channels);
     change (rig);
     const auto after = rig.render (10 * d);
-    float step = largestStep (after, 0, after[0].size());
+    float step = largestStep (after, 0, after[0].size(), channels);
     for (size_t ch = 0; ch < after.size(); ++ch)   // and the step across the change
-        step = std::max (step, std::abs (after[ch].front() - ringing[ch].back()));
-    std::cout << name << ": largest step " << step << " from the change on, " << before << " while ringing before\n";
+        if (channels.empty() || std::find (channels.begin(), channels.end(), (int) ch) != channels.end())
+            step = std::max (step, std::abs (after[ch].front() - ringing[ch].back()));
+    measured (std::string (name) + " step after / before", std::to_string (step) + " / " + std::to_string (before));
     return (double) step / (double) before;
 }
 }
@@ -286,37 +305,41 @@ TEST (DelayEffects, FeedbackColorAndSpreadChangeWithoutAStep)
     EXPECT_LE (stepRatioOnChange ([] (DelayRig& r) { r.feedback = 0.0f; }, "FEEDBK 0.95 -> 0"), 1.5);
     EXPECT_LE (stepRatioOnChange ([] (DelayRig& r) { r.color = 1.0f; }, "COLOR 0 -> +1"), 1.5);
     EXPECT_LE (stepRatioOnChange ([] (DelayRig& r) { r.color = -1.0f; }, "COLOR 0 -> -1"), 1.5);
-    EXPECT_LE (stepRatioOnChange ([] (DelayRig& r) { r.spread = 180.0f; }, "SPREAD 60 -> 180"), 1.5);
-    EXPECT_LE (stepRatioOnChange ([] (DelayRig& r) { r.spread = 0.0f; }, "SPREAD 60 -> 0"), 1.5);
+    // W does not turn: the spread is measured where it acts, on Y and X (review minor 2).
+    EXPECT_LE (stepRatioOnChange ([] (DelayRig& r) { r.spread = 180.0f; }, "SPREAD 60 -> 180", { acnY, acnX }), 1.5);
+    EXPECT_LE (stepRatioOnChange ([] (DelayRig& r) { r.spread = 0.0f; }, "SPREAD 60 -> 0", { acnY, acnX }), 1.5);
 }
 
 namespace
 {
-struct GlideMeasure
+struct TimeChange
 {
-    double lowestHz, highestHz;   // the tone's frequency through the glide (zero crossings)
-    double settledAfter;          // seconds until it stays within 1 Hz of 1 kHz
-    double stepRatio;             // largest step after the change / before it
+    double lowestHz, highestHz;   // the tone's frequency from the change on (zero crossings)
+    double offUntil;              // seconds after the change of the last period more than offHz off
+    double stepRatio;             // largest step after the change / the steady tone's
+    double quietMs;               // how long the tone stays below half its steady level (1 ms windows)
+    size_t echoAt;                // an impulse sent when the crossfade has ended: its echo, in samples
 };
 
-// A steady 1 kHz tone through the delay with no feedback (one echo, so the output is the tone
-// read at the gliding time); BEAT changes from `from` to `to` at 120 BPM.
-GlideMeasure beatChange (float from, float to)
+// A steady 1 kHz tone through the delay with no feedback, so the output is the tone read at the
+// delay's time; after 3 s the tempo and beats change from `from` to `to`. Then an impulse once the
+// crossfade is over, for the time now in place.
+TimeChange timeChange (std::pair<float, float> from, std::pair<float, float> to, double offHz = 1.0)
 {
     DelayRig rig;
     rig.feedback = 0.0f;
-    rig.beats = from;
-    const size_t before = frames (3.0), after = frames (4.0);
+    std::tie (rig.tempo, rig.beats) = from;
+    const size_t before = frames (3.0), after = frames (1.5);
     std::vector<float> tone (before + after);
     for (size_t i = 0; i < tone.size(); ++i)
         tone[i] = 0.5f * (float) std::sin (2.0 * pi * 1000.0 * (double) i / rate);
-    const auto first = rig.render (before, { std::vector<float> (tone.begin(), tone.begin() + (long) before) });
-    rig.beats = to;
-    const auto second = rig.render (after, { std::vector<float> (tone.begin() + (long) before, tone.end()) });
+    const auto steady = rig.render (before, { std::vector<float> (tone.begin(), tone.begin() + (long) before) });
+    std::tie (rig.tempo, rig.beats) = to;
+    const auto changed = rig.render (after, { std::vector<float> (tone.begin() + (long) before, tone.end()) });
 
-    const auto& w = second[acnW];
-    GlideMeasure m { 1e9, 0.0, 0.0, 0.0 };
-    double lastCrossing = -1.0, lastOff = 0.0;
+    const auto& w = changed[acnW];
+    TimeChange m { 1e9, 0.0, 0.0, 0.0, 0.0, 0 };
+    double lastCrossing = -1.0;
     for (size_t i = 1; i < w.size(); ++i)
     {
         if (! (w[i - 1] < 0.0f && w[i] >= 0.0f))
@@ -327,33 +350,89 @@ GlideMeasure beatChange (float from, float to)
             const double hz = rate / (crossing - lastCrossing);
             m.lowestHz = std::min (m.lowestHz, hz);
             m.highestHz = std::max (m.highestHz, hz);
-            if (std::abs (hz - 1000.0) > 1.0)
-                lastOff = crossing / rate;
+            if (std::abs (hz - 1000.0) > offHz)
+                m.offUntil = crossing / rate;
         }
         lastCrossing = crossing;
     }
-    m.settledAfter = lastOff;
-    m.stepRatio = (double) largestStep ({ w }, 0, w.size()) / (double) largestStep ({ first[acnW] }, frames (2.0), before);
+    m.stepRatio = (double) largestStep ({ w }, 0, w.size()) / (double) largestStep ({ steady[acnW] }, frames (2.0), before);
+    const float level = peakIn (steady[acnW], frames (2.0), before);
+    const size_t window = frames (0.001);
+    size_t quiet = 0;
+    for (size_t i = 0; i + window <= frames (0.1); ++i)
+        if (peakIn (w, i, i + window) < 0.5f * level)
+            ++quiet;
+    m.quietMs = 1000.0 * (double) quiet / rate;
+
+    const auto expected = (size_t) std::lround (echoSamples (to.first, a3::delay::fitBeatsToLine (to.first, to.second)));
+    rig.render (expected + frames (0.1));   // silence until the tone has left the line
+    std::vector<float> impulse (expected + frames (0.05), 0.0f);
+    impulse[0] = 1.0f;
+    m.echoAt = peakAt (rig.render (impulse.size(), { impulse })[acnW], 1, impulse.size());
     return m;
+}
+
+std::string describe (const TimeChange& m)
+{
+    return "tone " + std::to_string (m.lowestHz) + ".." + std::to_string (m.highestHz) + " Hz, off until "
+           + std::to_string (m.offUntil * 1000.0) + " ms, step x" + std::to_string (m.stepRatio) + ", below half level "
+           + std::to_string (m.quietMs) + " ms, echo at "
+           + std::to_string (m.echoAt);
 }
 }
 
-// BEAT cannot be smoothed by the engine: DualDelay glides its time with a 0.5 Hz one-pole of its
-// own (IEM compiled unchanged), so a change is a tape-like pitch swoop, not a click. Measured and
-// printed for the report; asserted: the output stays finite, settles, and a small change has no step.
-TEST (DelayEffects, ABeatChangeIsAPitchSwoopNotAClick)
+// R18: a BEAT change jumps like a DJM's delay: the old and the new read position crossfade over
+// delay::crossfadeSeconds, no pitch sweep and no step, and the new time is in place when the
+// crossfade ends. Nothing is off after the crossfade. During it the tone depends on the two reads'
+// phase: a whole number of 1 kHz periods apart (0.25 <-> 0.5, 0.25 -> 0.75 at 120 BPM) they add,
+// and the tone stays within 1 Hz (an equal-power bump of up to 3 dB, step x1.41); half a period
+// apart (0.125 <-> 2: 937.5 ms) they cancel at mid-fade, and the tone dips and turns its phase
+// there, which the zero crossings read as a pitch for those milliseconds.
+TEST (DelayEffects, ABeatChangeJumpsWithoutAPitchSweep)
 {
-    for (const auto& [from, to] : std::vector<std::pair<float, float>> { { 0.25f, 0.5f }, { 0.5f, 0.25f },
-                                                                         { 0.25f, 0.125f }, { 0.125f, 2.0f },
-                                                                         { 2.0f, 0.125f } })
+    const double crossfadeEnd = a3::delay::crossfadeSeconds + (double) block / rate;
+    struct Case { float from, to; bool inPhase; };
+    for (const auto& c : std::vector<Case> { { 0.25f, 0.5f, true }, { 0.5f, 0.25f, true }, { 0.25f, 0.75f, true },
+                                             { 0.125f, 2.0f, false }, { 2.0f, 0.125f, false } })
     {
-        const auto m = beatChange (from, to);
-        std::cout << "BEAT " << from << " -> " << to << " at 120 BPM: tone 1000 Hz glides between " << m.lowestHz
-                  << " and " << m.highestHz << " Hz, within 1 Hz after " << m.settledAfter << " s, largest step x"
-                  << m.stepRatio << " of the steady tone's\n";
-        EXPECT_TRUE (std::isfinite (m.stepRatio)) << from << " -> " << to;
-        // Ten of IEM's time constants (1 / (2 pi f)) at most: 3.2 s at 0.5 Hz.
-        EXPECT_LT (m.settledAfter, 10.0 / (2.0 * pi * a3::delay::iemDelayTimeGlideHz)) << from << " -> " << to;
+        const auto m = timeChange ({ 120.0f, c.from }, { 120.0f, c.to });
+        measured ("BEAT " + std::to_string (c.from) + " -> " + std::to_string (c.to) + " at 120", describe (m));
+        if (c.inPhase)
+        {
+            EXPECT_GT (m.lowestHz, 999.0) << c.from << " -> " << c.to;
+            EXPECT_LT (m.highestHz, 1001.0) << c.from << " -> " << c.to;
+        }
+        EXPECT_LE (m.offUntil, crossfadeEnd) << c.from << " -> " << c.to;
+        EXPECT_LE (m.stepRatio, 1.5) << c.from << " -> " << c.to;
+        EXPECT_LE (m.quietMs, 1000.0 * a3::delay::crossfadeSeconds) << c.from << " -> " << c.to;
+        EXPECT_NEAR ((double) m.echoAt, echoSamples (120.0f, c.to), 2.0) << "the new time is in place: " << c.from << " -> " << c.to;
     }
-    EXPECT_LE (beatChange (0.25f, 0.5f).stepRatio, 1.5) << "a longer time slows the tone down: no step";
+}
+
+// A tempo jump (a deck change, 120 -> 128) also crossfades. The two reads are 7.8 ms apart, out of
+// phase for 1 kHz: the crossfade bends the phase over its length, a few per cent of the tone for
+// those 20 ms and nothing after, where a glide swept it by a fifth for a second.
+TEST (DelayEffects, ATempoJumpCrossfades)
+{
+    const auto m = timeChange ({ 120.0f, 0.25f }, { 128.0f, 0.25f });
+    measured ("tempo 120 -> 128", describe (m));
+    EXPECT_GT (m.lowestHz, 950.0);
+    EXPECT_LT (m.highestHz, 1050.0);
+    EXPECT_LE (m.offUntil, a3::delay::crossfadeSeconds + (double) block / rate);
+    EXPECT_LE (m.stepRatio, 1.5);
+    EXPECT_NEAR ((double) m.echoAt, echoSamples (128.0f, 0.25f), 2.0);
+}
+
+// The beat clock's drift (120 -> 120.5, 0.4 %) stays below the threshold and glides: the shorter
+// time raises the tone by the glide's slope (about 1.6 Hz at its start) for a while instead of
+// jumping.
+TEST (DelayEffects, ADriftGlides)
+{
+    const auto m = timeChange ({ 120.0f, 0.25f }, { 120.5f, 0.25f }, 0.25);
+    measured ("tempo 120 -> 120.5", describe (m));
+    EXPECT_GT (m.highestHz, 1000.5) << "it glides";
+    EXPECT_LT (m.highestHz, 1003.0);
+    EXPECT_GT (m.lowestHz, 999.8);
+    EXPECT_GT (m.offUntil, 0.1) << "more than 0.25 Hz off for longer than any crossfade";
+    EXPECT_LE (m.stepRatio, 1.5);
 }

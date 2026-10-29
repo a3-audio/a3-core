@@ -172,6 +172,22 @@ TEST (AppArgs, CheckConfigSaysWhichDeckHasNoMeter)
     EXPECT_EQ (message, "ok");
 }
 
+// R15: a saved spatial directory whose fx the engine overrides (REAPER's warp, its pitch) and an
+// engine.json modulating what the engine owns: --check-config says so once and still passes.
+TEST (AppArgs, CheckConfigSaysWhatTheDelayOverrides)
+{
+    Home home;
+    const auto booth = juce::JSON::toString (juce::var (a3test::reaperBoothSpatialDirectory.getFullPathName()));
+    const auto config = home.write ("reaper.json", "{\"engine\":{\"delayModulation\":[{\"parameter\":\"pitchL\",\"base\":0,"
+                                                   "\"depth\":18,\"rateHz\":0.1,\"shape\":\"random\"}]},\"spatial\":" + booth + "}");
+    juce::String message;
+    ASSERT_TRUE (a3app::checkConfig (checkArgs (config), home.dir, message)) << message;
+    EXPECT_TRUE (message.contains ("transformModeL 1")) << message;
+    EXPECT_TRUE (message.contains ("delayModulation")) << message;
+    EXPECT_EQ (message.indexOf ("transformModeL"), message.lastIndexOf ("transformModeL")) << message;   // once
+    EXPECT_TRUE (message.endsWith ("ok")) << message;
+}
+
 TEST (AppArgs, CheckConfigNamesFileAndReason)
 {
     Home home;

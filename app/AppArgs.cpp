@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "AppArgs.h"
+#include "DelayModulation.h"
 #include "Engine.h"
 
 namespace a3app
@@ -90,6 +91,9 @@ bool checkConfig (const AppArgs& args, const juce::File& home, juce::String& mes
     if (const auto note = unmeteredDecksNote (data->config.engine.decks, data->truth.vuMeters); note.isNotEmpty())
         lines.add (note);
     if (const auto note = hiddenDecksNote (data->config.engine.decks, data->config.engine.decksNamed, data->truth.decks);
+        note.isNotEmpty())
+        lines.add (note);
+    if (const auto note = a3::delayOverrideNote (data->spatial.fxParameters, data->config.engine.delayModulation);
         note.isNotEmpty())
         lines.add (note);
     lines.add ("ok");

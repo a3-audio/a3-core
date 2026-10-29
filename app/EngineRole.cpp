@@ -7,6 +7,7 @@
 
 #include "ConfigEdits.h"
 #include "DeckAudioReport.h"
+#include "DelayModulation.h"
 #include "DeviceBackend.h"
 #include "EngineControlApi.h"
 #include "EngineHost.h"
@@ -175,7 +176,8 @@ public:
     juce::String truthNote() const override
     {
         juce::StringArray notes { a3app::truthNote (truth), unmeteredDecksNote (startedWith.engine.decks, truth.vuMeters),
-                                  hiddenDecksNote (startedWith.engine.decks, startedWith.engine.decksNamed, truth.decks) };
+                                  hiddenDecksNote (startedWith.engine.decks, startedWith.engine.decksNamed, truth.decks),
+                                  a3::delayOverrideNote (role.startup.spatial.fxParameters, role.startup.config.engine.delayModulation) };
         notes.removeEmptyStrings();
         return notes.joinIntoString ("; ");
     }
@@ -301,6 +303,9 @@ std::variant<std::unique_ptr<EngineRole>, int> EngineRole::start (const AppArgs&
     if (const auto note = unmeteredDecksNote (loaded->config.engine.decks, loaded->truth.vuMeters); note.isNotEmpty())
         sayEngine (note);
     if (const auto note = hiddenDecksNote (loaded->config.engine.decks, loaded->config.engine.decksNamed, loaded->truth.decks);
+        note.isNotEmpty())
+        sayEngine (note);
+    if (const auto note = a3::delayOverrideNote (loaded->spatial.fxParameters, loaded->config.engine.delayModulation);
         note.isNotEmpty())
         sayEngine (note);
     for (const auto& line : droppedLinkLines (loaded->config))

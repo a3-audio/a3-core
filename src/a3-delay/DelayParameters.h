@@ -4,10 +4,13 @@
 #include <array>
 
 // The four values of the AUX-RTN delay page (BEAT, FEEDBK, COLOR, SPREAD) as DualDelay's
-// parameters. Pure functions: no node, no thread; DelayModulation.h applies them.
+// parameters. Pure functions and constants, plain C++ (library a3-delay, no JUCE, no engine
+// headers): the engine applies them (DelayModulation.h), the patched DualDelay reads the crossfade
+// constants, and Core links a3-delay and includes "a3-delay/DelayParameters.h" to announce the
+// beat that plays (fitBeatsToLine, R16).
 namespace a3::delay
 {
-inline constexpr std::array<float, 7> legalBeats { 0.125f, 0.25f, 0.5f, 0.75f, 1.0f, 2.0f, 4.0f };
+inline constexpr std::array<float, 6> legalBeats { 0.125f, 0.25f, 0.5f, 0.75f, 1.0f, 2.0f };
 inline constexpr float defaultBeat = 0.25f;       // R1: delayMult 4 at the tempo, today's sound
 inline constexpr float defaultFeedback = 0.70f;   // R10: today's f + x = 0.679
 inline constexpr float defaultColor = 0.0f;
@@ -21,19 +24,24 @@ float clampFeedback (float share);
 float clampColor (float color);
 float clampSpread (float degrees);
 
-// R2's single place (maintainer decision pending). DualDelay's line holds the longest time its
-// legal range allows, delayBPM 46 at delayMult 1 (IEM compiled unchanged, line sized in its
-// prepareToPlay): 60/46 s = 1.304 s. fitBeatsToLine is the fallback for a longer time: halve the
-// beats until it fits (4 -> 2 -> 1 ...). Change the policy here and nowhere else.
+// The line and its fallback, in one place (R2, R16). DualDelay's line holds the longest time its
+// legal range allows, delayBPM 46 at delayMult 1 (line sized in its prepareToPlay): 60/46 s =
+// 1.304 s. A longer time halves the beats until it fits: of the legal beats only 2 below 92 BPM
+// (it plays 1). Core announces this beat, the engine plays it; change the policy here only.
 inline constexpr float lowestDelayBpm = 46.0f;
 inline constexpr double longestDelaySeconds = 60.0 / lowestDelayBpm;
 float fitBeatsToLine (float tempo, float beats);   // tempo clamped to 20..400 BPM as delayTimeFor does
 
-// The BEAT change glide's single anchor. a3 has no code for it: DualDelay glides its delay time
-// with a one-pole at this frequency, set only in third_party/IEMPluginSuite/DualDelay/Source/
-// PluginProcessor.cpp prepareToPlay, `delayTimeInterp[i].setFrequency (0.5f, sampleRate)`. A
-// change of BEAT or tempo is therefore a ~1 s tape-like pitch sweep (time constant
-// 1 / (2 pi 0.5 Hz) = 0.32 s), never a click. Changing it means an IEM patch or an own jump.
+// A change of the delay time, in one place (R18). The patched DualDelay
+// (patches/iem/DualDelay-crossfade.patch, applied at configure time; the submodule stays at its
+// pin) compares each block's target time with the one it is heading for: a change larger than
+// crossfadeAboveRatio of it (a BEAT step, a tempo jump at a deck change) jumps, reading the old and
+// the new position together and crossfading equal-power over crossfadeSeconds, then continues at the
+// new time; a smaller one (the beat clock's drift) keeps IEM's own glide, a one-pole at
+// iemDelayTimeGlideHz (DualDelay PluginProcessor.cpp prepareToPlay, `delayTimeInterp[i].setFrequency
+// (0.5f, sampleRate)`, unpatched; the value here only names it).
+inline constexpr float crossfadeAboveRatio = 0.02f;
+inline constexpr float crossfadeSeconds = 0.020f;
 inline constexpr float iemDelayTimeGlideHz = 0.5f;
 
 // BEAT: delayBPM x delayMult = tempo / fitted beats, delayMult the smallest of 1..16 that keeps

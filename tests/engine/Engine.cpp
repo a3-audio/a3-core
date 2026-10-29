@@ -803,6 +803,33 @@ TEST (Engine, TheDelaysColorAndSpreadAreNotOnTheAudioPath)
     EXPECT_NEAR (node.rawParameter ("HPcutOffR")->load(), 233.0f * std::cbrt (2.0f), 1.0f);
 }
 
+// R15: a saved spatial directory with REAPER's warp fx and an engine.json with REAPER's pitch LFO
+// still give the delay page's delay: rotate mode, pitch and roll 0, no modulation of what it owns.
+TEST (Engine, TheDelayIsTheEnginesWhateverTheSavedFilesSay)
+{
+    auto config = engineConfig (4, 2);
+    config.delayModulation = { { "pitchL", 0.0f, 18.0f, 0.124573f, "random" },
+                               { "yawR", 0.0f, 9.0f, 0.5f, "sine" },
+                               { "lfoDepthL", 0.2f, 0.0f, 0.0f, "sine" } };
+    juce::String error;
+    auto engine = a3::Engine::create (config, loadedSpatialConfig (reaperBoothSpatialDirectory), error);
+    ASSERT_NE (engine, nullptr) << error;
+    engine->prepare (engineRate, engineBlock);
+    a3::EngineControls controls (config.channels);
+    auto& node = engine->delay();
+    const auto expectTheEngines = [&]
+    {
+        for (const char* id : { "transformModeL", "transformModeR", "pitchL", "pitchR", "rollL", "rollR" })
+            EXPECT_FLOAT_EQ (node.rawParameter (id)->load(), 0.0f) << id;
+        EXPECT_FLOAT_EQ (node.rawParameter ("yawR")->load(), -node.rawParameter ("yawL")->load());
+    };
+    expectTheEngines();
+    for (const double t : { 0.5, 3.7, 9.1 })
+        engine->serviceControls (t, controls);
+    expectTheEngines();
+    EXPECT_NEAR (node.rawParameter ("lfoDepthL")->load(), 0.2f, 1e-3f) << "a parameter it does not own is modulated";
+}
+
 TEST (Engine, TheDelaysBeatAndFeedbackFollowTheControlsPerBlock)
 {
     EngineRig rig (engineConfig (4, 2), (size_t) (0.1 * engineRate));

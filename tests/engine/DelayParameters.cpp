@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <gtest/gtest.h>
 #include <cmath>
-#include "DelayParameters.h"
+#include "a3-delay/DelayParameters.h"
 
 namespace delay = a3::delay;
 
@@ -27,9 +27,10 @@ TEST (DelayParameters, ABeatSnapsToTheNearestLegalOneInLog)
     EXPECT_FLOAT_EQ (delay::snapBeat (0.3f), 0.25f);
     EXPECT_FLOAT_EQ (delay::snapBeat (0.6f), 0.5f);    // the log midpoint of 0.5 and 0.75 is 0.612
     EXPECT_FLOAT_EQ (delay::snapBeat (0.62f), 0.75f);
-    EXPECT_FLOAT_EQ (delay::snapBeat (2.7f), 2.0f);    // ... of 2 and 4 is 2.83
-    EXPECT_FLOAT_EQ (delay::snapBeat (3.0f), 4.0f);
-    EXPECT_FLOAT_EQ (delay::snapBeat (100.0f), 4.0f);
+    EXPECT_FLOAT_EQ (delay::snapBeat (1.3f), 1.0f);    // ... of 1 and 2 is 1.41
+    EXPECT_FLOAT_EQ (delay::snapBeat (1.5f), 2.0f);
+    EXPECT_FLOAT_EQ (delay::snapBeat (4.0f), 2.0f);    // 4 is no longer legal (maintainer, 2026-10-29)
+    EXPECT_FLOAT_EQ (delay::snapBeat (100.0f), 2.0f);
     EXPECT_FLOAT_EQ (delay::snapBeat (0.01f), 0.125f);
     EXPECT_FLOAT_EQ (delay::snapBeat (0.0f), 0.125f);
     EXPECT_FLOAT_EQ (delay::snapBeat (-1.0f), 0.125f);
@@ -48,14 +49,13 @@ TEST (DelayParameters, TheOtherValuesAreClamped)
     EXPECT_FLOAT_EQ (delay::clampSpread (45.0f), 45.0f);
 }
 
-TEST (DelayParameters, EveryLegalBeatAt120PlaysItsTimeExceptFourWhichHalves)
+TEST (DelayParameters, EveryLegalBeatAt120PlaysItsTime)
 {
     for (float beats : delay::legalBeats)
     {
         const auto t = delay::delayTimeFor (120.0f, beats);
-        const float played = delay::fitBeatsToLine (120.0f, beats);
-        EXPECT_FLOAT_EQ (t.beats, played) << beats;
-        EXPECT_NEAR (secondsOf (t), played * 60.0 / 120.0, 1e-6) << beats;
+        EXPECT_FLOAT_EQ (t.beats, beats) << beats;
+        EXPECT_NEAR (secondsOf (t), beats * 60.0 / 120.0, 1e-6) << beats;
         EXPECT_GE (t.bpm, delay::lowestDelayBpm) << beats;
         EXPECT_LE (t.bpm, 320.0f) << beats;
         EXPECT_GE (t.mult, 1) << beats;
@@ -65,10 +65,10 @@ TEST (DelayParameters, EveryLegalBeatAt120PlaysItsTimeExceptFourWhichHalves)
 
 TEST (DelayParameters, TheMultiplierIsTheSmallestThatFits)
 {
-    const auto four200 = delay::delayTimeFor (200.0f, 4.0f);   // 1.2 s fits the line
-    EXPECT_FLOAT_EQ (four200.beats, 4.0f);
-    EXPECT_EQ (four200.mult, 1);
-    EXPECT_FLOAT_EQ (four200.bpm, 50.0f);
+    const auto twoAt100 = delay::delayTimeFor (100.0f, 2.0f);   // 1.2 s fits the line
+    EXPECT_FLOAT_EQ (twoAt100.beats, 2.0f);
+    EXPECT_EQ (twoAt100.mult, 1);
+    EXPECT_FLOAT_EQ (twoAt100.bpm, 50.0f);
 
     const auto threeQuarters = delay::delayTimeFor (129.0f, 0.75f);
     EXPECT_EQ (threeQuarters.mult, 1);
@@ -83,7 +83,7 @@ TEST (DelayParameters, TheMultiplierIsTheSmallestThatFits)
     EXPECT_FLOAT_EQ (quarter.bpm, 240.0f);
 }
 
-// R2 (pending): every time fits the line; a time beyond it falls back by fitBeatsToLine, which
+// R2: every time fits the line; a time beyond it falls back by fitBeatsToLine, which
 // keeps a beat that fits and returns one that fits.
 TEST (DelayParameters, EveryBeatFitsTheLine)
 {
@@ -98,17 +98,27 @@ TEST (DelayParameters, EveryBeatFitsTheLine)
                 EXPECT_FLOAT_EQ (fitted, beats) << "fits already: " << tempo << " " << beats;
             EXPECT_NEAR (secondsOf (t), 60.0 * fitted / tempo, 1e-6) << tempo << " " << beats;
         }
-    EXPECT_NEAR (delay::longestDelaySeconds, 1.304, 1e-3);
 }
 
-// The policy itself (R2, pending): the one test that changes with it.
+// The policy itself (R2, R16): the one test that changes with it. Of the legal beats only 2 below
+// 92 BPM is too long; it plays 1.
 TEST (DelayParameters, TheFallbackHalvesTheBeats)
 {
-    EXPECT_FLOAT_EQ (delay::fitBeatsToLine (120.0f, 4.0f), 2.0f);
-    EXPECT_FLOAT_EQ (delay::fitBeatsToLine (60.0f, 4.0f), 1.0f);
     EXPECT_FLOAT_EQ (delay::fitBeatsToLine (91.0f, 2.0f), 1.0f);
-    EXPECT_FLOAT_EQ (delay::fitBeatsToLine (184.0f, 4.0f), 4.0f);   // the floor exactly: fits
-    EXPECT_FLOAT_EQ (delay::fitBeatsToLine (20.0f, 1.0f), 0.25f);
+    EXPECT_FLOAT_EQ (delay::fitBeatsToLine (92.0f, 2.0f), 2.0f);   // the floor exactly: fits
+    EXPECT_FLOAT_EQ (delay::fitBeatsToLine (60.0f, 2.0f), 1.0f);
+    for (const float tempo : { 46.0f, 60.0f, 91.0f, 92.0f, 120.0f, 400.0f })
+        for (const float beats : delay::legalBeats)
+            if (beats < 2.0f)
+                EXPECT_FLOAT_EQ (delay::fitBeatsToLine (tempo, beats), beats) << tempo << " " << beats;
+}
+
+// The two crossfade constants (R18) where the maintainer's ruling put them.
+TEST (DelayParameters, ATimeChangeAboveTwoPercentCrossfadesOver20Ms)
+{
+    EXPECT_FLOAT_EQ (delay::crossfadeAboveRatio, 0.02f);
+    EXPECT_GE (delay::crossfadeSeconds, 0.010f);
+    EXPECT_LE (delay::crossfadeSeconds, 0.030f);
 }
 
 TEST (DelayParameters, FeedbackSplitsTheLoopGainInTodaysRatio)

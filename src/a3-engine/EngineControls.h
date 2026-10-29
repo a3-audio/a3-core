@@ -5,7 +5,7 @@
 #include <cassert>
 #include <memory>
 #include "ChannelStrip.h"
-#include "DelayParameters.h"
+#include "a3-delay/DelayParameters.h"
 #include "DjFilter.h"
 
 namespace a3
