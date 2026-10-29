@@ -18,6 +18,7 @@
 #include "Look.h"
 #include "MainWindow.h"
 #include "SaveBar.h"
+#include "SpeakersPage.h"
 #include "SpatialTestData.h"
 #include "StatusPage.h"
 #include "ZonesPage.h"
@@ -674,4 +675,174 @@ TEST_F (Pages, AnIncompleteDeckSlotShowsItAndOneChoiceCompletesIt)
     EXPECT_EQ (view.cfg.io.jack.at ("deckA_aux_16"), std::vector<std::string> { "StemDeck-A:aux_16" });
     EXPECT_EQ (view.cfg.io.jack.at ("deckA_cue_9"), std::vector<std::string> { "StemDeck-A:cue_9" });
     EXPECT_EQ (page.deckSourceBox (1)->getSelectedId(), 1);
+}
+
+namespace
+{
+std::vector<juce::TextButton*> buttonsLabelled (juce::Component& parent, const juce::String& text)
+{
+    std::vector<juce::TextButton*> found;
+    for (auto* child : parent.getChildren())
+    {
+        if (auto* button = dynamic_cast<juce::TextButton*> (child); button != nullptr && button->getButtonText() == text)
+            found.push_back (button);
+        for (auto* inner : buttonsLabelled (*child, text))
+            found.push_back (inner);
+    }
+    return found;
+}
+
+// A scratch "installed" spatial directory the fake runs from, and an empty user root.
+struct SpeakerRig
+{
+    FakeView view;
+    a3test::ScratchDirectory installed;
+    juce::File userRoot = juce::File::createTempFile ("a3-user-spatial");
+    SpeakerRig()
+    {
+        view.cfg.spatialDirectory = installed.root();
+        view.runningCfg = view.cfg;
+    }
+    ~SpeakerRig() { userRoot.deleteRecursively(); }
+    juce::File variant() const { return userRoot.getChildFile (installed.root().getFileName()); }
+};
+}
+
+TEST_F (Pages, ZonesSummariseWhatEachZonePlays)
+{
+    FakeView view;
+    a3app::ZonesPage page (view, { a3test::shippedSpatialDirectory });
+    for (const auto zone : { a3::SpeakerZone::main, a3::SpeakerZone::booth })
+    {
+        const auto text = page.summaryText (zone);
+        for (const auto* part : { "AllRADecoder v0.9.5", "28 Feb 2026", "order 3", "inPhase", "sub ch 1", "150 Hz", "ch 2 az 45 el 0",
+                                  "ch 5 az 135 el 0", "imaginary az 0 el 90" })
+            EXPECT_TRUE (text.contains (part)) << a3::zoneName (zone) << ": " << part << " in " << text;
+    }
+    EXPECT_TRUE (page.summaryText (a3::SpeakerZone::main).startsWith ("MAIN"));
+    EXPECT_TRUE (page.summaryText (a3::SpeakerZone::booth).startsWith ("BOOTH"));
+    expectPainted (snapshot (page, "zones-summary"));
+
+    a3test::ScratchDirectory broken;
+    broken.root().getChildFile ("booth.decoder.json").replaceWithText ("{");
+    view.runningCfg.spatialDirectory = broken.root();
+    page.refresh();
+    EXPECT_TRUE (page.summaryText (a3::SpeakerZone::booth).contains ("booth.decoder.json")) << page.summaryText (a3::SpeakerZone::booth);
+    EXPECT_TRUE (page.summaryText (a3::SpeakerZone::main).contains ("order 3"));
+    expectPainted (snapshot (page, "zones-summary-unreadable"));
+
+    bool opened = false;
+    page.onOpenSpeakers = [&] { opened = true; };
+    const auto keys = buttonsLabelled (page, "EDIT SPEAKERS");
+    ASSERT_EQ (keys.size(), 1u);
+    keys.front()->onClick();
+    EXPECT_TRUE (opened);
+}
+
+TEST_F (Pages, SpeakersPageHostsIemsEditorPerZone)
+{
+    SpeakerRig rig;
+    a3app::SpeakersPage page (rig.view, rig.userRoot);
+    EXPECT_EQ (page.zone(), a3::SpeakerZone::main);
+    ASSERT_NE (page.editor(), nullptr);
+    EXPECT_EQ (buttonsLabelled (page, "Noise").size(), 6u);
+    expectPainted (snapshot (page, "speakers-main"));
+    page.showZone (a3::SpeakerZone::booth);
+    EXPECT_EQ (page.zone(), a3::SpeakerZone::booth);
+    EXPECT_TRUE (page.messageLabel().getText().isEmpty()) << page.messageLabel().getText();
+    expectPainted (snapshot (page, "speakers-booth"));
+}
+
+TEST_F (Pages, SpeakersSayWhenAZoneDoesNotLoad)
+{
+    SpeakerRig rig;
+    rig.installed.root().getChildFile ("main.decoder.json").replaceWithText ("{");
+    a3app::SpeakersPage page (rig.view, rig.userRoot);
+    EXPECT_TRUE (page.messageLabel().getText().contains ("main.decoder.json")) << page.messageLabel().getText();
+    expectPainted (snapshot (page, "speakers-unloadable"));
+}
+
+TEST_F (Pages, SpeakersNoiseGoesToTheShownZone)
+{
+    SpeakerRig rig;
+    a3app::SpeakersPage page (rig.view, rig.userRoot);
+    auto noise = buttonsLabelled (page, "Noise");
+    ASSERT_FALSE (noise.empty());
+    noise.front()->onClick();
+    page.showZone (a3::SpeakerZone::booth);
+    noise = buttonsLabelled (page, "Noise");
+    ASSERT_FALSE (noise.empty());
+    noise.front()->onClick();
+    ASSERT_EQ (rig.view.noises.size(), 2u);
+    EXPECT_EQ (rig.view.noises[0].zone, a3::SpeakerZone::main);
+    EXPECT_EQ (rig.view.noises[1].zone, a3::SpeakerZone::booth);
+    EXPECT_FALSE (rig.view.noises[1].ambisonic);
+    EXPECT_GE (rig.view.noises[1].channel, 2);
+}
+
+TEST_F (Pages, SpeakersSaveToZoneWritesAUserVariant)
+{
+    SpeakerRig rig;
+    const auto installedBooth = rig.installed.root().getChildFile ("booth.decoder.json").loadFileAsString();
+    a3app::SpeakersPage page (rig.view, rig.userRoot);
+    page.showZone (a3::SpeakerZone::booth);
+    page.setCrossover (120.0f);
+    page.saveToZone();
+    EXPECT_EQ (rig.view.edited, 1);
+    EXPECT_EQ (rig.view.cfg.spatialDirectory, rig.variant());
+    const auto parameters = juce::JSON::parse (rig.variant().getChildFile ("booth.parameters.json").loadFileAsString());
+    EXPECT_EQ ((double) parameters["lowPassFrequency"], 120.0);
+    EXPECT_EQ ((double) parameters["highPassFrequency"], 120.0);
+    EXPECT_EQ ((double) parameters["weights"], 2.0);   // inPhase, as the file says
+    const auto decoder = juce::JSON::parse (rig.variant().getChildFile ("booth.decoder.json").loadFileAsString());
+    EXPECT_TRUE (decoder["Description"].toString().contains ("AllRADecoder")) << decoder["Description"].toString();
+    EXPECT_EQ (decoder["LoudspeakerLayout"]["Loudspeakers"].size(), 6);
+    EXPECT_EQ (rig.installed.root().getChildFile ("booth.decoder.json").loadFileAsString(), installedBooth);
+    EXPECT_TRUE (page.messageLabel().getText().contains ("Save")) << page.messageLabel().getText();
+    expectPainted (snapshot (page, "speakers-saved"));
+}
+
+TEST_F (Pages, SpeakersSaveRefusesWhatIemRefuses)
+{
+    SpeakerRig rig;
+    a3app::SpeakersPage page (rig.view, rig.userRoot);
+    auto clear = buttonsLabelled (page, "CLEAR");
+    ASSERT_EQ (clear.size(), 1u);
+    auto* listener = dynamic_cast<juce::Button::Listener*> (page.editor());
+    ASSERT_NE (listener, nullptr);
+    listener->buttonClicked (clear.front());   // IEM's CLEAR: no loudspeakers left
+    page.saveToZone();
+    EXPECT_EQ (rig.view.edited, 0);
+    EXPECT_FALSE (rig.variant().exists());
+    EXPECT_TRUE (page.messageLabel().getText().contains ("no loudspeakers")) << page.messageLabel().getText();
+    expectPainted (snapshot (page, "speakers-refused"));
+}
+
+TEST_F (Pages, SpeakersSubChannelIsCheckedLikeTheEngine)
+{
+    SpeakerRig rig;
+    a3app::SpeakersPage page (rig.view, rig.userRoot);
+    page.setSubChannel (3);   // a top's channel
+    page.saveToZone();
+    EXPECT_EQ (rig.view.edited, 0);
+    EXPECT_TRUE (page.messageLabel().getText().contains ("sub")) << page.messageLabel().getText();
+    page.setSubChannel (0);   // no sub
+    page.saveToZone();
+    EXPECT_EQ (rig.view.edited, 1);
+    const auto parameters = juce::JSON::parse (rig.variant().getChildFile ("main.parameters.json").loadFileAsString());
+    EXPECT_EQ ((double) parameters["swMode"], 0.0);
+}
+
+TEST_F (Pages, ZonesOpenTheWindowsSpeakersPage)
+{
+    SpeakerRig rig;
+    a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, {}, {}, rig.userRoot);
+    EXPECT_TRUE (window.pageList().contains ("SPEAKERS"));
+    window.showPage ("ZONES");
+    const auto keys = buttonsLabelled (*window.getContentComponent(), "EDIT SPEAKERS");
+    ASSERT_EQ (keys.size(), 1u);
+    keys.front()->onClick();
+    EXPECT_EQ (window.currentPage(), "SPEAKERS");
+    window.refreshNow();
+    expectPainted (snapshot (*window.getContentComponent(), "window-speakers"));
 }

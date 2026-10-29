@@ -9,6 +9,7 @@
 #include "IoPage.h"
 #include "OnScreenKeyboard.h"
 #include "SaveBar.h"
+#include "SpeakersPage.h"
 #include "StatusPage.h"
 #include "ZonesPage.h"
 #include <functional>
@@ -35,16 +36,17 @@ juce::File windowSettingsFile (const juce::File& configDir);
 bool readMonitorSwitch (const juce::File& settings);
 void writeMonitorSwitch (const juce::File& settings, bool shown);
 
-// The window: the setup pages (AUDIO, CHANNELS, ZONES, I/O, CALIBRATION, FILTER) and STATUS in a page list on
+// The window: the setup pages (AUDIO, CHANNELS, ZONES, SPEAKERS, I/O, CALIBRATION, FILTER) and STATUS in a page list on
 // the left, the Save bar below; with a Core client also the OSC monitor's pages (TRAFFIC, TRUTH & DEVICES, NOT
 // UNDERSTOOD, REGISTER, BENCH), shown by the switch at the bottom of the list. With service = true the close button only hides it
 // (the app is a unit that only SIGTERM ends); otherwise it asks the app to quit.
 class MainWindow final : public juce::DocumentWindow, private juce::Timer
 {
 public:
-    // `spatialChoices` are the directories the ZONES page offers.
+    // `spatialChoices` are the directories the ZONES page offers; `userSpatialRoot` is where SPEAKERS saves
+    // user variants (<configDir>/engine/spatial; empty: it cannot save).
     MainWindow (HostView&, juce::AudioDeviceManager&, std::vector<juce::File> spatialChoices, bool service, std::function<void()> quit,
-                MonitorSetup monitor = {}, KeyboardSetup keyboard = {});
+                MonitorSetup monitor = {}, KeyboardSetup keyboard = {}, juce::File userSpatialRoot = {});
     ~MainWindow() override;
     // Puts the window on the desktop (needs a display); the constructor builds it without one,
     // so the pages and the close behaviour are testable headless.

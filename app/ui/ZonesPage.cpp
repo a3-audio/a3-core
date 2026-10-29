@@ -1,10 +1,52 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "ZonesPage.h"
+#include "DecoderSummary.h"
 #include <algorithm>
 
 namespace a3app
 {
+namespace
+{
+juce::String degrees (float value)
+{
+    return value == std::round (value) ? juce::String (juce::roundToInt (value)) : juce::String (value, 1);
+}
+
+juce::String speakerList (const std::vector<a3::Loudspeaker>& speakers)
+{
+    juce::StringArray rows;
+    for (const auto& s : speakers)
+        rows.add ((s.imaginary ? juce::String ("imaginary") : "ch " + juce::String (s.channel)) + " az " + degrees (s.azimuth)
+                  + " el " + degrees (s.elevation));
+    return rows.isEmpty() ? juce::String ("no loudspeaker table in the file") : rows.joinIntoString ("  ·  ");
+}
+
+juce::String crossoverText (const a3::DecoderSummary& s)
+{
+    if (s.lowPassHz == s.highPassHz)
+        return "crossover " + degrees (s.lowPassHz) + " Hz";
+    return "sub below " + degrees (s.lowPassHz) + " Hz, tops above " + degrees (s.highPassHz) + " Hz";
+}
+
+// Three lines: the zone and its directory; tool, date, order, weights, sub and crossover; the loudspeakers.
+juce::String zoneSummary (a3::SpeakerZone zone, const juce::File& directory)
+{
+    const juce::String name = a3::zoneName (zone);
+    const auto head = name.toUpperCase() + "   " + directory.getFullPathName();
+    const auto decoderFile = directory.getChildFile (name + ".decoder.json");
+    juce::String error;
+    const auto summary = a3::decoderSummary (decoderFile.loadFileAsString(),
+                                             juce::JSON::parse (directory.getChildFile (name + ".parameters.json").loadFileAsString()), error);
+    if (! summary)
+        return head + "\n" + decoderFile.getFullPathName() + ": " + error;
+    const auto made = summary->madeWith.isNotEmpty() ? summary->madeWith + ", " + summary->exportedOn : juce::String ("tool not named");
+    return head + "\n" + made + "  ·  order " + juce::String (summary->order) + "  ·  weights " + summary->weights + "  ·  "
+           + (summary->subChannel > 0 ? "sub ch " + juce::String (summary->subChannel) : juce::String ("no sub")) + "  ·  "
+           + crossoverText (*summary) + "\n" + speakerList (summary->loudspeakers);
+}
+}
+
 class ZonesPage::Model final : public juce::ListBoxModel
 {
 public:
@@ -43,8 +85,15 @@ ZonesPage::ZonesPage (HostView& v, std::vector<juce::File> choices)
     look::caption (note);
     title.setText ("ZONES", juce::dontSendNotification);
     note.setText ("The spatial data: decoders, layouts and zone stages. Installed variants and your own "
-                  "(~/.config/a3/engine/spatial). Layouts are edited as files, not here. Save restarts the engine.",
+                  "(~/.config/a3/engine/spatial). Layouts are edited on SPEAKERS. Save restarts the engine.",
                   juce::dontSendNotification);
+    for (auto* summary : { &mainSummary, &boothSummary })
+    {
+        look::value (*summary);
+        summary->setJustificationType (juce::Justification::topLeft);
+        summary->setMinimumHorizontalScale (1.0f);
+    }
+    openSpeakers.onClick = [this] { if (onOpenSpeakers) onOpenSpeakers(); };
     list.setRowHeight (juce::jmax (28, 640 / 14));
     look::caption (headphonesCaption);
     headphonesCaption.setText ("PHONES HEADPHONE EQ", juce::dontSendNotification);
@@ -53,7 +102,8 @@ ZonesPage::ZonesPage (HostView& v, std::vector<juce::File> choices)
     for (const auto& model : a3::headphoneEqModels())
         headphones.addItem (model, id++);
     headphones.onChange = [this] { chooseHeadphoneEq (headphones.getSelectedItemIndex()); };
-    for (auto* child : std::initializer_list<juce::Component*> { &title, &message, &note, &list, &headphonesCaption, &headphones })
+    for (auto* child : std::initializer_list<juce::Component*> { &title, &message, &note, &list, &headphonesCaption, &headphones,
+                                                                 &mainSummary, &boothSummary, &openSpeakers })
         addAndMakeVisible (child);
     refresh();
 }
@@ -91,8 +141,34 @@ void ZonesPage::chooseHeadphoneEq (int item)
     refresh();
 }
 
+juce::String ZonesPage::summaryText (a3::SpeakerZone zone) const
+{
+    return (zone == a3::SpeakerZone::main ? mainSummary : boothSummary).getText();
+}
+
+// The running directory and when its zone files last changed: a variant saved in place shows after the restart.
+juce::String ZonesPage::summaryKey() const
+{
+    const auto directory = view.running().spatialDirectory;
+    auto key = directory.getFullPathName();
+    for (const auto* name : { "main.decoder.json", "main.parameters.json", "booth.decoder.json", "booth.parameters.json" })
+        key << "|" << directory.getChildFile (name).getLastModificationTime().toMilliseconds();
+    return key;
+}
+
+// What plays: the running directory's files, read again only when they change.
+void ZonesPage::summarise()
+{
+    summarisedFrom = view.running().spatialDirectory;
+    summarisedKey = summaryKey();
+    look::say (mainSummary, zoneSummary (a3::SpeakerZone::main, summarisedFrom));
+    look::say (boothSummary, zoneSummary (a3::SpeakerZone::booth, summarisedFrom));
+}
+
 void ZonesPage::refresh()
 {
+    if (summaryKey() != summarisedKey)
+        summarise();
     const auto choice = a3::headphoneEqChoice (view.config().engine.phonesHeadphoneEq);
     headphones.setSelectedItemIndex (choice.value_or (0), juce::dontSendNotification);
     const int row = selectedRow();
@@ -115,6 +191,13 @@ void ZonesPage::resized()
     auto eqRow = area.removeFromBottom (row);
     headphonesCaption.setBounds (eqRow.removeFromLeft (eqRow.getWidth() / 3));
     headphones.setBounds (eqRow.removeFromLeft (eqRow.getWidth() / 2));
+    openSpeakers.setBounds (eqRow.reduced (row / 8, 0));
+    const auto summaryFont = juce::FontOptions ((float) row * 0.32f);
+    for (auto* summary : { &boothSummary, &mainSummary })
+    {
+        summary->setFont (summaryFont);
+        summary->setBounds (area.removeFromBottom (row * 3 / 2));
+    }
     list.setBounds (area);
 }
 }

@@ -148,7 +148,8 @@ public:
         window = std::make_unique<a3app::MainWindow> (*engine, pageDevices, a3app::spatialChoices (platform.configDir()), false,
                                                       [this] { quitFlow.close(); },
                                                       a3app::MonitorSetup { core.get(), a3app::windowSettingsFile (platform.configDir()) },
-                                                      a3app::KeyboardSetup { a3app::makeOnboardLink (platform), {} });   // the rig's touch screen types through onboard
+                                                      a3app::KeyboardSetup { a3app::makeOnboardLink (platform), {} },   // the rig's touch screen types through onboard
+                                                      platform.configDir().getChildFile ("engine/spatial"));
         core->refreshNow (0);   // the window has said whether the monitor shows: only then does this ask Core
         window->open();
     }

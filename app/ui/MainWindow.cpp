@@ -42,14 +42,18 @@ void writeMonitorSwitch (const juce::File& settings, bool shown)
 class MainWindow::Content final : public juce::Component
 {
 public:
-    Content (HostView& view, juce::AudioDeviceManager& manager, std::vector<juce::File> spatialChoices, MonitorSetup monitorToUse, KeyboardSetup keyboardSetup)
+    Content (HostView& view, juce::AudioDeviceManager& manager, std::vector<juce::File> spatialChoices, MonitorSetup monitorToUse,
+             KeyboardSetup keyboardSetup, juce::File userSpatialRoot)
         : saveBar (view), monitor (std::move (monitorToUse))
     {
         if (keyboardSetup.link != nullptr)
             addKeyboard (std::move (keyboardSetup));
         addPage ("AUDIO", std::make_unique<AudioPage> (view, manager));
         addPage ("CHANNELS", std::make_unique<ChannelsPage> (view));
-        addPage ("ZONES", std::make_unique<ZonesPage> (view, std::move (spatialChoices)));
+        auto zones = std::make_unique<ZonesPage> (view, std::move (spatialChoices));
+        zones->onOpenSpeakers = [this] { show ("SPEAKERS"); };
+        addPage ("ZONES", std::move (zones));
+        addPage ("SPEAKERS", std::make_unique<SpeakersPage> (view, std::move (userSpatialRoot)));
         addPage ("I/O", std::make_unique<IoPage> (view));
         addPage ("CALIBRATION", std::make_unique<CalibrationPage> (view));
         addPage ("FILTER", std::make_unique<FilterPage> (view));
@@ -253,11 +257,13 @@ private:
 };
 
 MainWindow::MainWindow (HostView& view, juce::AudioDeviceManager& manager, std::vector<juce::File> spatialChoices,
-                        bool serviceMode, std::function<void()> quitApp, MonitorSetup monitor, KeyboardSetup keyboard)
+                        bool serviceMode, std::function<void()> quitApp, MonitorSetup monitor, KeyboardSetup keyboard,
+                        juce::File userSpatialRoot)
     : juce::DocumentWindow ("a3-core", palette::ground, juce::DocumentWindow::closeButton, false), quit (std::move (quitApp)), service (serviceMode)
 {
     setLookAndFeel (&look);
-    auto page = std::make_unique<Content> (view, manager, std::move (spatialChoices), std::move (monitor), std::move (keyboard));
+    auto page = std::make_unique<Content> (view, manager, std::move (spatialChoices), std::move (monitor), std::move (keyboard),
+                                           std::move (userSpatialRoot));
     content = page.get();
     setContentOwned (page.release(), false);
     setResizable (true, false);
