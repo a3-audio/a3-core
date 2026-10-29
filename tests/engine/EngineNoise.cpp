@@ -3,13 +3,14 @@
 #include <gtest/gtest.h>
 #include <limits>
 #include "EngineFixture.h"
+#include "ZoneNoise.h"
 
 using namespace a3test;
 
 namespace
 {
 constexpr size_t oneSecond = 44100;
-constexpr size_t burstLength = 22050;   // IEM's NoiseBurst: 0.5 s at 44.1 kHz
+const size_t burstLength = (size_t) std::lround (a3::noiseBurstSeconds * 44100.0);
 constexpr double heard = 1e-3;
 
 // A rig with no input at all: whatever leaves it is the noise.
@@ -59,12 +60,13 @@ TEST (EngineNoise, ABoothChannelBurstLandsOnThatBoothOutputOnly)
     EXPECT_EQ (peak (rig->recOutputs()), 0.0);
 }
 
-TEST (EngineNoise, TheBurstLastsHalfASecond)
+TEST (EngineNoise, TheBurstLastsItsSecond)
 {
-    const auto rig = silentRig (oneSecond);
+    const auto rig = silentRig (burstLength + oneSecond / 2);
     rig->engine->playNoise (a3::SpeakerZone::main, 2);
     rig->run();
     EXPECT_GT (peak (portOf (rig->mainOutputs(), 2), 0, burstLength), heard);
+    EXPECT_GT (peak (portOf (rig->mainOutputs(), 2), burstLength * 3 / 4, burstLength - 1000), heard);   // still on near its end
     EXPECT_EQ (peak (portOf (rig->mainOutputs(), 2), burstLength + engineBlock), 0.0);
 }
 
@@ -100,18 +102,21 @@ TEST (EngineNoise, AClosedGateKeepsItSilent)
     EXPECT_EQ (peak (rig->boothOutputs()), 0.0);
 }
 
-TEST (EngineNoise, ARequestWhileOneRunsIsIgnored)
+// A new request while one plays moves the burst; the old target fades out within the fade.
+TEST (EngineNoise, ANewRequestMovesTheBurst)
 {
-    const auto rig = silentRig (oneSecond + oneSecond / 2);
+    const size_t moveAt = 4416;   // a block boundary, 0.1 s in
+    const size_t fadeLength = (size_t) std::lround (a3::noiseFadeSeconds * 44100.0);
+    const auto rig = silentRig (moveAt + burstLength + oneSecond / 4);
     rig->engine->playNoise (a3::SpeakerZone::main, 2);
-    rig->run (0, oneSecond / 10);
-    rig->engine->playNoise (a3::SpeakerZone::main, 3);   // the first still runs
-    rig->run (oneSecond / 10, oneSecond);
-    EXPECT_EQ (peak (portOf (rig->mainOutputs(), 3)), 0.0);
-
-    rig->engine->playNoise (a3::SpeakerZone::main, 3);   // the first has ended
-    rig->run (oneSecond, rig->frames);
-    EXPECT_GT (peak (portOf (rig->mainOutputs(), 3), oneSecond), heard);
+    rig->run (0, moveAt);
+    rig->engine->playNoise (a3::SpeakerZone::main, 3);
+    rig->run (moveAt, rig->frames);
+    EXPECT_GT (peak (portOf (rig->mainOutputs(), 2), 0, moveAt), heard);
+    EXPECT_EQ (peak (portOf (rig->mainOutputs(), 2), moveAt + fadeLength + engineBlock), 0.0);
+    EXPECT_EQ (peak (portOf (rig->mainOutputs(), 3), 0, moveAt), 0.0);
+    EXPECT_GT (peak (portOf (rig->mainOutputs(), 3), moveAt + burstLength / 2), heard);   // a whole new second
+    EXPECT_EQ (peak (rig->boothOutputs()), 0.0);
 }
 
 TEST (EngineNoise, ZonesHaveABurstEach)

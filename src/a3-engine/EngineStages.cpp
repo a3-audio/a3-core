@@ -121,6 +121,7 @@ void ZoneDecoder::process (const juce::AudioBuffer<float>& bus16, const ZoneOutp
         else
             juce::FloatVectorOperations::clear (buffer.getWritePointer (ch), count);
     }
+    testNoise.render (count);
     testNoise.addToInput (buffer.getArrayOfWritePointers(), count);
     engine::runNode (*decoder, buffer, count);
     testNoise.addToOutputs (buffer.getArrayOfWritePointers(), outputs, count);

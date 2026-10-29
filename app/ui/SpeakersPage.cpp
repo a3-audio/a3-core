@@ -48,8 +48,8 @@ SpeakersPage::SpeakersPage (HostView& v, juce::File root) : view (v), userRoot (
     title.setText ("SPEAKERS", juce::dontSendNotification);
     subCaption.setText ("Sub", juce::dontSendNotification);
     crossoverCaption.setText ("Crossover", juce::dontSendNotification);
-    note.setText ("IEM's AllRADecoder at order 3. Noise plays in the running engine, before MASTER/BOOTH and the gate "
-                  "(Alt: from that direction). SAVE TO ZONE writes your own variant (~/.config/a3/engine/spatial); "
+    note.setText ("IEM's AllRADecoder at order 3. Noise: 1 s of pink noise in the running engine, through the decoder that "
+                  "runs now, before MASTER/BOOTH and the gate (Alt: from that direction). SAVE TO ZONE writes your own variant (~/.config/a3/engine/spatial); "
                   "Save restarts the engine with it.", juce::dontSendNotification);
     note.setMinimumHorizontalScale (1.0f);
 

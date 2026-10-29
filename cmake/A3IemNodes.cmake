@@ -172,7 +172,7 @@ function(a3_add_iem_nodes SUFFIX JUCE_TARGET)
     set(AllRADecoder_VERSION ${AllRADecoder_VERISON})
     a3_iem_add_plugin("${SUFFIX}" ${JUCE_TARGET} AllRADecoder ${A3_IEM_NODES_DIR}/AllRadDesign.cpp
         ${A3_IEM_PATCH_DIR}/AllRADecoder-noise-hook.patch)
-    # ZoneNoise: the engine's per-zone test noise, IEM's NoiseBurst.h and AmbisonicNoiseBurst.h as they are.
+    # ZoneNoise: the engine's per-zone pink test noise; here for IEM's spherical harmonics (SHEval).
     target_sources(${AllRADecoder_TARGET} PRIVATE ${A3_IEM_DIR}/resources/NewtonApple/NewtonApple_hull3D.cpp
         ${A3_IEM_NODES_DIR}/ZoneNoise.cpp)
     set_source_files_properties(${A3_IEM_DIR}/resources/NewtonApple/NewtonApple_hull3D.cpp
