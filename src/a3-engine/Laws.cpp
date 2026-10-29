@@ -45,7 +45,13 @@ double slopeVolume (double control)
 double slopeEq (double control)
 {
     static constexpr std::array<double, 10> table { 0.0, 0.1, 0.2, 0.3, 0.5, 0.52, 0.54, 0.56, 0.58, 0.6 };
-    return interpTable (clamp01 (control), table);
+    // The table puts unity (0.5) at its control 0.4 and tops out at 0.9. The knob's centre detent sends 0.5,
+    // so the cut half 0..0.5 is stretched onto table 0..0.4 and the boost half 0.5..1 slides onto table
+    // 0.4..0.9, which also removes the old dead zone above 0.9: the maximum boost now sits at the knob's end.
+    constexpr double unityInTable = 0.4;
+    const double x = clamp01 (control);
+    const double tableControl = x <= 0.5 ? x * (unityInTable / 0.5) : unityInTable + (x - 0.5);
+    return interpTable (tableControl, table);
 }
 
 double slopeConstantPower (double control)
