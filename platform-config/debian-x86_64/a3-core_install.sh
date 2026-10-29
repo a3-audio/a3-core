@@ -8,13 +8,14 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 export DEBIAN_FRONTEND=noninteractive
 # Config
-KEY_URL="https://a3-audio.github.io/a3-core/KEY.gpg"
-KEYRING="/usr/share/keyrings/a3-core-archive-keyring.gpg"
-SOURCES_FILE_A3="/etc/apt/sources.list.d/a3-core.sources"
+KEY_URL="https://a3-audio.github.io/a3-system/KEY.gpg"
+KEYRING="/usr/share/keyrings/a3-audio.gpg"
+SOURCES_FILE_A3="/etc/apt/sources.list.d/a3-audio.sources"
+OLD_SOURCES_FILE_A3="/etc/apt/sources.list.d/a3-core.sources"
+OLD_KEYRING="/usr/share/keyrings/a3-core-archive-keyring.gpg"
 SOURCES_FILE_DEBIAN="/etc/apt/sources.list"
 SOURCES_FILE_DEBIAN_BACKUP="/etc/apt/sources.list.bak"
-REPO_URI="https://a3-audio.github.io/a3-core/"
-# Note: we intentionally write 'Suites: ./' and leave Components empty per your request.
+REPO_URI="https://a3-audio.github.io/a3-system"
 
 echo "1/4: Paketlisten aktualisieren und Werkzeuge installieren..."
 apt-get update
@@ -32,11 +33,13 @@ echo "3/4: APT‑Quelle anlegen (deb822 .sources): $SOURCES_FILE_A3"
 cat > "$SOURCES_FILE_A3" <<EOF
 Types: deb
 URIs: $REPO_URI
-Suites: ./
-Components:
+Suites: forky
+Components: main
 Signed-By: $KEYRING
 EOF
 chmod 644 "$SOURCES_FILE_A3"
+# The a3-core-only archive is frozen; leaving its entry would only add a stale source.
+rm -f "$OLD_SOURCES_FILE_A3" "$OLD_KEYRING"
 
 QUELLE="/etc/apt/sources.list"
 ZIEL="/etc/apt/sources.list.bck"
