@@ -64,9 +64,10 @@ void SaveBar::paint (juce::Graphics& g) { g.fillAll (palette::raised); }
 
 void SaveBar::resized()
 {
-    auto area = getLocalBounds().reduced (getWidth() / 80, getHeight() / 8);
-    saveButton.setBounds (area.removeFromRight (juce::jmax (80, getWidth() / 8)));
-    pending.setBounds (area.removeFromLeft (area.getWidth() / 3));
+    auto area = getLocalBounds().reduced (getWidth() / 80, getHeight() / 10);
+    saveButton.setBounds (area.removeFromRight (juce::jmax (area.getHeight() * 2, getWidth() / 5)));
+    // Two lines beside Save: in the window's footer the bar shares its row with KEYS and the switches.
+    pending.setBounds (area.removeFromTop (area.getHeight() / 2));
     message.setBounds (area);
 }
 }

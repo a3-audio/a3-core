@@ -181,6 +181,47 @@ TEST_F (Monitor, SwitchHidesAndRemembers)
     home.deleteRecursively();
 }
 
+// Portrait, monitor on: the engine's keys in the first row, the monitor's in a second, the switch in the footer.
+TEST_F (Monitor, MonitorKeysTakeASecondRowAndTheSwitchSitsInTheFooter)
+{
+    CoreWindowRig rig;
+    a3apptest::FakeView view;
+    juce::AudioDeviceManager manager;
+    manager.addAudioDeviceType (std::make_unique<a3apptest::NoDevices>());
+    a3app::MainWindow window (view, manager, {}, false, [] {}, { rig.client.get(), {} });
+    window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    auto& content = *window.getContentComponent();
+    const auto oneRow = window.bands().navigation.getHeight();
+    window.setMonitorShown (true);
+    const auto bands = window.bands();
+    EXPECT_GT (bands.navigation.getHeight(), oneRow * 3 / 2);
+    EXPECT_FALSE (bands.navigation.intersects (bands.page));
+    const auto keyOf = [&] (const juce::String& name) -> juce::Component*
+    {
+        for (auto* child : content.getChildren())
+            if (auto* key = dynamic_cast<juce::TextButton*> (child); key != nullptr && key->getButtonText() == name)
+                return key;
+        return nullptr;
+    };
+    auto* status = keyOf ("STATUS");
+    auto* traffic = keyOf ("TRAFFIC");
+    auto* bench = keyOf ("BENCH");
+    ASSERT_NE (status, nullptr);
+    ASSERT_NE (traffic, nullptr);
+    ASSERT_NE (bench, nullptr);
+    EXPECT_GE (traffic->getY(), status->getBottom());   // the monitor's row under the engine's
+    EXPECT_EQ (traffic->getY(), bench->getY());
+    for (auto* key : { status, traffic, bench })
+        EXPECT_TRUE (bands.navigation.contains (key->getBounds())) << key->getBounds().toString();
+    juce::Component* monitorSwitch = nullptr;
+    for (auto* child : content.getChildren())
+        if (auto* toggle = dynamic_cast<juce::ToggleButton*> (child); toggle != nullptr && toggle->getButtonText() == "OSC MONITOR")
+            monitorSwitch = toggle;
+    ASSERT_NE (monitorSwitch, nullptr);
+    EXPECT_TRUE (bands.footer.contains (monitorSwitch->getBounds()));
+    expectPainted (a3apptest::snapshotAt (content, "portrait-monitor", content.getWidth(), content.getHeight()));
+}
+
 TEST_F (Monitor, BenchShowsTheRefusal)
 {
     CoreWindowRig rig;
@@ -426,4 +467,11 @@ TEST_F (Monitor, LookCoversKeysTogglesAndTheDialog)
     EXPECT_LT (narrow, 30.0f);
     EXPECT_LE (juce::GlyphArrangement::getStringWidth (juce::FontOptions (narrow), "OSC MONITOR"), 100.0f);
     EXPECT_GT (juce::GlyphArrangement::getStringWidth (juce::FontOptions (narrow), "OSC MONITOR"), 85.0f);
+
+    // A narrow key (a row of page keys on the portrait screen): its text fits inside the key, whole.
+    juce::TextButton narrowKey ("CALIBRATION");
+    narrowKey.setSize (90, 57);
+    const auto fitted = look.getTextButtonFont (narrowKey, narrowKey.getHeight()).getHeight();
+    EXPECT_LT (fitted, 57 * a3app::keyTextShare);
+    EXPECT_LE (juce::GlyphArrangement::getStringWidth (juce::FontOptions (fitted), "CALIBRATION"), 90.0f * a3app::keyTextWidthShare + 0.5f);
 }

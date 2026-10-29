@@ -10,8 +10,8 @@ namespace a3app
 // then applies it when it differs from what runs.
 juce::Result saveEdits (HostView&);
 
-// The strip under the tabs: "not saved" while the edit differs from what runs, the Save
-// button and the outcome.
+// The right part of the window's footer: "not saved" while the edit differs from what runs and the
+// outcome (one line each), the Save button on the right.
 class SaveBar final : public juce::Component
 {
 public:

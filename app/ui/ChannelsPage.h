@@ -26,7 +26,7 @@ public:
 
 private:
     HostView& view;
-    juce::Label title, caption, load, decksCaption, decksRunning, message, note;
+    juce::Label title, caption, load, decksCaption, decksRunning, message;
     juce::Slider spin { juce::Slider::IncDecButtons, juce::Slider::TextBoxLeft };
     juce::Slider decksSpin { juce::Slider::IncDecButtons, juce::Slider::TextBoxLeft };
 };

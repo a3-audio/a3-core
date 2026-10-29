@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <gtest/gtest.h>
 #include <set>
+#include <juce_opengl/juce_opengl.h>
 #include "AppTruth.h"
 #include "EngineFixture.h"
 #include "FakeView.h"
@@ -888,4 +889,232 @@ TEST_F (Pages, SpeakersNeverListenForOsc)
         ASSERT_NE (page.editor(), nullptr);
         EXPECT_FALSE (a3::AllRadDesigner::showsOscControls (*page.editor()));
     }
+}
+
+namespace
+{
+// Every component under `parent` (not `parent` itself), depth first.
+void collectDescendants (juce::Component& parent, std::vector<juce::Component*>& found)
+{
+    for (auto* child : parent.getChildren())
+    {
+        found.push_back (child);
+        collectDescendants (*child, found);
+    }
+}
+
+std::vector<juce::Component*> descendants (juce::Component& parent)
+{
+    std::vector<juce::Component*> found;
+    collectDescendants (parent, found);
+    return found;
+}
+
+template <class Wanted>
+Wanted* firstDescendant (juce::Component& parent)
+{
+    for (auto* child : descendants (parent))
+        if (auto* wanted = dynamic_cast<Wanted*> (child))
+            return wanted;
+    return nullptr;
+}
+
+juce::Component* toggleLabelled (juce::Component& parent, const juce::String& text)
+{
+    for (auto* child : descendants (parent))
+        if (auto* toggle = dynamic_cast<juce::ToggleButton*> (child); toggle != nullptr && toggle->getButtonText() == text)
+            return toggle;
+    return nullptr;
+}
+
+juce::Label* labelSaying (juce::Component& parent, const juce::String& text)
+{
+    for (auto* child : descendants (parent))
+        if (auto* label = dynamic_cast<juce::Label*> (child); label != nullptr && label->getText() == text)
+            return label;
+    return nullptr;
+}
+
+// `child`'s area in `ancestor`'s coordinates (transforms included).
+juce::Rectangle<int> areaIn (juce::Component& ancestor, juce::Component& child)
+{
+    return ancestor.getLocalArea (&child, child.getLocalBounds());
+}
+
+// The one visible child of the window's content that fills the page band: the shown page.
+juce::Component* shownPage (a3app::MainWindow& window)
+{
+    auto& content = *window.getContentComponent();
+    juce::Component* shown = nullptr;
+    for (auto* child : content.getChildren())
+        if (child->isVisible() && child->getBounds() == window.bands().page)
+        {
+            EXPECT_EQ (shown, nullptr) << "two pages fill the page band";
+            shown = child;
+        }
+    return shown;
+}
+}
+
+// The rig's portrait screen: the page keys in rows across the top, the page at full width below them,
+// KEYS, OSC MONITOR, Tooltips and Save in one footer at the bottom; nothing of one band in another.
+TEST_F (Pages, PortraitWindowHasKeysOnTopPageBelowAndAFooter)
+{
+    SpeakerRig rig;
+    a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, {}, {}, rig.userRoot);
+    window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    auto& content = *window.getContentComponent();
+    const auto bands = window.bands();
+    const auto whole = content.getLocalBounds();
+
+    EXPECT_EQ (bands.navigation.getY(), 0);   // the keys sit at the ceiling
+    EXPECT_EQ (bands.footer.getBottom(), whole.getBottom());
+    EXPECT_EQ (bands.page.getWidth(), whole.getWidth());   // the page has the whole width
+    for (const auto& band : { bands.navigation, bands.page, bands.footer })
+        EXPECT_TRUE (whole.contains (band)) << band.toString();
+    EXPECT_FALSE (bands.navigation.intersects (bands.page));
+    EXPECT_FALSE (bands.page.intersects (bands.footer));
+    EXPECT_FALSE (bands.navigation.intersects (bands.footer));
+    EXPECT_LT (bands.navigation.getHeight(), whole.getHeight() / 6);
+    EXPECT_LT (bands.footer.getHeight(), whole.getHeight() / 10);
+
+    std::vector<juce::Rectangle<int>> keyAreas;
+    float keyText = -1.0f;
+    for (const auto& name : window.pageList())
+    {
+        if (name == "OSC MONITOR")
+            continue;
+        juce::TextButton* key = nullptr;
+        for (auto* candidate : buttonsLabelled (content, name))
+            if (candidate->getParentComponent() == &content)
+                key = candidate;   // the window's own key, not a page's button of the same name
+        ASSERT_NE (key, nullptr) << name;
+        const auto area = areaIn (content, *key);
+        EXPECT_TRUE (key->isVisible()) << name;
+        EXPECT_TRUE (bands.navigation.contains (area)) << name << " " << area.toString();
+        EXPECT_GE (key->getHeight(), 28) << name;   // a fingertip
+        for (const auto& other : keyAreas)
+            EXPECT_FALSE (other.intersects (area)) << name;
+        keyAreas.push_back (area);
+        const auto text = look.getTextButtonFont (*key, key->getHeight()).getHeight();
+        if (keyText < 0)
+            keyText = text;
+        EXPECT_FLOAT_EQ (text, keyText) << name << ": one text size across the keys";
+        EXPECT_LE (juce::GlyphArrangement::getStringWidth (juce::FontOptions (text), name), (float) key->getWidth()) << name;
+    }
+
+    const auto saves = buttonsLabelled (content, "Save");
+    ASSERT_EQ (saves.size(), 1u);
+    EXPECT_TRUE (bands.footer.contains (areaIn (content, *saves.front())));
+    EXPECT_GT (areaIn (content, *saves.front()).getCentreX(), whole.getCentreX());   // Save on the right
+    auto* tooltips = toggleLabelled (content, "Tooltips");
+    ASSERT_NE (tooltips, nullptr);
+    EXPECT_TRUE (bands.footer.contains (areaIn (content, *tooltips)));
+
+    for (const auto& name : window.pageList())
+    {
+        if (name == "OSC MONITOR")
+            continue;
+        window.showPage (name);
+        auto* page = shownPage (window);
+        ASSERT_NE (page, nullptr) << name;
+        expectPainted (a3apptest::snapshotAt (content, "portrait-" + name.toLowerCase().removeCharacters ("&/ "),
+                                              content.getWidth(), content.getHeight()));
+    }
+}
+
+// SPEAKERS: IEM's editor is scaled into the page (no scrolling), all of it inside the page, so its OpenGL
+// view (a native window JUCE does not clip) cannot paint over the keys or the footer; its 3D view is
+// narrower than the table.
+TEST_F (Pages, SpeakersEditorIsScaledIntoThePage)
+{
+    SpeakerRig rig;
+    a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, {}, {}, rig.userRoot);
+    for (const auto& size : { juce::Point<int> { a3apptest::portraitWidth, a3apptest::portraitHeight }, juce::Point<int> { 1000, 680 } })
+    {
+        window.setSize (size.x, size.y);
+        window.showPage ("SPEAKERS");
+        auto* page = dynamic_cast<a3app::SpeakersPage*> (shownPage (window));
+        ASSERT_NE (page, nullptr);
+        auto* editor = page->editor();
+        ASSERT_NE (editor, nullptr);
+        EXPECT_EQ (editor->getParentComponent(), page) << "no viewport: nothing to scroll";
+        EXPECT_EQ (firstDescendant<juce::Viewport> (*page), firstDescendant<juce::Viewport> (*editor)) << "the page has no viewport of its own";
+        const auto pageArea = page->getLocalBounds();
+        const auto editorArea = areaIn (*page, *editor);
+        EXPECT_TRUE (pageArea.contains (editorArea)) << size.toString() << ": " << editorArea.toString() << " in " << pageArea.toString();
+        for (auto* part : descendants (*editor))
+            if (part->isVisible())
+                EXPECT_TRUE (editorArea.expanded (1).contains (areaIn (*page, *part)))
+                    << size.toString() << ": " << part->getName() << " " << areaIn (*page, *part).toString();
+
+        auto* viewer = firstDescendant<juce::OpenGLRenderer> (*editor);
+        auto* table = firstDescendant<juce::TableListBox> (*editor);
+        ASSERT_NE (viewer, nullptr);
+        ASSERT_NE (table, nullptr);
+        auto& viewerComponent = dynamic_cast<juce::Component&> (*viewer);
+        EXPECT_TRUE (editorArea.contains (areaIn (*page, viewerComponent))) << size.toString();
+        EXPECT_LT (areaIn (*page, viewerComponent).getWidth(), areaIn (*page, *table).getWidth()) << size.toString();
+    }
+    window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    window.showPage ("SPEAKERS");
+    auto* page = dynamic_cast<a3app::SpeakersPage*> (shownPage (window));
+    ASSERT_NE (page, nullptr);
+    // Portrait: the editor fills the width (it is the width that limits it there).
+    EXPECT_GE (areaIn (*page, *page->editor()).getWidth(), page->getWidth() * 9 / 10);
+}
+
+// The pages' long help is a tooltip on the title (and the controls it explains), never a label taking space.
+TEST_F (Pages, HelpIsATooltipNotALabel)
+{
+    SpeakerRig rig;
+    a3app::SpeakersPage speakers (rig.view, rig.userRoot);
+    a3app::ZonesPage zones (rig.view, { rig.installed.root() });
+    a3app::ChannelsPage channels (rig.view);
+    a3app::CalibrationPage calibration (rig.view);
+    a3app::FilterPage filter (rig.view);
+    const std::vector<std::pair<juce::Component*, juce::String>> pages {
+        { &speakers, "SPEAKERS" }, { &zones, "ZONES" }, { &channels, "CHANNELS" }, { &calibration, "CALIBRATION" }, { &filter, "FILTER" } };
+    for (const auto& [page, title] : pages)
+    {
+        page->setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
+        auto* titleLabel = labelSaying (*page, title);
+        ASSERT_NE (titleLabel, nullptr) << title;
+        const auto help = titleLabel->getTooltip();
+        EXPECT_GT (help.length(), 40) << title;
+        for (auto* child : descendants (*page))
+            if (auto* label = dynamic_cast<juce::Label*> (child); label != nullptr && label->isVisible())
+                EXPECT_NE (label->getText(), help) << title;
+    }
+}
+
+// The Tooltips switch: off by default, a TooltipWindow only while on, remembered in the window's settings.
+TEST_F (Pages, TooltipsSwitchIsOffByDefaultAndRemembered)
+{
+    FakeView view;
+    const auto home = juce::File::createTempFile ("a3-window-home");
+    const auto settings = a3app::windowSettingsFile (home);
+    {
+        a3app::MainWindow window (view, manager, {}, false, [] {}, { nullptr, settings });
+        EXPECT_FALSE (window.tooltipsShown());
+        EXPECT_FALSE (window.hasTooltipWindow());
+        EXPECT_FALSE (settings.exists());   // nothing is written without a flip
+        window.setTooltipsShown (true);
+        EXPECT_TRUE (window.tooltipsShown());
+        EXPECT_TRUE (window.hasTooltipWindow());
+        EXPECT_TRUE (a3app::readTooltipSwitch (settings));
+        EXPECT_FALSE (a3app::readMonitorSwitch (settings));
+    }
+    {
+        a3app::MainWindow window (view, manager, {}, false, [] {}, { nullptr, settings });
+        EXPECT_TRUE (window.tooltipsShown());   // remembered
+        EXPECT_TRUE (window.hasTooltipWindow());
+        window.setTooltipsShown (false);
+        EXPECT_FALSE (window.hasTooltipWindow());
+    }
+    a3app::writeMonitorSwitch (settings, true);
+    a3app::writeTooltipSwitch (settings, true);
+    EXPECT_TRUE (a3app::readMonitorSwitch (settings));   // one switch's write keeps the other
+    EXPECT_TRUE (a3app::readTooltipSwitch (settings));
+    home.deleteRecursively();
 }

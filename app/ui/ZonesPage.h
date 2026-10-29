@@ -38,7 +38,7 @@ private:
     void summarise();
     juce::String summaryKey() const;
 
-    juce::Label title, message, note, headphonesCaption, mainSummary, boothSummary;
+    juce::Label title, message, headphonesCaption, mainSummary, boothSummary;
     juce::TextButton openSpeakers { "EDIT SPEAKERS" };
     juce::File summarisedFrom;
     juce::String summarisedKey;

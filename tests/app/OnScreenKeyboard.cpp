@@ -235,16 +235,17 @@ struct KeysInTheWindow : Keyboard
 };
 }
 
-TEST_F (KeysInTheWindow, TheKeysButtonSitsBesideThePageListAndNeverTakesTheFocus)
+TEST_F (KeysInTheWindow, TheKeysButtonSitsInTheFooterAndNeverTakesTheFocus)
 {
     a3app::MainWindow window (view, manager, {}, false, [] {}, {}, { onboard, quick });
     auto* keys = window.keysButton();
     ASSERT_NE (keys, nullptr);
     EXPECT_FALSE (keys->getMouseClickGrabsKeyboardFocus());   // pressing it must not leave the field it is for
-    window.setSize (1000, 680);
+    window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     EXPECT_TRUE (keys->isShowing() || keys->isVisible());
     EXPECT_GE (keys->getHeight(), 28);   // a fingertip, as the page keys
-    EXPECT_LT (keys->getRight(), window.getWidth() / 3);   // in the list column, not on a page
+    EXPECT_TRUE (window.bands().footer.contains (keys->getBounds())) << keys->getBounds().toString();
+    EXPECT_LT (keys->getRight(), window.getWidth() / 3);   // at the footer's left, away from Save
     expectPainted (snapshot (*window.getContentComponent(), "window-with-keys"));
 
     keys->triggerClick();
@@ -261,6 +262,8 @@ TEST_F (KeysInTheWindow, WithoutOnboardTheWindowSaysSoInOneLineWherePeopleLook)
     ASSERT_TRUE (pumpUntil ([&] { return window.keyboardNote().isNotEmpty(); }));
     EXPECT_EQ (window.keyboardNote(), "On-screen keyboard: onboard is not installed");
     expectPainted (snapshot (*window.getContentComponent(), "window-keys-hint"));
+    const auto bands = window.bands();   // the hint takes its own line above the footer, never the footer itself
+    EXPECT_FALSE (bands.page.intersects (bands.footer));
 }
 
 TEST_F (KeysInTheWindow, WhenTheHintHasExpiredTheTooltipStillSaysOnboardIsMissing)

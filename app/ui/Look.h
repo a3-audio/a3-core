@@ -24,6 +24,11 @@ inline const juce::Colour danger      { 0xffd9534f };
 // A key's text as a share of the key's height (the page list, FETCH, SEND, Save): JUCE's own stops at
 // 16 px, which reads as a quarter of a tall key.
 constexpr float keyTextShare = 0.38f;
+// The share of a key's width its text may take (JUCE indents a key's text on both sides).
+constexpr float keyTextWidthShare = 0.8f;
+// A key's text height shared with its neighbours (the window's page keys): set on the key's properties,
+// it caps the key's own; a row of keys then reads as one size, not each word as large as it fits.
+inline const juce::Identifier sharedKeyTextHeight { "a3SharedKeyTextHeight" };
 // A toggle's tick box and text as shares of its height.
 constexpr float toggleBoxShare = 0.45f, toggleTextShare = 0.42f;
 
@@ -44,6 +49,13 @@ inline void failure (juce::Label& label)   { label.setColour (juce::Label::textC
 // A page's row height as a share of the page, never below a fingertip-ish floor.
 inline int rowHeight (const juce::Component& page) { return juce::jmax (28, page.getHeight() / 14); }
 inline void say (juce::Label& label, const juce::String& message) { label.setText (message, juce::dontSendNotification); }
+// A page's help: a tooltip on its title and the controls it explains, shown only while the window's
+// Tooltips switch is on. It takes no layout space.
+inline void help (const juce::String& text, std::initializer_list<juce::SettableTooltipClient*> parts)
+{
+    for (auto* part : parts)
+        part->setTooltip (text);
+}
 }
 
 // The JUCE widgets (tabs, buttons, labels, the device selector) take their colours from here.
@@ -86,13 +98,22 @@ public:
         setColour (juce::AlertWindow::backgroundColourId, palette::raised);
         setColour (juce::AlertWindow::textColourId, palette::text);
         setColour (juce::AlertWindow::outlineColourId, palette::lifted);
+        setColour (juce::TooltipWindow::backgroundColourId, palette::raised);
+        setColour (juce::TooltipWindow::textColourId, palette::text);
+        setColour (juce::TooltipWindow::outlineColourId, palette::lifted);
     }
 
-    // The share of the key's height, never below JUCE's own (which keeps short keys as they were).
+    // The share of the key's height, never below JUCE's own (which keeps short keys as they were); smaller
+    // when the word would not fit the key's width whole (a row of narrow page keys).
     juce::Font getTextButtonFont (juce::TextButton& button, int buttonHeight) override
     {
         const auto juces = juce::LookAndFeel_V4::getTextButtonFont (button, buttonHeight).getHeight();
-        return juce::FontOptions (juce::jmax (juces, (float) buttonHeight * keyTextShare));
+        auto wanted = juce::jmax (juces, (float) buttonHeight * keyTextShare);
+        if (const auto* shared = button.getProperties().getVarPointer (sharedKeyTextHeight))
+            wanted = juce::jmin (wanted, (float) static_cast<double> (*shared));
+        if (button.getWidth() <= 0)
+            return juce::FontOptions (wanted);
+        return juce::FontOptions (fittedTextHeight (button.getButtonText(), wanted, (float) button.getWidth() * keyTextWidthShare));
     }
 
     // JUCE's toggle stops its text at 15 px; ours is a share of the toggle's height, as a key's is.

@@ -7,6 +7,7 @@
 #include "MonitorTrafficPage.h"
 #include "MonitorTruthPage.h"
 #include "MonitorUnknownPage.h"
+#include <limits>
 
 namespace a3app
 {
@@ -15,30 +16,42 @@ namespace
 constexpr int refreshHz = 20;
 constexpr int windowWidth = 1000, windowHeight = 680;
 constexpr int pageGroup = 1;
-constexpr int noteSeconds = 6;   // how long the keyboard's line stays before the list is plain again
+constexpr int noteSeconds = 6;   // how long the keyboard's line stays before the footer is plain again
+constexpr int minimumKey = 28;   // a fingertip-ish floor under the shares below
+constexpr int keyRowShare = 18, footerShare = 16;   // a key row and the footer as shares of the window's height
 const juce::String monitorSwitchName = "OSC MONITOR";
-}
+const juce::String tooltipSwitchName = "Tooltips";
 
-juce::File windowSettingsFile (const juce::File& configDir) { return configDir.getChildFile ("core/window.settings"); }
-
-bool readMonitorSwitch (const juce::File& settings)
+bool readSwitch (const juce::File& settings, const juce::Identifier& key)
 {
     if (! settings.existsAsFile())
         return false;
-    const auto parsed = juce::JSON::parse (settings.loadFileAsString());
-    return parsed["monitor"].isBool() && static_cast<bool> (parsed["monitor"]);
+    const auto value = juce::JSON::parse (settings.loadFileAsString())[key];
+    return value.isBool() && static_cast<bool> (value);
 }
 
-void writeMonitorSwitch (const juce::File& settings, bool shown)
+void writeSwitch (const juce::File& settings, const juce::Identifier& key, bool on)
 {
     settings.getParentDirectory().createDirectory();
     auto* made = new juce::DynamicObject();
-    made->setProperty ("monitor", shown);
+    const auto old = settings.existsAsFile() ? juce::JSON::parse (settings.loadFileAsString()) : juce::var();
+    if (auto* properties = old.getDynamicObject())
+        for (const auto& property : properties->getProperties())
+            made->setProperty (property.name, property.value);
+    made->setProperty (key, on);
     settings.replaceWithText (juce::JSON::toString (juce::var (made)) + "\n", false, false, "\n");
 }
+}
 
-// The page list on the left (one radio group of keys, the monitor switch at its bottom), the shown page
-// beside it and the Save bar below. Pages are refreshed by the window's timer.
+juce::File windowSettingsFile (const juce::File& configDir) { return configDir.getChildFile ("core/window.settings"); }
+bool readMonitorSwitch (const juce::File& settings) { return readSwitch (settings, "monitor"); }
+void writeMonitorSwitch (const juce::File& settings, bool shown) { writeSwitch (settings, "monitor", shown); }
+bool readTooltipSwitch (const juce::File& settings) { return readSwitch (settings, "tooltips"); }
+void writeTooltipSwitch (const juce::File& settings, bool shown) { writeSwitch (settings, "tooltips", shown); }
+
+// The page keys in rows across the top (one radio group: the engine's row, then the monitor's), the shown
+// page below them at the full width, the footer (KEYS, the switches, the Save bar) at the bottom. Pages are
+// refreshed by the window's timer.
 class MainWindow::Content final : public juce::Component
 {
 public:
@@ -70,6 +83,9 @@ public:
             monitorSwitch.onClick = [this] { flip (monitorSwitch.getToggleState()); };
             addAndMakeVisible (monitorSwitch);
         }
+        tooltipSwitch.onClick = [this] { showTooltips (tooltipSwitch.getToggleState()); };
+        addAndMakeVisible (tooltipSwitch);
+        applyTooltips (readTooltipSwitch (monitor.settings));
         addAndMakeVisible (saveBar);
         applySwitch();
         show ("STATUS");
@@ -107,6 +123,19 @@ public:
     }
 
     bool monitorShown() const { return monitorSwitch.getToggleState(); }
+    bool tooltipsShown() const { return tooltipSwitch.getToggleState(); }
+    bool hasTooltipWindow() const { return tooltipWindow != nullptr; }
+    WindowBands currentBands() const { return bands; }
+
+    // A flip of the Tooltips switch: shown or not, and remembered (the one moment it is written).
+    void showTooltips (bool wanted)
+    {
+        if (wanted == hasTooltipWindow())
+            return tooltipSwitch.setToggleState (wanted, juce::dontSendNotification);
+        applyTooltips (wanted);
+        if (monitor.settings != juce::File())
+            writeTooltipSwitch (monitor.settings, wanted);
+    }
 
     juce::TextButton* keysButton() { return keyboard != nullptr ? &keys : nullptr; }
     juce::String keyboardNote() const { return keyboardNoteLabel.getText(); }
@@ -135,33 +164,32 @@ public:
     void resized() override
     {
         auto area = getLocalBounds();
-        saveBar.setBounds (area.removeFromBottom (juce::jmax (36, getHeight() / 14)));
-        auto list = area.removeFromLeft (juce::jmax (120, getWidth() / 6)).reduced (getWidth() / 200);
-        const int key = juce::jmax (28, list.getHeight() / 14);
-        if (keyboard != nullptr)
+        const int key = juce::jmax (minimumKey, getHeight() / keyRowShare);
+        bands.footer = area.removeFromBottom (juce::jmax (minimumKey, getHeight() / footerShare));
+        layoutFooter (bands.footer);
+        const bool monitorRow = monitorShown() && monitor.core != nullptr;
+        bands.navigation = area.removeFromTop (key * (monitorRow ? 2 : 1));
+        auto navigation = bands.navigation;
+        layoutKeyRow (navigation.removeFromTop (key), false);
+        if (monitorRow)
+            layoutKeyRow (navigation, true);
+        shareKeyText();
+        if (keyboardNoteLabel.isVisible())
         {
-            keys.setBounds (list.removeFromBottom (key).reduced (0, key / 16));
-            if (keyboardNoteLabel.getText().isNotEmpty())
-            {
-                keyboardNoteLabel.setFont (juce::FontOptions ((float) key * 0.3f));
-                keyboardNoteLabel.setBounds (list.removeFromBottom (key * 3 / 2));
-            }
+            keyboardNoteLabel.setFont (juce::FontOptions ((float) key * 0.3f));
+            keyboardNoteLabel.setBounds (area.removeFromBottom (key).reduced (getWidth() / 80, 0));
         }
-        if (monitor.core != nullptr)
-            monitorSwitch.setBounds (list.removeFromBottom (key));
-        for (auto& page : pages)
-        {
-            if (! page.key->isVisible())
-                continue;
-            if (&page == firstMonitorPage())
-                list.removeFromTop (key / 3);   // a gap between the engine's pages and the monitor's
-            page.key->setBounds (list.removeFromTop (key).reduced (0, key / 16));
-        }
+        bands.page = area;
         for (auto& page : pages)
             page.component->setBounds (area);
     }
 
-    void paint (juce::Graphics& g) override { g.fillAll (palette::ground); }
+    void paint (juce::Graphics& g) override
+    {
+        g.fillAll (palette::ground);
+        g.setColour (palette::raised);
+        g.fillRect (bands.footer);
+    }
 
 private:
     struct Page
@@ -216,12 +244,49 @@ private:
         pages.push_back (std::move (page));
     }
 
-    const Page* firstMonitorPage() const
+    // One row of page keys (the engine's or the monitor's), side by side in equal shares of the width.
+    void layoutKeyRow (juce::Rectangle<int> row, bool monitorKeys)
     {
-        for (const auto& page : pages)
-            if (page.monitor)
-                return &page;
-        return nullptr;
+        std::vector<juce::TextButton*> keysInRow;
+        for (auto& page : pages)
+            if (page.monitor == monitorKeys && page.key->isVisible())
+                keysInRow.push_back (page.key.get());
+        if (keysInRow.empty())
+            return;
+        const int gap = juce::jmax (1, row.getHeight() / 16);
+        const int width = row.getWidth() / (int) keysInRow.size();
+        for (auto* key : keysInRow)
+            key->setBounds (row.removeFromLeft (width).reduced (gap));
+    }
+
+    // Every page key's text at the size the longest name fits its key at: one size across the rows.
+    void shareKeyText()
+    {
+        auto shared = std::numeric_limits<float>::max();
+        for (auto& page : pages)
+            if (page.key->isVisible())
+                shared = juce::jmin (shared, fittedTextHeight (page.name, (float) page.key->getHeight() * keyTextShare,
+                                                               (float) page.key->getWidth() * keyTextWidthShare));
+        for (auto& page : pages)
+            page.key->getProperties().set (sharedKeyTextHeight, (double) shared);
+    }
+
+    // KEYS, the monitor and Tooltips switches on the left; the Save bar (its Save on the right) takes the rest.
+    void layoutFooter (juce::Rectangle<int> footer)
+    {
+        auto left = footer.reduced (getWidth() / 200, footer.getHeight() / 10);
+        if (keyboard != nullptr)
+            keys.setBounds (left.removeFromLeft (getWidth() / 8));
+        if (monitor.core != nullptr)
+            monitorSwitch.setBounds (left.removeFromLeft (getWidth() / 5));
+        tooltipSwitch.setBounds (left.removeFromLeft (getWidth() / 7));
+        saveBar.setBounds (footer.withLeft (left.getX()));
+    }
+
+    void applyTooltips (bool on)
+    {
+        tooltipSwitch.setToggleState (on, juce::dontSendNotification);
+        tooltipWindow = on ? std::make_unique<juce::TooltipWindow> (this) : nullptr;   // without one JUCE shows no tooltip
     }
 
     void applySwitch()
@@ -249,6 +314,9 @@ private:
     SaveBar saveBar;
     MonitorSetup monitor;
     juce::ToggleButton monitorSwitch { monitorSwitchName };
+    juce::ToggleButton tooltipSwitch { tooltipSwitchName };
+    std::unique_ptr<juce::TooltipWindow> tooltipWindow;
+    WindowBands bands;
     juce::TextButton keys { "KEYS" };
     juce::Label keyboardNoteLabel;
     std::unique_ptr<OnScreenKeyboard> keyboard;
@@ -309,4 +377,8 @@ void MainWindow::setMonitorShown (bool shown) { content->flip (shown); }
 bool MainWindow::monitorShown() const { return content->monitorShown(); }
 juce::TextButton* MainWindow::keysButton() { return content->keysButton(); }
 juce::String MainWindow::keyboardNote() const { return content->keyboardNote(); }
+void MainWindow::setTooltipsShown (bool shown) { content->showTooltips (shown); }
+bool MainWindow::tooltipsShown() const { return content->tooltipsShown(); }
+bool MainWindow::hasTooltipWindow() const { return content->hasTooltipWindow(); }
+WindowBands MainWindow::bands() const { return content->currentBands(); }
 }

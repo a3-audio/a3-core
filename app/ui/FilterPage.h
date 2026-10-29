@@ -22,7 +22,7 @@ public:
 
 private:
     HostView& view;
-    juce::Label title, note;
+    juce::Label title;
     juce::TextButton svfButton { "SVF" }, ladderButton { "Ladder" };
 };
 }

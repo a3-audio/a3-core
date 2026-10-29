@@ -82,11 +82,10 @@ ZonesPage::ZonesPage (HostView& v, std::vector<juce::File> choices)
         directories.insert (directories.begin(), current);
     look::caption (title);
     look::failure (message);
-    look::caption (note);
     title.setText ("ZONES", juce::dontSendNotification);
-    note.setText ("The spatial data: decoders, layouts and zone stages. Installed variants and your own "
-                  "(~/.config/a3/engine/spatial). Layouts are edited on SPEAKERS. Save restarts the engine.",
-                  juce::dontSendNotification);
+    look::help ("The spatial data: decoders, layouts and zone stages. Installed variants and your own "
+                "(~/.config/a3/engine/spatial). Layouts are edited on SPEAKERS. Save restarts the engine.",
+                { &title, &list, &openSpeakers });
     for (auto* summary : { &mainSummary, &boothSummary })
     {
         look::value (*summary);
@@ -102,7 +101,7 @@ ZonesPage::ZonesPage (HostView& v, std::vector<juce::File> choices)
     for (const auto& model : a3::headphoneEqModels())
         headphones.addItem (model, id++);
     headphones.onChange = [this] { chooseHeadphoneEq (headphones.getSelectedItemIndex()); };
-    for (auto* child : std::initializer_list<juce::Component*> { &title, &message, &note, &list, &headphonesCaption, &headphones,
+    for (auto* child : std::initializer_list<juce::Component*> { &title, &message, &list, &headphonesCaption, &headphones,
                                                                  &mainSummary, &boothSummary, &openSpeakers })
         addAndMakeVisible (child);
     refresh();
@@ -186,7 +185,6 @@ void ZonesPage::resized()
     const int row = look::rowHeight (*this);
     list.setRowHeight (row);
     title.setBounds (area.removeFromTop (row));
-    note.setBounds (area.removeFromBottom (row * 2));
     message.setBounds (area.removeFromBottom (row));
     auto eqRow = area.removeFromBottom (row);
     headphonesCaption.setBounds (eqRow.removeFromLeft (eqRow.getWidth() / 3));
@@ -196,7 +194,7 @@ void ZonesPage::resized()
     for (auto* summary : { &boothSummary, &mainSummary })
     {
         summary->setFont (summaryFont);
-        summary->setBounds (area.removeFromBottom (row * 3 / 2));
+        summary->setBounds (area.removeFromBottom (row * 2));   // five lines of the summary at its font
     }
     list.setBounds (area);
 }

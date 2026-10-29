@@ -35,6 +35,7 @@ public:
 
 private:
     void load();
+    void placeEditor (juce::Rectangle<int> area);
     void showParameters();
     juce::var editedParameters() const;
 
@@ -46,10 +47,9 @@ private:
     int subChannel = 0;     // 0 = no sub
     float crossoverHz = 150.0f;
     a3::AllRadDesigner designer;
-    std::unique_ptr<juce::AudioProcessorEditor> iemEditor;
-    juce::Viewport viewport;
+    std::unique_ptr<juce::AudioProcessorEditor> iemEditor;   // scaled into the page, never scrolled
     juce::TextButton mainKey { "MAIN" }, boothKey { "BOOTH" }, save { "SAVE TO ZONE" };
-    juce::Label title, subCaption, crossoverCaption, message, note;
+    juce::Label title, subCaption, crossoverCaption, message;
     juce::ComboBox sub;
     juce::Slider crossover { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
 };

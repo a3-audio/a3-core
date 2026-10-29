@@ -52,11 +52,11 @@ CalibrationPage::CalibrationPage (HostView& v, Confirm c)
         rows.push_back (std::make_unique<Row> (zone));
     look::caption (title);
     look::failure (message);
-    look::caption (note);
     title.setText ("CALIBRATION", juce::dontSendNotification);
-    note.setText ("A slider only proposes a value. Set... asks, naming the old and the new trim; nothing "
-                  "changes before you agree. Save applies it. A zone without a trim stays closed.", juce::dontSendNotification);
-    for (auto* child : std::initializer_list<juce::Component*> { &title, &message, &note })
+    const juce::String help ("A slider only proposes a value. Set... asks, naming the old and the new trim; nothing "
+                             "changes before you agree. Save applies it. A zone without a trim stays closed.");
+    look::help (help, { &title });
+    for (auto* child : std::initializer_list<juce::Component*> { &title, &message })
         addAndMakeVisible (child);
     for (auto& rowPtr : rows)
     {
@@ -70,6 +70,7 @@ CalibrationPage::CalibrationPage (HostView& v, Confirm c)
         // Starts at what the zone has now (the lowest for a zone without a trim), so it never reads as a pending change.
         row.proposal.setValue (trimOf (view.config(), row.zone).value_or (minTrimDb), juce::dontSendNotification);
         row.set.onClick = [this, zone = row.zone] { proposeTrim (zone, (float) rows[(size_t) zone]->proposal.getValue()); };
+        look::help (help, { &row.proposal, &row.set });
         for (auto* child : std::initializer_list<juce::Component*> { &row.name, &row.current, &row.proposal, &row.set })
             addAndMakeVisible (child);
     }
@@ -129,6 +130,5 @@ void CalibrationPage::resized()
         r.proposal.setBounds (line);
     }
     message.setBounds (area.removeFromTop (row));
-    note.setBounds (area.removeFromTop (row * 2));
 }
 }

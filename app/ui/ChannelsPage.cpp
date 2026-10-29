@@ -28,17 +28,17 @@ ChannelsPage::ChannelsPage (HostView& v) : view (v)
     look::caption (decksCaption);
     look::value (decksRunning);
     look::failure (message);
-    look::caption (note);
     title.setText ("CHANNELS", juce::dontSendNotification);
     caption.setText ("Channels (N)", juce::dontSendNotification);
     decksCaption.setText ("Decks", juce::dontSendNotification);
-    note.setText ("N sets the channel strips, the encoder inputs and the per-channel meter outputs. Decks sets the "
-                  "deck slots, 1.." + juce::String (maxDecksOnPage) + " (one letter each, A..Z); a new slot links "
-                  "to its local StemDeck. Save restarts the engine; Core replays its state.", juce::dontSendNotification);
+    look::help ("N sets the channel strips, the encoder inputs and the per-channel meter outputs. Decks sets the "
+                "deck slots, 1.." + juce::String (maxDecksOnPage) + " (one letter each, A..Z); a new slot links "
+                "to its local StemDeck. Save restarts the engine; Core replays its state.",
+                { &title, &caption, &spin, &decksCaption, &decksSpin });
     makeSpin (spin, maxChannelsOnPage, [this] (int n) { setChannels (n); });
     makeSpin (decksSpin, maxDecksOnPage, [this] (int n) { setDecks (n); });
     for (auto* child : std::initializer_list<juce::Component*> { &title, &caption, &spin, &load, &decksCaption, &decksSpin,
-                                                                 &decksRunning, &message, &note })
+                                                                 &decksRunning, &message })
         addAndMakeVisible (child);
     refresh();
 }
@@ -93,6 +93,5 @@ void ChannelsPage::resized()
     layoutRow (caption, spin, load);
     layoutRow (decksCaption, decksSpin, decksRunning);
     message.setBounds (area.removeFromTop (row));
-    note.setBounds (area.removeFromTop (row * 3));
 }
 }

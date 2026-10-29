@@ -7,17 +7,16 @@ namespace a3app
 FilterPage::FilterPage (HostView& v) : view (v)
 {
     look::caption (title);
-    look::caption (note);
     title.setText ("FILTER", juce::dontSendNotification);
-    note.setText ("Live: the choice acts at once and needs no Save (the next Save keeps it in the file). "
-                  "The decks always use the SVF.", juce::dontSendNotification);
+    look::help ("Live: the choice acts at once and needs no Save (the next Save keeps it in the file). "
+                "The decks always use the SVF.", { &title, &svfButton, &ladderButton });
     svfButton.setRadioGroupId (2);
     ladderButton.setRadioGroupId (2);
     for (auto* button : { &svfButton, &ladderButton })
         button->setClickingTogglesState (false);   // the config decides which one is on
     svfButton.onClick = [this] { choose (a3::FilterKind::svf); };
     ladderButton.onClick = [this] { choose (a3::FilterKind::ladder); };
-    for (auto* child : std::initializer_list<juce::Component*> { &title, &note, &svfButton, &ladderButton })
+    for (auto* child : std::initializer_list<juce::Component*> { &title, &svfButton, &ladderButton })
         addAndMakeVisible (child);
     refresh();
 }
@@ -50,6 +49,5 @@ void FilterPage::resized()
     auto keys = area.removeFromTop (row * 2);
     svfButton.setBounds (keys.removeFromLeft (keys.getWidth() / 4).reduced (2));
     ladderButton.setBounds (keys.removeFromLeft (keys.getWidth() / 3).reduced (2));
-    note.setBounds (area.removeFromTop (row * 2));
 }
 }

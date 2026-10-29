@@ -7,7 +7,14 @@ namespace a3app
 {
 namespace
 {
-constexpr int editorMinWidth = 1000, editorMinHeight = 600;   // IEM's editor's own resize limits
+// IEM's AllRADecoder editor lays out in its own fixed pixels: margins and the table's column take a fixed
+// width, the 3D view and the energy map share what is left. We give it a narrower width than its own minimum
+// (the 3D view a share of the table's column) and a height that fills the page, then scale it to the page.
+constexpr int iemTableColumn = 420;
+constexpr int iemFixedWidth = 2 * 30 + iemTableColumn + 20;   // margins, the table's column, the gap (its resized())
+constexpr float viewerShareOfTable = 0.6f;
+constexpr int editorWidth = iemFixedWidth + (int) (iemTableColumn * viewerShareOfTable);
+constexpr int editorMinHeight = 600;   // IEM's own minimum: below it the table's column runs out
 constexpr int highestSubChannel = 31;                         // the engine's output limit (Layout.h)
 constexpr double lowestCrossover = 20.0, highestCrossover = 300.0;   // SimpleDecoder's range
 constexpr int noSubItem = 1;
@@ -44,14 +51,13 @@ SpeakersPage::SpeakersPage (HostView& v, juce::File root) : view (v), userRoot (
     look::caption (subCaption);
     look::caption (crossoverCaption);
     look::failure (message);
-    look::caption (note);
     title.setText ("SPEAKERS", juce::dontSendNotification);
     subCaption.setText ("Sub", juce::dontSendNotification);
     crossoverCaption.setText ("Crossover", juce::dontSendNotification);
-    note.setText ("IEM's AllRADecoder at order 3. Noise: 1 s of pink noise in the running engine, through the decoder that "
+    look::help ("IEM's AllRADecoder at order 3. Noise: 1 s of pink noise in the running engine, through the decoder that "
                   "runs now, before MASTER/BOOTH and the gate (Alt: from that direction). SAVE TO ZONE writes your own variant (~/.config/a3/engine/spatial); "
-                  "Save restarts the engine with it.", juce::dontSendNotification);
-    note.setMinimumHorizontalScale (1.0f);
+                "Save restarts the engine with it.",
+                { &title, &mainKey, &boothKey, &save });
 
     for (auto* key : { &mainKey, &boothKey })
     {
@@ -88,14 +94,13 @@ SpeakersPage::SpeakersPage (HostView& v, juce::File root) : view (v), userRoot (
     });
 
     for (auto* child : std::initializer_list<juce::Component*> { &title, &mainKey, &boothKey, &save, &subCaption, &sub,
-                                                                 &crossoverCaption, &crossover, &message, &note, &viewport })
+                                                                 &crossoverCaption, &crossover, &message })
         addAndMakeVisible (child);
     load();
 }
 
 SpeakersPage::~SpeakersPage()
 {
-    viewport.setViewedComponent (nullptr, false);
     iemEditor.reset();   // before the designer it edits
 }
 
@@ -122,9 +127,8 @@ void SpeakersPage::load()
         designer.setLoudspeakers ({});
     sayOutcome (message, loaded.failed() ? decoderFile.getFullPathName() + ": " + loaded.getErrorMessage() : juce::String(), loaded.wasOk());
 
-    viewport.setViewedComponent (nullptr, false);
     iemEditor = designer.createEditor();
-    viewport.setViewedComponent (iemEditor.get(), false);
+    addAndMakeVisible (*iemEditor);
     mainKey.setToggleState (shown == a3::SpeakerZone::main, juce::dontSendNotification);
     boothKey.setToggleState (shown == a3::SpeakerZone::booth, juce::dontSendNotification);
     showParameters();
@@ -207,11 +211,27 @@ void SpeakersPage::resized()
     crossoverCaption.setBounds (settings.removeFromLeft (settings.getWidth() / 5));
     crossover.setBounds (settings.reduced (2));
     message.setBounds (area.removeFromTop (row));
-    note.setFont (juce::FontOptions ((float) row * 0.3f));
-    note.setBounds (area.removeFromBottom (row));
-    viewport.setBounds (area);
-    if (iemEditor != nullptr)
-        iemEditor->setSize (juce::jmax (editorMinWidth, viewport.getMaximumVisibleWidth()),
-                            juce::jmax (editorMinHeight, viewport.getMaximumVisibleHeight()));
+    placeEditor (area);
+}
+
+// IEM's editor at its own size, scaled (aspect kept) to fill `area`'s width, or its height when that is
+// the tighter. All of it stays inside the page: its 3D view is a native OpenGL window that nothing clips.
+void SpeakersPage::placeEditor (juce::Rectangle<int> area)
+{
+    if (iemEditor == nullptr || area.isEmpty())
+        return;
+    const auto widthScale = (float) area.getWidth() / (float) editorWidth;
+    const int height = juce::jmax (editorMinHeight, (int) ((float) area.getHeight() / widthScale));
+    const auto scale = juce::jmin (widthScale, (float) area.getHeight() / (float) height);
+    const auto left = (float) area.getX() + ((float) area.getWidth() - (float) editorWidth * scale) * 0.5f;
+    const auto transform = juce::AffineTransform::scale (scale).translated (left, (float) area.getY());
+    if (transform != iemEditor->getTransform())
+    {
+        iemEditor->setTransform (transform);
+        // A transform alone moves no child: the 3D view's OpenGL window follows only a move or a resize of
+        // its own, so the editor is laid out once more at another height.
+        iemEditor->setBounds (0, 0, editorWidth, height + 1);
+    }
+    iemEditor->setBounds (0, 0, editorWidth, height);
 }
 }

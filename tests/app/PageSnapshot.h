@@ -24,9 +24,13 @@ public:
     juce::AudioIODevice* createDevice (const juce::String&, const juce::String&) override { return nullptr; }
 };
 
-inline juce::Image snapshot (juce::Component& page, const juce::String& name)
+// The rig's screen: the window in portrait on a 768 x 1024 panel.
+constexpr int portraitWidth = 768, portraitHeight = 1024;
+
+// `page` at `width` x `height`, painted (A3_SNAPSHOT_DIR keeps it as <name>.png).
+inline juce::Image snapshotAt (juce::Component& page, const juce::String& name, int width, int height)
 {
-    page.setSize (900, 640);
+    page.setSize (width, height);
     auto image = page.createComponentSnapshot (page.getLocalBounds(), false, 1.0f);
     if (const char* dir = std::getenv ("A3_SNAPSHOT_DIR"))
     {
@@ -36,6 +40,8 @@ inline juce::Image snapshot (juce::Component& page, const juce::String& name)
     }
     return image;
 }
+
+inline juce::Image snapshot (juce::Component& page, const juce::String& name) { return snapshotAt (page, name, 900, 640); }
 
 inline int distinctColours (const juce::Image& image)
 {
