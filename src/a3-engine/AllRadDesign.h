@@ -49,6 +49,11 @@ public:
     void playNoise (int channel);                                // as IEM's table calls it
     void playAmbisonicNoise (float azimuth, float elevation);    // as IEM's table calls it with Alt
 
+    // The window's processor never takes OSC (anyone on the network could play noise on the PA): its
+    // receiver is never opened, and createEditor hides and disables IEM's OSC footer.
+    bool listensForOsc() const;
+    static bool showsOscControls (const juce::Component& editor);   // a visible or enabled OSC footer in it
+
 private:
     struct Impl;
     std::unique_ptr<Impl> impl;

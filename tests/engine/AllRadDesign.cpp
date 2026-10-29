@@ -144,3 +144,15 @@ TEST (AllRadDesign, TheEditorsNoiseButtonsCallTheHook)
     std::sort (channels.begin(), channels.end());
     EXPECT_EQ (channels, (std::vector<int> { 2, 3, 4, 5 }));
 }
+
+// M3: the window's AllRADecoder never takes OSC: no receiver, and IEM's OSC footer is neither shown nor usable.
+TEST (AllRadDesign, TheHostedEditorOffersNoOsc)
+{
+    juce::MessageManagerLock lock;
+    a3::AllRadDesigner designer;
+    auto editor = designer.createEditor();
+    ASSERT_NE (editor, nullptr);
+    editor->setSize (1000, 600);
+    EXPECT_FALSE (a3::AllRadDesigner::showsOscControls (*editor));
+    EXPECT_FALSE (designer.listensForOsc());
+}

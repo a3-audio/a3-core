@@ -28,6 +28,7 @@ public:
     void refresh();                     // reloads when the pending spatial directory changed
 
     juce::AudioProcessorEditor* editor() { return iemEditor.get(); }
+    bool listensForOsc() const { return designer.listensForOsc(); }
     const juce::Label& messageLabel() const { return message; }
     void resized() override;
     void paint (juce::Graphics&) override;

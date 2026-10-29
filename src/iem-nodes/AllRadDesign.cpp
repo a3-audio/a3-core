@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "AllRadDesign.h"
 #include "PluginProcessor.h"
+#include "PluginEditor.h"
 
 namespace a3
 {
@@ -102,7 +103,15 @@ std::optional<juce::String> AllRadDesigner::design (juce::String& error)
 
 std::unique_ptr<juce::AudioProcessorEditor> AllRadDesigner::createEditor()
 {
-    return std::unique_ptr<juce::AudioProcessorEditor> (impl->processor.createEditor());
+    std::unique_ptr<juce::AudioProcessorEditor> editor (impl->processor.createEditor());
+    // IEM's footer opens the processor's OSC receiver; the window's never listens (see listensForOsc).
+    for (auto* child : editor->getChildren())
+        if (dynamic_cast<OSCFooter*> (child) != nullptr)
+        {
+            child->setVisible (false);
+            child->setEnabled (false);
+        }
+    return editor;
 }
 
 void AllRadDesigner::setNoiseHooks (std::function<void (int)> channel, std::function<void (float, float)> direction)
@@ -112,6 +121,16 @@ void AllRadDesigner::setNoiseHooks (std::function<void (int)> channel, std::func
 }
 void AllRadDesigner::playNoise (int channel) { impl->processor.playNoiseBurst (channel); }
 void AllRadDesigner::playAmbisonicNoise (float azimuth, float elevation) { impl->processor.playAmbisonicNoiseBurst (azimuth, elevation); }
+
+bool AllRadDesigner::listensForOsc() const { return impl->processor.oscParameterInterface.getOSCReceiver().isConnected(); }
+
+bool AllRadDesigner::showsOscControls (const juce::Component& editor)
+{
+    for (auto* child : editor.getChildren())
+        if (dynamic_cast<OSCFooter*> (child) != nullptr && (child->isVisible() || child->isEnabled()))
+            return true;
+    return false;
+}
 
 std::optional<juce::String> designDecoder (const std::vector<Loudspeaker>& speakers, AmbisonicWeights weights, juce::String& error)
 {

@@ -875,3 +875,17 @@ TEST_F (Pages, SpeakersSaveTwiceKeepsBothVariants)
     EXPECT_EQ (rig.variants().size(), 2u);
     EXPECT_TRUE (first.getChildFile ("booth.parameters.json").existsAsFile());
 }
+
+// M3, PA safety: noise must never be playable from the network through IEM's OSC receiver.
+TEST_F (Pages, SpeakersNeverListenForOsc)
+{
+    SpeakerRig rig;
+    a3app::SpeakersPage page (rig.view, rig.userRoot);
+    for (const auto zone : { a3::SpeakerZone::main, a3::SpeakerZone::booth })
+    {
+        page.showZone (zone);
+        EXPECT_FALSE (page.listensForOsc());
+        ASSERT_NE (page.editor(), nullptr);
+        EXPECT_FALSE (a3::AllRadDesigner::showsOscControls (*page.editor()));
+    }
+}
