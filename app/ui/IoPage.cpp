@@ -10,6 +10,8 @@ namespace
 {
 constexpr int localDeckId = 1, aes67DeckId = 2, incompleteDeckId = 3;   // the chooser's items
 constexpr int reloadEveryTicks = 10;   // the window ticks at 20 Hz: the live links are re-read twice a second
+constexpr int noneItem = 1;            // a route dropdown's first item; the choices follow from 2
+const juce::String noneText = juce::String::fromUTF8 ("\xe2\x80\x94 none \xe2\x80\x94");
 
 juce::String joined (const std::vector<std::string>& names)
 {
@@ -92,9 +94,28 @@ IoPage::IoPage (HostView& v)
     portEditor.onReturnKey = [this] { commitEditor(); };
     portEditor.onFocusLost = [this] { commitEditor(); };
     linksEditor.onFocusLost = [this] { setDirectLinks (linksEditor.getText()); };
-    for (auto* child : std::initializer_list<juce::Component*> { &title, &portCaption, &linksCaption, &message, &list, &portEditor, &linksEditor })
+    for (auto* child : std::initializer_list<juce::Component*> { &title, &portCaption, &linksCaption, &message, &list, &portEditor, &linksEditor,
+                                                                 &inputKey, &outputKey, &inputView, &outputView })
         addAndMakeVisible (child);
+    for (auto* key : { &inputKey, &outputKey })
+    {
+        key->setRadioGroupId (3);
+        key->setClickingTogglesState (false);
+    }
+    inputKey.onClick = [this] { showSub (Sub::input); };
+    outputKey.onClick = [this] { showSub (Sub::output); };
+    look::help ("INPUT: what feeds each channel's L and R, the decks' sources and the direct links. OUTPUT: where each "
+                "zone's channels go, and every engine port with its live links. A port another channel already uses is "
+                "marked in the list, not refused. Every edit applies after Save.", { &title, &inputKey, &outputKey });
+    look::caption (decksCaption);
+    decksCaption.setText ("DECKS", juce::dontSendNotification);
+    inputContent.addAndMakeVisible (decksCaption);
+    inputView.setViewedComponent (&inputContent, false);
+    outputView.setViewedComponent (&outputContent, false);
+    for (auto* scroller : { &inputView, &outputView })
+        scroller->setScrollBarsShown (true, false);
     refresh (true);
+    showSub (Sub::input);
 }
 
 IoPage::~IoPage() { list.setModel (nullptr); }
@@ -203,8 +224,8 @@ void IoPage::rebuildDeckChoosers()
         chooser->box.addItem ("AES67 stream", aes67DeckId);
         chooser->box.addItem ("Incomplete - pick a source", incompleteDeckId);
         chooser->box.onChange = [this, slot] { chooseDeckSource (slot); };
-        addAndMakeVisible (chooser->label);
-        addAndMakeVisible (chooser->box);
+        inputContent.addAndMakeVisible (chooser->label);
+        inputContent.addAndMakeVisible (chooser->box);
         deckChoosers.push_back (std::move (chooser));
     }
     resized();
@@ -265,6 +286,9 @@ void IoPage::reload()
     if (! ports)
         return look::say (message, error);
     portRows = ioRows (shown, *ports, lastLinks);
+    offered = view.status();
+    rebuildRoutes();
+    fillRoutes();
     rebuildDeckChoosers();
     showDeckSources();
     list.updateContent();
@@ -280,32 +304,233 @@ void IoPage::reload()
         selectPort (list.getSelectedRow());
 }
 
+void IoPage::showSub (Sub wanted)
+{
+    sub = wanted;
+    const bool input = sub == Sub::input;
+    inputKey.setToggleState (input, juce::dontSendNotification);
+    outputKey.setToggleState (! input, juce::dontSendNotification);
+    for (auto* child : std::initializer_list<juce::Component*> { &inputView, &linksCaption, &linksEditor })
+        child->setVisible (input);
+    for (auto* child : std::initializer_list<juce::Component*> { &outputView, &list, &portCaption, &portEditor })
+        child->setVisible (! input);
+}
+
+juce::String IoPage::foreignPeers (const std::string& port) const
+{
+    for (const auto& row : portRows)
+        if (row.port == port)
+            return joined (row.foreign);
+    return {};
+}
+
+// JACK: the hardware's capture (input) or playback ports; a device: its channels, "channel 1" on.
+juce::StringArray IoPage::routeChoices (bool input) const
+{
+    if (! deviceMode())
+        return input ? offered.capturePorts : offered.playbackPorts;
+    juce::StringArray channels;
+    for (int channel = 1; channel <= (input ? offered.deviceInputs : offered.deviceOutputs); ++channel)
+        channels.add ("channel " + juce::String (channel));
+    return channels;
+}
+
+// The dropdowns for the ports this config has: per channel L and R (INPUT), per zone its outputs (OUTPUT).
+void IoPage::rebuildRoutes()
+{
+    juce::String error;
+    const auto ports = portNamesFor (shown, error);
+    if (! ports)
+        return;
+    juce::String key;
+    for (const auto& port : ports->outputs)
+        key << port << ",";
+    for (const auto& channel : channelInputPorts (shown.engine))
+        key << channel.left.value_or ("-") << channel.right.value_or ("-") << ",";
+    if (key == routeKey)
+        return;
+    routeKey = key;
+    inputGroups.clear();
+    outputGroups.clear();
+    const auto addRoute = [this] (Group& group, juce::Component& content, const std::string& port, bool input, const juce::String& caption)
+    {
+        auto route = std::make_unique<Route>();
+        route->port = port;
+        route->input = input;
+        look::caption (route->caption);
+        route->caption.setText (caption, juce::dontSendNotification);
+        look::caption (route->foreign);
+        route->box.onChange = [this, port, box = &route->box] { chooseRoute (port, box->getSelectedItemIndex()); };
+        for (auto* child : std::initializer_list<juce::Component*> { &route->caption, &route->foreign, &route->box })
+            content.addAndMakeVisible (child);
+        group.routes.push_back (std::move (route));
+    };
+    const auto addGroup = [] (std::vector<std::unique_ptr<Group>>& groups, juce::Component& content, const juce::String& name) -> Group&
+    {
+        groups.push_back (std::make_unique<Group>());
+        look::caption (groups.back()->caption);
+        groups.back()->caption.setText (name, juce::dontSendNotification);
+        content.addAndMakeVisible (groups.back()->caption);
+        return *groups.back();
+    };
+    for (const auto& channel : channelInputPorts (shown.engine))
+    {
+        auto& group = addGroup (inputGroups, inputContent, "CH " + juce::String (channel.channel)
+                                                               + (channel.left ? juce::String() : "   deck only: no analog input"));
+        if (channel.left)
+            addRoute (group, inputContent, *channel.left, true, "L   " + juce::String (*channel.left));
+        if (channel.right)
+            addRoute (group, inputContent, *channel.right, true, "R   " + juce::String (*channel.right));
+    }
+    for (const auto& zone : zoneOutputGroups (*ports))
+    {
+        auto& group = addGroup (outputGroups, outputContent, zone.zone);
+        for (const auto& port : zone.ports)
+            addRoute (group, outputContent, port, false, juce::String (port));
+    }
+    resized();
+}
+
+// Each dropdown's items (a choice another port uses says which) and its selection, from the config.
+void IoPage::fillRoutes()
+{
+    for (auto* groups : { &inputGroups, &outputGroups })
+        for (auto& group : *groups)
+            for (auto& route : group->routes)
+            {
+                const auto choices = routeChoices (route->input);
+                juce::StringArray items { noneText };
+                for (int i = 0; i < choices.size(); ++i)
+                {
+                    const auto peer = deviceMode() ? "#" + std::to_string (i) : choices[i].toStdString();
+                    juce::StringArray users;
+                    for (const auto& other : portsRoutedTo (shown, peer, route->port))
+                        users.add (juce::String (other));
+                    items.add (choices[i] + (users.isEmpty() ? juce::String() : "   (also " + users.joinIntoString (", ") + ")"));
+                }
+                int selectedIndex = 0;
+                if (deviceMode())
+                {
+                    if (const auto it = shown.io.deviceChannels.find (route->port); it != shown.io.deviceChannels.end())
+                        selectedIndex = it->second + 1 < items.size() ? it->second + 1 : 0;
+                }
+                else if (const auto it = shown.io.jack.find (route->port); it != shown.io.jack.end() && ! it->second.empty())
+                {
+                    const int found = choices.indexOf (juce::String (it->second.front()));
+                    if (found < 0)
+                        items.add (juce::String (it->second.front()) + "   (not hardware)");   // what the map holds, kept
+                    selectedIndex = found >= 0 ? found + 1 : items.size() - 1;
+                }
+                juce::StringArray current;
+                for (int i = 0; i < route->box.getNumItems(); ++i)
+                    current.add (route->box.getItemText (i));
+                if (current != items)
+                {
+                    route->box.clear (juce::dontSendNotification);
+                    for (int i = 0; i < items.size(); ++i)
+                        route->box.addItem (items[i], noneItem + i);
+                }
+                route->box.setSelectedItemIndex (selectedIndex, juce::dontSendNotification);
+                look::say (route->foreign, deviceMode() ? juce::String() : foreignPeers (route->port));
+            }
+}
+
+juce::ComboBox* IoPage::routeBox (const std::string& port)
+{
+    for (auto* groups : { &inputGroups, &outputGroups })
+        for (auto& group : *groups)
+            for (auto& route : group->routes)
+                if (route->port == port)
+                    return &route->box;
+    return nullptr;
+}
+
+void IoPage::chooseRoute (const std::string& port, int item)
+{
+    const bool input = isEngineInputPort (port);
+    const auto choices = routeChoices (input);
+    if (item < 0 || item > choices.size())
+        return;   // the "not hardware" item: what the map holds stays
+    look::say (message, {});
+    if (deviceMode())
+        return edit (withDeviceRoute (view.config(), port, item == 0 ? std::nullopt : std::optional<int> (item - 1)));
+    edit (withJackRoute (view.config(), port, item == 0 ? std::string() : choices[item - 1].toStdString()));
+}
+
 void IoPage::paint (juce::Graphics& g) { g.fillAll (palette::surface); }
 
 void IoPage::resized()
 {
     auto area = getLocalBounds().reduced (getWidth() / 40);
     const int row = look::rowHeight (*this);
-    list.setRowHeight (juce::jmax (22, row * 2 / 3));
-    title.setBounds (area.removeFromTop (row));
-    auto bottom = area.removeFromBottom (row * 3 + row);
-    message.setBounds (bottom.removeFromBottom (row));
-    linksCaption.setBounds (bottom.removeFromTop (row));
-    linksEditor.setBounds (bottom);
-    auto deckRow = area.removeFromBottom (row);
-    if (! deckChoosers.empty())
+    auto top = area.removeFromTop (row);
+    title.setBounds (top.removeFromLeft (top.getWidth() / 4));
+    inputKey.setBounds (top.removeFromLeft (top.getWidth() / 2).reduced (row / 16));
+    outputKey.setBounds (top.reduced (row / 16));
+    message.setBounds (area.removeFromBottom (row));
+    layoutInput (area, row);
+    layoutOutput (area, row);
+}
+
+namespace
+{
+// Groups of dropdown rows in a scrolled content: a caption row per group, then one row per route.
+template <class Group>
+int layoutGroups (std::vector<std::unique_ptr<Group>>& groups, juce::Rectangle<int>& content, int line)
+{
+    int used = 0;
+    for (auto& group : groups)
     {
-        const int cell = deckRow.getWidth() / (int) deckChoosers.size();
-        for (auto& chooser : deckChoosers)
+        group->caption.setBounds (content.removeFromTop (line));
+        used += line;
+        for (auto& route : group->routes)
         {
-            auto slice = deckRow.removeFromLeft (cell).reduced (getWidth() / 120, 0);
-            chooser->label.setBounds (slice.removeFromLeft (slice.getWidth() / 4));
-            chooser->box.setBounds (slice);
+            auto slice = content.removeFromTop (line).reduced (0, line / 12);
+            route->caption.setBounds (slice.removeFromLeft (slice.getWidth() / 4));
+            route->foreign.setBounds (slice.removeFromRight (slice.getWidth() / 4));
+            route->box.setBounds (slice);
+            used += line;
         }
     }
-    auto editRow = area.removeFromBottom (row);
+    return used;
+}
+}
+
+// INPUT: the channels' L/R dropdowns and the deck sources scrolled together; the direct links below.
+void IoPage::layoutInput (juce::Rectangle<int> area, int row)
+{
+    auto links = area.removeFromBottom (row * 3);
+    linksCaption.setBounds (links.removeFromTop (row));
+    linksEditor.setBounds (links);
+    inputView.setBounds (area);
+    const int line = row * 3 / 4;
+    const int width = area.getWidth() - inputView.getScrollBarThickness();
+    auto content = juce::Rectangle<int> (0, 0, width, 1 << 20);
+    int used = layoutGroups (inputGroups, content, line);
+    decksCaption.setBounds (content.removeFromTop (line));
+    used += line;
+    for (auto& chooser : deckChoosers)
+    {
+        auto slice = content.removeFromTop (line).reduced (0, line / 12);
+        chooser->label.setBounds (slice.removeFromLeft (slice.getWidth() / 4));
+        chooser->box.setBounds (slice);
+        used += line;
+    }
+    inputContent.setSize (width, used);
+}
+
+// OUTPUT: the zones' dropdowns scrolled, then every port with its live links and the editor for one.
+void IoPage::layoutOutput (juce::Rectangle<int> area, int row)
+{
+    list.setRowHeight (juce::jmax (22, row * 2 / 3));
+    auto lower = area.removeFromBottom (area.getHeight() / 3);
+    auto editRow = lower.removeFromBottom (row);
     portCaption.setBounds (editRow.removeFromLeft (editRow.getWidth() / 2));
     portEditor.setBounds (editRow);
-    list.setBounds (area);
+    list.setBounds (lower);
+    outputView.setBounds (area);
+    const int width = area.getWidth() - outputView.getScrollBarThickness();
+    auto content = juce::Rectangle<int> (0, 0, width, 1 << 20);
+    outputContent.setSize (width, layoutGroups (outputGroups, content, row * 3 / 4));
 }
 }

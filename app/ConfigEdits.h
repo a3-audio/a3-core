@@ -97,4 +97,26 @@ struct IoRow
 };
 using LiveLinks = std::vector<std::pair<std::string, std::string>>;   // (from, to), as AudioBackend::liveLinks
 std::vector<IoRow> ioRows (const AppConfig&, const PortNames&, const LiveLinks&);
+
+// The I/O page's OUTPUT: the engine's outputs of MAIN, BOOTH (each its sub, then its tops: the zone's layout),
+// PHONES and REC, in that order. The channels' pre/post meter outputs belong to no zone.
+struct ZoneOutputs
+{
+    juce::String zone;
+    std::vector<std::string> ports;
+};
+std::vector<ZoneOutputs> zoneOutputGroups (const PortNames&);
+// The I/O page's INPUT: per channel the analog inputs of its pair (analogPairs); none for a deck-only channel.
+struct ChannelInputs
+{
+    int channel = 0;
+    std::optional<std::string> left, right;
+};
+std::vector<ChannelInputs> channelInputPorts (const a3::EngineConfig&);
+// One route for an engine port, the dropdowns' edit: `peer` replaces every JACK peer the map holds for it
+// (empty: none); a device channel (0-based; nullopt: none) likewise. Live foreign links are not the map's.
+AppConfig withJackRoute (const AppConfig&, const std::string& port, const std::string& peer);
+AppConfig withDeviceRoute (const AppConfig&, const std::string& port, std::optional<int> channel);
+// The engine ports other than `except` the map routes to `peer` (a JACK peer, or "#<n>" for device channel n, 0-based).
+std::vector<std::string> portsRoutedTo (const AppConfig&, const std::string& peer, const std::string& except);
 }

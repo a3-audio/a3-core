@@ -344,6 +344,72 @@ std::optional<DeckSource> deckSourceOf (const IoMap& map, int slot)
     return std::nullopt;
 }
 
+std::vector<ZoneOutputs> zoneOutputGroups (const PortNames& ports)
+{
+    std::vector<ZoneOutputs> groups { { "MAIN", {} }, { "BOOTH", {} }, { "PHONES", {} }, { "REC", {} } };
+    const std::pair<const char*, size_t> prefixes[] { { "main_", 0 }, { "booth_", 1 }, { "phones_", 2 }, { "rec_", 3 } };
+    for (const auto& port : ports.outputs)
+        for (const auto& [prefix, group] : prefixes)
+            if (port.rfind (prefix, 0) == 0)
+                groups[group].ports.push_back (port);
+    return groups;
+}
+
+std::vector<ChannelInputs> channelInputPorts (const a3::EngineConfig& engine)
+{
+    std::vector<ChannelInputs> channels;
+    for (int n = 1; n <= engine.channels; ++n)
+    {
+        ChannelInputs channel;
+        channel.channel = n;
+        const int pair = n <= (int) engine.analogPairs.size() ? engine.analogPairs[(size_t) n - 1] : 0;
+        if (pair > 0)
+        {
+            channel.left = "analog_" + std::to_string (2 * pair - 1);
+            channel.right = "analog_" + std::to_string (2 * pair);
+        }
+        channels.push_back (channel);
+    }
+    return channels;
+}
+
+AppConfig withJackRoute (const AppConfig& config, const std::string& port, const std::string& peer)
+{
+    auto edited = config;
+    if (peer.empty())
+        edited.io.jack.erase (port);
+    else
+        edited.io.jack[port] = { peer };
+    return edited;
+}
+
+AppConfig withDeviceRoute (const AppConfig& config, const std::string& port, std::optional<int> channel)
+{
+    auto edited = config;
+    if (channel)
+        edited.io.deviceChannels[port] = *channel;
+    else
+        edited.io.deviceChannels.erase (port);
+    return edited;
+}
+
+std::vector<std::string> portsRoutedTo (const AppConfig& config, const std::string& peer, const std::string& except)
+{
+    std::vector<std::string> ports;
+    if (peer.rfind ("#", 0) == 0)
+    {
+        const int channel = std::stoi (peer.substr (1));
+        for (const auto& [port, mapped] : config.io.deviceChannels)
+            if (port != except && mapped == channel)
+                ports.push_back (port);
+        return ports;
+    }
+    for (const auto& [port, peers] : config.io.jack)
+        if (port != except && std::find (peers.begin(), peers.end(), peer) != peers.end())
+            ports.push_back (port);
+    return ports;
+}
+
 bool isUserVariant (const juce::File& directory, const juce::File& userRoot)
 {
     // The parent must be the root itself, by path: a path holding ".." never matches, and a link could point anywhere.

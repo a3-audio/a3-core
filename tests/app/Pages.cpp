@@ -1304,3 +1304,96 @@ TEST_F (Pages, ZonesDropdownsFirstAndRenameDeleteInTheFooter)
     EXPECT_FALSE (buttonsLabelled (content, "RENAME").front()->isVisible());
     EXPECT_FALSE (deleteKey->isVisible());
 }
+
+namespace
+{
+// A JACK graph with eight capture and eight playback ports, as the engine's status reports it.
+void giveHardwarePorts (FakeView& view)
+{
+    for (int i = 1; i <= 8; ++i)
+    {
+        view.state.capturePorts.add ("system:capture_" + juce::String (i));
+        view.state.playbackPorts.add ("system:playback_" + juce::String (i));
+    }
+}
+
+juce::Component* subKey (juce::Component& page, const juce::String& name)
+{
+    const auto keys = buttonsLabelled (page, name);
+    return keys.empty() ? nullptr : keys.front();
+}
+}
+
+// OUTPUT: every channel of MAIN, BOOTH, PHONES and REC has a dropdown of the playback ports ("none" first); a
+// choice is the port's route; a port another channel already uses is marked, not refused.
+TEST_F (Pages, IoOutputHasADropdownPerZoneChannel)
+{
+    FakeView view;
+    giveHardwarePorts (view);
+    view.links = { { "a3-engine:main_top_1", "stranger:in" } };
+    a3app::IoPage page (view);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
+    ASSERT_NE (subKey (page, "INPUT"), nullptr);
+    ASSERT_NE (subKey (page, "OUTPUT"), nullptr);
+    page.showSub (a3app::IoPage::Sub::output);
+    juce::String error;
+    const auto ports = a3app::portNamesFor (view.cfg, error);
+    ASSERT_TRUE (ports) << error;
+    for (const auto& group : a3app::zoneOutputGroups (*ports))
+        for (const auto& port : group.ports)
+        {
+            auto* box = page.routeBox (port);
+            ASSERT_NE (box, nullptr) << port;
+            EXPECT_TRUE (box->isShowing() || box->isVisible()) << port;
+            EXPECT_EQ (box->getNumItems(), 9) << port;   // none + 8
+            EXPECT_TRUE (box->getItemText (0).contains ("none")) << port;
+        }
+    page.chooseRoute ("booth_top_2", 3);   // system:playback_3
+    EXPECT_EQ (view.cfg.io.jack.at ("booth_top_2"), std::vector<std::string> { "system:playback_3" });
+    page.chooseRoute ("rec_L", 3);
+    EXPECT_EQ (view.cfg.io.jack.at ("rec_L"), std::vector<std::string> { "system:playback_3" });   // twice: allowed
+    page.refresh (true);
+    EXPECT_TRUE (page.routeBox ("rec_L")->getItemText (3).contains ("booth_top_2")) << page.routeBox ("rec_L")->getItemText (3);
+    EXPECT_TRUE (page.foreignPeers ("main_top_1").contains ("stranger:in"));   // shown, never touched
+    page.chooseRoute ("rec_L", 0);
+    EXPECT_EQ (view.cfg.io.jack.count ("rec_L"), 0u);
+    EXPECT_EQ (view.links.size(), 1u);
+    expectPainted (a3apptest::snapshotAt (page, "io-output", page.getWidth(), page.getHeight()));
+}
+
+// INPUT: per channel L and R dropdowns of the capture ports, the deck sources, the direct links.
+TEST_F (Pages, IoInputHasLeftAndRightPerChannelAndTheDecks)
+{
+    FakeView view;
+    giveHardwarePorts (view);
+    a3app::IoPage page (view);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
+    page.showSub (a3app::IoPage::Sub::input);
+    for (const auto& channel : a3app::channelInputPorts (view.cfg.engine))
+        for (const auto& port : { channel.left, channel.right })
+        {
+            ASSERT_TRUE (port.has_value());
+            auto* box = page.routeBox (*port);
+            ASSERT_NE (box, nullptr) << *port;
+            EXPECT_TRUE (box->isVisible()) << *port;
+            EXPECT_EQ (box->getNumItems(), 9) << *port;
+        }
+    page.chooseRoute ("analog_4", 6);
+    EXPECT_EQ (view.cfg.io.jack.at ("analog_4"), std::vector<std::string> { "system:capture_6" });
+    ASSERT_NE (page.deckSourceBox (1), nullptr);
+    EXPECT_TRUE (page.deckSourceBox (1)->isVisible());
+    expectPainted (a3apptest::snapshotAt (page, "io-input", page.getWidth(), page.getHeight()));
+
+    page.showSub (a3app::IoPage::Sub::output);
+    EXPECT_FALSE (page.deckSourceBox (1)->isShowing());
+    EXPECT_FALSE (page.routeBox ("analog_4")->isShowing());
+
+    view.runDevice();   // a device: the device's channels instead of ports
+    view.state.deviceInputs = 4;
+    view.state.deviceOutputs = 6;
+    page.refresh (true);
+    page.showSub (a3app::IoPage::Sub::input);
+    EXPECT_EQ (page.routeBox ("analog_1")->getNumItems(), 5);   // none + 4
+    page.chooseRoute ("analog_1", 2);
+    EXPECT_EQ (view.cfg.io.deviceChannels.at ("analog_1"), 1);   // channel 2, 0-based in the map
+}

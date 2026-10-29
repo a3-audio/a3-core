@@ -566,3 +566,69 @@ TEST (ConfigEdits, RenameChecksTheNameAndFollowsThePendingConfig)
     EXPECT_EQ (a3app::zoneSpatialDirectory (followed, a3::SpeakerZone::booth), *renamed);
     EXPECT_EQ (a3app::zoneSpatialDirectory (followed, a3::SpeakerZone::main), v.club);
 }
+
+// The engine's outputs by zone as the I/O page's OUTPUT groups them: MAIN, BOOTH (each sub first, then its tops),
+// PHONES, REC; the channels' pre/post meter outputs belong to no zone.
+TEST (ConfigEdits, OutputsGroupByZone)
+{
+    juce::String error;
+    const auto ports = a3app::portNamesFor (sample(), error);
+    ASSERT_TRUE (ports) << error;
+    const auto groups = a3app::zoneOutputGroups (*ports);
+    ASSERT_EQ (groups.size(), 4u);
+    EXPECT_EQ (groups[0].zone, "MAIN");
+    EXPECT_EQ (groups[1].zone, "BOOTH");
+    EXPECT_EQ (groups[2].zone, "PHONES");
+    EXPECT_EQ (groups[3].zone, "REC");
+    EXPECT_EQ (groups[0].ports, (std::vector<std::string> { "main_sub", "main_top_1", "main_top_2", "main_top_3", "main_top_4" }));
+    EXPECT_EQ (groups[2].ports, (std::vector<std::string> { "phones_L", "phones_R" }));
+    EXPECT_EQ (groups[3].ports, (std::vector<std::string> { "rec_L", "rec_R" }));
+    for (const auto& group : groups)
+        for (const auto& port : group.ports)
+            EXPECT_EQ (port.find ("_pre"), std::string::npos) << port;
+}
+
+// INPUT: a channel's L and R are the analog inputs of its pair; a deck-only channel has none.
+TEST (ConfigEdits, ChannelInputsFollowTheAnalogPairs)
+{
+    auto config = sample();
+    config.engine.analogPairs = { 1, 2, 0, 4 };
+    const auto inputs = a3app::channelInputPorts (config.engine);
+    ASSERT_EQ (inputs.size(), 4u);
+    EXPECT_EQ (inputs[0].left, "analog_1");
+    EXPECT_EQ (inputs[0].right, "analog_2");
+    EXPECT_EQ (inputs[1].left, "analog_3");
+    EXPECT_FALSE (inputs[2].left.has_value());   // deck only
+    EXPECT_EQ (inputs[3].right, "analog_8");
+}
+
+// One route per engine port: a JACK peer replaces what the map holds for it (none clears it); a device channel
+// likewise. Every zone round-trips through the loader.
+TEST (ConfigEdits, ARouteReplacesThePortsEntryAndSurvivesTheLoader)
+{
+    juce::String error;
+    const auto ports = a3app::portNamesFor (sample(), error);
+    ASSERT_TRUE (ports) << error;
+    for (const auto& group : a3app::zoneOutputGroups (*ports))
+    {
+        const auto& port = group.ports.back();
+        auto config = a3app::withJackRoute (sample(), port, "system:playback_7");
+        EXPECT_EQ (config.io.jack.at (port), std::vector<std::string> { "system:playback_7" }) << group.zone;
+        const auto scratch = juce::File::createTempFile ("a3-route.json");
+        ASSERT_TRUE (a3app::saveAppConfig (config, scratch).wasOk()) << group.zone;
+        const auto loaded = a3app::loadAppConfig (scratch, error, a3apptest::truthDecks());
+        scratch.deleteFile();
+        ASSERT_TRUE (loaded) << error;
+        EXPECT_EQ (loaded->io.jack.at (port), std::vector<std::string> { "system:playback_7" }) << group.zone;
+        config = a3app::withJackRoute (config, port, {});
+        EXPECT_EQ (config.io.jack.count (port), 0u) << group.zone;
+    }
+    auto device = a3app::withDeviceRoute (sample(), "phones_L", 3);
+    EXPECT_EQ (device.io.deviceChannels.at ("phones_L"), 3);
+    device = a3app::withDeviceRoute (device, "phones_L", std::nullopt);
+    EXPECT_EQ (device.io.deviceChannels.count ("phones_L"), 0u);
+
+    auto twice = a3app::withJackRoute (sample(), "main_top_1", "system:playback_1");
+    twice = a3app::withJackRoute (twice, "main_top_2", "system:playback_1");   // allowed, only marked
+    EXPECT_EQ (a3app::portsRoutedTo (twice, "system:playback_1", "main_top_2"), (std::vector<std::string> { "main_top_1" }));
+}

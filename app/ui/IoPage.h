@@ -8,15 +8,26 @@
 
 namespace a3app
 {
-// Per engine port: JACK shows the peers the I/O map names (editable, comma separated) and the
-// live ones it does not (foreign: shown in muted text, never edited); a device shows the device
-// channel (editable). Below: the direct links the engine makes between two foreign ports.
-// Every edit is pending until Save.
+// Two sub-pages, chosen by INPUT and OUTPUT at the top. INPUT: per channel a dropdown for L and R (the capture
+// port or device channel feeding its analog pair), the deck slots' sources, and the direct links the engine makes
+// between two foreign ports. OUTPUT: per zone (MAIN, BOOTH, PHONES, REC) a dropdown per channel (the playback
+// port or device channel it goes to; one another channel uses is marked, not refused), and below it every engine
+// port as the I/O map names its peers (editable, comma separated) beside the live ones it does not (foreign:
+// shown in muted text, never edited). Every edit is pending until Save.
 class IoPage final : public juce::Component
 {
 public:
     explicit IoPage (HostView&);
     ~IoPage() override;
+
+    enum class Sub { input, output };
+    void showSub (Sub);
+    Sub shownSub() const { return sub; }
+    // A dropdown's port: its box (nullptr when the page has none for it), and a choice (0 = none, then the
+    // offered capture/playback ports or device channels in order).
+    juce::ComboBox* routeBox (const std::string& port);
+    void chooseRoute (const std::string& port, int item);
+    juce::String foreignPeers (const std::string& port) const;   // the live peers the map does not name
 
     const std::vector<IoRow>& rows() const { return portRows; }
     juce::String rowText (int row) const;               // mapped and foreign, as the row shows them
@@ -43,6 +54,11 @@ private:
     void chooseDeckSource (int slotOneBased);
     void showDeckSources();
     void rebuildDeckChoosers();
+    void rebuildRoutes();
+    void fillRoutes();
+    juce::StringArray routeChoices (bool input) const;
+    void layoutInput (juce::Rectangle<int> area, int row);
+    void layoutOutput (juce::Rectangle<int> area, int row);
 
     HostView& view;
     std::vector<IoRow> portRows;
@@ -55,5 +71,17 @@ private:
     juce::TextEditor portEditor, linksEditor;
     struct DeckChooser { juce::Label label; juce::ComboBox box; };
     std::vector<std::unique_ptr<DeckChooser>> deckChoosers;
+
+    // One dropdown: its port, the caption beside it, and the live foreign peers after it.
+    struct Route { std::string port; bool input = false; juce::Label caption, foreign; juce::ComboBox box; };
+    struct Group { juce::Label caption; std::vector<std::unique_ptr<Route>> routes; };
+    std::vector<std::unique_ptr<Group>> inputGroups, outputGroups;
+    juce::String routeKey;   // the ports and choices the dropdowns were built for
+    BackendStatus offered;   // the status the choices came from
+    Sub sub = Sub::input;
+    juce::TextButton inputKey { "INPUT" }, outputKey { "OUTPUT" };
+    juce::Label decksCaption;
+    juce::Component inputContent, outputContent;   // the scrolled parts of the sub-pages
+    juce::Viewport inputView, outputView;
 };
 }
