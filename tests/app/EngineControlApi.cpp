@@ -215,3 +215,40 @@ TEST (EngineControlApi, AnApplyTheControlThreadNeverRunsIsAnsweredBeforeTheWindo
     EXPECT_EQ (reply.status, 503);
     EXPECT_NE (parse (reply.body)["problem"].toString().indexOf ("did not answer"), -1);
 }
+
+TEST (EngineControlApi, NoiseWaitsForTheControlThreadInEitherZone)
+{
+    RemoteRig rig;
+    const auto port = rig.server->port();
+    EXPECT_EQ (httpclient::post (port, "/api/engine/noise", "{\"zone\":\"booth\",\"channel\":4}").status, 200);
+    EXPECT_EQ (httpclient::post (port, "/api/engine/noise", "{\"zone\":\"main\",\"azimuth\":45,\"elevation\":-10.5}").status, 200);
+    EXPECT_TRUE (rig.fake.noises.empty());   // the HTTP thread touched nothing
+    rig.tick();
+    ASSERT_EQ (rig.fake.noises.size(), 2u);
+    EXPECT_EQ (rig.fake.noises[0].zone, a3::SpeakerZone::booth);
+    EXPECT_FALSE (rig.fake.noises[0].ambisonic);
+    EXPECT_EQ (rig.fake.noises[0].channel, 4);
+    EXPECT_EQ (rig.fake.noises[1].zone, a3::SpeakerZone::main);
+    EXPECT_TRUE (rig.fake.noises[1].ambisonic);
+    EXPECT_FLOAT_EQ (rig.fake.noises[1].azimuth, 45.0f);
+    EXPECT_FLOAT_EQ (rig.fake.noises[1].elevation, -10.5f);
+
+    for (const auto* refused : { "{\"zone\":\"phones\",\"channel\":1}", "{\"zone\":\"main\",\"channel\":0}",
+                                 "{\"zone\":\"main\",\"channel\":65}", "{\"zone\":\"main\"}", "{\"zone\":\"main\",\"azimuth\":1}", "nope" })
+        EXPECT_EQ (httpclient::post (port, "/api/engine/noise", refused).status, 400) << refused;
+    rig.tick();
+    EXPECT_EQ (rig.fake.noises.size(), 2u);
+}
+
+TEST (EngineControlApi, NoiseRequestsRoundTrip)
+{
+    a3app::NoiseRequest burst;
+    burst.zone = a3::SpeakerZone::booth;
+    burst.channel = 7;
+    juce::String why;
+    const auto back = a3app::noiseFromJson (a3app::toJson (burst), why);
+    ASSERT_TRUE (back) << why;
+    EXPECT_EQ (back->zone, a3::SpeakerZone::booth);
+    EXPECT_EQ (back->channel, 7);
+    EXPECT_FALSE (back->ambisonic);
+}

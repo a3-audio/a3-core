@@ -221,3 +221,18 @@ TEST (RemoteHostView, AnUnnamedDeckCountTakesTheEnginesTruthCount)
     EXPECT_FALSE (rig.remote->config().engine.decksNamed);
     EXPECT_EQ (rig.remote->running().engine.decks, rig.fake.truthDeckCount);
 }
+
+TEST (RemoteHostView, NoiseReachesTheEnginesZone)
+{
+    RemoteRig rig;
+    a3app::NoiseRequest burst;
+    burst.zone = a3::SpeakerZone::booth;
+    burst.ambisonic = true;
+    burst.azimuth = -135.0f;
+    rig.remote->playNoise (burst);
+    rig.sync();
+    ASSERT_EQ (rig.fake.noises.size(), 1u);
+    EXPECT_EQ (rig.fake.noises[0].zone, a3::SpeakerZone::booth);
+    EXPECT_TRUE (rig.fake.noises[0].ambisonic);
+    EXPECT_FLOAT_EQ (rig.fake.noises[0].azimuth, -135.0f);
+}

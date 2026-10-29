@@ -143,6 +143,51 @@ std::optional<EngineMetersReport> metersFromJson (const juce::var& v)
     return report;
 }
 
+namespace
+{
+constexpr int highestNoiseChannel = 64;   // IEM's NoiseBurst plays channels 1..64
+}
+
+juce::var toJson (const NoiseRequest& request)
+{
+    const juce::String zone = a3::zoneName (request.zone);
+    if (request.ambisonic)
+        return object ({ { "zone", zone }, { "azimuth", (double) request.azimuth }, { "elevation", (double) request.elevation } });
+    return object ({ { "zone", zone }, { "channel", request.channel } });
+}
+
+std::optional<NoiseRequest> noiseFromJson (const juce::var& v, juce::String& why)
+{
+    NoiseRequest request;
+    const auto zone = v["zone"].toString();
+    if (zone != "main" && zone != "booth")
+    {
+        why = "zone must be \"main\" or \"booth\"";
+        return std::nullopt;
+    }
+    request.zone = zone == "main" ? a3::SpeakerZone::main : a3::SpeakerZone::booth;
+    if (const auto channel = number (v["channel"]))
+    {
+        request.channel = (int) *channel;
+        if (request.channel < 1 || request.channel > highestNoiseChannel || request.channel != *channel)
+        {
+            why = "channel must be a whole number in 1.." + juce::String (highestNoiseChannel);
+            return std::nullopt;
+        }
+        return request;
+    }
+    const auto azimuth = number (v["azimuth"]), elevation = number (v["elevation"]);
+    if (! azimuth || ! elevation)
+    {
+        why = "a noise burst needs a channel, or an azimuth and an elevation";
+        return std::nullopt;
+    }
+    request.ambisonic = true;
+    request.azimuth = (float) *azimuth;
+    request.elevation = (float) *elevation;
+    return request;
+}
+
 juce::var toJson (const LiveLinks& links)
 {
     juce::Array<juce::var> all;
@@ -179,6 +224,7 @@ a3core::Routes EngineControlApi::routes()
     routes.post ("/api/engine/edit", [this] (const HttpRequest& r) { return edit (r); });
     routes.post ("/api/engine/apply", [this] (const HttpRequest& r) { return apply (r); });
     routes.post ("/api/engine/filter-kind", [this] (const HttpRequest& r) { return filterKind (r); });
+    routes.post ("/api/engine/noise", [this] (const HttpRequest& r) { return noise (r); });
     return routes;
 }
 
@@ -386,6 +432,17 @@ HttpResponse EngineControlApi::filterKind (const HttpRequest& request)
         return problem (400, "kind must be \"svf\" or \"ladder\"");
     const auto chosen = kind == "svf" ? a3::FilterKind::svf : a3::FilterKind::ladder;
     enqueue ([this, chosen] { view.setFilterKind (chosen); return juce::Result::ok(); });
+    return json (200, object ({}));
+}
+
+HttpResponse EngineControlApi::noise (const HttpRequest& request)
+{
+    juce::String why;
+    const auto body = parseBody (request, why);
+    const auto burst = body ? noiseFromJson (*body, why) : std::nullopt;
+    if (! burst)
+        return problem (400, why);
+    enqueue ([this, burst = *burst] { view.playNoise (burst); return juce::Result::ok(); });
     return json (200, object ({}));
 }
 

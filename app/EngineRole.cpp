@@ -208,6 +208,17 @@ public:
         edited.engine.filterKind = startedWith.engine.filterKind = kind;   // it runs now
     }
 
+    void playNoise (const NoiseRequest& request) override
+    {
+        auto* engine = live() ? role.session->engineHost().engine() : nullptr;
+        if (engine == nullptr)
+            return;
+        if (request.ambisonic)
+            engine->playAmbisonicNoise (request.zone, request.azimuth, request.elevation);
+        else
+            engine->playNoise (request.zone, request.channel);
+    }
+
 private:
     bool live() const { return role.session != nullptr && role.session->isReady(); }
     static std::vector<std::string> outputsOf (const AppConfig& config)

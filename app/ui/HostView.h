@@ -9,6 +9,16 @@
 
 namespace a3app
 {
+// The speaker map's test noise in one zone: a burst on one decoder output channel, or (ambisonic) one
+// from a direction into the zone's decoder (Engine::playNoise, playAmbisonicNoise).
+struct NoiseRequest
+{
+    a3::SpeakerZone zone = a3::SpeakerZone::main;
+    bool ambisonic = false;
+    int channel = 0;                          // 1-based decoder output channel (a channel burst)
+    float azimuth = 0.0f, elevation = 0.0f;   // degrees (an ambisonic burst)
+};
+
 // What the pages see of the running engine: read-only state, the pending edit (config()) beside
 // what runs (running()), and the three ways to change things: edit() stores a pending edit,
 // setFilterKind() acts at once, apply() rebuilds after Save has written the file. The window
@@ -43,5 +53,6 @@ public:
     // session (new boot id; Core replays through the hello); on failure the old one is back.
     virtual juce::Result apply (const AppConfig&) = 0;
     virtual void setFilterKind (a3::FilterKind) = 0;               // live, on the running engine; also the pending edit and what runs
+    virtual void playNoise (const NoiseRequest&) = 0;              // live, on the running engine; nothing when none runs
 };
 }

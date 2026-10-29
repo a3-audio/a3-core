@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // The engine's control API (P2): what the window, a separate process, sees of the engine over HTTP on
 // loopback (the truth's engine.control). The routes serve snapshots that the engine's control tick
-// publishes; an edit, a filter kind and an apply are queued to that same tick (P8: the HTTP threads
+// publishes; an edit, a filter kind, a noise burst and an apply are queued to that same tick (P8: the HTTP threads
 // never touch the host, the backend or the pending config themselves). Bodies are engine.json's
 // format (ConfigFile.h's toJson).
 #pragma once
@@ -46,6 +46,10 @@ struct EngineMetersReport
 };
 juce::var toJson (const EngineMetersReport&);
 std::optional<EngineMetersReport> metersFromJson (const juce::var&);
+
+// POST /api/engine/noise: {"zone": "main"|"booth", "channel": 1..64} or {"zone", "azimuth", "elevation"}.
+juce::var toJson (const NoiseRequest&);
+std::optional<NoiseRequest> noiseFromJson (const juce::var&, juce::String& why);
 
 juce::var toJson (const LiveLinks&);
 std::optional<LiveLinks> linksFromJson (const juce::var&);
@@ -92,6 +96,7 @@ private:
     a3core::HttpResponse edit (const a3core::HttpRequest&);
     a3core::HttpResponse apply (const a3core::HttpRequest&);
     a3core::HttpResponse filterKind (const a3core::HttpRequest&);
+    a3core::HttpResponse noise (const a3core::HttpRequest&);
 
     std::optional<AppConfig> configOf (const a3core::HttpRequest&, a3core::HttpResponse& refusal) const;
     std::future<juce::Result> enqueue (std::function<juce::Result()>);

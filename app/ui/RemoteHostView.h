@@ -54,6 +54,7 @@ public:
     void edit (const AppConfig&) override;
     juce::Result apply (const AppConfig&) override;
     void setFilterKind (a3::FilterKind) override;
+    void playNoise (const NoiseRequest&) override;
 
 private:
     struct Post

@@ -209,6 +209,15 @@ void RemoteHostView::setFilterKind (a3::FilterKind kind)
     wake.notify_all();
 }
 
+void RemoteHostView::playNoise (const NoiseRequest& request)
+{
+    {
+        const std::lock_guard<std::mutex> posting (postLock);
+        posts.push_back ({ "/api/engine/noise", juce::JSON::toString (toJson (request), true).toStdString(), false });
+    }
+    wake.notify_all();
+}
+
 juce::Result RemoteHostView::apply (const AppConfig& config)
 {
     const std::lock_guard<std::mutex> round (pollLock);

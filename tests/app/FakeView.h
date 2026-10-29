@@ -50,6 +50,7 @@ struct FakeView final : a3app::HostView
         return applyResult;
     }
     void setFilterKind (a3::FilterKind kind) override { cfg.engine.filterKind = runningCfg.engine.filterKind = kind; ++filterSets; }
+    void playNoise (const a3app::NoiseRequest& request) override { noises.push_back (request); }
     ~FakeView() override { file.deleteFile(); }
 
     void runDevice() { cfg.backend.type = runningCfg.backend.type = a3app::BackendSettings::Type::device; }
@@ -68,5 +69,6 @@ struct FakeView final : a3app::HostView
     int truthDeckCount = 4;   // the truth copy's stemdeck.deck-hello range
     bool fileExistedAtApply = false;
     int edited = 0, applied = 0, filterSets = 0;
+    std::vector<a3app::NoiseRequest> noises;
 };
 }
