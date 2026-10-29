@@ -31,8 +31,8 @@ The script switches the machine to Debian testing. Updates after that are
 
 ## Build and test
 
-A push to `main` builds the package and publishes the apt archive
-(`.github/workflows/pages-deploy.yml`). The version is the last `v*` tag plus
+The umbrella a3-system's workflow builds and publishes every package (a3-core
+included) from its pins to https://a3-audio.github.io/a3-system. The version is the last `v*` tag plus
 the commits since it; `python3 tools/package_version.py` prints it.
 
 The package is one: the `a3-core` program (`/usr/bin/a3-core`, built from this
