@@ -54,6 +54,25 @@ std::optional<juce::var> parseBody (const HttpRequest& request, juce::String& wh
 }
 }
 
+namespace
+{
+juce::var toVar (const juce::StringArray& names)
+{
+    juce::Array<juce::var> list;
+    for (const auto& name : names)
+        list.add (name);
+    return list;
+}
+
+juce::StringArray stringsOf (const juce::var& list)
+{
+    juce::StringArray names;
+    for (int i = 0; i < list.size(); ++i)
+        names.add (list[i].toString());
+    return names;
+}
+}
+
 juce::var toJson (const EngineStatusReport& report)
 {
     juce::Array<juce::var> missing, levels, dropped, ignored;
@@ -73,6 +92,10 @@ juce::var toJson (const EngineStatusReport& report)
                      { "bitDepth", report.backend.bitDepth },
                      { "captureLatency", report.backend.captureLatency },
                      { "playbackLatency", report.backend.playbackLatency },
+                     { "capturePorts", toVar (report.backend.capturePorts) },
+                     { "playbackPorts", toVar (report.backend.playbackPorts) },
+                     { "deviceInputs", report.backend.deviceInputs },
+                     { "deviceOutputs", report.backend.deviceOutputs },
                      { "missingPeers", missing },
                      { "connecting", report.backend.connecting },
                      { "coreHeard", report.coreHeard },
@@ -103,6 +126,10 @@ std::optional<EngineStatusReport> statusFromJson (const juce::var& v)
     // An engine before the round trip sends neither: 0, the round trip is then the period alone.
     report.backend.captureLatency = (int) number (v["captureLatency"]).value_or (0.0);
     report.backend.playbackLatency = (int) number (v["playbackLatency"]).value_or (0.0);
+    report.backend.capturePorts = stringsOf (v["capturePorts"]);   // an older engine sends none: no choices
+    report.backend.playbackPorts = stringsOf (v["playbackPorts"]);
+    report.backend.deviceInputs = (int) number (v["deviceInputs"]).value_or (0.0);
+    report.backend.deviceOutputs = (int) number (v["deviceOutputs"]).value_or (0.0);
     for (int i = 0; i < v["missingPeers"].size(); ++i)
         report.backend.missingPeers.push_back (v["missingPeers"][i].toString());
     report.coreHeard = (bool) v["coreHeard"];

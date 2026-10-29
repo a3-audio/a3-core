@@ -24,6 +24,10 @@ struct BackendStatus
     // Samples between the converters and the engine's ports. JACK: the largest of the engine's ports' latency
     // ranges (capture on its inputs, playback on its outputs); a device: what the driver reports.
     int captureLatency = 0, playbackLatency = 0;
+    // What the I/O page offers as a route. JACK: the physical capture and playback ports; a device: its
+    // input and output channel counts.
+    juce::StringArray capturePorts, playbackPorts;
+    int deviceInputs = 0, deviceOutputs = 0;
 };
 
 // The input-to-output round trip as the backend reports its parts: an estimate (a driver's figures can be

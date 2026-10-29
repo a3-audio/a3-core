@@ -176,6 +176,8 @@ BackendStatus DeviceBackend::status() const
         s.xruns = device->getXRunCount();
         s.captureLatency = device->getInputLatencyInSamples();
         s.playbackLatency = device->getOutputLatencyInSamples();
+        s.deviceInputs = device->getActiveInputChannels().countNumberOfSetBits();
+        s.deviceOutputs = device->getActiveOutputChannels().countNumberOfSetBits();
     }
     s.dspLoadPercent = combinedLoadPercent ((float) (manager.getCpuUsage() * 100.0), engineBlockMs.load(),
                                             lastBlockFrames.load(), s.sampleRate);

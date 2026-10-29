@@ -136,6 +136,10 @@ BackendStatus JackBackend::status() const
     s.blockSize = (int) jack_get_buffer_size (client);
     s.captureLatency = largestLatency (inputPorts, JackCaptureLatency);
     s.playbackLatency = largestLatency (outputPorts, JackPlaybackLatency);
+    for (const auto& name : takeNames (jack_get_ports (client, nullptr, JACK_DEFAULT_AUDIO_TYPE, JackPortIsPhysical | JackPortIsOutput)))
+        s.capturePorts.add (juce::String (name));
+    for (const auto& name : takeNames (jack_get_ports (client, nullptr, JACK_DEFAULT_AUDIO_TYPE, JackPortIsPhysical | JackPortIsInput)))
+        s.playbackPorts.add (juce::String (name));
     // jack_cpu_load is the whole graph's load and already holds the engine's time; the engine's
     // own block time against the period shows when the engine alone is the heavy part.
     s.dspLoadPercent = combinedLoadPercent (jack_cpu_load (client), engineBlockMs.load(), (int) lastBlockFrames.load(), s.sampleRate);

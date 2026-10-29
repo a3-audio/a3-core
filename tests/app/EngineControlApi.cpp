@@ -26,6 +26,10 @@ TEST (EngineControlApi, StatusAsTheHostViewSaysIt)
     rig.fake.state.xruns = 3;
     rig.fake.state.captureLatency = 256;
     rig.fake.state.playbackLatency = 384;
+    rig.fake.state.capturePorts = { "system:capture_1", "system:capture_2" };
+    rig.fake.state.playbackPorts = { "system:playback_1" };
+    rig.fake.state.deviceInputs = 2;
+    rig.fake.state.deviceOutputs = 6;
     rig.fake.state.missingPeers = { "system:capture_9" };
     rig.fake.heard = true;
     rig.fake.sinceCore = 1.25;
@@ -45,6 +49,10 @@ TEST (EngineControlApi, StatusAsTheHostViewSaysIt)
     EXPECT_EQ (report->backend.bitDepth, 32);
     EXPECT_EQ (report->backend.captureLatency, 256);   // the round trip's parts reach the window
     EXPECT_EQ (report->backend.playbackLatency, 384);
+    EXPECT_EQ (report->backend.capturePorts, (juce::StringArray { "system:capture_1", "system:capture_2" }));   // the I/O page's choices
+    EXPECT_EQ (report->backend.playbackPorts, juce::StringArray { "system:playback_1" });
+    EXPECT_EQ (report->backend.deviceInputs, 2);
+    EXPECT_EQ (report->backend.deviceOutputs, 6);
     EXPECT_TRUE (report->backend.connecting);
     ASSERT_EQ (report->backend.missingPeers.size(), 1u);
     EXPECT_EQ (report->backend.missingPeers[0], "system:capture_9");
