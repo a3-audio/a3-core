@@ -683,6 +683,34 @@ class TheDeckStreams(unittest.TestCase):
         self.assertIn("aux-return.cue,", engine["carries"])
         self.assertNotIn("source/cue", engine["carries"])
 
+    def test_the_delay_parameters_have_turn_and_value_words(self):
+        """The AUX-RTN encoder steps four delay parameters: the desk sends
+        turns, Core steps and announces the value, the engine maps it."""
+        words = self.truth.addresses()
+        for name in ("beat", "feedback", "color", "spread"):
+            turn = words["aux-return.delay.%s.turn" % name]
+            value = words["aux-return.delay.%s" % name]
+            with self.subTest(name=name):
+                self.assertEqual((turn["pattern"], turn["args"], turn["from"], turn["to"]),
+                                 ("/aux-return/delay/%s/turn" % name, "i", ["mixer"], ["core"]))
+                self.assertEqual((value["pattern"], value["args"], value["from"], value["to"]),
+                                 ("/aux-return/delay/%s" % name, "f", ["core"], ["engine", "mixer"]))
+                self.assertIn("default", value["meaning"])
+                self.assertEqual(self.truth.match("/aux-return/delay/%s" % name),
+                                 ("aux-return.delay.%s" % name, {}))
+        self.assertIn("0.25", words["aux-return.delay.beat"]["meaning"])
+        self.assertIn("0.70", words["aux-return.delay.feedback"]["meaning"])
+        self.assertIn("60", words["aux-return.delay.spread"]["meaning"])
+
+    def test_the_engine_lists_the_delay_parameters(self):
+        carries = self.truth.listener("engine", "osc")["carries"]
+        self.assertIn("aux-return.delay.*", carries)
+
+    def test_the_fx_return_push_steps_the_page_and_holds_for_cue(self):
+        meaning = self.truth.addresses()["aux-return.stem.push"]["meaning"]
+        self.assertIn("hold", meaning)
+        self.assertNotIn("Its turn does nothing", meaning)
+
     def test_the_fx_return_push_toggles_its_cue(self):
         entry = self.truth.addresses()["aux-return.stem.push"]
         self.assertEqual((entry["from"], entry["to"]), (["mixer", "desk", "prodj"], ["core"]))
