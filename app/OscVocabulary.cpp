@@ -257,6 +257,18 @@ juce::String unmeteredDecksNote (int decks, const std::vector<juce::String>& vuM
            + " (the truth's vu_meters name none)";
 }
 
+juce::String hiddenDecksNote (int decks, bool decksNamed, int truthDecks)
+{
+    if (! decksNamed || decks >= truthDecks)
+        return {};
+    juce::StringArray hidden;
+    for (int slot = decks + 1; slot <= truthDecks; ++slot)
+        hidden.add (a3::deckLetters (slot));
+    return "engine.json names " + juce::String (decks) + " decks, the truth " + juce::String (truthDecks) + ": "
+           + (hidden.size() == 1 ? "deck " + hidden[0] + " has no slot" : "decks " + hidden.joinIntoString (", ") + " have no slot")
+           + "; set \"decks\": " + juce::String (truthDecks) + " or remove the line";
+}
+
 bool applyEngineMessage (const EngineTruth& truth, const a3::EngineConfig& config, const juce::OSCMessage& m,
                          a3::EngineControls& controls)
 {

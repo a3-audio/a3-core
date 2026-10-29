@@ -89,6 +89,9 @@ bool checkConfig (const AppArgs& args, const juce::File& home, juce::String& mes
     auto lines = droppedLinkLines (data->config);
     if (const auto note = unmeteredDecksNote (data->config.engine.decks, data->truth.vuMeters); note.isNotEmpty())
         lines.add (note);
+    if (const auto note = hiddenDecksNote (data->config.engine.decks, data->config.engine.decksNamed, data->truth.decks);
+        note.isNotEmpty())
+        lines.add (note);
     lines.add ("ok");
     message = lines.joinIntoString ("\n");
     return true;

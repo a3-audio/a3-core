@@ -144,6 +144,18 @@ TEST (AppArgs, TheDeckCountIsTheConfigsElseTheTruths)
     EXPECT_EQ (named.loadFileAsString(), "{\"engine\":{\"decks\":2}," + spatialField() + "}");   // never rewritten
 }
 
+// The rig's saved "decks": 2 under a truth of 4: --check-config names the hidden slots once and still passes.
+TEST (AppArgs, CheckConfigSaysWhichDecksTheSavedCountHides)
+{
+    Home home;
+    const auto named = home.write ("named.json", "{\"engine\":{\"decks\":2}," + spatialField() + "}");
+    juce::String message;
+    ASSERT_TRUE (a3app::checkConfig (checkArgs (named), home.dir, message)) << message;
+    EXPECT_TRUE (message.contains ("decks C, D have no slot")) << message;
+    EXPECT_EQ (message.indexOf ("no slot"), message.lastIndexOf ("no slot")) << message;
+    EXPECT_TRUE (message.endsWith ("ok")) << message;
+}
+
 // A slot beyond the truth's /vu deck meters (deck_a ... deck_d) has none, and --check-config says so once.
 TEST (AppArgs, CheckConfigSaysWhichDeckHasNoMeter)
 {

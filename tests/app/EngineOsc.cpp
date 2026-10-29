@@ -207,6 +207,19 @@ TEST_F (EngineOsc, ADeckSlotBeyondTheMetersIsSaid)
     EXPECT_TRUE (a3app::unmeteredDecksNote (5, more).isEmpty());
 }
 
+// A saved engine.json may name fewer decks than the truth has (the rig's "decks": 2): the slots it
+// hides would look selectable on the desk and stay silent, so that is said, with what to change.
+TEST_F (EngineOsc, ASavedDeckCountBelowTheTruthIsSaid)
+{
+    const auto two = a3app::hiddenDecksNote (2, true, 4);
+    EXPECT_EQ (two, "engine.json names 2 decks, the truth 4: decks C, D have no slot; set \"decks\": 4 or remove the line");
+    const auto three = a3app::hiddenDecksNote (3, true, 4);
+    EXPECT_TRUE (three.contains ("deck D has no slot")) << three;
+    EXPECT_TRUE (a3app::hiddenDecksNote (4, true, 4).isEmpty());
+    EXPECT_TRUE (a3app::hiddenDecksNote (6, true, 4).isEmpty());   // more than the truth: his choice, said elsewhere
+    EXPECT_TRUE (a3app::hiddenDecksNote (4, false, 4).isEmpty());  // no count in the file: the truth's
+}
+
 TEST_F (EngineOsc, ATruthWithoutDeckAudioStillParsesAndSaysSo)
 {
     EXPECT_EQ (engineTruth().deckAudioPattern, "/engine/deck/{deck}/audio");

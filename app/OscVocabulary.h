@@ -53,6 +53,10 @@ juce::String truthNote (const EngineTruth&);
 // line naming the slots that have none.
 juce::String unmeteredDecksNote (int decks, const std::vector<juce::String>& vuMeters);
 
+// "" unless the saved config names a deck count (decksNamed) below the truth's deck range; else one
+// line naming the slots it leaves out and what to change.
+juce::String hiddenDecksNote (int decks, bool decksNamed, int truthDecks);
+
 // The truth keys of the words above, in EngineWord order.
 const std::vector<juce::String>& engineWordKeys();
 

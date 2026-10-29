@@ -174,7 +174,8 @@ public:
     std::vector<std::string> ignoredKeys() const override { return startedWith.ignoredKeys; }
     juce::String truthNote() const override
     {
-        juce::StringArray notes { a3app::truthNote (truth), unmeteredDecksNote (startedWith.engine.decks, truth.vuMeters) };
+        juce::StringArray notes { a3app::truthNote (truth), unmeteredDecksNote (startedWith.engine.decks, truth.vuMeters),
+                                  hiddenDecksNote (startedWith.engine.decks, startedWith.engine.decksNamed, truth.decks) };
         notes.removeEmptyStrings();
         return notes.joinIntoString ("; ");
     }
@@ -298,6 +299,9 @@ std::variant<std::unique_ptr<EngineRole>, int> EngineRole::start (const AppArgs&
     if (const auto note = truthNote (loaded->truth); note.isNotEmpty())
         sayEngine (note);
     if (const auto note = unmeteredDecksNote (loaded->config.engine.decks, loaded->truth.vuMeters); note.isNotEmpty())
+        sayEngine (note);
+    if (const auto note = hiddenDecksNote (loaded->config.engine.decks, loaded->config.engine.decksNamed, loaded->truth.decks);
+        note.isNotEmpty())
         sayEngine (note);
     for (const auto& line : droppedLinkLines (loaded->config))
         sayEngine (line);
