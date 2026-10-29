@@ -23,6 +23,11 @@ constexpr int maxChannelsOnPage = 128;
 // N channels: the analog pair list follows (a new channel takes the next free pair below the
 // return, else it is deck-only).
 std::optional<AppConfig> withChannels (const AppConfig&, int channels, juce::String& error);
+// The page's bound only (A17): one letter per slot, A..Z. The engine itself keeps no cap (A8).
+constexpr int maxDecksOnPage = 26;
+// N decks, named in the file from then on: a removed slot's links leave the map, an added slot the
+// map names none of gets its local StemDeck's links (A9); the other slots stay as they are.
+std::optional<AppConfig> withDecks (const AppConfig&, int decks, juce::String& error);
 std::optional<AppConfig> withSpatialDirectory (const AppConfig&, const juce::File& directory, juce::String& error);
 
 enum class TrimZone { main, booth, phones, rec };
@@ -39,6 +44,7 @@ void setDeckSource (IoMap&, int slotOneBased, DeckSource);
 // Each slot 1..decks the map names none of the 41 ports of (no JACK peer, no device channel) gets its
 // local StemDeck's links; a slot it names any port of stays as it is.
 void linkUnnamedSlotsLocally (IoMap&, int decks);
+void linkUnnamedSlotLocally (IoMap&, int slotOneBased);
 // The source whose 41 links the slot holds exactly; nullopt when it holds anything else
 // (missing, partial, or hand-edited links).
 std::optional<DeckSource> deckSourceOf (const IoMap&, int slotOneBased);

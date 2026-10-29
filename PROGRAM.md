@@ -146,7 +146,7 @@ The window has one page per job and a Save bar under them:
 | Page | What it edits |
 |---|---|
 | AUDIO | JACK: rate and quantum, read-only (the server owns them). Device: type, input, output, rate, block size. A choice only edits the config; it opens no device. |
-| CHANNELS | N (1..128) with the DSP load beside it |
+| CHANNELS | N (1..128) with the DSP load beside it; the deck count (1..26, one letter a slot A..Z; the engine has no cap) with the count that runs |
 | ZONES | which spatial directory: the installed `spatial` and `spatial-reaper-booth-6.1`, and `~/.config/a3/engine/spatial`. No layout editor |
 | I/O | per engine port its JACK peers (editable) and the live ones the map does not name (foreign: shown, never edited), or its device channel; the direct links the engine makes between two foreign ports |
 | CALIBRATION | trim per zone, -90..+6 dB; a slider only proposes, a dialog names the old and the new value, a zone without a trim stays closed |
@@ -194,7 +194,11 @@ that names none takes the truth's deck range (`stemdeck.deck-hello`'s upper boun
 it out again. When the engine loads the file from disk at start, each slot whose ports the file links nowhere
 links to its local `StemDeck-<X>`, whether or not the file names its count (A9); a slot linked anywhere stays as
 saved. A config posted from the I/O page is never filled (A10), so a slot emptied there stays empty until the
-next start. Port letters run A…Z, AA, AB, … (`a3::deckLetters`).
+next start. Port letters run A…Z, AA, AB, … (`a3::deckLetters`). The count is set on the window's CHANNELS page beside N
+(A17, 1..26 there): a count set there is named in the file, a removed slot's links leave the map and an added
+slot the map names none of links to its local `StemDeck-<X>`; Save re-creates the engine as for N. A file that
+names fewer decks than the truth gets one line at start, in STATUS and from `--check-config` naming the hidden
+slots and pointing to that setting.
 
 **The default config** (`data/engine.json`): four channels on analog pairs 1-4 (pairs 5 and 6 free), no deck
 count (the truth's), trims main/booth -30.88 dB (REAPER's output faders), phones 0, rec 0, SVF filter, Step 0's delay

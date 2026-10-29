@@ -284,6 +284,35 @@ TEST_F (Pages, ChannelsEditTheConfigAndShowTheLoad)
     EXPECT_TRUE (page.messageLabel().getText().isNotEmpty());
 }
 
+// A17: the deck count sits beside N, edits the same way and shows what runs.
+TEST_F (Pages, DecksEditTheConfigBesideTheChannels)
+{
+    FakeView view;   // two decks, named
+    a3app::ChannelsPage page (view);
+    page.refresh();
+    EXPECT_NE (page.decksRunningLabel().getText().indexOf ("running: 2"), -1);
+    page.setDecks (4);
+    EXPECT_EQ (view.edited, 1);
+    EXPECT_EQ (view.cfg.engine.decks, 4);
+    EXPECT_TRUE (view.cfg.engine.decksNamed);
+    EXPECT_EQ (a3app::deckSourceOf (view.cfg.io, 4), a3app::DeckSource::local);
+    EXPECT_EQ (view.applied, 0);
+    page.refresh();
+    EXPECT_NE (page.decksRunningLabel().getText().indexOf ("running: 2"), -1);   // until Save
+    page.setDecks (4);   // the same count: no new edit
+    EXPECT_EQ (view.edited, 1);
+    page.setDecks (27);  // beyond Z: refused with a reason, nothing edited
+    EXPECT_EQ (view.edited, 1);
+    EXPECT_NE (page.messageLabel().getText().indexOf ("26"), -1);
+
+    ASSERT_TRUE (a3app::saveEdits (view).wasOk());
+    EXPECT_EQ (view.applied, 1);
+    juce::String error;
+    EXPECT_EQ (a3app::loadAppConfig (view.file, error, a3apptest::truthDecks())->engine.decks, 4);
+    page.refresh();
+    EXPECT_NE (page.decksRunningLabel().getText().indexOf ("running: 4"), -1);
+}
+
 TEST_F (Pages, ZonesPickADirectoryAndShowAFailure)
 {
     FakeView view;
@@ -482,6 +511,25 @@ TEST_F (Pages, SaveWritesThenAppliesRemote)
     EXPECT_TRUE (refused.failed());
     EXPECT_NE (refused.getErrorMessage().indexOf ("cannot open the device"), -1);
     EXPECT_EQ (a3app::loadAppConfig (rig.fake.file, error, a3apptest::truthDecks())->engine.channels, 6);   // the previous file is back
+}
+
+// The deck count crosses to the engine the way N does: the window's edit, posted, saved, applied.
+TEST_F (Pages, DecksSaveThenApplyRemote)
+{
+    RemoteRig rig;
+    rig.tick();
+    rig.remote->refreshNow();
+    a3app::ChannelsPage page (*rig.remote);
+    page.setDecks (4);
+    ASSERT_EQ (rig.remote->config().engine.decks, 4);
+
+    const auto result = rig.settle ([&] { return a3app::saveEdits (*rig.remote); });
+    ASSERT_TRUE (result.wasOk()) << result.getErrorMessage();
+    EXPECT_EQ (rig.fake.applied, 1);
+    EXPECT_EQ (rig.fake.runningCfg.engine.decks, 4);
+    EXPECT_EQ (a3app::deckSourceOf (rig.fake.runningCfg.io, 4), a3app::DeckSource::local);
+    juce::String error;
+    EXPECT_EQ (a3app::loadAppConfig (rig.fake.file, error, a3apptest::truthDecks())->engine.decks, 4);
 }
 
 TEST_F (Pages, SaveThatTheLoaderWouldRefuseWritesAndAppliesNothing)

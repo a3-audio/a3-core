@@ -212,7 +212,8 @@ TEST_F (EngineOsc, ADeckSlotBeyondTheMetersIsSaid)
 TEST_F (EngineOsc, ASavedDeckCountBelowTheTruthIsSaid)
 {
     const auto two = a3app::hiddenDecksNote (2, true, 4);
-    EXPECT_EQ (two, "engine.json names 2 decks, the truth 4: decks C, D have no slot; set \"decks\": 4 or remove the line");
+    EXPECT_EQ (two, "engine.json names 2 decks, the truth 4: decks C, D have no slot; set Decks to 4 on the CHANNELS page "
+                   "of the a3-core window, or remove the \"decks\" line from engine.json");
     const auto three = a3app::hiddenDecksNote (3, true, 4);
     EXPECT_TRUE (three.contains ("deck D has no slot")) << three;
     EXPECT_TRUE (a3app::hiddenDecksNote (4, true, 4).isEmpty());
