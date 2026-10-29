@@ -10,7 +10,7 @@ clients were gone. That half still holds: no unit raises a whole process.
 The audio server is PipeWire now. Its module-rt puts the data loop at FIFO 83,
 which it may only do when limits.d gives @audio an rtprio above that; the JACK
 clients' threads run below it (the engine's are set by the realtime preload,
-src/jack-rt-priority.c, which the postinst builds). The USB IRQ threads stay
+packaging/app/jack-rt-priority.c, built with the program). The USB IRQ threads stay
 above it all: set_irq_prio puts xhci at FIFO 95.
 
 The JACK clients a3-core starts itself were REAPER and QjackCtl until
@@ -25,7 +25,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "platform-config/debian-x86_64/a3-core"
 CONFIG = PACKAGE / "home/aaa/.local/share/a3-core/config"
-LIMITS = PACKAGE / "etc/security/limits.d/audio.conf"
+#: Shipped by a3-core-app as /etc/security/limits.d/a3-audio.conf.
+LIMITS = ROOT / "packaging/app/a3-audio.conf"
 
 USB_IRQ_PRIORITY = 95
 #: PipeWire's data loop: module-rt's default rt.prio.

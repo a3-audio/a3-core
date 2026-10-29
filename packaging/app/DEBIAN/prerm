@@ -1,0 +1,7 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Raphael Eismann
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Nothing to stop: this package enables no unit (the deployment, a3-core, does).
+set -e
+
+exit 0

@@ -1,0 +1,15 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Raphael Eismann
+# SPDX-License-Identifier: GPL-3.0-or-later
+set -e
+
+# The ld.so.conf.d file for pipewire-jack is gone with the package (it is no
+# conffile: its name carries the building machine's multiarch triplet); the
+# loader's cache must forget it too.
+case "$1" in
+  remove|purge)
+    ldconfig || true
+  ;;
+esac
+
+exit 0

@@ -12,7 +12,7 @@ import configparser
 import re
 import unittest
 
-from tools.tests.paths import DEBIAN, PACKAGE, ROOT
+from tools.tests.paths import APP_DEBIAN, DEBIAN, PACKAGE, ROOT
 
 CONTROL = DEBIAN / "control"
 CONFIG = PACKAGE / "home/aaa/.local/share/a3-core/config"
@@ -28,8 +28,8 @@ AUDIO_UNITS = (
 )
 
 
-def depends():
-    line = next(l for l in CONTROL.read_text().splitlines() if l.startswith("Depends:"))
+def depends(control=CONTROL):
+    line = next(l for l in control.read_text().splitlines() if l.startswith("Depends:"))
     return {entry.split("(")[0].strip() for entry in line.split(":", 1)[1].split(",")}
 
 
@@ -52,8 +52,10 @@ def shipped_units():
 
 class DependsOnPipeWire(unittest.TestCase):
     def test_pipewire_its_jack_library_and_the_session_manager_are_installed(self):
+        # By the program's package, which the deployment depends on.
+        self.assertIn("a3-core-app", depends())
         for package in ("pipewire", "pipewire-jack", "wireplumber"):
-            self.assertIn(package, depends())
+            self.assertIn(package, depends(APP_DEBIAN / "control"))
 
     def test_ptp_is_installed_for_aes67(self):
         self.assertIn("linuxptp", depends())

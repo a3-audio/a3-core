@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: 2026 Raphael Eismann
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=a3-core (the a3-core program's core role)
+PartOf=a3-main.service
+# The audio server comes first; Core reaching the void for a moment costs nothing.
+After=pipewire.service wireplumber.service
+
+# The Core role for any machine, shipped by a3-core-app. On a Core machine the
+# deployment's copy in ~/.config/systemd/user (with its drop-ins) comes first,
+# as systemd reads a user's own units before the packaged ones.
+[Service]
+# Idle: the window orders itself after this unit (a3-core-window.service).
+Type=idle
+PrivateTmp=true
+ExecStart=/usr/bin/a3-core --role core
+
+[Install]
+WantedBy=default.target

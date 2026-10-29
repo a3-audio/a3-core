@@ -47,9 +47,9 @@ class ThePackageHasNoDisplayManager(unittest.TestCase):
 
 USER_UNITS = PACKAGE / "home/aaa/.local/share/a3-core/config/systemd/user"
 WAIT = "ExecStartPre=/home/aaa/.local/bin/a3-wait-for-the-screen"
-#: The program's window, laid into the package from packaging/; %h is aaa's home.
+#: The program's window, laid into a3-core-app from packaging/ with its helper.
 WINDOW_UNIT = ROOT / "packaging/a3-core-window.service"
-WINDOW_WAIT = "ExecStartPre=%h/.local/bin/a3-wait-for-the-screen"
+WINDOW_WAIT = "ExecStartPre=/usr/lib/a3-core/a3-wait-for-the-screen"
 
 
 class WindowsWaitForTheScreen(unittest.TestCase):

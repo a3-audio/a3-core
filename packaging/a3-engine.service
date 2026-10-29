@@ -20,8 +20,8 @@ ExecStart=/usr/bin/a3-core --role engine
 # No CPUScheduling here: raising the whole process would put its GUI/OSC threads above JACK's
 # process threads (2026-10-06). The audio threads get their priority
 # from the JACK library; pipewire-jack's answer is uninitialised, so this preload gives the right
-# one (a3-core's postinst builds it).
-Environment=LD_PRELOAD=%h/.local/lib/a3/libjack-rt-priority.so
+# one (built with the program, shipped by a3-core-app).
+Environment=LD_PRELOAD=/usr/lib/a3-core/libjack-rt-priority.so
 CPUAffinity=1 2 3
 Restart=on-failure
 RestartSec=1

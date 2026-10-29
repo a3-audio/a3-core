@@ -1,9 +1,11 @@
 # SPDX-FileCopyrightText: 2026 Raphael Eismann
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Pins the Debian packaging that a3-system's installer/package.py reads:
-packaging/stage lays out the a3-core program, its user units, the default config and the bench,
-and the deployment payload (platform-config/debian-x86_64/a3-core); packaging/DEBIAN/control
-names the one package a3-core, which takes over from the old a3-engine package."""
+"""Pins the Debian packaging that a3-system's installer/package.py reads, two recipes since
+2026-10-29: packaging/app/stage lays out the a3-core program, its user units, the default config
+and the bench (package a3-core-app, packaging/app/DEBIAN); packaging/stage lays out the deployment
+payload (platform-config/debian-x86_64/a3-core), and packaging/DEBIAN/control names the package
+a3-core, which takes over from the old a3-engine package. See test_packaging_split for the line
+between the two."""
 
 import json
 import os
@@ -13,9 +15,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools.tests.paths import DEBIAN, PACKAGE, ROOT
+from tools.tests.paths import APP_DEBIAN, APP_RECIPE, DEBIAN, PACKAGE, ROOT
 
 STAGE = ROOT / "packaging" / "stage"
+APP_STAGE = APP_RECIPE / "stage"
 CONTROL = DEBIAN / "control"
 UNIT = ROOT / "packaging" / "a3-engine.service"
 WINDOW_UNIT = ROOT / "packaging" / "a3-core-window.service"
@@ -24,7 +27,8 @@ APP = ROOT / "build" / "app" / "a3-core"
 TRUTH = ROOT / "tests" / "engine" / "data" / "a3-osc.json"
 SHIPPED_CONFIG = ROOT / "data" / "engine.json"
 SHIPPED_SPATIAL = ROOT / "data" / "spatial"
-COPYRIGHT = "usr/share/doc/a3-core/copyright"
+COPYRIGHT = "usr/share/doc/a3-core-app/copyright"
+DEPLOYMENT_COPYRIGHT = "usr/share/doc/a3-core/copyright"
 #: Every licence dep5 names that /usr/share/common-licenses does not carry.
 UNCOMMON_LICENCES = ("MIT", "CC-BY-3.0", "Apache-2.0", "CC-BY-SA-4.0")
 
@@ -43,8 +47,8 @@ CC_BY_ATTRIBUTION = (
 
 
 def stub_build(build):
-    """The two executables `files` takes from a build tree."""
-    for relative in ("bench/a3-engine-bench", "app/a3-core"):
+    """What the app's `files` takes from a build tree: two executables and the realtime preload."""
+    for relative in ("bench/a3-engine-bench", "app/a3-core", "rt-preload/libjack-rt-priority.so"):
         (build / relative).parent.mkdir(parents=True, exist_ok=True)
         (build / relative).write_text("#!/bin/sh\n")
     return build
@@ -55,22 +59,22 @@ def unit_lines():
             if line.strip() and not line.startswith("#")]
 
 
-def staged_files(case):
+def staged_files(case, stage_script=APP_STAGE):
     tmp = tempfile.mkdtemp(dir=SCRATCH_ROOT)
     case.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
     build = stub_build(Path(tmp, "build"))
     stage = Path(tmp, "stage")
-    subprocess.run([str(STAGE), "files", str(ROOT), str(build), str(stage)], check=True)
+    subprocess.run([str(stage_script), "files", str(ROOT), str(build), str(stage)], check=True)
     return stage
 
 
-def control_entries(field):
-    return [entry.strip() for entry in control_fields().get(field, "").split(",") if entry.strip()]
+def control_entries(field, control=CONTROL):
+    return [entry.strip() for entry in control_fields(control).get(field, "").split(",") if entry.strip()]
 
 
-def control_fields():
+def control_fields(control=CONTROL):
     fields = {}
-    for line in CONTROL.read_text().splitlines():
+    for line in control.read_text().splitlines():
         if line and not line.startswith(" ") and ":" in line:
             key, value = line.split(":", 1)
             fields[key] = value.strip()
@@ -107,35 +111,41 @@ class StageTest(unittest.TestCase):
         # engine.json names its spatial directory relative to itself; that directory ships beside it.
         self.assertTrue((stage / "usr/share/a3-engine/spatial/main.zone.json").is_file())
 
-    def test_stage_holds_program_and_payload(self):
+    def test_the_stages_hold_program_and_payload(self):
         stage = self.stage_files()
         for path in ("usr/bin/a3-core", "usr/bin/a3-engine-bench",
                      "usr/lib/systemd/user/a3-engine.service",
                      "usr/lib/systemd/user/a3-core-window.service",
                      "usr/share/a3-engine/engine.json", "usr/share/a3/a3-osc.json",
-                     "home/aaa/.local/bin/a3-wait-for-the-screen"):
+                     "usr/lib/a3-core/a3-wait-for-the-screen"):
             self.assertTrue((stage / path).is_file(), path)
-        # DEBIAN/ is installer/package.py's, from packaging/DEBIAN; the recipe lays out the payload only.
+        deployment = staged_files(self, STAGE)
+        self.assertTrue((deployment / "home/aaa/.local/bin/a3-wait-for-the-screen").is_file())
+        # DEBIAN/ is installer/package.py's, from <recipe>/DEBIAN; a recipe lays out the payload only.
         self.assertFalse((stage / "DEBIAN").exists())
+        self.assertFalse((deployment / "DEBIAN").exists())
 
     def test_the_payload_is_staged_as_it_is_in_git(self):
-        stage = self.stage_files()
-        for relative in ("usr/share/a3/a3-osc.json", "home/aaa/.local/bin/a3-wait-for-the-screen"):
+        staged = {"usr/share/a3/a3-osc.json": (self.stage_files(), "usr/share/a3/a3-osc.json"),
+                  "home/aaa/.local/bin/a3-wait-for-the-screen":
+                      (staged_files(self, STAGE), "home/aaa/.local/bin/a3-wait-for-the-screen")}
+        for relative, (stage, target) in staged.items():
             with self.subTest(path=relative):
-                self.assertEqual((stage / relative).read_bytes(), (PACKAGE / relative).read_bytes())
-                self.assertEqual(os.access(stage / relative, os.X_OK),
+                self.assertEqual((stage / target).read_bytes(), (PACKAGE / relative).read_bytes())
+                self.assertEqual(os.access(stage / target, os.X_OK),
                                  os.access(PACKAGE / relative, os.X_OK))
 
-    def test_copyright_is_a3_cores_and_carries_every_uncommon_licence(self):
-        stage = self.stage_files()
-        copyright = (stage / COPYRIGHT).read_text()
-        lines = copyright.splitlines()
-        for name in UNCOMMON_LICENCES:
-            with self.subTest(license=name):
-                self.assertIn("\nLicense: " + name + "\n", copyright)
-                for line in (ROOT / "LICENSES" / (name + ".txt")).read_text().splitlines():
-                    self.assertIn(" " + (line or "."), lines)
-        self.assertFalse((stage / "usr/share/doc/a3-engine").exists())
+    def test_each_package_carries_the_copyright_with_every_uncommon_licence(self):
+        for stage, relative in ((self.stage_files(), COPYRIGHT),
+                                (staged_files(self, STAGE), DEPLOYMENT_COPYRIGHT)):
+            copyright = (stage / relative).read_text()
+            lines = copyright.splitlines()
+            for name in UNCOMMON_LICENCES:
+                with self.subTest(package=relative, license=name):
+                    self.assertIn("\nLicense: " + name + "\n", copyright)
+                    for line in (ROOT / "LICENSES" / (name + ".txt")).read_text().splitlines():
+                        self.assertIn(" " + (line or "."), lines)
+            self.assertFalse((stage / "usr/share/doc/a3-engine").exists())
 
     def test_ships_a3_core_and_no_a3_engine_binary(self):
         stage = self.stage_files()
@@ -145,12 +155,13 @@ class StageTest(unittest.TestCase):
 
     def test_no_python_in_the_package(self):
         self.assertNotIn("python", control_fields()["Depends"].lower())
-        for path in [*CONTROL.parent.iterdir(), STAGE, UNIT]:
+        self.assertNotIn("python", control_fields(APP_DEBIAN / "control")["Depends"].lower())
+        for path in [*CONTROL.parent.iterdir(), *APP_DEBIAN.iterdir(), STAGE, APP_STAGE, UNIT]:
             text = path.read_text().lower()
             self.assertNotIn("python", text, path.name)
             self.assertNotIn("pip ", text, path.name)
-        stage = self.stage_files()
-        for shipped in (p for p in stage.rglob("*") if p.is_file()):
+        stages = (self.stage_files(), staged_files(self, STAGE))
+        for shipped in (p for stage in stages for p in stage.rglob("*") if p.is_file()):
             self.assertNotEqual(shipped.suffix, ".py", shipped)
             if shipped.stat().st_size and "doc" not in shipped.parts:
                 self.assertFalse(shipped.read_bytes().startswith(b"#!/usr/bin/env python"), shipped)
@@ -220,7 +231,7 @@ class UnitTest(unittest.TestCase):
     def test_the_unit_leaves_the_priorities_to_the_jack_library(self):
         # Raising the whole process put its GUI/OSC threads above JACK's (2026-10-06).
         lines = unit_lines()
-        self.assertIn("Environment=LD_PRELOAD=%h/.local/lib/a3/libjack-rt-priority.so", lines)
+        self.assertIn("Environment=LD_PRELOAD=/usr/lib/a3-core/libjack-rt-priority.so", lines)
         for line in lines:
             self.assertFalse(line.startswith("CPUScheduling"), line)
             self.assertNotIn("stemdeck@", line)
@@ -248,7 +259,7 @@ class WindowUnitTest(unittest.TestCase):
     def test_the_window_unit_runs_the_window_role_after_the_screen_is_there(self):
         lines = self.lines()
         self.assertIn("Environment=DISPLAY=:0", lines)
-        self.assertIn("ExecStartPre=%h/.local/bin/a3-wait-for-the-screen", lines)
+        self.assertIn("ExecStartPre=/usr/lib/a3-core/a3-wait-for-the-screen", lines)
         self.assertIn("ExecStart=/usr/bin/a3-core", lines)   # no role: the window
         for line in lines:
             self.assertNotIn("--role", line)
@@ -306,7 +317,8 @@ class ControlTest(unittest.TestCase):
             self.assertIn("a3-engine", control_entries(field), field)
         self.assertNotIn("a3-engine", [entry.split()[0] for entry in control_entries("Depends")])
         self.assertNotIn("a3-engine-bench", CONTROL.read_text())
-        self.assertIn("${shlibs:Depends}", control_entries("Depends"))
+        # The binaries are a3-core-app's, so are the libraries they need.
+        self.assertIn("${shlibs:Depends}", control_entries("Depends", APP_DEBIAN / "control"))
 
     def test_control_keeps_the_analyzer_rule(self):
         self.assertIn("beat-analyzer (>= 03.0+64)", control_entries("Recommends"))
@@ -350,9 +362,10 @@ class ControlTest(unittest.TestCase):
 
     def test_maintainer_scripts_exist_and_are_executable(self):
         # installer/package.py refuses a package without all three.
-        for name in ("postinst", "prerm", "postrm"):
-            script = CONTROL.parent / name
-            self.assertTrue(os.access(script, os.X_OK), name)
+        for debian in (DEBIAN, APP_DEBIAN):
+            for name in ("postinst", "prerm", "postrm"):
+                script = debian / name
+                self.assertTrue(os.access(script, os.X_OK), script)
 
     def test_the_window_recommends_the_on_screen_keyboard_and_never_depends_on_it(self):
         # The touch screen needs onboard to type into the window's fields; a laptop with a keyboard does not.
