@@ -351,7 +351,6 @@ TEST (EngineWords, AReplayOvertakenByANewHelloDoesNotCount)
     EXPECT_EQ (s.evening(), file);
 }
 
-
 // The delay page
 
 TEST (EngineWords, TheEngineIsToldTheSelectedDelayValuesAndTheStateCarriesThem)

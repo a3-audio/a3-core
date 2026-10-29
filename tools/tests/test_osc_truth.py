@@ -694,7 +694,7 @@ class TheDeckStreams(unittest.TestCase):
                 self.assertEqual((turn["pattern"], turn["args"], turn["from"], turn["to"]),
                                  ("/aux-return/delay/%s/turn" % name, "i", ["mixer"], ["core"]))
                 self.assertEqual((value["pattern"], value["args"], value["from"], value["to"]),
-                                 ("/aux-return/delay/%s" % name, "f", ["core"], ["engine", "mixer"]))
+                                 ("/aux-return/delay/%s" % name, "f", ["core"], ["engine", "mixer", "desk", "motion"]))
                 self.assertIn("default", value["meaning"])
                 self.assertEqual(self.truth.match("/aux-return/delay/%s" % name),
                                  ("aux-return.delay.%s" % name, {}))

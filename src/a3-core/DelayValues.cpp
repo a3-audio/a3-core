@@ -92,7 +92,17 @@ int& DelaySteps::at (DelayWord word)
     return beat;
 }
 
-int DelaySteps::at (DelayWord word) const { return const_cast<DelaySteps&> (*this).at (word); }
+int DelaySteps::at (DelayWord word) const
+{
+    switch (word)
+    {
+        case DelayWord::beat: return beat;
+        case DelayWord::feedback: return feedback;
+        case DelayWord::color: return color;
+        case DelayWord::spread: return spread;
+    }
+    return beat;
+}
 
 void turnDelay (DelaySteps& steps, DelayWord word, long long clicks)
 {
