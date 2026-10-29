@@ -699,6 +699,10 @@ class TheDeckStreams(unittest.TestCase):
                 self.assertEqual(self.truth.match("/aux-return/delay/%s" % name),
                                  ("aux-return.delay.%s" % name, {}))
         self.assertIn("0.25", words["aux-return.delay.beat"]["meaning"])
+        # 4 beats removed (maintainer 2026-10-29); Core announces the beat that plays (R16)
+        self.assertIn("one of 0.125, 0.25, 0.5, 0.75, 1, 2;", words["aux-return.delay.beat"]["meaning"])
+        self.assertIn("below 92 BPM", words["aux-return.delay.beat"]["meaning"])
+        self.assertIn("crossfade", words["aux-return.delay.beat"]["meaning"])
         self.assertIn("0.70", words["aux-return.delay.feedback"]["meaning"])
         self.assertIn("60", words["aux-return.delay.spread"]["meaning"])
 
