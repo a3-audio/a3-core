@@ -3,7 +3,8 @@
 #
 # Compiles IEM plug-ins from third_party/IEMPluginSuite into libraries a3::IemNode
 # wraps, unchanged except DualDelay, which gets patches/iem/DualDelay-crossfade.patch
-# on a copy in the build tree (R17; the submodule stays clean at its pin). Called once per JUCE build: every target carries
+# on a copy in the build tree (R17; the submodule stays clean at its pin), and AllRADecoder,
+# which gets patches/iem/AllRADecoder-noise-hook.patch the same way. Called once per JUCE build: every target carries
 # SUFFIX, and JUCE comes only from JUCE_TARGET, so a second call with another
 # JUCE library (Task 4's VST3-host build) does not collide with the first.
 
@@ -169,7 +170,8 @@ function(a3_add_iem_nodes SUFFIX JUCE_TARGET)
     # AllRADecoder for the window's speaker map: its processor designs the decoder, its editor is the
     # SPEAKERS page; it never processes audio. IEM's Versions.cmake spells this one's version VERISON.
     set(AllRADecoder_VERSION ${AllRADecoder_VERISON})
-    a3_iem_add_plugin("${SUFFIX}" ${JUCE_TARGET} AllRADecoder ${A3_IEM_NODES_DIR}/AllRadDesign.cpp)
+    a3_iem_add_plugin("${SUFFIX}" ${JUCE_TARGET} AllRADecoder ${A3_IEM_NODES_DIR}/AllRadDesign.cpp
+        ${A3_IEM_PATCH_DIR}/AllRADecoder-noise-hook.patch)
     # ZoneNoise: the engine's per-zone test noise, IEM's NoiseBurst.h and AmbisonicNoiseBurst.h as they are.
     target_sources(${AllRADecoder_TARGET} PRIVATE ${A3_IEM_DIR}/resources/NewtonApple/NewtonApple_hull3D.cpp
         ${A3_IEM_NODES_DIR}/ZoneNoise.cpp)

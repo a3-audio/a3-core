@@ -105,6 +105,14 @@ std::unique_ptr<juce::AudioProcessorEditor> AllRadDesigner::createEditor()
     return std::unique_ptr<juce::AudioProcessorEditor> (impl->processor.createEditor());
 }
 
+void AllRadDesigner::setNoiseHooks (std::function<void (int)> channel, std::function<void (float, float)> direction)
+{
+    impl->processor.a3NoiseHook = std::move (channel);
+    impl->processor.a3AmbisonicNoiseHook = std::move (direction);
+}
+void AllRadDesigner::playNoise (int channel) { impl->processor.playNoiseBurst (channel); }
+void AllRadDesigner::playAmbisonicNoise (float azimuth, float elevation) { impl->processor.playAmbisonicNoiseBurst (azimuth, elevation); }
+
 std::optional<juce::String> designDecoder (const std::vector<Loudspeaker>& speakers, AmbisonicWeights weights, juce::String& error)
 {
     AllRadDesigner designer;

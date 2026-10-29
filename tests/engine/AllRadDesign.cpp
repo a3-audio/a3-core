@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <gtest/gtest.h>
+#include <algorithm>
 #include "AllRadDesign.h"
 #include "SpatialTestData.h"
 
@@ -92,4 +93,54 @@ TEST (AllRadDesign, LoadTakesAnAllRadFileAndRefusesABrokenOne)
     const auto refused = designer.load (R"({"LoudspeakerLayout":{"Loudspeakers":[{"Azimuth":0}]}})");
     EXPECT_TRUE (refused.failed());
     EXPECT_TRUE (refused.getErrorMessage().contains ("Elevation")) << refused.getErrorMessage();
+}
+
+namespace
+{
+void collectNoiseButtons (juce::Component& parent, std::vector<juce::TextButton*>& found)
+{
+    for (auto* child : parent.getChildren())
+    {
+        if (auto* button = dynamic_cast<juce::TextButton*> (child); button != nullptr && button->getButtonText() == "Noise")
+            found.push_back (button);
+        collectNoiseButtons (*child, found);
+    }
+}
+}
+
+// The window has no audio: IEM's noise calls go to the hooks (patches/iem/AllRADecoder-noise-hook.patch).
+TEST (AllRadDesign, NoiseGoesToTheHooks)
+{
+    a3::AllRadDesigner designer;
+    ASSERT_TRUE (designer.load (juce::JSON::toString (shippedMainDecoder())).wasOk());
+    std::vector<int> channels;
+    std::vector<std::pair<float, float>> directions;
+    designer.setNoiseHooks ([&] (int channel) { channels.push_back (channel); },
+                            [&] (float azimuth, float elevation) { directions.emplace_back (azimuth, elevation); });
+    designer.playNoise (4);
+    designer.playAmbisonicNoise (-45.0f, 10.0f);
+    EXPECT_EQ (channels, (std::vector<int> { 4 }));
+    ASSERT_EQ (directions.size(), 1u);
+    EXPECT_FLOAT_EQ (directions[0].first, -45.0f);
+    EXPECT_FLOAT_EQ (directions[0].second, 10.0f);
+}
+
+// IEM's own table: each real loudspeaker's Noise button fires its channel; an imaginary one's nothing.
+TEST (AllRadDesign, TheEditorsNoiseButtonsCallTheHook)
+{
+    juce::MessageManagerLock lock;
+    a3::AllRadDesigner designer;
+    ASSERT_TRUE (designer.load (juce::JSON::toString (shippedMainDecoder())).wasOk());
+    std::vector<int> channels;
+    designer.setNoiseHooks ([&] (int channel) { channels.push_back (channel); }, [] (float, float) {});
+    auto editor = designer.createEditor();
+    ASSERT_NE (editor, nullptr);
+    editor->setSize (1000, 600);
+    std::vector<juce::TextButton*> buttons;
+    collectNoiseButtons (*editor, buttons);
+    ASSERT_EQ (buttons.size(), 6u);
+    for (auto* button : buttons)
+        button->onClick();
+    std::sort (channels.begin(), channels.end());
+    EXPECT_EQ (channels, (std::vector<int> { 2, 3, 4, 5 }));
 }

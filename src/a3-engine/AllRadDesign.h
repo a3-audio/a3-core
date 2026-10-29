@@ -43,6 +43,12 @@ public:
     // IEM's AllRADecoderAudioProcessorEditor on this processor; it must not outlive the designer.
     std::unique_ptr<juce::AudioProcessorEditor> createEditor();
 
+    // What IEM's noise buttons do (a channel's Noise; Alt: a burst from that row's direction) goes to these
+    // hooks instead of the processor's own bursts: the window has no audio, the engine plays them.
+    void setNoiseHooks (std::function<void (int channel)>, std::function<void (float azimuth, float elevation)>);
+    void playNoise (int channel);                                // as IEM's table calls it
+    void playAmbisonicNoise (float azimuth, float elevation);    // as IEM's table calls it with Alt
+
 private:
     struct Impl;
     std::unique_ptr<Impl> impl;

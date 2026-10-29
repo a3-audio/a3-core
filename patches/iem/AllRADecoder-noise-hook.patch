@@ -1,0 +1,45 @@
+SPDX-FileCopyrightText: 2026 Raphael Eismann
+SPDX-License-Identifier: GPL-3.0-or-later
+
+AllRADecoder: the noise buttons call a hook when one is set (a3-core's SPEAKERS page).
+
+Applied by cmake/A3IemNodes.cmake at configure time to a copy of AllRADecoder/Source in the
+build tree (patch -p1 from that Source directory); third_party/IEMPluginSuite stays clean at
+its pin. The window hosts IEM's AllRADecoder editor on a processor that never gets audio:
+playNoiseBurst (a row's Noise button) and playAmbisonicNoiseBurst (the same with Alt) call
+a3NoiseHook / a3AmbisonicNoiseHook when set, and the window posts the burst to the engine,
+which plays IEM's NoiseBurst / AmbisonicNoiseBurst in that zone (src/iem-nodes/ZoneNoise.cpp).
+Unset, IEM's own behaviour is unchanged. Configure fails if this no longer applies.
+
+--- a/PluginProcessor.h
++++ b/PluginProcessor.h
+@@ -97,6 +97,10 @@
+ 
+     void playNoiseBurst (const int channel);
+     void playAmbisonicNoiseBurst (const float azimuth, const float elevation);
++    // a3 patch (a3-core patches/iem/AllRADecoder-noise-hook.patch): when set, the noise buttons call
++    // these instead of the processor's own bursts; the window has no audio, the engine plays them.
++    std::function<void (int)> a3NoiseHook;
++    std::function<void (float, float)> a3AmbisonicNoiseHook;
+     void addRandomPoint();
+     void addImaginaryLoudspeakerBelow();
+     void clearLoudspeakers();
+--- a/PluginProcessor.cpp
++++ b/PluginProcessor.cpp
+@@ -562,12 +562,16 @@
+ 
+ void AllRADecoderAudioProcessor::playNoiseBurst (const int channel)
+ {
++    if (a3NoiseHook != nullptr)
++        return a3NoiseHook (channel);
+     noiseBurst.setChannel (channel);
+ }
+ 
+ void AllRADecoderAudioProcessor::playAmbisonicNoiseBurst (const float azimuthInDegrees,
+                                                           const float elevationInDegrees)
+ {
++    if (a3AmbisonicNoiseHook != nullptr)
++        return a3AmbisonicNoiseHook (azimuthInDegrees, elevationInDegrees);
+     auto dec = decoder.getCurrentDecoder();
+     if (dec != nullptr)
+     {
