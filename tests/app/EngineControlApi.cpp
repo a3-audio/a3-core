@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <gtest/gtest.h>
+#include <limits>
 #include "AppTruth.h"
 #include "RemoteRig.h"
 
@@ -251,4 +252,45 @@ TEST (EngineControlApi, NoiseRequestsRoundTrip)
     EXPECT_EQ (back->zone, a3::SpeakerZone::booth);
     EXPECT_EQ (back->channel, 7);
     EXPECT_FALSE (back->ambisonic);
+}
+
+namespace
+{
+juce::var noiseBody (std::initializer_list<std::pair<const char*, juce::var>> members)
+{
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("zone", "main");
+    for (const auto& m : members)
+        o->setProperty (m.first, m.second);
+    return juce::var (o);
+}
+}
+
+// S4: only a whole channel number and finite angles; the elevation is clamped to the sphere.
+TEST (EngineControlApi, NoiseRefusesWhatIsNoBurst)
+{
+    const auto inf = std::numeric_limits<double>::infinity(), nan = std::numeric_limits<double>::quiet_NaN();
+    juce::String why;
+    EXPECT_FALSE (a3app::noiseFromJson (noiseBody ({ { "azimuth", inf }, { "elevation", 0.0 } }), why));
+    EXPECT_FALSE (a3app::noiseFromJson (noiseBody ({ { "azimuth", 0.0 }, { "elevation", nan } }), why));
+    EXPECT_FALSE (a3app::noiseFromJson (noiseBody ({ { "channel", true } }), why));
+    EXPECT_FALSE (a3app::noiseFromJson (noiseBody ({ { "channel", "3" } }), why));
+    EXPECT_FALSE (a3app::noiseFromJson (noiseBody ({ { "channel", 2.5 } }), why));
+    EXPECT_FALSE (a3app::noiseFromJson (noiseBody ({ { "channel", inf } }), why));
+    EXPECT_FALSE (why.isEmpty());
+
+    const auto up = a3app::noiseFromJson (noiseBody ({ { "azimuth", 30.0 }, { "elevation", 120.0 } }), why);
+    ASSERT_TRUE (up) << why;
+    EXPECT_FLOAT_EQ (up->elevation, 90.0f);
+    const auto down = a3app::noiseFromJson (noiseBody ({ { "azimuth", 30.0 }, { "elevation", -100.0 } }), why);
+    ASSERT_TRUE (down) << why;
+    EXPECT_FLOAT_EQ (down->elevation, -90.0f);
+    const auto whole = a3app::noiseFromJson (noiseBody ({ { "channel", 3.0 } }), why);
+    ASSERT_TRUE (whole) << why;
+    EXPECT_EQ (whole->channel, 3);
+
+    RemoteRig rig;
+    for (const auto* refused : { "{\"zone\":\"main\",\"channel\":true}", "{\"zone\":\"main\",\"channel\":\"3\"}",
+                                 "{\"zone\":\"main\",\"azimuth\":1e999,\"elevation\":0}" })
+        EXPECT_EQ (httpclient::post (rig.server->port(), "/api/engine/noise", refused).status, 400) << refused;
 }

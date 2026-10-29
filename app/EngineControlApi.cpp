@@ -145,7 +145,15 @@ std::optional<EngineMetersReport> metersFromJson (const juce::var& v)
 
 namespace
 {
-constexpr int highestNoiseChannel = 64;   // IEM's NoiseBurst plays channels 1..64
+constexpr int highestNoiseChannel = 64;   // the decoders' widest output (swChannel's range)
+
+// A JSON number that is finite; never a bool or a string.
+std::optional<double> finiteNumber (const juce::var& v)
+{
+    if (! (v.isInt() || v.isInt64() || v.isDouble()) || ! std::isfinite ((double) v))
+        return std::nullopt;
+    return (double) v;
+}
 }
 
 juce::var toJson (const NoiseRequest& request)
@@ -166,8 +174,14 @@ std::optional<NoiseRequest> noiseFromJson (const juce::var& v, juce::String& why
         return std::nullopt;
     }
     request.zone = zone == "main" ? a3::SpeakerZone::main : a3::SpeakerZone::booth;
-    if (const auto channel = number (v["channel"]))
+    if (v.hasProperty ("channel"))
     {
+        const auto channel = finiteNumber (v["channel"]);
+        if (! channel)
+        {
+            why = "channel must be a whole number in 1.." + juce::String (highestNoiseChannel);
+            return std::nullopt;
+        }
         request.channel = (int) *channel;
         if (request.channel < 1 || request.channel > highestNoiseChannel || request.channel != *channel)
         {
@@ -176,15 +190,15 @@ std::optional<NoiseRequest> noiseFromJson (const juce::var& v, juce::String& why
         }
         return request;
     }
-    const auto azimuth = number (v["azimuth"]), elevation = number (v["elevation"]);
+    const auto azimuth = finiteNumber (v["azimuth"]), elevation = finiteNumber (v["elevation"]);
     if (! azimuth || ! elevation)
     {
-        why = "a noise burst needs a channel, or an azimuth and an elevation";
+        why = "a noise burst needs a channel, or a finite azimuth and elevation";
         return std::nullopt;
     }
     request.ambisonic = true;
     request.azimuth = (float) *azimuth;
-    request.elevation = (float) *elevation;
+    request.elevation = (float) juce::jlimit (-90.0, 90.0, *elevation);
     return request;
 }
 

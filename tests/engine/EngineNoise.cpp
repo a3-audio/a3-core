@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <gtest/gtest.h>
+#include <limits>
 #include "EngineFixture.h"
 
 using namespace a3test;
@@ -139,4 +140,43 @@ TEST (EngineNoise, AnAmbisonicBurstGoesThroughThatZonesDecoderOnly)
         EXPECT_EQ (peak (quiet), 0.0);
         EXPECT_EQ (peak (rig->recOutputs()), 0.0);
     }
+}
+
+namespace
+{
+bool allFinite (const std::vector<const std::vector<float>*>& channels)
+{
+    for (const auto* channel : channels)
+        for (const float sample : *channel)
+            if (! std::isfinite (sample))
+                return false;
+    return true;
+}
+}
+
+// S4: a non-finite direction would put NaN into the zone decoder's filters for good; it is ignored.
+TEST (EngineNoise, ANonFiniteDirectionIsIgnored)
+{
+    const auto rig = silentRig (oneSecond);
+    rig->engine->playAmbisonicNoise (a3::SpeakerZone::main, std::numeric_limits<float>::quiet_NaN(), 0.0f);
+    rig->engine->playAmbisonicNoise (a3::SpeakerZone::booth, 0.0f, std::numeric_limits<float>::infinity());
+    rig->run (0, oneSecond / 4);
+    EXPECT_TRUE (allFinite (rig->mainOutputs()));
+    EXPECT_TRUE (allFinite (rig->boothOutputs()));
+    EXPECT_EQ (peak (rig->mainOutputs()), 0.0);
+    EXPECT_EQ (peak (rig->boothOutputs()), 0.0);
+
+    rig->engine->playAmbisonicNoise (a3::SpeakerZone::main, 45.0f, 0.0f);
+    rig->run (oneSecond / 4, rig->frames);
+    EXPECT_TRUE (allFinite (rig->mainOutputs()));
+    EXPECT_GT (peak (portOf (rig->mainOutputs(), 2)), heard);
+}
+
+TEST (EngineNoise, AChannelAboveTheZonesOutputsIsSilent)
+{
+    const auto rig = silentRig (oneSecond / 2);
+    rig->engine->playNoise (a3::SpeakerZone::main, 40);
+    rig->run();
+    EXPECT_EQ (peak (rig->mainOutputs()), 0.0);
+    EXPECT_EQ (peak (rig->boothOutputs()), 0.0);
 }

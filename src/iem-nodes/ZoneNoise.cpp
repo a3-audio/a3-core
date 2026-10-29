@@ -43,6 +43,8 @@ void ZoneNoise::requestChannel (int channel) { pendingChannel.store (channel, st
 
 void ZoneNoise::requestDirection (float azimuthDegrees, float elevationDegrees)
 {
+    if (! std::isfinite (azimuthDegrees) || ! std::isfinite (elevationDegrees))
+        return;   // NaN would stay in the zone decoder's filters until the next rebuild
     pendingAzimuth.store (azimuthDegrees, std::memory_order_relaxed);
     pendingElevation.store (elevationDegrees, std::memory_order_relaxed);
     pendingDirection.store (true, std::memory_order_release);
