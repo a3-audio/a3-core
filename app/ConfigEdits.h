@@ -29,20 +29,41 @@ constexpr int maxDecksOnPage = 26;
 // N decks, named in the file from then on: a removed slot's links leave the map, an added slot the
 // map names none of gets its local StemDeck's links (A9); the other slots stay as they are.
 std::optional<AppConfig> withDecks (const AppConfig&, int decks, juce::String& error);
+// Both zones from `directory`.
 std::optional<AppConfig> withSpatialDirectory (const AppConfig&, const juce::File& directory, juce::String& error);
+// One zone's variant; the other zone keeps the one it has (MAIN's also carries the shared files, ConfigFile.h).
+std::optional<AppConfig> withZoneSpatialDirectory (const AppConfig&, a3::SpeakerZone, const juce::File& directory, juce::String& error);
 
 // The one edit that writes files (the SPEAKERS page's SAVE TO ZONE): a new user variant, zoneVariantDirectory,
-// holding a copy of the config's spatial directory's files with the zone's <zone>.decoder.json (verbatim) and
+// holding a copy of the zone's spatial directory's files with the zone's <zone>.decoder.json (verbatim) and
 // <zone>.parameters.json replaced and its <zone>.zone.json topDirections taken from the decoder's layout. It is
 // staged in <userRoot>/.staging, moved into place only once it loads, and chosen as the spatial directory, so
-// Save restarts the engine on it. No directory is ever rewritten or deleted: the previous one stays the way
+// Save restarts the engine on it. It is chosen for that zone only. No directory is ever rewritten or deleted: the previous one stays the way
 // back. A refusal names the file and leaves nothing behind.
 std::optional<AppConfig> withZoneDecoder (const AppConfig&, a3::SpeakerZone, const juce::String& decoderJson,
                                           const juce::var& parameters, const juce::File& userRoot, juce::String& error,
                                           juce::Time now = juce::Time::getCurrentTime());
-// <userRoot>/<base>-YYYYMMDD-HHMMSS, base being the config's directory name without an earlier stamp; "-2", "-3"
+// <userRoot>/<base>-YYYYMMDD-HHMMSS, base being the zone's directory name without an earlier stamp; "-2", "-3"
 // ... when that exists.
-juce::File zoneVariantDirectory (const AppConfig&, const juce::File& userRoot, juce::Time now);
+juce::File zoneVariantDirectory (const AppConfig&, const juce::File& userRoot, juce::Time now,
+                                 a3::SpeakerZone = a3::SpeakerZone::main);
+
+// The user's variants (the ZONES page's RENAME and DELETE). Only a direct, visible child directory of `userRoot`
+// (~/.config/a3/engine/spatial) is one; installed directories never are.
+bool isUserVariant (const juce::File& directory, const juce::File& userRoot);
+bool usesVariant (const AppConfig&, const juce::File& directory);   // either zone
+// Why `directory` cannot be deleted ("" when it can): not a user variant, or used by what runs or the pending edit.
+juce::String deleteRefusal (const juce::File& directory, const juce::File& userRoot, const AppConfig& running, const AppConfig& pending);
+juce::Result deleteVariant (const juce::File& directory, const juce::File& userRoot, const AppConfig& running, const AppConfig& pending);
+// Why `directory` cannot be renamed to `name` ("" when it can): not a user variant, used by what runs (its saved
+// file names it), or a name with a slash, a leading dot, blank, or one that exists.
+juce::String renameRefusal (const juce::File& directory, const juce::String& name, const juce::File& userRoot, const AppConfig& running);
+// The same without the name: whether `directory` can be renamed at all.
+juce::String renameRefusal (const juce::File& directory, const juce::File& userRoot, const AppConfig& running);
+std::optional<juce::File> renameVariant (const juce::File& directory, const juce::String& name, const juce::File& userRoot,
+                                         const AppConfig& running, juce::String& error);
+// `config` with every zone that named `from` naming `to`.
+AppConfig withRenamedVariant (const AppConfig&, const juce::File& from, const juce::File& to);
 
 enum class TrimZone { main, booth, phones, rec };
 std::optional<AppConfig> withTrim (const AppConfig&, TrimZone, float db, juce::String& error);   // refuses outside -90..+6 dB

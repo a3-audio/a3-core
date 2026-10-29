@@ -210,6 +210,21 @@ std::optional<SpatialConfig> loadSpatialConfig (const juce::File& directory, juc
     return SpatialConfigReader (directory, error).read();
 }
 
+std::optional<SpatialConfig> loadSpatialConfig (const juce::File& mainDirectory, const juce::File& boothDirectory, juce::String& error)
+{
+    auto config = loadSpatialConfig (mainDirectory, error);
+    if (! config || boothDirectory == mainDirectory)
+        return config;
+    const auto booth = loadSpatialConfig (boothDirectory, error);
+    if (! booth)
+    {
+        error = "booth (" + boothDirectory.getFullPathName() + "): " + error;
+        return std::nullopt;
+    }
+    config->booth = booth->booth;
+    return config;
+}
+
 std::array<BedSource, numBedSources> bedFrom (const SpatialConfig& config)
 {
     const auto parameter = [&] (const char* name, int source)

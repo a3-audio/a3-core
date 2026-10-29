@@ -66,4 +66,7 @@ std::array<BedSource, numBedSources> bedFrom (const SpatialConfig&);
 // explicitly (encoder orderSetting, decoder and rec inputOrderSetting), never "auto".
 // nullopt + error naming the file and the reason.
 std::optional<SpatialConfig> loadSpatialConfig (const juce::File& directory, juce::String& error);
+// `mainDirectory`'s config with its booth zone taken from `boothDirectory`'s (the same directory: one load).
+// Both must load whole; a refusal names the directory it came from.
+std::optional<SpatialConfig> loadSpatialConfig (const juce::File& mainDirectory, const juce::File& boothDirectory, juce::String& error);
 }

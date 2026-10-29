@@ -241,7 +241,7 @@ private:
 juce::Result EngineRole::restart (const AppConfig& config, juce::String& problem)
 {
     juce::String error;
-    const auto spatial = a3::loadSpatialConfig (config.spatialDirectory, error);
+    const auto spatial = loadZonesSpatial (config, error);
     if (! spatial)
         return juce::Result::fail ("spatial: " + error);
 

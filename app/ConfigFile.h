@@ -3,6 +3,7 @@
 #pragma once
 #include "EngineConfig.h"
 #include "IoMap.h"
+#include "SpatialConfig.h"
 #include <functional>
 #include <juce_core/juce_core.h>
 #include <optional>
@@ -24,7 +25,12 @@ struct AppConfig
     a3::EngineConfig engine;
     BackendSettings backend;
     IoMap io;
+    // MAIN's spatial variant. It also gives the files both zones share: encoder, rec, fx and phones parameters
+    // and encoder.inputs (they are one per engine, not one per zone).
     juce::File spatialDirectory { "/usr/share/a3-engine/spatial" };
+    // BOOTH's variant: only booth.decoder.json, booth.parameters.json and booth.zone.json are read from it.
+    // Empty: the same as MAIN's (a file of the single-"spatial" form).
+    juce::File boothSpatialDirectory;
     // Entries of the loaded file's io section that named a retired deck port ("<port> -> <peer>"),
     // left out of `io`. Only a load fills it; a save writes the map without them.
     std::vector<std::string> droppedLinks;
@@ -34,11 +40,17 @@ struct AppConfig
 
 constexpr float minTrimDb = -90.0f, maxTrimDb = 6.0f;
 
-// Sections "engine", "backend", "io", "spatial"; a missing section takes its defaults.
+// Sections "engine", "backend", "io", "spatial"; a missing section takes its defaults. "spatial" is
+// {"main": dir, "booth": dir}, or (an older file) one dir for both zones; a save writes the per-zone form.
 // Refuses (never clamps) a broken file, naming file and reason in `error`. Links of retired
 // deck ports (EnginePorts.h) are dropped, not refused, and listed in droppedLinks. truthDecks is the
 // deck count of a file that names none (EngineTruth::decks). Every slot whose ports the file links
 // nowhere links to its local StemDeck (A9); parseAppConfig does not fill (A10: a posted body is kept).
+// The directory a zone's decoder, parameters and zone files come from.
+juce::File zoneSpatialDirectory (const AppConfig&, a3::SpeakerZone);
+// The spatial config the engine runs on: MAIN's variant, with the booth's zone from BOOTH's.
+std::optional<a3::SpatialConfig> loadZonesSpatial (const AppConfig&, juce::String& error);
+
 std::optional<AppConfig> loadAppConfig (const juce::File&, juce::String& error, int truthDecks);
 // "dropped retired link <entry>" per entry of AppConfig::droppedLinks, then "ignored retired key <key>"
 // per entry of AppConfig::ignoredKeys.

@@ -346,7 +346,8 @@ TEST (ConfigEdits, AZoneDecoderBecomesAUserVariantBesideTheInstalledFiles)
     ASSERT_TRUE (edited) << error;
 
     const auto variant = edit.userRoot.getChildFile (edit.installed.root().getFileName() + "-20261029-210507");
-    EXPECT_EQ (edited->spatialDirectory, variant);
+    EXPECT_EQ (a3app::zoneSpatialDirectory (*edited, a3::SpeakerZone::booth), variant);   // chosen for the booth only
+    EXPECT_EQ (a3app::zoneSpatialDirectory (*edited, a3::SpeakerZone::main), edit.installed.root());
     EXPECT_FALSE (a3app::sameConfig (*edited, edit.config()));   // Save restarts the engine on it
     EXPECT_EQ (variant.getChildFile ("booth.decoder.json").loadFileAsString(), decoder);
     EXPECT_EQ ((double) juce::JSON::parse (variant.getChildFile ("booth.parameters.json").loadFileAsString())["lowPassFrequency"], 120.0);
@@ -366,7 +367,8 @@ TEST (ConfigEdits, ASecondSaveMakesANewVariantAndKeepsTheFirst)
     const auto first = a3app::withZoneDecoder (edit.config(), a3::SpeakerZone::booth, edit.installedFile ("main.decoder.json"),
                                                boothParametersWithCrossover (edit, 120.0), edit.userRoot, error, saveTime);
     ASSERT_TRUE (first) << error;
-    const auto firstFiles = filesOf (first->spatialDirectory);
+    const auto firstVariant = a3app::zoneSpatialDirectory (*first, a3::SpeakerZone::booth);
+    const auto firstFiles = filesOf (firstVariant);
 
     const auto running = *first;   // Save applied it
     auto mainParameters = juce::JSON::parse (edit.installedFile ("main.parameters.json")).clone();
@@ -374,11 +376,13 @@ TEST (ConfigEdits, ASecondSaveMakesANewVariantAndKeepsTheFirst)
     const auto second = a3app::withZoneDecoder (running, a3::SpeakerZone::main, edit.installedFile ("main.decoder.json"),
                                                 mainParameters, edit.userRoot, error, saveTime + juce::RelativeTime::minutes (3));
     ASSERT_TRUE (second) << error;
-    EXPECT_NE (second->spatialDirectory, first->spatialDirectory);
+    EXPECT_NE (second->spatialDirectory, firstVariant);
     EXPECT_EQ (second->spatialDirectory.getFileName(), edit.installed.root().getFileName() + "-20261029-210807");   // no stacked stamps
     EXPECT_FALSE (a3app::sameConfig (*second, running));
-    EXPECT_EQ (filesOf (first->spatialDirectory), firstFiles);
-    EXPECT_EQ ((double) juce::JSON::parse (second->spatialDirectory.getChildFile ("booth.parameters.json").loadFileAsString())["lowPassFrequency"], 120.0);
+    EXPECT_EQ (filesOf (firstVariant), firstFiles);
+    EXPECT_EQ (a3app::zoneSpatialDirectory (*second, a3::SpeakerZone::booth), firstVariant);   // a MAIN save leaves the booth's
+    const auto boothNow = a3app::zoneSpatialDirectory (*second, a3::SpeakerZone::booth);
+    EXPECT_EQ ((double) juce::JSON::parse (boothNow.getChildFile ("booth.parameters.json").loadFileAsString())["lowPassFrequency"], 120.0);
     EXPECT_EQ ((double) juce::JSON::parse (second->spatialDirectory.getChildFile ("main.parameters.json").loadFileAsString())["lowPassFrequency"], 90.0);
     EXPECT_EQ (variantsUnder (edit.userRoot).size(), 2u);
 }
@@ -460,11 +464,105 @@ TEST (ConfigEdits, ASixPointOneBoothSavedThroughTheEditLoads)
     const auto edited = a3app::withZoneDecoder (edit.config(), a3::SpeakerZone::booth, *designed,
                                                 juce::JSON::parse (edit.installedFile ("booth.parameters.json")), edit.userRoot, error, saveTime);
     ASSERT_TRUE (edited) << error;
-    const auto loaded = a3::loadSpatialConfig (edited->spatialDirectory, error);
+    const auto loaded = a3app::loadZonesSpatial (*edited, error);
     ASSERT_TRUE (loaded) << error;
     EXPECT_EQ (loaded->booth.layout.topChannels, (std::vector<int> { 2, 3, 4, 5, 6, 9 }));
     EXPECT_EQ (loaded->booth.topDirections, tops);
     EXPECT_EQ (loaded->main.topDirections.size(), 4u);   // the other zone as it was
-    const auto zone = juce::JSON::parse (edited->spatialDirectory.getChildFile ("booth.zone.json").loadFileAsString());
+    const auto zone = juce::JSON::parse (a3app::zoneSpatialDirectory (*edited, a3::SpeakerZone::booth).getChildFile ("booth.zone.json").loadFileAsString());
     EXPECT_EQ (juce::JSON::toString (zone["stages"]), juce::JSON::toString (juce::JSON::parse (edit.installedFile ("booth.zone.json"))["stages"]));
+}
+
+// MAIN and BOOTH each pick a variant; picking one zone's never moves the other's.
+TEST (ConfigEdits, EachZonePicksItsOwnVariant)
+{
+    auto config = sample();
+    juce::String error;
+    const auto booth = a3app::withZoneSpatialDirectory (config, a3::SpeakerZone::booth, a3test::reaperBoothSpatialDirectory, error);
+    ASSERT_TRUE (booth) << error;
+    EXPECT_EQ (a3app::zoneSpatialDirectory (*booth, a3::SpeakerZone::main), a3test::shippedSpatialDirectory);
+    EXPECT_EQ (a3app::zoneSpatialDirectory (*booth, a3::SpeakerZone::booth), a3test::reaperBoothSpatialDirectory);
+    EXPECT_FALSE (a3app::sameConfig (*booth, config));
+
+    const auto main = a3app::withZoneSpatialDirectory (config, a3::SpeakerZone::main, a3test::reaperBoothSpatialDirectory, error);
+    ASSERT_TRUE (main) << error;
+    EXPECT_EQ (a3app::zoneSpatialDirectory (*main, a3::SpeakerZone::main), a3test::reaperBoothSpatialDirectory);
+    EXPECT_EQ (a3app::zoneSpatialDirectory (*main, a3::SpeakerZone::booth), a3test::shippedSpatialDirectory);   // stays
+
+    a3test::ScratchDirectory broken;
+    broken.root().getChildFile ("booth.decoder.json").replaceWithText ("{");
+    EXPECT_FALSE (a3app::withZoneSpatialDirectory (config, a3::SpeakerZone::booth, broken.root(), error));
+    EXPECT_TRUE (error.contains ("booth.decoder.json")) << error;
+}
+
+namespace
+{
+// A user root with two variants; MAIN runs from "club", BOOTH is pending on "dome".
+struct Variants
+{
+    juce::File userRoot = juce::File::createTempFile ("a3-user-spatial");
+    juce::File club = userRoot.getChildFile ("club"), dome = userRoot.getChildFile ("dome"), spare = userRoot.getChildFile ("spare");
+    a3app::AppConfig running = sample(), pending = sample();
+    Variants()
+    {
+        for (const auto& variant : { club, dome, spare })
+            a3test::shippedSpatialDirectory.copyDirectoryTo (variant);
+        running.spatialDirectory = club;
+        pending.spatialDirectory = club;
+        pending.boothSpatialDirectory = dome;
+    }
+    ~Variants() { userRoot.deleteRecursively(); }
+};
+}
+
+TEST (ConfigEdits, OnlyAnUnusedUserVariantCanBeDeleted)
+{
+    Variants v;
+    EXPECT_TRUE (a3app::isUserVariant (v.spare, v.userRoot));
+    EXPECT_FALSE (a3app::isUserVariant (a3test::shippedSpatialDirectory, v.userRoot));   // installed: never
+    EXPECT_TRUE (a3app::deleteRefusal (v.spare, v.userRoot, v.running, v.pending).isEmpty());
+    EXPECT_TRUE (a3app::deleteRefusal (v.club, v.userRoot, v.running, v.pending).contains ("runs")) << "used by what runs";
+    EXPECT_TRUE (a3app::deleteRefusal (v.dome, v.userRoot, v.running, v.pending).contains ("pending"));
+    EXPECT_TRUE (a3app::deleteRefusal (a3test::shippedSpatialDirectory, v.userRoot, v.running, v.pending).contains ("installed"));
+
+    EXPECT_TRUE (a3app::deleteVariant (v.club, v.userRoot, v.running, v.pending).failed());
+    EXPECT_TRUE (v.club.isDirectory());
+    EXPECT_TRUE (a3app::deleteVariant (v.spare, v.userRoot, v.running, v.pending).wasOk());
+    EXPECT_FALSE (v.spare.exists());
+}
+
+// Never anything outside the user root: not its parent, not the root itself, not a path that climbs out.
+TEST (ConfigEdits, DeleteNeverLeavesTheUserRoot)
+{
+    Variants v;
+    const auto outside = juce::File::createTempFile ("a3-outside");
+    a3test::shippedSpatialDirectory.copyDirectoryTo (outside);
+    for (const auto& target : { outside, v.userRoot, v.userRoot.getParentDirectory(), v.userRoot.getChildFile ("club/.."),
+                                v.userRoot.getChildFile (".staging"), juce::File ("/") })
+    {
+        EXPECT_FALSE (a3app::isUserVariant (target, v.userRoot)) << target.getFullPathName();
+        EXPECT_TRUE (a3app::deleteVariant (target, v.userRoot, v.running, v.pending).failed()) << target.getFullPathName();
+    }
+    EXPECT_TRUE (outside.getChildFile ("main.decoder.json").existsAsFile());
+    EXPECT_TRUE (v.userRoot.isDirectory());
+    outside.deleteRecursively();
+}
+
+TEST (ConfigEdits, RenameChecksTheNameAndFollowsThePendingConfig)
+{
+    Variants v;
+    for (const auto* bad : { "", "a/b", ".hidden", "club", "..", "  " })
+        EXPECT_FALSE (a3app::renameRefusal (v.spare, bad, v.userRoot, v.running).isEmpty()) << bad;
+    EXPECT_FALSE (a3app::renameRefusal (v.club, "other", v.userRoot, v.running).isEmpty()) << "what runs keeps its name";
+    EXPECT_FALSE (a3app::renameRefusal (a3test::shippedSpatialDirectory, "other", v.userRoot, v.running).isEmpty());
+
+    juce::String error;
+    const auto renamed = a3app::renameVariant (v.dome, "dome-wide", v.userRoot, v.running, error);
+    ASSERT_TRUE (renamed) << error;
+    EXPECT_EQ (*renamed, v.userRoot.getChildFile ("dome-wide"));
+    EXPECT_TRUE (renamed->getChildFile ("booth.decoder.json").existsAsFile());
+    EXPECT_FALSE (v.dome.exists());
+    const auto followed = a3app::withRenamedVariant (v.pending, v.dome, *renamed);
+    EXPECT_EQ (a3app::zoneSpatialDirectory (followed, a3::SpeakerZone::booth), *renamed);
+    EXPECT_EQ (a3app::zoneSpatialDirectory (followed, a3::SpeakerZone::main), v.club);
 }

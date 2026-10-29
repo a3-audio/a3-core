@@ -61,9 +61,12 @@ std::optional<StartupData> loadStartupData (const AppArgs& args, const juce::Fil
         return std::nullopt;
     data.config = *config;
     if (args.spatial.isNotEmpty())
-        data.config.spatialDirectory = juce::File (args.spatial);
+    {
+        data.config.spatialDirectory = juce::File (args.spatial);   // both zones from it
+        data.config.boothSpatialDirectory = juce::File();
+    }
 
-    const auto spatial = a3::loadSpatialConfig (data.config.spatialDirectory, error);
+    const auto spatial = loadZonesSpatial (data.config, error);
     if (! spatial)
     {
         error = data.config.spatialDirectory.getFullPathName() + ": " + error;

@@ -8,6 +8,7 @@
 #include "ConfigFile.h"
 #include "EngineFixture.h"
 #include "EnginePorts.h"
+#include "SpatialTestData.h"
 
 namespace
 {
@@ -316,4 +317,56 @@ TEST (ConfigFile, SaveNeverWritesWithoutBeingAsked)
     EXPECT_FALSE (a3app::saveAppConfig (sample(), source.getChildFile ("not-a-directory/engine.json")).wasOk());
     EXPECT_EQ (source.loadFileAsString(), before);
     ::setenv ("HOME", savedHome.toRawUTF8(), 1);
+}
+
+// A file of the single-"spatial" form keeps loading (both zones from it); a save writes the per-zone form.
+TEST (ConfigFile, ASingleSpatialLoadsBothZonesAndASaveWritesBoth)
+{
+    Scratch scratch;
+    auto text = juce::JSON::toString (a3app::toJson (sample()));
+    auto root = juce::JSON::parse (text);
+    root.getDynamicObject()->setProperty ("spatial", a3test::shippedSpatialDirectory.getFullPathName());   // the old form
+    const auto file = scratch.write ("engine.json", juce::JSON::toString (root));
+    juce::String error;
+    const auto loaded = a3app::loadAppConfig (file, error, a3apptest::truthDecks());
+    ASSERT_TRUE (loaded) << error;
+    EXPECT_EQ (a3app::zoneSpatialDirectory (*loaded, a3::SpeakerZone::main), a3test::shippedSpatialDirectory);
+    EXPECT_EQ (a3app::zoneSpatialDirectory (*loaded, a3::SpeakerZone::booth), a3test::shippedSpatialDirectory);
+    EXPECT_EQ (file.loadFileAsString(), juce::JSON::toString (root));   // a load writes nothing
+
+    const auto json = a3app::toJson (*loaded)["spatial"];
+    EXPECT_EQ (json["main"].toString(), a3test::shippedSpatialDirectory.getFullPathName());
+    EXPECT_EQ (json["booth"].toString(), a3test::shippedSpatialDirectory.getFullPathName());
+}
+
+// MAIN from one variant, BOOTH from another: the booth's decoder, parameters and zone file come from BOOTH's,
+// everything else (main's and the shared files) from MAIN's.
+TEST (ConfigFile, ZonesLoadFromTheirOwnVariants)
+{
+    Scratch scratch;
+    auto config = sample();
+    config.spatialDirectory = a3test::shippedSpatialDirectory;
+    config.boothSpatialDirectory = a3test::reaperBoothSpatialDirectory;
+    const auto file = scratch.dir.getChildFile ("engine.json");
+    ASSERT_TRUE (a3app::saveAppConfig (config, file).wasOk());
+    juce::String error;
+    const auto loaded = a3app::loadAppConfig (file, error, a3apptest::truthDecks());
+    ASSERT_TRUE (loaded) << error;
+    EXPECT_EQ (a3app::zoneSpatialDirectory (*loaded, a3::SpeakerZone::booth), a3test::reaperBoothSpatialDirectory);
+    EXPECT_FALSE (a3app::sameConfig (*loaded, sample()));
+
+    const auto mixed = a3app::loadZonesSpatial (*loaded, error);
+    const auto shipped = a3::loadSpatialConfig (a3test::shippedSpatialDirectory, error);
+    const auto reaper = a3::loadSpatialConfig (a3test::reaperBoothSpatialDirectory, error);
+    ASSERT_TRUE (mixed && shipped && reaper) << error;
+    EXPECT_EQ (mixed->booth.layout.decoderJson, reaper->booth.layout.decoderJson);
+    EXPECT_EQ (mixed->booth.topDirections, reaper->booth.topDirections);
+    EXPECT_EQ (mixed->main.layout.decoderJson, shipped->main.layout.decoderJson);
+    EXPECT_EQ (juce::JSON::toString (mixed->encoderParameters), juce::JSON::toString (shipped->encoderParameters));
+    EXPECT_EQ (juce::JSON::toString (mixed->phonesParameters), juce::JSON::toString (shipped->phonesParameters));
+
+    auto broken = config;
+    broken.boothSpatialDirectory = scratch.dir.getChildFile ("missing");
+    EXPECT_FALSE (a3app::loadZonesSpatial (broken, error));
+    EXPECT_TRUE (error.contains ("missing")) << error;   // the refusal names the booth's directory
 }

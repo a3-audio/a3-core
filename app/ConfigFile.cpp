@@ -142,6 +142,27 @@ juce::var withoutRetiredPorts (const juce::var& io, const std::vector<std::strin
     return result;
 }
 
+juce::File spatialPath (const juce::var& path, const juce::File& base, const juce::String& what)
+{
+    if (! path.isString() || path.toString().isEmpty())
+        refuse (what + " must be a directory path");
+    return base.getChildFile (path.toString());
+}
+
+// One dir for both zones (an older file), or {"main": dir, "booth": dir}.
+void parseSpatial (const juce::var& spatial, const juce::File& base, AppConfig& config)
+{
+    if (! spatial.isObject())
+    {
+        config.spatialDirectory = spatialPath (spatial, base, "spatial");
+        return;
+    }
+    rejectUnknownKeys (*spatial.getDynamicObject(), { "main", "booth" }, "spatial");
+    config.spatialDirectory = spatialPath (spatial["main"], base, "spatial.main");
+    const auto booth = spatialPath (spatial["booth"], base, "spatial.booth");
+    config.boothSpatialDirectory = booth == config.spatialDirectory ? juce::File() : booth;
+}
+
 AppConfig parseRoot (const juce::var& root, const juce::File& base, int truthDecks)
 {
     const auto& object = objectOf (root, "the file");
@@ -162,14 +183,9 @@ AppConfig parseRoot (const juce::var& root, const juce::File& base, int truthDec
     if (object.hasProperty ("backend"))
         config.backend = parseBackend (object.getProperty ("backend"));
     if (object.hasProperty ("spatial"))
-    {
-        const auto path = object.getProperty ("spatial");
-        if (! path.isString() || path.toString().isEmpty())
-            refuse ("spatial must be a directory path");
-        config.spatialDirectory = base.getChildFile (path.toString());
-    }
+        parseSpatial (object.getProperty ("spatial"), base, config);
 
-    const auto spatial = a3::loadSpatialConfig (config.spatialDirectory, error);
+    const auto spatial = loadZonesSpatial (config, error);
     if (! spatial)
         refuse ("spatial (" + config.spatialDirectory.getFullPathName() + "): " + error);
     const auto io = object.hasProperty ("io") ? object.getProperty ("io") : juce::var (new juce::DynamicObject());
@@ -218,6 +234,19 @@ std::optional<AppConfig> loadAppConfig (const juce::File& file, juce::String& er
     }
 }
 
+juce::File zoneSpatialDirectory (const AppConfig& config, a3::SpeakerZone zone)
+{
+    if (zone == a3::SpeakerZone::booth && config.boothSpatialDirectory != juce::File())
+        return config.boothSpatialDirectory;
+    return config.spatialDirectory;
+}
+
+std::optional<a3::SpatialConfig> loadZonesSpatial (const AppConfig& config, juce::String& error)
+{
+    return a3::loadSpatialConfig (zoneSpatialDirectory (config, a3::SpeakerZone::main),
+                                  zoneSpatialDirectory (config, a3::SpeakerZone::booth), error);
+}
+
 juce::StringArray droppedLinkLines (const AppConfig& config)
 {
     juce::StringArray lines;
@@ -242,7 +271,10 @@ juce::var toJson (const AppConfig& config)
     root->setProperty ("engine", a3::toJson (config.engine));
     root->setProperty ("backend", juce::var (backend));
     root->setProperty ("io", toJson (config.io));
-    root->setProperty ("spatial", config.spatialDirectory.getFullPathName());
+    auto* spatial = new juce::DynamicObject();
+    spatial->setProperty ("main", zoneSpatialDirectory (config, a3::SpeakerZone::main).getFullPathName());
+    spatial->setProperty ("booth", zoneSpatialDirectory (config, a3::SpeakerZone::booth).getFullPathName());
+    root->setProperty ("spatial", juce::var (spatial));
     return juce::var (root);
 }
 

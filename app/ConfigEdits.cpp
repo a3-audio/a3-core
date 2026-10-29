@@ -44,7 +44,7 @@ std::optional<AppConfig> pruned (AppConfig config, juce::String& error)
 
 std::optional<PortNames> portNamesFor (const AppConfig& config, juce::String& error)
 {
-    const auto spatial = a3::loadSpatialConfig (config.spatialDirectory, error);
+    const auto spatial = loadZonesSpatial (config, error);
     if (! spatial)
     {
         error = "spatial (" + config.spatialDirectory.getFullPathName() + "): " + error;
@@ -105,6 +105,27 @@ std::optional<AppConfig> withSpatialDirectory (const AppConfig& config, const ju
 {
     auto edited = config;
     edited.spatialDirectory = directory;
+    edited.boothSpatialDirectory = juce::File();
+    return pruned (std::move (edited), error);
+}
+
+namespace
+{
+void setZoneDirectory (AppConfig& config, a3::SpeakerZone zone, const juce::File& directory)
+{
+    const auto booth = zoneSpatialDirectory (config, a3::SpeakerZone::booth);
+    if (zone == a3::SpeakerZone::main)
+        config.spatialDirectory = directory;
+    const auto newBooth = zone == a3::SpeakerZone::booth ? directory : booth;
+    config.boothSpatialDirectory = newBooth == config.spatialDirectory ? juce::File() : newBooth;
+}
+}
+
+std::optional<AppConfig> withZoneSpatialDirectory (const AppConfig& config, a3::SpeakerZone zone, const juce::File& directory,
+                                                   juce::String& error)
+{
+    auto edited = config;
+    setZoneDirectory (edited, zone, directory);
     return pruned (std::move (edited), error);
 }
 
@@ -179,9 +200,9 @@ juce::Result writeTopDirections (const juce::File& directory, a3::SpeakerZone zo
 }
 }
 
-juce::File zoneVariantDirectory (const AppConfig& config, const juce::File& userRoot, juce::Time now)
+juce::File zoneVariantDirectory (const AppConfig& config, const juce::File& userRoot, juce::Time now, a3::SpeakerZone zone)
 {
-    const auto name = variantBase (config.spatialDirectory.getFileName()) + "-" + now.formatted ("%Y%m%d-%H%M%S");
+    const auto name = variantBase (zoneSpatialDirectory (config, zone).getFileName()) + "-" + now.formatted ("%Y%m%d-%H%M%S");
     auto variant = userRoot.getChildFile (name);
     for (int n = 2; variant.exists(); ++n)
         variant = userRoot.getChildFile (name + "-" + juce::String (n));
@@ -192,7 +213,8 @@ std::optional<AppConfig> withZoneDecoder (const AppConfig& config, a3::SpeakerZo
                                           const juce::var& parameters, const juce::File& userRoot, juce::String& error,
                                           juce::Time now)
 {
-    const auto variant = zoneVariantDirectory (config, userRoot, now);
+    const auto source = zoneSpatialDirectory (config, zone);
+    const auto variant = zoneVariantDirectory (config, userRoot, now, zone);
     const auto stagingRoot = userRoot.getChildFile (stagingName);
     const auto staging = stagingRoot.getChildFile (variant.getFileName());
     staging.deleteRecursively();   // only ever a leftover of an interrupted save of this very name
@@ -205,14 +227,14 @@ std::optional<AppConfig> withZoneDecoder (const AppConfig& config, a3::SpeakerZo
         return std::nullopt;
     };
 
-    if (! copyFiles (config.spatialDirectory, staging))
-        return discard ("cannot copy " + config.spatialDirectory.getFullPathName() + " to " + staging.getFullPathName());
+    if (! copyFiles (source, staging))
+        return discard ("cannot copy " + source.getFullPathName() + " to " + staging.getFullPathName());
     if (const auto written = writeZoneFiles (staging, zone, decoderJson, parameters); written.failed())
         return discard (written.getErrorMessage());
     if (const auto directions = writeTopDirections (staging, zone, decoderJson); directions.failed())
         return discard (directions.getErrorMessage());
     juce::String refusal;
-    auto edited = withSpatialDirectory (config, staging, refusal);   // loads it: the engine would refuse what fails here
+    auto edited = withZoneSpatialDirectory (config, zone, staging, refusal);   // loads it: the engine would refuse what fails here
     if (! edited)
         return discard (refusal);
 
@@ -220,7 +242,7 @@ std::optional<AppConfig> withZoneDecoder (const AppConfig& config, a3::SpeakerZo
         return discard ("cannot move " + staging.getFullPathName() + " to " + variant.getFullPathName());
     if (stagingRoot.findChildFiles (juce::File::findFilesAndDirectories, false).isEmpty())
         stagingRoot.deleteFile();
-    edited->spatialDirectory = variant;
+    setZoneDirectory (*edited, zone, variant);
     error = {};
     return edited;
 }
@@ -322,11 +344,91 @@ std::optional<DeckSource> deckSourceOf (const IoMap& map, int slot)
     return std::nullopt;
 }
 
+bool isUserVariant (const juce::File& directory, const juce::File& userRoot)
+{
+    // The parent must be the root itself, by path: a path holding ".." never matches, and a link could point anywhere.
+    return userRoot != juce::File() && directory.getParentDirectory() == userRoot && ! directory.getFileName().startsWithChar ('.')
+        && ! directory.getFileName().contains ("..") && directory.isDirectory() && ! directory.isSymbolicLink()
+        && ! userRoot.isSymbolicLink();
+}
+
+bool usesVariant (const AppConfig& config, const juce::File& directory)
+{
+    return zoneSpatialDirectory (config, a3::SpeakerZone::main) == directory || zoneSpatialDirectory (config, a3::SpeakerZone::booth) == directory;
+}
+
+juce::String deleteRefusal (const juce::File& directory, const juce::File& userRoot, const AppConfig& running, const AppConfig& pending)
+{
+    if (! isUserVariant (directory, userRoot))
+        return "installed or not one of your variants: only your own (" + userRoot.getFullPathName() + ") can be deleted";
+    if (usesVariant (running, directory))
+        return "what runs uses it";
+    if (usesVariant (pending, directory))
+        return "the pending edit uses it";
+    return {};
+}
+
+juce::Result deleteVariant (const juce::File& directory, const juce::File& userRoot, const AppConfig& running, const AppConfig& pending)
+{
+    if (const auto why = deleteRefusal (directory, userRoot, running, pending); why.isNotEmpty())
+        return juce::Result::fail (why);
+    return directory.deleteRecursively (false) ? juce::Result::ok() : juce::Result::fail ("cannot delete " + directory.getFullPathName());
+}
+
+juce::String renameRefusal (const juce::File& directory, const juce::File& userRoot, const AppConfig& running)
+{
+    if (! isUserVariant (directory, userRoot))
+        return "installed or not one of your variants: only your own can be renamed";
+    if (usesVariant (running, directory))
+        return "what runs uses it (its saved file names it): save another variant first";
+    return {};
+}
+
+juce::String renameRefusal (const juce::File& directory, const juce::String& name, const juce::File& userRoot, const AppConfig& running)
+{
+    if (const auto why = renameRefusal (directory, userRoot, running); why.isNotEmpty())
+        return why;
+    if (name.trim().isEmpty())
+        return "a name must not be blank";
+    if (name.containsChar ('/') || name.containsChar ('\\'))
+        return "a name must not hold a slash";
+    if (name.startsWithChar ('.'))
+        return "a name must not start with a dot";
+    if (userRoot.getChildFile (name).exists())
+        return name + " exists";
+    return {};
+}
+
+std::optional<juce::File> renameVariant (const juce::File& directory, const juce::String& name, const juce::File& userRoot,
+                                         const AppConfig& running, juce::String& error)
+{
+    error = renameRefusal (directory, name, userRoot, running);
+    if (error.isNotEmpty())
+        return std::nullopt;
+    const auto target = userRoot.getChildFile (name);
+    if (! directory.moveFileTo (target))
+    {
+        error = "cannot rename " + directory.getFullPathName() + " to " + name;
+        return std::nullopt;
+    }
+    return target;
+}
+
+AppConfig withRenamedVariant (const AppConfig& config, const juce::File& from, const juce::File& to)
+{
+    auto edited = config;
+    for (const auto zone : { a3::SpeakerZone::main, a3::SpeakerZone::booth })
+        if (zoneSpatialDirectory (config, zone) == from)
+            setZoneDirectory (edited, zone, to);
+    return edited;
+}
+
 bool sameConfig (const AppConfig& a, const AppConfig& b)
 {
     const auto& x = a.backend;
     const auto& y = b.backend;
     return a.engine == b.engine && a.spatialDirectory == b.spatialDirectory
+        && zoneSpatialDirectory (a, a3::SpeakerZone::booth) == zoneSpatialDirectory (b, a3::SpeakerZone::booth)
         && x.type == y.type && x.deviceType == y.deviceType && x.inputDevice == y.inputDevice
         && x.outputDevice == y.outputDevice && x.sampleRate == y.sampleRate && x.blockSize == y.blockSize
         && a.io.jack == b.io.jack && a.io.directLinks == b.io.directLinks && a.io.deviceChannels == b.io.deviceChannels;
