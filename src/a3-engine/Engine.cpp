@@ -147,8 +147,9 @@ struct Engine::Impl
     std::vector<std::unique_ptr<EngineChannel>> channels;
     std::vector<int> analogChannelOf;   // source index -> channel index
     std::unique_ptr<AmbiEncoderBus> encMain, encFx, encPhones;
-    std::unique_ptr<IemNode> dualDelay;      // declared before the tempo, which holds its raw parameters
-    std::unique_ptr<DelayTempo> tempo;
+    std::unique_ptr<IemNode> dualDelay;      // declared before the loop, which holds its raw parameters
+    std::unique_ptr<DelayLoop> loop;         // BEAT and FEEDBK, audio thread
+    std::unique_ptr<DelayShape> shape;       // COLOR and SPREAD, control thread
     DelayModulation modulation;
     std::unique_ptr<HeadphoneDecoder> rec, phones;
     std::unique_ptr<ZoneDecoder> main, booth;
@@ -183,7 +184,7 @@ struct Engine::Impl
 };
 
 Engine::Impl::Impl (const EngineConfig& c, const SpatialConfig& spatial)
-    : config (c), modulation (c.delayModulation)
+    : config (c), modulation (withoutOwnedParameters (c.delayModulation))
 {
     if (config.channels < 1)
         throw std::runtime_error ("channels must be at least 1");
@@ -217,7 +218,8 @@ Engine::Impl::Impl (const EngineConfig& c, const SpatialConfig& spatial)
     }
     dualDelay = engine::createNode (IemKind::dualDelay, busChannels, busChannels, "fx");
     engine::require (dualDelay->setParameters (spatial.fxParameters), "fx.parameters.json");
-    tempo = std::make_unique<DelayTempo> (*dualDelay);
+    loop = std::make_unique<DelayLoop> (*dualDelay);
+    shape = std::make_unique<DelayShape> (*dualDelay);
     rec = std::make_unique<HeadphoneDecoder> (spatial.recParameters, "rec");
     phones = std::make_unique<HeadphoneDecoder> (withHeadphoneEq (spatial.phonesParameters, config.phonesHeadphoneEq), "phones");
     main = std::make_unique<ZoneDecoder> (spatial.main, "main");
@@ -296,6 +298,7 @@ void Engine::Impl::prepare (double rate, int newBlockSize)
     for (auto* bus : { encMain.get(), encFx.get(), encPhones.get() })
         bus->prepare (rate, blockSize);
     dualDelay->prepare (rate, blockSize);
+    loop->prepare (rate);
     rec->prepare (rate, blockSize);
     phones->prepare (rate, blockSize);
     main->prepare (rate, blockSize);
@@ -323,6 +326,8 @@ void Engine::Impl::processChunk (const EngineInputs& in, const EngineOutputs& ou
     encode (n);
     addDecks (n);
     fxSendPeak = std::max (fxSendPeak, peakOf (busFx, n));
+    const auto& g = controls.global();
+    loop->set (load (g.delayBpm), load (g.delayBeat), load (g.delayFeedback), n);
     engine::runNode (*dualDelay, busFx, n);
     playReturn (n);
     decode (in, out, offset, n);
@@ -355,7 +360,6 @@ void Engine::Impl::latchGlobals (EngineControls& controls)
     phonesStage.set (load (g.phonesVolume));
     main->setLevel (load (g.masterVolume));
     booth->setLevel (load (g.booth));
-    tempo->set (load (g.delayBpm));
 
     for (size_t s = 0; s < analogChannelOf.size(); ++s)
     {
@@ -808,7 +812,13 @@ void Engine::process (const EngineInputs& in, const EngineOutputs& out, int numS
     impl->lastAnalogEncoderPeak.store (impl->analogEncoderPeak, std::memory_order_relaxed);
 }
 
-void Engine::serviceControls (double seconds) { impl->modulation.tick (seconds, *impl->dualDelay); }
+void Engine::serviceControls (double seconds, const EngineControls& controls)
+{
+    const auto& g = controls.global();
+    impl->modulation.tick (seconds, *impl->dualDelay);
+    impl->shape->tick (load (g.delayColor), load (g.delaySpread), *impl->dualDelay);
+}
+
 GateLevels Engine::gateLevels() const
 {
     GateLevels levels;

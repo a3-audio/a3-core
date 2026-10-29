@@ -15,22 +15,7 @@
    "rec": 0.0
   },
   "filterKind": "svf",
-  "delayModulation": [
-   {
-    "parameter": "pitchL",
-    "base": 0.0,
-    "depth": 18.0,
-    "rateHz": 0.124573,
-    "shape": "random"
-   },
-   {
-    "parameter": "pitchR",
-    "base": 0.0,
-    "depth": 18.0,
-    "rateHz": 0.018817,
-    "shape": "random"
-   }
-  ]
+  "delayModulation": []
  },
  "backend": {
   "type": "jack"

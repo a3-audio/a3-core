@@ -62,8 +62,9 @@ size_t firstEchoAt (float bpm)
 {
     auto node = makeDualDelay();
     node->prepare (sampleRate, blockSize);
-    a3::DelayTempo tempo (*node);
-    tempo.set (bpm);
+    a3::DelayLoop loop (*node);
+    loop.prepare (sampleRate);
+    loop.set (bpm, a3::delay::defaultBeat, a3::delay::defaultFeedback, blockSize);   // the time is held until the next set
     render (*node, std::vector<float> (44100 * 2, 0.0f));   // let the delay time settle
     std::vector<float> impulse (44100, 0.0f);
     impulse[0] = 1.0f;
@@ -92,7 +93,7 @@ TEST (DualDelay, NeverListensForOscAndWritesNothingUnderHome)
 
 TEST (DualDelay, ImpulseEchoesAtTheTempo)
 {
-    // delayMult 4 from the data: one echo every 60 / (bpm * 4) seconds.
+    // The default quarter beat (R1, what delayMult 4 played): one echo every 60 / (bpm * 4) seconds.
     const double expected120 = sampleRate * 60.0 / (120.0 * 4.0);
     const double expected90 = sampleRate * 60.0 / (90.0 * 4.0);
     EXPECT_NEAR ((double) firstEchoAt (120.0f), expected120, blockSize);
@@ -121,4 +122,24 @@ TEST (DualDelay, TheEngineChoosesThirdOrderAndNoSync)
     EXPECT_FLOAT_EQ (node->rawParameter ("syncL")->load(), 0.0f);
     EXPECT_FLOAT_EQ (node->rawParameter ("syncR")->load(), 0.0f);
     EXPECT_FLOAT_EQ (node->rawParameter ("lfoDepthL")->load(), 0.0f);
+}
+
+// R5: SPREAD turns the lines, so both rotate (warp left yaw and pitch inert) at the default spread,
+// with no tilt; the cutoffs are COLOR's centre (R4).
+TEST (DualDelay, TheShippedDataRotatesAtTheDefaultSpread)
+{
+    auto node = makeDualDelay();
+    for (const auto& [id, value] : std::initializer_list<std::pair<const char*, float>> {
+             { "transformModeL", 0.0f }, { "transformModeR", 0.0f }, { "pitchL", 0.0f }, { "pitchR", 0.0f },
+             { "rollL", 0.0f }, { "rollR", 0.0f }, { "yawL", 60.0f }, { "yawR", -60.0f },
+             { "HPcutOffL", 233.0f }, { "HPcutOffR", 233.0f }, { "LPcutOffL", 8000.0f }, { "LPcutOffR", 8000.0f } })
+        EXPECT_FLOAT_EQ (node->rawParameter (id)->load(), value) << id;
+}
+
+// The line's floor in DelayParameters is DualDelay's own: its legal delayBPM starts there.
+TEST (DualDelay, TheLineIsAsLongAsDelayParametersSays)
+{
+    auto node = makeDualDelay();
+    EXPECT_FLOAT_EQ (node->legalValue ("delayBPML", 0.0f), a3::delay::lowestDelayBpm);
+    EXPECT_FLOAT_EQ (node->legalValue ("delayMultL", 0.0f), 1.0f);
 }

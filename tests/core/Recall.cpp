@@ -383,3 +383,31 @@ TEST (Recall, MessagesAsPython)
         }
     }
 }
+
+// The delay page
+
+namespace
+{
+const Truth& packageTruth()
+{
+    static const auto truth = std::get<Truth> (Truth::load (juce::File (A3_PACKAGE_TRUTH), std::nullopt));
+    return truth;
+}
+}
+
+TEST (Recall, TheDelayPageIsToldAsItIsWithTheBeatThatPlays)
+{
+    DelaySteps steps;
+    turnDelay (steps, DelayWord::beat, 99);   // 2 selected
+    turnDelay (steps, DelayWord::color, -3);
+    EXPECT_EQ (delayWordMessages (packageTruth(), steps, 126.0),
+               (Messages { { "/aux-return/delay/beat", pyFloat (2.0) }, { "/aux-return/delay/feedback", pyFloat (0.7) },
+                           { "/aux-return/delay/color", pyFloat (-0.3) }, { "/aux-return/delay/spread", pyFloat (60.0) } }));
+    EXPECT_EQ (delayWordMessages (packageTruth(), steps, 80.0).front(), (Message { "/aux-return/delay/beat", pyFloat (1.0) }));
+    EXPECT_EQ (delayWordMessages (packageTruth(), steps, std::nullopt).front(), (Message { "/aux-return/delay/beat", pyFloat (2.0) }));
+}
+
+TEST (Recall, ATruthWithoutTheDelayWordsSaysNothingOfThem)
+{
+    EXPECT_TRUE (delayWordMessages (b0::truth(), DelaySteps {}, 120.0).empty());
+}

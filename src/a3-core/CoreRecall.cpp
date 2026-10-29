@@ -22,6 +22,7 @@ int Core::sayTheWholeState()
     for (const auto& message : messages)
         for (const auto& client : subscribers)
             send (client, message);
+    announceDelayRecall();
     speakStems (true);
     return static_cast<int> (messages.size());
 }

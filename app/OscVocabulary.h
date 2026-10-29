@@ -18,7 +18,7 @@ enum class EngineWord
     channelAzimuth, channelElevation, channelSource,
     filterFrequency, filterResonance, filterMode,
     masterVolume, masterBooth, masterPhonesMix, masterPhonesVolume, masterAuxReturn,
-    returnCue, delayBpm, engineOpen
+    returnCue, delayBpm, delayBeat, delayFeedback, delayColor, delaySpread, engineOpen
 };
 
 // One key of the truth the engine carries, with its address read from the truth.
@@ -66,7 +66,8 @@ std::optional<EngineTruth> parseEngineTruth (const juce::String& json, juce::Str
 
 // Core's message into the controls, read and clamped as Core and the bench do:
 // positions +-180 / +-90 degrees, 0..1 values, the source 0..decks (analog refused on a
-// deck-only channel), the return source 0 analog / 1 delay, delay.bpm 20..400, filter.mode a
+// deck-only channel), the return source 0 analog / 1 delay, delay.bpm 20..400, the delay page's
+// beat to its nearest legal value and feedback/color/spread clamped (a3::delay), filter.mode a
 // number (> 0.5 high-pass) or "high_pass"/"low_pass", engine.open 1 opens and 0 closes.
 // The channel is the truth's range within 1..config.channels. false, and nothing
 // changed: an address the engine does not carry, not exactly one argument, a

@@ -1,0 +1,115 @@
+SPDX-FileCopyrightText: 2026 Raphael Eismann
+SPDX-License-Identifier: GPL-3.0-or-later
+
+DualDelay: a delay-time jump crossfades instead of gliding (a3-core rulings R17, R18).
+
+Applied by cmake/A3IemNodes.cmake at configure time to a copy of DualDelay/Source in the
+build tree (patch -p1 from that Source directory); third_party/IEMPluginSuite stays clean at
+its pin. A target time that moves by more than a3::delay::crossfadeAboveRatio jumps: the
+line reads the old and the new position together and crossfades equal-power over
+a3::delay::crossfadeSeconds (both in src/a3-delay/DelayParameters.h), then continues at the
+new time. A smaller move keeps IEM's 0.5 Hz glide. Configure fails if this no longer applies.
+
+--- a/PluginProcessor.h
++++ b/PluginProcessor.h
+@@ -28,6 +28,7 @@
+ #include "../../resources/AmbisonicWarp.h"
+ #include "../../resources/AudioProcessorBase.h"
+ #include "../../resources/OnePoleFilter.h"
++#include "a3-delay/DelayParameters.h"   // a3 patch: the crossfade constants
+ #include "../../resources/ambisonicTools.h"
+ 
+ #define ProcessorClass DualDelayAudioProcessor
+@@ -114,6 +115,17 @@
+     juce::AudioBuffer<float> delayOutBuffer[2];
+     OnePoleFilter<float> delayTimeInterp[2];
+ 
++    // a3 patch (a3-core patches/iem/DualDelay-crossfade.patch, rulings R17/R18): a target delay
++    // time that moves by more than a3::delay::crossfadeAboveRatio of the one the line is heading
++    // for jumps there, reading the old and the new position together and crossfading equal-power
++    // over a3::delay::crossfadeSeconds; a smaller move keeps the glide of delayTimeInterp.
++    float a3HeadingFor[2] = { -1.0f, -1.0f };   // < 0: no target yet (the first block takes its own)
++    float a3Glided[2] = { 0.0f, 0.0f };         // the glided time at the last sample, in samples
++    float a3FadeFrom[2] = { 0.0f, 0.0f };       // the old read position while a crossfade runs
++    int a3FadeLeft[2] = { 0, 0 };
++    int a3FadeLength = 1;
++    void a3HeadFor (int line, float newDelay);
++
+     bool updateFilterCoeffs = false;
+ 
+     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DualDelayAudioProcessor)
+--- a/PluginProcessor.cpp
++++ b/PluginProcessor.cpp
+@@ -143,8 +143,11 @@
+     specLFO.numChannels = 1;
+     specLFO.maximumBlockSize = samplesPerBlock;
+ 
++    a3FadeLength = juce::jmax (1, juce::roundToInt (sampleRate * a3::delay::crossfadeSeconds));
+     for (int i = 0; i < 2; ++i)
+     {
++        a3HeadingFor[i] = -1.0f;
++        a3FadeLeft[i] = 0;
+         LFO[i].prepare (specLFO);
+         LFO[i].setFrequency (*lfoRate[i], true);
+ 
+@@ -239,7 +242,7 @@
+ 
+         // Setting up delay interpolator
+         const float newDelay = fs * 60.0f / (*delayBPM[i] * *delayMult[i]);
+-        delayTimeInterp[i].setTargetValue (newDelay);
++        a3HeadFor (i, newDelay);
+ 
+         // ========== Fill input buffer for delay line ==========
+         // Copy dry input to delay buffer
+@@ -286,8 +289,26 @@
+         // Cycle through it on sample basis for smooth delay time changes
+         for (int sample = 0; sample < spb; ++sample)
+         {
+-            float currentDelay = delayTimeInterp[i].process()
+-                                 + LFO[i].processSample (1.0f) * msToSamples * *lfoDepth[i];
++            a3Glided[i] = delayTimeInterp[i].process();
++            const float lfo = LFO[i].processSample (1.0f) * msToSamples * *lfoDepth[i];
++            float currentDelay = a3Glided[i] + lfo;
++
++            if (a3FadeLeft[i] > 0)
++            {
++                const float progress =
++                    static_cast<float> (a3FadeLength - a3FadeLeft[i] + 1) / static_cast<float> (a3FadeLength);
++                const float toNew = std::sin (juce::MathConstants<float>::halfPi * progress);
++                const float fromOld = std::cos (juce::MathConstants<float>::halfPi * progress);
++                --a3FadeLeft[i];
++                for (int channel = 0; channel < nCh; ++channel)
++                {
++                    delayLine[i].pushSample (channel, delayBuffer[i].getSample (channel, sample));
++                    const float old = delayLine[i].popSample (channel, a3FadeFrom[i] + lfo, false);
++                    const float now = delayLine[i].popSample (channel, currentDelay);
++                    delayOutBuffer[i].setSample (channel, sample, fromOld * old + toNew * now);
++                }
++                continue;
++            }
+ 
+             for (int channel = 0; channel < nCh; ++channel)
+             {
+@@ -322,6 +343,22 @@
+     }
+ }
+ 
++// a3 patch: a jump crossfades, a small move glides; a change during a crossfade waits for its end.
++void DualDelayAudioProcessor::a3HeadFor (int line, float newDelay)
++{
++    if (a3FadeLeft[line] > 0)
++        return;
++    const float headingFor = a3HeadingFor[line];
++    if (headingFor > 0.0f && std::abs (newDelay - headingFor) > a3::delay::crossfadeAboveRatio * headingFor)
++    {
++        a3FadeFrom[line] = a3Glided[line];
++        a3FadeLeft[line] = a3FadeLength;
++        delayTimeInterp[line].process (newDelay, true);   // the glide restarts at the new time
++    }
++    delayTimeInterp[line].setTargetValue (newDelay);
++    a3HeadingFor[line] = newDelay;
++}
++
+ //==============================================================================
+ bool DualDelayAudioProcessor::hasEditor() const
+ {

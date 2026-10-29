@@ -70,6 +70,15 @@ libraries JUCE would `dlopen` for a window are not needed.
   channel reaches the delay through its AUX send, encoded at its position (B-format); there is no analog
   return input and no return source any more. A saved `engine.returnAnalogPair` is a retired key: it
   loads, is ignored and listed (`ignored retired key engine.returnAnalogPair`), and is never written.
+- **The delay page (AUX-RTN).** Core's `aux-return.delay.beat/feedback/color/spread` set IEM's
+  DualDelay: BEAT with the tempo to delayBPM × delayMult, FEEDBK to the direct and cross feedback (a
+  30 ms ramp), both on the audio thread; COLOR to the in-loop filters and SPREAD to ± yaw, glided on the
+  control tick. The rules and constants are `src/a3-delay/DelayParameters.h` (plain C++, library
+  `a3-delay`, shared with Core). The engine owns the delay (R15): rotate mode, pitch and roll 0, and no
+  `delayModulation` of what it sets, whatever a saved spatial directory or `engine.json` says; when that
+  overrides a saved value it says so once at start, in `--check-config` and on STATUS. A delay-time
+  change above 2 % jumps with an equal-power crossfade (patched DualDelay, see Third-party code), a
+  smaller one (the beat clock's drift) keeps IEM's glide.
 - **Stem cue.** Every deck slot's 9 `cue` channels (second-order B-format, ACN 0..8) are added to
   `enc_phones` ahead of the phones decoder, weighted by the CUE↔MIX knob only, whether the deck is on
   a channel or not (R13); they share the HRTF and PHONES with the desk's cue.
@@ -201,8 +210,8 @@ names fewer decks than the truth gets one line at start, in STATUS and from `--c
 slots and pointing to that setting.
 
 **The default config** (`data/engine.json`): four channels on analog pairs 1-4 (pairs 5 and 6 free), no deck
-count (the truth's), trims main/booth -30.88 dB (REAPER's output faders), phones 0, rec 0, SVF filter, Step 0's delay
-modulation, the JACK backend, and the rig's connections: what `a3-patchbay.xml` connected for REAPER,
+count (the truth's), trims main/booth -30.88 dB (REAPER's output faders), phones 0, rec 0, SVF filter, no delay
+modulation (R5), the JACK backend, and the rig's connections: what `a3-patchbay.xml` connected for REAPER,
 moved to the engine's ports (analog capture, Scarlett playback and the analyzer's beat input `bpm_1`),
 deck A to `StemDeck-A` (`bformat_1..16`, `aux_1..16`, `cue_1..9`), deck B to `AES67 deck B` (`receive_MAIN/AUX/CUE…`), and
 every other slot to its local `StemDeck-<X>` by the rule above (a StemDeck's ports exist once StemDeck's S4 is
@@ -332,8 +341,11 @@ names in `tests/core` and `tests/engine`. See `tools/parity/README.md`.
 ## Third-party code and data
 
 - **IEM Plug-in Suite** (Institute of Electronic Music and Acoustics, Graz), GPL-3.0-or-later,
-  v1.16.0, a git submodule at `third_party/IEMPluginSuite`, compiled from source, unchanged (no file
-  in it is edited; its own nested submodules are not used). Initialise it with
+  v1.16.0, a git submodule at `third_party/IEMPluginSuite`, compiled from source; no file in it is
+  edited (its own nested submodules are not used). One plug-in is patched in the build tree:
+  `patches/iem/DualDelay-crossfade.patch` (a delay-time jump crossfades instead of gliding) is applied at
+  configure time to a copy of `DualDelay/Source` under the build directory, and configure stops,
+  naming the patch, when it no longer applies. Initialise it with
   `git submodule update --init third_party/IEMPluginSuite` (not `--recursive`); CMake stops with that
   message when it is missing.
 - **KU100 HRIR data** in IEM's BinauralDecoder (`BinauralDecoder/Source/IRs/*.wav`, `EQ/*.wav`),

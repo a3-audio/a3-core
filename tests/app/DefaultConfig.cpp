@@ -243,9 +243,7 @@ TEST (DefaultConfig, CalibratedZonesHaveTrims)
     EXPECT_FLOAT_EQ (*config.engine.trims.phones, 0.0f);
     EXPECT_FLOAT_EQ (config.engine.trims.rec, 0.0f);
     EXPECT_EQ (config.engine.filterKind, a3::FilterKind::svf);
-    ASSERT_EQ (config.engine.delayModulation.size(), 2u);
-    EXPECT_EQ (config.engine.delayModulation[0].parameter, "pitchL");
-    EXPECT_FLOAT_EQ (config.engine.delayModulation[0].depth, 18.0f);
+    EXPECT_TRUE (config.engine.delayModulation.empty()) << "R5: the pitch LFO would tilt the rotating repeats";
 }
 
 // O13: the engine measures the meters itself, so the default map links nothing to beat-analyzer's

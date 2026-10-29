@@ -41,13 +41,19 @@ include(cmake/A3IemNodes.cmake)
 include(third_party/IEMPluginSuite/Versions.cmake)   # only set()s the plug-in versions
 a3_add_iem_nodes("" a3-engine-juce)
 
+# The delay page's values as DualDelay's parameters: plain C++, no JUCE and no engine headers, so
+# Core (the beat it announces, R16), the engine and the patched DualDelay share one rule.
+add_library(a3-delay STATIC src/a3-delay/DelayParameters.cpp)
+target_include_directories(a3-delay PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_compile_options(a3-delay PRIVATE -Wall -Wextra -Werror=switch)
+
 add_library(a3-engine STATIC src/a3-engine/Laws.cpp src/a3-engine/PurestGain.cpp
     src/a3-engine/SmoothEQ3.cpp src/a3-engine/Isolator3.cpp src/a3-engine/Meters.cpp src/a3-engine/DjFilter.cpp
     src/a3-engine/ChannelStrip.cpp src/a3-engine/DeckStrip.cpp src/a3-engine/ChannelSelect.cpp src/a3-engine/SpatialConfig.cpp src/a3-engine/SpatialBus.cpp src/a3-engine/AmbiEncoderBus.cpp src/a3-engine/EngineConfig.cpp
     src/a3-engine/DelayModulation.cpp src/a3-engine/EngineStages.cpp src/a3-engine/OutputGate.cpp src/a3-engine/Engine.cpp
     src/a3-engine/VuTaps.cpp src/a3-engine/VuBundles.cpp src/a3-engine/DeckLetters.cpp)
 target_include_directories(a3-engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/a3-engine)
-target_link_libraries(a3-engine PUBLIC a3-engine-juce a3-iem)
+target_link_libraries(a3-engine PUBLIC a3-engine-juce a3-iem a3-delay)
 target_compile_options(a3-engine PRIVATE -Wall -Wextra -Werror=switch)
 
 # The link planning and the JACK linker: juce_core and libjack only, no engine headers, so another

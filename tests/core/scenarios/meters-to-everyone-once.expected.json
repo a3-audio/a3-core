@@ -498,6 +498,110 @@
   "to": "mixer",
   "host": "192.168.8.11",
   "port": 7772,
+  "address": "/aux-return/delay/beat",
+  "args": [
+   [
+    "f",
+    0.25
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/aux-return/delay/beat",
+  "args": [
+   [
+    "f",
+    0.25
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/aux-return/delay/feedback",
+  "args": [
+   [
+    "f",
+    0.699999988079071
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/aux-return/delay/feedback",
+  "args": [
+   [
+    "f",
+    0.699999988079071
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/aux-return/delay/color",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/aux-return/delay/color",
+  "args": [
+   [
+    "f",
+    0.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
+  "address": "/aux-return/delay/spread",
+  "args": [
+   [
+    "f",
+    60.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "motion",
+  "host": "127.0.0.1",
+  "port": 7771,
+  "address": "/aux-return/delay/spread",
+  "args": [
+   [
+    "f",
+    60.0
+   ]
+  ]
+ },
+ {
+  "at": 0.0,
+  "to": "mixer",
+  "host": "192.168.8.11",
+  "port": 7772,
   "address": "/channel/1/stem",
   "args": [
    [

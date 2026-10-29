@@ -351,3 +351,25 @@ TEST (EngineWords, AReplayOvertakenByANewHelloDoesNotCount)
     EXPECT_EQ (s.evening(), file);
 }
 
+// The delay page
+
+TEST (EngineWords, TheEngineIsToldTheSelectedDelayValuesAndTheStateCarriesThem)
+{
+    static const auto package = std::get<Truth> (Truth::load (juce::File (A3_PACKAGE_TRUTH), std::nullopt));
+    auto info = master();
+    turnDelay (info.delay, DelayWord::beat, 99);   // 2 selected: the engine gets 2 whatever the tempo, it fits it itself
+    turnDelay (info.delay, DelayWord::spread, -2);
+    const std::vector<Message> expected { { "/aux-return/delay/beat", pyFloat (2.0) }, { "/aux-return/delay/feedback", pyFloat (0.7) },
+                                          { "/aux-return/delay/color", pyFloat (0.0) }, { "/aux-return/delay/spread", pyFloat (30.0) } };
+    EXPECT_EQ (delayEngineMessages (package, info.delay), expected);
+    const auto got = stateMessages (package, channels(), info, DeckSelector (4, 2), 80.0);
+    for (const auto& message : expected)
+        EXPECT_TRUE (contains (got, message)) << message.first;
+}
+
+TEST (EngineWords, ATruthWithoutTheDelayWordsSendsNone)
+{
+    EXPECT_TRUE (delayEngineMessages (truth(), DelaySteps {}).empty());
+    for (const auto& message : stateMessages (truth(), channels(), master(), DeckSelector (4, 2), 120.0))
+        EXPECT_EQ (message.first.find ("/aux-return/delay"), std::string::npos);
+}

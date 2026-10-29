@@ -201,7 +201,10 @@ with the reason, and is never re-recorded. The runner compares it as strictly as
   reached, once each. Runs on the engine truth (`"truth": "engine"`). The start-up entries (at 0.0) are
   copied from `beat-to-remote-motion-and-desks.expected.json`, which B1 recorded for the same empty
   start; the three `vu` entries are written by hand from the truth's routes (Motion's vu port, the
-  mixer, radla) with the datagram encoded by an independent script. B1 has no engine meters.
+  mixer, radla) with the datagram encoded by an independent script. B1 has no engine meters. Since the
+  delay page it also holds the four `/aux-return/delay/*` words the start-up recall says to every
+  subscriber, because the truth lists mixer, desk and motion as their receivers (the engine truth has
+  them, B1's does not): inserted, nothing else moved.
 
 ## The rig's own files
 

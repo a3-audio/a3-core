@@ -7,6 +7,8 @@
 
 #include <optional>
 
+#include "DelayValues.h"
+
 namespace a3core
 {
 struct ChannelInfo
@@ -22,6 +24,7 @@ struct MasterInfo
 
     double phonesMix = 0;
     bool returnCue = false;
+    DelaySteps delay;   // the AUX-RTN delay page: BEAT, FEEDBK, COLOR, SPREAD (the selected beat, not the one that plays)
     FxMode fxMode = FxMode::lowPass;
 };
 

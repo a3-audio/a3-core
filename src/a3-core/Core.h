@@ -174,6 +174,11 @@ private:
     void sendToDeck (const std::vector<Message>& messages);
     void announceFlag (LedFlag flag, int index);
     void toggleReturnCue();
+    void stepDelay (DelayWord word, long long clicks);
+    void announceDelayWord (DelayWord word);
+    void tellTheDeskDelayWord (DelayWord word);
+    void announceDelayRecall();
+    void reannounceBeatIfItPlaysDifferently();
     void keepThreeD (int index, double value);
     void rememberState();
     void sendPositionToProdj (const std::string& key, int index, double value);
@@ -234,6 +239,8 @@ private:
     TempoSource tempo;
     double tempoLookedAt = 0.0;
     std::optional<double> engineBpm;
+    // The beat the desk was last told: the one that plays at the tempo (R16), not the selected one.
+    std::optional<double> beatAnnounced;
     // A NaN was just put into the state (B1: a new float object, so the state differs from the last).
     bool nanArrived = false;
 

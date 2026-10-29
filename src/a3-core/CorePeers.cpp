@@ -488,6 +488,7 @@ void Core::sendTempo (double bpm)
 {
     engineBpm = bpm;
     sendToEngine ({ tempoMessage (truth, bpm) });
+    reannounceBeatIfItPlaysDifferently();
 }
 
 // vu_destinations: the remote Motion followed (the rig's own gets the analyzer's meters directly)

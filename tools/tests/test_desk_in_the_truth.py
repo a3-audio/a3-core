@@ -62,9 +62,20 @@ class TheDeskTalks(unittest.TestCase):
         self.assertIn(("stemdeck", "core.vu-relay", "vu"), self.routes)
 
 
+# The AUX-RTN delay turns come from the hardware mixer only: the A3 Desk app has no
+# delay page yet (ruling R8 of the delay-parameters feature). The value words name
+# the desk as a receiver, like every lamp: Core broadcasts them (R21).
+HARDWARE_ONLY = {
+    f"aux-return.delay.{name}.turn"
+    for name in ("beat", "feedback", "color", "spread")
+}
+
+
 class TheDeskMirrorsTheHardware(unittest.TestCase):
     def test_wherever_the_hardware_desk_is_named_a_desk_is_too(self):
         for key, entry in TRUTH.addresses().items():
+            if key in HARDWARE_ONLY:
+                continue
             for field in LISTS:
                 names = entry.get(field, [])
                 if "mixer" in names:

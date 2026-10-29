@@ -304,3 +304,54 @@ TEST (CoreState, ACrossfadeSetToNullIsForgotten)
     applyState (parsed ("{\"channels\": [{\"three_d\": null}]}"), rig.channels, rig.master);
     EXPECT_FALSE (rig.channels[0].threeD.has_value());   // Python sets None
 }
+
+TEST (CoreState, TheDelayValuesAreKeptWhenTheyDifferFromTheDefaults)
+{
+    auto rig = aRig();
+    rig.master.delay.beat = 4;
+    rig.master.delay.feedback = 3;
+    rig.master.delay.color = -7;
+    rig.master.delay.spread = 12;
+    juce::String error;
+    const auto written = parseJson (juce::String (dumpIndented (stateOf (rig.channels, rig.master), 2)), error);
+    EXPECT_EQ (static_cast<double> (written["delay_beat"]), 1.0);
+    EXPECT_EQ (static_cast<double> (written["delay_feedback"]), 0.15);
+    EXPECT_EQ (static_cast<double> (written["delay_color"]), -0.7);
+    EXPECT_EQ (static_cast<double> (written["delay_spread"]), 180.0);
+    auto back = aRig();
+    applyState (written, back.channels, back.master);
+    EXPECT_EQ (back.master.delay, rig.master.delay);
+}
+
+// The file stays the layout the Python Core wrote (the recorded scenarios compare its bytes) until a
+// value is moved: a missing field is the default anyway.
+TEST (CoreState, TheDefaultsAreLeftOutOfTheFile)
+{
+    auto rig = aRig();
+    EXPECT_EQ (dumpIndented (stateOf (rig.channels, rig.master), 2).find ("delay_"), std::string::npos);
+    rig.master.delay.spread = 5;
+    const auto text = dumpIndented (stateOf (rig.channels, rig.master), 2);
+    EXPECT_NE (text.find ("delay_spread"), std::string::npos);
+    EXPECT_EQ (text.find ("delay_beat"), std::string::npos);
+}
+
+TEST (CoreState, AnOldFileHasTheDelayDefaults)
+{
+    auto back = aRig();
+    back.master.delay.spread = 5;
+    applyState (parsed ("{\"phones_mix\": 0.5}"), back.channels, back.master);
+    EXPECT_EQ (back.master.delay.spread, 5);   // a field the file does not name is left alone
+    auto fresh = aRig();
+    EXPECT_EQ (fresh.master.delay, DelaySteps {});
+}
+
+TEST (CoreState, AnIllegalDelayValueLandsOnTheNearestStepOrIsSkipped)
+{
+    auto back = aRig();
+    applyState (parsed ("{\"delay_beat\": 0.7, \"delay_feedback\": 0.33, \"delay_color\": \"high\", \"delay_spread\": 1000}"),
+                back.channels, back.master);
+    EXPECT_EQ (delayValue (back.master.delay, DelayWord::beat), 0.75);
+    EXPECT_EQ (delayValue (back.master.delay, DelayWord::feedback), 0.35);
+    EXPECT_EQ (back.master.delay.color, 0);   // a text is no number: the default stays
+    EXPECT_EQ (delayValue (back.master.delay, DelayWord::spread), 180.0);
+}
