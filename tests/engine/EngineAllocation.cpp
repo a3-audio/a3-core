@@ -324,3 +324,33 @@ TEST (EngineAllocation, DeckAuxStripsDoNotAllocate)
     std::printf ("[ recorded ] DeckAuxStripsDoNotAllocate: %d allocations, %d releases in %d blocks (IEM's own: %d)\n",
                  total.allocated, total.released, blocks, upstream.allocated);
 }
+
+// The speaker map's noise in both zones, channel and direction bursts started and running at odd call
+// sizes: the engine still adds nothing to IEM's own.
+TEST (EngineAllocation, NoiseBurstsDoNotAllocate)
+{
+    const std::vector<int> calls { quantum, 1, 7, 333, 64 };
+    EngineRig rig (engineConfig (4, 2), 44100, quantum);
+    HeapCount total;
+    size_t k = 0;
+    for (size_t start = 0; start < rig.frames;)
+    {
+        const int n = (int) std::min<size_t> ((size_t) calls[k++ % calls.size()], rig.frames - start);
+        if (k == 1 || k == 40)
+        {
+            rig.engine->playNoise (a3::SpeakerZone::main, 2);
+            rig.engine->playAmbisonicNoise (a3::SpeakerZone::booth, -45.0f, 0.0f);
+        }
+        const auto in = rig.inputsAt (start);
+        const auto out = rig.outputsAt (start);
+        const auto count = countHeapDuring ([&] { rig.engine->process (in, out, n, rig.controls); });
+        total.allocated += count.allocated;
+        total.released += count.released;
+        start += (size_t) n;
+    }
+    EXPECT_GT (peak (rig.mainOutputs()), 1e-3);
+    EXPECT_GT (peak (rig.boothOutputs()), 1e-3);
+    const auto upstream = upstreamAllocations (rig.spatial, quantum, calls, rig.frames);
+    EXPECT_EQ (total.allocated, upstream.allocated);
+    EXPECT_EQ (total.released, upstream.released);
+}

@@ -11,6 +11,7 @@
 #include "SilenceFade.h"
 #include "SpatialBus.h"
 #include "SpatialConfig.h"
+#include "ZoneNoise.h"
 
 // The small stages the engine graph is built from; none allocates in process.
 namespace a3
@@ -45,7 +46,8 @@ private:
 };
 
 // IEM's SimpleDecoder for one zone, its level stage (MASTER or BOOTH) and its gate:
-//   outputs = route (gate (stage (SimpleDecoder (bus16))))
+//   outputs = route (gate (stage (SimpleDecoder (bus16 + direction noise) + channel noise)))
+// The speaker map's test noise (ZoneNoise) is in front of the stage and the gate, never behind them.
 // The stage sits after the decoder so that 0 is exact silence at once: in front
 // of it the crossover filters would ring out. PurestGain is linear, so the
 // place does not change the level. ZoneConfig::fixedGainDb is not applied (R1):
@@ -56,6 +58,7 @@ public:
     ZoneDecoder (const ZoneConfig&, const juce::String& name);   // throws std::runtime_error
     void prepare (double sampleRate, int blockSize);
     void setLevel (float control) { stage.set (control); }
+    ZoneNoise& noise() { return testNoise; }
     void process (const juce::AudioBuffer<float>& bus16, const ZoneOutputs& out, int offset, int count, OutputGate&, bool open);
     // The zone's ports in order (sub when the layout has one, then the tops) and what
     // each carried in the last process call.
@@ -66,6 +69,7 @@ public:
 private:
     std::unique_ptr<IemNode> decoder;
     GainStage stage;
+    ZoneNoise testNoise;
     juce::AudioBuffer<float> buffer;
     int outputs = 0;
     int subChannel = 0;

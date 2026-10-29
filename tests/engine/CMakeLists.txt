@@ -24,7 +24,7 @@ add_executable(a3-engine-tests ReferenceSmoke.cpp Laws.cpp PurestGain.cpp Smooth
     Isolator3.cpp Meters.cpp DjFilter.cpp ChannelStrip.cpp DeckStrip.cpp ChannelSelect.cpp StripTiming.cpp Bench.cpp CpuBench.cpp
     JuceEnvironment.cpp IemCompileTrial.cpp IemNode.cpp Layout.cpp AllRadDesign.cpp DecoderSummary.cpp SpatialBus.cpp SpatialTiming.cpp
     SpatialAllocation.cpp EngineConfig.cpp DualDelay.cpp DelayModulation.cpp DelayParameters.cpp DelayEffects.cpp AmbiEncoderBus.cpp Engine.cpp
-    EngineGate.cpp EngineAllocation.cpp EngineTiming.cpp VuTaps.cpp VuBundles.cpp LinkPlan.cpp LinkMap.cpp
+    EngineGate.cpp EngineNoise.cpp EngineAllocation.cpp EngineTiming.cpp VuTaps.cpp VuBundles.cpp LinkPlan.cpp LinkMap.cpp
     ../app/EngineOsc.cpp ../app/HelloSender.cpp ../app/EngineHost.cpp
     ../app/ConfigFile.cpp ../app/EnginePorts.cpp ../app/ConnectionPlan.cpp
     ../app/DeviceBackend.cpp ../app/AppArgs.cpp

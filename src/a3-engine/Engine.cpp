@@ -153,6 +153,7 @@ struct Engine::Impl
     DelayModulation modulation;
     std::unique_ptr<HeadphoneDecoder> rec, phones;
     std::unique_ptr<ZoneDecoder> main, booth;
+    ZoneDecoder& zoneDecoder (SpeakerZone zone) { return zone == SpeakerZone::main ? *main : *booth; }
     std::array<OutputGate, numGatedZones> gates;   // GatedZone order
     bool gateOpen = false;
     std::atomic<bool> heldClosed { false };   // the host's fade before a swap; Core's gateOpen is left as it is
@@ -825,6 +826,13 @@ GateLevels Engine::gateLevels() const
     for (int z = 0; z < numGatedZones; ++z)
         levels.gain[z] = impl->gates[(size_t) z].currentGain();
     return levels;
+}
+
+void Engine::playNoise (SpeakerZone zone, int channel) { impl->zoneDecoder (zone).noise().requestChannel (channel); }
+
+void Engine::playAmbisonicNoise (SpeakerZone zone, float azimuthDegrees, float elevationDegrees)
+{
+    impl->zoneDecoder (zone).noise().requestDirection (azimuthDegrees, elevationDegrees);
 }
 
 void Engine::holdGateClosed (bool held) { impl->heldClosed.store (held, std::memory_order_relaxed); }

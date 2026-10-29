@@ -80,6 +80,14 @@ public:
     // The host's fade-out before it swaps in a rebuilt Engine.
     void holdGateClosed (bool held);
 
+    // Any thread: the speaker map's test noise in one zone, IEM AllRADecoder's bursts (0.5 s, -10 dBFS).
+    // A channel burst goes on decoder output `channel` (1-based) right after the zone's SimpleDecoder; a
+    // direction goes into that zone's decoder input. Both sit before MASTER/BOOTH and the zone's gate: the
+    // fader sets the loudness and a closed gate keeps it silent. A request while that zone's burst of the
+    // same kind runs is ignored (IEM's behaviour); it starts at the next process call.
+    void playNoise (SpeakerZone, int channel);
+    void playAmbisonicNoise (SpeakerZone, float azimuthDegrees, float elevationDegrees);
+
     // One meter per output port, in port order: main (sub when the layout has one, then
     // tops 1..N), booth (the same), rec L/R, phones L/R, then per channel pre L/R, post L/R.
     // Peaks since the last call (the call takes them; one reader), RMS now; lock-free.

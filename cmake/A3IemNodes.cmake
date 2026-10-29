@@ -170,7 +170,9 @@ function(a3_add_iem_nodes SUFFIX JUCE_TARGET)
     # SPEAKERS page; it never processes audio. IEM's Versions.cmake spells this one's version VERISON.
     set(AllRADecoder_VERSION ${AllRADecoder_VERISON})
     a3_iem_add_plugin("${SUFFIX}" ${JUCE_TARGET} AllRADecoder ${A3_IEM_NODES_DIR}/AllRadDesign.cpp)
-    target_sources(${AllRADecoder_TARGET} PRIVATE ${A3_IEM_DIR}/resources/NewtonApple/NewtonApple_hull3D.cpp)
+    # ZoneNoise: the engine's per-zone test noise, IEM's NoiseBurst.h and AmbisonicNoiseBurst.h as they are.
+    target_sources(${AllRADecoder_TARGET} PRIVATE ${A3_IEM_DIR}/resources/NewtonApple/NewtonApple_hull3D.cpp
+        ${A3_IEM_NODES_DIR}/ZoneNoise.cpp)
     set_source_files_properties(${A3_IEM_DIR}/resources/NewtonApple/NewtonApple_hull3D.cpp
         TARGET_DIRECTORY ${AllRADecoder_TARGET} PROPERTIES COMPILE_OPTIONS -w)
 

@@ -85,8 +85,18 @@ void WeightRamp::render (float* curve, int numSamples)
     silence = current == 0.0f && (numSamples == 0 || curve[0] == 0.0f);   // monotonic: first and last 0 = all 0
 }
 
+namespace
+{
+// The decoder's input normalisation, as IEM's SimpleDecoder reads its useSN3D (default SN3D).
+bool decodesSn3d (const juce::var& parameters)
+{
+    const auto value = parameters.getProperty ("useSN3D", juce::var());
+    return ! (value.isInt() || value.isInt64() || value.isDouble()) || (double) value >= 0.5;
+}
+}
+
 ZoneDecoder::ZoneDecoder (const ZoneConfig& config, const juce::String& name)
-    : outputs (config.layout.numOutputs()), subChannel (config.layout.subChannel), topChannels (config.layout.topChannels)
+    : testNoise (decodesSn3d (config.parameters)), outputs (config.layout.numOutputs()), subChannel (config.layout.subChannel), topChannels (config.layout.topChannels)
 {
     decoder = engine::createNode (IemKind::simpleDecoder, engine::busChannels, outputs, name);
     engine::require (decoder->setParameters (config.parameters), name + ".parameters.json");
@@ -97,6 +107,7 @@ void ZoneDecoder::prepare (double sampleRate, int blockSize)
 {
     buffer.setSize (std::max (engine::busChannels, decoder->processor().getTotalNumOutputChannels()), blockSize);
     stage.prepare (sampleRate);
+    testNoise.prepare (sampleRate, blockSize);
     decoder->prepare (sampleRate, blockSize);
 }
 
@@ -110,7 +121,9 @@ void ZoneDecoder::process (const juce::AudioBuffer<float>& bus16, const ZoneOutp
         else
             juce::FloatVectorOperations::clear (buffer.getWritePointer (ch), count);
     }
+    testNoise.addToInput (buffer.getArrayOfWritePointers(), count);
     engine::runNode (*decoder, buffer, count);
+    testNoise.addToOutputs (buffer.getArrayOfWritePointers(), outputs, count);
     stage.process (buffer.getArrayOfWritePointers(), count, outputs);
     gate.process (buffer.getArrayOfWritePointers(), outputs, count, open);
 
