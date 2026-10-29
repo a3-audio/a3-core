@@ -14,7 +14,7 @@ namespace
 {
 constexpr int ch16 = 16;
 constexpr double rate = 44100.0;
-constexpr float neutralEq = 0.4f;   // slopeEq (0.4) = 0.5, the flat EQ (not the control midpoint)
+constexpr float neutralEq = 0.5f;   // slopeEq (0.5) = 0.5, the flat EQ: unity sits at the knob centre
 using Planes = std::vector<std::vector<float>>;   // [channel][frame]
 
 Planes zeros (size_t frames) { return Planes (ch16, std::vector<float> (frames, 0.0f)); }

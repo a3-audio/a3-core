@@ -25,7 +25,29 @@ void expectMatches (const char* name, double (*law) (double))
 }
 
 TEST (Laws, VolumeMatchesCore)  { expectMatches ("slope_volume", a3::laws::slopeVolume); }
-TEST (Laws, EqMatchesCore)      { expectMatches ("slope_eq", a3::laws::slopeEq); }
+// The golden slope_eq rows were re-recorded when unity moved from control 0.4 to the knob centre 0.5
+// (the desk's detent sends exactly 0.5); the old rows are Core's former law.
+TEST (Laws, EqMatchesGolden)    { expectMatches ("slope_eq", a3::laws::slopeEq); }
+
+// SmoothEQ3 parameter 0.5 is flat (gain 1.0), so control 0.5 must land exactly there.
+TEST (Laws, EqUnityIsExactlyAtTheKnobCentre) { EXPECT_DOUBLE_EQ (a3::laws::slopeEq (0.5), 0.5); }
+
+TEST (Laws, EqEndPointsKeepFullCutAndMaximumBoost)
+{
+    EXPECT_DOUBLE_EQ (a3::laws::slopeEq (0.0), 0.0);
+    EXPECT_DOUBLE_EQ (a3::laws::slopeEq (1.0), 0.6);
+}
+
+TEST (Laws, EqIsMonotonicOnBothHalves)
+{
+    double previous = a3::laws::slopeEq (0.0);
+    for (int i = 1; i <= 1000; ++i)
+    {
+        const double value = a3::laws::slopeEq (i / 1000.0);
+        EXPECT_GT (value, previous) << i / 1000.0;
+        previous = value;
+    }
+}
 
 TEST (Laws, BandGainMatchesCoresCrossfade)
 {
