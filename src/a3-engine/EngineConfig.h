@@ -26,7 +26,10 @@ struct ModulatedParameter
 struct EngineConfig
 {
     int channels = 4;                 // N >= 1, no upper cap
-    int decks = 2;                    // deck slots A, B, ...; each 16 + aux 16 + cue 9 inputs
+    // Deck slots A, B, ... (no cap); each 16 + aux 16 + cue 9 inputs. A parsed section takes its count
+    // from the file if it names one (decksNamed: written back), else from the truth's deck range (A8).
+    int decks = 0;
+    bool decksNamed = false;
     int analogInputs = 12;
     // Per channel (size == channels), 1-based pair (2p-1, 2p); 0 = deck-only, no encoder source.
     std::vector<int> analogPairs { 1, 2, 3, 4 };
@@ -52,6 +55,7 @@ bool operator== (const EngineConfig&, const EngineConfig&);
 const std::vector<std::string>& retiredEngineKeys();
 
 // Refuses with a reason in `error`; nothing is filled in for a broken or partial section.
-std::optional<EngineConfig> parseEngineConfig (const juce::var& engineSection, juce::String& error);
+// truthDecks: the deck count when the section names none (the truth's deck range, OscVocabulary).
+std::optional<EngineConfig> parseEngineConfig (const juce::var& engineSection, juce::String& error, int truthDecks);
 juce::var toJson (const EngineConfig&);   // round-trips through parseEngineConfig
 }

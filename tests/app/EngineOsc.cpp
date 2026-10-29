@@ -178,6 +178,49 @@ TEST_F (EngineOsc, ReadsCoresAddressesAndTheHello)
     EXPECT_FALSE (error.isEmpty());
 }
 
+// A8: the deck slots of a config that names no count are the truth's deck range (stemdeck.deck-hello),
+// whatever its upper bound; a truth without that range is refused, naming it.
+TEST_F (EngineOsc, TheDeckCountIsTheTruthsDeckRange)
+{
+    EXPECT_EQ (engineTruth().decks, 4);
+    juce::String error;
+    const auto wider = a3app::parseEngineTruth (a3apptest::truthWithDeckRange (6), error);
+    ASSERT_TRUE (wider.has_value()) << error;
+    EXPECT_EQ (wider->decks, 6);
+    EXPECT_FALSE (a3app::parseEngineTruth (a3apptest::truthText().replace ("\"stemdeck.deck-hello\"", "\"stemdeck.other\""), error));
+    EXPECT_TRUE (error.contains ("stemdeck.deck-hello")) << error;
+}
+
+// The /vu block names deck_a ... deck_d: slots 1-4 have a meter, a fifth has none, and that is said.
+TEST_F (EngineOsc, ADeckSlotBeyondTheMetersIsSaid)
+{
+    const auto& meters = engineTruth().vuMeters;
+    EXPECT_TRUE (a3app::unmeteredDecksNote (4, meters).isEmpty());
+    EXPECT_TRUE (a3app::unmeteredDecksNote (0, meters).isEmpty());
+    const auto five = a3app::unmeteredDecksNote (5, meters);
+    EXPECT_TRUE (five.contains ("deck E")) << five;
+    EXPECT_FALSE (five.contains ("deck D")) << five;
+    const auto six = a3app::unmeteredDecksNote (6, meters);
+    EXPECT_TRUE (six.contains ("E") && six.contains ("F")) << six;
+    auto more = meters;
+    more.push_back ("deck_e");   // a truth that grew a meter for E: the engine needs no change
+    EXPECT_TRUE (a3app::unmeteredDecksNote (5, more).isEmpty());
+}
+
+// A saved engine.json may name fewer decks than the truth has (the rig's "decks": 2): the slots it
+// hides would look selectable on the desk and stay silent, so that is said, with what to change.
+TEST_F (EngineOsc, ASavedDeckCountBelowTheTruthIsSaid)
+{
+    const auto two = a3app::hiddenDecksNote (2, true, 4);
+    EXPECT_EQ (two, "engine.json names 2 decks, the truth 4: decks C, D have no slot; set Decks to 4 on the CHANNELS page "
+                   "of the a3-core window, or remove the \"decks\" line from engine.json");
+    const auto three = a3app::hiddenDecksNote (3, true, 4);
+    EXPECT_TRUE (three.contains ("deck D has no slot")) << three;
+    EXPECT_TRUE (a3app::hiddenDecksNote (4, true, 4).isEmpty());
+    EXPECT_TRUE (a3app::hiddenDecksNote (6, true, 4).isEmpty());   // more than the truth: his choice, said elsewhere
+    EXPECT_TRUE (a3app::hiddenDecksNote (4, false, 4).isEmpty());  // no count in the file: the truth's
+}
+
 TEST_F (EngineOsc, ATruthWithoutDeckAudioStillParsesAndSaysSo)
 {
     EXPECT_EQ (engineTruth().deckAudioPattern, "/engine/deck/{deck}/audio");

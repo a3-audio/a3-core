@@ -59,6 +59,7 @@ juce::var Core::rigJson() const
                        { "decks", deckRows },
                        { "stemdeck", objectOf ({ { "host", textOrNull (stemdeckWatch.host()) } }) },
                        { "prodj_live", prodjLive.on() },
+                       { "tempo_source", text (tempo.source()) },
                        { "engine", objectOf ({ { "heard", engineHeard() },
                                                { "boot_id", project ? textOrNull (project->lastBootId()) : juce::var() },
                                                { "open", engineOpen } }) },

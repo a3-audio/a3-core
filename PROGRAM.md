@@ -59,9 +59,11 @@ libraries JUCE would `dlopen` for a window are not needed.
   before it fades in (R14), the analog strip included. A channel without an analog pair is deck-only
   and has no encoder source (R10). Positions, 3D, FREQ and Q do nothing on a deck channel.
 - **Buses.** `enc_main`, `enc_fx` (AUX, into IEM's DualDelay) and `enc_phones` (cue pre-VOLUME, mix
-  post-VOLUME), order 3. A deck's 16 post-VOLUME channels are added to `enc_main` directly; its 16-channel
-  `aux` bus runs through a second deck strip on the channel's controls and, post-VOLUME times the AUX
-  send, joins `enc_fx` (never the main 16). Decks are 1…D on the wire (R12).
+  post-VOLUME), order 3. A deck's 16 post-VOLUME channels are added to `enc_main` directly and, times the
+  channel's AUX send (post-fader, like an analog channel's), to `enc_fx`. Its 16-channel `aux` bus
+  (StemDeck's own send) runs through a second deck strip on the channel's controls and joins `enc_fx`
+  after the select fade and VOLUME at unity, not times the AUX send: a pulled fader or a deck on no
+  channel sends nothing. Decks are 1…D on the wire (R12).
 - **FX Return (P45/P47).** The master of the delay channel, like a channel strip whose input is the
   delay's output: RETURN scales it into main, booth and rec (0 is silence); the phones take it as a
   channel, post-RETURN times MIX plus pre-RETURN times CUE (a PFL, `aux-return.cue`). Every analog
@@ -86,12 +88,14 @@ libraries JUCE would `dlopen` for a window are not needed.
   beat-analyzer measured, at the points the patchbay fed it (`tests/engine/data/vu-points.json`):
   `analog1_L`…`analog4_R` = analog inputs 1-8, raw; `aux_L/R` = the FX Return after RETURN, its W on both sides;
   `main_*`, `booth_*` (tops beyond the layout stay 0), `phones_L/R`, `rec_L/R` = those outputs as they
-  leave; `in{n}_pre/post_L/R` = the channel taps above. `VuTaps` (`src/a3-engine/VuTaps.h`) is
+  leave; `in{n}_pre/post_L/R` = the channel taps above; `deck_<letters>` = that deck slot's W as it arrives.
+  The truth names `deck_a`…`deck_d` (/vu 37-40), so slots 1-4 have a meter; a slot beyond has none, and the
+  engine says so once at start, in `--check-config` and on STATUS. `VuTaps` (`src/a3-engine/VuTaps.h`) is
   beat-analyzer's `VuMeter` per point (per block: raw peak kept until taken, RMS followed 0.8 / 0.2),
   fed in `process` by `Engine::attachVuTaps`, separate from `outputMeters()` (two readers, two
   accumulators). The host sends them on the control tick at 25 Hz as beat-analyzer's six bundles
   (`VuBundles.h`: `/vu/1-40` in blocks of 10, `/vu/51-66` in blocks of 8, `ff` peak and rms, byte-equal
-  to its `serializeBundle`) to Core's `core.vu-relay`, which forwards them; free numbers (9-10, 37-40) are
+  to its `serializeBundle`) to Core's `core.vu-relay`, which forwards them; free numbers (9-10) are
   sent as 0, 41-50 are StemDeck's. The default map no longer links anything to `beat-analyzer:vu_*`.
 
 **Timing guard.** `EngineTiming.FullGraphAnalogUnderOneDecksUnderOnePointTwoFiveMillisecondsPer128`
@@ -104,6 +108,12 @@ still does. 2026-10-26: 0.84 ms (decks), 0.80 ms (analog); 2026-10-27 with the a
 1.0 ms (decks). The two BinauralDecoders are about half of it.
 `ReportsCostPerChannelAtThirtyTwo` prints the cost of one more channel (about 43 µs analog, 44 µs
 deck). The rig's own run decides.
+
+**CPU per deck count.** `a3-engine-cpu-bench [--decks N] [--paced]` (`bench/CpuBenchMain.cpp`, no JACK) runs the
+whole engine offline at 128 frames and 48 kHz with every deck slot fed on its B-format, AUX and cue
+inputs and each deck on its own channel (the others analog, as Core's deck selector allows), and prints mean and p99 block time as a share of the block period
+(one RESULT line). Without `--decks` it takes the truth's deck range, as the engine does. It is a
+relative tool: the numbers belong to the machine they ran on.
 
 **Known upstream allocations.** IEM's SimpleDecoder copies a `juce::Array` on every call (one small
 malloc and free per zone per block), and DualDelay resizes scratch buffers when the block size
@@ -136,7 +146,7 @@ The window has one page per job and a Save bar under them:
 | Page | What it edits |
 |---|---|
 | AUDIO | JACK: rate and quantum, read-only (the server owns them). Device: type, input, output, rate, block size. A choice only edits the config; it opens no device. |
-| CHANNELS | N (1..128) with the DSP load beside it |
+| CHANNELS | N (1..128) with the DSP load beside it; the deck count (1..26, one letter a slot A..Z; the engine has no cap) with the count that runs |
 | ZONES | which spatial directory: the installed `spatial` and `spatial-reaper-booth-6.1`, and `~/.config/a3/engine/spatial`. No layout editor |
 | I/O | per engine port its JACK peers (editable) and the live ones the map does not name (foreign: shown, never edited), or its device channel; the direct links the engine makes between two foreign ports |
 | CALIBRATION | trim per zone, -90..+6 dB; a slider only proposes, a dialog names the old and the new value, a zone without a trim stays closed |
@@ -179,13 +189,24 @@ exit 0 and stay closed; a crash or a kill signal starts it again. There is no `[
 (a3-core's `a3-main.service` Wants the unit, so the postinst enables nothing for it) and no
 `Conflicts=`, for the reason above.
 
-**The default config** (`data/engine.json`): four channels on analog pairs 1-4 (pairs 5 and 6 free), two
-decks, trims main/booth -30.88 dB (REAPER's output faders), phones 0, rec 0, SVF filter, Step 0's delay
+**The deck count** (A8, no cap): a config that names `"decks"` keeps it (never raised, never rewritten); one
+that names none takes the truth's deck range (`stemdeck.deck-hello`'s upper bound, 4 today), and a Save leaves
+it out again. When the engine loads the file from disk at start, each slot whose ports the file links nowhere
+links to its local `StemDeck-<X>`, whether or not the file names its count (A9); a slot linked anywhere stays as
+saved. A config posted from the I/O page is never filled (A10), so a slot emptied there stays empty until the
+next start. Port letters run A…Z, AA, AB, … (`a3::deckLetters`). The count is set on the window's CHANNELS page beside N
+(A17, 1..26 there): a count set there is named in the file, a removed slot's links leave the map and an added
+slot the map names none of links to its local `StemDeck-<X>`; Save re-creates the engine as for N. A file that
+names fewer decks than the truth gets one line at start, in STATUS and from `--check-config` naming the hidden
+slots and pointing to that setting.
+
+**The default config** (`data/engine.json`): four channels on analog pairs 1-4 (pairs 5 and 6 free), no deck
+count (the truth's), trims main/booth -30.88 dB (REAPER's output faders), phones 0, rec 0, SVF filter, Step 0's delay
 modulation, the JACK backend, and the rig's connections: what `a3-patchbay.xml` connected for REAPER,
 moved to the engine's ports (analog capture, Scarlett playback and the analyzer's beat input `bpm_1`),
-and every deck port to
-`StemDeck-A`/`StemDeck-B` (`bformat_1..16`, `aux_1..16`, `cue_1..9`; they exist once StemDeck's S4 is
-installed, until then they are reported as missing, not an error). Since Task 24 the links into the
+deck A to `StemDeck-A` (`bformat_1..16`, `aux_1..16`, `cue_1..9`), deck B to `AES67 deck B` (`receive_MAIN/AUX/CUE…`), and
+every other slot to its local `StemDeck-<X>` by the rule above (a StemDeck's ports exist once StemDeck's S4 is
+installed; until then they are reported as missing, not an error). Since Task 24 the links into the
 analyzer's meter ports (`beat-analyzer:vu_*`, and the direct capture links that only fed them) are gone:
 the engine measures those meters itself. Left out on purpose: REAPER's inputs
 13-24 (StemDeck's stems and AES67's cue have no engine counterpart) and every link to the AES67 sender: its

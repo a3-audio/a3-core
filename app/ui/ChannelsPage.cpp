@@ -4,21 +4,41 @@
 
 namespace a3app
 {
+namespace
+{
+void makeSpin (juce::Slider& spin, int maximum, std::function<void (int)> onChange)
+{
+    spin.setRange (1, maximum, 1);
+    spin.setIncDecButtonsMode (juce::Slider::incDecButtonsNotDraggable);
+    spin.onValueChange = [&spin, onChange] { onChange ((int) spin.getValue()); };
+}
+
+void show (juce::Slider& spin, int value)
+{
+    if (! spin.hasKeyboardFocus (true) && (int) spin.getValue() != value)
+        spin.setValue (value, juce::dontSendNotification);
+}
+}
+
 ChannelsPage::ChannelsPage (HostView& v) : view (v)
 {
     look::caption (title);
     look::caption (caption);
     look::value (load);
+    look::caption (decksCaption);
+    look::value (decksRunning);
     look::failure (message);
     look::caption (note);
     title.setText ("CHANNELS", juce::dontSendNotification);
     caption.setText ("Channels (N)", juce::dontSendNotification);
-    note.setText ("N sets the channel strips, the encoder inputs and the per-channel meter outputs. "
-                  "Save restarts the engine; Core replays its state.", juce::dontSendNotification);
-    spin.setRange (1, maxChannelsOnPage, 1);
-    spin.setIncDecButtonsMode (juce::Slider::incDecButtonsNotDraggable);
-    spin.onValueChange = [this] { setChannels ((int) spin.getValue()); };
-    for (auto* child : std::initializer_list<juce::Component*> { &title, &caption, &spin, &load, &message, &note })
+    decksCaption.setText ("Decks", juce::dontSendNotification);
+    note.setText ("N sets the channel strips, the encoder inputs and the per-channel meter outputs. Decks sets the "
+                  "deck slots, 1.." + juce::String (maxDecksOnPage) + " (one letter each, A..Z); a new slot links "
+                  "to its local StemDeck. Save restarts the engine; Core replays its state.", juce::dontSendNotification);
+    makeSpin (spin, maxChannelsOnPage, [this] (int n) { setChannels (n); });
+    makeSpin (decksSpin, maxDecksOnPage, [this] (int n) { setDecks (n); });
+    for (auto* child : std::initializer_list<juce::Component*> { &title, &caption, &spin, &load, &decksCaption, &decksSpin,
+                                                                 &decksRunning, &message, &note })
         addAndMakeVisible (child);
     refresh();
 }
@@ -36,13 +56,24 @@ void ChannelsPage::setChannels (int channels)
         view.edit (*edited);
 }
 
+void ChannelsPage::setDecks (int decks)
+{
+    juce::String error;
+    const auto edited = withDecks (view.config(), decks, error);
+    look::say (message, edited ? juce::String() : error);
+    if (! edited)
+        return;
+    if (edited->engine.decks != view.config().engine.decks)
+        view.edit (*edited);
+}
+
 void ChannelsPage::refresh()
 {
-    const int n = view.config().engine.channels;
-    if (! spin.hasKeyboardFocus (true) && (int) spin.getValue() != n)
-        spin.setValue (n, juce::dontSendNotification);
+    show (spin, view.config().engine.channels);
+    show (decksSpin, view.config().engine.decks);
     look::say (load, "DSP load   " + juce::String (view.status().dspLoadPercent, 1) + " %   with N = "
                          + juce::String (view.running().engine.channels));
+    look::say (decksRunning, "running: " + juce::String (view.running().engine.decks));
 }
 
 void ChannelsPage::paint (juce::Graphics& g) { g.fillAll (palette::surface); }
@@ -52,11 +83,16 @@ void ChannelsPage::resized()
     auto area = getLocalBounds().reduced (getWidth() / 40);
     const int row = look::rowHeight (*this);
     title.setBounds (area.removeFromTop (row));
-    auto line = area.removeFromTop (row);
-    caption.setBounds (line.removeFromLeft (line.getWidth() / 4));
-    spin.setBounds (line.removeFromLeft (line.getWidth() / 3));
-    load.setBounds (line.reduced (row / 4, 0));
+    const auto layoutRow = [&] (juce::Label& label, juce::Slider& slider, juce::Label& value)
+    {
+        auto line = area.removeFromTop (row);
+        label.setBounds (line.removeFromLeft (line.getWidth() / 4));
+        slider.setBounds (line.removeFromLeft (line.getWidth() / 3));
+        value.setBounds (line.reduced (row / 4, 0));
+    };
+    layoutRow (caption, spin, load);
+    layoutRow (decksCaption, decksSpin, decksRunning);
     message.setBounds (area.removeFromTop (row));
-    note.setBounds (area.removeFromTop (row * 2));
+    note.setBounds (area.removeFromTop (row * 3));
 }
 }

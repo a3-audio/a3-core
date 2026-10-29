@@ -20,6 +20,20 @@ TEST (StatusGrouping, GroupsMissingPortsByClient)
     EXPECT_TRUE (a3app::groupMissingByClient ({}).empty());
 }
 
+// Decks C and D group like A and B: by their own client, local or AES67.
+TEST (StatusGrouping, DecksCAndDGroupLikeAAndB)
+{
+    std::vector<std::string> missing;
+    for (int i = 1; i <= 41; ++i)
+        missing.push_back ("StemDeck-C:bformat_" + std::to_string (i));
+    for (int i = 1; i <= 3; ++i)
+        missing.push_back ("AES67 deck D:receive_CUE" + std::to_string (i));
+    EXPECT_EQ (a3app::groupMissingByClient (missing), (Groups { { "StemDeck-C", 41 }, { "AES67 deck D", 3 } }));
+    EXPECT_EQ (a3app::missingText (missing), "StemDeck-C (41), AES67 deck D (3)");
+    EXPECT_EQ (a3app::droppedText ({ "deckC_cue_L -> x:y", "deckD_aux_R -> p:q", "deckC_aux_L -> x:y" }),
+               "3 retired links dropped:\ndeckC: cue_L aux_L\ndeckD: aux_R");
+}
+
 TEST (StatusGrouping, ClientIsEverythingBeforeTheFirstColon)
 {
     EXPECT_EQ (a3app::groupMissingByClient ({ "a:b:c", "a:d", "nocolon" }), (Groups { { "a", 2 }, { "nocolon", 1 } }));

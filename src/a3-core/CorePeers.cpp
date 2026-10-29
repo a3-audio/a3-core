@@ -441,14 +441,53 @@ void Core::beatHandler (const Endpoint& from, const OscMessage& message)
     for (const auto& [host, client] : told)
         send (client, passedOn);
 
-    if (tempoArg == nullptr)
-        return;
-    const auto wanted = tempo.wanted (*tempoArg);
-    if (! wanted)
-        return;
-    engineBpm = *wanted;
-    sendToEngine ({ tempoMessage (truth, *wanted) });
+    const auto wanted = tempoArg != nullptr ? tempo.beat (*tempoArg, env.clock.monotonic()) : std::nullopt;
+    if (wanted)
+        sendTempo (*wanted);
+    else
+        followDeckTempo();   // a beat without a tempo keeps no clock alive
     // B1 also set the DualDelay's two lines inside REAPER: not ported (O8).
+}
+
+// stemdeck.tempo: a StemDeck instance's word on its deck's tempo, from whichever host plays the deck
+// (a one-deck instance on a deck host, the two-deck app on the Core), as the deck hello is taken.
+void Core::deckTempo (const Endpoint& from, const OscMessage& message)
+{
+    const auto found = knownAddress (from, message);
+    if (! found)
+        return;
+    const auto origin = peerName (from.host, peerHosts);
+    seen (message, firstOrNone (message), origin);
+    if (! tempo.deckReport (found->second.at ("deck"), message.args, env.clock.monotonic()))
+    {
+        trafficTable.unknown (message.address, firstOrNone (message), origin, env.clock.monotonic());
+        return;
+    }
+    followDeckTempo();
+}
+
+// Without a live beat clock the decks set the delay's tempo (Ruling A4); with one, this does nothing.
+void Core::followDeckTempo()
+{
+    if (const auto wanted = tempo.fromDecks (env.clock.monotonic(), [this] (int deck) { return faderOfDeck (deck); }))
+        sendTempo (*wanted);
+}
+
+// The fader of the channel the deck is on; a channel whose fader Core has not heard yet counts as down.
+std::optional<double> Core::faderOfDeck (int deck) const
+{
+    const auto channel = decks.channelOf (deck);
+    if (! channel)
+        return std::nullopt;
+    const auto fader = relayed.value (truth.address ("channel.volume", { { "ch", *channel } }));
+    return fader ? pythonFloat (*fader).value_or (0.0) : 0.0;
+}
+
+// Kept for the engine's next hello, which gets it again.
+void Core::sendTempo (double bpm)
+{
+    engineBpm = bpm;
+    sendToEngine ({ tempoMessage (truth, bpm) });
 }
 
 // vu_destinations: the remote Motion followed (the rig's own gets the analyzer's meters directly)

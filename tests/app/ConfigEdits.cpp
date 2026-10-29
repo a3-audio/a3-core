@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <cmath>
 #include <gtest/gtest.h>
+#include "AppTruth.h"
 #include "ConfigEdits.h"
 #include "EngineFixture.h"
 #include "SpatialTestData.h"
@@ -48,7 +49,7 @@ TEST (ConfigEdits, EveryEditSurvivesTheLoadersChecks)
     ASSERT_TRUE (edited);
     const auto file = juce::File::createTempFile ("a3-edit");
     ASSERT_TRUE (a3app::saveAppConfig (*edited, file).wasOk());
-    EXPECT_TRUE (a3app::loadAppConfig (file, error)) << error;
+    EXPECT_TRUE (a3app::loadAppConfig (file, error, a3apptest::truthDecks())) << error;
     file.deleteFile();
 }
 
@@ -215,4 +216,71 @@ TEST (ConfigEdits, DeckSourceOfNeedsAllFortyOneLinks)
     for (int i = 1; i <= 16; ++i)
         sixteen.jack["deckA_" + std::to_string (i)] = { "StemDeck-A:bformat_" + std::to_string (i) };
     EXPECT_FALSE (a3app::deckSourceOf (sixteen, 1));
+}
+
+// A17: the CHANNELS page sets the deck count beside N, 1..26 (one letter per slot A..Z).
+TEST (ConfigEdits, DecksAreBoundedAndNamedInTheFile)
+{
+    juce::String error;
+    EXPECT_FALSE (a3app::withDecks (sample(), 0, error));
+    EXPECT_NE (error, juce::String());
+    EXPECT_FALSE (a3app::withDecks (sample(), a3app::maxDecksOnPage + 1, error));
+    EXPECT_EQ (a3app::maxDecksOnPage, 26);
+
+    auto unnamed = sample();
+    unnamed.engine.decksNamed = false;
+    const auto four = a3app::withDecks (unnamed, 4, error);
+    ASSERT_TRUE (four) << error;
+    EXPECT_EQ (four->engine.decks, 4);
+    EXPECT_TRUE (four->engine.decksNamed);   // a count set on the page is the user's: written to the file
+    EXPECT_TRUE (a3app::withDecks (sample(), a3app::maxDecksOnPage, error)) << error;
+}
+
+TEST (ConfigEdits, GrowingTheDecksLinksOnlyTheNewSlotsLocally)
+{
+    juce::String error;
+    auto config = sample();   // two decks
+    a3app::setDeckSource (config.io, 1, a3app::DeckSource::local);
+    a3app::setDeckSource (config.io, 2, a3app::DeckSource::aes67);
+    const auto four = a3app::withDecks (config, 4, error);
+    ASSERT_TRUE (four) << error;
+    EXPECT_EQ (a3app::deckSourceOf (four->io, 1), a3app::DeckSource::local);
+    EXPECT_EQ (a3app::deckSourceOf (four->io, 2), a3app::DeckSource::aes67);   // as it was
+    EXPECT_EQ (a3app::deckSourceOf (four->io, 3), a3app::DeckSource::local);
+    EXPECT_EQ (four->io.jack.at ("deckD_cue_9"), std::vector<std::string> { "StemDeck-D:cue_9" });
+    EXPECT_EQ (four->io.jack.at ("analog_1"), std::vector<std::string> { "system:capture_1" });
+    EXPECT_EQ (four->io.directLinks.size(), 1u);
+
+    // A slot the user emptied stays empty: only slots the count adds are filled.
+    auto emptied = config;
+    for (auto it = emptied.io.jack.begin(); it != emptied.io.jack.end();)
+        it = it->first.rfind ("deckB", 0) == 0 ? emptied.io.jack.erase (it) : std::next (it);
+    const auto three = a3app::withDecks (emptied, 3, error);
+    ASSERT_TRUE (three) << error;
+    EXPECT_EQ (three->io.jack.count ("deckB_1"), 0u);
+    EXPECT_EQ (a3app::deckSourceOf (three->io, 3), a3app::DeckSource::local);
+}
+
+TEST (ConfigEdits, ShrinkingTheDecksDropsTheRemovedSlotsLinks)
+{
+    juce::String error;
+    auto two = sample();
+    a3app::setDeckSource (two.io, 1, a3app::DeckSource::local);
+    a3app::setDeckSource (two.io, 2, a3app::DeckSource::aes67);
+    const auto four = a3app::withDecks (two, 4, error);
+    ASSERT_TRUE (four) << error;
+    const auto one = a3app::withDecks (*four, 1, error);
+    ASSERT_TRUE (one) << error;
+    EXPECT_EQ (one->engine.decks, 1);
+    EXPECT_EQ (a3app::deckSourceOf (one->io, 1), a3app::DeckSource::local);
+    for (const auto& [port, peers] : one->io.jack)
+        EXPECT_TRUE (port.rfind ("deck", 0) != 0 || port.rfind ("deckA_", 0) == 0) << port;
+    EXPECT_EQ (one->io.jack.at ("analog_1"), std::vector<std::string> { "system:capture_1" });
+
+    const auto file = juce::File::createTempFile ("a3-decks");
+    ASSERT_TRUE (a3app::saveAppConfig (*one, file).wasOk());
+    const auto loaded = a3app::loadAppConfig (file, error, a3apptest::truthDecks());
+    ASSERT_TRUE (loaded) << error;
+    EXPECT_EQ (loaded->engine.decks, 1);   // the file names it, under a truth of 4
+    file.deleteFile();
 }

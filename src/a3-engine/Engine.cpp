@@ -6,6 +6,7 @@
 #include "AmbiEncoderBus.h"
 #include "ChannelSelect.h"
 #include "ChannelStrip.h"
+#include "DeckLetters.h"
 #include "DeckStrip.h"
 #include "DelayModulation.h"
 #include "EngineStages.h"
@@ -68,16 +69,6 @@ int numberIn (const std::string& name, const std::string& prefix, const std::str
     return std::stoi (digits);
 }
 
-// The deck slot (1-4) a meter name "deck_a" ... "deck_d" names; 0 for any other name.
-int deckSlotIn (const std::string& name)
-{
-    static const std::string prefix = "deck_";
-    if (name.size() != prefix.size() + 1 || name.compare (0, prefix.size(), prefix) != 0)
-        return 0;
-    const char letter = name.back();
-    return letter >= 'a' && letter <= 'd' ? letter - 'a' + 1 : 0;
-}
-
 // Linear ramp from `from` to `to` over `length` samples: the j-th value is from + (to - from) (j + 1) / length.
 void fillRamp (float* curve, float from, float to, int length)
 {
@@ -108,7 +99,7 @@ struct EngineChannel
 
     int analogPair = 0;   // 1-based; 0 = deck only
     std::unique_ptr<ChannelStrip> strip;
-    DeckStrip deck, deckAux;   // deckAux: the deck's aux bus through the same controls, into the delay
+    DeckStrip deck, deckAux;   // deckAux: the deck's aux bus through the same controls, into the delay at unity
     ChannelSelect select;
     WeightRamp aux, cue, mix;
     juce::AudioBuffer<float> planes, deckPre, deckPost, deckAuxPost;
@@ -578,8 +569,10 @@ void Engine::Impl::encode (int n)
     encPhones->process (phMoving, phSteady, {}, busPhones, n, azimuth.get(), elevation.get());
 }
 
-// R11: a deck channel's 16 post-VOLUME channels go straight into the buses, no encoder;
-// the delay gets the deck's aux bus through its own strip instead (design 4.2).
+// R11: a deck channel's 16 post-VOLUME channels go straight into the buses, no encoder.
+// The delay gets them like an analog channel's, times AUX; the deck's aux bus is StemDeck's own
+// send, so it goes in at unity, though through the channel's strip and select fade (design 4.2,
+// Ruling A1): a pulled fader or a deck on no channel still sends nothing.
 void Engine::Impl::addDecks (int n)
 {
     using P = EngineChannel;
@@ -595,8 +588,9 @@ void Engine::Impl::addDecks (int n)
         {
             const float* post = ch.deckPost.getReadPointer (k);
             juce::FloatVectorOperations::add (busMain.getWritePointer (k), post, n);
+            juce::FloatVectorOperations::add (busFx.getWritePointer (k), ch.deckAuxPost.getReadPointer (k), n);
             if (auxOpen)
-                addWeighted (busFx.getWritePointer (k), ch.deckAuxPost.getReadPointer (k), ch.p (P::auxCurve), n);
+                addWeighted (busFx.getWritePointer (k), post, ch.p (P::auxCurve), n);
             if (cueOpen)
                 addWeighted (busPhones.getWritePointer (k), ch.deckPre.getReadPointer (k), ch.p (P::cueCurve), n);
             if (mixOpen)
@@ -685,7 +679,7 @@ std::vector<std::string> Engine::Impl::attachVuTaps (VuTaps& taps)
 bool Engine::Impl::placeVuTap (const std::string& name, VuTap& tap)
 {
     using P = EngineChannel;
-    if (const int slot = deckSlotIn (name))
+    if (const int slot = deckSlotOfMeter (name))
     {
         if (slot > config.decks)
             return false;

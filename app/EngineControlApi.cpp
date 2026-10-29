@@ -165,7 +165,7 @@ std::optional<LiveLinks> linksFromJson (const juce::var& v)
     return links;
 }
 
-EngineControlApi::EngineControlApi (HostView& local) : view (local) {}
+EngineControlApi::EngineControlApi (HostView& local) : view (local), truthDecks (local.truthDecks()) {}
 
 EngineControlApi::~EngineControlApi() { close(); }
 
@@ -263,7 +263,8 @@ void EngineControlApi::publishConfig()
 {
     const auto pending = view.config(), running = view.running();
     auto configJson = juce::JSON::toString (object ({ { "pending", toJson (pending) }, { "running", toJson (running) },
-                                                      { "file", view.configFile().getFullPathName() } }), true).toStdString();
+                                                      { "file", view.configFile().getFullPathName() },
+                                                      { "truthDecks", truthDecks } }), true).toStdString();
     auto linksJson = juce::JSON::toString (toJson (view.liveLinks()), true).toStdString();
     const auto where = view.configFile();
 
@@ -329,7 +330,7 @@ std::optional<AppConfig> EngineControlApi::configOf (const HttpRequest& request,
     juce::String why;
     const auto body = parseBody (request, why);
     if (body)
-        if (const auto parsed = parseAppConfig (*body, base, why))
+        if (const auto parsed = parseAppConfig (*body, base, why, truthDecks))
             return parsed;
     refusal = problem (400, why);
     return std::nullopt;

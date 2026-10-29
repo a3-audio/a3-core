@@ -548,6 +548,18 @@ class TheEngineSpeaks(unittest.TestCase):
                           entry["from"], entry["to"]),
                          ("/stemdeck/{deck}/hello", "s", [1, 4], ["stemdeck"], ["core"]))
 
+    def test_a_stemdeck_reports_each_decks_tempo_to_core(self):
+        # Core's delay follows the decks when no beat clock runs (S2): the
+        # tempo as it plays, whether the deck plays and whether it is MASTER.
+        entry = self.truth.addresses()["stemdeck.tempo"]
+        self.assertEqual((entry["pattern"], entry["args"], entry["deck"],
+                          entry["from"], entry["to"]),
+                         ("/stemdeck/{deck}/tempo", "fii",
+                          self.truth.addresses()["stemdeck.deck-hello"]["deck"],
+                          ["stemdeck"], ["core"]))
+        self.assertEqual(self.truth.match("/stemdeck/3/tempo"),
+                         ("stemdeck.tempo", {"deck": 3}))
+
     def test_engine_mode_words_say_deck_four_is_D_and_reaper_words_keep_two(self):
         words = self.truth.addresses()
         for key in ("channel.source", "channel.source.cursor"):

@@ -6,16 +6,21 @@
 
 namespace a3core
 {
-std::optional<double> TempoFollower::wanted (const OscArg& argument)
+std::optional<double> tempoOf (const OscArg& argument)
 {
     const auto reading = pythonFloat (argument);
+    if (! reading || ! std::isfinite (*reading) || ! (bpmMin <= *reading && *reading <= bpmMax))
+        return std::nullopt;
+    return reading;
+}
+
+std::optional<double> TempoFollower::steady (const OscArg& argument)
+{
+    const auto reading = tempoOf (argument);
     if (! reading)
         return std::nullopt;
 
     const double bpm = *reading;
-    if (! std::isfinite (bpm) || ! (bpmMin <= bpm && bpm <= bpmMax))
-        return std::nullopt;
-
     if (! candidate || std::abs (bpm - *candidate) >= deadband)
     {
         // A different tempo: the run starts again, at this one.
@@ -27,8 +32,16 @@ std::optional<double> TempoFollower::wanted (const OscArg& argument)
     ++run;
     if (run < steadyBeats)
         return std::nullopt;
+    return bpm;
+}
 
-    if (sent && std::abs (bpm - *sent) < deadband)
+std::optional<double> TempoFollower::wanted (const OscArg& argument)
+{
+    const auto bpm = steady (argument);
+    if (! bpm)
+        return std::nullopt;
+
+    if (sent && std::abs (*bpm - *sent) < deadband)
         return std::nullopt;
 
     sent = bpm;

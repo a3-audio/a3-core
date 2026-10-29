@@ -191,8 +191,8 @@ double loadAverage()
 }
 
 // N = 4, quantum 128. The worst case of the revision: all four channels on decks (with signal
-// on the analog pairs too), two stem cues with all nine ACN planes, the four aux strips with an
-// open AUX send and signal on every aux plane, cue and mix adds open (PHONES MIX 0.5), the
+// on the analog pairs too), two stem cues with all nine ACN planes, the four aux strips with
+// signal on every aux plane (into the delay at unity), an open AUX send on every channel's main, cue and mix adds open (PHONES MIX 0.5), the
 // return on the DELAY and a headphone EQ model on the phones decoder; then the same with all
 // four analog. Judged on the
 // best of several repetition means: background load only ever adds time, so it cannot fail
@@ -217,7 +217,7 @@ TEST (EngineTiming, FullGraphAnalogUnderOneDecksUnderOnePointTwoFiveMilliseconds
     for (int c = 0; c < 4; ++c)
         decks.controls.channel (c).source = c < 2 ? 1 : 2;
 
-    // The same graph with the aux strips shut (AUX 0): the difference is their share.
+    // The same graph with AUX 0: the difference is the AUX sends' share (the aux strips still feed the delay).
     EngineRig decksNoAux (decksConfig, loopFrames, quantum);
     deckOnEveryChannel (decksNoAux);
     analogOnEveryPair (decksNoAux);
@@ -256,7 +256,7 @@ TEST (EngineTiming, FullGraphAnalogUnderOneDecksUnderOnePointTwoFiveMilliseconds
     }
     std::printf ("EngineTiming best of %d: all decks %.4f ms, all analog %.4f ms (budgets %.2f / %.2f)\n", repetitions, bestDecks,
                  bestAnalog, decksBudgetMs, analogBudgetMs);
-    std::printf ("EngineTiming aux strips: all decks %.1f us mean (best), %.1f us max (worst block of %d); AUX 0: %.1f us; aux share %.1f us = %.1f %%\n",
+    std::printf ("EngineTiming AUX sends: all decks %.1f us mean (best), %.1f us max (worst block of %d); AUX 0: %.1f us; AUX send share %.1f us = %.1f %%\n",
                  1000.0 * bestDecks, 1000.0 * worstDecksMs, repetitions * blocks, 1000.0 * bestNoAux,
                  1000.0 * (bestDecks - bestNoAux), 100.0 * (bestDecks - bestNoAux) / bestDecks);
     RecordProperty ("decks_best_mean_ms", std::to_string (bestDecks));

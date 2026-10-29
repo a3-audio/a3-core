@@ -3,6 +3,8 @@
 #include "OscVocabulary.h"
 #include <algorithm>
 #include <cmath>
+#include <set>
+#include "DeckLetters.h"
 
 namespace a3app
 {
@@ -228,12 +230,44 @@ std::optional<EngineTruth> parseEngineTruth (const juce::String& json, juce::Str
         truth.vuRelayHost = root["hosts"]["local"].toString();
     truth.controlPort = a3bench::listenerPort (root, "engine.control");
     truth.controlHost = a3bench::listenerHostAddress (root, "engine.control");
+    const auto deckRange = addresses["stemdeck.deck-hello"]["deck"];
+    if (! deckRange.isArray() || deckRange.size() != 2 || ! (deckRange[1].isInt() || deckRange[1].isInt64()))
+        return error = "the truth has no deck range (\"stemdeck.deck-hello\" with \"deck\": [first, last])", std::nullopt;
+    truth.decks = (int) deckRange[1];
     return truth;
 }
 
 juce::String truthNote (const EngineTruth& truth)
 {
     return truth.deckAudioPattern.isEmpty() ? "the truth has no engine.deck-audio: deck audio reports are off" : juce::String();
+}
+
+juce::String unmeteredDecksNote (int decks, const std::vector<juce::String>& vuMeters)
+{
+    std::set<int> metered;
+    for (const auto& name : vuMeters)
+        metered.insert (a3::deckSlotOfMeter (name.toStdString()));
+    juce::StringArray missing;
+    for (int slot = 1; slot <= decks; ++slot)
+        if (metered.count (slot) == 0)
+            missing.add (a3::deckLetters (slot));
+    if (missing.isEmpty())
+        return {};
+    return (missing.size() == 1 ? "deck " + missing[0] + " has no meter" : "decks " + missing.joinIntoString (", ") + " have no meter")
+           + " (the truth's vu_meters name none)";
+}
+
+juce::String hiddenDecksNote (int decks, bool decksNamed, int truthDecks)
+{
+    if (! decksNamed || decks >= truthDecks)
+        return {};
+    juce::StringArray hidden;
+    for (int slot = decks + 1; slot <= truthDecks; ++slot)
+        hidden.add (a3::deckLetters (slot));
+    return "engine.json names " + juce::String (decks) + " decks, the truth " + juce::String (truthDecks) + ": "
+           + (hidden.size() == 1 ? "deck " + hidden[0] + " has no slot" : "decks " + hidden.joinIntoString (", ") + " have no slot")
+           + "; set Decks to " + juce::String (truthDecks) + " on the CHANNELS page of the a3-core window, "
+           + "or remove the \"decks\" line from engine.json";
 }
 
 bool applyEngineMessage (const EngineTruth& truth, const a3::EngineConfig& config, const juce::OSCMessage& m,

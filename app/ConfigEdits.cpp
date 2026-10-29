@@ -85,6 +85,21 @@ std::optional<AppConfig> withChannels (const AppConfig& config, int channels, ju
     return pruned (std::move (edited), error);
 }
 
+std::optional<AppConfig> withDecks (const AppConfig& config, int decks, juce::String& error)
+{
+    if (decks < 1 || decks > maxDecksOnPage)
+    {
+        error = "decks must be within 1.." + juce::String (maxDecksOnPage);
+        return std::nullopt;
+    }
+    auto edited = config;
+    edited.engine.decks = decks;
+    edited.engine.decksNamed = true;
+    for (int slot = config.engine.decks + 1; slot <= decks; ++slot)
+        linkUnnamedSlotLocally (edited.io, slot);
+    return pruned (std::move (edited), error);
+}
+
 std::optional<AppConfig> withSpatialDirectory (const AppConfig& config, const juce::File& directory, juce::String& error)
 {
     auto edited = config;
@@ -154,6 +169,23 @@ void setDeckSource (IoMap& map, int slot, DeckSource source)
 {
     for (const auto& [port, peer] : deckLinks (slot, source))
         map.jack[port] = { peer };
+}
+
+void linkUnnamedSlotLocally (IoMap& map, int slot)
+{
+    const auto links = deckLinks (slot, DeckSource::local);
+    const bool named = std::any_of (links.begin(), links.end(), [&] (const auto& link)
+    {
+        return map.jack.count (link.first) > 0 || map.deviceChannels.count (link.first) > 0;
+    });
+    if (! named)
+        setDeckSource (map, slot, DeckSource::local);
+}
+
+void linkUnnamedSlotsLocally (IoMap& map, int decks)
+{
+    for (int slot = 1; slot <= decks; ++slot)
+        linkUnnamedSlotLocally (map, slot);
 }
 
 std::optional<DeckSource> deckSourceOf (const IoMap& map, int slot)

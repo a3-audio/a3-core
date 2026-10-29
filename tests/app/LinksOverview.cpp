@@ -109,6 +109,23 @@ TEST (LinksOverview, StemDeckSlotsAreNamedAndItsDeckPortsExplained)
     EXPECT_TRUE (hasLine (text, "  cue 1–9      → deck A cue 1–9  (cue)")) << text;
 }
 
+// Deck C reads like deck A, and an AES67 stream into deck D names its slot the same way.
+TEST (LinksOverview, DecksCAndDReadLikeAAndB)
+{
+    Graph graph;
+    for (int n = 1; n <= 9; ++n)
+        graph.link ("StemDeck-C:cue_" + std::to_string (n), "a3-engine:deckC_cue_" + std::to_string (n));
+    for (int n = 1; n <= 16; ++n)
+        graph.link ("AES67 deck D:receive_AUX" + std::to_string (n), "a3-engine:deckD_aux_" + std::to_string (n));
+    const auto text = show (graph);
+    EXPECT_TRUE (hasLine (text, "StemDeck C → engine")) << text;
+    EXPECT_NE (text.find ("deck C cue 1–9"), std::string::npos) << text;
+    EXPECT_NE (text.find ("(cue)"), std::string::npos) << text;
+    EXPECT_TRUE (hasLine (text, "AES67 deck D → engine")) << text;
+    EXPECT_NE (text.find ("deck D aux 1–16"), std::string::npos) << text;
+    EXPECT_NE (text.find ("(aux)"), std::string::npos) << text;
+}
+
 TEST (LinksOverview, TheCardsLongAlsaNameAndSystemAreBothTheScarlett)
 {
     Graph alsa;

@@ -7,7 +7,8 @@
 namespace a3app
 {
 // N, the number of channels (a spin box), with the DSP load beside it: the load is what N costs.
-// A change is a pending edit; Save re-creates the engine.
+// Below it the number of decks, with the count that runs. A change is a pending edit; Save
+// re-creates the engine.
 class ChannelsPage final : public juce::Component
 {
 public:
@@ -15,6 +16,8 @@ public:
     ~ChannelsPage() override;
 
     void setChannels (int);
+    void setDecks (int);
+    const juce::Label& decksRunningLabel() const { return decksRunning; }
     void refresh();
     const juce::Label& loadLabel() const { return load; }
     const juce::Label& messageLabel() const { return message; }
@@ -23,7 +26,8 @@ public:
 
 private:
     HostView& view;
-    juce::Label title, caption, load, message, note;
+    juce::Label title, caption, load, decksCaption, decksRunning, message, note;
     juce::Slider spin { juce::Slider::IncDecButtons, juce::Slider::TextBoxLeft };
+    juce::Slider decksSpin { juce::Slider::IncDecButtons, juce::Slider::TextBoxLeft };
 };
 }

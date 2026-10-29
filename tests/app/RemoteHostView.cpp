@@ -206,3 +206,18 @@ TEST (RemoteHostView, SaysTheDroppedLinksAndTheTruthNote)
     EXPECT_TRUE (rig.remote->ignoredKeys().empty());
     EXPECT_TRUE (rig.remote->truthNote().isEmpty());
 }
+
+// A8: a config that names no deck count crosses to the window without one, and the window reads it with
+// the engine's truth count, so the I/O page shows the engine's slots and a Save leaves the count out.
+TEST (RemoteHostView, AnUnnamedDeckCountTakesTheEnginesTruthCount)
+{
+    RemoteRig rig;
+    rig.fake.cfg.engine.decks = rig.fake.runningCfg.engine.decks = rig.fake.truthDeckCount;
+    rig.fake.cfg.engine.decksNamed = rig.fake.runningCfg.engine.decksNamed = false;
+    rig.tick();
+    rig.remote->refreshNow();
+    EXPECT_EQ (rig.remote->truthDecks(), rig.fake.truthDeckCount);
+    EXPECT_EQ (rig.remote->config().engine.decks, rig.fake.truthDeckCount);
+    EXPECT_FALSE (rig.remote->config().engine.decksNamed);
+    EXPECT_EQ (rig.remote->running().engine.decks, rig.fake.truthDeckCount);
+}

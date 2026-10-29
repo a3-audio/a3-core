@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <cmath>
 #include "ChannelSelect.h"
 #include <map>
@@ -301,7 +302,7 @@ TEST (Engine, DeckAuxEchoesKeepTheDirection)
     rig.decks[0].aux = rig.decks[0].bformat;   // the echoes come from the aux bus
     rig.controls.channel (0).source = 1;
     rig.neutralStrip (0);
-    rig.controls.channel (0).auxSend = 1.0f;
+    rig.controls.channel (0).auxSend = 0.0f;   // the deck main stays out of the delay
     rig.run();
 
     const double dry = leftOverRightDb (rig, hit, hit + 1500);
@@ -898,7 +899,6 @@ TEST (Engine, AnalogFadeInAfterResetIsClickFree)
 
 namespace
 {
-constexpr size_t aWeightRamp = 441;   // a send weight's 10 ms at 44.1 kHz
 
 std::vector<float> constant (size_t frames, float level) { return std::vector<float> (frames, level); }
 
@@ -924,29 +924,46 @@ float fxSendFrom (EngineRig& rig, size_t from)
 }
 }
 
-TEST (Engine, DeckMainNeverReachesTheDelay)
+// Like an analog channel's: the deck's main 16 after VOLUME, times the desk AUX.
+TEST (Engine, DeckMainReachesTheDelayOnlyThroughTheDeskAux)
 {
-    const size_t frames = oneSecond / 2;
-    auto rig = deckOnChannelOne (frames, [&] (EngineRig& r) { fillDeck (r.decks[0], frames, 0.3f, 400); });
-    rig->run (0, 0, { engineBlock }, {}, [&] { EXPECT_EQ (rig->engine->lastFxSendPeak(), 0.0f); });
-    EXPECT_GT (peak (rig->mainOutputs()), 1e-3);   // the deck does play
+    const size_t frames = oneSecond;
+    const float level = 0.5f;
+    const auto mainDc = [&] (float auxSend, float volume)
+    {
+        auto rig = deckOnChannelOne (frames, [&] (EngineRig& r)
+        {
+            r.decks[0].bformat[0] = constant (frames, level);
+            r.controls.channel (0).auxSend = auxSend;
+            r.controls.channel (0).volume = volume;
+        });
+        return (double) fxSendFrom (*rig, settled);
+    };
+    EXPECT_EQ (mainDc (0.0f, 1.0f), 0.0);
+    EXPECT_NEAR (mainDc (1.0f, 1.0f), level * a3::laws::auxSendGain (1.0), 1e-4);
+    EXPECT_NEAR (mainDc (0.5f, 1.0f), level * a3::laws::auxSendGain (0.5), 1e-4);
+    EXPECT_EQ (mainDc (1.0f, 0.0f), 0.0);   // post-fader
 }
 
+// The deck's aux bus is StemDeck's own send: unity into the delay, after the channel's VOLUME.
 TEST (Engine, DeckAuxReachesTheDelayThroughTheStrip)
 {
     const size_t frames = oneSecond;
     const float level = 0.5f;
-    const auto auxDc = [&] (float volume)
+    const auto auxDc = [&] (float volume, float auxSend)
     {
         auto rig = deckOnChannelOne (frames, [&] (EngineRig& r)
         {
             r.decks[0].aux[0] = constant (frames, level);
             r.controls.channel (0).volume = volume;
+            r.controls.channel (0).auxSend = auxSend;
         });
         return fxSendFrom (*rig, settled);
     };
-    EXPECT_NEAR (auxDc (1.0f), level * a3::laws::auxSendGain (1.0), 1e-4);
-    EXPECT_EQ (auxDc (0.0f), 0.0f);
+    EXPECT_NEAR (auxDc (1.0f, 0.0f), level, 1e-4);
+    EXPECT_NEAR (auxDc (1.0f, 0.5f), level, 1e-4);
+    EXPECT_NEAR (auxDc (1.0f, 1.0f), level, 1e-4);
+    EXPECT_EQ (auxDc (0.0f, 0.0f), 0.0f);
 
     // EQ low fully down: the aux path loses the low band in the same proportion as the main path.
     const auto low = sine (frames, 60.0, engineRate, level).l;
@@ -975,33 +992,43 @@ TEST (Engine, DeckAuxReachesTheDelayThroughTheStrip)
     EXPECT_NEAR (auxRatio, mainRatio, 1e-3);
 }
 
-TEST (Engine, DeskAuxZeroIsSilenceOnTheDeckAux)
+TEST (Engine, DeskAuxMovesLeaveTheDeckAuxAlone)
 {
     const size_t frames = oneSecond / 2, half = frames / 2;
-    auto rig = deckOnChannelOne (frames, [&] (EngineRig& r)
+    const auto sends = [&] (bool closeHalfway)
     {
-        for (int ch = 0; ch < deckChannels; ++ch)
-            r.decks[0].aux[(size_t) ch] = noise (frames, 0.3f, 500 + (uint32_t) ch).l;
-    });
-    float before = 0.0f;
-    size_t at = 0, closedAt = 0;
-    rig->run (0, 0, { engineBlock }, [&] (size_t start)
-    {
-        at = start;
-        if (start >= half && closedAt == 0)
+        auto rig = deckOnChannelOne (frames, [&] (EngineRig& r)
         {
-            rig->controls.channel (0).auxSend = 0.0f;
-            closedAt = start;
-        }
-    },
-    [&]
+            for (int ch = 0; ch < deckChannels; ++ch)
+                r.decks[0].aux[(size_t) ch] = noise (frames, 0.3f, 500 + (uint32_t) ch).l;
+        });
+        std::vector<float> peaks;
+        rig->run (0, 0, { engineBlock }, [&] (size_t start)
+        {
+            if (closeHalfway && start >= half)
+                rig->controls.channel (0).auxSend = 0.0f;
+        },
+        [&] { peaks.push_back (rig->engine->lastFxSendPeak()); });
+        return peaks;
+    };
+    const auto open = sends (false);
+    EXPECT_GT (*std::max_element (open.begin(), open.end()), 1e-2f);
+    EXPECT_EQ (sends (true), open);
+
+    // With the deck main playing too: what the send carries beyond main x AUX is the aux bus, at unity.
+    const float auxLevel = 0.5f, mainLevel = 0.2f;
+    const auto auxShare = [&] (float auxSend)
     {
-        if (closedAt == 0)
-            before = std::max (before, rig->engine->lastFxSendPeak());
-        else if (at >= closedAt + aWeightRamp)
-            EXPECT_EQ (rig->engine->lastFxSendPeak(), 0.0f) << "at " << at;
-    });
-    EXPECT_GT (before, 1e-2f);
+        auto rig = deckOnChannelOne (oneSecond, [&] (EngineRig& r)
+        {
+            r.decks[0].aux[0] = constant (oneSecond, auxLevel);
+            r.decks[0].bformat[0] = constant (oneSecond, mainLevel);
+            r.controls.channel (0).auxSend = auxSend;
+        });
+        return (double) fxSendFrom (*rig, settled) - mainLevel * a3::laws::auxSendGain (auxSend);
+    };
+    for (float auxSend : { 0.0f, 0.5f, 1.0f })
+        EXPECT_NEAR (auxShare (auxSend), auxLevel, 1e-4) << "AUX " << auxSend;
 }
 
 TEST (Engine, DeckOnNoChannelFeedsNoDelay)
@@ -1035,6 +1062,7 @@ TEST (Engine, DeckSwitchDipsTheAuxToo)
     {
         r.decks[0].aux[0] = constant (frames, levelA);
         r.decks[1].aux[0] = constant (frames, levelB);
+        r.controls.channel (0).auxSend = 0.0f;   // the aux bus alone, unity
     });
     std::vector<float> fx (frames, 0.0f);   // one-sample calls: each call's peak is that sample's |value|
     size_t at = 0;
@@ -1045,9 +1073,8 @@ TEST (Engine, DeckSwitchDipsTheAuxToo)
     },
     [&] { fx[at] = rig->engine->lastFxSendPeak(); });
 
-    const double aux = a3::laws::auxSendGain (1.0);
-    EXPECT_NEAR (fx[switchAt - 1], levelA * aux, 1e-4);
-    EXPECT_NEAR (fx.back(), levelB * aux, 1e-4);
+    EXPECT_NEAR (fx[switchAt - 1], levelA, 1e-4);
+    EXPECT_NEAR (fx.back(), levelB, 1e-4);
     EXPECT_LT (*std::min_element (fx.begin() + (long) switchAt, fx.begin() + (long) (switchAt + 1000)), 1e-3f);   // the dip
     EXPECT_LE (maxStep (fx, switchAt - 100), 0.05);
 }
@@ -1125,6 +1152,43 @@ TEST (Engine, EachDeckMetersItsWBeforeAnyChannel)
     EXPECT_EQ (byName.at ("deck_b"), 0.5f);
     EXPECT_EQ (byName.at ("deck_c"), 0.0f);
     EXPECT_EQ (byName.at ("deck_d"), 0.0f);
+}
+
+// A8: the deck meters are wherever the truth names them, by letter. Four slots: C and D read their own W.
+// A fifth slot meters only once the truth names a deck_e (here in place of free39); the engine has no 4 of its own.
+TEST (Engine, EveryDeckSlotTheTruthNamesAMeterForIsMetered)
+{
+    auto names = truthVuMeters();
+    a3::VuTaps four (names, a3::VuSettings {});
+    EngineRig rig (engineConfig (4, 4), 4096);
+    rig.engine->attachVuTaps (four);
+    rig.decks[2].bformat[0] = impulseAt (rig.frames, 100, 0.25f);
+    rig.decks[3].bformat[0] = impulseAt (rig.frames, 100, 0.75f);
+    rig.run();
+    const auto peaksOf = [] (a3::VuTaps& taps)
+    {
+        std::vector<float> peaks, rms;
+        taps.take (peaks, rms);
+        std::map<std::string, float> byName;
+        for (size_t slot = 0; slot < taps.names().size(); ++slot)
+            byName[taps.names()[slot]] = peaks[slot];
+        return byName;
+    };
+    const auto fourPeaks = peaksOf (four);
+    EXPECT_EQ (fourPeaks.at ("deck_a"), 0.0f);
+    EXPECT_EQ (fourPeaks.at ("deck_c"), 0.25f);
+    EXPECT_EQ (fourPeaks.at ("deck_d"), 0.75f);
+
+    const auto free = std::find (names.begin(), names.end(), "free39");
+    ASSERT_NE (free, names.end());
+    *free = "deck_e";
+    a3::VuTaps five (names, a3::VuSettings {});
+    EngineRig wider (engineConfig (4, 5), 4096);
+    const auto unplaced = wider.engine->attachVuTaps (five);
+    EXPECT_EQ (std::count (unplaced.begin(), unplaced.end(), "deck_e"), 0);
+    wider.decks[4].bformat[0] = impulseAt (wider.frames, 100, 0.5f);
+    wider.run();
+    EXPECT_EQ (peaksOf (five).at ("deck_e"), 0.5f);
 }
 
 // O13: the /vu meters at the points the patchbay fed beat-analyzer. The raw inputs: an impulse into

@@ -83,6 +83,43 @@ TEST (EnginePorts, DeckSlotHas41Inputs)
     EXPECT_EQ (std::count (two.begin(), two.end(), "deckA_cue_L"), 0);
 }
 
+// A8: four slots (A-D) and six (A-F) are the same walk; 4 slots are 12 + 4 x 41 = 176 inputs.
+TEST (EnginePorts, FourAndSixSlotsFollowTheCount)
+{
+    const auto spatial = a3test::loadedSpatialConfig (a3test::shippedSpatialDirectory);
+    const auto four = a3app::enginePortNames (a3test::engineConfig (4, 4), spatial).inputs;
+    ASSERT_EQ (four.size(), 176u);
+    EXPECT_EQ (four[12 + 2 * 41], "deckC_1");
+    EXPECT_EQ (four[12 + 3 * 41 + 16], "deckD_aux_1");
+    EXPECT_EQ (four.back(), "deckD_cue_9");
+    const auto six = a3app::enginePortNames (a3test::engineConfig (4, 6), spatial).inputs;
+    ASSERT_EQ (six.size(), 12u + 6 * 41u);
+    EXPECT_EQ (six[12 + 4 * 41], "deckE_1");
+    EXPECT_EQ (six.back(), "deckF_cue_9");
+}
+
+// One pure function names a slot, with no cap (A..Z, AA, AB, ...), and reads it back in either case.
+TEST (EnginePorts, DeckLettersHaveNoCapAndReadBack)
+{
+    EXPECT_EQ (a3::deckLetters (1), "A");
+    EXPECT_EQ (a3::deckLetters (4), "D");
+    EXPECT_EQ (a3::deckLetters (26), "Z");
+    EXPECT_EQ (a3::deckLetters (27), "AA");
+    EXPECT_EQ (a3::deckLetters (28), "AB");
+    EXPECT_EQ (a3::deckLetters (53), "BA");
+    EXPECT_EQ (a3::deckLetters (703), "AAA");
+    for (int slot = 1; slot <= 1000; ++slot)
+        ASSERT_EQ (a3::deckSlotOf (a3::deckLetters (slot)), slot) << slot;
+    EXPECT_EQ (a3::deckSlotOf ("c"), 3);
+    EXPECT_EQ (a3::deckSlotOf ("aa"), 27);
+    for (const char* other : { "", "1", "a1", "_", "A-" })
+        EXPECT_EQ (a3::deckSlotOf (other), 0) << other;
+    EXPECT_EQ (a3::deckSlotOfMeter ("deck_d"), 4);
+    EXPECT_EQ (a3::deckSlotOfMeter ("deck_aa"), 27);
+    for (const char* other : { "deck_", "deckA", "deck_a1", "free39", "aux_L" })
+        EXPECT_EQ (a3::deckSlotOfMeter (other), 0) << other;
+}
+
 TEST (EnginePorts, RetiredDeckPortsAreTheOldStereoPairs)
 {
     const Names expected { "deckA_cue_L", "deckA_cue_R", "deckA_aux_L", "deckA_aux_R",

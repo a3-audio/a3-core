@@ -101,6 +101,7 @@ private:
     void publishConfig();
 
     HostView& view;
+    const int truthDecks;   // the view's, fixed for the process: the HTTP threads parse bodies with it
 
     // The snapshot: written by tick, read by the handlers.
     mutable std::mutex snapshotLock;

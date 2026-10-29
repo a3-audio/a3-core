@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <gtest/gtest.h>
+#include "AppTruth.h"
 #include "RemoteRig.h"
 
 namespace
@@ -113,8 +114,8 @@ TEST (EngineControlApi, ConfigAndLinksAreServed)
 
     const auto config = parse (httpclient::get (rig.server->port(), "/api/engine/config").body);
     juce::String error;
-    const auto pending = a3app::parseAppConfig (config["pending"], rig.fake.file.getParentDirectory(), error);
-    const auto running = a3app::parseAppConfig (config["running"], rig.fake.file.getParentDirectory(), error);
+    const auto pending = a3app::parseAppConfig (config["pending"], rig.fake.file.getParentDirectory(), error, a3apptest::truthDecks());
+    const auto running = a3app::parseAppConfig (config["running"], rig.fake.file.getParentDirectory(), error, a3apptest::truthDecks());
     ASSERT_TRUE (pending && running) << error;
     EXPECT_EQ (pending->engine.channels, 5);
     EXPECT_EQ (running->engine.channels, 4);

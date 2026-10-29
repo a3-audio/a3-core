@@ -48,6 +48,7 @@ public:
     std::vector<std::string> droppedLinks() const override;
     std::vector<std::string> ignoredKeys() const override;
     juce::String truthNote() const override;
+    int truthDecks() const override;
     juce::File configFile() const override;
     LiveLinks liveLinks() const override;
     void edit (const AppConfig&) override;
@@ -66,6 +67,7 @@ private:
         EngineMetersReport meters;
         AppConfig pending, running;
         juce::File file;
+        int truthDecks = 0;       // the engine's (its config answer's "truthDecks")
         LiveLinks links;
         juce::String problem;
         std::string configBody;   // the last config answer's bytes: parsed again only when they change

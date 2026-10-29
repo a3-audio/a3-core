@@ -1407,3 +1407,40 @@ TEST (CoreApi, TheBenchSendsMixerAndMotionAsCoreSends)
     EXPECT_THROW (rig.core->sendFromBench ("reaper", { "/x", {} }), std::invalid_argument);
     EXPECT_THROW (rig.core->sendFromBench ("self", { "/x", {} }), std::invalid_argument);
 }
+
+// Core's deck selector counts the package truth's deck range (stemdeck.deck-hello): four decks, A-D, and a
+// channel's input ring turns A B C D ANALOG.
+TEST (CoreApi, ThePackagesTruthGivesFourDecks)
+{
+    const auto truth = std::get<Truth> (Truth::load (juce::File (A3_PACKAGE_TRUTH), std::nullopt));
+    CoreRig::Options options;
+    options.truth = &truth;
+    CoreRig rig (CoreRig::WithOptions {}, options);
+    rig.core->publishView();
+    const auto decks = rowsOf (property (parsedRig (rig), "decks"));
+    ASSERT_EQ (decks.size(), 4u);
+    for (int deck = 1; deck <= 4; ++deck)
+        EXPECT_EQ (static_cast<int> (decks[(size_t) deck - 1]["deck"]), deck);
+
+    rig.clear();
+    for (int step = 0; step < 5; ++step)
+        rig.osc (rig.desk, "/channel/1/stem/turn", { pyStr ("1") });
+    EXPECT_EQ (corerig::startingWith (rig.to ("motion"), "/channel/1/source/cursor"),
+               (std::vector<std::string> { "/channel/1/source/cursor i:1", "/channel/1/source/cursor i:2",
+                                           "/channel/1/source/cursor i:3", "/channel/1/source/cursor i:4",
+                                           "/channel/1/source/cursor i:0" }));
+}
+
+// Where the delay's tempo comes from, as the last look chose it (Ruling A4).
+TEST (CoreApi, RigNamesWhereTheDelaysTempoComesFrom)
+{
+    const auto truth = std::get<Truth> (Truth::load (juce::File (A3_PACKAGE_TRUTH), std::nullopt));
+    CoreRig::Options options;
+    options.truth = &truth;
+    CoreRig rig (CoreRig::WithOptions {}, options);
+    rig.core->publishView();
+    EXPECT_EQ (property (parsedRig (rig), "tempo_source").toString(), "held");
+    rig.osc ({ "127.0.0.3", 6001 }, "/stemdeck/2/tempo", { pyFloat (126.0), pyInt (1), pyInt (1) });
+    rig.core->publishView();
+    EXPECT_EQ (property (parsedRig (rig), "tempo_source").toString(), "master deck 2");
+}

@@ -19,6 +19,9 @@ inline constexpr int defaultSteadyBeats = 4;
 inline constexpr double bpmMin = 20.0;
 inline constexpr double bpmMax = 400.0;
 
+// The value as a tempo: a number, finite, within bpmMin..bpmMax; nothing otherwise.
+std::optional<double> tempoOf (const OscArg& bpm);
+
 // What to pass on, given what keeps arriving. The deadband is measured against what was *sent*,
 // so a slow drift cannot creep past it a hundredth at a time.
 class TempoFollower
@@ -31,6 +34,9 @@ public:
     // refused, and refusing it changes nothing: not what the deadband measures against, not the
     // run of steady beats.
     std::optional<double> wanted (const OscArg& bpm);
+    // The tempo once it has held still for a bar, whatever was sent; nothing before. A value that is
+    // not a tempo is refused as in wanted(). TempoSource measures the deadband itself, across sources.
+    std::optional<double> steady (const OscArg& bpm);
 
 private:
     double deadband;

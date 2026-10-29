@@ -32,6 +32,7 @@ inline a3::EngineConfig engineConfig (int channels = 4, int decks = 2)
     a3::EngineConfig config;
     config.channels = channels;
     config.decks = decks;
+    config.decksNamed = true;   // a test names its count, as a user's file may
     config.analogPairs.assign ((size_t) channels, 0);
     for (int c = 0; c < channels && c + 1 <= testAnalogPairs; ++c)
         config.analogPairs[(size_t) c] = c + 1;

@@ -1,7 +1,6 @@
 {
  "engine": {
   "channels": 4,
-  "decks": 2,
   "analogInputs": 12,
   "analogPairs": [
    1,
