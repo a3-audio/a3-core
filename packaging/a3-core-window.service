@@ -9,10 +9,10 @@ PartOf=a3-main.service
 After=a3-core.service a3-engine.service
 
 [Service]
-# The display by name and the screen awaited here. The helper comes with the deployment's
-# payload, in ~/.local/bin.
+# The display by name and the screen awaited here. The helper comes with the program
+# (a3-core-app), so a machine without the Core's deployment has it too.
 Environment=DISPLAY=:0
-ExecStartPre=%h/.local/bin/a3-wait-for-the-screen
+ExecStartPre=/usr/lib/a3-core/a3-wait-for-the-screen
 # No role: the window. It exits 0 when it is closed (also after the quit question) and on SIGTERM,
 # so on-failure leaves a closed window closed; a crash or a kill signal starts it again.
 ExecStart=/usr/bin/a3-core

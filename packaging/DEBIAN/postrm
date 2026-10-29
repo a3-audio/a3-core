@@ -3,9 +3,6 @@ set -e
 
 case "$1" in
   purge)
-    # The ld.so.conf.d file for pipewire-jack is gone with the purge; the
-    # loader's cache must forget it too.
-    ldconfig || true
     rm -f /etc/systemd/network/a3.network || true
     # optionally disable the service on purge
     if command -v systemctl >/dev/null 2>&1; then

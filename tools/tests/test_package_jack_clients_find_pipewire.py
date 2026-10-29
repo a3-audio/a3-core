@@ -4,27 +4,30 @@ pipewire-jack puts PipeWire's libjack in a directory of its own, out of the
 loader's way; Debian leaves the switch to the admin and ships the ld.so.conf.d
 file only as an example. The rig started with an LD_LIBRARY_PATH drop-in per
 unit -- REAPER and QjackCtl then, the beat-analyzer, StemDeck -- and a JACK program
-started by hand still found jackd's library. The package ships Debian's
-example as the real file instead, so no unit needs to know, and runs ldconfig
-so the loader's cache has it before anything starts.
+started by hand still found jackd's library. The program's package
+(a3-core-app) ships Debian's example as the real file instead, so no unit
+needs to know, and runs ldconfig so the loader's cache has it before anything
+starts. Its name carries the building machine's multiarch triplet; the file
+itself is packaging/app/00-a3-pipewire-jack.conf.in.
 """
 
-import re
 import unittest
 
-from tools.tests.paths import DEBIAN, PACKAGE
+from tools.tests.paths import APP_DEBIAN, APP_RECIPE
 
-LD_CONF = PACKAGE / "etc/ld.so.conf.d/pipewire-jack-x86_64-linux-gnu.conf"
-PIPEWIRE_JACK = "/usr/lib/x86_64-linux-gnu/pipewire-0.3/jack"
+TEMPLATE = APP_RECIPE / "00-a3-pipewire-jack.conf.in"
+#: The name packaging/app/stage gives it on the NUCs.
+LD_CONF_NAME = "00-a3-pipewire-jack-x86_64-linux-gnu.conf"
+PIPEWIRE_JACK = "/usr/lib/@MULTIARCH@/pipewire-0.3/jack"
 
 
 def maintainer_script(name):
-    return (DEBIAN / name).read_text()
+    return (APP_DEBIAN / name).read_text()
 
 
 class TheLoaderFindsPipeWiresLibjack(unittest.TestCase):
     def test_the_file_names_pipewire_jacks_directory(self):
-        lines = [l.strip() for l in LD_CONF.read_text().splitlines()
+        lines = [l.strip() for l in TEMPLATE.read_text().splitlines()
                  if l.strip() and not l.strip().startswith("#")]
         self.assertEqual([l.rstrip("/") for l in lines], [PIPEWIRE_JACK])
 
@@ -32,17 +35,21 @@ class TheLoaderFindsPipeWiresLibjack(unittest.TestCase):
         """ld.so.conf reads ld.so.conf.d/*.conf in name order; the
         architecture's own directory comes from x86_64-linux-gnu.conf, where
         jackd2's libjack lives."""
-        self.assertLess(LD_CONF.name, "x86_64-linux-gnu.conf")
+        self.assertLess(LD_CONF_NAME, "x86_64-linux-gnu.conf")
 
-    def test_it_is_a_conffile(self):
-        self.assertIn("/etc/ld.so.conf.d/" + LD_CONF.name,
-                      maintainer_script("conffiles").splitlines())
+    def test_it_is_no_conffile(self):
+        """dpkg-deb refuses a conffile line whose file is not in the package,
+        and the name differs per architecture; the file is generated, not
+        edited, and goes with the package."""
+        self.assertNotIn(LD_CONF_NAME, maintainer_script("conffiles"))
 
     def test_the_postinst_refreshes_the_loader_cache(self):
         self.assertRegex(maintainer_script("postinst"), r"(?m)^\s*ldconfig\b")
 
-    def test_the_postrm_refreshes_it_on_purge(self):
-        self.assertRegex(maintainer_script("postrm"), r"(?m)^\s*ldconfig\b")
+    def test_the_postrm_refreshes_it_on_remove_and_purge(self):
+        postrm = maintainer_script("postrm")
+        self.assertRegex(postrm, r"(?m)^\s*remove\|purge\)$")
+        self.assertRegex(postrm, r"(?m)^\s*ldconfig\b")
 
 
 if __name__ == "__main__":

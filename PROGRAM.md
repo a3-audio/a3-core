@@ -40,7 +40,7 @@ the main checkout:
 bit-identical, SimpleDecoder at most 9.6e-6 (about −92 dB re RMS) against the installed 1.15 VST3s,
 BinauralDecoder about −134 dB.
 
-**Package.** `packaging/stage` installs the bench, both data directories and a copyright file that
+**Package.** `packaging/app/stage` (package `a3-core-app`) installs the bench, both data directories and a copyright file that
 carries the MIT, CC BY 3.0 and Apache-2.0 texts (the GPL texts are Debian's
 `/usr/share/common-licenses`). Library dependencies come from `dpkg-shlibdeps`; the bench links only
 libjack, freetype and fontconfig. IEM's editors are compiled in but never opened, so the X11
@@ -180,8 +180,8 @@ the Python Core (a3-core before the cut) and the metering beat-analyzer (before 
 numbers are in `packaging/DEBIAN/control` only. It depends on no Python.
 
 **The window unit** (`a3-core-window.service`). `PartOf=a3-main.service`, `After=a3-core.service
-a3-engine.service`: the window attaches to the Core and the engine that are up. It waits for the screen (`DISPLAY=:0` and `%h/.local/bin/a3-wait-for-the-screen`, a
-helper of a3-core's package, not shipped here), then runs `/usr/bin/a3-core` with no role, which is
+a3-engine.service`: the window attaches to the Core and the engine that are up. It waits for the screen (`DISPLAY=:0` and `/usr/lib/a3-core/a3-wait-for-the-screen`, a
+helper shipped with the program in `a3-core-app`), then runs `/usr/bin/a3-core` with no role, which is
 the window. It attaches to Core and the engine and spawns a role only when no unit has it enabled or
 running (`systemctl --user is-enabled` / `is-active`; `After=` orders the start only, and Core is
 `Type=idle`). `Restart=on-failure`, `RestartSec=2`, `TimeoutStopSec=10` (the quit question can hold SIGTERM): a close, also after the quit question, and SIGTERM

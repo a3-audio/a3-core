@@ -1,0 +1,21 @@
+Package: a3-core-app
+Version: 0
+Architecture: amd64
+Maintainer: Rafjagger
+Section: sound
+Priority: optional
+Depends: ${shlibs:Depends}, pipewire, pipewire-jack, wireplumber, jack-example-tools
+Breaks: a3-core (<< ${a3:Version}), a3-engine
+Replaces: a3-core (<< ${a3:Version}), a3-engine
+Description: A3 Core: the a3-core program
+ The A3 program /usr/bin/a3-core: the window, the Core and the audio engine as
+ roles of one binary, and their systemd user units (a3-engine.service,
+ a3-core.service, a3-core-window.service), none enabled by this package. It
+ reads the OSC address truth from /usr/share/a3/a3-osc.json, its config from
+ ~/.config/a3/engine/engine.json or /usr/share/a3-engine/engine.json, and the
+ speaker layouts and IEM data from /usr/share/a3-engine/spatial. A headless
+ JACK host for parity and load runs is shipped as a tool.
+ .
+ Installs on any machine. JACK programs find PipeWire's libjack system-wide,
+ and the audio group may run realtime. The Core machine's deployment around
+ it is the package a3-core.

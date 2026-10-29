@@ -1,0 +1,6 @@
+# PipeWire's libjack before jackd's: every JACK program on this machine -- the
+# engine, the beat-analyzer, StemDeck, one started by hand -- talks to
+# PipeWire. Debian's example (pipewire's doc/examples/ld.so.conf.d), shipped
+# by a3-core-app under a name of its own, so a copy the admin made of the
+# example stays theirs; 00- sorts it before the architecture's own directory.
+/usr/lib/@MULTIARCH@/pipewire-0.3/jack/

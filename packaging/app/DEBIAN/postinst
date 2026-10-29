@@ -1,0 +1,15 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Raphael Eismann
+# SPDX-License-Identifier: GPL-3.0-or-later
+set -e
+
+# The loader's cache with pipewire-jack's libjack in it
+# (/etc/ld.so.conf.d/00-a3-pipewire-jack-<multiarch>.conf), before anything
+# that runs a JACK program is started.
+case "$1" in
+  configure)
+    ldconfig || true
+  ;;
+esac
+
+exit 0

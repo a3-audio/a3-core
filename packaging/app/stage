@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Raphael Eismann
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# a3-core-app's recipe: the a3-core program as a package of its own, for any
+# machine (the Core, a laptop). Called by a3-system's installer/package.py
+# (--recipe packaging/app) from an exported tree (git archive):
+#
+#   packaging/app/stage build <src> <build> <juce-prefix> <jobs> [--test]
+#   packaging/app/stage files <src> <build> <stage>
+#
+# Nothing it lays out lies under /home: what a Core machine adds around the
+# program is a3-core's (packaging/stage).
+set -euo pipefail
+
+. "$(dirname "$(readlink -f "$0")")/../copyright.sh"
+
+PACKAGE=a3-core-app
+RECIPE=packaging/app
+# The truth and the screen helper stay where the deployment tree has kept them
+# in git (the tools and the rig's own units read them there); the program
+# carries the files.
+PAYLOAD=platform-config/debian-x86_64/a3-core
+
+usage() {
+    echo "usage: $0 build <src> <build> <juce> <jobs> [--test] | files <src> <build> <stage>" >&2
+    exit 2
+}
+
+build() {
+    [[ $# -eq 4 || ( $# -eq 5 && "$5" == --test ) ]] || usage
+    local src=$1 build=$2 juce=$3 jobs=$4 test=${5:-}
+    local tests=OFF
+    [[ "$test" == --test ]] && tests=ON
+    cmake -S "$src" -B "$build" -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_PREFIX_PATH="$juce" -DA3_ENGINE_TESTS="$tests" -DA3_ENGINE_BENCH=ON
+    cmake --build "$build" -j "$jobs"
+    build_rt_preload "$src" "$build"
+    [[ "$tests" == ON ]] && ctest --test-dir "$build" --output-on-failure
+    return 0
+}
+
+# The engine's realtime preload (see the source's comment, and a3-engine.service's
+# LD_PRELOAD). Built with the program: a machine without a compiler gets it too.
+build_rt_preload() {
+    local src=$1 build=$2
+    mkdir -p "$build/rt-preload"
+    "${CC:-cc}" -shared -fPIC -O2 -Wall \
+        -o "$build/rt-preload/libjack-rt-priority.so" "$src/$RECIPE/jack-rt-priority.c"
+}
+
+files() {
+    [[ $# -eq 3 ]] || usage
+    local src=$1 build=$2 stage=$3
+    install -D -m 755 "$build/app/a3-core" "$stage/usr/bin/a3-core"
+    install -D -m 755 "$build/bench/a3-engine-bench" "$stage/usr/bin/a3-engine-bench"
+    install -D -m 644 "$build/rt-preload/libjack-rt-priority.so" "$stage/usr/lib/a3-core/libjack-rt-priority.so"
+    install -D -m 755 "$src/$PAYLOAD/home/aaa/.local/bin/a3-wait-for-the-screen" \
+        "$stage/usr/lib/a3-core/a3-wait-for-the-screen"
+    install_user_units "$src" "$stage"
+    install -D -m 644 "$src/data/engine.json" "$stage/usr/share/a3-engine/engine.json"
+    install_spatial_data "$src" "$stage"
+    install -D -m 644 "$src/$PAYLOAD/usr/share/a3/a3-osc.json" "$stage/usr/share/a3/a3-osc.json"
+    install -D -m 644 "$src/$RECIPE/a3-audio.conf" "$stage/etc/security/limits.d/a3-audio.conf"
+    install_loader_config "$src" "$stage"
+    install_copyright "$src" "$stage" "$PACKAGE"
+}
+
+install_user_units() {
+    local src=$1 stage=$2 unit
+    for unit in a3-engine.service a3-core-window.service a3-core.service; do
+        install -D -m 644 "$src/packaging/$unit" "$stage/usr/lib/systemd/user/$unit"
+    done
+}
+
+# The app's and the bench's package default is spatial/ (engine.json names it relative to itself); the 6.1 booth is REAPER's, for the parity run (--spatial).
+install_spatial_data() {
+    local src=$1 stage=$2 directory file
+    for directory in spatial spatial-reaper-booth-6.1; do
+        for file in "$src/data/$directory"/*.json; do
+            install -D -m 644 "$file" "$stage/usr/share/a3-engine/$directory/$(basename "$file")"
+        done
+    done
+}
+
+# pipewire-jack's libjack lives in a directory per architecture: the building
+# machine's (x86_64 on the NUCs, aarch64 on a Raspberry Pi 5) names the file and its line.
+install_loader_config() {
+    local src=$1 stage=$2 triplet
+    triplet=$(multiarch)
+    [[ -n "$triplet" ]] || { echo "$0: no multiarch triplet for the loader file" >&2; exit 1; }
+    mkdir -p "$stage/etc/ld.so.conf.d"
+    sed "s|@MULTIARCH@|$triplet|" "$src/$RECIPE/00-a3-pipewire-jack.conf.in" \
+        > "$stage/etc/ld.so.conf.d/00-a3-pipewire-jack-$triplet.conf"
+    chmod 644 "$stage/etc/ld.so.conf.d/00-a3-pipewire-jack-$triplet.conf"
+}
+
+multiarch() {
+    dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null || "${CC:-cc}" -print-multiarch
+}
+
+case "${1:-}" in
+    build) shift; build "$@" ;;
+    files) shift; files "$@" ;;
+    *) usage ;;
+esac

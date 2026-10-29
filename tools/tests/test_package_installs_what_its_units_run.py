@@ -13,8 +13,8 @@ a3-reaper and qjackctl waited on once they stopped sleeping, comes from
 would never have come up. The engine's unit waits on it today.
 
 **What counts as started.** Everything reachable from default.target.wants
-through `Wants=`, the program's own units (packaging/, laid into the package
-by packaging/stage) included. A unit that is shipped but that nothing starts is not a
+through `Wants=`, the program's own units (packaging/, laid into a3-core-app
+by packaging/app/stage) included. A unit that is shipped but that nothing starts is not a
 promise, so a program it names is not one either.
 
 **What it cannot check.** Which package really ships a program. That is
@@ -31,10 +31,10 @@ installed by it.
 import re
 import unittest
 
-from tools.tests.paths import DEBIAN, LOCAL, ROOT
+from tools.tests.paths import APP_DEBIAN, DEBIAN, LOCAL, ROOT
 
 UNITS = LOCAL / "share/a3-core/config/systemd/user"
-#: The program's units, beside its recipe; packaging/stage installs them.
+#: The program's units; packaging/app/stage installs them into a3-core-app.
 PROGRAM_UNITS = ROOT / "packaging"
 
 #: Present on every Debian system this package can be installed on, so a
@@ -43,8 +43,8 @@ PROGRAM_UNITS = ROOT / "packaging"
 #: session to begin with.
 BASE_SYSTEM = "base system"
 
-#: Built and shipped by this package itself (packaging/stage), so not a
-#: Depends of it.
+#: Built and shipped by this package or by a3-core-app (packaging/app/stage),
+#: which it depends on at its own version.
 THIS_PACKAGE = "this package"
 
 PROVIDED_BY = {
@@ -57,6 +57,7 @@ PROVIDED_BY = {
     "/usr/bin/pkill": BASE_SYSTEM,
     "/usr/bin/jack_wait": "jack-example-tools",
     "/usr/bin/a3-core": THIS_PACKAGE,
+    "/usr/lib/a3-core/a3-wait-for-the-screen": THIS_PACKAGE,
 }
 
 _EXEC_LINE = re.compile(r"^(Exec\w*)=(.*)$")
@@ -64,14 +65,15 @@ _PROGRAM = re.compile(r"^[-@:+!]*(\S+)")
 
 
 def depends():
-    """Package names in Depends, without versions and with every
-    alternative of an `a | b` counted -- either one satisfies it."""
-    control = (DEBIAN / "control").read_text()
-    line = next(l for l in control.splitlines() if l.startswith("Depends:"))
+    """Package names in Depends of a3-core and of a3-core-app (which a3-core
+    depends on), without versions and with every alternative of an `a | b`
+    counted -- either one satisfies it."""
     names = set()
-    for entry in line.split(":", 1)[1].split(","):
-        for alternative in entry.split("|"):
-            names.add(alternative.split("(")[0].strip())
+    for control in (DEBIAN / "control", APP_DEBIAN / "control"):
+        line = next(l for l in control.read_text().splitlines() if l.startswith("Depends:"))
+        for entry in line.split(":", 1)[1].split(","):
+            for alternative in entry.split("|"):
+                names.add(alternative.split("(")[0].strip())
     return names
 
 

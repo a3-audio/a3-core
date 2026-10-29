@@ -35,16 +35,23 @@ A push to `main` builds the package and publishes the apt archive
 (`.github/workflows/pages-deploy.yml`). The version is the last `v*` tag plus
 the commits since it; `python3 tools/package_version.py` prints it.
 
-The package is one: the `a3-core` program (`/usr/bin/a3-core`, built from this
-repository's C++ source) and the deployment payload under
-`platform-config/debian-x86_64/a3-core/`. Its recipe is `packaging/stage`, its
-control file and maintainer scripts are in `packaging/DEBIAN/`, and the
-packages a build needs are listed in `packaging/build-depends`. It takes over
-from the old `a3-engine` package (`Conflicts`/`Replaces`). To build by hand,
-from a clean checkout and with JUCE installed, use the umbrella's builder:
+The repository builds two packages. `a3-core-app` is the program
+(`/usr/bin/a3-core`, built from this repository's C++ source), its user units,
+the engine data and its helpers; it installs on any machine, a laptop included.
+Its recipe is `packaging/app/stage`, its control file and maintainer scripts are
+in `packaging/app/DEBIAN/`. `a3-core` is the Core machine's deployment: the
+payload under `platform-config/debian-x86_64/a3-core/`, the RT kernel and the
+conflicts with what would take the machine's network over; it depends on
+`a3-core-app` at its own version. Its recipe is `packaging/stage`, its control
+file and maintainer scripts are in `packaging/DEBIAN/`. The packages a build
+needs are listed in `packaging/build-depends`. `a3-core` takes over from the
+old `a3-engine` package (`Conflicts`/`Replaces`). To build by hand, from a
+clean checkout and with JUCE installed, use the umbrella's builder once per
+recipe:
 
 ```sh
-python3 /path/to/a3-system/installer/package.py <a3-core checkout> --out <dir> --juce ~/local/juce
+python3 /path/to/a3-system/installer/package.py <a3-core checkout> --recipe packaging/app --out <dir> --juce ~/local/juce
+python3 /path/to/a3-system/installer/package.py <a3-core checkout> --recipe packaging --out <dir> --juce ~/local/juce
 ```
 
 The package runs no Python. The tests

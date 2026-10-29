@@ -631,25 +631,6 @@ echo "a3-core: nothing restarted; restart a3-main to run the new config"
 
 ssh_key_step "${USER_HOME}/.ssh"
 
-# The engine's realtime preload (see the source's comment, and
-# a3-engine.service's LD_PRELOAD): pipewire-jack answers its maximum realtime
-# priority from an uninitialised variable, and a JACK client then runs its
-# worker threads without realtime. The library is compiled here, on the
-# machine. A failed build is said, not fatal: the engine then runs its
-# workers without realtime.
-build_jack_rt_shim() {
-  shim_source="$1"; library="$2"
-  mkdir -p "$(dirname "$library")" || true
-  if gcc -shared -fPIC -O2 -Wall -o "$library.new" "$shim_source"; then
-    mv -f "$library.new" "$library"
-  else
-    rm -f "$library.new"
-    echo "a3-core: could not build $library -- the engine's workers run without realtime" >&2
-  fi
-}
-
-build_jack_rt_shim "${USER_HOME}/.local/share/a3-core/src/jack-rt-priority.c" "${USER_HOME}/.local/lib/a3/libjack-rt-priority.so"
-
 # startx runs ~/.xserverrc as the X server: Xorg alone goes to CPU 0 (see the
 # shipped file). A ~/.xserverrc that is not ours is somebody's own: kept, named.
 install_xserverrc() {
@@ -682,11 +663,6 @@ if [ -d /home/aaa/.ssh ]; then
   chmod 0700 /home/aaa/.ssh
   find /home/aaa/.ssh -type f -exec chmod 0600 {} \;
 fi
-
-# The loader's cache with pipewire-jack's libjack in it
-# (/etc/ld.so.conf.d/pipewire-jack-x86_64-linux-gnu.conf), before anything
-# that runs a JACK program is started.
-ldconfig || true
 
 echo "enable system services..."
 systemctl daemon-reload || true

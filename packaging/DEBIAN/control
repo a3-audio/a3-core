@@ -4,20 +4,15 @@ Architecture: amd64
 Maintainer: Rafjagger
 Section: sound
 Priority: optional
-Depends: ${shlibs:Depends}, systemd, git, vim, i3, htop, linux-image-rt-amd64, liblo-tools, x11vnc, xserver-xorg-video-dummy, xserver-xorg-video-amdgpu, curl, net-tools, xinit, sudo, wget, gpg, build-essential, cmake, pkg-config, pipewire, pipewire-jack, wireplumber, linuxptp, libjack-jackd2-dev, libsamplerate0-dev, libgtk2.0-0, pcmanfm, jack-example-tools, tree, x11-utils, x11-xserver-utils, i3status, dex, unclutter-xfixes, maim, ffmpeg, xclip, brightnessctl, openssh-server
+Depends: a3-core-app (= ${a3:Version}), systemd, git, vim, i3, htop, linux-image-rt-amd64, liblo-tools, x11vnc, xserver-xorg-video-dummy, xserver-xorg-video-amdgpu, curl, net-tools, xinit, sudo, wget, gpg, build-essential, cmake, pkg-config, linuxptp, libjack-jackd2-dev, libsamplerate0-dev, libgtk2.0-0, pcmanfm, tree, x11-utils, x11-xserver-utils, i3status, dex, unclutter-xfixes, maim, ffmpeg, xclip, brightnessctl, openssh-server
 Recommends: beat-analyzer (>= 03.0+64), onboard
 Breaks: beat-analyzer (<< 03.0+64)
 Conflicts: wpasupplicant, modemmanager, blueman, bluetooth,bluez, bluez-obexd, network-manager, plymouth, cron, gnome-keyring, gnome-accessibility-themes, gnome-keyring-pkcs11, gnome-themes-extra, gnome-themes-extra-data, dhcpcd-base, gvfs-common, gvfs-daemons, gvfs-fuse, gvfs-libs, i3lock, a3-engine
 Replaces: wpasupplicant, modemmanager, blueman, bluetooth,bluez, bluez-obexd, network-manager, plymouth, cron, gnome-keyring, gnome-accessibility-themes, gnome-keyring-pkcs11, gnome-themes-extra, gnome-themes-extra-data, dhcpcd-base, gvfs-common, gvfs-daemons, gvfs-fuse, gvfs-libs, i3lock, i3lock, a3-engine
-Description: A3 Core: the a3-core program and the Core machine's deployment
- The A3 program /usr/bin/a3-core: the window, the Core and the audio engine as
- roles of one binary, and the systemd user unit a3-engine.service, which runs
- its engine role without a window. It reads the OSC address truth from
- /usr/share/a3/a3-osc.json, its config from ~/.config/a3/engine/engine.json or
- /usr/share/a3-engine/engine.json, and the speaker layouts and IEM data from
- /usr/share/a3-engine/spatial. A headless JACK host for parity and load runs
- is shipped as a tool.
- .
- The deployment around it: the user units of the a3-main group, the network,
- display, realtime and PipeWire configuration of a Core machine, and the
- questions asked at install time.
+Description: A3 Core: the Core machine's deployment
+ The deployment around the A3 program (a3-core-app, at this version): the user
+ units of the a3-main group, the network, display, realtime and PipeWire
+ configuration of a Core machine, and the questions asked at install time.
+ It takes the machine over -- network-manager, wpasupplicant, bluez and their
+ kind conflict with it -- and installs the RT kernel; a laptop wants only
+ a3-core-app.
