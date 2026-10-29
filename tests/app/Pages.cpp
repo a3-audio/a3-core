@@ -1145,3 +1145,27 @@ TEST_F (Pages, TooltipsSwitchIsOffByDefaultAndRemembered)
     EXPECT_TRUE (a3app::readTooltipSwitch (settings));
     home.deleteRecursively();
 }
+
+// The keys say what each filter sounds like; one visible line says what the choice is for and why decks keep SVF.
+TEST_F (Pages, FilterKeysDescribeTheFiltersAndALineSaysWhy)
+{
+    FakeView view;
+    a3app::FilterPage page (view);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
+    const auto svf = buttonsLabelled (page, juce::String::fromUTF8 ("SVF \xc2\xb7 clean, 12 dB/oct"));
+    const auto ladder = buttonsLabelled (page, juce::String::fromUTF8 ("LADDER \xc2\xb7 warm, 24 dB/oct, drives"));
+    ASSERT_EQ (svf.size(), 1u);
+    ASSERT_EQ (ladder.size(), 1u);
+    auto* why = labelSaying (page, "The DJ filter's character on the analog channels. Decks always use SVF "
+                                   "(B-format: the ladder's drive would bend the 3D image).");
+    ASSERT_NE (why, nullptr);
+    EXPECT_TRUE (why->isVisible());
+    EXPECT_GE (why->getY(), svf.front()->getBottom());   // under the keys
+    EXPECT_TRUE (page.getLocalBounds().contains (why->getBounds()));
+    for (auto* key : { svf.front(), ladder.front() })
+        EXPECT_LE (juce::GlyphArrangement::getStringWidth (look.getTextButtonFont (*key, key->getHeight()), key->getButtonText()),
+                   (float) key->getWidth()) << key->getButtonText();
+    EXPECT_FLOAT_EQ (look.getTextButtonFont (*svf.front(), svf.front()->getHeight()).getHeight(),
+                     look.getTextButtonFont (*ladder.front(), ladder.front()->getHeight()).getHeight());   // one size
+    expectPainted (a3apptest::snapshotAt (page, "filter-described", page.getWidth(), page.getHeight()));
+}

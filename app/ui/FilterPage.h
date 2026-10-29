@@ -22,7 +22,8 @@ public:
 
 private:
     HostView& view;
-    juce::Label title;
-    juce::TextButton svfButton { "SVF" }, ladderButton { "Ladder" };
+    juce::Label title, why;   // why: what the choice is for, always visible under the keys
+    juce::TextButton svfButton { juce::String::fromUTF8 ("SVF \xc2\xb7 clean, 12 dB/oct") },
+                     ladderButton { juce::String::fromUTF8 ("LADDER \xc2\xb7 warm, 24 dB/oct, drives") };
 };
 }

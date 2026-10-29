@@ -1,22 +1,28 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "FilterPage.h"
+#include <limits>
 
 namespace a3app
 {
 FilterPage::FilterPage (HostView& v) : view (v)
 {
     look::caption (title);
+    look::caption (why);
+    why.setText ("The DJ filter's character on the analog channels. Decks always use SVF "
+                 "(B-format: the ladder's drive would bend the 3D image).", juce::dontSendNotification);
+    why.setJustificationType (juce::Justification::topLeft);
+    why.setMinimumHorizontalScale (1.0f);
     title.setText ("FILTER", juce::dontSendNotification);
     look::help ("Live: the choice acts at once and needs no Save (the next Save keeps it in the file). "
-                "The decks always use the SVF.", { &title, &svfButton, &ladderButton });
+                "The line under the keys says what it is for.", { &title, &svfButton, &ladderButton });
     svfButton.setRadioGroupId (2);
     ladderButton.setRadioGroupId (2);
     for (auto* button : { &svfButton, &ladderButton })
         button->setClickingTogglesState (false);   // the config decides which one is on
     svfButton.onClick = [this] { choose (a3::FilterKind::svf); };
     ladderButton.onClick = [this] { choose (a3::FilterKind::ladder); };
-    for (auto* child : std::initializer_list<juce::Component*> { &title, &svfButton, &ladderButton })
+    for (auto* child : std::initializer_list<juce::Component*> { &title, &why, &svfButton, &ladderButton })
         addAndMakeVisible (child);
     refresh();
 }
@@ -47,7 +53,16 @@ void FilterPage::resized()
     const int row = look::rowHeight (*this);
     title.setBounds (area.removeFromTop (row));
     auto keys = area.removeFromTop (row * 2);
-    svfButton.setBounds (keys.removeFromLeft (keys.getWidth() / 4).reduced (2));
-    ladderButton.setBounds (keys.removeFromLeft (keys.getWidth() / 3).reduced (2));
+    svfButton.setBounds (keys.removeFromLeft (keys.getWidth() / 2).reduced (row / 16));
+    ladderButton.setBounds (keys.reduced (row / 16));
+    auto shared = std::numeric_limits<float>::max();   // both keys at one size: the longer text decides
+    for (auto* key : { &svfButton, &ladderButton })
+        shared = juce::jmin (shared, fittedTextHeight (key->getButtonText(), (float) key->getHeight() * keyTextShare * 0.7f,
+                                                       (float) key->getWidth() * keyTextWidthShare));
+    for (auto* key : { &svfButton, &ladderButton })
+        key->getProperties().set (sharedKeyTextHeight, (double) shared);
+    area.removeFromTop (row / 4);
+    why.setFont (juce::FontOptions ((float) row * 0.36f));
+    why.setBounds (area.removeFromTop (row * 2));
 }
 }
