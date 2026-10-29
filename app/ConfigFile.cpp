@@ -286,12 +286,23 @@ std::vector<juce::File> spatialCandidates (const juce::File& configDir)
     return { configDir.getChildFile ("engine/spatial"), installed, installed.getSiblingFile (installed.getFileName() + "-reaper-booth-6.1") };
 }
 
+namespace
+{
+bool holdsAVariant (const juce::File& directory) { return directory.getChildFile ("main.decoder.json").existsAsFile(); }
+}
+
 std::vector<juce::File> spatialChoices (const juce::File& configDir)
 {
+    const auto candidates = spatialCandidates (configDir);
     std::vector<juce::File> choices;
-    for (const auto& directory : spatialCandidates (configDir))
-        if (directory.isDirectory())
+    for (const auto& directory : candidates)
+        if (holdsAVariant (directory))
             choices.push_back (directory);
+    auto variants = candidates.front().findChildFiles (juce::File::findDirectories, false);
+    variants.sort();
+    for (const auto& variant : variants)
+        if (holdsAVariant (variant) && ! variant.getFileName().startsWithChar ('.'))
+            choices.push_back (variant);
     return choices;
 }
 }

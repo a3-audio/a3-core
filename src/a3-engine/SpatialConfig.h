@@ -15,6 +15,10 @@ constexpr float iemOrderThree = 4.0f;
 
 enum class Tap { moving, steady };
 
+// The two loudspeaker zones, each a <zone>.decoder.json + <zone>.parameters.json pair.
+enum class SpeakerZone { main, booth };
+inline const char* zoneName (SpeakerZone zone) { return zone == SpeakerZone::main ? "main" : "booth"; }
+
 // One strip tap summed into an encoder input: strip 0..3, side 0 = L, 1 = R, gain linear incl. sign.
 struct EncoderInput
 {

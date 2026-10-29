@@ -282,3 +282,23 @@ TEST (Window, SpatialChoicesFollowTheConfigDefault)
                (std::vector<juce::File> { configDir.getChildFile ("engine/spatial"), installed,
                                           installed.getSiblingFile (installed.getFileName() + "-reaper-booth-6.1") }));
 }
+
+// The SPEAKERS page saves user variants as <configDir>/engine/spatial/<name>; ZONES offers each that holds a
+// main decoder, and the user's directory itself only when it is a variant of its own.
+TEST (Window, SpatialChoicesListTheUsersVariants)
+{
+    const auto configDir = juce::File::createTempFile ("a3-config");
+    const auto user = configDir.getChildFile ("engine/spatial");
+    ASSERT_TRUE (user.getChildFile ("club").createDirectory());
+    ASSERT_TRUE (user.getChildFile ("club/main.decoder.json").replaceWithText ("{}"));
+    ASSERT_TRUE (user.getChildFile ("half").createDirectory());
+    const auto choices = a3app::spatialChoices (configDir);
+    const auto offered = [&] (const juce::File& f) { return std::find (choices.begin(), choices.end(), f) != choices.end(); };
+    EXPECT_TRUE (offered (user.getChildFile ("club")));
+    EXPECT_FALSE (offered (user.getChildFile ("half")));
+    EXPECT_FALSE (offered (user));
+
+    ASSERT_TRUE (user.getChildFile ("main.decoder.json").replaceWithText ("{}"));
+    EXPECT_TRUE (a3app::spatialChoices (configDir).front() == user);
+    configDir.deleteRecursively();
+}

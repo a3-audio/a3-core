@@ -107,6 +107,62 @@ std::optional<AppConfig> withSpatialDirectory (const AppConfig& config, const ju
     return pruned (std::move (edited), error);
 }
 
+juce::File zoneVariantDirectory (const AppConfig& config, const juce::File& userRoot)
+{
+    const auto current = config.spatialDirectory;
+    return current.isAChildOf (userRoot) ? current : userRoot.getChildFile (current.getFileName());
+}
+
+namespace
+{
+juce::Result writeZoneFiles (const juce::File& directory, a3::SpeakerZone zone, const juce::String& decoderJson, const juce::var& parameters)
+{
+    const juce::String name = a3::zoneName (zone);
+    const auto decoder = directory.getChildFile (name + ".decoder.json");
+    const auto values = directory.getChildFile (name + ".parameters.json");
+    if (! decoder.replaceWithText (decoderJson, false, false, nullptr))
+        return juce::Result::fail ("cannot write " + decoder.getFullPathName());
+    if (! values.replaceWithText (juce::JSON::toString (parameters) + "\n", false, false, "\n"))
+        return juce::Result::fail ("cannot write " + values.getFullPathName());
+    return juce::Result::ok();
+}
+}
+
+std::optional<AppConfig> withZoneDecoder (const AppConfig& config, a3::SpeakerZone zone, const juce::String& decoderJson,
+                                          const juce::var& parameters, const juce::File& userRoot, juce::String& error)
+{
+    const auto variant = zoneVariantDirectory (config, userRoot);
+    if (! variant.isAChildOf (userRoot))
+    {
+        error = variant.getFullPathName() + " is not under " + userRoot.getFullPathName();
+        return std::nullopt;
+    }
+    const auto staging = variant.getSiblingFile ("." + variant.getFileName() + ".saving");
+    staging.deleteRecursively();
+    const auto discard = [&] (const juce::String& why) -> std::optional<AppConfig>
+    {
+        staging.deleteRecursively();
+        error = why;
+        return std::nullopt;
+    };
+
+    if (! config.spatialDirectory.copyDirectoryTo (staging))
+        return discard ("cannot copy " + config.spatialDirectory.getFullPathName() + " to " + staging.getFullPathName());
+    if (const auto written = writeZoneFiles (staging, zone, decoderJson, parameters); written.failed())
+        return discard (written.getErrorMessage());
+    juce::String refusal;
+    auto edited = withSpatialDirectory (config, staging, refusal);   // loads it: the engine would refuse what fails here
+    if (! edited)
+        return discard (refusal);
+
+    variant.deleteRecursively();
+    if (! staging.moveFileTo (variant))
+        return discard ("cannot move " + staging.getFullPathName() + " to " + variant.getFullPathName());
+    edited->spatialDirectory = variant;
+    error = {};
+    return edited;
+}
+
 std::optional<AppConfig> withTrim (const AppConfig& config, TrimZone zone, float db, juce::String& error)
 {
     if (! std::isfinite (db) || db < minTrimDb || db > maxTrimDb)

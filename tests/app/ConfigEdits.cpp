@@ -284,3 +284,86 @@ TEST (ConfigEdits, ShrinkingTheDecksDropsTheRemovedSlotsLinks)
     EXPECT_EQ (loaded->engine.decks, 1);   // the file names it, under a truth of 4
     file.deleteFile();
 }
+
+namespace
+{
+// A scratch "installed" directory and a user root beside it; both go when the test ends.
+struct ZoneEdit
+{
+    a3test::ScratchDirectory installed;
+    juce::File userRoot = juce::File::createTempFile ("a3-user-spatial");
+    ~ZoneEdit() { userRoot.deleteRecursively(); }
+
+    a3app::AppConfig config() const
+    {
+        auto c = sample();
+        c.spatialDirectory = installed.root();
+        return c;
+    }
+    juce::String installedFile (const char* name) const { return installed.root().getChildFile (name).loadFileAsString(); }
+};
+
+juce::var boothParametersWithCrossover (const ZoneEdit& edit, double hz)
+{
+    auto parameters = juce::JSON::parse (edit.installedFile ("booth.parameters.json")).clone();
+    parameters.getDynamicObject()->setProperty ("lowPassFrequency", hz);
+    parameters.getDynamicObject()->setProperty ("highPassFrequency", hz);
+    return parameters;
+}
+}
+
+TEST (ConfigEdits, AZoneDecoderBecomesAUserVariantBesideTheInstalledFiles)
+{
+    ZoneEdit edit;
+    const auto before = edit.installedFile ("booth.parameters.json");
+    const auto decoder = edit.installedFile ("main.decoder.json");   // any valid decoder: main's quad on the booth
+    juce::String error;
+    const auto edited = a3app::withZoneDecoder (edit.config(), a3::SpeakerZone::booth, decoder,
+                                                boothParametersWithCrossover (edit, 120.0), edit.userRoot, error);
+    ASSERT_TRUE (edited) << error;
+
+    const auto variant = edit.userRoot.getChildFile (edit.installed.root().getFileName());
+    EXPECT_EQ (edited->spatialDirectory, variant);
+    EXPECT_EQ (variant.getChildFile ("booth.decoder.json").loadFileAsString(), decoder);
+    EXPECT_EQ ((double) juce::JSON::parse (variant.getChildFile ("booth.parameters.json").loadFileAsString())["lowPassFrequency"], 120.0);
+    EXPECT_EQ (variant.getChildFile ("main.decoder.json").loadFileAsString(), edit.installedFile ("main.decoder.json"));
+    EXPECT_EQ (variant.getChildFile ("encoder.inputs.json").loadFileAsString(), edit.installedFile ("encoder.inputs.json"));
+    EXPECT_EQ (edit.installedFile ("booth.parameters.json"), before);   // never written
+    EXPECT_TRUE (a3::loadSpatialConfig (variant, error)) << error;
+    EXPECT_EQ (edit.userRoot.findChildFiles (juce::File::findDirectories, false).size(), 1);   // no staging left
+}
+
+TEST (ConfigEdits, AUserVariantIsEditedInPlace)
+{
+    ZoneEdit edit;
+    const auto mine = edit.userRoot.getChildFile ("mine");
+    ASSERT_TRUE (edit.installed.root().copyDirectoryTo (mine));
+    auto config = edit.config();
+    config.spatialDirectory = mine;
+    juce::String error;
+    const auto edited = a3app::withZoneDecoder (config, a3::SpeakerZone::main, edit.installedFile ("main.decoder.json"),
+                                                juce::JSON::parse (edit.installedFile ("main.parameters.json")), edit.userRoot, error);
+    ASSERT_TRUE (edited) << error;
+    EXPECT_EQ (edited->spatialDirectory, mine);
+}
+
+TEST (ConfigEdits, AZoneDecoderTheEngineWouldRefuseWritesNothing)
+{
+    ZoneEdit edit;
+    juce::String error;
+    const auto config = edit.config();
+    EXPECT_FALSE (a3app::withZoneDecoder (config, a3::SpeakerZone::main, "{\"Decoder\":{}}",
+                                          juce::JSON::parse (edit.installedFile ("main.parameters.json")), edit.userRoot, error));
+    EXPECT_TRUE (error.contains ("main.decoder.json")) << error;
+    EXPECT_TRUE (edit.userRoot.findChildFiles (juce::File::findFilesAndDirectories, true).isEmpty());
+}
+
+TEST (ConfigEdits, TheVariantOfAnInstalledDirectoryIsNamedAfterIt)
+{
+    a3app::AppConfig config;
+    config.spatialDirectory = juce::File ("/usr/share/a3-engine/spatial");
+    const juce::File root ("/home/tester/.config/a3/engine/spatial");
+    EXPECT_EQ (a3app::zoneVariantDirectory (config, root), root.getChildFile ("spatial"));
+    config.spatialDirectory = root.getChildFile ("club");
+    EXPECT_EQ (a3app::zoneVariantDirectory (config, root), root.getChildFile ("club"));
+}

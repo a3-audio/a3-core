@@ -54,7 +54,8 @@ inline const juce::File packageConfigFile { "/usr/share/a3-engine/engine.json" }
 // The spatial directories the ZONES page may offer, in order: the user's (<configDir>/engine/spatial), the
 // package's default (AppConfig's), and the package's REAPER booth variant beside it. Existing or not.
 std::vector<juce::File> spatialCandidates (const juce::File& configDir);
-// Those of them that are directories.
+// Those of them that hold a main.decoder.json, then the user's variants (<configDir>/engine/spatial/<name>,
+// the SPEAKERS page's saves) that do, by name.
 std::vector<juce::File> spatialChoices (const juce::File& configDir);
 
 // ~/.config/a3/engine/engine.json under `home`.
