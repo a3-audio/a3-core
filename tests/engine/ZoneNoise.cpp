@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <gtest/gtest.h>
+#include <atomic>
 #include <cmath>
+#include <thread>
 #include <juce_dsp/juce_dsp.h>
 #include "ZoneNoise.h"
 
@@ -175,4 +177,38 @@ TEST (ZoneNoise, NonFiniteDirectionsAndBadChannelsAreIgnored)
     for (const auto* set : { &r.input, &r.output })
         for (const auto& channel : *set)
             EXPECT_EQ (peakOf (channel, 0), 0.0);
+}
+
+// M7: azimuth and elevation of one request arrive together, never one request's azimuth with another's
+// elevation. Every request here has elevation = azimuth - 90; the audio side must only ever take such a pair.
+TEST (ZoneNoise, ADirectionArrivesWhole)
+{
+    a3::ZoneNoise noise { true };
+    noise.prepare (rate, 1);
+    std::atomic<bool> stop { false };
+    std::thread requests ([&]
+    {
+        for (int k = 0; ! stop.load(); k = (k + 1) % 181)
+            noise.requestDirection ((float) k, (float) k - 90.0f);
+    });
+    float in[16][1] {};
+    float* bus[16];
+    for (int ch = 0; ch < 16; ++ch)
+        bus[ch] = in[ch];
+    int taken = 0, torn = 0;
+    for (int i = 0; i < 200000; ++i)
+    {
+        noise.render (1);
+        noise.addToInput (bus, 1);
+        if (const auto direction = noise.takenDirection())
+        {
+            ++taken;
+            if (direction->second != direction->first - 90.0f)
+                ++torn;
+        }
+    }
+    stop = true;
+    requests.join();
+    EXPECT_GT (taken, 100);
+    EXPECT_EQ (torn, 0);
 }

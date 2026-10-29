@@ -3,6 +3,7 @@
 #include "ZoneNoise.h"
 #include <JuceHeader.h>
 #include <cmath>
+#include <cstring>
 #include "efficientSHvanilla.h"
 #include "ambisonicTools.h"
 
@@ -69,9 +70,25 @@ void ZoneNoise::requestDirection (float azimuthDegrees, float elevationDegrees)
 {
     if (! std::isfinite (azimuthDegrees) || ! std::isfinite (elevationDegrees))
         return;   // NaN would stay in the zone decoder's filters until the next rebuild
-    pendingAzimuth.store (azimuthDegrees, std::memory_order_relaxed);
-    pendingElevation.store (elevationDegrees, std::memory_order_relaxed);
+    pendingDirection.store (pack (azimuthDegrees, elevationDegrees), std::memory_order_relaxed);
     pendingKind.store (direction, std::memory_order_release);
+}
+
+uint64_t ZoneNoise::pack (float azimuth, float elevation)
+{
+    uint32_t a = 0, e = 0;
+    std::memcpy (&a, &azimuth, sizeof a);
+    std::memcpy (&e, &elevation, sizeof e);
+    return ((uint64_t) a << 32) | e;
+}
+
+std::pair<float, float> ZoneNoise::unpack (uint64_t word)
+{
+    const auto a = (uint32_t) (word >> 32), e = (uint32_t) word;
+    float azimuth = 0.0f, elevation = 0.0f;
+    std::memcpy (&azimuth, &a, sizeof azimuth);
+    std::memcpy (&elevation, &e, sizeof elevation);
+    return { azimuth, elevation };
 }
 
 void ZoneNoise::start (Voice& voice, Kind kind, int channelNumber, float azimuth, float elevation) const
@@ -98,14 +115,16 @@ void ZoneNoise::takeRequest()
     const int kind = pendingKind.exchange (none, std::memory_order_acquire);
     if (kind == none)
         return;
+    const auto [azimuth, elevation] = unpack (pendingDirection.load (std::memory_order_relaxed));
+    if (kind == direction)
+        taken = std::pair { azimuth, elevation };
     if (playing.kind != none)
     {
         fading = playing;
         fading.releasing = true;
         fading.releaseStep = fading.level / (float) fadeLength;
     }
-    start (playing, (Kind) kind, pendingChannel.load (std::memory_order_relaxed), pendingAzimuth.load (std::memory_order_relaxed),
-           pendingElevation.load (std::memory_order_relaxed));
+    start (playing, (Kind) kind, pendingChannel.load (std::memory_order_relaxed), azimuth, elevation);
 }
 
 float ZoneNoise::envelope (Voice& voice)
@@ -129,6 +148,7 @@ float ZoneNoise::envelope (Voice& voice)
 
 void ZoneNoise::render (int count)
 {
+    taken.reset();
     jassert (count <= (int) noise.size());
     count = juce::jmin (count, (int) noise.size());
     if (pendingKind.load (std::memory_order_relaxed) != none)

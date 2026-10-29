@@ -4,6 +4,8 @@
 #include <array>
 #include <atomic>
 #include <cstdint>
+#include <optional>
+#include <utility>
 #include <vector>
 
 namespace a3
@@ -34,6 +36,8 @@ public:
     void render (int count);
     void addToInput (float* const* bus16, int count) const;
     void addToOutputs (float* const* outputs, int numOutputs, int count) const;
+    // Audio thread, for tests: the direction the last render took from a request, if it took one.
+    std::optional<std::pair<float, float>> takenDirection() const { return taken; }
 
 private:
     static constexpr int busChannels = 16;
@@ -56,6 +60,8 @@ private:
         float next();
     };
 
+    static uint64_t pack (float azimuth, float elevation);
+    static std::pair<float, float> unpack (uint64_t);
     void takeRequest();
     void start (Voice&, Kind, int channelNumber, float azimuth, float elevation) const;
     float envelope (Voice&);
@@ -63,13 +69,15 @@ private:
     const bool sn3d;
     std::atomic<int> pendingKind { none };
     std::atomic<int> pendingChannel { 0 };
-    std::atomic<float> pendingAzimuth { 0.0f }, pendingElevation { 0.0f };
+    std::atomic<uint64_t> pendingDirection { 0 };   // azimuth and elevation in one word: never one request's
+                                                    // azimuth with another's elevation
 
     Pink pink;
     float scale = 1.0f;
     int burstLength = 1, fadeLength = 1;
     Voice playing, fading;   // the burst, and the one it replaced while that fades out
     std::array<Voice, 2> rendered;   // both as the last render began
+    std::optional<std::pair<float, float>> taken;
     std::vector<float> noise;
     std::array<std::vector<float>, 2> curves;   // playing, fading: level x noise per sample
 };
