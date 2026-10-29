@@ -36,10 +36,9 @@ struct EngineConfig
     Trims trims;
     juce::String phonesHeadphoneEq = "off";   // "off" or an IEM BinauralDecoder headphone model; never the rec decoder's
     FilterKind filterKind = FilterKind::svf;
-    // The values are copied from Step 0's measurement of the REAPER template ("best reading").
-    std::vector<ModulatedParameter> delayModulation {
-        { "pitchL", 0.0f, 18.0f, 0.124573f, "random" },
-        { "pitchR", 0.0f, 18.0f, 0.018817f, "random" } };
+    // None by default (R5): REAPER's pitch LFO was inert in its warp mode and would tilt the
+    // repeats the engine's delay now rotates (SPREAD).
+    std::vector<ModulatedParameter> delayModulation;
 };
 
 // IEM's headphone-EQ models in its own order (BinauralDecoder v1.16.0): choice 0 = off, 1... = these.

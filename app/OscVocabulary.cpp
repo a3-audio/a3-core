@@ -38,6 +38,10 @@ const WordKey wordKeys[] {
     { EngineWord::masterAuxReturn, "master.aux-return" },
     { EngineWord::returnCue, "aux-return.cue" },
     { EngineWord::delayBpm, "delay.bpm" },
+    { EngineWord::delayBeat, "aux-return.delay.beat" },
+    { EngineWord::delayFeedback, "aux-return.delay.feedback" },
+    { EngineWord::delayColor, "aux-return.delay.color" },
+    { EngineWord::delaySpread, "aux-return.delay.spread" },
     { EngineWord::engineOpen, "engine.open" },
 };
 
@@ -98,6 +102,16 @@ bool storeClamped (std::atomic<float>& target, const juce::OSCMessage& m, float 
 
 bool storeUnit (std::atomic<float>& target, const juce::OSCMessage& m) { return storeClamped (target, m, 0.0f, 1.0f); }
 
+// The value onto its legal set by `legal` (a3::delay's snap or clamp).
+bool storeLegal (std::atomic<float>& target, const juce::OSCMessage& m, float (*legal) (float))
+{
+    const auto value = numberOf (m);
+    if (! value)
+        return false;
+    target.store (legal ((float) *value));
+    return true;
+}
+
 bool storeWhole (std::atomic<int>& target, const juce::OSCMessage& m, int first, int last)
 {
     const auto value = wholeIn (m, first, last);
@@ -149,6 +163,10 @@ bool applyWord (EngineWord word, const a3::EngineConfig& config, const juce::OSC
         case EngineWord::masterAuxReturn: return storeUnit (g.auxReturn, m);
         case EngineWord::returnCue: return storeUnit (g.returnCue, m);
         case EngineWord::delayBpm: return storeClamped (g.delayBpm, m, minBpm, maxBpm);
+        case EngineWord::delayBeat: return storeLegal (g.delayBeat, m, a3::delay::snapBeat);
+        case EngineWord::delayFeedback: return storeLegal (g.delayFeedback, m, a3::delay::clampFeedback);
+        case EngineWord::delayColor: return storeLegal (g.delayColor, m, a3::delay::clampColor);
+        case EngineWord::delaySpread: return storeLegal (g.delaySpread, m, a3::delay::clampSpread);
         case EngineWord::engineOpen:
         {
             const auto open = wholeIn (m, 0, 1);   // 1 opens, 0 closes; nothing else opens (spec Review Focus 2)

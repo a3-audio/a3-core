@@ -10,7 +10,6 @@ namespace a3
 namespace
 {
 constexpr double twoPi = 6.283185307179586;
-constexpr float tempoFloor = 20.0f, tempoCeiling = 400.0f;
 
 // splitmix64: a stateless, reproducible source of targets, so any time can be asked for.
 double randomTarget (size_t parameterIndex, int64_t segment)
@@ -65,20 +64,78 @@ void DelayModulation::tick (double seconds, IemNode& dualDelay)
     }
 }
 
-DelayTempo::DelayTempo (IemNode& dualDelay)
-    : bpmL (dualDelay.rawParameter ("delayBPML")),
-      bpmR (dualDelay.rawParameter ("delayBPMR")),
-      lowest (dualDelay.legalValue ("delayBPML", tempoFloor)),
-      highest (dualDelay.legalValue ("delayBPML", tempoCeiling))
+namespace
+{
+constexpr float feedbackRampSeconds = 0.030f;   // the whole 0..0.95 range
+
+float gainOf (std::atomic<float>* decibels) { return juce::Decibels::decibelsToGain (decibels->load(), -60.0f); }
+}
+
+DelayLoop::DelayLoop (IemNode& dualDelay)
+{
+    const char* names[2] = { "L", "R" };
+    for (int i = 0; i < 2; ++i)
+    {
+        const juce::String side (names[i]);
+        sides[i] = { dualDelay.rawParameter ("delayBPM" + side), dualDelay.rawParameter ("delayMult" + side),
+                     dualDelay.rawParameter ("feedback" + side), dualDelay.rawParameter ("xfeedback" + side) };
+    }
+    share = gainOf (sides[0].feedback) + gainOf (sides[0].xfeedback);
+}
+
+void DelayLoop::prepare (double rate) { sampleRate = rate; }
+
+void DelayLoop::set (float tempo, float beats, float feedbackShare, int numSamples) noexcept
+{
+    if (std::isfinite (tempo) && std::isfinite (beats))
+    {
+        const auto time = delay::delayTimeFor (tempo, beats);
+        for (auto& side : sides)
+        {
+            side.bpm->store (time.bpm);
+            side.mult->store ((float) time.mult);
+        }
+    }
+    if (! std::isfinite (feedbackShare))
+        return;
+    const float reach = delay::maxFeedback * (float) numSamples / (feedbackRampSeconds * (float) sampleRate);
+    const float target = delay::clampFeedback (feedbackShare);
+    share += std::clamp (target - share, -reach, reach);
+    const auto gains = delay::feedbackGains (share);
+    for (auto& side : sides)
+    {
+        side.feedback->store (delay::feedbackDb (gains.direct));
+        side.xfeedback->store (delay::feedbackDb (gains.cross));
+    }
+}
+
+DelayShape::DelayShape (IemNode& dualDelay)
+    : cutoffs { dualDelay.rawParameter ("HPcutOffL")->load(), dualDelay.rawParameter ("LPcutOffL")->load() },
+      spread (dualDelay.rawParameter ("yawL")->load())
 {
 }
 
-void DelayTempo::set (float bpm) noexcept
+void DelayShape::tick (float color, float targetSpread, IemNode& dualDelay)
 {
-    if (! std::isfinite (bpm))
-        return;
-    const float clamped = std::clamp (std::clamp (bpm, tempoFloor, tempoCeiling), lowest, highest);
-    bpmL->store (clamped);
-    bpmR->store (clamped);
+    const auto nextCutoffs = delay::glideCutoffs (cutoffs, delay::cutoffsFor (color));
+    if (nextCutoffs.highPass != cutoffs.highPass)
+    {
+        dualDelay.setParameter ("HPcutOffL", nextCutoffs.highPass);
+        dualDelay.setParameter ("HPcutOffR", nextCutoffs.highPass);
+    }
+    if (nextCutoffs.lowPass != cutoffs.lowPass)
+    {
+        dualDelay.setParameter ("LPcutOffL", nextCutoffs.lowPass);
+        dualDelay.setParameter ("LPcutOffR", nextCutoffs.lowPass);
+    }
+    cutoffs = nextCutoffs;
+
+    const float nextSpread = delay::glideSpread (spread, delay::clampSpread (targetSpread));
+    if (nextSpread != spread)
+    {
+        dualDelay.setParameter ("yawL", nextSpread);
+        dualDelay.setParameter ("yawR", -nextSpread);
+    }
+    spread = nextSpread;
 }
 }

@@ -23,7 +23,7 @@ target_compile_options(a3-engine-reference PRIVATE -w)   # upstream code, unchan
 add_executable(a3-engine-tests ReferenceSmoke.cpp Laws.cpp PurestGain.cpp SmoothEQ3.cpp
     Isolator3.cpp Meters.cpp DjFilter.cpp ChannelStrip.cpp DeckStrip.cpp ChannelSelect.cpp StripTiming.cpp Bench.cpp CpuBench.cpp
     JuceEnvironment.cpp IemCompileTrial.cpp IemNode.cpp Layout.cpp SpatialBus.cpp SpatialTiming.cpp
-    SpatialAllocation.cpp EngineConfig.cpp DualDelay.cpp DelayModulation.cpp AmbiEncoderBus.cpp Engine.cpp
+    SpatialAllocation.cpp EngineConfig.cpp DualDelay.cpp DelayModulation.cpp DelayParameters.cpp DelayEffects.cpp AmbiEncoderBus.cpp Engine.cpp
     EngineGate.cpp EngineAllocation.cpp EngineTiming.cpp VuTaps.cpp VuBundles.cpp LinkPlan.cpp LinkMap.cpp
     ../app/EngineOsc.cpp ../app/HelloSender.cpp ../app/EngineHost.cpp
     ../app/ConfigFile.cpp ../app/EnginePorts.cpp ../app/ConnectionPlan.cpp

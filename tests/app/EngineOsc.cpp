@@ -102,6 +102,10 @@ std::map<juce::String, Reader> readers()
         { "master.aux-return", global (&a3::GlobalControls::auxReturn) },
         { "aux-return.cue", global (&a3::GlobalControls::returnCue) },
         { "delay.bpm", global (&a3::GlobalControls::delayBpm) },
+        { "aux-return.delay.beat", global (&a3::GlobalControls::delayBeat) },
+        { "aux-return.delay.feedback", global (&a3::GlobalControls::delayFeedback) },
+        { "aux-return.delay.color", global (&a3::GlobalControls::delayColor) },
+        { "aux-return.delay.spread", global (&a3::GlobalControls::delaySpread) },
         { "engine.open", [] (a3::EngineControls& c) { return c.global().gateOpen.load() ? 1.0f : 0.0f; } },
     };
 }
@@ -137,7 +141,7 @@ TEST_F (EngineOsc, EveryCarriedKeyIsUnderstood)
 {
     const auto root = juce::JSON::parse (a3apptest::truthText());
     const auto keys = carriedKeys (root);
-    ASSERT_EQ (keys.size(), 25u);
+    ASSERT_EQ (keys.size(), 29u);
 
     auto sorted = keys;
     auto vocabulary = a3app::engineWordKeys();
@@ -351,6 +355,48 @@ TEST_F (EngineOsc, ValuesAreClampedAsCoreClampsThem)
     EXPECT_EQ (controls.global().delayBpm.load(), 400.0f);
     EXPECT_TRUE (applyInt ("/delay/bpm", 128));
     EXPECT_EQ (controls.global().delayBpm.load(), 128.0f);
+}
+
+// The delay page's values on their legal sets: a beat to the nearest legal one in log, the rest
+// clamped; an int is read as the number it is.
+TEST_F (EngineOsc, TheDelayValuesAreSnappedAndClamped)
+{
+    auto& g = controls.global();
+    EXPECT_FLOAT_EQ (g.delayBeat.load(), 0.25f);
+    EXPECT_FLOAT_EQ (g.delayFeedback.load(), 0.70f);
+    EXPECT_FLOAT_EQ (g.delayColor.load(), 0.0f);
+    EXPECT_FLOAT_EQ (g.delaySpread.load(), 60.0f);
+
+    const std::pair<float, float> beats[] { { 0.3f, 0.25f }, { 0.6f, 0.5f }, { 0.62f, 0.75f }, { 3.0f, 4.0f },
+                                            { 100.0f, 4.0f }, { 0.0f, 0.125f }, { -1.0f, 0.125f } };
+    for (const auto& [sent, stored] : beats)
+    {
+        EXPECT_TRUE (apply ("/aux-return/delay/beat", sent));
+        EXPECT_FLOAT_EQ (g.delayBeat.load(), stored) << sent;
+    }
+    EXPECT_TRUE (applyInt ("/aux-return/delay/beat", 2));
+    EXPECT_FLOAT_EQ (g.delayBeat.load(), 2.0f);
+
+    EXPECT_TRUE (apply ("/aux-return/delay/feedback", 2.0f));
+    EXPECT_FLOAT_EQ (g.delayFeedback.load(), 0.95f);
+    EXPECT_TRUE (apply ("/aux-return/delay/feedback", -1.0f));
+    EXPECT_FLOAT_EQ (g.delayFeedback.load(), 0.0f);
+    EXPECT_TRUE (apply ("/aux-return/delay/color", 3.0f));
+    EXPECT_FLOAT_EQ (g.delayColor.load(), 1.0f);
+    EXPECT_TRUE (apply ("/aux-return/delay/color", -0.4f));
+    EXPECT_FLOAT_EQ (g.delayColor.load(), -0.4f);
+    EXPECT_TRUE (apply ("/aux-return/delay/spread", 270.0f));
+    EXPECT_FLOAT_EQ (g.delaySpread.load(), 180.0f);
+    EXPECT_TRUE (applyInt ("/aux-return/delay/spread", 90));
+    EXPECT_FLOAT_EQ (g.delaySpread.load(), 90.0f);
+
+    for (const char* address : { "/aux-return/delay/beat", "/aux-return/delay/feedback", "/aux-return/delay/color",
+                                 "/aux-return/delay/spread" })
+    {
+        EXPECT_FALSE (apply (address, std::numeric_limits<float>::quiet_NaN())) << address;
+        EXPECT_FALSE (apply (message (address, juce::OSCArgument (juce::String ("1"))))) << address;
+    }
+    EXPECT_FLOAT_EQ (g.delaySpread.load(), 90.0f);
 }
 
 TEST_F (EngineOsc, FilterModeTakesANumberOrCoresWord)

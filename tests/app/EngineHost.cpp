@@ -161,16 +161,17 @@ TEST (EngineHost, ControlTickRunsTheModulation)
     rig.ticking = false;
     ASSERT_TRUE (rig.host.rebuild (rate, 128, false).wasOk());
     rig.restValues();
-    auto* pitch = rig.host.engine()->delay().rawParameter ("pitchL");
-    ASSERT_NE (pitch, nullptr);
-    const float before = pitch->load();
+    rig.host.controls().global().delaySpread = 120.0f;   // a glide only the control tick moves
+    auto* yaw = rig.host.engine()->delay().rawParameter ("yawL");
+    ASSERT_NE (yaw, nullptr);
+    const float before = yaw->load();
     rig.run (0.5, 128);
-    EXPECT_EQ (pitch->load(), before) << "the audio callback never runs the modulation";
+    EXPECT_EQ (yaw->load(), before) << "the audio callback never runs the modulation";
     EXPECT_TRUE (rig.toCore.empty());
     EXPECT_TRUE (rig.host.meters().empty());
 
     rig.host.controlTick (3.7);
-    EXPECT_NE (pitch->load(), before);
+    EXPECT_NE (yaw->load(), before);
 
     ASSERT_EQ (rig.toCore.size(), 1u) << "the hello";
     EXPECT_EQ (rig.toCore[0].getAddressPattern().toString(), "/engine/hello");

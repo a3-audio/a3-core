@@ -303,6 +303,10 @@ TEST (Engine, DeckAuxEchoesKeepTheDirection)
     rig.controls.channel (0).source = 1;
     rig.neutralStrip (0);
     rig.controls.channel (0).auxSend = 0.0f;   // the deck main stays out of the delay
+    // SPREAD turns every repeat by design (R5); at 0 the path itself must keep the direction.
+    rig.controls.global().delaySpread = 0.0f;
+    for (int tick = 0; tick < 10; ++tick)
+        rig.engine->serviceControls (0.0, rig.controls);
     rig.run();
 
     const double dry = leftOverRightDb (rig, hit, hit + 1500);
@@ -773,16 +777,50 @@ TEST (Engine, CallSizesDoNotChangeTheResult)
             << "prepared " << prepared;
 }
 
-TEST (Engine, DelayModulationIsNotOnTheAudioPath)
+// COLOR and SPREAD glide only in serviceControls (R7: listeners); BEAT and FEEDBK follow the
+// controls per block on the audio path (raw values).
+TEST (Engine, TheDelaysColorAndSpreadAreNotOnTheAudioPath)
 {
     EngineRig rig (engineConfig (4, 2), 100 * engineBlock);
-    auto* pitch = rig.engine->delay().rawParameter ("pitchL");
-    ASSERT_TRUE (pitch != nullptr);
-    const float before = pitch->load();
-    rig.run (0, 0, { engineBlock }, {}, [&] { EXPECT_EQ (pitch->load(), before); });
+    auto& node = rig.engine->delay();
+    auto& g = rig.controls.global();
+    g.delayColor = -1.0f;
+    g.delaySpread = 120.0f;
+    const float yaw = node.rawParameter ("yawL")->load();
+    const float highPass = node.rawParameter ("HPcutOffL")->load();
+    EXPECT_FLOAT_EQ (yaw, 60.0f);
+    EXPECT_FLOAT_EQ (highPass, 233.0f);
+    rig.run (0, 0, { engineBlock }, {}, [&]
+    {
+        EXPECT_EQ (node.rawParameter ("yawL")->load(), yaw);
+        EXPECT_EQ (node.rawParameter ("HPcutOffL")->load(), highPass);
+    });
 
-    rig.engine->serviceControls (3.7);
-    EXPECT_NE (pitch->load(), before);
+    rig.engine->serviceControls (3.7, rig.controls);
+    EXPECT_NEAR (node.rawParameter ("yawL")->load(), 70.0f, 0.06f);
+    EXPECT_NEAR (node.rawParameter ("yawR")->load(), -70.0f, 0.06f);
+    EXPECT_NEAR (node.rawParameter ("HPcutOffL")->load(), 233.0f * std::cbrt (2.0f), 1.0f);
+    EXPECT_NEAR (node.rawParameter ("HPcutOffR")->load(), 233.0f * std::cbrt (2.0f), 1.0f);
+}
+
+TEST (Engine, TheDelaysBeatAndFeedbackFollowTheControlsPerBlock)
+{
+    EngineRig rig (engineConfig (4, 2), (size_t) (0.1 * engineRate));
+    auto& node = rig.engine->delay();
+    auto& g = rig.controls.global();
+    g.delayBpm = 120.0f;
+    g.delayBeat = 1.0f;          // 0.5 s = 120 BPM x 1
+    g.delayFeedback = 0.0f;
+    rig.run (0, engineBlock);
+    EXPECT_FLOAT_EQ (node.rawParameter ("delayBPML")->load(), 120.0f);
+    EXPECT_FLOAT_EQ (node.rawParameter ("delayBPMR")->load(), 120.0f);
+    EXPECT_FLOAT_EQ (node.rawParameter ("delayMultL")->load(), 1.0f);
+    EXPECT_FLOAT_EQ (node.rawParameter ("delayMultR")->load(), 1.0f);
+    EXPECT_GT (node.rawParameter ("feedbackL")->load(), -60.0f) << "the feedback moves, it does not jump";
+
+    rig.run (engineBlock);   // 100 ms: the 30 ms ramp is through
+    for (const char* id : { "feedbackL", "feedbackR", "xfeedbackL", "xfeedbackR" })
+        EXPECT_FLOAT_EQ (node.rawParameter (id)->load(), -60.0f) << id;
 }
 
 // The rig's quantum is 128; any call size gives the same output once the decoders have

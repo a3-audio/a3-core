@@ -15,14 +15,14 @@
  "lfoRateL": 0.0,
  "lfoRateR": 0.0,
  "orderSetting": 4.0,
- "pitchL": 13.80000305175781,
- "pitchR": 2.100006103515625,
+ "pitchL": 0.0,
+ "pitchR": 0.0,
  "rollL": 0.0,
  "rollR": 0.0,
  "syncL": 0.0,
  "syncR": 0.0,
- "transformModeL": 1.0,
- "transformModeR": 1.0,
+ "transformModeL": 0.0,
+ "transformModeR": 0.0,
  "useSN3D": 1.0,
  "warpFactorAzL": -0.3700000047683716,
  "warpFactorAzR": 0.3799999952316284,
@@ -36,6 +36,6 @@
  "wetGainR": 0.0,
  "xfeedbackL": -15.0,
  "xfeedbackR": -15.0,
- "yawL": 10.0,
- "yawR": 119.6000061035156
+ "yawL": 60.0,
+ "yawR": -60.0
 }

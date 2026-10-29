@@ -109,7 +109,7 @@ void EngineHost::controlTick (double nowSeconds)
         publish (std::move (waiting));
     if (auto* engine = current.load())
     {
-        engine->serviceControls (nowSeconds);
+        engine->serviceControls (nowSeconds, wire);
         lastMeters = engine->outputMeters();
     }
     hello.tick (nowSeconds);

@@ -5,6 +5,7 @@
 #include <cassert>
 #include <memory>
 #include "ChannelStrip.h"
+#include "DelayParameters.h"
 #include "DjFilter.h"
 
 namespace a3
@@ -22,6 +23,9 @@ struct GlobalControls
     FilterControls filter;
     std::atomic<float> masterVolume { 0.0f }, booth { 0.0f }, phonesMix { 0.0f }, phonesVolume { 0.0f }, auxReturn { 0.0f };
     std::atomic<float> returnCue { 0.0f }, delayBpm { 120.0f };
+    // The AUX-RTN delay page, as the engine's words store them (snapped and clamped).
+    std::atomic<float> delayBeat { delay::defaultBeat }, delayFeedback { delay::defaultFeedback };
+    std::atomic<float> delayColor { delay::defaultColor }, delaySpread { delay::defaultSpread };
     std::atomic<bool> gateOpen { false };
 };
 
@@ -40,6 +44,7 @@ public:
         return perChannel[(size_t) index];
     }
     GlobalControls& global() { return globals; }
+    const GlobalControls& global() const { return globals; }
 
 private:
     int count;

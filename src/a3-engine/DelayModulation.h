@@ -3,6 +3,7 @@
 #pragma once
 #include "EngineConfig.h"
 #include "IemNode.h"
+#include "DelayParameters.h"
 #include <atomic>
 #include <vector>
 
@@ -27,18 +28,44 @@ private:
     std::vector<ModulatedParameter> parameters;
 };
 
-// The tempo is written into DualDelay's raw BPM values, which the plug-in reads
-// per block without a listener, so set() is safe from the audio thread.
-// Clamped to 20..400 BPM, then held to the plug-in's own range; non-finite is ignored.
-class DelayTempo
+// BEAT and FEEDBK on the audio thread: DualDelay reads delayBPM, delayMult, feedback and
+// xfeedback raw per block without a listener, so set() writes them there, once per block before
+// the node runs. The time is delay::delayTimeFor (tempo clamped to 20..400 BPM), on both lines;
+// the plug-in glides it (0.5 Hz one-pole). The feedback moves at most the whole 0..0.95 range in
+// 30 ms toward delay::feedbackGains (linear gain), as DualDelay applies it per block unsmoothed.
+// A non-finite value leaves its part as it is.
+class DelayLoop
 {
 public:
-    explicit DelayTempo (IemNode& dualDelay);   // control thread: looks the parameters up
-    void set (float bpm) noexcept;
+    explicit DelayLoop (IemNode& dualDelay);   // control thread: looks the parameters up, starts from the node's feedback
+    void prepare (double sampleRate);
+    void set (float tempo, float beats, float feedbackShare, int numSamples) noexcept;
 
 private:
-    std::atomic<float>* bpmL;
-    std::atomic<float>* bpmR;
-    float lowest, highest;
+    struct Side
+    {
+        std::atomic<float>* bpm;
+        std::atomic<float>* mult;
+        std::atomic<float>* feedback;
+        std::atomic<float>* xfeedback;
+    };
+    Side sides[2];
+    float share;   // the loop gain now, f + x
+    double sampleRate = 48000.0;
+};
+
+// COLOR and SPREAD on the control thread: DualDelay applies cutoffs and yaw through parameter
+// listeners, so tick() runs where DelayModulation runs (ruling R7 above). Each tick glides the
+// cutoffs of both lines a third of an octave toward delay::cutoffsFor (color) and the yaw 10
+// degrees toward +spread (left line) / -spread (right line).
+class DelayShape
+{
+public:
+    explicit DelayShape (IemNode& dualDelay);   // starts from the node's left cutoffs and yaw
+    void tick (float color, float spread, IemNode& dualDelay);
+
+private:
+    delay::Cutoffs cutoffs;
+    float spread;
 };
 }

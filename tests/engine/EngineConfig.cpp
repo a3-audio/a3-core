@@ -48,14 +48,9 @@ TEST (EngineConfig, DefaultsAreFourChannelsSvf)
     EXPECT_FALSE (c->trims.booth.has_value());
     EXPECT_FALSE (c->trims.phones.has_value());
     EXPECT_EQ (c->trims.rec, 0.0f);
-    ASSERT_EQ (c->delayModulation.size(), 2u);
-    EXPECT_EQ (c->delayModulation[0].parameter, "pitchL");
-    EXPECT_EQ (c->delayModulation[0].base, 0.0f);
-    EXPECT_EQ (c->delayModulation[0].depth, 18.0f);
-    EXPECT_EQ (c->delayModulation[0].rateHz, 0.124573f);
-    EXPECT_EQ (c->delayModulation[0].shape, "random");
-    EXPECT_EQ (c->delayModulation[1].parameter, "pitchR");
-    EXPECT_EQ (c->delayModulation[1].rateHz, 0.018817f);
+    // R5: no modulation by default. REAPER's pitch LFO was inert in warp mode; in the rotate mode
+    // SPREAD needs it would tilt every repeat.
+    EXPECT_TRUE (c->delayModulation.empty());
     EXPECT_EQ (*c, parsedDefaults());
 }
 

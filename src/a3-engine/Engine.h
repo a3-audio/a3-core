@@ -44,7 +44,7 @@ struct EngineOutputs
 //   enc_fx      analog: the same sources x auxSendGain (no return); deck: its 16 post-VOLUME
 //               channels x auxSendGain, plus its 16-ch aux bus through a second DeckStrip on the
 //               channel's controls, post-VOLUME at unity (not x auxSendGain) -> DualDelay
-//               (tempo from delayBpm)
+//               (BEAT, FEEDBK from delayBpm, delayBeat, delayFeedback per block)
 //   FX Return   the delay channel's master (P45): fx = DualDelay's output x RETURN
 //   enc_phones  pre-VOLUME taps x cueWeight [cue on] + post-VOLUME x mixWeight,
 //               + DualDelay's output x (RETURN x mixWeight + cueWeight [returnCue on])
@@ -53,8 +53,8 @@ struct EngineOutputs
 //   phones      BinauralDecoder (enc_phones + every deck's cue ACN 0..8 x cueWeight) -> PHONES
 //
 // A deck channel ignores its positions, 3D, FREQ and Q. Every gain control at 0 is silence (R18);
-// aux/cue/mix weights move over 10 ms (R6). The DualDelay pitch modulation runs only in
-// serviceControls (R7).
+// aux/cue/mix weights move over 10 ms (R6). The DualDelay modulation and its COLOR and SPREAD
+// glides run only in serviceControls (R7).
 //
 // Output stage (Scope 7, Settled 6): main, booth and phones each pass an OutputGate
 // (trim and gate in one gain) behind MASTER/BOOTH/PHONES; rec gets trims.rec and is never
@@ -69,7 +69,8 @@ public:
     int preparedBlockSize() const;
     // Any numSamples >= 0; calls longer than the prepared block are processed in prepared-size chunks.
     void process (const EngineInputs&, const EngineOutputs&, int numSamples, EngineControls&);
-    void serviceControls (double seconds);   // control thread: the delay's pitch modulation
+    // Control thread: the delay's modulation, and one glide step of its COLOR and SPREAD.
+    void serviceControls (double seconds, const EngineControls&);
 
     // The gates' current gains, and the hand-over to a new Engine on a swap: call
     // startGateAt after prepare and before the first process.

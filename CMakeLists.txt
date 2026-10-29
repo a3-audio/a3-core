@@ -44,7 +44,7 @@ a3_add_iem_nodes("" a3-engine-juce)
 add_library(a3-engine STATIC src/a3-engine/Laws.cpp src/a3-engine/PurestGain.cpp
     src/a3-engine/SmoothEQ3.cpp src/a3-engine/Isolator3.cpp src/a3-engine/Meters.cpp src/a3-engine/DjFilter.cpp
     src/a3-engine/ChannelStrip.cpp src/a3-engine/DeckStrip.cpp src/a3-engine/ChannelSelect.cpp src/a3-engine/SpatialConfig.cpp src/a3-engine/SpatialBus.cpp src/a3-engine/AmbiEncoderBus.cpp src/a3-engine/EngineConfig.cpp
-    src/a3-engine/DelayModulation.cpp src/a3-engine/EngineStages.cpp src/a3-engine/OutputGate.cpp src/a3-engine/Engine.cpp
+    src/a3-engine/DelayParameters.cpp src/a3-engine/DelayModulation.cpp src/a3-engine/EngineStages.cpp src/a3-engine/OutputGate.cpp src/a3-engine/Engine.cpp
     src/a3-engine/VuTaps.cpp src/a3-engine/VuBundles.cpp src/a3-engine/DeckLetters.cpp)
 target_include_directories(a3-engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/a3-engine)
 target_link_libraries(a3-engine PUBLIC a3-engine-juce a3-iem)
