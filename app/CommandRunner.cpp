@@ -68,7 +68,7 @@ CommandRunner::Result SpawnRunner::run (const Command& command)
         return {};
     }
     Result result;
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds (runTimeoutMillis);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds (timeout);
     bool timedOut = false;
     for (char buffer[4096];;)
     {

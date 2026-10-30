@@ -33,3 +33,15 @@ TEST (CommandRunner, AStartedCommandIsPolledNotWaitedFor)
     EXPECT_FALSE (runner.finished().has_value());
     EXPECT_TRUE (runner.start ({ "true" }));
 }
+
+// The SYSTEM page's plans run systemctl with a longer limit than the engine's quick commands; a command past its limit
+// is ended and reads as not finished (-1).
+TEST (CommandRunner, TheTimeLimitIsTheRunnersOwn)
+{
+    a3app::SpawnRunner quick (200);
+    const auto started = std::chrono::steady_clock::now();
+    EXPECT_EQ (quick.run ({ "sleep", "5" }).exitCode, -1);
+    EXPECT_LT (std::chrono::steady_clock::now() - started, std::chrono::seconds (2));
+    a3app::SpawnRunner patient (5000);
+    EXPECT_EQ (patient.run ({ "sleep", "0.5" }).exitCode, 0);
+}

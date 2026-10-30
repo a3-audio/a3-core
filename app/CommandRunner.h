@@ -32,12 +32,15 @@ class SpawnRunner final : public CommandRunner
 {
 public:
     static constexpr int runTimeoutMillis = 3000;
+    // `timeoutMillis` for run(): the SYSTEM page's systemctl start of a unit may take longer than a pw-metadata.
+    explicit SpawnRunner (int timeoutMillis = runTimeoutMillis) : timeout (timeoutMillis) {}
     ~SpawnRunner() override;
     Result run (const Command&) override;
     bool start (const Command&) override;
     std::optional<int> finished() override;
 
 private:
+    const int timeout;
     pid_t startedPid = -1;
 };
 }
