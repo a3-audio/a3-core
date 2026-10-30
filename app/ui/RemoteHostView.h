@@ -59,6 +59,7 @@ public:
     void playNoise (const NoiseRequest&) override;
     void measureRoundTrip() override;
     void measureAnalogChain() override;
+    void applyTiming (const AudioTiming&) override;
 
 private:
     struct Post

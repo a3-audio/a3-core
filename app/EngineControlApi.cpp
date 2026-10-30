@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "EngineControlApi.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 
@@ -121,6 +122,28 @@ RoundTripReport roundTripFromJson (const juce::var& v)
     return report;
 }
 
+juce::var toJson (const TimingReport& report)
+{
+    return object ({ { "available", report.available }, { "block", report.applied.block }, { "periods", report.applied.periods },
+                     { "previousBlock", report.previous ? report.previous->block : 0 },
+                     { "previousPeriods", report.previous ? report.previous->periods : 0 },
+                     { "restarting", report.restarting }, { "message", report.message } });
+}
+
+// An engine before the timing sends none: not available.
+TimingReport timingReportFromJson (const juce::var& v)
+{
+    TimingReport report;
+    report.available = (bool) v["available"];
+    report.applied = { (int) number (v["block"]).value_or (defaultBlock), (int) number (v["periods"]).value_or (defaultPeriods) };
+    const int previousBlock = (int) number (v["previousBlock"]).value_or (0.0);
+    if (previousBlock > 0)
+        report.previous = AudioTiming { previousBlock, (int) number (v["previousPeriods"]).value_or (defaultPeriods) };
+    report.restarting = (bool) v["restarting"];
+    report.message = v["message"].toString();
+    return report;
+}
+
 juce::var stringList (const std::vector<std::string>& entries)
 {
     juce::Array<juce::var> list;
@@ -164,6 +187,7 @@ juce::var toJson (const EngineStatusReport& report)
                      { "ignoredKeys", ignored },
                      { "truthNote", report.truthNote },
                      { "roundTripMeasured", toJson (report.backend.roundTripMeasured) },
+                     { "timing", toJson (report.backend.timing) },
                      { "loopDropped", stringList (report.loopDropped) },
                      { "clock", a3clock::toJson (report.clock) },
                      { "clockIndicator", a3clock::toJson (a3clock::clockIndicator (report.clock)) } });
@@ -207,6 +231,7 @@ std::optional<EngineStatusReport> statusFromJson (const juce::var& v)
     if (v["truthNote"].isString())
         report.truthNote = v["truthNote"].toString();
     report.backend.roundTripMeasured = roundTripFromJson (v["roundTripMeasured"]);
+    report.backend.timing = timingReportFromJson (v["timing"]);
     for (int i = 0; i < v["loopDropped"].size(); ++i)
         report.loopDropped.push_back (v["loopDropped"][i].toString().toStdString());
     report.clock = a3clock::clockReportFromJson (v["clock"]);   // an engine before the clock: not reported
@@ -338,6 +363,7 @@ a3core::Routes EngineControlApi::routes()
     routes.post ("/api/engine/noise", [this] (const HttpRequest& r) { return noise (r); });
     routes.post ("/api/engine/roundtrip", [this] (const HttpRequest&) { return measureRoundTrip(); });
     routes.post ("/api/engine/roundtrip/analog", [this] (const HttpRequest&) { return measureAnalogChain(); });
+    routes.post ("/api/engine/timing", [this] (const HttpRequest& r) { return timing (r); });
     return routes;
 }
 
@@ -570,6 +596,35 @@ HttpResponse EngineControlApi::measureRoundTrip()
 HttpResponse EngineControlApi::measureAnalogChain()
 {
     enqueue ([this] { view.measureAnalogChain(); return juce::Result::ok(); });
+    return json (200, object ({}));
+}
+
+std::optional<AudioTiming> timingFromJson (const juce::var& v, juce::String& why)
+{
+    const auto block = v["block"], periods = v["periods"];
+    const auto whole = [] (const juce::var& n) { return n.isInt() || n.isInt64() || (n.isDouble() && (double) n == std::floor ((double) n)); };
+    const auto among = [] (const std::vector<int>& choices, int n) { return std::find (choices.begin(), choices.end(), n) != choices.end(); };
+    if (! whole (block) || ! among (pipewireBlocks(), (int) block))
+    {
+        why = "block must be one of 32, 64, 128, 256, 512, 1024";
+        return std::nullopt;
+    }
+    if (! whole (periods) || ! among (pipewirePeriods(), (int) periods))
+    {
+        why = "periods must be 2 or 3";
+        return std::nullopt;
+    }
+    return AudioTiming { (int) block, (int) periods };
+}
+
+HttpResponse EngineControlApi::timing (const HttpRequest& request)
+{
+    juce::String why;
+    const auto body = parseBody (request, why);
+    const auto chosen = body ? timingFromJson (*body, why) : std::nullopt;
+    if (! chosen)
+        return problem (400, why);
+    enqueue ([this, chosen = *chosen] { view.applyTiming (chosen); return juce::Result::ok(); });
     return json (200, object ({}));
 }
 

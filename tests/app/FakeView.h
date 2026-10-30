@@ -55,6 +55,7 @@ struct FakeView final : a3app::HostView
     void playNoise (const a3app::NoiseRequest& request) override { noises.push_back (request); }
     void measureRoundTrip() override { ++roundTripRequests; }
     void measureAnalogChain() override { ++analogRequests; }
+    void applyTiming (const a3app::AudioTiming& timing) override { timings.push_back (timing); }
     ~FakeView() override { file.deleteFile(); }
 
     void runDevice() { cfg.backend.type = runningCfg.backend.type = a3app::BackendSettings::Type::device; }
@@ -76,5 +77,6 @@ struct FakeView final : a3app::HostView
     bool fileExistedAtApply = false;
     int edited = 0, applied = 0, filterSets = 0;
     std::vector<a3app::NoiseRequest> noises;
+    std::vector<a3app::AudioTiming> timings;   // the AUDIO page's block and periods, as asked
 };
 }

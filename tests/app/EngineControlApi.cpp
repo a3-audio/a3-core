@@ -340,3 +340,21 @@ TEST (EngineControlApi, TheClockIsServedInTheStatus)
     EXPECT_FALSE (fromOlder->clock.running);
     EXPECT_NE (fromOlder->clock.why.find ("does not report the clock"), std::string::npos);
 }
+
+// POST /api/engine/timing takes only the AUDIO page's choices.
+TEST (EngineControlApi, TheTimingTakesOnlyThePagesChoices)
+{
+    juce::String why;
+    const auto chosen = a3app::timingFromJson (parse ("{\"block\":64,\"periods\":2}"), why);
+    ASSERT_TRUE (chosen) << why;
+    EXPECT_EQ (*chosen, (a3app::AudioTiming { 64, 2 }));
+    RemoteRig rig;
+    for (const char* body : { "{\"block\":48,\"periods\":3}", "{\"block\":64,\"periods\":4}", "{\"block\":64}",
+                              "{\"block\":\"64\",\"periods\":3}", "[]" })
+    {
+        EXPECT_FALSE (a3app::timingFromJson (parse (body), why)) << body;
+        EXPECT_EQ (httpclient::post (rig.server->port(), "/api/engine/timing", body).status, 400) << body;
+    }
+    rig.tick();
+    EXPECT_TRUE (rig.fake.timings.empty());
+}

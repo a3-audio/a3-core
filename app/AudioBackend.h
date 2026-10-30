@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+#include "AudioTiming.h"
 #include "ConfigFile.h"
 #include "EngineHost.h"
 #include "RoundTripProbe.h"
@@ -31,6 +32,8 @@ struct BackendStatus
     int deviceInputs = 0, deviceOutputs = 0;
     // The round trip measured over the I/O map's digital loop (RoundTripProbe.h).
     RoundTripReport roundTripMeasured;
+    // The engine's block and periods on PipeWire (TimingControl.h); not available on a device.
+    TimingReport timing;
 };
 
 // The input-to-output round trip as the backend reports its parts: an estimate (a driver's figures can be

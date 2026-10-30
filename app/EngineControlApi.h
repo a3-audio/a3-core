@@ -52,6 +52,9 @@ std::optional<EngineMetersReport> metersFromJson (const juce::var&);
 // POST /api/engine/roundtrip: measure the round trip over the loop now (the result comes with the status).
 // POST /api/engine/roundtrip/analog: measure the analog chain (both loops, one run) over the chosen test cable.
 
+// POST /api/engine/timing: {"block": one of pipewireBlocks(), "periods": one of pipewirePeriods()}.
+std::optional<AudioTiming> timingFromJson (const juce::var&, juce::String& why);
+
 // POST /api/engine/noise: {"zone": "main"|"booth", "channel": 1..64} or {"zone", "azimuth", "elevation"}.
 juce::var toJson (const NoiseRequest&);
 std::optional<NoiseRequest> noiseFromJson (const juce::var&, juce::String& why);
@@ -104,6 +107,7 @@ private:
     a3core::HttpResponse noise (const a3core::HttpRequest&);
     a3core::HttpResponse measureRoundTrip();
     a3core::HttpResponse measureAnalogChain();
+    a3core::HttpResponse timing (const a3core::HttpRequest&);
 
     std::optional<AppConfig> configOf (const a3core::HttpRequest&, a3core::HttpResponse& refusal) const;
     std::future<juce::Result> enqueue (std::function<juce::Result()>);
