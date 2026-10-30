@@ -20,11 +20,15 @@
 //   - It only ever changes the PHC's frequency, never its time: no step, whatever happens.
 //   - The frequency stays inside centre +- range and never moves faster than maxSlewPpmPerSecond, so
 //     the deck hosts' PTP servos follow without an offset.
+//   - Frequency first, then phase: it measures the rate (or starts from the last locked frequency, a
+//     warm start), slews there, and only then anchors the phase. The phase error the loop answers for
+//     therefore starts at zero, and the limits below can be tight against the receivers' FIFO.
 //   - Phase lock, not only frequency lock: the phase error is the FIFO fill walk of every receiver, so
 //     it has to stay bounded forever, not just stop growing.
 //   - No measurement: hold the last frequency (holdover), never guess.
 //   - A Scarlett discontinuity (xrun, restart, replug) or a stepped PHC is re-anchored, keeping the
-//     error it had: a jump is never slewed into the PTP clock.
+//     error it had: a jump is never slewed into the PTP clock. What counts as a step is bounded by the
+//     drift the held frequency allows (1 ppm of the gap), never by the whole range.
 //   - Fail safe: a write that fails, or an error that runs away after a lock, stops the steering for
 //     good (fault) with the last frequency held. That is what a dead daemon would leave, and it is said.
 //
@@ -35,8 +39,14 @@
 #include <cstdint>
 #include <optional>
 
+#include "ClockMeasure.h"
+
 namespace a3clock
 {
+// The numbers against the receivers (12 ms FIFO, refilled below one 128-frame cycle, ~2.9 ms: about
+// 9 ms of headroom): the loop gives up acquiring at 2 ms and calls a locked loop broken at 1 ms, both
+// far inside it; the lock is 50 us. The range is +-40 ppm around the free run (the I210 allows 62.5;
+// the daemon narrows it to the device's own limit minus a margin), the measured offset is 14.1 ppm.
 enum class Health
 {
     acquiring,   // anchored (or waiting for the first measurement), steering towards the lock
@@ -54,14 +64,16 @@ struct SteeringConfig
     double timeConstantSeconds = 60.0;     // the loop's time constant (critically damped PI)
     double errorSmoothingSeconds = 8.0;    // the error is low-passed this much before the PI (profiler jitter)
     double centreFrequencyPpm = 0.0;       // the frequency range's centre: the PHC running free
-    double frequencyRangePpm = 20.0;       // |frequency - centre| never exceeds this
+    double frequencyRangePpm = 40.0;       // |frequency - centre| never exceeds this
     double maxSlewPpmPerSecond = 0.1;      // the frequency never moves faster than this
     double lockThresholdNs = 50'000.0;     // |error| below this counts towards the lock
     int lockUpdates = 10;                  // ... for this many updates in a row
     double holdoverAfterSeconds = 3.0;     // no measurement for this long: holdover
-    double phcStepNs = 200'000.0;          // an error change above this (plus what the range allows) is a step
+    int rateUpdates = 30;                  // measurements the rate is taken from before steering
+    double phcStepNs = 200'000.0;          // an error change above this (plus the held drift) is a step
+    double heldDriftPpm = 1.0;             // what the held frequency may drift by in a gap
     double faultNs = 1'000'000.0;          // locked once, then |error| above this: fault
-    double acquireLimitNs = 8'000'000.0;   // never locked and |error| above this: fault
+    double acquireLimitNs = 2'000'000.0;   // never locked and |error| above this: fault
 };
 
 // One phase measurement: PHC time minus Scarlett time at the same instant, in ns. The Scarlett side
@@ -94,9 +106,10 @@ struct SteeringCounters
 class ClockSteering
 {
 public:
-    // `startFrequencyPpm` is the PHC's frequency as found: the loop starts from it, so a restart of the
-    // daemon on a locked PHC changes nothing.
-    ClockSteering (const SteeringConfig&, double startFrequencyPpm, double nowSeconds);
+    // `startFrequencyPpm` is the PHC's frequency as found. `warmFrequencyPpm`, the last locked one (a
+    // state file), replaces the rate measurement: the loop slews there at once.
+    ClockSteering (const SteeringConfig&, double startFrequencyPpm, double nowSeconds,
+                   std::optional<double> warmFrequencyPpm = std::nullopt);
 
     // One update: a measurement, or nullopt when none could be taken (no Scarlett, no PHC reading).
     Decision update (double nowSeconds, std::optional<Measurement>);
@@ -110,10 +123,16 @@ public:
     const char* reason() const { return why; }
     const SteeringCounters& counters() const { return count; }
     const SteeringConfig& config() const { return cfg; }
+    bool tracking() const { return stage == Stage::tracking; }   // anchored: the error means something
 
 private:
+    enum class Stage { measuringRate, slewing, tracking };
+
     Decision hold() const;
     Decision noMeasurement (double nowSeconds);
+    Decision measureRate (double nowSeconds, const Measurement&);
+    Decision slew (double dtSeconds);
+    bool inRange (double ppm) const;
     double anchoredError (const Measurement&, double gapSeconds);
     double nextFrequency (double errorNs, double dtSeconds);
     void judge (double errorNs);
@@ -127,6 +146,10 @@ private:
     std::uint64_t epoch = 0;
     std::int64_t offsetNs = 0;
     int inThreshold = 0;
+    Stage stage = Stage::measuringRate;
+    double target = 0.0;                   // the frequency slewed to before anchoring
+    RateEstimate rate;
+    std::int64_t rateOrigin = 0;
     Health state = Health::acquiring;
     const char* why = "waiting for the first measurement";
     SteeringCounters count;

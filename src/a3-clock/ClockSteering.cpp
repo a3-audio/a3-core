@@ -27,7 +27,8 @@ const char* healthWord (Health health)
     return "fault";
 }
 
-ClockSteering::ClockSteering (const SteeringConfig& config, double startFrequencyPpm, double nowSeconds)
+ClockSteering::ClockSteering (const SteeringConfig& config, double startFrequencyPpm, double nowSeconds,
+                              std::optional<double> warmFrequencyPpm)
     : cfg (config),
       kp (2.0 * damping / config.timeConstantSeconds),
       ki (1.0 / (config.timeConstantSeconds * config.timeConstantSeconds)),
@@ -35,6 +36,64 @@ ClockSteering::ClockSteering (const SteeringConfig& config, double startFrequenc
       integral (startFrequencyPpm),
       lastMeasurementAt (nowSeconds)
 {
+    if (warmFrequencyPpm && inRange (*warmFrequencyPpm))
+    {
+        stage = Stage::slewing;
+        target = *warmFrequencyPpm;
+        why = "warm start: slewing to the last locked frequency";
+    }
+}
+
+bool ClockSteering::inRange (double ppm) const { return std::abs (ppm - cfg.centreFrequencyPpm) <= cfg.frequencyRangePpm; }
+
+// Frequency first: the phase's slope over rateUpdates measurements, at the frequency as found (nothing
+// is written meanwhile), says where the PHC has to run.
+Decision ClockSteering::measureRate (double nowSeconds, const Measurement& m)
+{
+    if (rate.count() == 0 || m.epoch != epoch)
+    {
+        rate.clear();
+        epoch = m.epoch;
+        rateOrigin = m.phaseNs;
+    }
+    rate.add (m.epoch, nowSeconds, (double) (m.phaseNs - rateOrigin));
+    why = "measuring the rate against the Scarlett";
+    const auto slope = rate.ppm();
+    if (rate.count() < cfg.rateUpdates || ! slope)
+        return hold();
+    target = frequency - *slope;
+    if (! inRange (target))
+    {
+        writeFailed ("the PTP clock is further from the Scarlett than the frequency range: not steered");
+        return hold();
+    }
+    stage = Stage::slewing;
+    why = "slewing to the Scarlett's rate";
+    return hold();
+}
+
+// Towards the target at the slew limit; the phase is anchored once there.
+Decision ClockSteering::slew (double dtSeconds)
+{
+    const double maxStep = cfg.maxSlewPpmPerSecond * dtSeconds;
+    auto decision = hold();
+    const double next = frequency + std::clamp (target - frequency, -maxStep, maxStep);
+    if (next != frequency)
+    {
+        frequency = next;
+        decision.write = next;
+        ++count.corrections;
+    }
+    if (frequency == target)
+    {
+        stage = Stage::tracking;
+        integral = target;
+        anchored = false;
+        why = "at the Scarlett's rate: anchoring the phase";
+    }
+    decision.frequencyPpm = frequency;
+    decision.reason = why;
+    return decision;
 }
 
 Decision ClockSteering::hold() const
@@ -88,7 +147,9 @@ double ClockSteering::anchoredError (const Measurement& m, double gapSeconds)
         return reanchor();
     }
     const double candidate = (double) (m.phaseNs - offsetNs);
-    const double possible = cfg.phcStepNs + 2.0 * (cfg.frequencyRangePpm + std::abs (cfg.centreFrequencyPpm)) * ppmAsNsPerSecond * gapSeconds;
+    // What the held frequency can drift by in the gap, never the whole range: after a long holdover a
+    // stepped PHC (an igb reset) must still be seen as a step, not as error to steer away.
+    const double possible = std::min (cfg.phcStepNs + cfg.heldDriftPpm * ppmAsNsPerSecond * gapSeconds, cfg.faultNs);
     if (std::abs (candidate - error) > possible)
     {
         ++count.phcSteps;
@@ -140,6 +201,9 @@ Decision ClockSteering::update (double nowSeconds, std::optional<Measurement> me
     ++count.updates;
     if (state == Health::fault)
         return hold();
+    // Slewing to a known frequency needs no measurement, only no holdover.
+    if (! measurement && stage == Stage::slewing && nowSeconds - lastMeasurementAt < cfg.holdoverAfterSeconds)
+        return slew (cfg.updateSeconds);
     if (! measurement)
         return noMeasurement (nowSeconds);
 
@@ -148,14 +212,18 @@ Decision ClockSteering::update (double nowSeconds, std::optional<Measurement> me
     const double sinceLast = std::max (nowSeconds - lastMeasurementAt, 1e-3);
     const double gap = std::min (sinceLast, cfg.updateSeconds);
     lastMeasurementAt = nowSeconds;
-    const bool first = ! anchored;
-    error = anchoredError (*measurement, sinceLast);
     if (state == Health::holdover)
     {
         state = Health::acquiring;
         why = "measuring again: steering back";
     }
-    else if (first)
+    if (stage == Stage::measuringRate)
+        return measureRate (nowSeconds, *measurement);
+    if (stage == Stage::slewing)
+        return slew (gap);
+    const bool first = ! anchored;
+    error = anchoredError (*measurement, sinceLast);
+    if (first)
         why = "anchored: steering towards the lock";
 
     const double size = std::abs (error);

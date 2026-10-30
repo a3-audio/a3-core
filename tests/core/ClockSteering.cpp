@@ -8,6 +8,7 @@
 #include <cmath>
 #include <functional>
 #include <random>
+#include <utility>
 
 #include "ClockSteering.h"
 
@@ -45,22 +46,32 @@ struct Loop
     double minFrequency = 1e9, maxFrequency = -1e9;
     int writes = 0;
     std::uint64_t epoch = 1;
+    double worstError = 0.0;              // the largest |error| once anchored: the receivers' FIFO walk
+    bool writeLatency = false;            // a write takes effect one update later
+    std::optional<double> pendingWrite;
 
-    explicit Loop (SteeringConfig c = {}, double start = 0.0) : config (c), steering (c, start, 0.0) { plant.writtenPpm = start; }
+    explicit Loop (SteeringConfig c = {}, double start = 0.0, std::optional<double> warm = std::nullopt)
+        : config (c), steering (c, start, 0.0, warm) { plant.writtenPpm = start; }
 
     // `seconds` updates, one a second; `measured` false: nothing comes in.
     Decision step (bool measured = true)
     {
         now += 1.0;
         plant.advance (1.0);
+        if (pendingWrite)
+            plant.writtenPpm = *std::exchange (pendingWrite, std::nullopt);
         const double before = steering.frequencyPpm();
         const auto decision = steering.update (now, measured ? std::optional<Measurement> (plant.measure (epoch)) : std::nullopt);
         if (decision.write)
         {
             ++writes;
-            if (! plant.ignoresWrites)
+            if (writeLatency)
+                pendingWrite = *decision.write;
+            else if (! plant.ignoresWrites)
                 plant.writtenPpm = *decision.write;
         }
+        if (steering.tracking() && decision.health != Health::fault)
+            worstError = std::max (worstError, std::abs (decision.errorNs));
         maxSlew = std::max (maxSlew, std::abs (steering.frequencyPpm() - before));
         minFrequency = std::min (minFrequency, steering.frequencyPpm());
         maxFrequency = std::max (maxFrequency, steering.frequencyPpm());
@@ -86,10 +97,10 @@ struct Loop
 constexpr double slewTolerance = 1e-9;
 }
 
-TEST (ClockSteering, LocksFromTheMeasuredFourteenPpmWithinFifteenMinutes)
+TEST (ClockSteering, LocksFromTheMeasuredFourteenPpmWithinFiveMinutes)
 {
     Loop run;
-    const int seconds = run.untilLocked (900);
+    const int seconds = run.untilLocked (300);
     ASSERT_GT (seconds, 0);
     double worst = 0.0;
     for (int i = 0; i < 3600; ++i)
@@ -102,6 +113,14 @@ TEST (ClockSteering, LocksFromTheMeasuredFourteenPpmWithinFifteenMinutes)
     EXPECT_NEAR (run.steering.frequencyPpm(), 14.1, 0.1);
 }
 
+// The phase error from the anchor on is every receiver's FIFO walk: frequency first keeps it small.
+TEST (ClockSteering, ThePhaseWalkWhileAcquiringStaysSmall)
+{
+    Loop run;
+    ASSERT_GT (run.untilLocked (300), 0);
+    EXPECT_LT (run.worstError, 150'000.0);
+}
+
 TEST (ClockSteering, NeverSlewsFasterThanTheLimitWhileAcquiring)
 {
     Loop run;
@@ -109,20 +128,59 @@ TEST (ClockSteering, NeverSlewsFasterThanTheLimitWhileAcquiring)
     EXPECT_LE (run.maxSlew, 0.1 + slewTolerance);
 }
 
-TEST (ClockSteering, NeverLeavesItsRange)
+TEST (ClockSteering, NeverLeavesItsRangeAndLocksNearItsEdge)
 {
     Loop run;
-    run.plant.naturalPpm = -19.5;   // close to the edge: the phase pull pushes against it
+    run.plant.naturalPpm = -39.0;   // close to the edge: the phase pull pushes against it
+    EXPECT_GT (run.untilLocked (900), 0);
     run.run (3600);
-    EXPECT_LE (run.maxFrequency, 20.0 + slewTolerance);
-    EXPECT_GE (run.minFrequency, -20.0 - slewTolerance);
+    EXPECT_LE (run.maxFrequency, 40.0 + slewTolerance);
+    EXPECT_GE (run.minFrequency, -40.0 - slewTolerance);
+    EXPECT_EQ (run.steering.health(), Health::locked);
+}
+
+TEST (ClockSteering, LocksAtNineteenAndAHalfPpm)
+{
+    Loop run;
+    run.plant.naturalPpm = -19.5;
+    EXPECT_GT (run.untilLocked (600), 0);
+    EXPECT_LT (run.worstError, 150'000.0);
+}
+
+TEST (ClockSteering, AWarmStartSlewsToTheLastLockAndLocksSooner)
+{
+    Loop run ({}, 0.0, 14.1);   // after a boot the driver reset the PHC to 0; the state file says 14.1
+    EXPECT_TRUE (run.step().write);   // no rate measurement: it slews from the first update
+    const int seconds = run.untilLocked (300);
+    ASSERT_GT (seconds, 0);
+    EXPECT_LT (seconds, 141 + 30);   // 14.1 ppm at 0.1 ppm/s, then the lock
+    EXPECT_LT (run.worstError, 50'000.0);
+    EXPECT_LE (run.maxSlew, 0.1 + slewTolerance);
+}
+
+TEST (ClockSteering, AWarmStartOutsideTheRangeIsIgnored)
+{
+    Loop run ({}, 0.0, 55.0);
+    EXPECT_FALSE (run.step().write);   // measures the rate instead
+    EXPECT_GT (run.untilLocked (300), 0);
+}
+
+TEST (ClockSteering, LocksWithAWriteThatTakesEffectOneUpdateLate)
+{
+    Loop run;
+    run.writeLatency = true;
+    ASSERT_GT (run.untilLocked (400), 0);
+    double worst = 0.0;
+    for (int i = 0; i < 1800; ++i)
+        worst = std::max (worst, std::abs (run.step().errorNs));
+    EXPECT_LT (worst, 50'000.0);
 }
 
 TEST (ClockSteering, LocksWithTheJitterOfSingleProfilerRecords)
 {
     Loop run;
     run.plant.noiseNs = 12'500.0;   // one record's jitter, measured on the rig
-    ASSERT_GT (run.untilLocked (900), 0);
+    ASSERT_GT (run.untilLocked (600), 0);
     double worst = 0.0;
     for (int i = 0; i < 1800; ++i)
         worst = std::max (worst, std::abs (run.step().errorNs));
@@ -237,16 +295,28 @@ TEST (ClockSteering, StopsWhenTheErrorRunsAwayAfterALock)
     EXPECT_EQ (run.steering.health(), Health::fault);
 }
 
-TEST (ClockSteering, ACrystalBeyondTheRangeIsAFaultNotARunaway)
+TEST (ClockSteering, ACrystalBeyondTheRangeIsAFaultBeforeAnyWrite)
 {
     Loop run;
-    run.plant.naturalPpm = -40.0;
+    run.plant.naturalPpm = -45.0;
     Decision decision;
-    for (int i = 0; i < 3600 && decision.health != Health::fault; ++i)
+    for (int i = 0; i < 60 && decision.health != Health::fault; ++i)
         decision = run.step();
     EXPECT_EQ (decision.health, Health::fault);
-    EXPECT_LE (run.maxFrequency, 20.0 + slewTolerance);
-    EXPECT_LE (run.maxSlew, 0.1 + slewTolerance);
+    EXPECT_EQ (run.writes, 0);
+}
+
+TEST (ClockSteering, ASteppedPtpClockDuringAHoldoverIsReanchoredNotAFault)
+{
+    Loop run;
+    ASSERT_GT (run.untilLocked (300), 0);
+    run.run (60);
+    run.run (300, false);                  // five minutes without a PHC reading ...
+    run.plant.phaseNs += 3'000'000.0;      // ... during which an igb reset stepped the PHC by 3 ms
+    const auto decision = run.step();
+    EXPECT_EQ (run.steering.counters().phcSteps, 1);
+    EXPECT_NE (decision.health, Health::fault);
+    EXPECT_GT (run.untilLocked (120), 0);
 }
 
 TEST (ClockSteering, AFailedWriteIsAFaultAndNothingIsWrittenAgain)

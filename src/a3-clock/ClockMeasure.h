@@ -14,6 +14,7 @@
 #include <array>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <string_view>
 
 namespace a3clock
@@ -35,6 +36,15 @@ struct ProfilerClock
 // anything malformed). Allocates nothing.
 std::optional<ProfilerClock> parseProfilerClock (std::string_view line);
 
+// A "driver" record: which node the clock records of that id belong to (its node.name). In each
+// profiler sample the clock record comes first, then its driver's.
+struct ProfilerDriver
+{
+    int id = 0;
+    std::string_view name;
+};
+std::optional<ProfilerDriver> parseProfilerDriver (std::string_view line);
+
 // The Scarlett's time at an instant, from its epoch's first sample.
 struct ScarlettPoint
 {
@@ -44,9 +54,12 @@ struct ScarlettPoint
     int records = 0;
 };
 
+// The Scarlett 18i20's capture node on the rig; --scarlett NODE names another (a prefix of node.name).
+constexpr const char* defaultScarlettNode = "alsa_input.usb-Focusrite_Scarlett_18i20";
+
 struct IntakeConfig
 {
-    std::string_view namePrefix = "api.alsa.";   // the driver's clock name (the Scarlett: api.alsa.<card>)
+    std::string node = defaultScarlettNode;       // the capture node whose clock is the system's (node.name prefix)
     double maxJumpNs = 1'000'000.0;               // position + delay off its prediction by more: discontinuity
     double maxGapNs = 1'000'000'000.0;            // no record for longer: discontinuity
     int minRecords = 5;                           // a centroid of fewer is not taken
@@ -60,6 +73,8 @@ public:
     explicit ScarlettIntake (IntakeConfig = {});
 
     enum class Taken { used, ignored, discontinuity };
+    // A driver record: the configured node's id is learned here, never guessed from a clock record.
+    void addDriver (const ProfilerDriver&);
     Taken add (const ProfilerClock&);
     void restart();   // the feed was lost (the profiler process ended): the next record starts an epoch
 
@@ -78,6 +93,7 @@ private:
     IntakeConfig cfg;
     bool started = false;
     int id = -1, rate = 0;
+    int scarlettId = -1;               // the configured node's driver id, from its driver records
     std::int64_t xrun = 0;
     std::uint64_t currentEpoch = 0;
     std::int64_t breaks = 0;
@@ -118,6 +134,8 @@ class RateEstimate
 public:
     void add (std::uint64_t epoch, double seconds, double phaseNs);
     std::optional<double> ppm() const;
+    int count() const { return size; }
+    void clear() { size = next = 0; }
 
 private:
     static constexpr int capacity = 30;

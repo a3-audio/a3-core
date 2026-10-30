@@ -71,7 +71,22 @@ std::optional<ProfilerClock> parseProfilerClock (std::string_view line)
     return r;
 }
 
-ScarlettIntake::ScarlettIntake (IntakeConfig config) : cfg (config) {}
+std::optional<ProfilerDriver> parseProfilerDriver (std::string_view line)
+{
+    std::string_view type;
+    ProfilerDriver d;
+    if (! stringOf (line, "type", type) || type != "driver" || ! integerOf (line, "id", d.id) || ! stringOf (line, "name", d.name))
+        return std::nullopt;
+    return d;
+}
+
+ScarlettIntake::ScarlettIntake (IntakeConfig config) : cfg (std::move (config)) {}
+
+void ScarlettIntake::addDriver (const ProfilerDriver& d)
+{
+    if (d.name.substr (0, cfg.node.size()) == cfg.node)
+        scarlettId = d.id;
+}
 
 void ScarlettIntake::restart()
 {
@@ -102,8 +117,8 @@ void ScarlettIntake::startEpoch (const ProfilerClock& r, std::int64_t samples)
 
 ScarlettIntake::Taken ScarlettIntake::add (const ProfilerClock& r)
 {
-    if (r.name.substr (0, cfg.namePrefix.size()) != cfg.namePrefix || r.rate <= 0)
-        return Taken::ignored;
+    if (scarlettId < 0 || r.id != scarlettId || r.rate <= 0)
+        return Taken::ignored;   // another driver, or the Scarlett's not seen yet: never a fallback
     if ((r.flags & freewheelFlag) != 0)
     {
         restart();   // counted once, when the freewheel starts

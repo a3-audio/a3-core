@@ -7,6 +7,7 @@
 
 #include <cmath>
 #include <fstream>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -41,6 +42,16 @@ ProfilerClock record (double seconds, std::int64_t xrun = 0, int id = 375, std::
     return r;
 }
 
+const std::string scarlettNode = "alsa_input.usb-Focusrite_Scarlett_18i20_USB_P9P0A77190B57F-00.pro-input-0";
+
+// An intake that knows the Scarlett's driver as node 375, as the profiler's driver record says.
+ScarlettIntake scarlettIntake()
+{
+    ScarlettIntake intake;
+    intake.addDriver ({ 375, scarlettNode });
+    return intake;
+}
+
 void feed (ScarlettIntake& intake, double from, int count, double every = 0.05)
 {
     for (int i = 0; i < count; ++i)
@@ -72,7 +83,7 @@ TEST (ClockMeasure, OtherRecordsAndBrokenLinesAreNotClocks)
 
 TEST (ClockMeasure, TheRecordedScarlettIsALineWithMicrosecondsOfJitter)
 {
-    ScarlettIntake intake;
+    auto intake = scarlettIntake();
     std::vector<ScarlettPoint> points;
     int fed = 0;
     for (const auto& line : recorded())
@@ -108,7 +119,7 @@ TEST (ClockMeasure, TheRecordedScarlettIsALineWithMicrosecondsOfJitter)
 
 TEST (ClockMeasure, ACentroidNeedsEnoughRecordsAndKeepsTheWindowUntilThen)
 {
-    ScarlettIntake intake;
+    auto intake = scarlettIntake();
     feed (intake, 0.0, 3);
     EXPECT_FALSE (intake.take());
     feed (intake, 0.15, 3);
@@ -121,7 +132,7 @@ TEST (ClockMeasure, ACentroidNeedsEnoughRecordsAndKeepsTheWindowUntilThen)
 
 TEST (ClockMeasure, AnXrunStartsANewEpoch)
 {
-    ScarlettIntake intake;
+    auto intake = scarlettIntake();
     feed (intake, 0.0, 10);
     const auto before = intake.epoch();
     EXPECT_EQ (intake.add (record (0.5, 1)), ScarlettIntake::Taken::discontinuity);
@@ -131,7 +142,7 @@ TEST (ClockMeasure, AnXrunStartsANewEpoch)
 
 TEST (ClockMeasure, APositionThatJumpedStartsANewEpoch)
 {
-    ScarlettIntake intake;
+    auto intake = scarlettIntake();
     feed (intake, 0.0, 10);
     auto jumped = record (0.5);
     jumped.position += 441;   // 10 ms
@@ -143,14 +154,14 @@ TEST (ClockMeasure, APositionThatJumpedStartsANewEpoch)
 
 TEST (ClockMeasure, AGapStartsANewEpoch)
 {
-    ScarlettIntake intake;
+    auto intake = scarlettIntake();
     feed (intake, 0.0, 10);
     EXPECT_EQ (intake.add (record (2.0)), ScarlettIntake::Taken::discontinuity);
 }
 
 TEST (ClockMeasure, FreewheelIsIgnoredAndBreaksTheEpoch)
 {
-    ScarlettIntake intake;
+    auto intake = scarlettIntake();
     feed (intake, 0.0, 10);
     auto freewheel = record (0.5);
     freewheel.flags = 1;
@@ -158,19 +169,79 @@ TEST (ClockMeasure, FreewheelIsIgnoredAndBreaksTheEpoch)
     EXPECT_EQ (intake.add (record (0.55)), ScarlettIntake::Taken::discontinuity);
 }
 
-TEST (ClockMeasure, OnlyTheAlsaDriverCountsAndAnotherNodeIsANewEpoch)
+TEST (ClockMeasure, ReadsTheProfilersDriverRecord)
+{
+    const auto d = parseProfilerDriver (R"({ "type": "driver", "id": 375, "name": ")" + scarlettNode
+                                        + R"(", "prev": 1, "signal": 2, "awake": 3, "finish": 4, "status": "finished", "latency": "128/44100", "xrun_count": 6 },)");
+    ASSERT_TRUE (d);
+    EXPECT_EQ (d->id, 375);
+    EXPECT_EQ (d->name, scarlettNode);
+    EXPECT_FALSE (parseProfilerDriver (recordedLine));
+}
+
+TEST (ClockMeasure, NothingCountsBeforeTheScarlettsDriverIsSeen)
 {
     ScarlettIntake intake;
-    EXPECT_EQ (intake.add (record (0.0, 0, 30, "clock.system.monotonic")), ScarlettIntake::Taken::ignored);
+    EXPECT_EQ (intake.add (record (0.0)), ScarlettIntake::Taken::ignored);
+    intake.addDriver ({ 375, scarlettNode });
+    EXPECT_EQ (intake.add (record (0.05)), ScarlettIntake::Taken::discontinuity);   // the first epoch
+}
+
+TEST (ClockMeasure, AnotherAlsaDriverInterleavedIsIgnoredWithoutABreak)
+{
+    auto intake = scarlettIntake();
+    intake.addDriver ({ 400, "alsa_output.pci-0000_00_1f.3.analog-stereo" });   // onboard audio drives a graph of its own
+    for (int i = 0; i < 20; ++i)
+    {
+        intake.add (record (i * 0.05));
+        auto other = record (i * 0.05 + 0.01, 3, 400, "api.alsa.0");
+        other.position += 99'999;   // another crystal, another count
+        EXPECT_EQ (intake.add (other), ScarlettIntake::Taken::ignored);
+    }
+    EXPECT_EQ (intake.discontinuities(), 0);
+    const auto point = intake.take();
+    ASSERT_TRUE (point);
+    EXPECT_EQ (point->records, 20);
+}
+
+TEST (ClockMeasure, TheScarlettsPlaybackNodeIsNotItsCapture)
+{
+    ScarlettIntake intake;
+    intake.addDriver ({ 376, "alsa_output.usb-Focusrite_Scarlett_18i20_USB_P9P0A77190B57F-00.pro-output-0" });
+    EXPECT_EQ (intake.add (record (0.0, 0, 376)), ScarlettIntake::Taken::ignored);
+}
+
+TEST (ClockMeasure, TheScarlettComingBackAsANewNodeIsANewEpoch)
+{
+    auto intake = scarlettIntake();
     feed (intake, 0.0, 10);
     EXPECT_EQ (intake.lockedId(), 375);
-    EXPECT_EQ (intake.add (record (0.5, 0, 412, "api.alsa.2")), ScarlettIntake::Taken::discontinuity);
+    intake.addDriver ({ 412, scarlettNode });   // replugged
+    EXPECT_EQ (intake.add (record (0.5, 0, 375)), ScarlettIntake::Taken::ignored);
+    EXPECT_EQ (intake.add (record (0.55, 0, 412)), ScarlettIntake::Taken::discontinuity);
     EXPECT_EQ (intake.lockedId(), 412);
+}
+
+TEST (ClockMeasure, BurstyDeliveryWithJitterStillGivesACentroidOnTheLine)
+{
+    auto intake = scarlettIntake();
+    std::mt19937 random (3);
+    std::normal_distribution<double> jitter (0.0, 0.55);   // samples: 12.5 us rms
+    for (int i = 0; i < 20; ++i)   // a second of records, as one pipe burst
+    {
+        auto r = record (i * 0.05);
+        r.delay = 140 + (std::int64_t) std::lround (jitter (random));
+        intake.add (r);
+    }
+    const auto point = intake.take();
+    ASSERT_TRUE (point);
+    const double expected = (double) (point->monoNs - record (0.0).nsec);   // the line: Scarlett ns = mono ns
+    EXPECT_NEAR ((double) point->scarlettNs, expected, 8'000.0);
 }
 
 TEST (ClockMeasure, ALostFeedStartsANewEpoch)
 {
-    ScarlettIntake intake;
+    auto intake = scarlettIntake();
     feed (intake, 0.0, 10);
     intake.restart();
     EXPECT_EQ (intake.add (record (0.5)), ScarlettIntake::Taken::discontinuity);
