@@ -41,11 +41,14 @@ inline float fittedTextHeight (const juce::String& text, float wanted, float wid
     return needs <= width || needs <= 0.0f ? wanted : wanted * width / needs;
 }
 
+// A page holds this many rows: 16 since 2026-10-31 (the maintainer: "the text can be somewhat smaller overall, the
+// elements too"; 14 until then). The values on the rig are in PROGRAM.md.
+constexpr int rowsPerPage = 16;
 // A page's row height as a share of the page, never below a fingertip-ish floor.
-inline int rowHeight (const juce::Component& page) { return juce::jmax (28, page.getHeight() / 14); }
+inline int rowHeight (const juce::Component& page) { return juce::jmax (28, page.getHeight() / rowsPerPage); }
 
 // The window's one layout system (2026-10-30, the maintainer: "aren't there standards for what looks symmetric and
-// correct?"). Every size is a share of the page's row height (rowHeight: a fourteenth of the page, never below a
+// correct?"). Every size is a share of the page's row height (rowHeight: a sixteenth of the page, never below a
 // fingertip-ish floor), so it scales with the screen; nothing is a pixel. A page is cards stacked down its margin.
 namespace layout
 {

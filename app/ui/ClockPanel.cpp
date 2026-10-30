@@ -89,9 +89,7 @@ ClockPanel::ClockPanel (Mode m) : mode (m)
     look::caption (masterCaption);
     master.addItem ("Scarlett " + arrow + " PTP grandmaster", 1);
     master.setSelectedId (1, juce::dontSendNotification);
-    note.setText ("The only master in this version. An external PTP grandmaster would make the Core a PTP client and "
-                  "need the Scarlett on word clock; not offered.",
-                  juce::dontSendNotification);
+    // No note (2026-10-31: no explanation lines): the label stays empty and is not laid out.
     note.setColour (juce::Label::textColourId, palette::textMuted);
     for (auto* label : { &state, &role, &rate, &counters })
     {

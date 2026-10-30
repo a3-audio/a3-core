@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
-// RIG and ABOUT, STATUS' sub-pages beside ENGINE (2026-10-30, the maintainer: "all content from the Canvas goes to the
-// Engine"): what the Canvas showed, in the window's cards. RIG -- a card per program of the rig with its state, where it
-// runs, its software, firmware and audio address, Start/Stop and Restart for the ones on this machine; Start all and Stop
-// all on a card above them. ABOUT -- the project, its links, the contact, Support A³, PUBLISHED (each repository of the
-// umbrella's pins with its link and tag) and the licences last. Not keys of their own: a seventh key in the row made the
-// key text smaller than a quarter of the key.
+// RIG (a page of its own since 2026-10-31) and STATUS' ABOUT (2026-10-30, the maintainer: "all content from the Canvas goes
+// to the Engine"): what the Canvas showed, in the window's cards. RIG -- MAIN (Start all, Stop all, the plan's word) and
+// ENTITIES: a row per program of the rig with its state, where it runs, its software, firmware and audio address,
+// Start/Stop and Restart for the ones on this machine, scrolled by a finger inside the card. ABOUT -- the project, its
+// links, the contact, Support A³, PUBLISHED (each repository of the umbrella's pins with its link and tag) and the
+// licences last. No explanation lines.
 #pragma once
 #include "Look.h"
 #include "SystemProbe.h"
@@ -30,9 +30,10 @@ public:
     // The row's key: "Start" or "Stop", and "Restart"; nullptr for a program of another machine.
     juce::TextButton* startStopKey (const juce::String& label) const;
     juce::TextButton* restartKey (const juce::String& label) const;
-    // The programs' cards, scrolled below the RIG card (as I/O's lists are).
-    const CardPage& programCards() const;
+    // The programs' rows inside ENTITIES, scrolled (the list's children are their names and keys).
+    int programRows() const { return (int) rows.size(); }
     juce::Component& programList();
+    juce::Rectangle<int> entitiesView() const { return scroller.getBounds(); }
     void resized() override;
     void paint (juce::Graphics&) override;
 
@@ -47,7 +48,7 @@ private:
     SystemConfirm confirm;
     std::uint64_t seen = 0;
     SystemSnapshot shown;
-    juce::Label heading;
+    juce::Label heading, entitiesHeading;
     juce::TextButton startAll { "Start all" }, stopAll { "Stop all" };
     std::vector<std::unique_ptr<ProgramRow>> rows;
     std::unique_ptr<List> list;

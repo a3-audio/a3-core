@@ -94,9 +94,9 @@ struct SystemRigView::ProgramRow
     juce::Rectangle<int> first, second, light;
 };
 
-// The scrolled list of program cards: each its light, name and state with its keys on the first line, where it runs
-// and what it runs on a compact second line, muted.
-class SystemRigView::List final : public juce::Component, public CardPage
+// ENTITIES' scrolled rows: each its light, name and state with its keys on the first line, where it runs and what it
+// runs on a compact second line, muted; a hairline between two.
+class SystemRigView::List final : public juce::Component
 {
 public:
     explicit List (const std::vector<std::unique_ptr<ProgramRow>>& r) : rows (r) {}
@@ -104,10 +104,13 @@ public:
     int layOut (int width, const layout::Tokens& t)
     {
         textHeight = t.text;
-        layout::Stack stack ({ 0, 0, width, 1 << 20 }, t, cards);
+        int y = 0;
+        bottoms.clear();
         for (auto& r : rows)
         {
-            auto area = stack.card (2 * t.padding + t.row + layout::compactLine (t)).reduced (t.padding);
+            auto area = juce::Rectangle<int> (0, y, width, t.row + layout::compactLine (t));
+            y = area.getBottom() + t.unit;
+            bottoms.push_back (area.getBottom() + t.unit / 2);
             auto first = area.removeFromTop (t.row);
             r->second = area;
             const int keyWidth = width / 6;
@@ -125,16 +128,15 @@ public:
             r->first = first.withTrimmedLeft (t.unit);
             r->second = r->second.withTrimmedLeft (lightSide + t.unit);
         }
-        return cards.empty() ? 0 : cards.back().getBottom();
+        return juce::jmax (0, y - t.unit);
     }
 
     void paint (juce::Graphics& g) override
     {
-        const auto t = layout::tokens (*this);
-        paintCards (g, *this, t);
         g.setFont (juce::FontOptions (textHeight));
-        for (const auto& r : rows)
+        for (size_t i = 0; i < rows.size(); ++i)
         {
+            const auto& r = rows[i];
             g.setColour (lightColour (r->row.light));
             g.fillEllipse (r->light.toFloat().withSizeKeepingCentre ((float) r->light.getWidth(), (float) r->light.getWidth()));
             const bool news = r->row.light == rig::Light::degraded || r->row.light == rig::Light::failed;
@@ -142,11 +144,17 @@ public:
             g.drawFittedText (r->row.state, r->first, juce::Justification::centredLeft, 1, 0.8f);
             g.setColour (palette::textMuted);
             g.drawFittedText (details (r->row), r->second, juce::Justification::centredLeft, 1, 0.7f);
+            if (i + 1 < rows.size() && i < bottoms.size())
+            {
+                g.setColour (palette::face);
+                g.fillRect (0, bottoms[i], getWidth(), 1);
+            }
         }
     }
 
 private:
     const std::vector<std::unique_ptr<ProgramRow>>& rows;
+    std::vector<int> bottoms;
     float textHeight = 12.0f;
 };
 
@@ -154,8 +162,10 @@ SystemRigView::SystemRigView (SystemProbe& p, SystemConfirm c)
     : probe (p), confirm (c ? std::move (c) : SystemConfirm ([this] (const juce::String& q, const juce::String& d, std::function<void()> yes)
                                                                { askInTheWindow (*this, q, d, std::move (yes)); }))
 {
-    setHeading (heading, "RIG" + dot + juce::SystemStats::getComputerName());
+    setHeading (heading, "MAIN" + dot + juce::SystemStats::getComputerName());
+    setHeading (entitiesHeading, "ENTITIES");
     addAndMakeVisible (heading);
+    addAndMakeVisible (entitiesHeading);
     list = std::make_unique<List> (rows);
     for (const auto& program : probe.programs())
     {
@@ -168,12 +178,12 @@ SystemRigView::SystemRigView (SystemProbe& p, SystemConfirm c)
             const auto& program = raw->program;
             if (! raw->row.up)
                 return void (probe.run ("Start " + program.label, rig::start (program)));
-            ask ("Stop " + program.label + "?", "It stops now; what it plays stops with it.",
+            ask ("Stop " + program.label + "?", {},
                  [this, program] { probe.run ("Stop " + program.label, rig::stop (program)); });
         };
         made->restart.onClick = [this, raw] {
             const auto program = raw->program;
-            ask ("Restart " + program.label + "?", "It stops and starts again; what it plays stops with it.",
+            ask ("Restart " + program.label + "?", {},
                  [this, program] { probe.run ("Restart " + program.label, rig::restart (program)); });
         };
         list->addAndMakeVisible (made->name);
@@ -183,14 +193,13 @@ SystemRigView::SystemRigView (SystemProbe& p, SystemConfirm c)
     }
     startAll.onClick = [this] { probe.run ("Start all", rig::startAll (programsHere())); };
     stopAll.onClick = [this] {
-        ask ("Stop the whole rig?", "Every program of this machine stops: the decks, the desk, Motion, the beat analyzer, Core "
-                                    "and the engine. The sound stops.",
+        ask ("Stop all?", {},
              [this] { probe.run ("Stop all", rig::stopAll (programsHere())); });
     };
     addAndMakeVisible (startAll);
     addAndMakeVisible (stopAll);
     scroller.setViewedComponent (list.get(), false);
-    scroller.setScrollBarsShown (false, false);   // a finger scrolls it; the cards run its whole width
+    scroller.setScrollBarsShown (false, false);   // a finger scrolls it
     addAndMakeVisible (scroller);
     refresh();
 }
@@ -200,7 +209,6 @@ SystemRigView::~SystemRigView()
     scroller.setViewedComponent (nullptr, false);
 }
 
-const CardPage& SystemRigView::programCards() const { return *list; }
 juce::Component& SystemRigView::programList() { return *list; }
 
 void SystemRigView::ask (const juce::String& question, const juce::String& detail, std::function<void()> then)
@@ -274,16 +282,15 @@ juce::TextButton* SystemRigView::restartKey (const juce::String& label) const
     return r != nullptr && r->restart.isVisible() ? const_cast<juce::TextButton*> (&r->restart) : nullptr;
 }
 
-// The RIG card (layout::Stack): its heading, Start all and Stop all with the plan's word beside them; below it a gap,
-// then the programs' cards, scrolled.
+// Two cards (layout::Stack): MAIN (its heading, Start all and Stop all with the plan's word beside them) and ENTITIES in
+// the rest (its heading, then the programs' rows, scrolled inside the card).
 void SystemRigView::resized()
 {
     const auto t = layout::tokens (*this);
-    auto page = getLocalBounds().reduced (t.margin);
-    layout::Stack stack (page, t, cards);
-    const auto card = stack.card (layout::cardHeight (t, 1));
-    auto area = card.reduced (t.padding);
-    heading.setFont (juce::FontOptions (t.text));
+    layout::Stack stack (getLocalBounds().reduced (t.margin), t, cards);
+    auto area = stack.card (layout::cardHeight (t, 1)).reduced (t.padding);
+    for (auto* label : { &heading, &entitiesHeading })
+        label->setFont (juce::FontOptions (t.text));
     heading.setBounds (area.removeFromTop (t.heading));
     const int keyWidth = area.getWidth() / 6;
     startAll.setBounds (layout::control (area.removeFromLeft (keyWidth), t));
@@ -291,8 +298,10 @@ void SystemRigView::resized()
     stopAll.setBounds (layout::control (area.removeFromLeft (keyWidth), t));
     area.removeFromLeft (2 * t.unit);
     planArea = area;
-    scroller.setBounds (page.withTop (card.getBottom() + t.gap));
-    list->setSize (scroller.getWidth(), list->layOut (scroller.getWidth(), t));
+    area = stack.rest().reduced (t.padding);
+    entitiesHeading.setBounds (area.removeFromTop (t.heading));
+    scroller.setBounds (area);
+    list->setSize (area.getWidth(), list->layOut (area.getWidth(), t));
 }
 
 void SystemRigView::paint (juce::Graphics& g)

@@ -217,10 +217,7 @@ TEST (RoundTripLoop, TheIoPageNoticeNamesTheLoopAndWhatWasUnrouted)
     EXPECT_TRUE (a3app::loopNotice (config, {}).isEmpty());
     config.io.roundTripLoop = a3app::RoundTripLoop { 11, 11 };
     const auto plain = a3app::loopNotice (config, {});
-    EXPECT_TRUE (plain.contains ("output 11 ")) << plain;
-    EXPECT_TRUE (plain.contains ("input 11 ")) << plain;
-    EXPECT_FALSE (plain.contains ("11-12")) << plain;
-    EXPECT_TRUE (plain.containsIgnoreCase ("round-trip")) << plain;
+    EXPECT_EQ (plain, "Digital loop: output 11 -> input 11") << "a status, no explanation (2026-10-31)";
     const auto dropped = a3app::loopNotice (config, { "booth_sub -> system:playback_11", "analog_11 -> system:capture_11" });
     EXPECT_TRUE (dropped.contains ("booth_sub -> system:playback_11")) << dropped;
     EXPECT_TRUE (dropped.contains ("analog_11 -> system:capture_11")) << dropped;

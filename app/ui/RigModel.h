@@ -15,7 +15,7 @@ namespace a3app::rig
 {
 enum class Kind { engine, deck, mixer, motion, analyzer };
 
-// One program of the rig: the systemd user units that are it on its machine. The Engine row is the engine and Core;
+// One program of the rig: the systemd user units that are it on its machine. The a3-core row is the engine and Core;
 // the window that shows the page (a3-core-window.service) is not on it, so no key here ends the page itself.
 struct Program
 {

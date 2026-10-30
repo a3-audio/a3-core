@@ -47,7 +47,7 @@ void MonitorRegisterPage::refresh()
     }
     if (! report.fetched)
     {
-        look::say (note, client.summary().answered ? "not fetched yet: FETCH holds the register against what Core has seen"
+        look::say (note, client.summary().answered ? "not fetched yet"
                                                    : "no Core at " + client.url());
         return;
     }

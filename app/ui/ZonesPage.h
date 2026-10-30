@@ -22,10 +22,11 @@ ZoneInfo zoneInfo (a3::SpeakerZone, const juce::File& variant);
 // The spatial data (decoders, layouts, zone stages) per zone, top to bottom: MAIN's and BOOTH's variant and the
 // phones' headphone EQ as dropdowns (each a pending edit; a variant that does not load is refused with the
 // reason and the choice stays where it was); then the variants in a list (the installed ones and the user's
-// own under ~/.config/a3/engine/spatial, each marked when it runs or is the pending edit), a line saying what RENAME
-// and DELETE (in the window's footer) do for the picked one, and an info card for it (its MAIN and BOOTH decoders
-// side by side as tables, zoneInfo). Picking in the list edits nothing: RENAME and DELETE act only on an unused
-// variant of the user's own, and say why not on any other.
+// own under ~/.config/a3/engine/spatial, each marked when it runs or is the pending edit; the package's default by its
+// name, "Default 4.1") and an info card for the picked one (its MAIN and BOOTH decoders side by side as tables,
+// zoneInfo). Picking in the list edits nothing. In the window's footer: LOAD applies the zones' choice now (written and
+// applied as Save would, the other pending edits staying pending), RENAME and DELETE act only on an unused variant of
+// the user's own and say why not on any other. No explanation lines (2026-10-31).
 class ZonesPage final : public juce::Component, public CardPage
 {
 public:
@@ -54,10 +55,10 @@ public:
     juce::String renameRefusal() const;           // "" when it can be renamed (the name is checked when given)
     void askDelete();
     void askRename();
+    void loadNow();                               // LOAD
 
     void refresh();
     const juce::Label& messageLabel() const { return message; }
-    const juce::Label& actionsLabel() const { return actions; }   // what RENAME and DELETE do for the picked variant
     juce::String summaryText (a3::SpeakerZone) const;   // the info card's, for the selected variant, as text
     std::function<void()> onOpenSpeakers;               // EDIT SPEAKERS
     void resized() override;
@@ -66,7 +67,6 @@ public:
 private:
     class Model;
     class Info;
-    void sayActions();
     void rescan();
     void fillZoneChoosers();
     void summarise();
@@ -82,7 +82,6 @@ private:
     juce::File selected;
     juce::String summarisedKey;
 
-    juce::Label actions;
     bool messageLaidOutEmpty = true;
     juce::Label title, message, mainCaption, boothCaption, headphonesCaption;
     std::unique_ptr<Info> info;

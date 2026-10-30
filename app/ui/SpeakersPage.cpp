@@ -181,8 +181,7 @@ void SpeakersPage::saveToZone()
     view.edit (*edited);
     loadedFrom = zoneSpatialDirectory (*edited, shown);   // what the editor shows is what was written
     parameters = values;
-    sayOutcome (message, juce::String (a3::zoneName (shown)).toUpperCase() + " saved to " + loadedFrom.getFullPathName()
-                             + ". Save restarts the engine with it.", true);
+    sayOutcome (message, juce::String (a3::zoneName (shown)).toUpperCase() + " saved: " + loadedFrom.getFileName(), true);
 }
 
 void SpeakersPage::refresh()

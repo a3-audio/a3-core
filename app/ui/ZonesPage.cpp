@@ -3,6 +3,7 @@
 #include "ZonesPage.h"
 #include "ConfigEdits.h"
 #include "DecoderSummary.h"
+#include "SaveBar.h"
 #include <algorithm>
 
 namespace a3app
@@ -36,9 +37,7 @@ void confirmWithBox (juce::Component* window, const juce::String& question, std:
 
 void askNameWithBox (juce::Component* window, const juce::String& current, std::function<void (const juce::String&)> onName)
 {
-    auto* box = new juce::AlertWindow ("Rename variant", "A new name for " + current
-                                           + " (no slash, not starting with a dot, not one that exists).",
-                                       juce::MessageBoxIconType::NoIcon);
+    auto* box = new juce::AlertWindow ("Rename " + current, {}, juce::MessageBoxIconType::NoIcon);
     box->addTextEditor ("name", current);
     box->addButton ("RENAME", 1, juce::KeyPress (juce::KeyPress::returnKey));
     box->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
@@ -168,10 +167,10 @@ public:
         const auto& directory = page.directories[(size_t) row];
         g.setFont ((float) height * 0.45f);
         g.setColour (selected ? palette::text : palette::textMuted);
-        g.drawText (directory.getFileName(), width / 40, 0, width / 2, height, juce::Justification::centredLeft);
+        g.drawText (variantDisplayName (directory, page.userRoot), width / 40, 0, width / 2, height, juce::Justification::centredLeft);
         g.setColour (palette::textMuted);
         const bool own = isUserVariant (directory, page.userRoot);
-        juce::StringArray tags { own ? juce::String ("yours") : directory.getParentDirectory().getFullPathName() };
+        juce::StringArray tags { own ? juce::String ("yours") : juce::String ("installed") };
         if (usesVariant (page.view.running(), directory))
             tags.add ("runs");
         else if (usesVariant (page.view.config(), directory))
@@ -206,8 +205,6 @@ ZonesPage::ZonesPage (HostView& v, std::vector<juce::File> choices, juce::File r
         look::caption (*label);
         label->setText (text, juce::dontSendNotification);
     }
-    look::caption (actions);
-    actions.setMinimumHorizontalScale (0.6f);
     openSpeakers.onClick = [this] { if (onOpenSpeakers) onOpenSpeakers(); };
     mainBox.onChange = [this] { chooseZone (a3::SpeakerZone::main, mainBox.getSelectedItemIndex()); };
     boothBox.onChange = [this] { chooseZone (a3::SpeakerZone::booth, boothBox.getSelectedItemIndex()); };
@@ -217,7 +214,7 @@ ZonesPage::ZonesPage (HostView& v, std::vector<juce::File> choices, juce::File r
         headphones.addItem (name, id++);
     headphones.onChange = [this] { chooseHeadphoneEq (headphones.getSelectedItemIndex()); };
     for (auto* child : std::initializer_list<juce::Component*> { &title, &openSpeakers, &mainCaption, &mainBox, &boothCaption, &boothBox,
-                                                                 &headphonesCaption, &headphones, &message, &list, &actions, info.get() })
+                                                                 &headphonesCaption, &headphones, &message, &list, info.get() })
         addAndMakeVisible (child);
     selected = view.config().spatialDirectory;
     rescan();
@@ -240,12 +237,17 @@ int ZonesPage::rowOf (const juce::File& directory) const
 // The installed choices, the user's variants by name, and whatever the configs name that neither holds.
 void ZonesPage::rescan()
 {
-    std::vector<juce::File> found = installedChoices;
+    std::vector<juce::File> found;
     const auto add = [&] (const juce::File& directory)
     {
         if (directory != juce::File() && std::find (found.begin(), found.end(), directory) == found.end())
             found.push_back (directory);
     };
+    // The user's variants come from the scan below, never from the choices the window was started with: those named
+    // the variants of that moment, so a renamed or deleted one stayed in the list (2026-10-31).
+    for (const auto& choice : installedChoices)
+        if (choice.getParentDirectory() != userRoot)
+            add (choice);
     if (userRoot.isDirectory())
     {
         auto children = userRoot.findChildFiles (juce::File::findDirectories, false);
@@ -273,7 +275,7 @@ void ZonesPage::fillZoneChoosers()
     {
         box->clear (juce::dontSendNotification);
         for (size_t row = 0; row < directories.size(); ++row)
-            box->addItem (directories[row].getFileName() + (isUserVariant (directories[row], userRoot) ? "  (yours)" : ""), (int) row + 1);
+            box->addItem (variantDisplayName (directories[row], userRoot) + (isUserVariant (directories[row], userRoot) ? "  (yours)" : ""), (int) row + 1);
     }
 }
 
@@ -297,7 +299,6 @@ void ZonesPage::selectVariant (int row)
     list.selectRow (row, true, true);
     look::say (message, {});   // a refusal belonged to the variant picked before
     summarise();
-    sayActions();
 }
 
 void ZonesPage::chooseHeadphoneEq (int item)
@@ -325,7 +326,7 @@ void ZonesPage::askDelete()
     if (const auto why = deleteRefusal(); why.isNotEmpty())
         return look::say (message, "not deleted: " + why);
     const auto target = selected;
-    dialogs.confirm ("Delete " + target.getFullPathName() + "? Its files are gone for good.",
+    dialogs.confirm ("Delete " + variantDisplayName (target, userRoot) + "?",
                      [safe = juce::Component::SafePointer<ZonesPage> (this), target]
     {
         if (safe == nullptr)
@@ -371,20 +372,24 @@ juce::String ZonesPage::summaryText (a3::SpeakerZone zone) const
     return lines.joinIntoString ("\n");
 }
 
-// What RENAME and DELETE do for the picked variant, said before a key is pressed.
-void ZonesPage::sayActions()
+// LOAD: the zones' choice written and applied now; the other pending edits stay pending.
+void ZonesPage::loadNow()
 {
-    const auto name = selected.getFileName();
-    const auto renameWhy = renameRefusal(), deleteWhy = deleteRefusal();
-    juce::String text;
-    if (renameWhy.isEmpty() && deleteWhy.isEmpty())
-        text = "RENAME and DELETE act on " + name + ".";
-    else if (renameWhy == deleteWhy || ! isUserVariant (selected, userRoot))
-        text = name + ": no RENAME or DELETE, " + deleteWhy + ".";
-    else
-        text = name + ": " + (renameWhy.isEmpty() ? juce::String ("RENAME acts on it") : "no RENAME, " + renameWhy) + "; "
-               + (deleteWhy.isEmpty() ? juce::String ("DELETE acts on it") : "no DELETE, " + deleteWhy) + ".";
-    look::say (actions, text);
+    const auto before = view.config();
+    auto zones = view.running();
+    juce::String error;
+    for (const auto zone : { a3::SpeakerZone::main, a3::SpeakerZone::booth })
+        if (const auto edited = withZoneSpatialDirectory (zones, zone, zoneSpatialDirectory (before, zone), error))
+            zones = *edited;
+        else
+            return look::say (message, "not loaded: " + error);
+    if (sameConfig (zones, view.running()))
+        return look::say (message, {});
+    const auto result = saveConfig (view, zones);
+    look::say (message, result.failed() ? "not loaded: " + result.getErrorMessage() : juce::String());
+    if (result.wasOk() && ! sameConfig (before, view.config()))
+        view.edit (before);
+    refresh();
 }
 
 // The selected variant and when its zone files last changed: a variant saved in place shows at once.
@@ -419,7 +424,10 @@ void ZonesPage::refresh()
         list.selectRow (row, true, true);
     else
         list.deselectAllRows();
-    sayActions();
+    if (message.getText().isEmpty())
+        for (const auto& key : view.ignoredKeys())
+            if (juce::String (key).contains (retiredSpatialVariant))
+                look::say (message, retiredSpatialVariant + " retired: Default 4.1 in its place");
     if (message.getText().isEmpty() != messageLaidOutEmpty)
         resized();   // the choices' card takes the message's line only while there is one
 }
@@ -430,12 +438,12 @@ void ZonesPage::paint (juce::Graphics& g)
     paintCards (g, *this, layout::tokens (*this));
 }
 
-// Three cards (layout::Stack): the zones' choices (with EDIT SPEAKERS and the message), the variants with what RENAME
-// and DELETE would do, and the picked variant's info in the rest.
+// Three cards (layout::Stack): the zones' choices (with EDIT SPEAKERS and the message), the variants, and the picked
+// variant's info in the rest.
 void ZonesPage::resized()
 {
     const auto t = layout::tokens (*this);
-    for (auto* label : { &title, &mainCaption, &boothCaption, &headphonesCaption, &message, &actions })
+    for (auto* label : { &title, &mainCaption, &boothCaption, &headphonesCaption, &message })
         label->setFont (juce::FontOptions (t.text));
     layout::Stack stack (getLocalBounds().reduced (t.margin), t, cards);
     messageLaidOutEmpty = message.getText().isEmpty();
@@ -457,9 +465,8 @@ void ZonesPage::resized()
     const int listRow = t.row * 3 / 4;
     list.setRowHeight (listRow);
     const int listHeight = listRow * juce::jlimit (1, 5, rowCount()) + 2;
-    area = stack.card (2 * t.padding + listHeight + t.row).reduced (t.padding);
+    area = stack.card (2 * t.padding + listHeight).reduced (t.padding);
     list.setBounds (area.removeFromTop (listHeight));
-    actions.setBounds (area);
     info->setBounds (stack.rest().reduced (t.padding));
 }
 }

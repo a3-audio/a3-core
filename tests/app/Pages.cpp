@@ -17,7 +17,6 @@
 #include "CalibrationPage.h"
 #include "ChannelsPage.h"
 #include "ConfigEdits.h"
-#include "FilterPage.h"
 #include "IoPage.h"
 #include "Look.h"
 #include "MainWindow.h"
@@ -273,7 +272,7 @@ TEST_F (Pages, TheClockMasterHasOneChoiceAndSaysWhy)
     const auto& clock = page.clockPanel();
     ASSERT_EQ (clock.masterBox().getNumItems(), 1);
     EXPECT_EQ (clock.masterBox().getText(), juce::String (juce::CharPointer_UTF8 ("Scarlett \xe2\x86\x92 PTP grandmaster")));
-    EXPECT_TRUE (clock.noteLabel().getText().contains ("external PTP grandmaster")) << clock.noteLabel().getText();
+    EXPECT_TRUE (clock.noteLabel().getText().isEmpty()) << "no explanation (2026-10-31): " << clock.noteLabel().getText();
 }
 
 TEST_F (Pages, TheClockSaysItsNumbers)
@@ -364,7 +363,7 @@ TEST_F (Pages, PipeWireBlockAndPeriodsApplyOnlyOnApply)
     page.chooseBlock (64);
     EXPECT_TRUE (view.timings.empty()) << "a choice is not applied on its own";
     EXPECT_TRUE (page.applyButton().isVisible());
-    EXPECT_TRUE (page.confirmLabel().getText().contains ("live")) << page.confirmLabel().getText();
+    EXPECT_EQ (page.confirmLabel().getText(), "Block 64 frames. APPLY?") << "no explanation (2026-10-31)";
     page.cancelButton().triggerClick();
     juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
     EXPECT_TRUE (view.timings.empty());
@@ -372,8 +371,7 @@ TEST_F (Pages, PipeWireBlockAndPeriodsApplyOnlyOnApply)
     EXPECT_FALSE (page.applyButton().isVisible());
 
     page.choosePeriods (2);
-    EXPECT_TRUE (page.confirmLabel().getText().contains ("two seconds")) << page.confirmLabel().getText();
-    EXPECT_TRUE (page.confirmLabel().getText().contains ("WirePlumber")) << page.confirmLabel().getText();
+    EXPECT_EQ (page.confirmLabel().getText(), "Periods 2: audio stops ~2 s. APPLY?") << "the warning, short";
     EXPECT_TRUE (page.getLocalBounds().contains (page.applyButton().getBounds()));
     expectPainted (a3apptest::snapshotAt (page, "audio-periods-confirm", page.getWidth(), page.getHeight()));
     page.applyButton().triggerClick();
@@ -414,7 +412,7 @@ TEST_F (Pages, PipeWireSaysWhatRunsAndReverts)
     page.revertButton().triggerClick();
     juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
     EXPECT_EQ (view.timings.size(), 1u) << "periods: asked first";
-    EXPECT_TRUE (page.confirmLabel().getText().contains ("two seconds")) << page.confirmLabel().getText();
+    EXPECT_TRUE (page.confirmLabel().getText().contains ("~2 s")) << page.confirmLabel().getText();
     page.applyButton().triggerClick();
     juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
     ASSERT_EQ (view.timings.size(), 2u);
@@ -617,10 +615,6 @@ void paintEveryPage (a3app::HostView& view, const juce::String& suffix)
     {
         a3app::CalibrationPage page (view);
         expectPainted (snapshot (page, "calibration" + suffix));
-    }
-    {
-        a3app::FilterPage page (view);
-        expectPainted (snapshot (page, "filter" + suffix));
     }
     {
         a3app::StatusPage page (view);
@@ -840,7 +834,8 @@ TEST_F (Pages, CalibrationNeedsConfirmationRemote)
 TEST_F (Pages, FilterKindIsLive)
 {
     FakeView view;
-    a3app::FilterPage page (view);
+    a3app::CalibrationPage calibration (view);
+    auto& page = calibration.filterCard();
     EXPECT_EQ (page.shownKind(), a3::FilterKind::svf);
     page.choose (a3::FilterKind::ladder);
     EXPECT_EQ (view.filterSets, 1);
@@ -866,6 +861,21 @@ TEST_F (Pages, SaveWritesThenApplies)
     ASSERT_TRUE (loaded) << error;
     EXPECT_EQ (loaded->engine.channels, 6);
     EXPECT_TRUE (a3app::sameConfig (view.cfg, view.runningCfg));
+}
+
+// The rig, 2026-10-31: the digital loop picked on the I/O page and saved was written but never applied, so the running
+// engine kept "no loop configured" and MEASURE stayed off. A Save that only changes the loop applies it.
+TEST_F (Pages, SaveAppliesALoopPickedAlone)
+{
+    FakeView view;
+    view.runningCfg.io.roundTripLoop.reset();
+    view.cfg = view.runningCfg;
+    view.cfg.io.roundTripLoop = a3app::RoundTripLoop { 11, 11 };
+    const auto result = a3app::saveEdits (view);
+    ASSERT_TRUE (result.wasOk()) << result.getErrorMessage();
+    EXPECT_EQ (view.applied, 1) << "written and applied";
+    ASSERT_TRUE (view.runningCfg.io.roundTripLoop.has_value());
+    EXPECT_EQ (view.runningCfg.io.roundTripLoop->output, 11);
 }
 
 TEST_F (Pages, SaveWritesThenAppliesRemote)
@@ -997,7 +1007,7 @@ TEST_F (Pages, StatusSaysWhenNoEngineRuns)
     EXPECT_EQ (page.modeLine().indexOf ("NO ENGINE"), -1);
     view.problem = "device gone; the previous setting could not be reopened";
     page.refresh();
-    EXPECT_NE (page.modeLine().indexOf ("NO ENGINE RUNNING"), -1);
+    EXPECT_TRUE (page.modeLine().startsWith ("A3-CORE NOT RUNNING - ")) << page.modeLine();
     EXPECT_NE (page.modeLine().indexOf ("device gone"), -1);
     expectPainted (snapshot (page, "status-no-engine"));
 }
@@ -1195,7 +1205,7 @@ TEST_F (Pages, SpeakersSaveToZoneWritesAUserVariant)
     EXPECT_TRUE (decoder["Description"].toString().contains ("AllRADecoder")) << decoder["Description"].toString();
     EXPECT_EQ (decoder["LoudspeakerLayout"]["Loudspeakers"].size(), 6);
     EXPECT_EQ (rig.installed.root().getChildFile ("booth.decoder.json").loadFileAsString(), installedBooth);
-    EXPECT_TRUE (page.messageLabel().getText().contains ("Save")) << page.messageLabel().getText();
+    EXPECT_TRUE (page.messageLabel().getText().startsWith ("BOOTH saved: ")) << page.messageLabel().getText();
     expectPainted (snapshot (page, "speakers-saved"));
 }
 
@@ -1343,7 +1353,7 @@ juce::Component* shownPage (a3app::MainWindow& window)
 }
 
 // The rig's portrait screen: the page keys in rows across the top, the page at full width below them,
-// KEYS, OSC MONITOR, Tooltips and Save in one footer at the bottom; nothing of one band in another.
+// KEYS, MONITOR, Tooltips and Save in one footer at the bottom; nothing of one band in another.
 TEST_F (Pages, PortraitWindowHasKeysOnTopPageBelowAndAFooter)
 {
     SpeakerRig rig;
@@ -1368,7 +1378,7 @@ TEST_F (Pages, PortraitWindowHasKeysOnTopPageBelowAndAFooter)
     float keyText = -1.0f;
     for (const auto& name : window.pageList())
     {
-        if (name == "OSC MONITOR")
+        if (name == "MONITOR")
             continue;
         juce::TextButton* key = nullptr;
         for (auto* candidate : buttonsLabelled (content, name))
@@ -1397,7 +1407,7 @@ TEST_F (Pages, PortraitWindowHasKeysOnTopPageBelowAndAFooter)
 
     for (const auto& name : window.pageList())
     {
-        if (name == "OSC MONITOR")
+        if (name == "MONITOR")
             continue;
         window.showPage (name);
         auto* page = shownPage (window);
@@ -1446,6 +1456,12 @@ TEST_F (Pages, SpeakersEditorIsScaledIntoThePage)
     ASSERT_NE (page, nullptr);
     // Portrait: the editor nearly fills the width (since the sub-page keys of 2026-10-30 its height limits it a little).
     EXPECT_GE (areaIn (*page, *page->editor()).getWidth(), page->getWidth() * 5 / 6);
+    // 2026-10-31: the energy map was cut at its right edge -- its image cache, made at the unscaled size and drawn through
+    // the page's transform. Nothing of the hosted editor is cached to an image.
+    for (auto* part : descendants (*page->editor()))
+        EXPECT_EQ (part->getCachedComponentImage(), nullptr) << typeid (*part).name();
+    expectPainted (a3apptest::snapshotAt (*window.getContentComponent(), "system3-speakers", window.getContentComponent()->getWidth(),
+                                          window.getContentComponent()->getHeight()));
 }
 
 // No tooltips (2026-10-30): no Tooltips switch, and the window.settings key "tooltips" from before is ignored and kept.
@@ -1469,28 +1485,23 @@ TEST_F (Pages, TheTooltipsKeyIsIgnored)
     home.deleteRecursively();
 }
 
-// The keys say what each filter sounds like; one visible line says what the choice is for and why decks keep SVF.
-TEST_F (Pages, FilterKeysDescribeTheFiltersAndALineSaysWhy)
+// FILTER is a card on CALIBRATION (2026-10-31, a page until then): its heading and the two keys, no explanation.
+TEST_F (Pages, FilterIsACardOnCalibration)
 {
     FakeView view;
-    a3app::FilterPage page (view);
+    a3app::CalibrationPage page (view);
     page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
-    const auto svf = buttonsLabelled (page, juce::String::fromUTF8 ("SVF \xc2\xb7 clean, 12 dB/oct"));
-    const auto ladder = buttonsLabelled (page, juce::String::fromUTF8 ("LADDER \xc2\xb7 warm, 24 dB/oct, drives"));
+    const auto svf = buttonsLabelled (page, "SVF");
+    const auto ladder = buttonsLabelled (page, "LADDER");
     ASSERT_EQ (svf.size(), 1u);
     ASSERT_EQ (ladder.size(), 1u);
-    auto* why = labelSaying (page, "The DJ filter's character on the analog channels. Decks always use SVF "
-                                   "(B-format: the ladder's drive would bend the 3D image).");
-    ASSERT_NE (why, nullptr);
-    EXPECT_TRUE (why->isVisible());
-    EXPECT_GE (why->getY(), svf.front()->getBottom());   // under the keys
-    EXPECT_TRUE (page.getLocalBounds().contains (why->getBounds()));
-    for (auto* key : { svf.front(), ladder.front() })
-        EXPECT_LE (juce::GlyphArrangement::getStringWidth (look.getTextButtonFont (*key, key->getHeight()), key->getButtonText()),
-                   (float) key->getWidth()) << key->getButtonText();
-    EXPECT_FLOAT_EQ (look.getTextButtonFont (*svf.front(), svf.front()->getHeight()).getHeight(),
-                     look.getTextButtonFont (*ladder.front(), ladder.front()->getHeight()).getHeight());   // one size
-    expectPainted (a3apptest::snapshotAt (page, "filter-described", page.getWidth(), page.getHeight()));
+    EXPECT_NE (labelSaying (page, "FILTER"), nullptr);
+    ASSERT_EQ (page.cardAreas().size(), 2u) << "the trims and FILTER, no help card";
+    EXPECT_TRUE (page.cardAreas()[1].contains (areaIn (page, *svf.front())));
+    for (auto* child : descendants (page))
+        if (auto* label = dynamic_cast<juce::Label*> (child))
+            EXPECT_LT (label->getText().length(), 60) << "no explanation: " << label->getText();
+    expectPainted (a3apptest::snapshotAt (page, "system3-calibration-filter", page.getWidth(), page.getHeight()));
 }
 
 namespace
@@ -1557,6 +1568,54 @@ TEST_F (Pages, ZonesRenameAndDeleteOnlyAnUnusedUserVariant)
     EXPECT_FALSE (renamed.exists());
     EXPECT_EQ (rig.rowOf (page, renamed), -1);
     expectPainted (a3apptest::snapshotAt (page, "zones-after-delete", a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4));
+}
+
+// End to end on the file system as the program builds the page (2026-10-31): the choices from spatialChoices (configDir),
+// the user's variants under <configDir>/engine/spatial. A rename leaves no stale old name in the list, a delete no row.
+TEST_F (Pages, ZonesRenameAndDeleteOnTheFileSystemAsTheProgramDoes)
+{
+    ZonesRig rig;
+    const auto configDir = juce::File::createTempFile ("a3-config");
+    const auto userRoot = configDir.getChildFile ("engine/spatial");
+    userRoot.createDirectory();
+    const auto spare = userRoot.getChildFile ("spare");
+    rig.speakers.installed.root().copyDirectoryTo (spare);
+    a3app::ZonesPage page (rig.speakers.view, a3app::spatialChoices (configDir), userRoot, rig.dialogs);
+    ASSERT_GE (rig.rowOf (page, spare), 0);
+
+    page.selectVariant (rig.rowOf (page, spare));
+    page.askRename();
+    const auto renamed = userRoot.getChildFile ("spare-renamed");
+    EXPECT_TRUE (renamed.isDirectory());
+    EXPECT_FALSE (spare.exists());
+    EXPECT_GE (rig.rowOf (page, renamed), 0);
+    EXPECT_EQ (rig.rowOf (page, spare), -1) << "the old name is gone from the list";
+    EXPECT_EQ (page.selectedVariant(), renamed);
+
+    page.askDelete();
+    page.refresh();
+    EXPECT_FALSE (renamed.exists());
+    EXPECT_EQ (rig.rowOf (page, renamed), -1) << "the list follows a delete";
+    configDir.deleteRecursively();
+}
+
+// LOAD (2026-10-31): the zones' choice written and applied now; another pending edit stays pending.
+TEST_F (Pages, ZonesLoadAppliesTheZonesNow)
+{
+    ZonesRig rig;
+    auto& view = rig.speakers.view;
+    a3app::ZonesPage page (view, { rig.speakers.installed.root() }, rig.speakers.userRoot, rig.dialogs);
+    juce::String error;
+    view.cfg = *a3app::withChannels (view.cfg, 6, error);
+    page.chooseZone (a3::SpeakerZone::booth, rig.rowOf (page, rig.spare));
+    ASSERT_EQ (a3app::zoneSpatialDirectory (view.config(), a3::SpeakerZone::booth), rig.spare);
+    const int channelsRunning = view.running().engine.channels;
+    page.loadNow();
+    EXPECT_EQ (view.applied, 1);
+    EXPECT_EQ (a3app::zoneSpatialDirectory (view.running(), a3::SpeakerZone::booth), rig.spare) << "runs now";
+    EXPECT_EQ (view.running().engine.channels, channelsRunning) << "only the zones were applied";
+    EXPECT_EQ (view.config().engine.channels, 6) << "the other edit stays pending";
+    EXPECT_TRUE (page.messageLabel().getText().isEmpty()) << page.messageLabel().getText();
 }
 
 // A rename the page refuses (a bad name) changes nothing and says why; renaming what the pending edit uses follows it.
@@ -1998,26 +2057,6 @@ juce::Component* findAlertIn (juce::Component& parent)
 }
 }
 
-// CALIBRATION (2026-10-30, the maintainer: the info pops up although there is room below): its help is text in the
-// free space under the rows, and nothing on the page carries a tooltip.
-TEST_F (Pages, CalibrationHelpIsTextInTheFreeSpace)
-{
-    FakeView view;
-    a3app::CalibrationPage page (view);
-    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
-    juce::Label* help = nullptr;
-    for (auto* child : descendants (page))
-        if (auto* label = dynamic_cast<juce::Label*> (child); label != nullptr && label->getText().contains ("only proposes"))
-            help = label;
-    ASSERT_NE (help, nullptr);
-    EXPECT_TRUE (help->isVisible());
-    EXPECT_TRUE (page.getLocalBounds().contains (help->getBounds()));
-    EXPECT_GE (help->getY(), page.messageLabel().getBottom()) << "below the rows and the message";
-    for (auto* child : descendants (page))
-        if (auto* client = dynamic_cast<juce::SettableTooltipClient*> (child))
-            EXPECT_TRUE (client->getTooltip().isEmpty()) << child->getName() << ": " << client->getTooltip();
-    expectPainted (a3apptest::snapshotAt (page, "calibration-help-as-text", page.getWidth(), page.getHeight()));
-}
 
 // No tooltips anywhere (2026-10-30): no control of the window carries one, the hosted AllRADecoder's included (its own
 // TooltipWindow then has nothing to show), on every page, with Core's pages too.
@@ -2028,8 +2067,8 @@ TEST_F (Pages, NoTooltipsAnywhere)
     a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, { core.client.get(), {} }, {}, rig.userRoot);
     window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     window.setMonitorShown (true);
-    for (const auto& name : { "AUDIO", "SPEAKERS", "ZONES", "INPUT", "OUTPUT", "DEPARTMENTS", "CALIBRATION", "FILTER", "STATUS", "ENGINE",
-                              "RIG", "ABOUT", "BENCH" })
+    for (const auto& name : juce::StringArray { "AUDIO", "SPEAKERS", "ZONES", "INPUT", "OUTPUT", "DEPARTMENTS", "CALIBRATION", "RIG", "STATUS",
+                                                juce::String::fromUTF8 ("A³ CORE"), "ABOUT", "BENCH" })
     {
         window.showPage (name);
         window.refreshNow();
@@ -2082,8 +2121,8 @@ TEST_F (Pages, ZonesKeysAlwaysAnswer)
     ASSERT_NE (page, nullptr);
     page->selectVariant (rig.rowOf (*page, rig.club));
     window.refreshNow();
-    EXPECT_TRUE (page->actionsLabel().isVisible());
-    EXPECT_TRUE (page->actionsLabel().getText().contains ("runs")) << page->actionsLabel().getText();
+    for (const auto& name : { "LOAD", "RENAME", "DELETE" })
+        EXPECT_TRUE (buttonsLabelled (content, name).front()->isVisible()) << name;
     for (const auto& name : { "RENAME", "DELETE" })
     {
         auto* key = buttonsLabelled (content, name).front();
@@ -2096,7 +2135,6 @@ TEST_F (Pages, ZonesKeysAlwaysAnswer)
     EXPECT_TRUE (rig.club.isDirectory());
     page->selectVariant (rig.rowOf (*page, rig.spare));
     window.refreshNow();
-    EXPECT_TRUE (page->actionsLabel().getText().contains ("RENAME")) << page->actionsLabel().getText();
     expectPainted (a3apptest::snapshotAt (content, "portrait-zones-keys-answer", content.getWidth(), content.getHeight()));
 }
 
@@ -2322,6 +2360,38 @@ TEST_F (Pages, StatusHasTheDriverAndTheClocksDetail)
     expectPainted (a3apptest::snapshotAt (page, "window2-status", page.getWidth(), page.getHeight()));
 }
 
+// ENGINE's round trip and network (2026-10-31): four "Label: value" lines, values only; the AES67 latency is StemDeck's
+// shipped sender (sess.latency 3 ms, packet 0.25 ms) plus the receiver's buffer read from the rendered config.
+TEST_F (Pages, EngineSaysTheRoundTripAndTheAes67Latency)
+{
+    const auto conf = juce::File (A3_APP_SOURCE_DIR).getSiblingFile ("platform-config/debian-x86_64/a3-core/home/aaa/.local/share/a3-core/pipewire/pipewire-aes67.conf.in");
+    const auto receiver = a3app::deckReceiveLatencyMs (conf.loadFileAsString());
+    ASSERT_TRUE (receiver.has_value());
+    EXPECT_DOUBLE_EQ (*receiver, 6.0) << "the deck rule's sess.latency.msec, not the host senders' 12";
+    EXPECT_EQ (a3app::aes67LatencyText (receiver), "9.3 ms");
+    EXPECT_FALSE (a3app::deckReceiveLatencyMs ("context.modules = []").has_value());
+
+    a3app::RoundTrip estimate;
+    estimate.sampleRate = 44100;
+    estimate.captureSamples = 256;
+    estimate.processingSamples = 128;
+    estimate.playbackSamples = 384;
+    a3app::RoundTripReport measured;
+    auto lines = a3app::roundTripLines (estimate, measured, a3app::aes67LatencyText (receiver));
+    EXPECT_EQ (lines, (juce::StringArray { "Estimated: 17.4 ms (768 samples)", "Measured digital: not measured",
+                                           "Measured analog: not measured", "AES67 latency: 9.3 ms" }));
+    measured.state = a3app::RoundTripReport::State::measured;
+    measured.samples = 441;
+    measured.atMillis = juce::Time (2026, 9, 31, 0, 12).toMilliseconds();
+    measured.analog = a3app::RoundTripReport::Analog::measured;
+    measured.converters = { 44, 44100.0, "2026-10-30" };
+    lines = a3app::roundTripLines (estimate, measured, "9.3 ms");
+    EXPECT_EQ (lines[1], "Measured digital: 10.0 ms  00:12");
+    EXPECT_EQ (lines[2], "Measured analog: 11.0 ms  2026-10-30");
+    for (const auto& line : lines)
+        EXPECT_FALSE (line.containsAnyOf ("=+")) << "no parts: " << line;
+}
+
 // The window's keys (2026-10-30): CHANNELS, ZONES and DEPARTMENTS have none (AUDIO's card, SPEAKERS' and I/O's
 // sub-pages), so six keys share the row beside the switch and their text is larger again. SYSTEM and ABOUT (the Canvas's
 // content) are STATUS' sub-pages: as a seventh key SYSTEM made the text smaller than a quarter of the key (11.95 < 12.25 px).
@@ -2332,7 +2402,7 @@ TEST_F (Pages, SixPageKeysAndTheSubPages)
     a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, { core.client.get(), {} }, {}, rig.userRoot);
     window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     window.setWorkspaceRunner ([] (const std::vector<std::string>&) { return std::string(); });
-    EXPECT_EQ (window.pageList(), (juce::StringArray { "AUDIO", "SPEAKERS", "I/O", "CALIBRATION", "FILTER", "STATUS", "OSC MONITOR" }));
+    EXPECT_EQ (window.pageList(), (juce::StringArray { "AUDIO", "SPEAKERS", "I/O", "CALIBRATION", "RIG", "STATUS", "MONITOR" }));
     auto& content = *window.getContentComponent();
     juce::TextButton* calibration = nullptr;
     for (auto* key : buttonsLabelled (content, "CALIBRATION"))
@@ -2453,7 +2523,8 @@ TEST_F (Pages, EveryPageIsCardsOnOneGrid)
     a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, { core.client.get(), {} }, {}, rig.userRoot);
     window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     auto& content = *window.getContentComponent();
-    for (const auto& name : { "AUDIO", "SPEAKERS", "ZONES", "INPUT", "OUTPUT", "DEPARTMENTS", "CALIBRATION", "FILTER", "STATUS", "ENGINE", "RIG", "ABOUT" })
+    for (const auto& name : juce::StringArray { "AUDIO", "SPEAKERS", "ZONES", "INPUT", "OUTPUT", "DEPARTMENTS", "CALIBRATION", "RIG", "STATUS",
+                                                juce::String::fromUTF8 ("A³ CORE"), "ABOUT" })
     {
         window.showPage (name);
         window.refreshNow();
@@ -2481,35 +2552,38 @@ TEST_F (Pages, EveryPageIsCardsOnOneGrid)
     }
 }
 
-// ENGINE, RIG and ABOUT (2026-10-30, "all content from the Canvas goes to the Engine"): STATUS' sub-pages -- what the
-// engine runs, the rig (a card per program, Start all, Stop all) and the project (Support A³, PUBLISHED, the licences).
-TEST_F (Pages, EngineRigAndAboutAreSubPagesOfStatus)
+// RIG is a page of the key row again (2026-10-31; FILTER went to CALIBRATION), STATUS is ENGINE and ABOUT.
+TEST_F (Pages, RigIsAPageAndStatusIsEngineAndAbout)
 {
     SpeakerRig rig;
     a3app::SystemProbe probe ({}, false);
     a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, {}, {}, rig.userRoot, { &probe });
     window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
-    EXPECT_FALSE (window.pageList().contains ("RIG")) << "no seventh key";
-    window.showPage ("STATUS");
-    EXPECT_EQ (window.currentSubPage(), "ENGINE");
+    EXPECT_TRUE (window.pageList().contains ("RIG"));
+    EXPECT_FALSE (window.pageList().contains ("FILTER"));
     auto& content = *window.getContentComponent();
-    for (const auto* key : { "ENGINE", "RIG", "ABOUT" })
+    window.showPage ("STATUS");
+    EXPECT_EQ (window.currentSubPage(), juce::String::fromUTF8 ("A³ CORE")) << "a3-core, not Engine (2026-10-31)";
+    for (const auto& key : { juce::String::fromUTF8 ("A³ CORE"), juce::String ("ABOUT") })
         EXPECT_FALSE (buttonsLabelled (*shownPage (window), key).empty()) << key;
-    EXPECT_TRUE (buttonsLabelled (*shownPage (window), "STATUS").empty()) << "the page is STATUS, its first sub-page ENGINE";
+    EXPECT_TRUE (buttonsLabelled (*shownPage (window), "RIG").empty()) << "RIG is no sub-page";
     EXPECT_FALSE (probe.isWanted()) << "the machine is asked only while RIG or ABOUT is shown";
-    expectPainted (a3apptest::snapshotAt (content, "system2-engine", content.getWidth(), content.getHeight()));
+    window.refreshNow();
+    expectPainted (a3apptest::snapshotAt (content, "system3-engine", content.getWidth(), content.getHeight()));
     window.showPage ("RIG");
     EXPECT_TRUE (probe.isWanted());
-    EXPECT_EQ (window.currentPage(), "STATUS");
-    EXPECT_EQ (window.currentSubPage(), "RIG");
+    EXPECT_EQ (window.currentPage(), "RIG");
+    for (const auto* heading : { "ENTITIES" })
+        EXPECT_NE (labelSaying (content, heading), nullptr) << heading;
     EXPECT_FALSE (buttonsLabelled (content, "Start all").empty());
-    expectPainted (a3apptest::snapshotAt (content, "system2-window-rig", content.getWidth(), content.getHeight()));
+    window.refreshNow();
+    expectPainted (a3apptest::snapshotAt (content, "system3-window-rig", content.getWidth(), content.getHeight()));
     window.showPage ("ABOUT");
+    EXPECT_EQ (window.currentPage(), "STATUS");
     EXPECT_EQ (window.currentSubPage(), "ABOUT");
     EXPECT_TRUE (probe.isWanted());
-    expectPainted (a3apptest::snapshotAt (content, "system2-window-about", content.getWidth(), content.getHeight()));
-    window.showPage ("STATUS");
-    EXPECT_EQ (window.currentSubPage(), "ABOUT") << "the page keeps the sub-page last shown";
+    window.refreshNow();
+    expectPainted (a3apptest::snapshotAt (content, "system3-window-about", content.getWidth(), content.getHeight()));
     window.showPage ("AUDIO");
     EXPECT_FALSE (probe.isWanted());
 }

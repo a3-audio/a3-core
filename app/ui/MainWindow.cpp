@@ -21,7 +21,7 @@ constexpr int pageGroup = 1;
 constexpr int noteSeconds = 6;   // how long the keyboard's line stays before the footer is plain again
 constexpr int minimumKey = 28;   // a fingertip-ish floor under the shares below
 constexpr int keyRowShare = 18, footerShare = 16;   // a key row and the footer as shares of the window's height
-const juce::String monitorSwitchName = "OSC MONITOR";
+const juce::String monitorSwitchName = "MONITOR";   // OSC MONITOR until 2026-10-31
 
 bool readSwitch (const juce::File& settings, const juce::Identifier& key)
 {
@@ -74,33 +74,34 @@ public:
         speakers->add ("ZONES", std::move (zones), [this] { zonesPage->refresh(); });
         for (const auto& name : { "SPEAKERS", "ZONES" })
             speakers->key (name)->onClick = [this, name = juce::String (name)] { speakers->show (name); showZonesKeys(); };
+        loadKey.onClick = [this] { zonesPage->loadNow(); };
         renameKey.onClick = [this] { zonesPage->askRename(); };
         deleteKey.onClick = [this] { zonesPage->askDelete(); };
-        addChildComponent (renameKey);
-        addChildComponent (deleteKey);
+        for (auto* key : { &loadKey, &renameKey, &deleteKey })
+            addChildComponent (key);
         addPage ("SPEAKERS", std::move (speakersAndZones));
         auto io = std::make_unique<IoPage> (view);
         ioPage = io.get();
         addPage ("I/O", std::move (io));
         addPage ("CALIBRATION", std::make_unique<CalibrationPage> (view));
-        addPage ("FILTER", std::make_unique<FilterPage> (view));
         // 2026-10-30: STATUS is ENGINE (what the engine runs) and the Canvas's content, RIG and ABOUT; a seventh key in the
         // row made the key text smaller than a quarter of the key.
         if (systemSetup.probe == nullptr)
             idleProbe = std::make_unique<SystemProbe> (SystemSources {}, false);
         systemProbe = systemSetup.probe != nullptr ? systemSetup.probe : idleProbe.get();
-        auto statusAndSystem = std::make_unique<SubPages> ("STATUS");
-        status = statusAndSystem.get();
+        // 2026-10-31: RIG is a page again (FILTER went to CALIBRATION's card); STATUS is ENGINE and ABOUT.
+        auto rigPage = std::make_unique<SystemRigView> (*systemProbe, SystemConfirm {});
+        rig = rigPage.get();
+        addPage ("RIG", std::move (rigPage), false, true);
+        auto statusAndAbout = std::make_unique<SubPages> ("STATUS");
+        status = statusAndAbout.get();
         auto statusPage = std::make_unique<StatusPage> (view);
-        auto rigView = std::make_unique<SystemRigView> (*systemProbe, SystemConfirm {});
         auto aboutView = std::make_unique<SystemAboutView> (*systemProbe);
         auto* statusRaw = statusPage.get();
-        auto* rigRaw = rigView.get();
         auto* aboutRaw = aboutView.get();
-        status->add ("ENGINE", std::move (statusPage), [statusRaw] { statusRaw->refresh(); });
-        status->add ("RIG", std::move (rigView), [rigRaw] { rigRaw->refresh(); });
+        status->add (juce::String::fromUTF8 ("A³ CORE"), std::move (statusPage), [statusRaw] { statusRaw->refresh(); });
         status->add ("ABOUT", std::move (aboutView), [aboutRaw] { aboutRaw->refresh(); });
-        addPage ("STATUS", std::move (statusAndSystem));
+        addPage ("STATUS", std::move (statusAndAbout));
         if (monitor.core != nullptr)
         {
             auto& core = *monitor.core;
@@ -108,7 +109,7 @@ public:
             departments = std::make_unique<DepartmentsPage> (core);
             ioPage->addDepartments (*departments, [this] { departments->refresh(); });
             addPage ("TRAFFIC", std::make_unique<MonitorTrafficPage> (core), true);
-            addPage ("TRUTH & DEVICES", std::make_unique<MonitorTruthPage> (core), true);
+            addPage ("TRUTH & DEVICES", std::make_unique<MonitorTruthPage> (core, [&view] { return retiredText (view); }), true);
             addPage ("NOT UNDERSTOOD", std::make_unique<MonitorUnknownPage> (core), true);
             addPage ("REGISTER", std::make_unique<MonitorRegisterPage> (core), true);
             addPage ("BENCH", std::make_unique<MonitorBenchPage> (core), true);
@@ -342,10 +343,8 @@ private:
         if (monitor.core != nullptr)
             monitorSwitch.setBounds (left.removeFromLeft (getWidth() / 5));
         if (renameKey.isVisible())
-        {
-            renameKey.setBounds (left.removeFromLeft (getWidth() / 8).reduced (left.getHeight() / 16, 0));
-            deleteKey.setBounds (left.removeFromLeft (getWidth() / 8).reduced (left.getHeight() / 16, 0));
-        }
+            for (auto* key : { &loadKey, &renameKey, &deleteKey })
+                key->setBounds (left.removeFromLeft (getWidth() / 8).reduced (left.getHeight() / 16, 0));
         saveBar.setBounds (footer.withLeft (left.getX()));
     }
 
@@ -356,15 +355,16 @@ private:
         const bool onZones = ! pages.empty() && pages[(size_t) shown].component.get() == speakers && speakers->shown() == "ZONES";
         if (renameKey.isVisible() == onZones)
             return;
-        renameKey.setVisible (onZones);
-        deleteKey.setVisible (onZones);
+        for (auto* key : { &loadKey, &renameKey, &deleteKey })
+            key->setVisible (onZones);
         resized();
     }
 
     // systemd, git and Core's rig are asked only while RIG or ABOUT is shown.
     void askTheMachineWhileShown()
     {
-        const bool shownNow = ! pages.empty() && pages[(size_t) shown].component.get() == status && status->shown() != "ENGINE";
+        const auto* page = pages.empty() ? nullptr : pages[(size_t) shown].component.get();
+        const bool shownNow = page == rig || (page == status && status->shown() == "ABOUT");
         systemProbe->setWanted (shownNow);
     }
 
@@ -394,13 +394,14 @@ private:
     MonitorSetup monitor;
     juce::ToggleButton monitorSwitch { monitorSwitchName };
     ZonesPage* zonesPage = nullptr;
-    juce::TextButton renameKey { "RENAME" }, deleteKey { "DELETE" };
+    juce::TextButton loadKey { "LOAD" }, renameKey { "RENAME" }, deleteKey { "DELETE" };
     SubPages* speakers = nullptr;
     IoPage* ioPage = nullptr;
     std::unique_ptr<DepartmentsPage> departments;
     std::unique_ptr<SystemProbe> idleProbe;
     SystemProbe* systemProbe = nullptr;
     SubPages* status = nullptr;
+    SystemRigView* rig = nullptr;
     WindowBands bands;
     juce::TextButton keys { "KEYS" };
     juce::Label keyboardNoteLabel;

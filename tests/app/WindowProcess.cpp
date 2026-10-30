@@ -278,9 +278,8 @@ TEST (Window, SpatialChoicesFollowTheConfigDefault)
 {
     const juce::File configDir ("/home/tester/.config/a3");
     const auto installed = a3app::AppConfig{}.spatialDirectory;
-    EXPECT_EQ (a3app::spatialCandidates (configDir),
-               (std::vector<juce::File> { configDir.getChildFile ("engine/spatial"), installed,
-                                          installed.getSiblingFile (installed.getFileName() + "-reaper-booth-6.1") }));
+    EXPECT_EQ (a3app::spatialCandidates (configDir), (std::vector<juce::File> { configDir.getChildFile ("engine/spatial"), installed }))
+        << "REAPER's 6.1 booth left the package (2026-10-31)";
 }
 
 // The SPEAKERS page saves user variants as <configDir>/engine/spatial/<name>; ZONES offers each that holds a

@@ -167,9 +167,10 @@ class StageTest(unittest.TestCase):
                 self.assertFalse(shipped.read_bytes().startswith(b"#!/usr/bin/env python"), shipped)
 
     def test_files_installs_the_spatial_data(self):
-        # The package default for the bench, and REAPER's 6.1 booth for the parity run (--spatial).
+        # The package default ("Default 4.1"); REAPER's 6.1 booth left the package on 2026-10-31.
         stage = self.stage_files()
-        for name in ("spatial", "spatial-reaper-booth-6.1"):
+        self.assertFalse((stage / "usr/share/a3-engine/spatial-reaper-booth-6.1").exists())
+        for name in ("spatial",):
             with self.subTest(directory=name):
                 originals = sorted((ROOT / "data" / name).glob("*.json"))
                 self.assertTrue(originals)

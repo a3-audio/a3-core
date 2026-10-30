@@ -85,6 +85,11 @@ std::vector<juce::File> spatialCandidates (const juce::File& configDir);
 // Those of them that hold a main.decoder.json, then the user's variants (<configDir>/engine/spatial/<name>,
 // the SPEAKERS page's saves) that do, by name.
 std::vector<juce::File> spatialChoices (const juce::File& configDir);
+// The variant that left the package (2026-10-31); a config naming it loads the default instead.
+inline const juce::String retiredSpatialVariant = "spatial-reaper-booth-6.1";
+// What the ZONES list and dropdowns call a variant: an installed one its variant.json "name" (the package default is
+// "Default 4.1"), a user's its directory's name.
+juce::String variantDisplayName (const juce::File& directory, const juce::File& userRoot);
 
 // ~/.config/a3/engine/engine.json under `home`.
 juce::File userConfigFile (const juce::File& home);

@@ -21,6 +21,8 @@ juce::String missingText (const std::vector<std::string>& missingPorts);   // "A
 juce::String droppedText (const std::vector<std::string>& droppedLinks, int maxLines = 1000);
 juce::String droppedText (const std::vector<std::string>& droppedLinks, const std::vector<std::string>& ignoredKeys,
                           int maxLines = 1000);
+// The MONITOR's lines of what the engine's config named and the load left out (droppedText), "" when nothing was.
+juce::String retiredText (const HostView&);
 
 // What the driver runs, as STATUS says it (the AUDIO page's info lines until 2026-10-30): "44100 Hz", "Block 64 frames
 // x 3 periods" (a device: no periods), where the rate comes from, the bit depth and who sets it, the DSP load, xruns.
@@ -29,6 +31,21 @@ struct DriverInfo
     juce::String rate, timing, rateSource, bitDepth, load, xruns, roundTrip;   // roundTrip: the estimate (AUDIO says the measured)
 };
 DriverInfo driverInfo (const AppConfig& running, const BackendStatus&);
+
+// ENGINE's round-trip lines (2026-10-31), values only: the estimate ("16.0 ms (768 samples)"), the digital loop as measured
+// ("4.4 ms  14:05", else "not measured") and the analog chain (that digital measurement plus the stored converters' share,
+// "6.1 ms  2026-10-30", else "not measured").
+juce::String estimatedText (const RoundTrip&);
+juce::String measuredDigitalText (const RoundTrip&, const RoundTripReport&);
+juce::String measuredAnalogText (const RoundTrip&, const RoundTripReport&);
+
+// A deck's stream over the network: the deck host's sender (its sess.latency and packet time, StemDeck's shipped values:
+// the Core does not know the deck host's) plus the Core's receiver buffer, the deck rule's sess.latency.msec in the
+// rendered pipewire-aes67.conf. nullopt: no deck rule there.
+std::optional<double> deckReceiveLatencyMs (const juce::String& aes67Conf);
+juce::String aes67LatencyText (std::optional<double> receiverMs);   // "9.3 ms", or "no AES67 receiver config"
+// ENGINE's four lines as they read: "Estimated: …", "Measured digital: …", "Measured analog: …", "AES67 latency: …".
+juce::StringArray roundTripLines (const RoundTrip&, const RoundTripReport&, const juce::String& aes67);
 inline DriverInfo driverInfo (const HostView& view) { return driverInfo (view.running(), view.status()); }
 
 // Read-only: engine mode, Core's last word, the gate per zone, load and xruns, missing peers
@@ -36,13 +53,22 @@ inline DriverInfo driverInfo (const HostView& view) { return driverInfo (view.ru
 class StatusPage final : public juce::Component, public CardPage
 {
 public:
-    explicit StatusPage (HostView&);
+    // `aes67Config`: the rendered PipeWire AES67 config (~/.config/pipewire/pipewire-aes67.conf by default).
+    explicit StatusPage (HostView&, juce::File aes67Config = defaultAes67Config());
+    static juce::File defaultAes67Config();
     ~StatusPage() override;
 
     void refresh();
     // What runs, not the pending edit; or why no engine runs.
     const ClockPanel& clockPanel() const { return clock; }
-    juce::String modeLine() const { return problem.isEmpty() ? modeText (config, status) : "NO ENGINE RUNNING - " + problem; }
+    // The window says a3-core, not "engine" (2026-10-31): the engine role's own "NO ENGINE RUNNING: " is left off.
+    juce::String modeLine() const
+    {
+        if (problem.isEmpty())
+            return modeText (config, status);
+        const juce::String engineWords = "NO ENGINE RUNNING: ";
+        return "A3-CORE NOT RUNNING - " + (problem.startsWith (engineWords) ? problem.substring (engineWords.length()) : problem);
+    }
     void resized() override;
     void paint (juce::Graphics&) override;
 
@@ -51,6 +77,7 @@ private:
     int row() const;
     HostView& view;
     int clockLinesLaid = 0;
+    juce::String aes67;
     std::unique_ptr<Meters> meters;
     ClockPanel clock { ClockPanel::Mode::detail };
     AppConfig config;

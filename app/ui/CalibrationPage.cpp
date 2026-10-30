@@ -48,21 +48,15 @@ juce::String CalibrationPage::describe (std::optional<float> db)
 
 CalibrationPage::CalibrationPage (HostView& v, Confirm c)
     : view (v), confirm (c ? std::move (c) : Confirm ([this] (const juce::String& text, std::function<void()> onYes)
-                                                             { askWithBox (look::dialogParent (*this), text, std::move (onYes)); }))
+                                                             { askWithBox (look::dialogParent (*this), text, std::move (onYes)); })),
+      filter (v)
 {
     for (const auto zone : { TrimZone::main, TrimZone::booth, TrimZone::phones, TrimZone::rec })
         rows.push_back (std::make_unique<Row> (zone));
     look::caption (title);
     look::failure (message);
     title.setText ("CALIBRATION", juce::dontSendNotification);
-    const juce::String help ("A slider only proposes a value. Set... asks, naming the old and the new trim; nothing "
-                             "changes before you agree. Save applies it. A zone without a trim stays closed.");
-    // The page has room below its rows: the help is text there, not a tip (2026-10-30, the maintainer).
-    look::caption (helpText);
-    helpText.setJustificationType (juce::Justification::topLeft);
-    helpText.setMinimumHorizontalScale (1.0f);
-    look::say (helpText, help);
-    for (auto* child : std::initializer_list<juce::Component*> { &title, &message, &helpText })
+    for (auto* child : std::initializer_list<juce::Component*> { &title, &message, &filter })
         addAndMakeVisible (child);
     for (auto& rowPtr : rows)
     {
@@ -116,6 +110,7 @@ void CalibrationPage::refresh()
     const auto config = view.config();
     for (auto& row : rows)
         look::say (row->current, describe (trimOf (config, row->zone)));
+    filter.refresh();
 }
 
 void CalibrationPage::paint (juce::Graphics& g)
@@ -124,13 +119,13 @@ void CalibrationPage::paint (juce::Graphics& g)
     paintCards (g, *this, layout::tokens (*this));
 }
 
-// Two cards (layout::Stack): the trims (heading, a line per zone, the message) and the help in the room below.
+// Two cards (layout::Stack): the trims (heading, a line per zone, the message) and FILTER.
 void CalibrationPage::resized()
 {
     const auto t = layout::tokens (*this);
     layout::Stack stack (getLocalBounds().reduced (t.margin), t, cards);
     auto area = stack.card (layout::cardHeight (t, (int) rows.size() + 1)).reduced (t.padding);
-    for (auto* label : { &title, &message, &helpText })
+    for (auto* label : { &title, &message })
         label->setFont (juce::FontOptions (t.text));
     title.setBounds (area.removeFromTop (t.heading));
     for (auto& rowPtr : rows)
@@ -146,6 +141,7 @@ void CalibrationPage::resized()
         r.proposal.setBounds (layout::control (line, t));
     }
     message.setBounds (area);
-    helpText.setBounds (stack.card (2 * t.padding + 3 * t.heading).reduced (t.padding));
+    filter.setTokens (t);
+    filter.setBounds (stack.card (layout::cardHeight (t, FilterCard::lines)).reduced (t.padding));
 }
 }

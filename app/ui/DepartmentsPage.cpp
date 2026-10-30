@@ -191,8 +191,7 @@ private:
 DepartmentsPage::DepartmentsPage (CoreClient& c, int askEveryMillis) : client (c), askEvery (askEveryMillis)
 {
     look::caption (title);
-    look::say (title, "Departments: a light or video desk that is told every A3 message, as the mixer and Motion are. "
-                      "SAVE LIST applies it at once, without a restart.");
+    look::say (title, "DEPARTMENTS");
     const std::pair<juce::Label*, const char*> captions[] { { &nameCaption, "NAME" }, { &hostCaption, "HOST" }, { &portCaption, "PORT" },
                                                             { &onCaption, "ON" }, { &statusCaption, "STATUS" } };
     for (const auto& [label, text] : captions)

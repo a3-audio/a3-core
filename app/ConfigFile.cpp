@@ -150,11 +150,19 @@ juce::var withoutRetiredPorts (const juce::var& io, const std::vector<std::strin
     return result;
 }
 
-juce::File spatialPath (const juce::var& path, const juce::File& base, const juce::String& what)
+// REAPER's 6.1 booth (spatial-reaper-booth-6.1) left the package on 2026-10-31: a file that names it, and it is not
+// there, runs on the default variant and says so (in ignoredKeys: stderr, --check-config, the window's MONITOR).
+juce::File spatialPath (const juce::var& path, const juce::File& base, const juce::String& what, AppConfig& config)
 {
     if (! path.isString() || path.toString().isEmpty())
         refuse (what + " must be a directory path");
-    return base.getChildFile (path.toString());
+    const auto directory = base.getChildFile (path.toString());
+    if (directory.getFileName() == retiredSpatialVariant && ! directory.isDirectory())
+    {
+        config.ignoredKeys.push_back ((what + " " + retiredSpatialVariant + " (retired: Default 4.1 in its place)").toStdString());
+        return directory.getSiblingFile ("spatial");   // the package's default, where the retired one was beside it
+    }
+    return directory;
 }
 
 // One dir for both zones (an older file), or {"main": dir, "booth": dir}.
@@ -162,12 +170,12 @@ void parseSpatial (const juce::var& spatial, const juce::File& base, AppConfig& 
 {
     if (! spatial.isObject())
     {
-        config.spatialDirectory = spatialPath (spatial, base, "spatial");
+        config.spatialDirectory = spatialPath (spatial, base, "spatial", config);
         return;
     }
     rejectUnknownKeys (*spatial.getDynamicObject(), { "main", "booth" }, "spatial");
-    config.spatialDirectory = spatialPath (spatial["main"], base, "spatial.main");
-    const auto booth = spatialPath (spatial["booth"], base, "spatial.booth");
+    config.spatialDirectory = spatialPath (spatial["main"], base, "spatial.main", config);
+    const auto booth = spatialPath (spatial["booth"], base, "spatial.booth", config);
     config.boothSpatialDirectory = booth == config.spatialDirectory ? juce::File() : booth;
 }
 
@@ -404,7 +412,7 @@ juce::File chooseSaveFile (const juce::String& argument, const juce::File& home)
 std::vector<juce::File> spatialCandidates (const juce::File& configDir)
 {
     const auto installed = AppConfig{}.spatialDirectory;
-    return { configDir.getChildFile ("engine/spatial"), installed, installed.getSiblingFile (installed.getFileName() + "-reaper-booth-6.1") };
+    return { configDir.getChildFile ("engine/spatial"), installed };
 }
 
 namespace
@@ -425,5 +433,13 @@ std::vector<juce::File> spatialChoices (const juce::File& configDir)
         if (holdsAVariant (variant) && ! variant.getFileName().startsWithChar ('.'))
             choices.push_back (variant);
     return choices;
+}
+
+juce::String variantDisplayName (const juce::File& directory, const juce::File& userRoot)
+{
+    if (directory.getParentDirectory() != userRoot)
+        if (const auto named = juce::JSON::parse (directory.getChildFile ("variant.json").loadFileAsString())["name"].toString(); named.isNotEmpty())
+            return named;
+    return directory.getFileName();
 }
 }

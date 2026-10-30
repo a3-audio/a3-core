@@ -376,6 +376,30 @@ TEST (ConfigFile, ZonesLoadFromTheirOwnVariants)
 }
 
 // The PipeWire block goes down to 32 frames (the AUDIO page's smallest choice).
+// REAPER's 6.1 booth left the package (2026-10-31): a file naming it, and it is not there, runs on the default beside it
+// ("Default 4.1") and says so; the shipped default is called by its variant.json name.
+TEST (ConfigFile, TheRetiredReaperBoothFallsBackToTheDefault)
+{
+    Scratch scratch;
+    const auto spatial = scratch.dir.getChildFile ("spatial");
+    ASSERT_TRUE (a3test::shippedSpatialDirectory.copyDirectoryTo (spatial));
+    auto config = sample();
+    config.spatialDirectory = spatial;
+    const auto file = scratch.dir.getChildFile ("engine.json");
+    ASSERT_TRUE (a3app::saveAppConfig (config, file).wasOk());
+    auto json = juce::JSON::parse (file.loadFileAsString());
+    json["spatial"].getDynamicObject()->setProperty ("booth", scratch.dir.getChildFile (a3app::retiredSpatialVariant).getFullPathName());
+    file.replaceWithText (juce::JSON::toString (json));
+    juce::String error;
+    const auto loaded = a3app::loadAppConfig (file, error, a3apptest::truthDecks());
+    ASSERT_TRUE (loaded) << error;
+    EXPECT_EQ (a3app::zoneSpatialDirectory (*loaded, a3::SpeakerZone::booth), spatial);
+    ASSERT_EQ (loaded->ignoredKeys.size(), 1u);
+    EXPECT_TRUE (juce::String (loaded->ignoredKeys.front()).contains ("Default 4.1")) << loaded->ignoredKeys.front();
+    EXPECT_EQ (a3app::variantDisplayName (a3test::shippedSpatialDirectory, scratch.dir.getChildFile ("user")), "Default 4.1");
+    EXPECT_EQ (a3app::variantDisplayName (spatial, scratch.dir), "spatial") << "a user's variant by its own name";
+}
+
 TEST (ConfigFile, ABlockOf32FramesLoads)
 {
     Scratch scratch;

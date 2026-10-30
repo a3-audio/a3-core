@@ -34,7 +34,7 @@ void MonitorUnknownPage::refresh()
     }
     if (! report.fetched)
     {
-        look::say (note, client.summary().answered ? "not fetched yet: FETCH asks Core once (it can be many rows)"
+        look::say (note, client.summary().answered ? "not fetched yet"
                                                    : "no Core at " + client.url());
         return;
     }

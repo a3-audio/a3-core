@@ -8,11 +8,14 @@
 namespace a3app
 {
 // TRUTH & DEVICES: Core's fingerprint of a3-osc.json, each device that said hello with "is Core's" or
-// "differs", and which audio engine runs.
+// "differs", which audio engine runs, and (2026-10-31, the STATUS page's DROPPED until then) what the engine's config
+// file named and the load left out -- retired links and retired keys -- as compact lines.
 class MonitorTruthPage final : public juce::Component
 {
 public:
-    explicit MonitorTruthPage (CoreClient&);
+    // `retired`: the engine's retired links and keys as lines ("" when none); empty: no such lines.
+    explicit MonitorTruthPage (CoreClient&, std::function<juce::String()> retired = {});
+    const juce::Label& retiredLabel() const { return retiredLines; }
     ~MonitorTruthPage() override;
 
     void refresh();
@@ -27,7 +30,8 @@ private:
     std::uint64_t seen = 0;   // the client's generation last copied
     int copied = 0;
     CoreSummary summary;
-    juce::Label fingerprint, engine, connection;
+    juce::Label fingerprint, engine, connection, retiredLines;
+    std::function<juce::String()> retired;
     MonitorTable table;
 };
 }

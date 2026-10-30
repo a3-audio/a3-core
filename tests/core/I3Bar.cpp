@@ -23,7 +23,7 @@ TEST (I3Bar, ModeByWorkspace)
         { "", "invisible" }, { "x", "invisible" },
         // test_rig_workspaces.BarPerWorkspace
         { "1:MOTION", "invisible" }, { "2:STEMDECK", "invisible" }, { "2", "invisible" },
-        { "3:ENGINE", "dock" }, { "4", "dock" }, { "5:SCARLETT", "dock" }, { "7:DESK", "dock" }, { "7", "dock" },
+        { "3:A3-CORE", "dock" }, { "4", "dock" }, { "5:SCARLETT", "dock" }, { "7:DESK", "dock" }, { "7", "dock" },
         { "6:STEMDECK B", "invisible" }, { "scratch", "invisible" },
         // B1's STEMDECK rule is by name, wherever the number is, and case-sensitive
         { "9:STEMDECK C", "invisible" }, { "6: stemdeck", "dock" }, { "STEMDECK", "invisible" },
@@ -36,7 +36,7 @@ TEST (I3Bar, ModeByWorkspace)
 
 TEST (I3Bar, OnlyFocusEventsCount)
 {
-    EXPECT_EQ (focusChange (R"({"change":"focus","current":{"name":"3:ENGINE"},"old":{"name":"1"}})"), std::optional<std::string> ("dock"));
+    EXPECT_EQ (focusChange (R"({"change":"focus","current":{"name":"3:A3-CORE"},"old":{"name":"1"}})"), std::optional<std::string> ("dock"));
     EXPECT_EQ (focusChange (R"({"change":"focus","current":{"name":"2:STEMDECK"}})"), std::optional<std::string> ("invisible"));
     EXPECT_EQ (focusChange (R"({"change":"focus"})"), std::optional<std::string> ("invisible"));   // no current: not a tool workspace
     EXPECT_EQ (focusChange (R"({"change":"focus","current":null})"), std::optional<std::string> ("invisible"));
@@ -142,7 +142,7 @@ std::string event (const std::string& change, const std::string& workspace)
 TEST (I3Bar, TheBarIsSetForTheFocusedWorkspaceFirst)
 {
     FakeI3 i3;
-    i3.workspaces = R"([{"name":"1:MOTION","focused":false},{"name":"3:ENGINE","focused":true}])";
+    i3.workspaces = R"([{"name":"1:MOTION","focused":false},{"name":"3:A3-CORE","focused":true}])";
     EXPECT_EQ (runI3Bar (i3), 0);
     ASSERT_GE (i3.spawns.size(), 3u);
     EXPECT_EQ (i3.spawns[0], (std::vector<std::string> { "i3-msg", "-t", "get_workspaces" }));
@@ -166,8 +166,8 @@ TEST (I3Bar, NoWorkspaceFocusedOrNothingAnsweredKeepsTheBarAway)
 TEST (I3Bar, NoRepeatOfTheSameMode)
 {
     FakeI3 i3;
-    i3.workspaces = R"([{"name":"3:ENGINE","focused":true}])";
-    i3.events = event ("focus", "3:ENGINE") + event ("focus", "4") + event ("focus", "1:MOTION")
+    i3.workspaces = R"([{"name":"3:A3-CORE","focused":true}])";
+    i3.events = event ("focus", "3:A3-CORE") + event ("focus", "4") + event ("focus", "1:MOTION")
               + "garbage\n" + event ("init", "9") + event ("focus", "2:STEMDECK") + event ("focus", "5:SCARLETT")
               + event ("focus", "6:STEMDECK B");
     runI3Bar (i3);

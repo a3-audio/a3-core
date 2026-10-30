@@ -17,14 +17,14 @@ namespace
 juce::String problemOf (const std::string& body)
 {
     const auto reply = parsedJson (body);
-    return reply["problem"].isString() ? reply["problem"].toString() : juce::String ("the engine refused");
+    return reply["problem"].isString() ? reply["problem"].toString() : juce::String ("a3-core refused");
 }
 }
 
 RemoteHostView::RemoteHostView (std::string hostToUse, int portToUse, bool startPolling)
     : host (std::move (hostToUse)), port (portToUse)
 {
-    cache.problem = "no engine at " + url();
+    cache.problem = "no a3-core at " + url();
     if (startPolling)
         poller = std::thread ([this] { run(); });
 }
@@ -85,7 +85,7 @@ void RemoteHostView::noEngine()
     const std::lock_guard<std::mutex> guard (cacheLock);
     cache.report = {};   // as the local view says when nothing runs
     cache.meters.meters.clear();
-    cache.problem = "no engine at " + url();
+    cache.problem = "no a3-core at " + url();
 }
 
 void RemoteHostView::pollStatusAndMeters()
@@ -248,9 +248,9 @@ juce::Result RemoteHostView::apply (const AppConfig& config)
     const auto answer = httpExchange (host, port, "POST", "/api/engine/apply", juce::JSON::toString (toJson (config), true).toStdString(),
                                   applyTimeout);
     if (! answer)
-        return juce::Result::fail ("no engine at " + url());
+        return juce::Result::fail ("no a3-core at " + url());
     if (answer->timedOut)
-        return juce::Result::fail ("the engine at " + url() + " did not answer in " + juce::String (applyTimeout / 1000.0, 1) + " s; it may still be applying");
+        return juce::Result::fail ("a3-core at " + url() + " did not answer in " + juce::String (applyTimeout / 1000.0, 1) + " s; it may still be applying");
     if (answer->status != 200)
         return juce::Result::fail (problemOf (answer->body));
     const std::lock_guard<std::mutex> guard (cacheLock);

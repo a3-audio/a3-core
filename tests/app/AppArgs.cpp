@@ -224,7 +224,7 @@ TEST (AppArgs, SpatialArgumentReplacesTheConfigsDirectory)
     const auto config = home.write ("engine.json", "{" + spatialField() + "}");
     auto args = checkArgs (config);
     juce::String message;
-    args.spatial = a3test::shippedSpatialDirectory.getParentDirectory().getChildFile ("spatial-reaper-booth-6.1").getFullPathName();
+    args.spatial = a3test::reaperBoothSpatialDirectory.getFullPathName();
     const auto loaded = a3app::loadStartupData (args, home.dir, message);
     ASSERT_TRUE (loaded.has_value()) << message;
     EXPECT_EQ (loaded->config.spatialDirectory.getFullPathName(), args.spatial);

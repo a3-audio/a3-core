@@ -23,8 +23,8 @@ guards against regressions; the bench's run on the rig decides.
 
 **Spatial data** (`data/spatial/`, installed to `/usr/share/a3-engine/spatial/`): per zone the speaker
 layout, the decoder and its parameters, plus the encoder inputs. The default is 4.1 for main and
-booth. `data/spatial-reaper-booth-6.1/` (installed beside it) is REAPER's 6.1 booth, for the parity
-run: `--spatial /usr/share/a3-engine/spatial-reaper-booth-6.1`. The bench takes `--spatial DIR`, else
+booth, shown as "Default 4.1" (its `variant.json`). REAPER's 6.1 booth left the package on 2026-10-31: it is the
+tests' fixture `tests/engine/data/spatial-reaper-booth-6.1/`, and a config naming it runs on the default and says so. The bench takes `--spatial DIR`, else
 `~/.config/a3/engine/spatial/` if it exists, else `/usr/share/a3-engine/spatial/`; the package never
 writes `~/.config`. To change the speakers of a zone, copy `/usr/share/a3-engine/spatial/` (or the 6.1
 variant) to `~/.config/a3/engine/spatial/`, edit the decoder JSON and parameters, and restart the
@@ -152,27 +152,31 @@ says hello on `core.osc` and shows a window.
 - `--check-config`: prints `ok` or `<file>: <reason>`, exit 0 or 1, opens nothing.
 
 The window's look is its own small module, `app/ui/look/` (2026-10-30): `Tokens.h` (the palette and the layout grid:
-every size a share of the page's row height; unit = a sixth of the window's row, page margin 2 units, card padding 1,
+every size a share of the page's row height -- a sixteenth of the page since 2026-10-31 (a fourteenth until then; the
+maintainer: "the text can be somewhat smaller overall, the elements too"): at the rig's 768 x 1024 a full page's row is
+56 px (64), its text 20.2 px (23.0), a control 46 px tall (52), the unit 10 px (12); a page under sub-page keys 52 px (59);
+the key row and the footer are the window's own shares and unchanged; unit = a sixth of the window's row, page margin 2 units, card padding 1,
 gap between cards 1, a card's heading 3/5 of a row, a control's inset half a unit, card radius 1 unit and no outline,
 one text height of 0.36 rows), `A3LookAndFeel` (JUCE's widgets, cards, the touch dropdown's rows, the workspace switch's
 keys), `Card.h` (a page of cards), `Dropdown`, `SubPageKeys`. It depends on JUCE only and knows no page: it is the seed of
 a shared `a3_look` JUCE module for every A3 app (StemDeck, the desk, Motion UI, Canvas). Every page is cards on that grid
 (a test walks them all: margins, paddings, gaps).
 
-The window has one page per job and a Save bar under them; no tooltips (2026-10-30: help that matters is a line on its page):
+The window has one page per job and a Save bar under them; no tooltips and no explanation lines (2026-10-30/31: a page
+says status, values and short errors, nothing else):
 
 | Page | What it edits |
 |---|---|
 | AUDIO | Four cards (2026-10-30). DRIVER: one device-type list, `PipeWire (JACK)` (the JACK backend; `"type": "jack"` in the file) beside JUCE's types, and every setting a dropdown showing what is set. PipeWire: sample rate (the graph's, its one choice: the engine does not change PipeWire's rate), Block and Periods, applied by the engine on APPLY (see "Block on PipeWire"). A JUCE type: input, output, rate, block size, an edit that Save applies; it opens no device. STEREO CHANNELS AND STEMDECKS (CHANNELS until 2026-10-30, which was not understood): Stereo channels, N (1..128), and StemDecks, the deck count (1..26, one letter a slot A..Z; the engine has no cap), each with the count that runs (the CHANNELS page until then). MEASURE: the round trip, measured over the digital loop (MEASURE), and the analog chain (MEASURE ANALOG CHAIN); see "The measured round trip". Each MEASURE is off while its pair is not set, its line naming the I/O page. CLOCK: the master and the one-word state. Every text one size; what runs in detail is on STATUS |
-| SPEAKERS | Two sub-pages (2026-10-30). SPEAKERS: the speaker map in IEM's AllRADecoder per zone. ZONES (a page of its own until then): which spatial directory per zone (the installed `spatial` and `spatial-reaper-booth-6.1`, and `~/.config/a3/engine/spatial`), RENAME and DELETE in the footer, the picked variant's decoders as a card |
+| SPEAKERS | Two sub-pages (2026-10-30). SPEAKERS: the speaker map in IEM's AllRADecoder per zone. ZONES (a page of its own until then): which spatial directory per zone (the installed "Default 4.1" and the user's under `~/.config/a3/engine/spatial`), LOAD (the zones' choice written and applied now, other pending edits staying pending), RENAME and DELETE in the footer, the picked variant's decoders as a card; no explanation lines (2026-10-31) |
 | I/O | Sub-pages INPUT, OUTPUT and, with Core, DEPARTMENTS (a page of its own until 2026-10-30). INPUT: per channel L/R a dropdown and the decks' sources; no direct links (2026-10-30: a file's `io.directLinks` still loads and the engine still makes them, but the page neither shows nor edits them). OUTPUT: per zone channel a dropdown; REC is empty by default (for an analog recorder). A dropdown runs the row's width and names the device's port as the user means it (`Scarlett 18i20 USB out 1`, from the configured ALSA node; `Device out 1` without one), never a raw `system:*` and nothing beside it. Each list ends with MEASURE: the digital loop and the analog test cable, its side of each, one channel a side. The digital loop's channels are offered in no route, and a one-line notice names them and what a load unrouted. No list of foreign links and no free-text port field: the engine removes every link on its ports it does not plan (see "Who owns a link") |
-| CALIBRATION | trim per zone, -90..+6 dB; a slider only proposes, a dialog names the old and the new value, a zone without a trim stays closed |
-| FILTER | SVF or Ladder, live: acts at once, needs no Save |
-| STATUS | Three sub-pages (2026-10-30). ENGINE: what runs: mode, Core's last word, gate, rate and block x periods, where the rate comes from, bit depth, DSP load, xruns, the clock's detail (state with phase error, PTP role, rates, counters, the note; compact lines, a line with nothing to say left out), meters. The MISSING/DROPPED card went (RIG says what runs where). RIG and ABOUT: the Canvas's content (see "RIG and ABOUT") |
+| CALIBRATION | trim per zone, -90..+6 dB; a slider only proposes, a dialog names the old and the new value, a zone without a trim stays closed. The FILTER card (a page until 2026-10-31): SVF or LADDER, live: acts at once, needs no Save |
+| RIG | The Canvas's rig (see "RIG and ABOUT"); a page of the key row again since 2026-10-31 |
+| STATUS | Two sub-pages (2026-10-31). ENGINE: what runs: mode, Core's last word, gate, rate and block x periods, where the rate comes from, bit depth, DSP load, xruns; then "Estimated: …" (the driver's sum), "Measured digital: …" (value and time, or "not measured"), "Measured analog: …" (that and the stored converters' share, value and date, or "not measured") and "AES67 latency: …" (a deck stream: StemDeck's shipped sender, sess.latency 3 ms and 0.25 ms packets, plus the deck rule's sess.latency.msec read from `~/.config/pipewire/pipewire-aes67.conf`, 6 ms: 9.3 ms); the clock's detail (state with phase error, PTP role, rates, counters; compact lines, a line with nothing to say left out, no note), meters. The MISSING/DROPPED card went; the retired links and keys are on the MONITOR's TRUTH & DEVICES. ABOUT: the Canvas's project and PUBLISHED (see "RIG and ABOUT") |
 
 **RIG and ABOUT** (2026-10-30, the maintainer: "all content from the Canvas goes to the Engine"; `app/ui/SystemPage.cpp`,
-the model in `SystemAbout`, `SystemCheckout`, `RigModel`, `RigPlan`, read by `SystemProbe`). RIG is the rig: a card per
-program, scrolled below the RIG card that carries Start all and Stop all (A³ Engine = `a3-engine.service` and `a3-core.service`, never the window's own unit; a deck per slot of the truth's
+the model in `SystemAbout`, `SystemCheckout`, `RigModel`, `RigPlan`, read by `SystemProbe`). RIG is the rig: MAIN (Start
+all, Stop all and the plan's word) and ENTITIES, a row per program scrolled by a finger inside the card (a3-core = `a3-engine.service` and `a3-core.service` -- "A³ Engine" until 2026-10-31: the Engine is only the audio backend, never the window's own unit; a deck per slot of the truth's
 `stemdeck.deck-hello` range as `stemdeck@<letter>.service`; A³ Mixer = the desk, a transient `a3-desk` unit run by
 `systemd-run`; A³ Motion; Beat analyzer) with its light and state, where it runs (Core's `/api/rig` first, then the truth's
 `hosts`; `local · <address>` on this machine), its audio address (the device's report, else the truth's `<host>-audio`), its
@@ -180,7 +184,7 @@ software (the device's `device.version` in `/api/rig`'s `versions`; the Engine's
 Mixer and Motion, its firmware -- "not reported" only where the device said nothing. A program of this machine has Start/Stop and
 Restart (Stop and Restart ask first); Start all and Stop all act on this machine's programs in the Canvas's order (engine and
 Core first and waited for, then the analyzer, the decks -- skipped when the engine did not come up --, the desk, Motion; Stop
-all the other way round and asks first). A program of another machine shows what Core hears of it and has no key. ABOUT: the
+all the other way round and asks first; the questions say nothing but the question). A program of another machine shows what Core hears of it and has no key. ABOUT: the
 project (Spatial DJ setup, Documentation / Website / Source, the copyright and the contact), Support A³ (PayPal, Ko-fi, Bitcoin
 as the Canvas reads them from `~/.config/a3/canvas.json`, else `/usr/share/a3/canvas.json`; the card is left out when none is
 set; no QR code -- that would be a new dependency), PUBLISHED (`~/a3-system`: its own tag, then each repository in two
@@ -197,7 +201,14 @@ keeps describing what runs). **Save** writes the file atomically, then applies i
 session is re-created (new engine, new boot id; Core replays its state through the hello). That
 holds for every change (N, layout, backend, trims, I/O map) and also works while the backend is
 stopped. If the new session does not open, the previous setting is opened again and the error
-is shown.
+is shown. The digital loop and the analog test pair are edits like any other (2026-10-31: until then a Save that only
+picked the loop wrote the file but did not apply it, so the engine kept "no loop configured" and MEASURE stayed off);
+after an apply that sets a new loop the engine measures it at once.
+
+On the rig the window lives on i3 workspace 3, labelled `A3-CORE` (`3:A3-CORE` in the shipped i3 config; `3:ENGINE` until
+2026-10-31: the window is the program a3-core, "Engine" names only its audio backend). The postinst offers the i3 config
+among the parts to replace (ticked; an unattended install replaces it, the old one kept in the backup) but does not
+reload i3: until `i3-msg reload` and a rename of the running workspace (or a reboot) the old label stays.
 
 ## Plan 4d: the package and the unit
 
@@ -364,8 +375,8 @@ API, P2). The package ships it as `/usr/bin/a3-core` (Task 28); there is no `/us
   monitor that replaces the Python Core's HTML page: TRAFFIC (direction, address, peer, count, rate,
   last value, age; filter by address, only active = younger than 6 s, one device; the picked row's
   history), TRUTH & DEVICES (Core's fingerprint, each device "is Core's" or "DIFFERS", the audio
-  engine), NOT UNDERSTOOD and REGISTER (fetched with FETCH, never streamed), BENCH (to self, mixer
-  or motion; the truth's `state.recall`; Core's answer or refusal). The **OSC MONITOR** switch at the
+  engine, and since 2026-10-31 the engine's retired links and keys as compact lines -- STATUS' DROPPED until then), NOT UNDERSTOOD and REGISTER (fetched with FETCH, never streamed), BENCH (to self, mixer
+  or motion; the truth's `state.recall`; Core's answer or refusal). The **MONITOR** switch (OSC MONITOR until 2026-10-31) at the
   bottom of the list shows them; it is remembered in `~/.config/a3/core/window.settings`
   (`{"monitor": true}`), written only when it is flipped, off when the file is missing. Only while
   the monitor is on does the window ask Core anything: the traffic from Core's `/api/stream`

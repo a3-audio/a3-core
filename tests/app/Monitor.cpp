@@ -139,7 +139,7 @@ TEST_F (Monitor, SwitchHidesAndRemembers)
         EXPECT_FALSE (window.monitorShown());   // no file: off
         EXPECT_FALSE (rig.client->monitorShown());
         auto list = window.pageList();
-        EXPECT_EQ (list[list.size() - 1], "OSC MONITOR");   // the switch is at the bottom of the list
+        EXPECT_EQ (list[list.size() - 1], "MONITOR");   // the switch is at the bottom of the list
         for (const auto& name : monitorPages)
             EXPECT_FALSE (list.contains (name)) << name;
         EXPECT_TRUE (list.contains ("STATUS"));
@@ -149,7 +149,7 @@ TEST_F (Monitor, SwitchHidesAndRemembers)
         list = window.pageList();
         for (const auto& name : monitorPages)
             EXPECT_TRUE (list.contains (name)) << name;
-        EXPECT_EQ (list[list.size() - 1], "OSC MONITOR");
+        EXPECT_EQ (list[list.size() - 1], "MONITOR");
         EXPECT_TRUE (rig.client->monitorShown());
         EXPECT_TRUE (settings.existsAsFile());
         EXPECT_TRUE (a3app::readMonitorSwitch (settings));
@@ -175,7 +175,7 @@ TEST_F (Monitor, SwitchHidesAndRemembers)
     }
     {
         a3app::MainWindow window (view, manager, {}, false, [] {}, {});   // no Core client: no switch at all
-        EXPECT_FALSE (window.pageList().contains ("OSC MONITOR"));
+        EXPECT_FALSE (window.pageList().contains ("MONITOR"));
         EXPECT_FALSE (window.pageList().contains ("TRAFFIC"));
     }
     home.deleteRecursively();
@@ -215,7 +215,7 @@ TEST_F (Monitor, MonitorKeysTakeASecondRowAndTheSwitchSitsInTheFooter)
         EXPECT_TRUE (bands.navigation.contains (key->getBounds())) << key->getBounds().toString();
     juce::Component* monitorSwitch = nullptr;
     for (auto* child : content.getChildren())
-        if (auto* toggle = dynamic_cast<juce::ToggleButton*> (child); toggle != nullptr && toggle->getButtonText() == "OSC MONITOR")
+        if (auto* toggle = dynamic_cast<juce::ToggleButton*> (child); toggle != nullptr && toggle->getButtonText() == "MONITOR")
             monitorSwitch = toggle;
     ASSERT_NE (monitorSwitch, nullptr);
     EXPECT_TRUE (bands.footer.contains (monitorSwitch->getBounds()));
@@ -474,4 +474,36 @@ TEST_F (Monitor, LookCoversKeysTogglesAndTheDialog)
     const auto fitted = look.getTextButtonFont (narrowKey, narrowKey.getHeight()).getHeight();
     EXPECT_LT (fitted, 57 * a3app::keyTextShare);
     EXPECT_LE (juce::GlyphArrangement::getStringWidth (juce::FontOptions (fitted), "CALIBRATION"), 90.0f * a3app::keyTextWidthShare + 0.5f);
+}
+
+// What the engine's config named and the load left out (STATUS' DROPPED until 2026-10-31) is on the MONITOR's TRUTH &
+// DEVICES page as compact lines; the switch is MONITOR (OSC MONITOR until then).
+TEST_F (Monitor, RetiredLinksAndKeysAreOnTheMonitor)
+{
+    CoreWindowRig rig;
+    a3apptest::FakeView view;
+    view.dropped = { "deckA_cue_L -> x:y", "deckA_cue_R -> x:y" };
+    view.ignored = { "engine.returnAnalogPair" };
+    juce::AudioDeviceManager manager;
+    manager.addAudioDeviceType (std::make_unique<a3apptest::NoDevices>());
+    const auto home = juce::File::createTempFile ("a3-window-home");
+    a3app::MainWindow window (view, manager, {}, false, [] {}, { rig.client.get(), a3app::windowSettingsFile (home) });
+    window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    window.setMonitorShown (true);
+    EXPECT_TRUE (window.pageList().contains ("MONITOR"));
+    window.showPage ("TRUTH & DEVICES");
+    window.refreshNow();
+    auto& content = *window.getContentComponent();
+    a3app::MonitorTruthPage* truth = nullptr;
+    for (auto* child : content.getChildren())
+        if (auto* page = dynamic_cast<a3app::MonitorTruthPage*> (child))
+            truth = page;
+    ASSERT_NE (truth, nullptr);
+    const auto text = truth->retiredLabel().getText();
+    EXPECT_TRUE (text.contains ("deckA: cue_L cue_R")) << text;
+    EXPECT_TRUE (text.contains ("engine.returnAnalogPair")) << text;
+    EXPECT_TRUE (truth->retiredLabel().isVisible());
+    EXPECT_GT (truth->retiredLabel().getHeight(), 0);
+    expectPainted (a3apptest::snapshotAt (content, "system3-monitor-retired", content.getWidth(), content.getHeight()));
+    home.deleteRecursively();
 }

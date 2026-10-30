@@ -197,7 +197,7 @@ TEST (SpatialConfig, TheVariantSharesEverythingButTheBoothWithTheDefault)
     for (const auto& file : shippedDirectory.findChildFiles (juce::File::findFiles, false, "*.json"))
     {
         // fx: the engine's delay rotates (SPREAD, R5); the variant keeps REAPER's warp for the parity run.
-        if (file.getFileName().startsWith ("booth.") || file.getFileName() == "fx.parameters.json")
+        if (file.getFileName().startsWith ("booth.") || file.getFileName() == "fx.parameters.json" || file.getFileName() == "variant.json")
             continue;
         const auto twin = reaperBoothDirectory.getChildFile (file.getFileName());
         EXPECT_TRUE (twin.existsAsFile()) << file.getFileName();

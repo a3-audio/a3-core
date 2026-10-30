@@ -4,7 +4,6 @@
 #include "AudioPage.h"
 #include "CoreClient.h"
 #include "CalibrationPage.h"
-#include "FilterPage.h"
 #include "IoPage.h"
 #include "OnScreenKeyboard.h"
 #include "SaveBar.h"
@@ -51,12 +50,13 @@ struct WindowBands
 };
 
 // The window: the setup pages' keys (AUDIO, SPEAKERS with its sub-page ZONES, I/O with INPUT, OUTPUT and, with a Core
-// client, DEPARTMENTS, which only asks Core while it is shown; CALIBRATION, FILTER, STATUS with ENGINE, RIG and ABOUT --
-// RIG and ABOUT ask the machine only while one of them is shown) in a row across the top,
-// the workspace switch at its right end; with a Core client and the OSC MONITOR switch on, the monitor's (TRAFFIC,
-// TRUTH & DEVICES, NOT UNDERSTOOD, REGISTER, BENCH) in a second row. The shown page below them at the full width, and a
-// footer: KEYS, the OSC MONITOR switch, and the Save bar. No tooltips anywhere (2026-10-30). With service = true the
-// close button only hides it (the app is a unit that only SIGTERM ends); otherwise it asks the app to quit.
+// client, DEPARTMENTS, which only asks Core while it is shown; CALIBRATION with the FILTER card, RIG, STATUS with ENGINE
+// and ABOUT -- RIG and ABOUT ask the machine only while one of them is shown) in a row across the top, the workspace
+// switch at its right end; with a Core client and the MONITOR switch on, the monitor's (TRAFFIC, TRUTH & DEVICES, NOT
+// UNDERSTOOD, REGISTER, BENCH) in a second row. The shown page below them at the full width, and a footer: KEYS, the
+// MONITOR switch, LOAD / RENAME / DELETE on ZONES, and the Save bar. No tooltips and no explanation lines anywhere
+// (2026-10-30/31). With service = true the close button only hides it (the app is a unit that only SIGTERM ends);
+// otherwise it asks the app to quit.
 class MainWindow final : public juce::DocumentWindow, private juce::Timer
 {
 public:

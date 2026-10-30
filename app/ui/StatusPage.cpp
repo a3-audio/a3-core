@@ -167,11 +167,77 @@ DriverInfo driverInfo (const AppConfig& running, const BackendStatus& status)
              juce::String (status.bitDepth) + (device ? "  -  set by the device" : "  -  float samples, set by JACK"),
              juce::String (status.dspLoadPercent, 1) + " %",
              juce::String (status.xruns),
-             roundTripText (estimatedRoundTrip (status)).fromFirstOccurrenceOf ("Round trip ", false, false) };
+             estimatedText (estimatedRoundTrip (status)) };
 }
 
-StatusPage::StatusPage (HostView& v) : view (v), meters (std::make_unique<Meters>())
+namespace
 {
+// StemDeck's deck sender as it ships (stemdeck tools/pipewire-aes67-deck.conf.in): it lives on the deck host.
+constexpr double deckSenderLatencyMs = 3.0, deckPacketMs = 0.25;
+juce::String msText (double ms) { return juce::String (std::round (ms * 10.0) / 10.0, 1) + " ms"; }   // half up: 9.25 is 9.3
+}
+
+juce::String retiredText (const HostView& view)
+{
+    const auto links = view.droppedLinks();
+    const auto keys = view.ignoredKeys();
+    return links.empty() && keys.empty() ? juce::String() : droppedText (links, keys);
+}
+
+juce::String estimatedText (const RoundTrip& estimate)
+{
+    if (estimate.sampleRate <= 0)
+        return "a3-core not running";
+    return msText (estimate.totalMs()) + " (" + juce::String (estimate.totalSamples()) + " samples)";
+}
+
+juce::String measuredDigitalText (const RoundTrip& estimate, const RoundTripReport& measured)
+{
+    if (measured.state != RoundTripReport::State::measured || estimate.sampleRate <= 0)
+        return measured.measuring ? "measuring" : "not measured";
+    return msText (estimate.ms (measured.samples)) + "  " + juce::Time (measured.atMillis).formatted ("%H:%M");
+}
+
+juce::String measuredAnalogText (const RoundTrip& estimate, const RoundTripReport& measured)
+{
+    if (measured.analog != RoundTripReport::Analog::measured || measured.state != RoundTripReport::State::measured || estimate.sampleRate <= 0)
+        return measured.analogMeasuring ? "measuring" : "not measured";
+    return msText (estimate.ms (measured.samples) + measured.converters.ms()) + "  " + measured.converters.measuredOn;
+}
+
+std::optional<double> deckReceiveLatencyMs (const juce::String& conf)
+{
+    const auto rule = conf.fromFirstOccurrenceOf ("\"~^AES67 deck ", false, false);
+    if (rule.isEmpty())
+        return std::nullopt;
+    const auto key = rule.fromFirstOccurrenceOf ("sess.latency.msec", false, false);
+    const auto value = key.fromFirstOccurrenceOf ("=", false, false).trimStart().initialSectionContainingOnly ("0123456789.");
+    if (key.isEmpty() || value.isEmpty())
+        return std::nullopt;
+    return value.getDoubleValue();
+}
+
+juce::String aes67LatencyText (std::optional<double> receiverMs)
+{
+    if (! receiverMs)
+        return "no AES67 receiver config";
+    return msText (deckSenderLatencyMs + deckPacketMs + *receiverMs);
+}
+
+juce::StringArray roundTripLines (const RoundTrip& estimate, const RoundTripReport& measured, const juce::String& aes67)
+{
+    return { "Estimated: " + estimatedText (estimate), "Measured digital: " + measuredDigitalText (estimate, measured),
+             "Measured analog: " + measuredAnalogText (estimate, measured), "AES67 latency: " + aes67 };
+}
+
+juce::File StatusPage::defaultAes67Config()
+{
+    return juce::File::getSpecialLocation (juce::File::userHomeDirectory).getChildFile (".config/pipewire/pipewire-aes67.conf");
+}
+
+StatusPage::StatusPage (HostView& v, juce::File aes67Config) : view (v), meters (std::make_unique<Meters>())
+{
+    aes67 = aes67LatencyText (deckReceiveLatencyMs (aes67Config.loadFileAsString()));   // the file changes with an install
     addAndMakeVisible (*meters);
     addAndMakeVisible (clock);
     refresh();
@@ -200,7 +266,7 @@ void StatusPage::refresh()
 
 namespace
 {
-constexpr int statusLines = 9;   // MODE..ROUND TRIP
+constexpr int statusLines = 12;   // MODE..XRUNS, then the round trip's three lines and the AES67 latency
 }
 
 // The page's row, or less so that the two cards of lines leave the meters two rows (ENGINE is a sub-page beside RIG and
@@ -277,6 +343,12 @@ void StatusPage::paint (juce::Graphics& g)
     line ("DSP LOAD", driver.load,
           status.dspLoadPercent >= loadDanger ? palette::danger : status.dspLoadPercent >= loadWarn ? palette::caution : palette::text);
     line ("XRUNS", driver.xruns, status.xruns > 0 ? palette::caution : palette::text);
-    line ("ROUND TRIP", driver.roundTrip, palette::textMuted);
+    // The round trip and the network, "Label: value" each (2026-10-31), values only.
+    const auto estimate = estimatedRoundTrip (status);
+    for (const auto& text : roundTripLines (estimate, status.roundTripMeasured, aes67))
+    {
+        g.setColour (palette::text);
+        g.drawFittedText (text, area.removeFromTop (row), juce::Justification::centredLeft, 1, 0.7f);
+    }
 }
 }

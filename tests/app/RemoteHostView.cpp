@@ -58,11 +58,11 @@ TEST (RemoteHostView, NoEngineIsSaid)
     }   // the server is gone
 
     wasConnected->refreshNow();
-    EXPECT_EQ (wasConnected->engineProblem(), "no engine at http://127.0.0.1:" + juce::String (port));
+    EXPECT_EQ (wasConnected->engineProblem(), "no a3-core at http://127.0.0.1:" + juce::String (port));
     EXPECT_EQ (wasConnected->status().blockSize, 0);
 
     a3app::RemoteHostView remote ("127.0.0.1", port, false);
-    const juce::String said = "no engine at http://127.0.0.1:" + juce::String (port);
+    const juce::String said = "no a3-core at http://127.0.0.1:" + juce::String (port);
     EXPECT_EQ (remote.engineProblem(), said);   // before the first poll too
     remote.refreshNow();
     EXPECT_EQ (remote.engineProblem(), said);
@@ -80,7 +80,7 @@ TEST (RemoteHostView, TheEngineGoingAwayIsSaidAndComingBackIsHeard)
     const auto port = rig.server->port();
     rig.server.reset();
     rig.remote->refreshNow();
-    EXPECT_NE (rig.remote->engineProblem().indexOf ("no engine at"), -1);
+    EXPECT_NE (rig.remote->engineProblem().indexOf ("no a3-core at"), -1);
 
     rig.server = std::make_unique<a3core::HttpServer> ("127.0.0.1:" + std::to_string (port), rig.api.routes());
     ASSERT_TRUE (rig.server->start ([] (const std::string&, bool) {}));
@@ -162,10 +162,10 @@ TEST (RemoteHostView, AnApplyNobodyAnswersHasItsOwnMessage)
     const auto result = remote.apply (a3app::AppConfig {});
     ASSERT_TRUE (result.failed());
     EXPECT_NE (result.getErrorMessage().indexOf ("did not answer"), -1);
-    EXPECT_EQ (result.getErrorMessage().indexOf ("no engine at"), -1);   // it is there, it is only slow
+    EXPECT_EQ (result.getErrorMessage().indexOf ("no a3-core at"), -1);   // it is there, it is only slow
 
     a3app::RemoteHostView nobody (a3core::loopbackAddress(), 1, false);   // nothing listens on port 1
-    EXPECT_NE (nobody.apply (a3app::AppConfig {}).getErrorMessage().indexOf ("no engine at"), -1);
+    EXPECT_NE (nobody.apply (a3app::AppConfig {}).getErrorMessage().indexOf ("no a3-core at"), -1);
 }
 
 TEST (RemoteHostView, ARefusedEditLeavesNoPendingStateBehind)

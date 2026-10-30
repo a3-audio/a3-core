@@ -9,6 +9,8 @@ namespace a3app
 // Save: writes the pending edit to the config file (refused if the loader would refuse it),
 // then applies it when it differs from what runs.
 juce::Result saveEdits (HostView&);
+// The same for `config` instead of the pending edit (ZONES' LOAD: the zones' choice alone, applied now).
+juce::Result saveConfig (HostView&, const AppConfig& config);
 
 // The right part of the window's footer: "not saved" while the edit differs from what runs and the
 // outcome (one line each), the Save button on the right.

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+#include "FilterCard.h"
 #include "HostView.h"
 #include "Look.h"
 #include <functional>
@@ -10,7 +11,8 @@
 namespace a3app
 {
 // Trim per zone in dB, -90..+6. The sliders only propose a value; the trim changes after a
-// confirmation naming the old and the new value. A zone without a trim is closed ("not set").
+// confirmation naming the old and the new value. A zone without a trim is closed ("not set"). Below it the FILTER
+// card (FilterCard, a page of its own until 2026-10-31). No explanation lines.
 class CalibrationPage final : public juce::Component, public CardPage
 {
 public:
@@ -25,6 +27,7 @@ public:
     double sliderRangeMax() const { return rows.front()->proposal.getMaximum(); }
     double proposalValue (TrimZone zone) const { return rows[(size_t) zone]->proposal.getValue(); }
     const juce::Label& messageLabel() const { return message; }
+    FilterCard& filterCard() { return filter; }
     void resized() override;
     void paint (juce::Graphics&) override;
 
@@ -41,7 +44,8 @@ private:
 
     HostView& view;
     Confirm confirm;
-    juce::Label title, message, helpText;
+    juce::Label title, message;
+    FilterCard filter;
     std::vector<std::unique_ptr<Row>> rows;
 };
 }

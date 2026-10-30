@@ -76,13 +76,12 @@ install_user_units() {
     done
 }
 
-# The app's and the bench's package default is spatial/ (engine.json names it relative to itself); the 6.1 booth is REAPER's, for the parity run (--spatial).
+# The app's and the bench's package default is spatial/ ("Default 4.1", its variant.json; engine.json names it relative
+# to itself). REAPER's 6.1 booth left the package on 2026-10-31 (a test fixture now, tests/engine/data).
 install_spatial_data() {
-    local src=$1 stage=$2 directory file
-    for directory in spatial spatial-reaper-booth-6.1; do
-        for file in "$src/data/$directory"/*.json; do
-            install -D -m 644 "$file" "$stage/usr/share/a3-engine/$directory/$(basename "$file")"
-        done
+    local src=$1 stage=$2 file
+    for file in "$src/data/spatial"/*.json; do
+        install -D -m 644 "$file" "$stage/usr/share/a3-engine/spatial/$(basename "$file")"
     done
 }
 

@@ -42,7 +42,7 @@ target_compile_definitions(a3-engine-tests PRIVATE
     A3_CURVES_GOLDEN="${CMAKE_CURRENT_SOURCE_DIR}/data/curves-golden.json"
     A3_IEM_PRESETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/IEMPluginSuite/SimpleDecoder/Source/Presets"
     A3_SPATIAL_DATA="${CMAKE_CURRENT_SOURCE_DIR}/../../data/spatial"
-    A3_SPATIAL_REAPER_BOOTH_DATA="${CMAKE_CURRENT_SOURCE_DIR}/../../data/spatial-reaper-booth-6.1"
+    A3_SPATIAL_REAPER_BOOTH_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data/spatial-reaper-booth-6.1"
     A3_TRUTH_COPY="${CMAKE_CURRENT_SOURCE_DIR}/data/a3-osc.json"
     A3_DEFAULT_ENGINE_CONFIG="${CMAKE_CURRENT_SOURCE_DIR}/../../data/engine.json"
     A3_PATCHBAY_COPY="${CMAKE_CURRENT_SOURCE_DIR}/data/a3-patchbay.xml"

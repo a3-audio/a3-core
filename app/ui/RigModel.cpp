@@ -247,7 +247,7 @@ void stateElsewhere (const Program& program, const Facts& facts, Row& row)
 std::vector<Program> programs (int decks)
 {
     std::vector<Program> made;
-    made.push_back ({ Kind::engine, juce::String::fromUTF8 ("A³ Engine"), { "a3-engine.service", "a3-core.service" } });
+    made.push_back ({ Kind::engine, "a3-core", { "a3-engine.service", "a3-core.service" } });
     for (int deck = 1; deck <= decks; ++deck)
         made.push_back ({ Kind::deck, "Deck " + deckLetter (deck), { "stemdeck@" + deckLetter (deck) + ".service" }, deck });
     made.push_back ({ Kind::mixer, juce::String::fromUTF8 ("A³ Mixer"), { "a3-desk.service" } });

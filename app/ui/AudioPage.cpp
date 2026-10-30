@@ -36,7 +36,7 @@ juce::String chosenName (const juce::ComboBox& box)
     return box.getText().upToFirstOccurrenceOf ("  (not found)", false, false);
 }
 
-const juce::String restartWarning = "the audio stops for about two seconds while WirePlumber restarts";
+const juce::String restartWarning = "audio stops ~2 s";
 }
 
 juce::String digitalRoundtripValue (const RoundTrip& estimate, const RoundTripReport& measured, bool loopSet)
@@ -52,7 +52,7 @@ juce::String digitalRoundtripValue (const RoundTrip& estimate, const RoundTripRe
     if ((measured.state == State::noLoop || measured.state == State::noLoopFound) && measured.reason.isNotEmpty())
         return measured.reason;
     if (estimate.sampleRate <= 0)
-        return "no engine runs";
+        return "a3-core not running";
     return "not measured yet";
 }
 
@@ -359,11 +359,11 @@ void AudioPage::showTiming (const BackendStatus& status)
     if (asking)
         line = chosenTiming->periods != currentTiming().periods
                    ? "Periods " + juce::String (chosenTiming->periods) + ": " + restartWarning + ". APPLY?"
-                   : "Block " + juce::String (chosenTiming->block) + " frames applies live, without a restart. APPLY?";
+                   : "Block " + juce::String (chosenTiming->block) + " frames. APPLY?";
     else if (status.timing.restarting)
-        line = "WirePlumber is restarting; the device comes back on its own";
+        line = "WirePlumber restarting";
     else if (! status.timing.available)
-        line = "Block and periods apply once the engine runs on PipeWire (Save)";
+        line = "PipeWire only";
     else
         line = status.timing.message;
     confirm.setText (line, juce::dontSendNotification);
@@ -391,7 +391,7 @@ void AudioPage::refresh()
     if (device != deviceChoosers)
         return rebuildForType();
     const bool runsDevice = view.running().backend.type == BackendSettings::Type::device;   // the values below describe what runs
-    pending.setText (device != runsDevice ? "not saved - applies after Save" : juce::String(), juce::dontSendNotification);
+    pending.setText (device != runsDevice ? "not saved" : juce::String(), juce::dontSendNotification);
     if (! device)
         fillPipeWireRate();
     showTiming (status);

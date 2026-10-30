@@ -15,9 +15,10 @@ bool putBack (const juce::File& file, const juce::String& text)
 }
 }
 
-juce::Result saveEdits (HostView& view)
+juce::Result saveEdits (HostView& view) { return saveConfig (view, view.config()); }
+
+juce::Result saveConfig (HostView& view, const AppConfig& config)
 {
-    const auto config = view.config();
     const auto file = view.configFile();
     const bool existed = file.existsAsFile();
     const auto previous = existed ? file.loadFileAsString() : juce::String();
@@ -60,7 +61,7 @@ void SaveBar::save()
 
 void SaveBar::refresh()
 {
-    look::say (pending, sameConfig (view.config(), view.running()) ? juce::String() : "not saved - applies after Save");
+    look::say (pending, sameConfig (view.config(), view.running()) ? juce::String() : "not saved");
     const auto indicator = a3clock::clockIndicator (view.clock());
     clock.setText ("CLOCK " + juce::String (indicator.word), juce::dontSendNotification);
     clock.setColour (juce::Label::textColourId, toneColour (indicator.tone));
@@ -75,6 +76,9 @@ void SaveBar::resized()
     // The clock's word right-aligned, directly left of Save (2026-10-30); the edit's two lines take what is left of it.
     area.removeFromRight (area.getHeight() / 4);
     clock.setBounds (area.removeFromRight (area.getWidth() / 3));
+    // One line, squeezed rather than wrapped when the footer is full (ZONES' LOAD, RENAME and DELETE beside it).
+    clock.setFont (juce::FontOptions ((float) clock.getHeight() * 0.55f));
+    clock.setMinimumHorizontalScale (0.4f);
     // Two lines beside Save: in the window's footer the bar shares its row with KEYS and the switches.
     pending.setBounds (area.removeFromTop (area.getHeight() / 2));
     message.setBounds (area);

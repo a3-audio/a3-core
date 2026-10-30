@@ -21,13 +21,15 @@ juce::String engineLine (const CoreSummary& summary)
 }
 }
 
-MonitorTruthPage::MonitorTruthPage (CoreClient& c)
-    : client (c), table ({ { "DEVICE", 1.0f }, { "A3-OSC.JSON", 3.0f }, { "SAID", 0.8f, true } })
+MonitorTruthPage::MonitorTruthPage (CoreClient& c, std::function<juce::String()> r)
+    : client (c), retired (std::move (r)), table ({ { "DEVICE", 1.0f }, { "A3-OSC.JSON", 3.0f }, { "SAID", 0.8f, true } })
 {
     look::value (fingerprint);
     look::caption (engine);
     look::caption (connection);
-    for (auto* child : std::initializer_list<juce::Component*> { &fingerprint, &engine, &connection, &table })
+    look::warning (retiredLines);
+    retiredLines.setJustificationType (juce::Justification::topLeft);
+    for (auto* child : std::initializer_list<juce::Component*> { &fingerprint, &engine, &connection, &retiredLines, &table })
         addAndMakeVisible (child);
     refresh();
 }
@@ -36,6 +38,15 @@ MonitorTruthPage::~MonitorTruthPage() = default;
 
 void MonitorTruthPage::refresh()
 {
+    if (retired)
+    {
+        const auto text = retired();
+        if (text != retiredLines.getText())
+        {
+            look::say (retiredLines, text);
+            resized();
+        }
+    }
     // The summary changes once a second at most: the table is rebuilt only then.
     const auto now = client.summaryGeneration();
     if (copied > 0 && now == seen)
@@ -53,7 +64,7 @@ void MonitorTruthPage::refresh()
     else
     {
         look::caption (connection);
-        look::say (connection, "Core at " + client.url() + "; each device says which a3-osc.json it speaks when it starts");
+        look::say (connection, "Core at " + client.url());
         look::say (fingerprint, "Core's a3-osc.json: " + utf8 (summary.fingerprint).substring (0, fingerprintShown));
         look::say (engine, engineLine (summary));
         if (summary.audioEngine == "engine")
@@ -101,6 +112,11 @@ void MonitorTruthPage::resized()
     connection.setBounds (area.removeFromTop (row));
     fingerprint.setBounds (area.removeFromTop (row));
     engine.setBounds (area.removeFromTop (row));
+    // The retired lines, compact, one under the other.
+    const int lines = retiredLines.getText().isEmpty() ? 0 : juce::StringArray::fromLines (retiredLines.getText()).size();
+    const int compact = juce::roundToInt ((float) row * layout::compactLineShare);
+    retiredLines.setFont (juce::FontOptions ((float) row * 0.36f));
+    retiredLines.setBounds (area.removeFromTop (lines * compact));
     area.removeFromTop (row / 4);
     table.setBounds (area);
 }

@@ -6,24 +6,25 @@
 
 namespace a3app
 {
-// SVF or Ladder for the channels' DJ filter. Live: the choice acts at once (FilterControls::kind),
-// no Save needed; the next Save writes it into the file.
-class FilterPage final : public juce::Component, public CardPage
+// CALIBRATION's FILTER card (the FILTER page until 2026-10-31): the DJ filter's kind, SVF or LADDER, live (acts at once,
+// needs no Save). Its heading and the two keys; no explanation. It paints no ground: it sits on its card.
+class FilterCard final : public juce::Component
 {
 public:
-    explicit FilterPage (HostView&);
-    ~FilterPage() override;
+    explicit FilterCard (HostView&);
+    ~FilterCard() override;
 
+    static constexpr int lines = 1;   // under its heading
     void choose (a3::FilterKind);
     void refresh();
     a3::FilterKind shownKind() const;
+    void setTokens (const layout::Tokens&);
     void resized() override;
-    void paint (juce::Graphics&) override;
 
 private:
     HostView& view;
-    juce::Label title, why;   // why: what the choice is for, always visible under the keys
-    juce::TextButton svfButton { juce::String::fromUTF8 ("SVF \xc2\xb7 clean, 12 dB/oct") },
-                     ladderButton { juce::String::fromUTF8 ("LADDER \xc2\xb7 warm, 24 dB/oct, drives") };
+    layout::Tokens tokens;
+    juce::Label title;
+    juce::TextButton svfButton { "SVF" }, ladderButton { "LADDER" };
 };
 }

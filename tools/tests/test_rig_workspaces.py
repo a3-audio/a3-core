@@ -1,6 +1,6 @@
 """The rig's workspaces: which program lives where, and where i3bar shows.
 
-Decided 2026-09-30: 1 A3 Motion, 2 StemDeck, 3 REAPER (the engine window since 2026-10-26, renamed ENGINE), 4 QjackCtl
+Decided 2026-09-30: 1 A3 Motion, 2 StemDeck, 3 REAPER (the engine window since 2026-10-26, renamed ENGINE, then A3-CORE on 2026-10-31: the window is the program a3-core, the Engine only its audio backend), 4 QjackCtl
 (gone with REAPER on 2026-10-27; the workspace keeps its number, labelled "4"), 5 the Scarlett mixer;
 7 the virtual desk (A3 Desk, since 2026-10-25). The two touch UIs fill their 768x1024 screen and switch
 between each other themselves; from workspace 3 on, i3bar at the top gives
@@ -41,7 +41,7 @@ class WhereThingsLive(unittest.TestCase):
         expected = {
             '[class="A3 Motion UI"]': "1:MOTION",
             '[class="StemDeck"]': "2:STEMDECK",
-            '[class="a3-core"]': "3:ENGINE",
+            '[class="a3-core"]': "3:A3-CORE",
             '[title="Scarlett 18i20 USB"]': "5:SCARLETT",
             '[class="A3 Desk"]': "7:DESK",
             '[class="StemDeck" title="^StemDeck B$"]': "6:STEMDECK B",
@@ -62,7 +62,7 @@ class WhereThingsLive(unittest.TestCase):
         """JUCE sets WM_CLASS to getApplicationName(), which is "a3-core" for
         the program (a3-engine app/Main.cpp); "a3-engine" is the package, and
         no window carries that class."""
-        self.assertEqual(workspace_of(self.config, f'[class="{PROGRAM_CLASS}"]'), "3:ENGINE")
+        self.assertEqual(workspace_of(self.config, f'[class="{PROGRAM_CLASS}"]'), "3:A3-CORE")
         self.assertNotIn('class="a3-engine"', self.config)
 
     def test_the_one_deck_windows_are_main_windows_not_dialogs(self):

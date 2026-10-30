@@ -228,7 +228,7 @@ TEST (RigModel, TheProgramsAreTheCanvassRows)
     juce::StringArray labels;
     for (const auto& program : list)
         labels.add (program.label);
-    EXPECT_EQ (labels, (juce::StringArray { juce::String::fromUTF8 ("A³ Engine"), "Deck A", "Deck B", "Deck C", "Deck D",
+    EXPECT_EQ (labels, (juce::StringArray { juce::String ("a3-core"), "Deck A", "Deck B", "Deck C", "Deck D",
                                             juce::String::fromUTF8 ("A³ Mixer"), juce::String::fromUTF8 ("A³ Motion"), "Beat analyzer" }));
     EXPECT_EQ (list[0].units, (std::vector<juce::String> { "a3-engine.service", "a3-core.service" })) << "never the window's own unit";
     EXPECT_EQ (list[2].units, (std::vector<juce::String> { "stemdeck@B.service" }));
@@ -244,7 +244,7 @@ TEST (RigModel, RowsSayWhatEachDeviceReports)
     const auto list = rig::programs (4);
     const auto facts = coreFacts (true);
 
-    const auto engine = rig::describe (programNamed (list, juce::String::fromUTF8 ("A³ Engine")), facts);
+    const auto engine = rig::describe (programNamed (list, juce::String ("a3-core")), facts);
     EXPECT_TRUE (engine.here);
     EXPECT_EQ (engine.where, juce::String::fromUTF8 ("local · ") + host ("core"));
     EXPECT_EQ (engine.audio, host ("core-audio"));
@@ -423,7 +423,7 @@ TEST_F (SystemPageTest, RigRowsKeysAndPlans)
     });
     rigView.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
     rigView.refresh();
-    const auto engine = juce::String::fromUTF8 ("A³ Engine");
+    const auto engine = juce::String ("a3-core");
     EXPECT_EQ (rigView.stateLine (engine), "Running");
     EXPECT_TRUE (rigView.detailLine (engine).contains ("sw 03.0+857")) << rigView.detailLine (engine);
     EXPECT_TRUE (rigView.detailLine ("Deck B").contains ("sw 03.0+281")) << rigView.detailLine ("Deck B");
@@ -433,8 +433,10 @@ TEST_F (SystemPageTest, RigRowsKeysAndPlans)
     EXPECT_EQ (rigView.startStopKey (engine)->getButtonText(), "Stop");
     ASSERT_NE (rigView.startStopKey ("Deck D"), nullptr);
     EXPECT_EQ (rigView.startStopKey ("Deck D")->getButtonText(), "Start");
-    // 2026-10-30: every program its own card, its name on it.
-    EXPECT_EQ (rigView.programCards().cardAreas().size(), probe.programs().size());
+    // 2026-10-31: MAIN, then ENTITIES with a row per program, its name on it.
+    EXPECT_EQ (rigView.programRows(), (int) probe.programs().size());
+    ASSERT_EQ (rigView.cardAreas().size(), 2u) << "MAIN and ENTITIES";
+    EXPECT_TRUE (rigView.cardAreas()[1].contains (rigView.entitiesView())) << "the rows scroll inside ENTITIES";
     for (const auto& program : probe.programs())
     {
         bool named = false;
@@ -443,7 +445,7 @@ TEST_F (SystemPageTest, RigRowsKeysAndPlans)
                 named = named || label->getText() == program.label;
         EXPECT_TRUE (named) << program.label;
     }
-    a3apptest::expectPainted (a3apptest::snapshotAt (rigView, "system2-rig", rigView.getWidth(), rigView.getHeight()));
+    a3apptest::expectPainted (a3apptest::snapshotAt (rigView, "system3-rig", rigView.getWidth(), rigView.getHeight()));
 
     // Stop asks first; only a yes runs it.
     rigView.startStopKey ("Deck A")->triggerClick();
@@ -499,5 +501,5 @@ TEST_F (SystemPageTest, AboutShowsTheProjectSupportAndThePins)
     EXPECT_EQ (cards[0].getHeight(), 2 * t.padding + t.heading + 3 * line) << "the project";
     EXPECT_EQ (cards[1].getHeight(), 2 * t.padding + t.heading + 1 * line) << "Support";
     EXPECT_EQ (cards[2].getHeight(), 2 * t.padding + t.heading + 1 * line) << "PUBLISHED: two repositories, one line of two columns";
-    a3apptest::expectPainted (a3apptest::snapshotAt (view, "system2-about", view.getWidth(), view.getHeight()));
+    a3apptest::expectPainted (a3apptest::snapshotAt (view, "system3-about", view.getWidth(), view.getHeight()));
 }

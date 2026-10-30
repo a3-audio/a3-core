@@ -28,7 +28,7 @@ MonitorBenchPage::MonitorBenchPage (CoreClient& c) : client (c)
     look::say (addressCaption, "ADDRESS");
     look::say (valueCaption, "VALUE");
     look::caption (answer);
-    look::say (answer, "sends one message through Core; " + client.url());
+    look::say (answer, client.url());
     for (auto* child : std::initializer_list<juce::Component*> { &to, &address, &value, &sendButton, &recallButton, &toCaption,
                                                                  &addressCaption, &valueCaption, &answer })
         addAndMakeVisible (child);

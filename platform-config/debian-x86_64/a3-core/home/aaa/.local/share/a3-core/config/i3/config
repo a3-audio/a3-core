@@ -103,7 +103,7 @@ bindsym $mod+a focus parent
 # "workspace number N" still finds them.
 set $ws1 "1:MOTION"
 set $ws2 "2:STEMDECK"
-set $ws3 "3:ENGINE"
+set $ws3 "3:A3-CORE"
 set $ws4 "4"
 set $ws5 "5:SCARLETT"
 set $ws6 "6:STEMDECK B"

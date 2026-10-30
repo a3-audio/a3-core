@@ -14,7 +14,7 @@ using Source = juce::MouseInputSource::InputSourceType;
 using Argv = std::vector<std::string>;
 
 const std::string rigWorkspaces =
-    R"([{"name":"1:MOTION","focused":false},{"name":"2:STEMDECK","focused":false},{"name":"3:ENGINE","focused":true}])";
+    R"([{"name":"1:MOTION","focused":false},{"name":"2:STEMDECK","focused":false},{"name":"3:A3-CORE","focused":true}])";
 
 // The switch on a window of its own, as on the rig, with a fake i3 that notes every command.
 struct OnTheRig
@@ -85,10 +85,10 @@ TEST (WorkspaceSwitch, I3IsAskedForFullScreenOnTheWindow)
 TEST (WorkspaceSwitch, TheWorkspacesAreI3s)
 {
     const auto list = screen::parseWorkspaces (
-        R"([{"name":"1:MOTION","focused":false},{"name":"3:ENGINE","focused":true},{"name":"scratch","focused":false}])");
+        R"([{"name":"1:MOTION","focused":false},{"name":"3:A3-CORE","focused":true},{"name":"scratch","focused":false}])");
     ASSERT_EQ (list.size(), 2u);
     EXPECT_EQ (list[1].number, 3);
-    EXPECT_EQ (list[1].label, "ENGINE");
+    EXPECT_EQ (list[1].label, "A3-CORE");
     EXPECT_TRUE (list[1].current);
     EXPECT_TRUE (screen::parseWorkspaces ("").empty());
     EXPECT_EQ (screen::goToCommand (2), (Argv { "i3-msg", "-q", "workspace number 2" }));
@@ -127,7 +127,7 @@ TEST (WorkspaceSwitch, OneTapOpensTheListAndOneChooses)
         quick ? rig.quickTap (arrow, 1000) : rig.tap (arrow, 1000);
         ASSERT_TRUE (rig.keys.panel().isVisible()) << quick;
         ASSERT_EQ (rig.keys.panel().keyCount(), 3) << quick;
-        EXPECT_TRUE (rig.keys.panel().keyAt (2).current());   // 3:ENGINE
+        EXPECT_TRUE (rig.keys.panel().keyAt (2).current());   // 3:A3-CORE
         EXPECT_TRUE (rig.workspaceCommands().empty());
 
         quick ? rig.quickTap (OnTheRig::centreOf (rig.keys.panel().keyAt (0)), 2000)
