@@ -12,6 +12,7 @@
 #include "SpeakersPage.h"
 #include "StatusPage.h"
 #include "ZonesPage.h"
+#include "WorkspaceSwitch.h"
 #include <functional>
 
 namespace a3app
@@ -81,6 +82,10 @@ public:
     // The KEYS button (nullptr without a keyboard) and the one line the window says about the keyboard ("" when nothing is wrong).
     juce::TextButton* keysButton();
     juce::String keyboardNote() const;
+    // The switch to StemDeck and the rig's other workspaces (WorkspaceSwitch.h), at the right end of the page keys'
+    // row; it runs i3 through `runner` and works whatever Core does. nullptr: none (tests without one, no i3).
+    void setWorkspaceRunner (screen::I3Runner runner);
+    WorkspaceSwitch* workspaceSwitch();
     // What the timer does at each tick (the tests drive it without waiting).
     void refreshNow();
 

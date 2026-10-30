@@ -25,6 +25,7 @@
 #include "ZonesPage.h"
 #include "Dropdown.h"
 #include "TouchTooltips.h"
+#include "WorkspaceSwitch.h"
 #include <array>
 #include <map>
 
@@ -2294,3 +2295,30 @@ TEST_F (Pages, AudioIsDriverMeasureAndClock)
     expectPainted (a3apptest::snapshotAt (page, "window-audio", page.getWidth(), page.getHeight()));
 }
 
+
+// The window's way to StemDeck and the other workspaces (2026-10-30): the switch of StemDeck, A3 Motion and the desk
+// at the right end of the page keys' row, there without Core, the page keys beside it, never under it.
+TEST_F (Pages, TheWindowHasTheWorkspaceSwitch)
+{
+    FakeView view;
+    a3app::MainWindow window (view, manager, {}, false, [] {});
+    window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    std::vector<std::vector<std::string>> calls;
+    window.setWorkspaceRunner ([&] (const std::vector<std::string>& argv) { calls.push_back (argv); return std::string(); });
+    auto& content = *window.getContentComponent();
+    auto* keys = window.workspaceSwitch();
+    ASSERT_NE (keys, nullptr);
+    const auto app = areaIn (content, keys->appKey()), arrow = areaIn (content, keys->arrowKey());
+    EXPECT_TRUE (keys->appKey().isShowing() || keys->appKey().isVisible());
+    EXPECT_TRUE (window.bands().navigation.contains (app)) << app.toString();
+    EXPECT_TRUE (window.bands().navigation.contains (arrow)) << arrow.toString();
+    EXPECT_GT (app.getX(), content.getWidth() / 2) << "at the right end";
+    EXPECT_GE (app.getHeight(), 28) << "a fingertip";
+    for (const auto& name : window.pageList())
+        for (auto* key : buttonsLabelled (content, name))
+            if (key->getParentComponent() == &content)
+                EXPECT_FALSE (areaIn (content, *key).intersects (app.getUnion (arrow))) << name;
+    keys->appKey().onTap();
+    EXPECT_EQ (calls, (std::vector<std::vector<std::string>> { a3app::screen::goToCommand (2) })) << "StemDeck, whatever Core does";
+    expectPainted (a3apptest::snapshotAt (content, "window-workspace-switch", content.getWidth(), content.getHeight()));
+}

@@ -34,7 +34,7 @@ add_executable(a3-engine-tests ReferenceSmoke.cpp Laws.cpp PurestGain.cpp Smooth
     ../app/Monitor.cpp ../app/Departments.cpp ../app/KeyboardPolicy.cpp ../app/OnScreenKeyboard.cpp ../app/WindowProcess.cpp ../app/Subcommands.cpp
     ../app/LinksOverview.cpp ../app/ClockRole.cpp ../app/RoundTripProbe.cpp ../app/RoundTripLoop.cpp ../app/RoundTripText.cpp ../app/AnalogChain.cpp
     ../app/AudioTiming.cpp ../app/TimingControl.cpp ../app/CommandRunner.cpp ../app/SystemDevice.cpp
-    ../app/TouchTooltips.cpp ../app/Dropdown.cpp)
+    ../app/TouchTooltips.cpp ../app/Dropdown.cpp ../app/WorkspaceSwitch.cpp)
 target_include_directories(a3-engine-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../app)
 target_link_libraries(a3-engine-tests PRIVATE a3-engine a3-engine-bench-lib a3-engine-app-lib a3-engine-reference
     GTest::gtest GTest::gtest_main)

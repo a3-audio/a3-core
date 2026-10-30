@@ -6,6 +6,7 @@
 // (--headless: Core and the engine as children), the window and the i3 bar; --render-truth, --truth and --links print and exit. Each role is a RoleRunner the app's
 // timer drives on the message thread; SIGTERM and SIGINT only set a flag that the next tick reads.
 #include <atomic>
+#include <cstdint>
 #include <cstdio>
 #include <thread>
 
@@ -152,7 +153,19 @@ public:
                                                       a3app::KeyboardSetup { a3app::makeOnboardLink (platform), {} },   // the rig's touch screen types through onboard
                                                       platform.configDir().getChildFile ("engine/spatial"));
         core->refreshNow (0);   // the window has said whether the monitor shows: only then does this ask Core
+        window->setWorkspaceRunner (a3app::screen::systemI3Runner());
         window->open();
+        // Full screen as StemDeck, A3 Motion and the desk are (2026-10-30). JUCE's setFullScreen with a native title bar
+        // is a maximise, which i3 tiles under its bar: i3 is asked for its own full screen on this window once it is
+        // mapped, and once more in case i3 managed it late. Without i3 (a laptop) i3-msg is not there and nothing changes.
+        for (const int afterMs : { 300, 1500 })
+            juce::Timer::callAfterDelay (afterMs, [safe = juce::Component::SafePointer<a3app::MainWindow> (window.get())]
+            {
+                if (safe == nullptr || safe->getPeer() == nullptr)
+                    return;
+                const auto id = reinterpret_cast<std::uintptr_t> (safe->getPeer()->getNativeHandle());
+                a3app::screen::systemI3Runner() (a3app::screen::fullScreenCommand (static_cast<unsigned long> (id)));
+            });
     }
 
     ~WindowRunner() override

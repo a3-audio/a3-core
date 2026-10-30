@@ -151,6 +151,18 @@ public:
     }
 
     juce::TextButton* keysButton() { return keyboard != nullptr ? &keys : nullptr; }
+
+    void setWorkspaceRunner (screen::I3Runner runner)
+    {
+        workspaces.reset();
+        if (runner != nullptr)
+        {
+            workspaces = std::make_unique<WorkspaceSwitch> (std::move (runner));
+            workspaces->attachTo (*this);
+        }
+        resized();
+    }
+    WorkspaceSwitch* workspaceSwitch() { return workspaces.get(); }
     juce::String keyboardNote() const { return keyboardNoteLabel.getText(); }
 
     // A flip of the switch: the one moment the settings file is written (P10).
@@ -184,7 +196,15 @@ public:
         const bool monitorRow = monitorShown() && monitor.core != nullptr;
         bands.navigation = area.removeFromTop (key * (monitorRow ? 2 : 1));
         auto navigation = bands.navigation;
-        layoutKeyRow (navigation.removeFromTop (key), false);
+        auto firstRow = navigation.removeFromTop (key);
+        if (workspaces != nullptr)
+        {
+            // StemDeck's and A3 Motion's sizes (switcherGeometry), at the row's right end; the page keys share the rest.
+            const auto g = screen::switcherGeometry (getWidth());
+            workspaces->place (firstRow.withTrimmedTop (juce::jmax (1, key / 16)).withTrimmedBottom (juce::jmax (1, key / 16)));
+            firstRow.removeFromRight (g.margin + g.arrowWidth + g.gap + g.appKeyWidth + g.margin);
+        }
+        layoutKeyRow (firstRow, false);
         if (monitorRow)
             layoutKeyRow (navigation, true);
         shareKeyText();
@@ -356,6 +376,7 @@ private:
     juce::TextButton keys { "KEYS" };
     juce::Label keyboardNoteLabel;
     std::unique_ptr<OnScreenKeyboard> keyboard;
+    std::unique_ptr<WorkspaceSwitch> workspaces;
     int noteTicksLeft = 0;
     bool written = false;   // what the settings file says, as far as this window knows
 };
@@ -417,4 +438,6 @@ void MainWindow::setTooltipsShown (bool shown) { content->showTooltips (shown); 
 bool MainWindow::tooltipsShown() const { return content->tooltipsShown(); }
 bool MainWindow::hasTooltipWindow() const { return content->hasTooltipWindow(); }
 WindowBands MainWindow::bands() const { return content->currentBands(); }
+void MainWindow::setWorkspaceRunner (screen::I3Runner runner) { content->setWorkspaceRunner (std::move (runner)); }
+WorkspaceSwitch* MainWindow::workspaceSwitch() { return content->workspaceSwitch(); }
 }
