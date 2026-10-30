@@ -334,14 +334,17 @@ capture node by name (`--scarlett NODE`, a prefix of node.name, default
 `alsa_input.usb-Focusrite_Scarlett_18i20`), learnt from the profiler's driver records; another ALSA
 driver is never used instead, it is "no measurement" and the journal names what was seen.
 
-**ptp4l's port state.** Asked every 30 s with `pmc` on the read-only socket `/var/run/ptp4lro`, through
-a client socket `/tmp/a3-clock-pmc.<pid>.<n>` (one per query, removed after it; bound with umask 000,
-since ptp4l's unit has no CAP_DAC_OVERRIDE). Debian's `ptp4l@` unit gives ptp4l a private /tmp and hides
-/run/user (ProtectHome), so its reply never arrived; a3-core's drop-in sets `PrivateTmp=no` (the other
-protections stay: a datagram send to a socket works on a read-only mount). Any state but MASTER pauses
-the steering (holdover); a state nobody can read shows as UNVERIFIED, never LOCKED. The drop-in takes
-effect after `systemctl daemon-reload` and a restart of `ptp4l@<port>`; the postinst does neither (it
-never restarts ptp4l), so that is the maintainer's, or the next boot.
+**ptp4l's port state.** On the Core, Debian's sandboxed `ptp4l@` unit (ptp4l 4.4) never answers a
+user's `pmc`, whatever the client socket (measured on a3nuc1 2026-10-30; the Pi's unsandboxed 4.2 does).
+So a3-core ships `a3-ptp-state.timer` (every 10 s, as root): `/usr/lib/a3-core/a3-ptp-state` (from
+a3-core-app) asks `pmc -u -b 0 'GET PORT_DATA_SET'` on ptp4l's own socket and writes
+`/run/a3/ptp-state.json` (`portState`, `problem`, `writtenAtUnix`; 0644, a temporary renamed over it).
+The postinst enables the timer with AES67 and PTP and starts nothing. The clock role reads the file every
+10 s: MASTER and at most 30 s old is the grandmaster confirmed; another state pauses the steering
+(HOLDOVER, with the state named in red); missing, stale or "no answer from ptp4l" is not known yet. The
+maintainer (2026-10-30): a clock that is synced says LOCKED. The PTP role is a second, neutral line on
+the AUDIO page ("PTP grandmaster: confirmed", "PTP role: not read yet (why)"); only a real problem gets
+a warning word. ptp4l's sandbox is left as Debian ships it.
 
 **The rules** (`src/a3-clock/ClockSteering.h`, tested against synthetic clocks in
 `tests/core/ClockSteering.cpp` and `ClockDaemon.cpp`): only the frequency changes, never the time (no
@@ -375,10 +378,9 @@ ends or when it brings no Scarlett record for 10 s; a start that fails is said a
 Canvas shows) in `/api/engine/status`. The window shows the word in its footer on every page
 (`CLOCK LOCKED` in green, caution or danger otherwise) and a CLOCK section on the AUDIO page, which
 keeps at least a quarter of the page in every layout: master, state and phase error, device and port,
-the frequency, PTP against the Scarlett now, the counters, framed in caution (acquiring, observing,
-unverified) or danger (holdover, fault, not running). The journal gets one line every 10 s
+the frequency, PTP against the Scarlett now, the counters, framed in caution (acquiring, observing) or danger (holdover, fault, not running). The journal gets one line every 10 s
 (`a3-core clock: locked error +2.3 us freq +14.102 ppm rate +0.012 ppm corrections … reanchors … steps
-… holdovers … losses … breaks … feed-restarts … port MASTER|unverified`) and one at every state change.
+… holdovers … losses … breaks … feed-restarts … port MASTER|unknown`) and one at every state change.
 
 **Write access**: `/dev/ptp*` is `root:clock 0664` on Debian; the postinst puts the app user into
 `clock` (effective once the user manager starts again: a reboot). Without it the role measures and
