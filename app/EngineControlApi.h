@@ -33,6 +33,7 @@ struct EngineStatusReport
     juce::String engineProblem;
     std::vector<std::string> droppedLinks;   // HostView::droppedLinks
     std::vector<std::string> ignoredKeys;    // HostView::ignoredKeys
+    std::vector<std::string> loopDropped;    // HostView::loopDropped
     juce::String truthNote;                  // HostView::truthNote
     a3clock::ClockReport clock;              // HostView::clock
 };
@@ -47,6 +48,8 @@ struct EngineMetersReport
 };
 juce::var toJson (const EngineMetersReport&);
 std::optional<EngineMetersReport> metersFromJson (const juce::var&);
+
+// POST /api/engine/roundtrip: measure the round trip over the loop now (the result comes with the status).
 
 // POST /api/engine/noise: {"zone": "main"|"booth", "channel": 1..64} or {"zone", "azimuth", "elevation"}.
 juce::var toJson (const NoiseRequest&);
@@ -98,6 +101,7 @@ private:
     a3core::HttpResponse apply (const a3core::HttpRequest&);
     a3core::HttpResponse filterKind (const a3core::HttpRequest&);
     a3core::HttpResponse noise (const a3core::HttpRequest&);
+    a3core::HttpResponse measureRoundTrip();
 
     std::optional<AppConfig> configOf (const a3core::HttpRequest&, a3core::HttpResponse& refusal) const;
     std::future<juce::Result> enqueue (std::function<juce::Result()>);

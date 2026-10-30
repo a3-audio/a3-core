@@ -115,6 +115,7 @@ public:
 
     BackendStatus status() const { return backend != nullptr ? backend->status() : BackendStatus {}; }
     LiveLinks liveLinks() const { return backend != nullptr ? backend->liveLinks() : LiveLinks {}; }
+    void measureRoundTrip() { if (ready) backend->measureRoundTrip(); }
     EngineHost& engineHost() { return *host; }
     // Seconds on the app clock of Core's last message, or a negative number before the first.
     double lastCoreSeconds() const { return lastCoreMessage.load(); }
@@ -176,6 +177,7 @@ public:
     juce::String engineProblem() const override { return problem; }
     std::vector<std::string> droppedLinks() const override { return startedWith.droppedLinks; }
     std::vector<std::string> ignoredKeys() const override { return startedWith.ignoredKeys; }
+    std::vector<std::string> loopDropped() const override { return startedWith.loopDropped; }
     juce::String truthNote() const override
     {
         juce::StringArray notes { a3app::truthNote (truth), unmeteredDecksNote (startedWith.engine.decks, truth.vuMeters),
@@ -200,6 +202,8 @@ public:
         edited.droppedLinks.clear();
         startedWith.ignoredKeys.clear();
         edited.ignoredKeys.clear();
+        startedWith.loopDropped.clear();
+        edited.loopDropped.clear();
         if (auto outputs = outputsOf (config); ! outputs.empty())
             names = std::move (outputs);
         return juce::Result::ok();
@@ -210,6 +214,12 @@ public:
         if (live())
             role.session->engineHost().controls().global().filter.kind.store (static_cast<int> (kind));
         edited.engine.filterKind = startedWith.engine.filterKind = kind;   // it runs now
+    }
+
+    void measureRoundTrip() override
+    {
+        if (live())
+            role.session->measureRoundTrip();
     }
 
     void playNoise (const NoiseRequest& request) override

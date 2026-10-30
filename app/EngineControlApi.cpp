@@ -73,6 +73,48 @@ juce::StringArray stringsOf (const juce::var& list)
 }
 }
 
+namespace
+{
+using RoundTripState = RoundTripReport::State;
+const std::pair<RoundTripState, const char*> roundTripStates[] { { RoundTripState::notReported, "notReported" },
+                                                                  { RoundTripState::noLoop, "noLoop" },
+                                                                  { RoundTripState::notMeasured, "notMeasured" },
+                                                                  { RoundTripState::measured, "measured" },
+                                                                  { RoundTripState::noLoopFound, "noLoopFound" } };
+
+juce::var toJson (const RoundTripReport& report)
+{
+    juce::String state;
+    for (const auto& [value, name] : roundTripStates)
+        if (value == report.state)
+            state = name;
+    return object ({ { "state", state }, { "measuring", report.measuring }, { "samples", report.samples },
+                     { "atMillis", report.atMillis }, { "reason", report.reason } });
+}
+
+// An engine before the measurement sends none: notReported.
+RoundTripReport roundTripFromJson (const juce::var& v)
+{
+    RoundTripReport report;
+    for (const auto& [value, name] : roundTripStates)
+        if (v["state"].toString() == name)
+            report.state = value;
+    report.measuring = (bool) v["measuring"];
+    report.samples = (int) number (v["samples"]).value_or (0.0);
+    report.atMillis = (juce::int64) number (v["atMillis"]).value_or (0.0);
+    report.reason = v["reason"].toString();
+    return report;
+}
+
+juce::var stringList (const std::vector<std::string>& entries)
+{
+    juce::Array<juce::var> list;
+    for (const auto& entry : entries)
+        list.add (juce::String::fromUTF8 (entry.c_str()));
+    return list;
+}
+}
+
 juce::var toJson (const EngineStatusReport& report)
 {
     juce::Array<juce::var> missing, levels, dropped, ignored;
@@ -106,6 +148,8 @@ juce::var toJson (const EngineStatusReport& report)
                      { "droppedLinks", dropped },
                      { "ignoredKeys", ignored },
                      { "truthNote", report.truthNote },
+                     { "roundTripMeasured", toJson (report.backend.roundTripMeasured) },
+                     { "loopDropped", stringList (report.loopDropped) },
                      { "clock", a3clock::toJson (report.clock) },
                      { "clockIndicator", a3clock::toJson (a3clock::clockIndicator (report.clock)) } });
 }
@@ -147,6 +191,9 @@ std::optional<EngineStatusReport> statusFromJson (const juce::var& v)
         report.ignoredKeys.push_back (v["ignoredKeys"][i].toString().toStdString());
     if (v["truthNote"].isString())
         report.truthNote = v["truthNote"].toString();
+    report.backend.roundTripMeasured = roundTripFromJson (v["roundTripMeasured"]);
+    for (int i = 0; i < v["loopDropped"].size(); ++i)
+        report.loopDropped.push_back (v["loopDropped"][i].toString().toStdString());
     report.clock = a3clock::clockReportFromJson (v["clock"]);   // an engine before the clock: not reported
     return report;
 }
@@ -274,6 +321,7 @@ a3core::Routes EngineControlApi::routes()
     routes.post ("/api/engine/apply", [this] (const HttpRequest& r) { return apply (r); });
     routes.post ("/api/engine/filter-kind", [this] (const HttpRequest& r) { return filterKind (r); });
     routes.post ("/api/engine/noise", [this] (const HttpRequest& r) { return noise (r); });
+    routes.post ("/api/engine/roundtrip", [this] (const HttpRequest&) { return measureRoundTrip(); });
     return routes;
 }
 
@@ -344,6 +392,7 @@ void EngineControlApi::publishStatus()
     report.engineProblem = view.engineProblem();
     report.droppedLinks = view.droppedLinks();
     report.ignoredKeys = view.ignoredKeys();
+    report.loopDropped = view.loopDropped();
     report.truthNote = view.truthNote();
     report.clock = view.clock();
     auto text = juce::JSON::toString (toJson (report), true).toStdString();
@@ -493,6 +542,12 @@ HttpResponse EngineControlApi::noise (const HttpRequest& request)
     if (! burst)
         return problem (400, why);
     enqueue ([this, burst = *burst] { view.playNoise (burst); return juce::Result::ok(); });
+    return json (200, object ({}));
+}
+
+HttpResponse EngineControlApi::measureRoundTrip()
+{
+    enqueue ([this] { view.measureRoundTrip(); return juce::Result::ok(); });
     return json (200, object ({}));
 }
 

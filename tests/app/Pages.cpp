@@ -1582,3 +1582,78 @@ TEST_F (Pages, IoInputHasLeftAndRightPerChannelAndTheDecks)
     page.chooseRoute ("analog_1", 2);
     EXPECT_EQ (view.cfg.io.deviceChannels.at ("analog_1"), 1);   // channel 2, 0-based in the map
 }
+
+// AUDIO: the measured round trip replaces the estimate; MEASURE asks the engine for a new run.
+TEST_F (Pages, AudioShowsTheMeasuredRoundTripAndMeasuresOnRequest)
+{
+    FakeView view;
+    view.state.sampleRate = 48000;
+    view.state.roundTripMeasured.state = a3app::RoundTripReport::State::measured;
+    view.state.roundTripMeasured.samples = 211;
+    view.state.roundTripMeasured.atMillis = juce::Time (2026, 9, 30, 14, 5, 0, 0, true).toMilliseconds();
+    a3app::AudioPage page (view, manager);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
+    page.refresh();
+    EXPECT_EQ (page.roundTripLabel().getText(), "Round trip (measured, digital loop)   4.4 ms (211 samples), 14:05");
+    ASSERT_TRUE (page.measureButton().isVisible());
+    EXPECT_TRUE (page.measureButton().isEnabled());
+    EXPECT_TRUE (page.getLocalBounds().contains (page.measureButton().getBounds()));
+    page.measureButton().triggerClick();
+    juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
+    EXPECT_EQ (view.roundTripRequests, 1);
+    expectPainted (a3apptest::snapshotAt (page, "audio-roundtrip-measured", page.getWidth(), page.getHeight()));
+
+    view.state.roundTripMeasured = {};
+    view.state.roundTripMeasured.state = a3app::RoundTripReport::State::noLoop;
+    view.state.roundTripMeasured.reason = "no loop configured";
+    page.refresh();
+    EXPECT_TRUE (page.roundTripLabel().getText().contains ("(estimated, no loop configured)")) << page.roundTripLabel().getText();
+    EXPECT_FALSE (page.measureButton().isEnabled());
+}
+
+// I/O: the loop's channels are offered in no dropdown, the notice names them and what a load unrouted, and the
+// editor refuses them.
+TEST_F (Pages, IoLeavesTheRoundTripLoopOut)
+{
+    FakeView view;
+    for (int i = 1; i <= 14; ++i)
+    {
+        view.state.capturePorts.add ("system:capture_" + juce::String (i));
+        view.state.playbackPorts.add ("system:playback_" + juce::String (i));
+    }
+    view.cfg.io.roundTripLoop = a3app::RoundTripLoop { 11, 11, 2 };
+    view.unroutedByLoop = { "booth_sub -> system:playback_11" };
+    a3app::IoPage page (view);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
+    page.showSub (a3app::IoPage::Sub::output);
+    auto* box = page.routeBox ("booth_sub");
+    ASSERT_NE (box, nullptr);
+    EXPECT_EQ (box->getNumItems(), 13);   // none + 14 - the loop's 2
+    for (int i = 0; i < box->getNumItems(); ++i)
+    {
+        EXPECT_FALSE (box->getItemText (i).contains ("playback_11")) << box->getItemText (i);
+        EXPECT_FALSE (box->getItemText (i).contains ("playback_12")) << box->getItemText (i);
+    }
+    page.chooseRoute ("booth_sub", 11);   // past the loop: system:playback_13
+    EXPECT_EQ (view.cfg.io.jack.at ("booth_sub"), std::vector<std::string> { "system:playback_13" });
+    EXPECT_TRUE (page.noticeLabel().getText().contains ("output 11-12")) << page.noticeLabel().getText();
+    EXPECT_TRUE (page.noticeLabel().getText().contains ("booth_sub -> system:playback_11")) << page.noticeLabel().getText();
+    EXPECT_TRUE (page.noticeLabel().isVisible());
+
+    page.setPeers ("booth_top_1", "system:playback_12");
+    EXPECT_EQ (view.cfg.io.jack.count ("booth_top_1"), 0u);
+    EXPECT_TRUE (page.messageLabel().getText().contains ("round-trip loop")) << page.messageLabel().getText();
+
+    view.runDevice();
+    view.state.deviceInputs = 14;
+    view.state.deviceOutputs = 14;
+    page.refresh (true);
+    page.showSub (a3app::IoPage::Sub::input);
+    EXPECT_EQ (page.routeBox ("analog_1")->getNumItems(), 13);
+    page.chooseRoute ("analog_1", 11);   // past the loop: channel 13
+    EXPECT_EQ (view.cfg.io.deviceChannels.at ("analog_1"), 12);
+    page.setDeviceChannel ("analog_2", 10);   // device input 11
+    EXPECT_EQ (view.cfg.io.deviceChannels.count ("analog_2"), 0u);
+    EXPECT_TRUE (page.messageLabel().getText().contains ("round-trip loop")) << page.messageLabel().getText();
+    expectPainted (a3apptest::snapshotAt (page, "io-roundtrip-loop", page.getWidth(), page.getHeight()));
+}

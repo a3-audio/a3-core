@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "IoPage.h"
 #include "ConfigEdits.h"
+#include <algorithm>
 #include <sstream>
 
 namespace a3app
@@ -80,6 +81,8 @@ IoPage::IoPage (HostView& v)
     look::caption (portCaption);
     look::caption (linksCaption);
     look::failure (message);
+    look::caption (notice);
+    notice.setMinimumHorizontalScale (0.5f);
     title.setText ("I/O", juce::dontSendNotification);
     linksCaption.setText ("Direct links the engine makes (one per line: from -> to)", juce::dontSendNotification);
     for (auto* editor : { &portEditor, &linksEditor })
@@ -94,7 +97,7 @@ IoPage::IoPage (HostView& v)
     portEditor.onReturnKey = [this] { commitEditor(); };
     portEditor.onFocusLost = [this] { commitEditor(); };
     linksEditor.onFocusLost = [this] { setDirectLinks (linksEditor.getText()); };
-    for (auto* child : std::initializer_list<juce::Component*> { &title, &portCaption, &linksCaption, &message, &list, &portEditor, &linksEditor,
+    for (auto* child : std::initializer_list<juce::Component*> { &title, &portCaption, &linksCaption, &message, &notice, &list, &portEditor, &linksEditor,
                                                                  &inputKey, &outputKey, &inputView, &outputView })
         addAndMakeVisible (child);
     for (auto* key : { &inputKey, &outputKey })
@@ -147,6 +150,8 @@ void IoPage::setPeers (const std::string& port, const juce::String& text)
 {
     auto config = view.config();
     const auto peers = splitPeers (text);
+    if (const auto refusal = loopRefusal (config, peers); refusal.isNotEmpty())
+        return look::say (message, refusal);
     if (peers.empty())
         config.io.jack.erase (port);
     else
@@ -158,6 +163,8 @@ void IoPage::setPeers (const std::string& port, const juce::String& text)
 void IoPage::setDeviceChannel (const std::string& port, int channel)
 {
     auto config = view.config();
+    if (const auto refusal = loopRefusal (config, isEngineInputPort (port), channel); channel >= 0 && refusal.isNotEmpty())
+        return look::say (message, refusal);
     if (channel < 0)
         config.io.deviceChannels.erase (port);
     else
@@ -287,6 +294,7 @@ void IoPage::reload()
         return look::say (message, error);
     portRows = ioRows (shown, *ports, lastLinks);
     offered = view.status();
+    look::say (notice, loopNotice (shown, view.loopDropped()));
     rebuildRoutes();
     fillRoutes();
     rebuildDeckChoosers();
@@ -324,15 +332,11 @@ juce::String IoPage::foreignPeers (const std::string& port) const
     return {};
 }
 
-// JACK: the hardware's capture (input) or playback ports; a device: its channels, "channel 1" on.
-juce::StringArray IoPage::routeChoices (bool input) const
+// JACK: the hardware's capture (input) or playback ports; a device: its channels, "channel 1" on. Never the loop's.
+std::vector<RouteChoice> IoPage::choicesFor (bool input) const
 {
-    if (! deviceMode())
-        return input ? offered.capturePorts : offered.playbackPorts;
-    juce::StringArray channels;
-    for (int channel = 1; channel <= (input ? offered.deviceInputs : offered.deviceOutputs); ++channel)
-        channels.add ("channel " + juce::String (channel));
-    return channels;
+    return routeChoices (shown, input ? offered.capturePorts : offered.playbackPorts,
+                         input ? offered.deviceInputs : offered.deviceOutputs, input);
 }
 
 // The dropdowns for the ports this config has: per channel L and R (INPUT), per zone its outputs (OUTPUT).
@@ -398,25 +402,31 @@ void IoPage::fillRoutes()
         for (auto& group : *groups)
             for (auto& route : group->routes)
             {
-                const auto choices = routeChoices (route->input);
+                const auto choices = choicesFor (route->input);
                 juce::StringArray items { noneText };
-                for (int i = 0; i < choices.size(); ++i)
+                for (const auto& choice : choices)
                 {
-                    const auto peer = deviceMode() ? "#" + std::to_string (i) : choices[i].toStdString();
+                    const auto peer = choice.channel ? "#" + std::to_string (*choice.channel) : choice.peer;
                     juce::StringArray users;
                     for (const auto& other : portsRoutedTo (shown, peer, route->port))
                         users.add (juce::String (other));
-                    items.add (choices[i] + (users.isEmpty() ? juce::String() : "   (also " + users.joinIntoString (", ") + ")"));
+                    items.add (choice.label + (users.isEmpty() ? juce::String() : "   (also " + users.joinIntoString (", ") + ")"));
                 }
+                const auto indexOf = [&choices] (auto matches)
+                {
+                    const auto it = std::find_if (choices.begin(), choices.end(), matches);
+                    return it == choices.end() ? -1 : (int) (it - choices.begin());
+                };
                 int selectedIndex = 0;
                 if (deviceMode())
                 {
                     if (const auto it = shown.io.deviceChannels.find (route->port); it != shown.io.deviceChannels.end())
-                        selectedIndex = it->second + 1 < items.size() ? it->second + 1 : 0;
+                        selectedIndex = indexOf ([&] (const RouteChoice& c) { return c.channel == it->second; }) + 1;
                 }
                 else if (const auto it = shown.io.jack.find (route->port); it != shown.io.jack.end() && ! it->second.empty())
                 {
-                    const int found = choices.indexOf (juce::String (it->second.front()));
+                    const auto& mapped = it->second.front();
+                    const int found = indexOf ([&] (const RouteChoice& c) { return c.peer == mapped; });
                     if (found < 0)
                         items.add (juce::String (it->second.front()) + "   (not hardware)");   // what the map holds, kept
                     selectedIndex = found >= 0 ? found + 1 : items.size() - 1;
@@ -448,13 +458,14 @@ juce::ComboBox* IoPage::routeBox (const std::string& port)
 void IoPage::chooseRoute (const std::string& port, int item)
 {
     const bool input = isEngineInputPort (port);
-    const auto choices = routeChoices (input);
-    if (item < 0 || item > choices.size())
+    const auto choices = choicesFor (input);
+    if (item < 0 || item > (int) choices.size())
         return;   // the "not hardware" item: what the map holds stays
     look::say (message, {});
+    const auto* choice = item == 0 ? nullptr : &choices[(size_t) item - 1];
     if (deviceMode())
-        return edit (withDeviceRoute (view.config(), port, item == 0 ? std::nullopt : std::optional<int> (item - 1)));
-    edit (withJackRoute (view.config(), port, item == 0 ? std::string() : choices[item - 1].toStdString()));
+        return edit (withDeviceRoute (view.config(), port, choice != nullptr ? choice->channel : std::nullopt));
+    edit (withJackRoute (view.config(), port, choice != nullptr ? choice->peer : std::string()));
 }
 
 void IoPage::paint (juce::Graphics& g) { g.fillAll (palette::surface); }
@@ -468,6 +479,7 @@ void IoPage::resized()
     inputKey.setBounds (top.removeFromLeft (top.getWidth() / 2).reduced (row / 16));
     outputKey.setBounds (top.reduced (row / 16));
     message.setBounds (area.removeFromBottom (row));
+    notice.setBounds (area.removeFromBottom (shown.io.roundTripLoop ? row : 0));
     layoutInput (area, row);
     layoutOutput (area, row);
 }

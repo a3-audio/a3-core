@@ -10,7 +10,8 @@ namespace a3app
 {
 // The audio page. JACK: rate and quantum are read-only (the server owns them) with where they
 // come from. Device: choosers for device type, input and output device, rate and block size, and
-// the bit depth as the device reports it. Both: the estimated input-to-output round trip and its parts,
+// the bit depth as the device reports it. Both: the input-to-output round trip, measured over the I/O map's
+// digital loop (MEASURE runs it again) or, without a measurement, estimated from its parts,
 // and the CLOCK section (ClockPanel: the one clock's master and lock). Every choice only edits the pending config (HostView::edit);
 // Save applies it through the backend. The page opens no device: the manager is a catalogue of
 // device types and is never initialised.
@@ -30,6 +31,7 @@ public:
     const juce::Label& bitDepthLabel() const { return bitDepth; }
     const juce::Label& pendingLabel() const { return pending; }
     const juce::Label& roundTripLabel() const { return roundTrip; }
+    juce::Button& measureButton() { return measure; }
     const ClockPanel& clockPanel() const { return clock; }
 
     void resized() override;
@@ -45,7 +47,7 @@ private:
     HostView& view;
     juce::AudioDeviceManager& manager;
     juce::Label title, backendCaption, rate, quantum, rateSource, bitDepth, roundTrip, applyMessage, pending;
-    juce::TextButton jackButton { "JACK" }, deviceButton { "Device" };
+    juce::TextButton jackButton { "JACK" }, deviceButton { "Device" }, measure { "MEASURE" };
     juce::Label typeCaption, inputCaption, outputCaption, rateCaption, blockCaption;
     juce::ComboBox typeBox, inputBox, outputBox, rateBox, blockBox;
     ClockPanel clock;

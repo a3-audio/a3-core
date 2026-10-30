@@ -34,6 +34,7 @@ public:
     // A new quantum rebuilds the host (no re-fade); a port registration, and every second,
     // applies the connection plan.
     void service (double nowSeconds) override;
+    void measureRoundTrip() override;
     // The JACK server went away (it shut the client down): the app ends and its unit restarts it.
     bool lost() const;
 
@@ -47,6 +48,7 @@ private:
 
     void process (jack_nframes_t);
     bool registerPorts (const PortNames&);
+    bool registerLoopPorts();
     void rebuildOnNewQuantumOrRate();
 
     const bool connecting;
@@ -57,6 +59,9 @@ private:
     double sampleRate = 0;
 
     std::vector<jack_port_t*> inputPorts, outputPorts;   // enginePortNames' order
+    jack_port_t* loopIn = nullptr;                       // roundtrip_in / roundtrip_out, only with a loop
+    jack_port_t* loopOut = nullptr;
+    std::unique_ptr<RoundTripMeter> roundTrip;           // exists while the client is open
     a3::EngineInputs inputs;
     a3::EngineOutputs outputs;
     PortSlots slots;

@@ -5,6 +5,7 @@
 #include "EnginePorts.h"
 #include <atomic>
 #include <chrono>
+#include <memory>
 #include <juce_audio_devices/juce_audio_devices.h>
 
 namespace a3app
@@ -19,6 +20,9 @@ std::vector<int> deviceChannelFor (const IoMap&, const PortNames&, bool inputs);
 void bindDeviceBuffers (const std::vector<int>& inputChannels, const std::vector<int>& outputChannels,
                         const float* const* deviceIn, int numDeviceIn, float* const* deviceOut, int numDeviceOut,
                         int numSamples, PortSlots&);
+
+// Why the device cannot carry the loop ("" when it can): the device opened `inputs` and `outputs` channels.
+juce::String loopUnavailable (const std::optional<RoundTripLoop>&, int inputs, int outputs);
 
 // A JUCE audio device (ALSA on Linux) for machines without the rig's JACK: the engine's ports
 // are mapped to device channels by the I/O map (spec D9, "deviceChannels"). JUCE's own JACK
@@ -35,6 +39,7 @@ public:
     std::vector<std::pair<std::string, std::string>> liveLinks() const override { return {}; }   // a device has no links
     // A device that restarted with another rate or block size rebuilds the host (no re-fade).
     void service (double nowSeconds) override;
+    void measureRoundTrip() override;
 
 private:
     void audioDeviceIOCallbackWithContext (const float* const*, int, float* const*, int, int,
@@ -50,6 +55,8 @@ private:
     double sampleRate = 0;
 
     std::vector<int> inputChannels, outputChannels;
+    int loopInputChannel = -1, loopOutputChannel = -1;   // 0-based; -1: no loop, or the device lacks it
+    std::unique_ptr<RoundTripMeter> roundTrip;
     a3::EngineInputs inputs;
     a3::EngineOutputs outputs;
     PortSlots slots;

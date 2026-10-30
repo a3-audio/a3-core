@@ -36,6 +36,7 @@ struct FakeView final : a3app::HostView
     juce::String engineProblem() const override { return problem; }
     std::vector<std::string> droppedLinks() const override { return dropped; }
     std::vector<std::string> ignoredKeys() const override { return ignored; }
+    std::vector<std::string> loopDropped() const override { return unroutedByLoop; }
     juce::String truthNote() const override { return note; }
     a3clock::ClockReport clock() const override { return clockReport; }
     juce::File configFile() const override { return file; }
@@ -52,6 +53,7 @@ struct FakeView final : a3app::HostView
     }
     void setFilterKind (a3::FilterKind kind) override { cfg.engine.filterKind = runningCfg.engine.filterKind = kind; ++filterSets; }
     void playNoise (const a3app::NoiseRequest& request) override { noises.push_back (request); }
+    void measureRoundTrip() override { ++roundTripRequests; }
     ~FakeView() override { file.deleteFile(); }
 
     void runDevice() { cfg.backend.type = runningCfg.backend.type = a3app::BackendSettings::Type::device; }
@@ -65,7 +67,8 @@ struct FakeView final : a3app::HostView
     a3app::LiveLinks links;
     juce::Result applyResult = juce::Result::ok();
     juce::String problem;
-    std::vector<std::string> dropped, ignored;
+    std::vector<std::string> dropped, ignored, unroutedByLoop;
+    int roundTripRequests = 0;
     juce::String note;
     a3clock::ClockReport clockReport;
     int truthDeckCount = 4;   // the truth copy's stemdeck.deck-hello range

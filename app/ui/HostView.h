@@ -44,6 +44,8 @@ public:
     virtual std::vector<std::string> droppedLinks() const { return {}; }
     // Retired config keys the loaded file named and the load ignored ("engine.<key>").
     virtual std::vector<std::string> ignoredKeys() const { return {}; }
+    // Routes the loaded file had on the round-trip loop's channels and the load left out (AppConfig::loopDropped).
+    virtual std::vector<std::string> loopDropped() const { return {}; }
     // Non-empty when the truth in use lacks a key the engine would send with (an older a3-osc.json).
     virtual juce::String truthNote() const { return {}; }
     // The clock role's report (ClockStatus.h): the one clock's lock, or why nobody reports it.
@@ -57,5 +59,6 @@ public:
     virtual juce::Result apply (const AppConfig&) = 0;
     virtual void setFilterKind (a3::FilterKind) = 0;               // live, on the running engine; also the pending edit and what runs
     virtual void playNoise (const NoiseRequest&) = 0;              // live, on the running engine; nothing when none runs
+    virtual void measureRoundTrip() {}                             // over the loop, on the running engine; the result comes with status()
 };
 }
