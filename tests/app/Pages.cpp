@@ -431,7 +431,8 @@ TEST_F (Pages, TheSettingsComeBeforeTheInfo)
     }
 }
 
-// MEASURE and MEASURE ANALOG CHAIN stay on the page; without their pair set on the I/O page they are off and say so.
+// MEASURE and MEASURE ANALOG CHAIN stay on the page; without their pair set on the I/O page they are off, and their
+// own line says why (2026-10-30: no hint line under them).
 TEST_F (Pages, MeasureButtonsSayWhichPairIsMissing)
 {
     FakeView view;
@@ -442,9 +443,9 @@ TEST_F (Pages, MeasureButtonsSayWhichPairIsMissing)
     page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     page.refresh();
     EXPECT_TRUE (page.measureButton().isEnabled());
-    EXPECT_FALSE (page.measureHintLabel().isVisible());
     EXPECT_FALSE (page.analogButton().isEnabled());
-    EXPECT_EQ (page.analogHintLabel().getText(), "set the analog test pair on the I/O page");
+    EXPECT_TRUE (page.analogChainLabel().getText().contains ("analog test pair")) << page.analogChainLabel().getText();
+    EXPECT_TRUE (page.analogChainLabel().getText().contains ("I/O page")) << page.analogChainLabel().getText();
 
     view.cfg.io.roundTripLoop.reset();
     view.runningCfg.io.roundTripLoop.reset();
@@ -452,9 +453,10 @@ TEST_F (Pages, MeasureButtonsSayWhichPairIsMissing)
     view.state.roundTripMeasured.state = a3app::RoundTripReport::State::noLoop;
     page.refresh();
     EXPECT_FALSE (page.measureButton().isEnabled());
-    EXPECT_TRUE (page.measureHintLabel().isVisible());
-    EXPECT_EQ (page.measureHintLabel().getText(), "set the digital loop on the I/O page");
-    EXPECT_TRUE (page.getLocalBounds().contains (page.measureHintLabel().getBounds()));
+    EXPECT_TRUE (page.roundTripLabel().getText().contains ("no digital loop")) << page.roundTripLabel().getText();
+    for (auto* child : page.getChildren())
+        if (auto* label = dynamic_cast<juce::Label*> (child); label != nullptr && label->isVisible())
+            EXPECT_FALSE (label->getText().startsWith ("set the")) << "no hint line: " << label->getText();
     expectPainted (a3apptest::snapshotAt (page, "audio-no-loop", page.getWidth(), page.getHeight()));
 }
 
@@ -1808,7 +1810,7 @@ TEST_F (Pages, AudioMeasuresTheAnalogChainOnlyOnRequest)
     page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
     page.refresh();
     EXPECT_EQ (page.analogChainLabel().getText(), "Analog chain   converters not measured yet");
-    const auto hint = page.analogHintLabel().getText();
+    const auto hint = page.analogButton().getTooltip();   // what to plug first: the key's help (no hint line since 2026-10-30)
     EXPECT_TRUE (hint.contains ("output 6") && hint.contains ("input 8") && hint.contains ("cable")) << hint;
     EXPECT_TRUE (hint.contains ("not in use")) << hint;
     EXPECT_TRUE (page.analogButton().isEnabled());
@@ -2247,3 +2249,48 @@ TEST_F (Pages, TheAllRaEditorSitsOnThePagesGround)
     EXPECT_EQ (shot.getPixelAt (area.getX() + 2, area.getY() + area.getHeight() / 2).getARGB(), a3app::palette::surface.getARGB())
         << "the margin beside IEM's table is the page's surface";
 }
+
+// AUDIO (2026-10-30, the maintainer): three sections, DRIVER (type, block, periods and what runs), MEASURE (the round
+// trip and the analog chain with their keys) and CLOCK; the driver's info a compact block, one line under the other;
+// one font size for every text on the page, the clock's included.
+TEST_F (Pages, AudioIsDriverMeasureAndClock)
+{
+    FakeView view;
+    view.state.timing.available = true;
+    a3app::AudioPage page (view, manager);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 7 / 8);
+    page.refresh();
+    auto* driver = labelSaying (page, "DRIVER");
+    auto* measure = labelSaying (page, "MEASURE");
+    auto* clock = labelSaying (page.clockPanel(), "CLOCK");
+    ASSERT_NE (driver, nullptr);
+    ASSERT_NE (measure, nullptr);
+    ASSERT_NE (clock, nullptr);
+    EXPECT_LT (driver->getBottom(), page.typeChooser().getY() + 1);
+    EXPECT_LT (page.periodsChooser().getBottom(), page.rateLabel().getY() + 1);
+    const std::vector<const juce::Label*> info { &page.rateLabel(), &page.quantumLabel(), &page.rateSourceLabel(), &page.bitDepthLabel(),
+                                                 &page.loadLabel() };
+    for (size_t i = 1; i < info.size(); ++i)
+        EXPECT_EQ (info[i]->getY(), info[i - 1]->getBottom()) << "no empty line in the driver's info: " << info[i]->getText();
+    EXPECT_LT (page.loadLabel().getBottom(), measure->getY() + 1);
+    EXPECT_LT (measure->getBottom(), page.roundTripLabel().getY() + 1);
+    EXPECT_LT (page.analogChainLabel().getBottom(), page.clockPanel().getY() + 1);
+
+    std::set<int> sizes;
+    std::function<void (juce::Component&)> collect = [&] (juce::Component& parent)
+    {
+        for (auto* child : parent.getChildren())
+        {
+            if (! child->isVisible())
+                continue;
+            if (auto* label = dynamic_cast<juce::Label*> (child); label != nullptr && dynamic_cast<juce::ComboBox*> (parent.getParentComponent()) == nullptr
+                                                                   && dynamic_cast<juce::ComboBox*> (&parent) == nullptr && label->getText().isNotEmpty())
+                sizes.insert (juce::roundToInt (label->getFont().getHeight() * 10.0f));
+            collect (*child);
+        }
+    };
+    collect (page);
+    EXPECT_EQ (sizes.size(), 1u) << "one font size on the page";
+    expectPainted (a3apptest::snapshotAt (page, "window-audio", page.getWidth(), page.getHeight()));
+}
+

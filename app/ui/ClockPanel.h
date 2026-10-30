@@ -23,6 +23,8 @@ public:
     ClockPanel();
 
     void show (const a3clock::ClockReport&);
+    // Every line of the panel at this height (the AUDIO page's one size); 0: a share of the panel's rows.
+    void setTextHeight (float height);
 
     bool warns() const { return ! frame.isTransparent(); }
     const juce::Label& stateLabel() const { return state; }
@@ -39,5 +41,6 @@ private:
     juce::Label title, masterCaption, state, role, rate, counters, note;
     Dropdown master;
     juce::Colour frame = juce::Colours::transparentBlack;
+    float textHeight = 0.0f;
 };
 }

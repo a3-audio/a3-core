@@ -146,18 +146,37 @@ void ClockPanel::paint (juce::Graphics& g)
     g.drawRect (getLocalBounds(), juce::jmax (2, getHeight() / 80));
 }
 
+void ClockPanel::setTextHeight (float height)
+{
+    if (height == textHeight)
+        return;
+    textHeight = height;
+    resized();
+}
+
+// One size for every line when the page gives one (squeezed across, never smaller); else each fitted to its row.
 void ClockPanel::resized()
 {
     auto area = getLocalBounds().reduced (juce::jmax (4, getWidth() / 60), juce::jmax (2, getHeight() / 40));
-    const int row = area.getHeight() / 7;
-    fitText (title, area.removeFromTop (row), 0.5f);
+    const int row = area.getHeight() / 8;
+    const auto place = [&] (juce::Label& label, juce::Rectangle<int> line, float share)
+    {
+        if (textHeight <= 0.0f)
+            return fitText (label, line, share);
+        label.setFont (juce::FontOptions (textHeight));
+        label.setMinimumHorizontalScale (0.5f);
+        label.setBounds (line);
+    };
+    place (title, area.removeFromTop (row), 0.5f);
     auto choice = area.removeFromTop (row);
-    masterCaption.setBounds (choice.removeFromLeft (choice.getWidth() / 4));
+    place (masterCaption, choice.removeFromLeft (choice.getWidth() / 4), 0.4f);
     master.setBounds (choice.reduced (2));
-    fitText (state, area.removeFromTop (row), 0.45f);
-    fitText (role, area.removeFromTop (row), 0.4f);
-    fitText (rate, area.removeFromTop (row), 0.4f);
-    fitText (counters, area.removeFromTop (row), 0.4f);
-    fitText (note, area.removeFromTop (row), 0.36f);
+    place (state, area.removeFromTop (row), 0.45f);
+    place (role, area.removeFromTop (row), 0.4f);
+    place (rate, area.removeFromTop (row), 0.4f);
+    place (counters, area.removeFromTop (row), 0.4f);
+    place (note, area, 0.36f);   // the rest: two lines at the page's size
+    if (textHeight > 0.0f)
+        note.setMinimumHorizontalScale (1.0f);
 }
 }
