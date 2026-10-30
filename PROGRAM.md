@@ -305,6 +305,42 @@ link pass. While it is not, the plan names nothing on that side, so nothing land
 the links made to it are removed; STATUS lists those peers as missing. Without PipeWire (pw-metadata never answered)
 `system` is the JACK server's own device; after a first answer a failed read keeps the last one.
 
+## Where the units live (2026-10-31)
+
+**One place.** Every A³ user unit ships in a package under `/usr/lib/systemd/user/`, each unit once;
+`~/.config/systemd/user/` holds only a machine's own drop-ins. Until then the deployment copied a3-main,
+a3-aes67, a3-screencast, the bar and a second `a3-core.service` into `~/.config`, where they hid the
+packaged units (the rig's `a3-core.service` still said "python osc server", and only a drop-in made it run
+the program).
+
+| Unit or drop-in | Source in this repo | Package | Enabled by |
+|---|---|---|---|
+| `a3-engine.service` | `packaging/` | a3-core-app | a3-core's postinst, `systemctl --global enable` |
+| `a3-core.service` (the one, any machine) | `packaging/` | a3-core-app | nothing: a3-main Wants it |
+| `a3-core-window.service` | `packaging/` | a3-core-app | nothing (no `[Install]`): a3-main Wants it |
+| `a3-clock.service` | `packaging/` | a3-core-app | a3-core's postinst for aaa, only with an audio port |
+| `a3-main.service` | `platform-config/…/a3-core/usr/lib/systemd/user/` | a3-core | a3-core's postinst for aaa |
+| `a3-bar-per-workspace.service` | same | a3-core | a3-core's postinst for aaa |
+| `a3-aes67.service` | same | a3-core | a3-core's postinst for aaa, only with an audio port |
+| `a3-screencast.service` | same | a3-core | each machine by hand |
+| `beat-analyzer.service.d/a3-core.conf` | same | a3-core | drop-in on the beat-analyzer package's unit |
+| `stemdeck.service.d/a3-core.conf`, `two-deck-off.conf` | same | a3-core | drop-ins on StemDeck's unit |
+
+The units in `/usr/lib` are no conffiles: an upgrade replaces them. A machine that needs one line different
+writes a drop-in, `~/.config/systemd/user/<unit>.d/<name>.conf`, with only that line (`ExecStart=` needs an
+empty `ExecStart=` before it), then `systemctl --user daemon-reload`. A drop-in in `~/.config` with the same
+file name as a packaged one replaces it; any other name is applied on top, in file-name order across both
+folders. `systemctl --user cat <unit>` shows what runs.
+
+**The migration** (a3-core's postinst, `move_aside_unit_copies`). A unit or drop-in in `~/.config/systemd/user`
+whose sha256 is one of a version this package once copied there (`units_before_one_place`, from git history by
+`tools/units_before_one_place.py`; a test holds the two equal) is renamed to `<name>.before-one-place`, never
+deleted, and a `.wants` link that pointed at it is pointed at `/usr/lib/systemd/user/<name>`: what was enabled
+stays enabled. A copy changed by hand stays in place and is named in the postinst's output. A drop-in in
+`a3-core.service.d/` that starts the old Core script (`a3-core.py`; a3nuc1's `override.conf`) goes to the
+backup in `~/.config/a3-replaced/<date>/`: without the deployment's `program.conf` after it, it would start a
+file that is not there.
+
 ## The program: one binary, a3-core
 
 Since Task 23 of "A³ Core as one program" the app is **one binary, `build/app/a3-core`** (CMake

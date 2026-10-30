@@ -15,12 +15,11 @@ import sys
 import unittest
 from pathlib import Path
 
-from tools.tests.paths import DEBIAN, PACKAGE, ROOT
+from tools.tests.paths import DEBIAN, DEPLOYMENT_UNITS, PACKAGE, ROOT
 
 HOME = PACKAGE / "home/aaa/.local"
 SCRIPT = HOME / "bin/a3-screencast"
-UNIT = HOME / "share/a3-core/config/systemd/user/a3-screencast.service"
-WANTS = HOME / "share/a3-core/config/systemd/user/default.target.wants"
+UNIT = DEPLOYMENT_UNITS / "a3-screencast.service"
 CONTROL = DEBIAN / "control"
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
@@ -89,8 +88,8 @@ class TheUnit(unittest.TestCase):
 
     def test_the_package_does_not_enable_it(self):
         self.assertIn("WantedBy=default.target", UNIT.read_text())  # so `enable` works
-        self.assertFalse(list(WANTS.glob("a3-screencast*")))
-        self.assertNotIn("a3-screencast", (DEBIAN / "postinst").read_text())
+        self.assertFalse(list(PACKAGE.rglob("*.wants/a3-screencast*")))
+        self.assertNotRegex((DEBIAN / "postinst").read_text(), r"enable\s+a3-screencast")
 
 
 class TheScript(unittest.TestCase):

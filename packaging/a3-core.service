@@ -6,9 +6,9 @@ PartOf=a3-main.service
 # The audio server comes first; Core reaching the void for a moment costs nothing.
 After=pipewire.service wireplumber.service
 
-# The Core role for any machine, shipped by a3-core-app. On a Core machine the
-# deployment's copy in ~/.config/systemd/user (with its drop-ins) comes first,
-# as systemd reads a user's own units before the packaged ones.
+# The Core role for any machine, the Core machine included: the one
+# a3-core.service, shipped by a3-core-app. A machine that needs a different
+# line puts a drop-in into ~/.config/systemd/user/a3-core.service.d/.
 [Service]
 # Idle: the window orders itself after this unit (a3-core-window.service).
 Type=idle

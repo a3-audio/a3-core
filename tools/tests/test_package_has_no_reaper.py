@@ -16,9 +16,9 @@ import re
 import subprocess
 import unittest
 
-from tools.tests.paths import DEBIAN, LOCAL, PACKAGE, ROOT
+from tools.tests.paths import DEBIAN, DEPLOYMENT_UNITS, LOCAL, PACKAGE, ROOT
 
-UNITS = LOCAL / "share/a3-core/config/systemd/user"
+UNITS = DEPLOYMENT_UNITS
 SYSTEM_UNITS = PACKAGE / "etc/systemd/system"
 #: The program's own units, laid into the package by packaging/stage.
 PROGRAM_UNITS = (ROOT / "packaging/a3-engine.service",

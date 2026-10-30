@@ -10,11 +10,10 @@ the sound card away from PipeWire."""
 
 import configparser
 import unittest
-from pathlib import Path
 
-DROP_IN = (Path(__file__).resolve().parents[2]
-           / "platform-config/debian-x86_64/a3-core/home/aaa/.local/share/a3-core"
-             "/config/systemd/user/stemdeck.service.d/a3-core.conf")
+from tools.tests.paths import DEPLOYMENT_UNITS
+
+DROP_IN = DEPLOYMENT_UNITS / "stemdeck.service.d/a3-core.conf"
 
 
 def unit():

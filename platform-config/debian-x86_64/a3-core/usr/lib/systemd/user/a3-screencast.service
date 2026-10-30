@@ -5,7 +5,7 @@ StartLimitIntervalSec=0
 
 [Service]
 Environment=DISPLAY=:0
-# Port from a3-osc.json, rendered by a3-osc-render; the settings file is optional.
+# Port from a3-osc.json, rendered by a3-core --render-truth; the settings file is optional.
 EnvironmentFile=%h/.config/a3/osc.env
 EnvironmentFile=-%h/.config/a3/screencast.env
 ExecStartPre=%h/.local/bin/a3-wait-for-the-screen

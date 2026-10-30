@@ -1,11 +1,14 @@
+# SPDX-FileCopyrightText: 2026 Raphael Eismann
+# SPDX-License-Identifier: GPL-3.0-or-later
 [Unit]
 Description=i3bar on the tool workspaces (3 on), hidden on A3 Motion and StemDeck
 After=graphical.target
 
 [Service]
 Environment=DISPLAY=:0
-ExecStartPre=/home/aaa/.local/bin/a3-wait-for-the-screen
-ExecStart=/usr/bin/python3 /home/aaa/.local/bin/a3-bar-per-workspace.py
+# The helper and the program come with a3-core-app.
+ExecStartPre=/usr/lib/a3-core/a3-wait-for-the-screen
+ExecStart=/usr/bin/a3-core --role i3-bar
 # i3 restarting ends the event stream; follow it again.
 Restart=always
 RestartSec=2

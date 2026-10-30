@@ -14,9 +14,9 @@ condition runs (2026-10-27)."""
 
 import unittest
 
-from tools.tests.paths import LOCAL
+from tools.tests.paths import DEPLOYMENT_UNITS
 
-UNITS = LOCAL / "share/a3-core/config/systemd/user"
+UNITS = DEPLOYMENT_UNITS
 MAIN_UNIT = UNITS / "a3-main.service"
 TWO_DECK_OFF = UNITS / "stemdeck.service.d" / "two-deck-off.conf"
 

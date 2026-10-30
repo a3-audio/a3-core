@@ -12,7 +12,7 @@ the installer, still runs the a3-core window under i3.
 import re
 import unittest
 
-from tools.tests.paths import DEBIAN, PACKAGE, ROOT
+from tools.tests.paths import DEBIAN, DEPLOYMENT_UNITS, PACKAGE, ROOT
 
 CONTROL = DEBIAN / "control"
 CONFFILES = DEBIAN / "conffiles"
@@ -45,11 +45,11 @@ class ThePackageHasNoDisplayManager(unittest.TestCase):
 
 
 
-USER_UNITS = PACKAGE / "home/aaa/.local/share/a3-core/config/systemd/user"
-WAIT = "ExecStartPre=/home/aaa/.local/bin/a3-wait-for-the-screen"
+USER_UNITS = DEPLOYMENT_UNITS
 #: The program's window, laid into a3-core-app from packaging/ with its helper.
 WINDOW_UNIT = ROOT / "packaging/a3-core-window.service"
-WINDOW_WAIT = "ExecStartPre=/usr/lib/a3-core/a3-wait-for-the-screen"
+#: The helper a3-core-app ships; the bar, the deployment's, waits with it too.
+WAIT = "ExecStartPre=/usr/lib/a3-core/a3-wait-for-the-screen"
 
 
 class WindowsWaitForTheScreen(unittest.TestCase):
@@ -64,7 +64,7 @@ class WindowsWaitForTheScreen(unittest.TestCase):
         self.assertIn(WAIT, text)
         text = WINDOW_UNIT.read_text()
         self.assertIn("Environment=DISPLAY=:0", text, WINDOW_UNIT.name)
-        self.assertIn(WINDOW_WAIT, text, WINDOW_UNIT.name)
+        self.assertIn(WAIT, text, WINDOW_UNIT.name)
 
 
 if __name__ == "__main__":

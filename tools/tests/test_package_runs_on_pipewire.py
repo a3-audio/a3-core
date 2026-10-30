@@ -12,16 +12,16 @@ import configparser
 import re
 import unittest
 
-from tools.tests.paths import APP_DEBIAN, DEBIAN, PACKAGE, ROOT
+from tools.tests.paths import APP_DEBIAN, DEBIAN, DEPLOYMENT_UNITS, PACKAGE, ROOT
 
 CONTROL = DEBIAN / "control"
 CONFIG = PACKAGE / "home/aaa/.local/share/a3-core/config"
-UNITS = CONFIG / "systemd/user"
+UNITS = DEPLOYMENT_UNITS
 
 #: The units (or a3-core's drop-ins on units of other packages) that came
 #: after a3-jack: they need the audio graph.
 AUDIO_UNITS = (
-    UNITS / "a3-core.service",
+    ROOT / "packaging/a3-core.service",
     ROOT / "packaging/a3-engine.service",
     UNITS / "beat-analyzer.service.d/a3-core.conf",
     UNITS / "stemdeck.service.d/a3-core.conf",

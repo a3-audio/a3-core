@@ -70,6 +70,14 @@ Description: for internal use
  Set by the a3-system installer together with its network answers, so the
  postinst takes them without asking. Cleared by the postinst on every install.
 
+Template: a3-core/network-asked
+Type: boolean
+Default: false
+Description: for internal use
+ Set by the postinst once the network question has been put to a person (or
+ answered by the a3-system installer), so later installs do not ask again.
+ dpkg-reconfigure a3-core asks it anew.
+
 Template: a3-core/ssh-key
 Type: string
 Default:

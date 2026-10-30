@@ -12,9 +12,9 @@ a3-reaper and qjackctl waited on once they stopped sleeping, comes from
 `jack-example-tools` -- also absent from Depends. On a fresh install REAPER
 would never have come up. The engine's unit waits on it today.
 
-**What counts as started.** Everything reachable from default.target.wants
-through `Wants=`, the program's own units (packaging/, laid into a3-core-app
-by packaging/app/stage) included. A unit that is shipped but that nothing starts is not a
+**What counts as started.** Everything reachable through `Wants=` from the
+units the postinst enables, the program's own units (packaging/, laid into
+a3-core-app by packaging/app/stage) included. A unit that is shipped but that nothing starts is not a
 promise, so a program it names is not one either.
 
 **What it cannot check.** Which package really ships a program. That is
@@ -31,9 +31,9 @@ installed by it.
 import re
 import unittest
 
-from tools.tests.paths import APP_DEBIAN, DEBIAN, LOCAL, ROOT
+from tools.tests.paths import APP_DEBIAN, DEBIAN, DEPLOYMENT_UNITS, ROOT
 
-UNITS = LOCAL / "share/a3-core/config/systemd/user"
+UNITS = DEPLOYMENT_UNITS
 #: The program's units; packaging/app/stage installs them into a3-core-app.
 PROGRAM_UNITS = ROOT / "packaging"
 
@@ -56,6 +56,7 @@ PROVIDED_BY = {
     "/bin/true": BASE_SYSTEM,
     "/usr/bin/pkill": BASE_SYSTEM,
     "/usr/bin/jack_wait": "jack-example-tools",
+    "/usr/bin/pipewire": "pipewire",
     "/usr/bin/a3-core": THIS_PACKAGE,
     "/usr/lib/a3-core/a3-wait-for-the-screen": THIS_PACKAGE,
 }
@@ -93,11 +94,17 @@ def unit_path(name):
     return None
 
 
+def enabled_by_the_postinst():
+    """The user units the postinst enables, for aaa or for every user."""
+    text = (DEBIAN / "postinst").read_text()
+    return sorted(set(re.findall(r"systemctl (?:--global )?enable ([\w@.-]+\.service)", text)))
+
+
 def started_units():
-    """Shipped units reachable from default.target.wants through Wants=.
+    """Shipped units reachable from the enabled ones through Wants=.
     Names that are not shipped here (a3-motion comes from its own repo) are
     followed no further -- they are not this package's to install for."""
-    pending = sorted(p.name for p in (UNITS / "default.target.wants").iterdir())
+    pending = enabled_by_the_postinst()
     seen = set()
     while pending:
         name = pending.pop()
