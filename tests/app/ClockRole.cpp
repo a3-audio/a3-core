@@ -62,3 +62,68 @@ TEST (ClockRole, ScaledPpmIsTheKernelsUnit)
     EXPECT_EQ (a3app::scaledPpm (14.1), 924058);   // 14.1 * 65536, rounded
     EXPECT_DOUBLE_EQ (a3app::ppmOfScaled (-65536), -1.0);
 }
+
+namespace
+{
+struct TempDir
+{
+    juce::File dir = juce::File::createTempFile ("a3-clock-role");
+    TempDir() { dir.createDirectory(); }
+    ~TempDir() { dir.deleteRecursively(); }
+};
+}
+
+// The PHC is the audio port's, found the way PipeWire's clock.interface finds it.
+TEST (ClockRole, ThePhcIsTheAudioPortsFromSysfs)
+{
+    TempDir sys;
+    sys.dir.getChildFile ("enp5s0/device/ptp/ptp1").createDirectory();
+    sys.dir.getChildFile ("eno1/device/ptp/ptp0").createDirectory();
+    EXPECT_EQ (a3app::phcOfInterface (sys.dir, "enp5s0"), std::optional<std::string> ("/dev/ptp1"));
+    EXPECT_EQ (a3app::phcOfInterface (sys.dir, "eno1"), std::optional<std::string> ("/dev/ptp0"));
+    EXPECT_FALSE (a3app::phcOfInterface (sys.dir, "wlan0"));
+}
+
+TEST (ClockRole, ItRefusesAPhcThatIsNotTheAudioPorts)
+{
+    EXPECT_EQ (a3app::phcRefusal ("enp5s0", "/dev/ptp1", ""), "");
+    EXPECT_EQ (a3app::phcRefusal ("enp5s0", "/dev/ptp1", "/dev/ptp1"), "");
+    EXPECT_NE (a3app::phcRefusal ("enp5s0", "/dev/ptp1", "/dev/ptp0").find ("is not enp5s0's PTP clock"), std::string::npos);
+    EXPECT_NE (a3app::phcRefusal ("", std::nullopt, "").find ("no audio port"), std::string::npos);
+    EXPECT_NE (a3app::phcRefusal ("enp5s0", std::nullopt, "").find ("enp5s0 has no PTP hardware clock"), std::string::npos);
+}
+
+TEST (ClockRole, ReadsThePortStateFromPmc)
+{
+    const std::string answer = "sending: GET PORT_DATA_SET\n"
+                               "\ta0369f.fffe.1d2e3f-1 seq 0 RESPONSE MANAGEMENT PORT_DATA_SET \n"
+                               "\t\tportIdentity            a0369f.fffe.1d2e3f-1\n"
+                               "\t\tportState               MASTER\n"
+                               "\t\tlogMinDelayReqInterval  0\n";
+    EXPECT_EQ (a3app::portStateOf (answer), std::optional<std::string> ("MASTER"));
+    EXPECT_FALSE (a3app::portStateOf ("sending: GET PORT_DATA_SET\n"));   // nobody answered
+}
+
+TEST (ClockRole, TheLastLockedFrequencyIsKept)
+{
+    TempDir state;
+    const auto file = state.dir.getChildFile ("a3-core/clock.json");
+    EXPECT_FALSE (a3app::rememberedFrequency (file));
+    ASSERT_TRUE (a3app::rememberFrequency (file, 14.1023));
+    ASSERT_TRUE (a3app::rememberedFrequency (file));
+    EXPECT_DOUBLE_EQ (*a3app::rememberedFrequency (file), 14.1023);
+    file.replaceWithText ("{ broken");
+    EXPECT_FALSE (a3app::rememberedFrequency (file));
+}
+
+TEST (ClockRole, OnlyOneInstanceSteersAClock)
+{
+    TempDir dir;
+    const auto device = dir.dir.getChildFile ("ptp-stand-in");
+    device.replaceWithText ("");
+    a3app::LinuxPhc first (device.getFullPathName().toStdString());
+    a3app::LinuxPhc second (device.getFullPathName().toStdString());
+    EXPECT_TRUE (first.claim());
+    EXPECT_FALSE (second.claim());
+    EXPECT_NE (second.problem().find ("another clock role"), std::string::npos);
+}

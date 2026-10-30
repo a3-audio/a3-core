@@ -24,6 +24,8 @@ struct ClockStatus
     Health health = Health::acquiring;
     std::string reason;
     std::string device;                    // the PHC steered
+    std::string interface;                 // the audio port it belongs to
+    std::string portState;                 // ptp4l's port state there ("MASTER"); empty: not readable
     bool observeOnly = false;
     double frequencyPpm = 0.0;             // what the PHC runs at against its free run
     double errorNs = 0.0;                  // PHC minus Scarlett, after anchoring
@@ -69,6 +71,19 @@ private:
     std::optional<double> readAt;
     ClockReport last;
 };
+
+// What every surface shows of the clock in one word (the AUDIO page, the window's footer, Canvas
+// through /api/engine/status): LOCKED only when locked and ptp4l's port is known to be MASTER;
+// locked with a port state nobody could read is UNVERIFIED.
+struct ClockIndicator
+{
+    enum class Tone { ok, caution, danger };
+    std::string word;
+    Tone tone = Tone::danger;
+    std::string detail;
+};
+ClockIndicator clockIndicator (const ClockReport&);
+juce::var toJson (const ClockIndicator&);
 
 // The journal line: health, error, frequency, rate and every counter, on one line.
 std::string logLine (const ClockStatus&);

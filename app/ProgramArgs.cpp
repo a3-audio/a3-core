@@ -21,14 +21,14 @@ const char* const usage =
     "       a3-core --role window\n"
     "       a3-core --role screencast-fanout --port N [--linger SECONDS] -- COMMAND...\n"
     "       a3-core --role i3-bar\n"
-    "       a3-core --role clock [--device PATH] [--observe]\n"
+    "       a3-core --role clock [--device PATH] [--scarlett NODE] [--observe]\n"
     "       a3-core --render-truth user|network-file|network\n"
     "       a3-core --truth host NAME | --truth port PROGRAM ROLE\n"
     "       a3-core --links              the JACK/PipeWire connections, explained\n"
     "  core: every default from the truth (A3_OSC_TRUTH, else /usr/share/a3/a3-osc.json)\n"
     "  engine: --no-window and --service are accepted and do nothing (the engine role has no window)\n"
     "  screencast-fanout: --port defaults to A3_SCREENCAST_PORT\n"
-    "  clock: steers the PTP clock (--device, default /dev/ptp0) from the Scarlett; --observe only measures\n";
+    "  clock: steers the audio port's PTP clock from the Scarlett's capture node; --observe only measures\n";
 
 namespace
 {
@@ -45,7 +45,7 @@ const std::vector<Flag> engineFlags { { "--config", true }, { "--spatial", true 
                                       { "--timing", false }, { "--check-config", false }, { "--no-window", false },
                                       { "--service", false } };
 const std::vector<Flag> fanoutFlags { { "--port", true }, { "--linger", true } };
-const std::vector<Flag> clockFlags { { "--device", true }, { "--observe", false } };
+const std::vector<Flag> clockFlags { { "--device", true }, { "--scarlett", true }, { "--observe", false } };
 const std::vector<Flag> noFlags;
 
 const char* const dashes = "--";
@@ -355,8 +355,10 @@ void fillClock (ProgramArgs& args, const juce::StringArray& rest)
     {
         if (rest[i] == "--observe")
             args.clockObserve = true;
+        else if (rest[i] == "--scarlett")
+            args.clockScarlett = rest[++i].toStdString();   // checkFlags made sure it has a value
         else
-            args.clockDevice = rest[++i].toStdString();   // --device; checkFlags made sure it has a value
+            args.clockDevice = rest[++i].toStdString();
     }
 }
 

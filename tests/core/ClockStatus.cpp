@@ -16,6 +16,8 @@ ClockStatus locked()
     s.health = Health::locked;
     s.reason = "the PTP clock follows the Scarlett";
     s.device = "/dev/ptp0";
+    s.interface = "enp5s0";
+    s.portState = "MASTER";
     s.frequencyPpm = 14.1023;
     s.errorNs = 2'345.0;
     s.ratePpm = 0.012;
@@ -47,6 +49,8 @@ TEST (ClockStatus, GoesThroughJsonUnchanged)
     EXPECT_EQ (back->health, Health::locked);
     EXPECT_EQ (back->reason, "the PTP clock follows the Scarlett");
     EXPECT_EQ (back->device, "/dev/ptp0");
+    EXPECT_EQ (back->interface, "enp5s0");
+    EXPECT_EQ (back->portState, "MASTER");
     EXPECT_FALSE (back->observeOnly);
     EXPECT_DOUBLE_EQ (back->frequencyPpm, 14.1023);
     EXPECT_DOUBLE_EQ (back->errorNs, 2'345.0);
@@ -136,7 +140,7 @@ TEST (ClockStatus, TheJournalLineCarriesWhatTheSoakTestReads)
     const auto line = logLine (locked());
     EXPECT_EQ (line,
                "a3-core clock: locked error +2.3 us freq +14.102 ppm rate +0.012 ppm corrections 3990 "
-               "reanchors 1 steps 0 holdovers 2 losses 0 breaks 1 feed-restarts 3");
+               "reanchors 1 steps 0 holdovers 2 losses 0 breaks 1 feed-restarts 3 port MASTER");
     auto s = locked();
     s.ratePpm.reset();
     EXPECT_NE (logLine (s).find ("rate - ppm"), std::string::npos);
@@ -153,4 +157,36 @@ TEST (ClockStatus, TheReaderReadsTheFileOnceAPeriod)
     writeClockStatus (temp.file, s);
     EXPECT_EQ (reader.get (10.5, s.writtenAtUnix).status.counters.corrections, 3990);   // not yet
     EXPECT_EQ (reader.get (11.0, s.writtenAtUnix).status.counters.corrections, 4000);
+}
+
+TEST (ClockStatus, LockedIsLockedOnlyWithTheGrandmasterKnown)
+{
+    ClockReport report;
+    report.running = true;
+    report.status = locked();
+    EXPECT_EQ (clockIndicator (report).word, "LOCKED");
+    EXPECT_EQ (clockIndicator (report).tone, ClockIndicator::Tone::ok);
+    report.status.portState.clear();
+    EXPECT_EQ (clockIndicator (report).word, "UNVERIFIED");
+    EXPECT_EQ (clockIndicator (report).tone, ClockIndicator::Tone::caution);
+    EXPECT_NE (logLine (report.status).find ("port unverified"), std::string::npos);
+}
+
+TEST (ClockStatus, EveryOtherStateWarns)
+{
+    ClockReport report;
+    EXPECT_EQ (clockIndicator (report).word, "NOT RUNNING");
+    EXPECT_EQ (clockIndicator (report).tone, ClockIndicator::Tone::danger);
+    report.running = true;
+    report.status = locked();
+    report.status.health = Health::fault;
+    EXPECT_EQ (clockIndicator (report).tone, ClockIndicator::Tone::danger);
+    EXPECT_NE (clockIndicator (report).detail.find ("restart a3-clock.service"), std::string::npos);
+    report.status.health = Health::holdover;
+    EXPECT_EQ (clockIndicator (report).tone, ClockIndicator::Tone::danger);
+    report.status.health = Health::acquiring;
+    EXPECT_EQ (clockIndicator (report).tone, ClockIndicator::Tone::caution);
+    const auto json = toJson (clockIndicator (report));
+    EXPECT_EQ (json["word"].toString(), "ACQUIRING");
+    EXPECT_EQ (json["tone"].toString(), "caution");
 }

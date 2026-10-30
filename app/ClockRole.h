@@ -10,6 +10,13 @@
 //
 // Write access to the PHC is the device's group (`clock` on Debian: /dev/ptp* root:clock 0664), not a
 // capability. Opened read-only, the role still measures, and a write is refused and said (fault).
+//
+// The PHC is the audio port's (the truth's network.audio_port, where ptp4l@<port> runs), found in
+// sysfs as PipeWire's clock.interface finds it; a --device that is not that clock is refused. One
+// instance steers: it holds an flock on the PHC and on <runtime dir>/a3/clock.lock, and owns the
+// status file; --observe takes no lock and writes no status. ptp4l's port state is asked through
+// its read-only management socket with pmc; on the nucs that socket does not answer the user
+// (ptp4l's unit is sandboxed), and the state is then reported as unverified, never as LOCKED.
 #pragma once
 
 #include <memory>
@@ -40,7 +47,10 @@ public:
     std::optional<a3clock::PhcSample> read() override;
     std::optional<double> frequencyPpm() override;
     bool setFrequencyPpm (double) override;
+    std::optional<double> maxAdjustmentPpm() override;   // PTP_CLOCK_GETCAPS
     std::string problem() const override { return lastProblem; }
+    // An exclusive flock on the device: false (and said) when another clock role has it.
+    bool claim();
 
 private:
     void failed (const char* what);
@@ -51,6 +61,36 @@ private:
 };
 
 std::vector<std::string> profilerCommand();
+
+// "/dev/ptpN" of the interface (<sysClassNet>/<interface>/device/ptp/ptpN), or nullopt.
+std::optional<std::string> phcOfInterface (const juce::File& sysClassNet, const std::string& interface);
+// Why the role must not steer, or empty: no audio port, a port without a PHC, or a --device that is
+// not the port's.
+std::string phcRefusal (const std::string& audioPort, const std::optional<std::string>& portsPhc, const std::string& given);
+// The portState word of pmc's answer to GET PORT_DATA_SET, or nullopt when nobody answered.
+std::optional<std::string> portStateOf (const std::string& pmcOutput);
+// The last locked frequency, kept in the state directory for a warm start after a boot.
+std::optional<double> rememberedFrequency (const juce::File&);
+bool rememberFrequency (const juce::File&, double ppm);
+
+// ptp4l's port state through pmc on the read-only socket, without blocking: each call collects the
+// answer to the last one and asks again.
+class PmcPortState final : public a3clock::PtpPortState
+{
+public:
+    PmcPortState (const a3core::Platform&, juce::File clientSocket);
+    ~PmcPortState() override;
+    std::optional<std::string> portState() override;
+
+private:
+    void collect();
+    const a3core::Platform& platform;
+    juce::File socket;
+    std::unique_ptr<a3core::Child> child;
+    std::string output;
+    double startedAt = 0.0;
+    std::optional<std::string> last;
+};
 
 // A command's stdout as lines, from a child started through the platform (posix_spawn: a fork of a
 // large process can stall audio).
@@ -81,10 +121,23 @@ public:
     std::optional<int> tick (bool stopRequested) override;
 
 private:
-    juce::File statusFile;
+    struct Plan
+    {
+        std::string device, interface, refusal;
+    };
+    static Plan planFor (const ProgramArgs&, const a3core::Platform&);
+    bool takeInstanceLock();
+
+    Plan plan;
+    bool observe;
+    juce::File statusFile, lockFile, stateFile;
     a3core::Journal journal;
     LinuxPhc phc;
     ProfilerProcess feed;
-    a3clock::ClockDaemon daemon;
+    PmcPortState port;
+    int lockFd = -1;
+    bool ownsLock = false;
+    std::optional<int> exitCode;
+    std::optional<a3clock::ClockDaemon> daemon;
 };
 }

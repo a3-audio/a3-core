@@ -44,7 +44,8 @@ struct ProgramArgs
     double fanoutLinger = 10.0;
     juce::StringArray encoder;     // the fan-out's command, after --
     juce::StringArray subcommand;  // --render-truth's or --truth's words
-    std::string clockDevice = "/dev/ptp0";   // the PTP hardware clock the clock role steers
+    std::string clockDevice;                 // the PTP hardware clock to steer; empty: the audio port's
+    std::string clockScarlett = "alsa_input.usb-Focusrite_Scarlett_18i20";   // the capture node (node.name prefix)
     bool clockObserve = false;               // the clock role measures and never writes
 };
 
