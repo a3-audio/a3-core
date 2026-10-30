@@ -15,7 +15,7 @@ class CoreView
 public:
     struct Texts
     {
-        std::string status = "{}", rig = "{}";   // canonical JSON
+        std::string status = "{}", rig = "{}", departments = R"({"departments":[]})";   // canonical JSON
     };
 
     void publish (Texts texts)

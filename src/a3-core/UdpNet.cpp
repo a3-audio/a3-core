@@ -40,6 +40,19 @@ sockaddr_in addressOf (const Endpoint& endpoint)
 }
 }
 
+bool resolvesToIpv4 (const std::string& host)
+{
+    try
+    {
+        addressOf ({ host, 0 });
+        return true;
+    }
+    catch (const OsError&)
+    {
+        return false;
+    }
+}
+
 UdpSocket::UdpSocket() : descriptor (::socket (AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0)) {}
 
 UdpSocket::~UdpSocket()

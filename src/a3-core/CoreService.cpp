@@ -85,6 +85,7 @@ std::variant<std::unique_ptr<CoreService>, std::string> CoreService::start (Serv
 std::optional<std::string> CoreService::startUp()
 {
     say ("audio engine: engine");
+    readTheDepartments();
 
     // The self socket first, without a word: the hello gate trusts its place, which Core is given when
     // it is built. It only sends, so binding it early lets nothing in. (B1 bound it after the
@@ -143,6 +144,18 @@ std::optional<std::string> CoreService::startUp()
     return std::nullopt;
 }
 
+// The window's stored departments, for Core to subscribe at its start. A bad file or entry is said and
+// left out: a department never keeps Core from starting.
+void CoreService::readTheDepartments()
+{
+    if (options.departmentsFile == juce::File())
+        return;
+    auto stored = loadDepartments (options.departmentsFile);
+    for (const auto& problem : stored.problems)
+        say ("departments: " + problem, true);
+    options.core.departments = std::move (stored.list);
+}
+
 // The analyzer's and StemDeck's meters, for a remote Motion and the desks. A busy port costs a remote
 // Motion its meters, not the rig its sound. Read by the serve loop, not a thread of its own (P8).
 void CoreService::bindTheMetersInbox()
@@ -172,6 +185,10 @@ void CoreService::openTheWindow()
     else
         benchSocket = std::move (std::get<UdpSocket> (bench));
     addCoreRoutes (routes, &core->view(), [this] (const std::string& to, const OscMessage& message) { benchSend (to, message); });
+    DepartmentsDoor departments { resolvesToIpv4, {} };
+    if (options.departmentsFile != juce::File())
+        departments.save = [this] (const std::vector<Department>& list) { saveDepartmentsLive (list); };
+    addDepartmentRoutes (routes, &core->view(), std::move (departments));
     auto server = std::make_unique<HttpServer> (bind, std::move (routes));
     if (! server->start (journal))
         return;
@@ -186,7 +203,6 @@ void CoreService::openTheWindow()
 // is the serve thread's work, queued here and done before its next tick.
 void CoreService::benchSend (const std::string& to, const OscMessage& message)
 {
-    constexpr size_t queueLimit = 256;
     if (to == "self")
     {
         const std::scoped_lock hold (benchLock);
@@ -204,32 +220,57 @@ void CoreService::benchSend (const std::string& to, const OscMessage& message)
         }
         return;
     }
-    const std::scoped_lock hold (benchLock);
-    if (benchWork.size() >= queueLimit)
-        throw SendRefused ("the bench is busy, try again");
-    benchWork.push_back ([this, to, message] { core->sendFromBench (to, message); });
-}
-
-void CoreService::runTheBench()
-{
-    for (;;)
-    {
-        std::function<void()> work;
-        {
-            const std::scoped_lock hold (benchLock);
-            if (benchWork.empty())
-                return;
-            work = std::move (benchWork.front());
-            benchWork.pop_front();
-        }
+    onServeThread ([this, to, message] {
         try
         {
-            work();
+            core->sendFromBench (to, message);
         }
         catch (const std::exception& problem)
         {
             say (std::string ("the bench could not send: ") + problem.what(), true);
         }
+    });
+}
+
+void CoreService::saveDepartmentsLive (const std::vector<Department>& list)
+{
+    const std::scoped_lock hold (departmentsLock);
+    if (! saveDepartments (options.departmentsFile, list))
+        throw DepartmentsRefused ("could not write " + options.departmentsFile.getFullPathName().toStdString());
+    onServeThread ([this, list] {
+        try
+        {
+            core->setDepartments (list);
+        }
+        catch (const std::exception& problem)
+        {
+            say (std::string ("departments: not applied: ") + problem.what(), true);
+        }
+    });
+}
+
+void CoreService::onServeThread (std::function<void()> work)
+{
+    constexpr size_t queueLimit = 256;
+    const std::scoped_lock hold (workLock);
+    if (serveWork.size() >= queueLimit)
+        throw SendRefused ("Core is busy, try again");
+    serveWork.push_back (std::move (work));
+}
+
+void CoreService::runQueuedWork()
+{
+    for (;;)
+    {
+        std::function<void()> work;
+        {
+            const std::scoped_lock hold (workLock);
+            if (serveWork.empty())
+                return;
+            work = std::move (serveWork.front());
+            serveWork.pop_front();
+        }
+        work();
     }
 }
 
@@ -274,7 +315,7 @@ void CoreService::serve()
                      },
                      [this] { return serving.load(); },
                      [this] {
-                         runTheBench();
+                         runQueuedWork();
                          core->tick();
                      } };
     if (vuSocket)

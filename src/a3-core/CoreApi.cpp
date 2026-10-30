@@ -243,6 +243,32 @@ HttpResponse textResponse (const std::string& json)
     response.body = json;
     return response;
 }
+
+// The body of a POST /api/departments: the whole list, checked, then saved; or why not, and nothing saved.
+HttpResponse departmentsSaved (const DepartmentsDoor& door, const HttpRequest& request)
+{
+    if (! door.save)
+        return refused ("this Core keeps no departments file");
+    juce::String error;
+    const auto asked = parseJson (juce::String::fromUTF8 (request.body.data(), static_cast<int> (request.body.size())), error);
+    if (error.isNotEmpty())
+        return refused ("the body is not JSON: " + error.toStdString());
+    auto read = departmentsFrom (asked["departments"]);
+    if (const auto* why = std::get_if<std::string> (&read))
+        return refused (*why);
+    const auto& list = std::get<std::vector<Department>> (read);
+    if (const auto problem = listProblem (list, door.resolves))
+        return refused (*problem);
+    try
+    {
+        door.save (list);
+    }
+    catch (const std::exception& problem)
+    {
+        return refused (problem.what());
+    }
+    return jsonResponse (objectOf ({ { "departments", departmentsJson (list) } }));
+}
 }
 
 OscArg parseValue (const std::string& text)
@@ -264,6 +290,14 @@ void addCoreRoutes (Routes& routes, const CoreView* view, BenchSend send)
     routes.get ("/api/status", [view] (const HttpRequest&) { return textResponse (view != nullptr ? view->texts().status : "{}"); });
     routes.get ("/api/rig", [view] (const HttpRequest&) { return textResponse (view != nullptr ? view->texts().rig : "{}"); });
     routes.post ("/api/send", [send = std::move (send)] (const HttpRequest& request) { return benchSends (send, request); });
+}
+
+void addDepartmentRoutes (Routes& routes, const CoreView* view, DepartmentsDoor door)
+{
+    routes.get ("/api/departments", [view] (const HttpRequest&) {
+        return textResponse (view != nullptr ? view->texts().departments : R"({"departments":[]})");
+    });
+    routes.post ("/api/departments", [door = std::move (door)] (const HttpRequest& request) { return departmentsSaved (door, request); });
 }
 
 std::string defaultBind (const Truth& truth)

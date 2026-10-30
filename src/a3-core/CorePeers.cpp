@@ -215,6 +215,64 @@ void Core::pointMotionAt (const Endpoint& endpoint, const std::string& why)
 }
 
 //==============================================================================
+// The departments: the window's list beside the service file's --subscriber.
+
+std::vector<std::string> Core::serviceNames() const
+{
+    std::vector<std::string> names;
+    for (const auto& subscriber : serviceSubscribers)
+        names.push_back (subscriber.name);
+    return names;
+}
+
+void Core::setDepartments (std::vector<Department> stored)
+{
+    subscribersOwner.check ("the departments");
+    applyDepartments (std::move (stored), true);
+}
+
+// Who left goes first, then who joined or moved; one that joined or moved knows nothing yet and is told the
+// whole state (with everyone, as a desk that joins is) -- unless Core is still starting and says it anyway.
+void Core::applyDepartments (std::vector<Department> stored, bool speak)
+{
+    storedDepartments = std::move (stored);
+    const auto wanted = departmentClients (storedDepartments, serviceNames());
+    const auto find = [] (const std::vector<Client>& clients, const std::string& name) {
+        return std::find_if (clients.begin(), clients.end(), [&] (const Client& client) { return client.name == name; });
+    };
+    for (const auto& old : departmentSubscribers)
+    {
+        if (find (wanted, old.name) != wanted.end())
+            continue;
+        dropNamed (subscribers, old.name);
+        peerHosts.erase (old.name);
+        say ("department " + old.name + " is told nothing more");
+    }
+    bool joined = false;
+    for (const auto& client : wanted)
+    {
+        const auto where = client.to.host + ":" + std::to_string (client.to.port);
+        const auto old = find (departmentSubscribers, client.name);
+        if (old == departmentSubscribers.end())
+        {
+            addSubscriber (subscribers, client);
+            say ("department " + client.name + " at " + where);
+            joined = true;
+        }
+        else if (! (old->to == client.to))
+        {
+            replaceNamed (subscribers, client);
+            say ("department " + client.name + " now at " + where);
+            joined = true;
+        }
+        peerHosts[client.name] = client.to.host;
+    }
+    departmentSubscribers = wanted;
+    if (joined && speak)
+        say ("departments: replayed " + std::to_string (sayTheWholeState()) + " messages");
+}
+
+//==============================================================================
 // The desks and pro-DJ apps.
 
 std::optional<Client> Core::deskClientOf (const std::string& host) const

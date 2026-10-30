@@ -41,6 +41,7 @@ struct ServiceOptions
     std::optional<juce::File> truthPath;       // none: the installed a3-osc.json
     std::optional<juce::File> networkPath;     // the maintainer's network.json; none: no file
     Clock* clock = nullptr;                    // the one clock of every `now`; none: the system's
+    juce::File departmentsFile;                // the window's stored departments; none: POST /api/departments is refused
 };
 
 class CoreService
@@ -73,6 +74,7 @@ private:
     CoreService (ServiceOptions, Journal, Truth);
 
     std::optional<std::string> startUp();   // on the serve thread; an error ends the start
+    void readTheDepartments();
     void bindTheMetersInbox();
     void openTheWindow();
     void startAnnouncing();
@@ -80,7 +82,13 @@ private:
     // its own to Core's main port; mixer and motion are queued to the serve thread, which sends them
     // through Core's own clients. Core is never called from here (P8).
     void benchSend (const std::string& to, const OscMessage& message);
-    void runTheBench();                     // on the serve thread, before every tick
+    // POST /api/departments, on an HTTP thread, the list already checked: written to the file, then Core
+    // is handed it on the serve thread. DepartmentsRefused when the file cannot be written.
+    void saveDepartmentsLive (const std::vector<Department>& list);
+    // Work for the serve thread, done before its next tick, in the order it came; SendRefused when the
+    // queue is full.
+    void onServeThread (std::function<void()> work);
+    void runQueuedWork();                   // on the serve thread, before every tick
     void serve();                           // the serve loop, then Core's stop(), on the serve thread
     void say (const std::string& line, bool toStderr = false) { journal (line, toStderr); }
     void stopHelpers();                     // the window and the announcer
@@ -99,8 +107,10 @@ private:
     std::unique_ptr<HttpServer> window;
     std::string windowHost;
     std::optional<UdpSocket> benchSocket;      // the bench's `self` leaves from here: a stranger to the hello gate
-    std::mutex benchLock;                      // guards benchSocket's use and benchWork
-    std::deque<std::function<void()>> benchWork;
+    std::mutex benchLock;                      // guards benchSocket's use
+    std::mutex workLock;                       // guards serveWork
+    std::deque<std::function<void()>> serveWork;
+    std::mutex departmentsLock;                // one save at a time: file and queue in the same order
     std::atomic<int> servedPort { 0 };         // the main port once it is open
 
     std::thread serveThread, announceThread;

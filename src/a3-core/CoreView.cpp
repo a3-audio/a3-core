@@ -5,6 +5,8 @@
 // for the HTTP threads (CoreView); a call from any other thread is the mistake P8 forbids and throws.
 #include "Core.h"
 
+#include <algorithm>
+
 #include "Json.h"
 
 namespace a3core
@@ -66,10 +68,40 @@ juce::var Core::rigJson() const
                        { "devices", deviceTable.snapshot (now) } });
 }
 
+// The service file's first (read-only in the window), then the stored ones. A stored entry the service
+// file overrides is not what was sent to that name: it reports nothing sent.
+juce::var Core::departmentsJson() const
+{
+    subscribersOwner.check ("the departments");
+    const auto now = env.clock.monotonic();
+    const auto names = serviceNames();
+    juce::Array<juce::var> rows;
+    const auto rowOf = [&] (const std::string& name, const std::string& host, int port, bool on, const char* from, bool overridden) {
+        const bool subscribed = on && ! overridden;
+        const auto tally = sentTally.find (name);
+        const bool counted = ! overridden && tally != sentTally.end();
+        rows.add (objectOf ({ { "name", text (name) },
+                              { "host", text (host) },
+                              { "port", port },
+                              { "on", on },
+                              { "from", from },
+                              { "subscribed", subscribed },
+                              { "overridden", overridden },
+                              { "sent", counted ? juce::var (tally->second.count) : juce::var (0) },
+                              { "last_sent", counted ? juce::var (now - tally->second.last) : juce::var() } }));
+    };
+    for (const auto& subscriber : serviceSubscribers)
+        rowOf (subscriber.name, subscriber.host, subscriber.port, true, "service", false);
+    for (const auto& entry : storedDepartments)
+        rowOf (entry.name, entry.host, entry.port, entry.on, "window",
+               std::find (names.begin(), names.end(), entry.name) != names.end());
+    return objectOf ({ { "departments", rows } });
+}
+
 void Core::publishView()
 {
     subscribersOwner.check ("publishing the view");
-    published.publish ({ canonicalBytes (statusJson()), canonicalBytes (rigJson()) });
+    published.publish ({ canonicalBytes (statusJson()), canonicalBytes (rigJson()), canonicalBytes (departmentsJson()) });
     viewPublishedAt = env.clock.monotonic();
 }
 

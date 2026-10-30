@@ -3,7 +3,7 @@
 # The Core as a pure library (namespace a3core): no audio device, no GUI.
 add_library(a3-core-lib STATIC Version.cpp Json.cpp Truth.cpp OscWire.cpp Dispatcher.cpp LatestWins.cpp
     Presence.cpp DelayValues.cpp HelloGate.cpp Devices.cpp Desks.cpp MotionTarget.cpp ProdjLive.cpp
-    Buttons.cpp Tempo.cpp TempoSource.cpp Ahead.cpp DeskFirst.cpp SendFailures.cpp Subscribers.cpp Announce.cpp
+    Buttons.cpp Tempo.cpp TempoSource.cpp Ahead.cpp DeskFirst.cpp SendFailures.cpp Subscribers.cpp Departments.cpp Announce.cpp
     StateFile.cpp CoreState.cpp Recall.cpp Evening.cpp
     Stems.cpp StemsWords.cpp Decks.cpp EngineWords.cpp StartupRecall.cpp
     Traffic.cpp SeenFile.cpp Register.cpp Render.cpp VuRelay.cpp

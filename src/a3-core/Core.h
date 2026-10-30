@@ -20,6 +20,7 @@
 #include "Channels.h"
 #include "CoreView.h"
 #include "Decks.h"
+#include "Departments.h"
 #include "DeskFirst.h"
 #include "Desks.h"
 #include "Devices.h"
@@ -50,6 +51,7 @@ struct CoreArgs
     Endpoint mixer, motion;
     std::vector<std::string> subscribers;   // NAME=HOST:PORT, as --subscriber
     bool printOsc = false;
+    std::vector<Department> departments;    // the window's stored list (Departments.h)
 };
 
 struct CoreEnvironment
@@ -96,6 +98,15 @@ public:
     const CoreView& view() const { return published; }
     static constexpr double publishEvery = 0.25;
 
+    // The stored departments, live: an entry that is on and whose name the service file does not give
+    // is subscribed (one that joins is told the whole state), one that went or was switched off is told
+    // nothing more. Serve thread only.
+    void setDepartments (std::vector<Department> stored);
+    // {"departments": [...]}: the service file's subscribers (from "service"), then the stored entries
+    // (from "window"), each with whether it is subscribed, whether the service file overrides it, how
+    // many messages it was sent and how many seconds ago the last one (null: none yet).
+    juce::var departmentsJson() const;
+
     // The bench's mixer and motion: sent as Core's own clients send, so the traffic table has the
     // row. Serve thread only. std::invalid_argument for any other `to`.
     void sendFromBench (const std::string& to, const OscMessage& message);
@@ -114,6 +125,8 @@ private:
     bool engineHeard() const;
     void sendToEngine (const std::vector<Message>& messages);
     void say (const std::string& line, bool toStderr = false);
+    void applyDepartments (std::vector<Department> stored, bool speak);
+    std::vector<std::string> serviceNames() const;
 
     // What is said whole: at start-up, to a recall, to a Motion that moved.
     void speakRememberedState();
@@ -211,6 +224,15 @@ private:
 
     Client mixerClient, motionClient, engineClient, selfClient;
     std::vector<Client> subscribers;
+    std::vector<Subscriber> serviceSubscribers;   // --subscriber, as parsed: the service file's
+    std::vector<Department> storedDepartments;    // the window's list, as last given
+    std::vector<Client> departmentSubscribers;    // those of it that are subscribed now
+    struct SentTally
+    {
+        long long count = 0;
+        double last = 0;
+    };
+    std::map<std::string, SentTally> sentTally;   // per client name: what Core::send sent it
     std::set<std::string> motionOwnHosts;
     MotionTarget motion;
     DeskFollowers desks;

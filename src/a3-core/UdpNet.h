@@ -53,6 +53,9 @@ private:
     int descriptor = -1;
 };
 
+// Whether `host` (a dotted IPv4 address or a name) resolves to an IPv4 address now, as a send would.
+bool resolvesToIpv4 (const std::string& host);
+
 class UdpNet final : public Outbox
 {
 public:

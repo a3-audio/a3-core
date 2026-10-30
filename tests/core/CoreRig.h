@@ -53,6 +53,8 @@ public:
         std::optional<Endpoint> mixer = {};
         const Truth* truth = nullptr;   // b0::truth() when none
         bool start = true;              // false: Core is built, start() is the test's
+        std::vector<std::string> subscribers = {};   // --subscriber NAME=HOST:PORT
+        std::vector<Department> departments = {};    // the window's stored list
     };
 
     struct WithOptions {};   // tells the two constructors apart: a braced file list is no Options
@@ -69,7 +71,7 @@ public:
             coreDir.getChildFile (name).replaceWithText (text, false, false, "\n");
         net.toSelf = [this] (const std::vector<uint8_t>& data) { toSelf.push_back (data); };
         CoreArgs coreArgs { truth.host ("any"), truth.port ("core", "osc"), options.mixer.value_or (truth.endpoint ("mixer", "osc")),
-                            truth.endpoint ("motion", "osc"), {} };
+                            truth.endpoint ("motion", "osc"), options.subscribers, false, options.departments };
         CoreEnvironment environment { truth, net, clock,
                                       [this] (const std::string& line, bool toStderr) { net.journal (line, toStderr); },
                                       stateDir,

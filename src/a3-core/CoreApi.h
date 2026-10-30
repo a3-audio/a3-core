@@ -14,6 +14,9 @@
 //   GET /api/status    {"audio_engine", "reason"}: which engine runs (a3_core_web's /api/status)
 //   GET /api/rig       who is there: Motion, the desks, the decks, StemDeck, LIVE, the engine, the devices
 //   POST /api/send     the bench: {"to": self|mixer|motion, "address", "value"}
+//   GET /api/departments   {"departments": [...]}: the service file's and the stored ones, with what each was sent
+//   POST /api/departments  {"departments": [{"name", "host", "port", "on"}, ...]}: the whole stored list, checked,
+//                          then stored and applied live; 400 {"problem"} and nothing stored when it is refused
 // None of these three calls into Core: status and rig are the copy the serve thread published
 // (CoreView), and the bench hands what it sends to the callback it is given.
 #pragma once
@@ -25,6 +28,7 @@
 #include <juce_core/juce_core.h>
 
 #include "CoreView.h"
+#include "Departments.h"
 #include "Devices.h"
 #include "HttpServer.h"
 #include "Net.h"
@@ -67,6 +71,23 @@ using BenchSend = std::function<void (const std::string& to, const OscMessage&)>
 // Status, rig and the bench. `view` null: status and rig answer {}. `send` empty: a read-only window,
 // the bench is refused.
 void addCoreRoutes (Routes& routes, const CoreView* view, BenchSend send);
+
+// Thrown by a departments save that could not be done (the file not written); what() is said to the window.
+struct DepartmentsRefused : std::runtime_error
+{
+    using std::runtime_error::runtime_error;
+};
+
+// Where a checked list goes: `resolves` decides whether a host name resolves; `save` stores the list and
+// has Core apply it (DepartmentsRefused when it cannot). No `save`: this Core keeps no list, POST is refused.
+struct DepartmentsDoor
+{
+    HostResolves resolves;
+    std::function<void (const std::vector<Department>&)> save;
+};
+
+// GET /api/departments from the view (null: an empty list), POST /api/departments through the door.
+void addDepartmentRoutes (Routes& routes, const CoreView* view, DepartmentsDoor door);
 
 // a3_core_web.default_bind: where the window listens unless told otherwise, the truth's `core.web`
 // listener as "host:port".

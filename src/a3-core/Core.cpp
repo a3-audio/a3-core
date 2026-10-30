@@ -77,12 +77,14 @@ void Core::startPeers()
     helloGate.trustHost (peerHosts["mixer"]);
 
     subscribers = { mixerClient, motionClient };
-    for (const auto& extra : parseSubscribers (args.subscribers, shipped))   // SubscriberError: the service refuses to start
+    serviceSubscribers = parseSubscribers (args.subscribers, shipped);   // SubscriberError: the service refuses to start
+    for (const auto& extra : serviceSubscribers)
     {
         subscribers.push_back ({ extra.name, { extra.host, extra.port } });
         peerHosts[extra.name] = extra.host;
         say ("subscriber " + extra.name + " at " + extra.host + ":" + std::to_string (extra.port));
     }
+    applyDepartments (args.departments, false);   // told the remembered state with everyone, in startSpeaking
 
     // Replayed on the engine's hello; after the first replay the evening is Core's own live one.
     project.emplace (replayable (truth, eveningFile.load()),
@@ -169,6 +171,9 @@ void Core::send (const Client& client, const OscMessage& message)
     else
         trafficTable.seen (Direction::out, message.address, message.args.empty() ? nullptr : &message.args.front(), client.name,
                            env.clock.monotonic());
+    auto& tally = sentTally[client.name];
+    ++tally.count;
+    tally.last = env.clock.monotonic();
     sendFailures.send (client.name, [&] { env.out.send (client, message); });
 }
 

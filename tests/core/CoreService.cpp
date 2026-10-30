@@ -1361,3 +1361,66 @@ TEST (CoreApi, TheWindowAddressIsTheBoundOneAsB1Says)
     EXPECT_EQ (port.host, loopbackAddress());
     EXPECT_TRUE (rig.said.find ("window on http://" + loopbackAddress() + ":" + std::to_string (port.port)).has_value());
 }
+
+//==============================================================================
+// Departments: stored in Core's config, applied live, never a reason not to start.
+
+namespace
+{
+std::string departmentsBody (const std::vector<Department>& list)
+{
+    return canonicalBytes (objectOf ({ { "departments", departmentsJson (list) } }));
+}
+
+ServiceOptions withDepartmentsFile (const Rig& rig)
+{
+    auto options = rig.options();
+    options.departmentsFile = departmentsFile (rig.home.getChildFile (".config/a3"));
+    return options;
+}
+}
+
+TEST (CoreService, ADepartmentSavedInTheWindowIsStoredAndToldAtOnce)
+{
+    Rig rig;
+    const Socket light;
+    const auto options = withDepartmentsFile (rig);
+    ASSERT_TRUE (rig.start (options)) << rig.error;
+    const Department entry { "light", loopbackAddress(), light.port(), true };
+    const auto reply = httpclient::post (rig.service->webPort().port, "/api/departments", departmentsBody ({ entry }));
+    EXPECT_EQ (reply.status, 200) << reply.body;
+    EXPECT_EQ (loadDepartments (options.departmentsFile).list, (std::vector<Department> { entry }));
+    EXPECT_FALSE (light.messages (500).empty()) << "a department that joins is told the whole state";
+    EXPECT_TRUE (waitUntil ([&] {
+        const auto rows = jsonOf (httpclient::get (rig.service->webPort().port, "/api/departments"))["departments"];
+        return rows.size() == 1 && static_cast<int> (rows[0]["sent"]) > 0;
+    }));
+}
+
+TEST (CoreService, AStoredDepartmentIsToldFromTheStart)
+{
+    Rig rig;
+    const Socket light;
+    const auto options = withDepartmentsFile (rig);
+    ASSERT_TRUE (saveDepartments (options.departmentsFile, { { "light", loopbackAddress(), light.port(), true } }));
+    ASSERT_TRUE (rig.start (options)) << rig.error;
+    EXPECT_FALSE (light.messages (500).empty());
+}
+
+TEST (CoreService, ABrokenDepartmentsFileIsSaidAndCoreStarts)
+{
+    Rig rig;
+    const auto options = withDepartmentsFile (rig);
+    options.departmentsFile.getParentDirectory().createDirectory();
+    options.departmentsFile.replaceWithText ("{ not json");
+    ASSERT_TRUE (rig.start (options)) << rig.error;
+    EXPECT_TRUE (rig.said.find ("departments: ").has_value());
+}
+
+TEST (CoreService, WithoutADepartmentsFileTheSaveIsRefused)
+{
+    Rig rig;
+    ASSERT_TRUE (rig.start()) << rig.error;
+    const auto reply = httpclient::post (rig.service->webPort().port, "/api/departments", departmentsBody ({}));
+    EXPECT_EQ (reply.status, 400);
+}
