@@ -9,7 +9,7 @@ add_library(a3-engine-app-lib STATIC EngineHost.cpp OscVocabulary.cpp HelloSende
     ui/MonitorTrafficPage.cpp ui/MonitorTruthPage.cpp ui/MonitorUnknownPage.cpp ui/MonitorRegisterPage.cpp ui/MonitorBenchPage.cpp
     ui/AudioPage.cpp ui/ClockPanel.cpp ui/StatusPage.cpp ui/MainWindow.cpp
     ui/ChannelsPage.cpp ui/ZonesPage.cpp ui/SpeakersPage.cpp ui/IoPage.cpp ui/CalibrationPage.cpp ui/FilterPage.cpp ui/SaveBar.cpp
-    ui/KeyboardPolicy.cpp ui/OnboardLink.cpp ui/OnScreenKeyboard.cpp)
+    ui/KeyboardPolicy.cpp ui/OnboardLink.cpp ui/OnScreenKeyboard.cpp RoundTripProbe.cpp RoundTripLoop.cpp)
 target_include_directories(a3-engine-app-lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/ui)
 target_link_libraries(a3-engine-app-lib PUBLIC a3-engine a3-links a3-engine-bench-lib a3-core-lib a3-clock)
 target_compile_options(a3-engine-app-lib PRIVATE -Wall -Wextra -Werror=switch)
