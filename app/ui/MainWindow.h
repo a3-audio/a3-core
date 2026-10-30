@@ -45,8 +45,8 @@ struct WindowBands
     juce::Rectangle<int> navigation, page, footer;
 };
 
-// The window: the setup pages' keys (AUDIO, CHANNELS, ZONES, SPEAKERS, I/O, CALIBRATION, FILTER, STATUS) in a row
-// across the top; with a Core client and the OSC MONITOR switch on, the monitor's (TRAFFIC, TRUTH & DEVICES, NOT
+// The window: the setup pages' keys (AUDIO, CHANNELS, ZONES, SPEAKERS, I/O, CALIBRATION, FILTER, STATUS, and with a
+// Core client DEPARTMENTS, which only asks Core while it is shown) in a row across the top; with a Core client and the OSC MONITOR switch on, the monitor's (TRAFFIC, TRUTH & DEVICES, NOT
 // UNDERSTOOD, REGISTER, BENCH) in a second row. The shown page below them at the full width, and a footer: KEYS,
 // the OSC MONITOR and Tooltips switches, and the Save bar. With service = true the close button only hides it
 // (the app is a unit that only SIGTERM ends); otherwise it asks the app to quit.

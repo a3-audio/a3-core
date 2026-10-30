@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "MainWindow.h"
 
+#include "DepartmentsPage.h"
 #include "MonitorBenchPage.h"
 #include "MonitorRegisterPage.h"
 #include "MonitorTrafficPage.h"
@@ -80,6 +81,8 @@ public:
         if (monitor.core != nullptr)
         {
             auto& core = *monitor.core;
+            // Core's, not the monitor's: no switch hides it. It asks Core only while it is shown.
+            addPage ("DEPARTMENTS", std::make_unique<DepartmentsPage> (core), false, true);
             addPage ("TRAFFIC", std::make_unique<MonitorTrafficPage> (core), true);
             addPage ("TRUTH & DEVICES", std::make_unique<MonitorTruthPage> (core), true);
             addPage ("NOT UNDERSTOOD", std::make_unique<MonitorUnknownPage> (core), true);
@@ -160,7 +163,7 @@ public:
     void refresh()
     {
         for (auto& page : pages)
-            if (! page.monitor)
+            if (! page.monitor && ! page.onlyWhenShown)
                 page.refresh();   // the engine pages keep their pending edits current even when hidden
         refreshShown();
         showZonesKeys();
@@ -207,6 +210,7 @@ private:
         std::function<void()> refresh;
         bool monitor = false;
         std::unique_ptr<juce::TextButton> key;
+        bool onlyWhenShown = false;   // refreshed (and so asking Core) only while it is the page shown
     };
 
     // KEYS sits at the foot of the page list, where the hand already is. It never takes the focus: pressing it
@@ -240,10 +244,10 @@ private:
     }
 
     template <class PageType>
-    void addPage (const juce::String& name, std::unique_ptr<PageType> made, bool isMonitor = false)
+    void addPage (const juce::String& name, std::unique_ptr<PageType> made, bool isMonitor = false, bool onlyWhenShown = false)
     {
         auto* raw = made.get();
-        Page page { name, std::move (made), [raw] { raw->refresh(); }, isMonitor, std::make_unique<juce::TextButton> (name) };
+        Page page { name, std::move (made), [raw] { raw->refresh(); }, isMonitor, std::make_unique<juce::TextButton> (name), onlyWhenShown };
         page.key->setRadioGroupId (pageGroup);
         page.key->setClickingTogglesState (false);   // show() decides which one is on
         page.key->onClick = [this, name] { show (name); };
@@ -335,7 +339,7 @@ private:
 
     void refreshShown()
     {
-        if (! pages.empty() && pages[(size_t) shown].monitor)
+        if (! pages.empty() && (pages[(size_t) shown].monitor || pages[(size_t) shown].onlyWhenShown))
             pages[(size_t) shown].refresh();
     }
 

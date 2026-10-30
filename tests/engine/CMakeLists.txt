@@ -31,7 +31,7 @@ add_executable(a3-engine-tests ReferenceSmoke.cpp Laws.cpp PurestGain.cpp Smooth
     ../app/Pages.cpp ../app/StatusGrouping.cpp ../app/DeckAudioState.cpp ../app/ConfigEdits.cpp ../app/SessionRestart.cpp
     ../app/DefaultConfig.cpp ../app/ProgramArgs.cpp ../app/Supervisor.cpp
     ../app/EngineControlApi.cpp ../app/RemoteHostView.cpp
-    ../app/Monitor.cpp ../app/KeyboardPolicy.cpp ../app/OnScreenKeyboard.cpp ../app/WindowProcess.cpp ../app/Subcommands.cpp
+    ../app/Monitor.cpp ../app/Departments.cpp ../app/KeyboardPolicy.cpp ../app/OnScreenKeyboard.cpp ../app/WindowProcess.cpp ../app/Subcommands.cpp
     ../app/LinksOverview.cpp ../app/ClockRole.cpp ../app/RoundTripProbe.cpp ../app/RoundTripLoop.cpp ../app/RoundTripText.cpp ../app/AnalogChain.cpp
     ../app/AudioTiming.cpp ../app/TimingControl.cpp ../app/CommandRunner.cpp)
 target_include_directories(a3-engine-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../app)

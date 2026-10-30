@@ -11,6 +11,8 @@
 //   unknown, register   only when asked for (requestUnknown, requestRegister): they can be tens of thousands
 //             of rows, and Core's page never streamed them either.
 //   send, recall        the bench: POST /api/send, on the caller's thread, with Core's answer or refusal.
+//   departments         /api/departments when asked for (requestDepartments), shown or not: the DEPARTMENTS page is
+//             no monitor page. saveDepartments: POST /api/departments, on the caller's thread.
 //
 // Each cache has a generation that moves only when something new arrived, so a page that refreshes at
 // 20 Hz copies only when there is news -- and then, for the traffic, only a glance (the rows and at most
@@ -30,6 +32,7 @@
 
 #include <juce_core/juce_core.h>
 
+#include "Departments.h"
 #include "Truth.h"
 
 namespace a3app
@@ -102,6 +105,25 @@ struct RegisterReport
     int seen = 0, unseen = 0;
 };
 
+// One row of Core's departments report: the entry, where it comes from ("service": --subscriber in the
+// service file, read-only; "window": the stored list), and what Core does with it.
+struct DepartmentRow
+{
+    a3core::Department entry;
+    std::string from;
+    bool subscribed = false, overridden = false;
+    long long sent = 0;
+    std::optional<double> lastSent;   // seconds since the last message; none: nothing sent yet
+};
+
+struct DepartmentsReport
+{
+    bool answered = false;   // Core answered the last ask
+    std::vector<DepartmentRow> rows;
+};
+
+std::vector<DepartmentRow> departmentRowsFromJson (const juce::var& report);
+
 // What the TRAFFIC page reads: the report without the ring, and only the history it shows.
 struct TrafficGlance
 {
@@ -161,12 +183,14 @@ public:
     bool monitorShown() const { return shown; }
     void requestUnknown();
     void requestRegister();
+    void requestDepartments();
 
     // Move only when something new arrived (an event, a poll's answer, a fetch, a lost Core).
     std::uint64_t trafficGeneration() const { return trafficMoves; }
     std::uint64_t summaryGeneration() const { return summaryMoves; }
     std::uint64_t unknownGeneration() const { return unknownMoves; }
     std::uint64_t registerGeneration() const { return registerMoves; }
+    std::uint64_t departmentsGeneration() const { return departmentsMoves; }
 
     // The rows and the history of one direction and address (empty address: every address), newest first,
     // at most `limit` entries. What a page copies.
@@ -175,10 +199,13 @@ public:
     CoreSummary summary() const;
     UnknownReport unknown() const;
     RegisterReport registerReport() const;
+    DepartmentsReport departments() const;
 
     // POST /api/send: ok, and lastAnswer() says what Core sent; or Core's refusal as the failure.
     juce::Result send (const std::string& to, const std::string& address, const std::string& valueText);
     juce::Result recall();   // the truth's state.recall with 1, to Core itself
+    // POST /api/departments: the whole stored list. ok, or Core's refusal (nothing was stored then).
+    juce::Result saveDepartments (const std::vector<a3core::Department>&);
     juce::String lastAnswer() const;
     const std::string& recallAddress() const { return recallPattern; }
 
@@ -194,8 +221,8 @@ private:
     const std::string host;
     const int port;
     const std::string recallPattern;
-    std::atomic<bool> shown { false }, unknownAsked { false }, registerAsked { false };
-    std::atomic<std::uint64_t> trafficMoves { 0 }, summaryMoves { 0 }, unknownMoves { 0 }, registerMoves { 0 };
+    std::atomic<bool> shown { false }, unknownAsked { false }, registerAsked { false }, departmentsAsked { false };
+    std::atomic<std::uint64_t> trafficMoves { 0 }, summaryMoves { 0 }, unknownMoves { 0 }, registerMoves { 0 }, departmentsMoves { 0 };
     std::mutex roundLock;   // one round at a time: the thread's or refreshNow's
     std::unique_ptr<Stream> stream;
     mutable std::mutex cacheLock;
@@ -203,6 +230,7 @@ private:
     CoreSummary summaryCache;
     UnknownReport unknownCache;
     RegisterReport registerCache;
+    DepartmentsReport departmentsCache;
     juce::String answer;
     std::atomic<bool> stopping { false };
     std::mutex wakeLock;

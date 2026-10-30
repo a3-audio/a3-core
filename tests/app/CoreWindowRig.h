@@ -5,6 +5,7 @@
 // client in front: what the window's monitor pages see in the program. The bench's sends are recorded;
 // a send to "mixer" is refused as Core's sender refuses one it cannot make.
 #pragma once
+#include <algorithm>
 #include <memory>
 #include <stdexcept>
 #include <vector>
@@ -12,6 +13,8 @@
 #include "CoreApi.h"
 #include "CoreClient.h"
 #include "HttpServer.h"
+#include "Json.h"
+#include "Subscribers.h"
 #include "Traffic.h"
 #include "Truth.h"
 
@@ -41,6 +44,8 @@ struct CoreWindowRig
     a3core::CoreView view;
     juce::File registerFile = juce::File::createTempFile ("osc-register.json");
     std::vector<std::pair<std::string, a3core::OscMessage>> sent;
+    std::vector<std::vector<a3core::Department>> departmentsSaved;   // what POST /api/departments handed on
+    std::vector<a3core::Subscriber> serviceSubscribers;               // what the report names as the service file's
     std::unique_ptr<a3core::HttpServer> server;
     std::unique_ptr<a3app::CoreClient> client;
 
@@ -58,6 +63,13 @@ struct CoreWindowRig
                 throw a3core::SendRefused ("the mixer has no address yet");
             sent.emplace_back (to, message);
         });
+        a3core::DepartmentsDoor door;
+        door.resolves = [] (const std::string& host) { return host != "nowhere.invalid"; };
+        door.save = [this] (const std::vector<a3core::Department>& list) {
+            departmentsSaved.push_back (list);
+            publishDepartments (list);
+        };
+        a3core::addDepartmentRoutes (routes, &view, std::move (door));
         server = std::make_unique<a3core::HttpServer> (a3core::loopbackAddress() + ":0", std::move (routes));
         if (! server->start ([] (const std::string&, bool) {}))
             throw std::runtime_error ("Core's window did not start");
@@ -69,6 +81,40 @@ struct CoreWindowRig
         client.reset();
         server->stop();
         registerFile.deleteFile();
+    }
+
+    // The report Core would publish for `stored` beside the service file's: what is on and not overridden is
+    // subscribed and was sent `sent` messages, the last `ago` seconds before now.
+    void publishDepartments (const std::vector<a3core::Department>& stored, long long sentCount = 3, double ago = 0.5)
+    {
+        juce::Array<juce::var> rows;
+        const auto row = [&] (const std::string& name, const std::string& host, int port, bool on, const char* from, bool overridden) {
+            auto* made = new juce::DynamicObject();
+            const bool subscribed = on && ! overridden;
+            made->setProperty ("name", juce::String (name));
+            made->setProperty ("host", juce::String (host));
+            made->setProperty ("port", port);
+            made->setProperty ("on", on);
+            made->setProperty ("from", juce::String (from));
+            made->setProperty ("subscribed", subscribed);
+            made->setProperty ("overridden", overridden);
+            made->setProperty ("sent", subscribed ? juce::var (sentCount) : juce::var (0));
+            made->setProperty ("last_sent", subscribed ? juce::var (ago) : juce::var());
+            rows.add (juce::var (made));
+        };
+        for (const auto& subscriber : serviceSubscribers)
+            row (subscriber.name, subscriber.host, subscriber.port, true, "service", false);
+        for (const auto& entry : stored)
+        {
+            const bool overridden = std::any_of (serviceSubscribers.begin(), serviceSubscribers.end(),
+                                                 [&] (const a3core::Subscriber& subscriber) { return subscriber.name == entry.name; });
+            row (entry.name, entry.host, entry.port, entry.on, "window", overridden);
+        }
+        auto* report = new juce::DynamicObject();
+        report->setProperty ("departments", rows);
+        auto texts = view.texts();
+        texts.departments = a3core::canonicalBytes (juce::var (report));
+        view.publish (texts);
     }
 
     // A message Core understood, `seconds` before now.

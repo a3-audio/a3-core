@@ -456,6 +456,7 @@ std::variant<a3core::ServiceOptions, std::string> coreOptions (const ProgramArgs
     options.hostname = platform.hostname();
     options.truthPath = files.truth;
     options.networkPath = files.network;
+    options.departmentsFile = a3core::departmentsFile (platform.configDir());
     return options;
 }
 

@@ -53,6 +53,23 @@ RegisterReport registerFromJson (const juce::var& body)
 juce::String noCoreAt (const juce::String& url) { return "no Core at " + url; }
 }
 
+std::vector<DepartmentRow> departmentRowsFromJson (const juce::var& report)
+{
+    std::vector<DepartmentRow> rows;
+    if (const auto* list = report["departments"].getArray())
+        for (const auto& row : *list)
+        {
+            const auto& last = row["last_sent"];
+            rows.push_back ({ { text (row["name"]), text (row["host"]), static_cast<int> (whole (row["port"])), static_cast<bool> (row["on"]) },
+                              text (row["from"]),
+                              static_cast<bool> (row["subscribed"]),
+                              static_cast<bool> (row["overridden"]),
+                              whole (row["sent"]),
+                              last.isVoid() ? std::nullopt : std::optional<double> (number (last)) });
+        }
+    return rows;
+}
+
 std::string valueText (const juce::var& value)
 {
     if (value.isString())
@@ -178,7 +195,7 @@ void CoreClient::run()
         // fair, and a round taken again at once starved the window's first refresh). Core's stream says
         // something every 250 ms; what arrives meanwhile waits in the socket.
         std::unique_lock<std::mutex> sleep (wakeLock);
-        wake.wait_for (sleep, std::chrono::milliseconds (roundPeriodMillis), [this] { return stopping.load() || unknownAsked || registerAsked; });
+        wake.wait_for (sleep, std::chrono::milliseconds (roundPeriodMillis), [this] { return stopping.load() || unknownAsked || registerAsked || departmentsAsked; });
     }
 }
 
@@ -235,6 +252,17 @@ void CoreClient::fetchRequested()
             unknownCache = std::move (made);
             ++unknownMoves;
         }
+    }
+    if (departmentsAsked.exchange (false))
+    {
+        const auto reply = httpExchange (host, port, "GET", "/api/departments", {}, pollTimeoutMillis);
+        DepartmentsReport made;
+        made.answered = reply && reply->status == 200;
+        if (made.answered)
+            made.rows = departmentRowsFromJson (parsedJson (reply->body));
+        const std::lock_guard<std::mutex> guard (cacheLock);
+        departmentsCache = std::move (made);
+        ++departmentsMoves;
     }
     if (registerAsked.exchange (false))
     {
@@ -377,10 +405,17 @@ void CoreClient::requestRegister()
     wake.notify_all();
 }
 
+void CoreClient::requestDepartments()
+{
+    departmentsAsked = true;
+    wake.notify_all();
+}
+
 TrafficReport CoreClient::traffic() const { const std::lock_guard<std::mutex> g (cacheLock); return trafficCache; }
 CoreSummary CoreClient::summary() const { const std::lock_guard<std::mutex> g (cacheLock); return summaryCache; }
 UnknownReport CoreClient::unknown() const { const std::lock_guard<std::mutex> g (cacheLock); return unknownCache; }
 RegisterReport CoreClient::registerReport() const { const std::lock_guard<std::mutex> g (cacheLock); return registerCache; }
+DepartmentsReport CoreClient::departments() const { const std::lock_guard<std::mutex> g (cacheLock); return departmentsCache; }
 juce::String CoreClient::lastAnswer() const { const std::lock_guard<std::mutex> g (cacheLock); return answer; }
 
 juce::Result CoreClient::send (const std::string& to, const std::string& address, const std::string& valueToSend)
@@ -404,6 +439,25 @@ juce::Result CoreClient::send (const std::string& to, const std::string& address
 }
 
 juce::Result CoreClient::recall() { return send ("self", recallPattern, "1"); }
+
+juce::Result CoreClient::saveDepartments (const std::vector<a3core::Department>& list)
+{
+    auto* asked = new juce::DynamicObject();
+    asked->setProperty ("departments", a3core::departmentsJson (list));
+    const auto body = juce::JSON::toString (juce::var (asked), true).toStdString();
+    const auto reply = httpExchange (host, port, "POST", "/api/departments", body, sendTimeoutMillis);
+    if (! reply)
+        return juce::Result::fail (noCoreAt (url()));
+    if (reply->timedOut)
+        return juce::Result::fail ("Core at " + url() + " did not answer");
+    if (reply->status != 200)
+    {
+        const auto said = parsedJson (reply->body);
+        return juce::Result::fail (said["problem"].isString() ? said["problem"].toString() : juce::String ("Core refused"));
+    }
+    requestDepartments();   // what Core now does with it
+    return juce::Result::ok();
+}
 
 std::unique_ptr<CoreClient> coreClientFor (const a3core::Truth& truth, bool startPolling)
 {

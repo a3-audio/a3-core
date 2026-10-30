@@ -103,6 +103,7 @@ TEST (ProgramArgs, CoreDefaultsComeFromTheTruthAndTheEnvironment)
     EXPECT_EQ (o.hostname, "test-host");
     EXPECT_EQ (o.truthPath, std::optional<juce::File> (juce::File (A3_TRUTH_COPY)));
     EXPECT_EQ (o.networkPath, std::nullopt);   // an explicit truth never reads the maintainer's file
+    EXPECT_EQ (o.departmentsFile, platform.configDir().getChildFile ("core/departments.json"));   // the window's list, Core's own config
 
     const auto given = a3app::coreOptions (*parse ({ "--role", "core", "--ip", "10.1.2.3", "--port", "0", "--mixer", "m:1",
                                                      "--motion", "n:2", "--web-bind", "w:3", "--subscriber", "a=b:4" }),
