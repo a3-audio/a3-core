@@ -6,6 +6,7 @@
 
 #include "FakePlatform.h"
 #include "ProgramArgs.h"
+#include "Roles.h"
 #include "Truth.h"
 
 using a3app::Role;
@@ -254,4 +255,33 @@ TEST (ProgramArgs, LinksPrintsTheConnections)
     EXPECT_TRUE (refused ({ "--links", "--role", "core" }, "cannot be combined"));
     EXPECT_TRUE (refused ({ "--links", "--port", "7" }, "--port"));
     EXPECT_TRUE (refused ({ "--links", "--links" }, "twice"));
+}
+
+TEST (ProgramArgs, ClockFindsItsPhcFromTheAudioPortByDefault)
+{
+    const auto args = parse ({ "--role", "clock" });
+    ASSERT_TRUE (args);
+    EXPECT_EQ (args->role, Role::clock);
+    EXPECT_EQ (args->clockDevice, "");   // resolved from the truth's audio port
+    EXPECT_EQ (args->clockScarlett, "alsa_input.usb-Focusrite_Scarlett_18i20");
+    EXPECT_FALSE (args->clockObserve);
+    EXPECT_EQ (a3app::roleWord (Role::clock), "clock");
+}
+
+TEST (ProgramArgs, ClockTakesADeviceAndObserve)
+{
+    const auto args = parse ({ "--role", "clock", "--device", "/dev/ptp1", "--observe", "--scarlett", "alsa_input.usb-Other" });
+    ASSERT_TRUE (args);
+    EXPECT_EQ (args->clockDevice, "/dev/ptp1");
+    EXPECT_TRUE (args->clockObserve);
+    EXPECT_EQ (args->clockScarlett, "alsa_input.usb-Other");
+    refused ({ "--role", "clock", "--device" }, "--device needs a value");
+    refused ({ "--role", "clock", "--config", "x" }, "--config is not a flag of --role clock");
+    refused ({ "--role", "engine", "--observe" }, "--observe is not a flag of --role engine");
+    EXPECT_TRUE (a3app::usage != nullptr && juce::String (a3app::usage).contains ("--role clock [--device PATH] [--scarlett NODE] [--observe]"));
+}
+
+TEST (ProgramArgs, TheClocksUnitIsSystemds)
+{
+    EXPECT_EQ (a3app::unitOf (Role::clock), "a3-clock.service");
 }

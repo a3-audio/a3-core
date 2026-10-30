@@ -12,7 +12,9 @@
 #include <variant>
 
 #include "AppArgs.h"
+#include "CommandRunner.h"
 #include "Roles.h"
+#include "TimingControl.h"
 
 namespace a3core
 {
@@ -38,7 +40,7 @@ public:
 
 private:
     friend class EngineView;
-    EngineRole (const AppArgs&, StartupData);
+    EngineRole (const AppArgs&, StartupData, const juce::File& home);
 
     // Save of a changed config: the whole session is dropped and built again (new host, new boot id, new
     // ports; Core replays through the hello). The old gates close first (no hard cut on the PA); the old
@@ -47,9 +49,17 @@ private:
     // engine and says so in `problem` (the STATUS page shows it).
     juce::Result restart (const AppConfig&, juce::String& problem);
     void serveControl();
+    void storeConverterShare();
+    bool runsOnPipeWire() const;
+    // A session on PipeWire sets the block the engine remembers (TimingControl::start).
+    void startTiming();
+    juce::Result storeTiming (const AudioTiming&);
+    void applyTiming (const AudioTiming&);
 
     AppArgs args;
     StartupData startup;
+    SpawnRunner runner;
+    TimingControl timing;
     // Declared in the order they are built: the server stops first, then the API, then the view, then the session.
     std::unique_ptr<EngineSession> session;
     std::unique_ptr<EngineView> view;

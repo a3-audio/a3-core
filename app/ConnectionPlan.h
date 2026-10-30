@@ -18,6 +18,12 @@ juce::Result refuseBesideReaper (const std::vector<std::string>& clients, bool c
 // before M10. Applied at link time only: the user's file is never rewritten. No host name, no link.
 void addRecToAes67Sender (a3::links::LinkMap&, const std::string& hostname);
 
+// The loop's own ports to the loop's channels: roundtrip_out -> system:playback_<output>, system:capture_<input>
+// -> roundtrip_in (the device's JACK names; RoundTripLoop.h), and likewise analogtest_out/in to a chosen analog test
+// pair (both sides chosen). Nothing without a loop. Built in like the sender link above: never written to the file.
+void addRoundTripLoopLinks (IoMap&);
+bool hasAnalogTestPair (const IoMap&);   // an analog loop with both sides chosen
+
 // What the engine links and counts: the loaded io map plus the built-in links above. `hostname` is
 // Platform::hostname(), the source a3-osc-render names the sender from.
 IoMap linkMapFor (const AppConfig&, const std::string& hostname);

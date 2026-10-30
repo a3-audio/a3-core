@@ -27,10 +27,27 @@ void addRecToAes67Sender (a3::links::LinkMap& map, const std::string& hostname)
     }
 }
 
+bool hasAnalogTestPair (const IoMap& map) { return map.analogLoop && map.analogLoop->output > 0 && map.analogLoop->input > 0; }
+
+void addRoundTripLoopLinks (IoMap& map)
+{
+    if (map.roundTripLoop)
+    {
+        map.jack[loopOutputPort] = { "system:playback_" + std::to_string (map.roundTripLoop->output) };
+        map.jack[loopInputPort] = { "system:capture_" + std::to_string (map.roundTripLoop->input) };
+    }
+    if (hasAnalogTestPair (map))
+    {
+        map.jack[analogOutputPort] = { "system:playback_" + std::to_string (map.analogLoop->output) };
+        map.jack[analogInputPort] = { "system:capture_" + std::to_string (map.analogLoop->input) };
+    }
+}
+
 IoMap linkMapFor (const AppConfig& config, const std::string& hostname)
 {
     auto map = config.io;
     addRecToAes67Sender (map, hostname);
+    addRoundTripLoopLinks (map);
     return map;
 }
 

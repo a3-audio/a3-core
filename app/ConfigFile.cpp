@@ -11,7 +11,8 @@ namespace a3app
 {
 namespace
 {
-constexpr int minBlock = 64, maxBlock = 2048;
+constexpr int minBlock = 32, maxBlock = 2048;
+constexpr int minPeriods = 2, maxPeriods = 3;
 
 using a3::jsonparse::Refusal;
 using a3::jsonparse::refuse;
@@ -37,7 +38,7 @@ double numberProperty (const juce::DynamicObject& object, const char* key)
 BackendSettings parseBackend (const juce::var& section)
 {
     const auto& object = objectOf (section, "backend");
-    rejectUnknownKeys (object, { "type", "deviceType", "inputDevice", "outputDevice", "sampleRate", "blockSize" }, "backend");
+    rejectUnknownKeys (object, { "type", "deviceType", "inputDevice", "outputDevice", "sampleRate", "blockSize", "periods" }, "backend");
     BackendSettings backend;
     if (object.hasProperty ("type"))
     {
@@ -65,8 +66,15 @@ BackendSettings parseBackend (const juce::var& section)
     {
         const double size = numberProperty (object, "blockSize");
         if (size != std::floor (size) || size < minBlock || size > maxBlock)
-            refuse ("backend.blockSize must be a whole number within 64..2048");
+            refuse ("backend.blockSize must be a whole number within 32..2048");
         backend.blockSize = (int) size;
+    }
+    if (object.hasProperty ("periods"))
+    {
+        const double periods = numberProperty (object, "periods");
+        if (periods != std::floor (periods) || periods < minPeriods || periods > maxPeriods)
+            refuse ("backend.periods must be 2 or 3");
+        backend.periods = (int) periods;
     }
     return backend;
 }
@@ -194,6 +202,7 @@ AppConfig parseRoot (const juce::var& root, const juce::File& base, int truthDec
         config.io = *map;
     else
         refuse (error);
+    config.loopDropped = dropLoopRoutes (config.io);
     return config;
 }
 
@@ -254,6 +263,8 @@ juce::StringArray droppedLinkLines (const AppConfig& config)
         lines.add ("dropped retired link " + entry);
     for (const auto& key : config.ignoredKeys)
         lines.add ("ignored retired key " + key);
+    for (const auto& route : config.loopDropped)
+        lines.add ("unrouted " + route + ": the round-trip loop");
     return lines;
 }
 
@@ -266,6 +277,7 @@ juce::var toJson (const AppConfig& config)
     backend->setProperty ("outputDevice", config.backend.outputDevice);
     backend->setProperty ("sampleRate", config.backend.sampleRate);
     backend->setProperty ("blockSize", config.backend.blockSize);
+    backend->setProperty ("periods", config.backend.periods);
 
     auto* root = new juce::DynamicObject();
     root->setProperty ("engine", a3::toJson (config.engine));
@@ -294,6 +306,65 @@ juce::Result saveAppConfig (const AppConfig& config, const juce::File& file)
     if (! temporary.overwriteTargetFileWithTemporary())
         return juce::Result::fail ("cannot replace " + file.getFullPathName());
     return juce::Result::ok();
+}
+
+namespace
+{
+// `from` with one change made by `change` (a refusal is its reason), checked by the loader, written to `to` (atomic
+// replace). Nothing else in the file changes.
+juce::Result storeEdited (const juce::File& from, const juce::File& to, int truthDecks,
+                          const std::function<juce::Result (juce::DynamicObject& root)>& change)
+{
+    juce::var root;
+    if (const auto parsed = juce::JSON::parse (from.loadFileAsString(), root); parsed.failed() || root.getDynamicObject() == nullptr)
+        return juce::Result::fail (from.getFullPathName() + ": not valid JSON");
+    if (const auto changed = change (*root.getDynamicObject()); changed.failed())
+        return changed;
+
+    juce::String refusal;
+    const auto checked = parseAppConfig (root, from.getParentDirectory(), refusal, truthDecks);
+    if (! checked)
+        return juce::Result::fail ("not stored, " + refusal);
+    // A relative spatial path means the directory beside `from`; written elsewhere it is made absolute.
+    if (from.getParentDirectory() != to.getParentDirectory())
+        root.getDynamicObject()->setProperty ("spatial", toJson (*checked)["spatial"]);
+
+    if (! to.getParentDirectory().createDirectory())
+        return juce::Result::fail ("cannot create " + to.getParentDirectory().getFullPathName());
+    juce::TemporaryFile temporary (to);
+    if (! temporary.getFile().replaceWithText (juce::JSON::toString (root, false)))
+        return juce::Result::fail ("cannot write " + temporary.getFile().getFullPathName());
+    if (! temporary.overwriteTargetFileWithTemporary())
+        return juce::Result::fail ("cannot replace " + to.getFullPathName());
+    return juce::Result::ok();
+}
+}
+
+juce::Result storeConverterShare (const juce::File& from, const juce::File& to, const ConverterShare& share, int truthDecks)
+{
+    return storeEdited (from, to, truthDecks, [&] (juce::DynamicObject& root)
+    {
+        auto* analog = root.getProperty ("io")["analogLoop"].getDynamicObject();
+        if (analog == nullptr)
+            return juce::Result::fail (from.getFullPathName() + " names no io.analogLoop");
+        analog->setProperty ("converterSamples", share.samples);
+        analog->setProperty ("sampleRate", share.sampleRate);
+        analog->setProperty ("measuredOn", share.measuredOn);
+        return juce::Result::ok();
+    });
+}
+
+juce::Result storeBackendTiming (const juce::File& from, const juce::File& to, int blockSize, int periods, int truthDecks)
+{
+    return storeEdited (from, to, truthDecks, [&] (juce::DynamicObject& root)
+    {
+        if (root.getProperty ("backend").getDynamicObject() == nullptr)
+            root.setProperty ("backend", juce::var (new juce::DynamicObject()));
+        auto* backend = root.getProperty ("backend").getDynamicObject();
+        backend->setProperty ("blockSize", blockSize);
+        backend->setProperty ("periods", periods);
+        return juce::Result::ok();
+    });
 }
 
 juce::File chooseConfigFile (const juce::String& argument, const juce::File& home, std::function<bool (const juce::File&)> exists,

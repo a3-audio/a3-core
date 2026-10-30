@@ -57,6 +57,7 @@ files() {
     install -D -m 644 "$build/rt-preload/libjack-rt-priority.so" "$stage/usr/lib/a3-core/libjack-rt-priority.so"
     install -D -m 755 "$src/$PAYLOAD/home/aaa/.local/bin/a3-wait-for-the-screen" \
         "$stage/usr/lib/a3-core/a3-wait-for-the-screen"
+    install -D -m 755 "$src/$RECIPE/a3-ptp-state" "$stage/usr/lib/a3-core/a3-ptp-state"
     install_user_units "$src" "$stage"
     install -D -m 644 "$src/data/engine.json" "$stage/usr/share/a3-engine/engine.json"
     install_spatial_data "$src" "$stage"
@@ -68,7 +69,7 @@ files() {
 
 install_user_units() {
     local src=$1 stage=$2 unit
-    for unit in a3-engine.service a3-core-window.service a3-core.service; do
+    for unit in a3-engine.service a3-core-window.service a3-core.service a3-clock.service; do
         install -D -m 644 "$src/packaging/$unit" "$stage/usr/lib/systemd/user/$unit"
     done
 }

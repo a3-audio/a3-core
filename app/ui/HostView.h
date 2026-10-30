@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include "AudioBackend.h"
+#include "ClockStatus.h"
 #include "ConfigEdits.h"
 #include "ConfigFile.h"
 #include <string>
@@ -43,8 +44,12 @@ public:
     virtual std::vector<std::string> droppedLinks() const { return {}; }
     // Retired config keys the loaded file named and the load ignored ("engine.<key>").
     virtual std::vector<std::string> ignoredKeys() const { return {}; }
+    // Routes the loaded file had on the round-trip loop's channels and the load left out (AppConfig::loopDropped).
+    virtual std::vector<std::string> loopDropped() const { return {}; }
     // Non-empty when the truth in use lacks a key the engine would send with (an older a3-osc.json).
     virtual juce::String truthNote() const { return {}; }
+    // The clock role's report (ClockStatus.h): the one clock's lock, or why nobody reports it.
+    virtual a3clock::ClockReport clock() const { return {}; }
     virtual juce::File configFile() const = 0;                     // where Save writes
     virtual int truthDecks() const = 0;                            // EngineTruth::decks: the count of a config that names none
     virtual LiveLinks liveLinks() const = 0;                       // the engine ports' live JACK links, foreign ones included
@@ -54,5 +59,10 @@ public:
     virtual juce::Result apply (const AppConfig&) = 0;
     virtual void setFilterKind (a3::FilterKind) = 0;               // live, on the running engine; also the pending edit and what runs
     virtual void playNoise (const NoiseRequest&) = 0;              // live, on the running engine; nothing when none runs
+    virtual void measureRoundTrip() {}                             // over the loop, on the running engine; the result comes with status()
+    virtual void measureAnalogChain() {}                           // over the test cable and the loop at once; only ever on request
+    // PipeWire (JACK) only: the block live, the periods with a WirePlumber restart (the page asked first); kept in
+    // the config file at once, no Save. The outcome comes with status().timing.
+    virtual void applyTiming (const AudioTiming&) {}
 };
 }

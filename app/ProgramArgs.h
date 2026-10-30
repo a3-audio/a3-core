@@ -5,7 +5,7 @@
 //
 //   a3-core                                   the window
 //   a3-core --headless                        the supervisor: Core and the engine as children
-//   a3-core --role core|engine|window|screencast-fanout|i3-bar [flags]
+//   a3-core --role core|engine|window|screencast-fanout|i3-bar|clock [flags]
 //   a3-core --render-truth user|network-file|network
 //   a3-core --truth host NAME | --truth port PROGRAM ROLE
 //   a3-core --links
@@ -23,7 +23,7 @@
 
 namespace a3app
 {
-enum class Role { window, core, engine, screencastFanout, i3Bar, supervisor, renderTruth, truthQuery, links };
+enum class Role { window, core, engine, screencastFanout, i3Bar, supervisor, renderTruth, truthQuery, links, clock };
 
 // The core flags that default to the truth (B1's argparse defaults read a3-osc.json); unset here
 // means "the truth's", which only coreOptions() can know.
@@ -44,6 +44,9 @@ struct ProgramArgs
     double fanoutLinger = 10.0;
     juce::StringArray encoder;     // the fan-out's command, after --
     juce::StringArray subcommand;  // --render-truth's or --truth's words
+    std::string clockDevice;                 // the PTP hardware clock to steer; empty: the audio port's
+    std::string clockScarlett = "alsa_input.usb-Focusrite_Scarlett_18i20";   // the capture node (node.name prefix)
+    bool clockObserve = false;               // the clock role measures and never writes
 };
 
 extern const char* const usage;

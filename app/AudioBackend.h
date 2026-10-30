@@ -1,8 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+#include "AudioTiming.h"
 #include "ConfigFile.h"
 #include "EngineHost.h"
+#include "RoundTripProbe.h"
 #include <juce_core/juce_core.h>
 #include <string>
 #include <utility>
@@ -28,6 +30,10 @@ struct BackendStatus
     // input and output channel counts.
     juce::StringArray capturePorts, playbackPorts;
     int deviceInputs = 0, deviceOutputs = 0;
+    // The round trip measured over the I/O map's digital loop (RoundTripProbe.h).
+    RoundTripReport roundTripMeasured;
+    // The engine's block and periods on PipeWire (TimingControl.h); not available on a device.
+    TimingReport timing;
 };
 
 // The input-to-output round trip as the backend reports its parts: an estimate (a driver's figures can be
@@ -41,8 +47,14 @@ struct RoundTrip
     double totalMs() const { return ms (totalSamples()); }
 };
 RoundTrip estimatedRoundTrip (const BackendStatus&);
-// "estimated round trip 16.0 ms (768 samples) = capture 5.3 + processing 2.7 + playback 8.0 ms".
+// "Round trip (estimated)   16.0 ms (768 samples) = capture 5.3 + processing 2.7 + playback 8.0 ms".
 juce::String roundTripText (const RoundTrip&);
+// The AUDIO page's line: "Round trip (measured, digital loop)   4.4 ms (211 samples), 14:05" when the loop was
+// measured; else the estimate, "Round trip (estimated, <why not measured>)   ...".
+juce::String roundTripText (const RoundTrip& estimate, const RoundTripReport& measured);
+// The analog-chain line: the live digital loop plus the stored converters' share, or why it cannot say.
+// "Analog chain   5.4 ms (measured: digital loop now + converters measured on 2026-10-30)".
+juce::String analogChainText (const RoundTrip& estimate, const RoundTripReport& measured);
 
 // The load STATUS shows: the larger of the backend's own figure (JACK: the whole graph; a device:
 // JUCE's callback load) and the engine's own time for the last block against its period.
@@ -64,5 +76,12 @@ public:
     // The message thread's share, from the app's control timer (~50 Hz): what the audio
     // thread's callbacks flagged (a new block size, a port that came or went) is acted on here.
     virtual void service (double /*nowSeconds*/) {}
+    // Plays the test signal on the round-trip loop and measures (the result arrives in status()). Nothing while
+    // one runs or without a loop.
+    virtual void measureRoundTrip() {}
+    // The analog chain: both loops in one run, only ever on this request (a temporary cable must be plugged in).
+    virtual void measureAnalogChain() {}
+    // A converter share measured since the last call, once (the engine stores it in its config).
+    virtual std::optional<ConverterShare> takeNewConverterShare() { return std::nullopt; }
 };
 }

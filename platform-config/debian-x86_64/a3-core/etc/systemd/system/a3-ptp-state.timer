@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: 2026 Raphael Eismann
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Every 10 s: the clock role takes a state older than 30 s as unknown (UNVERIFIED).
+[Unit]
+Description=a3-ptp-state every 10 s
+
+[Timer]
+OnBootSec=10s
+OnUnitActiveSec=10s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

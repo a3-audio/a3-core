@@ -622,6 +622,22 @@ class TheInstalledTruthIsJoined(unittest.TestCase):
         self.assertEqual(json.loads(joined.canonical())["hosts"]["mixer"], "10.9.9.9")
 
 
+class TheMachinesByRole(unittest.TestCase):
+    """2026-10-30: the status views (the Canvas) show only what the truth
+    names, so the truth names which machine plays which role."""
+
+    def setUp(self):
+        self.truth = a3_osc.load(TRUTH)
+
+    def test_motion_runs_on_the_second_nuc(self):
+        self.assertEqual(self.truth.host("motion"), "192.168.8.20")
+
+    def test_each_deck_has_its_host(self):
+        self.assertEqual(self.truth.host("deckhost-a"), self.truth.host("core"))
+        self.assertEqual(self.truth.host("deckhost-b"), "192.168.8.23")
+        self.assertEqual(self.truth.host("deckhost-c"), "192.168.8.20")
+
+
 class TheDeckStreams(unittest.TestCase):
     """Deck B over AES67 (2026-10-27): each StemDeck host sends its deck's 41
     channels as one stream; the engine tells Core whether its links are live."""

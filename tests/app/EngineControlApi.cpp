@@ -311,3 +311,50 @@ TEST (EngineControlApi, NoiseRefusesWhatIsNoBurst)
                                  "{\"zone\":\"main\",\"azimuth\":1e999,\"elevation\":0}" })
         EXPECT_EQ (httpclient::post (rig.server->port(), "/api/engine/noise", refused).status, 400) << refused;
 }
+
+// The clock role's report rides in the status; an engine from before the clock sends none, and the
+// window then says so instead of showing a lock.
+TEST (EngineControlApi, TheClockIsServedInTheStatus)
+{
+    RemoteRig rig;
+    rig.fake.clockReport.running = true;
+    rig.fake.clockReport.status.health = a3clock::Health::holdover;
+    rig.fake.clockReport.status.reason = "no measurement: the last frequency is held";
+    rig.tick();
+    const auto reply = httpclient::get (rig.server->port(), "/api/engine/status");
+    ASSERT_EQ (reply.status, 200);
+    const auto report = a3app::statusFromJson (parse (reply.body));
+    ASSERT_TRUE (report);
+    EXPECT_TRUE (report->clock.running);
+    EXPECT_EQ (report->clock.status.health, a3clock::Health::holdover);
+    EXPECT_EQ (report->clock.status.reason, "no measurement: the last frequency is held");
+    // Canvas reads the one word without knowing the clock's states.
+    const auto served = parse (reply.body);
+    EXPECT_EQ (served["clockIndicator"]["word"].toString(), "HOLDOVER");
+    EXPECT_EQ (served["clockIndicator"]["tone"].toString(), "danger");
+
+    auto older = parse (reply.body);
+    older.getDynamicObject()->removeProperty ("clock");
+    const auto fromOlder = a3app::statusFromJson (older);
+    ASSERT_TRUE (fromOlder);
+    EXPECT_FALSE (fromOlder->clock.running);
+    EXPECT_NE (fromOlder->clock.why.find ("does not report the clock"), std::string::npos);
+}
+
+// POST /api/engine/timing takes only the AUDIO page's choices.
+TEST (EngineControlApi, TheTimingTakesOnlyThePagesChoices)
+{
+    juce::String why;
+    const auto chosen = a3app::timingFromJson (parse ("{\"block\":64,\"periods\":2}"), why);
+    ASSERT_TRUE (chosen) << why;
+    EXPECT_EQ (*chosen, (a3app::AudioTiming { 64, 2 }));
+    RemoteRig rig;
+    for (const char* body : { "{\"block\":48,\"periods\":3}", "{\"block\":64,\"periods\":4}", "{\"block\":64}",
+                              "{\"block\":\"64\",\"periods\":3}", "[]" })
+    {
+        EXPECT_FALSE (a3app::timingFromJson (parse (body), why)) << body;
+        EXPECT_EQ (httpclient::post (rig.server->port(), "/api/engine/timing", body).status, 400) << body;
+    }
+    rig.tick();
+    EXPECT_TRUE (rig.fake.timings.empty());
+}

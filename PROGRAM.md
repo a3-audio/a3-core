@@ -155,10 +155,10 @@ The window has one page per job and a Save bar under them:
 
 | Page | What it edits |
 |---|---|
-| AUDIO | JACK: rate and quantum, read-only (the server owns them). Device: type, input, output, rate, block size. A choice only edits the config; it opens no device. |
+| AUDIO | The sound-device settings first: one device-type list, `PipeWire (JACK)` (the JACK backend; `"type": "jack"` in the file) beside JUCE's types. PipeWire: Block and Periods, applied by the engine on APPLY (see "Block and periods on PipeWire"). A JUCE type: input, output, rate, block size, an edit that Save applies; it opens no device. Below them what runs: rate, block x periods, rate source, bit depth, DSP load and xruns, the round trip, measured over the digital loop (MEASURE), and the analog chain (MEASURE ANALOG CHAIN); see "The measured round trip". Each MEASURE is off, with a line naming the I/O page, while its pair is not set |
 | CHANNELS | N (1..128) with the DSP load beside it; the deck count (1..26, one letter a slot A..Z; the engine has no cap) with the count that runs |
 | ZONES | which spatial directory: the installed `spatial` and `spatial-reaper-booth-6.1`, and `~/.config/a3/engine/spatial`. No layout editor |
-| I/O | per engine port its JACK peers (editable) and the live ones the map does not name (foreign: shown, never edited), or its device channel; the direct links the engine makes between two foreign ports |
+| I/O | per engine port its JACK peers (editable) and the live ones the map does not name (foreign: shown, never edited), or its device channel; the direct links the engine makes between two foreign ports; the digital loop and the analog test pair. The digital loop's channels are offered in no route, and a notice names them and what a load unrouted |
 | CALIBRATION | trim per zone, -90..+6 dB; a slider only proposes, a dialog names the old and the new value, a zone without a trim stays closed |
 | FILTER | SVF or Ladder, live: acts at once, needs no Save |
 | STATUS | what runs: mode, Core's last word, gate, load, xruns, missing peers, meters |
@@ -213,7 +213,9 @@ slots and pointing to that setting.
 **The default config** (`data/engine.json`): four channels on analog pairs 1-4 (pairs 5 and 6 free), no deck
 count (the truth's), trims main/booth -30.88 dB (REAPER's output faders), phones 0, rec 0, SVF filter, no delay
 modulation (R5), the JACK backend, and the rig's connections: what `a3-patchbay.xml` connected for REAPER,
-moved to the engine's ports (analog capture, Scarlett playback and the analyzer's beat input `bpm_1`),
+moved to the engine's ports (analog capture, Scarlett playback and the analyzer's beat input `bpm_1`), except
+what the round-trip loop needs (2026-10-30): the booth is left unwired (assigned on the I/O page) and analog
+11/12 come from device inputs 13/14, because device channels 11-12 are the loop;
 deck A to `StemDeck-A` (`bformat_1..16`, `aux_1..16`, `cue_1..9`), deck B to `AES67 deck B` (`receive_MAIN/AUX/CUE…`), and
 every other slot to its local `StemDeck-<X>` by the rule above (a StemDeck's ports exist once StemDeck's S4 is
 installed; until then they are reported as missing, not an error). Since Task 24 the links into the
@@ -245,6 +247,7 @@ API, P2). The package ships it as `/usr/bin/a3-core` (Task 28); there is no `/us
                           [--check-config]
     a3-core --role screencast-fanout --port N [--linger SECONDS] -- COMMAND...
     a3-core --role i3-bar                     (not built yet)
+    a3-core --role clock [--device PATH] [--scarlett NODE] [--observe]   the PTP clock steered from the Scarlett
     a3-core --render-truth user|network-file|network      (not built yet)
     a3-core --truth host NAME | --truth port PROGRAM ROLE (not built yet)
     a3-core --links                           the JACK/PipeWire connections, explained
@@ -302,6 +305,174 @@ API, P2). The package ships it as `/usr/bin/a3-core` (Task 28); there is no `/us
 - Everything that asks the operating system (environment, home, host name, unit state, child
   processes) goes through `a3core::Platform` (`src/a3-core/Platform.h`, Linux only).
 - The journal: one whole line per write, flushed at once, from any thread.
+
+## The one clock: `--role clock`
+
+**Why** (2026-10-30, the maintainer): "core gets clock from scarlett. all devices must rely on it. no
+software clock at all. tight latency is mandatory for live setup. ... it should never break." Decks B
+and C crackled because the deck hosts' graphs followed PTP, and PTP was the Core's I210 hardware clock
+running free, 14.1 ppm away from the Scarlett; the Core's receivers resampled the decks all the time.
+Research and measurements: the workspace notes `2026-10-30-one-clock*.md`.
+
+**What runs** (stage 1): `a3-core --role clock` (`a3-clock.service`, a user unit in a3-core-app,
+enabled by a3-core's postinst where the Core has an audio socket) reads the Scarlett's sample clock
+from `pw-profiler -J` (the driver's clock record: position + delay against CLOCK_MONOTONIC; a client,
+not a node, so it cannot cause an xrun) and phase-locks the audio port's PTP clock to it with
+`clock_adjtime(ADJ_FREQUENCY)`. ptp4l on the Core stays the grandmaster with `--free_running 1` on the
+drop-in's command line (it beats the conffile, which dpkg keeps old if it was ever edited), so it never
+touches that clock; the deck hosts follow PTP as before and with it the Scarlett.
+
+**The receivers keep their resampler.** With the clock locked their correction is about 1.0 and costs
+nothing; without it, a clock role that is not locked walks the decks' 6 ms FIFO into a resync click within a
+few minutes. `resample.disable` on the deck receivers is a later, separate step, only after the clock
+role has soaked on the rig (zero rtp-source resyncs, lock held for hours), and only for deck hosts with
+a healthy PTP lock (not the Pi). The deck C crackle measured on 2026-10-30 (one corrupted 11-sample
+packet about every 13) is a packetisation fault, not the clock.
+
+**Which clocks.** The PHC is the audio port's (the truth's `network.audio_port`, where `ptp4l@<port>`
+runs), found under `/sys/class/net/<port>/device/ptp/`; a `--device` that is not that clock, a port
+without a PHC or a truth without an audio port is a fault that steers nothing. The Scarlett is its
+capture node by name (`--scarlett NODE`, a prefix of node.name, default
+`alsa_input.usb-Focusrite_Scarlett_18i20`), learnt from the profiler's driver records; another ALSA
+driver is never used instead, it is "no measurement" and the journal names what was seen.
+
+**ptp4l's port state.** On the Core, Debian's sandboxed `ptp4l@` unit (ptp4l 4.4) never answers a
+user's `pmc`, whatever the client socket (measured on a3nuc1 2026-10-30; the Pi's unsandboxed 4.2 does).
+So a3-core ships `a3-ptp-state.timer` (every 10 s, as root): `/usr/lib/a3-core/a3-ptp-state` (from
+a3-core-app) asks `pmc -u -b 0 'GET PORT_DATA_SET'` on ptp4l's own socket and writes
+`/run/a3/ptp-state.json` (`portState`, `problem`, `writtenAtUnix`; 0644, a temporary renamed over it).
+The postinst enables the timer with AES67 and PTP and starts nothing. The clock role reads the file every
+10 s: MASTER and at most 30 s old is the grandmaster confirmed; another state pauses the steering
+(HOLDOVER, with the state named in red); missing, stale or "no answer from ptp4l" is not known yet. The
+maintainer (2026-10-30): a clock that is synced says LOCKED. The PTP role is a second, neutral line on
+the AUDIO page ("PTP grandmaster: confirmed", "PTP role: not read yet (why)"); only a real problem gets
+a warning word. ptp4l's sandbox is left as Debian ships it.
+
+**The rules** (`src/a3-clock/ClockSteering.h`, tested against synthetic clocks in
+`tests/core/ClockSteering.cpp` and `ClockDaemon.cpp`): only the frequency changes, never the time (no
+step, whatever happens). Fast acquisition (2026-10-30, the maintainer: the Scarlett's clock is there at
+once, so the PTP clock has to follow at once): the rate is measured for 5 s without writing, the PHC is
+set to it in one ADJ_FREQUENCY write, and the phase is anchored. Five seconds tell the rate to about
+0.9 ppm rms (12.5 µs per profiler record, 20 a second); a PI with a 20 s time constant pulls the rest in
+and goes over to 60 s once the error has stayed inside the lock for a minute. A PHC found within 3 ppm of
+the measured rate (a restart on a locked clock) is not written at all. A warm start (the last frequency
+locked for at least a minute, kept in `$XDG_STATE_HOME/a3-core/clock.json`, used when the PHC reads 0
+after a boot) is written at the first update, checked against the next 5 s, and corrected once if it is
+more than 1.5 ppm off. These acquisition writes are the only ones not slew-limited; once tracking, the
+frequency moves at most 0.1 ppm/s. Measured in simulation over 200 noise seeds: locked within 10 s cold
+and 7 s warm, the anchored error at most about 35 µs (cold) and 55 µs (warm), no lock lost.
+The numbers against the decks' 6 ms FIFO (about 3 ms of headroom; 4 ms played clean on the rig,
+2 ms crackled): the range is ±40 ppm around the free run,
+narrowed to the device's max_adj minus 20 ppm (the I210 allows 62.5); a rate beyond it is a fault
+before any write; never locked and |error| above 2 ms is a fault; locked and |error| above 1 ms is a
+fault; a phase change above 200 µs plus 1 ppm of the gap (at most 1 ms) is a stepped PHC and is
+re-anchored. No measurement for 3 s is holdover (the last frequency held, nothing written); a Scarlett
+discontinuity (xrun, restart, replug) re-anchors with the error it had. A refused write or a runaway is
+a fault: steering stops, the last frequency is held, and it stays so until `a3-clock.service` is
+restarted.
+
+**One instance.** The steering role holds an flock on `<runtime dir>/a3/clock.lock` and on the PHC; a
+second one exits 1. Only the holder writes the status file. `--observe` measures and reports in the
+journal, never writes the PHC, takes no lock and writes no status. pw-profiler is started again when it
+ends or when it brings no Scarlett record for 10 s; a start that fails is said at most once a minute.
+
+**Where it shows**: the role writes `$XDG_RUNTIME_DIR/a3/clock.json` once a second; the engine reads it
+(at most once a second) and serves it as `clock` and `clockIndicator` (`word`, `tone`, `detail`: what
+Canvas shows) in `/api/engine/status`. The window shows the word in its footer on every page
+(`CLOCK LOCKED` in green, caution or danger otherwise) and a CLOCK section on the AUDIO page, which
+keeps at least a quarter of the page in every layout: master, state and phase error, device and port,
+the frequency, PTP against the Scarlett now, the counters, framed in caution (acquiring, observing) or danger (holdover, fault, not running). The journal gets one line every 10 s
+(`a3-core clock: locked error +2.3 us freq +14.102 ppm rate +0.012 ppm corrections … reanchors … steps
+… holdovers … losses … breaks … feed-restarts … port MASTER|unknown`) and one at every state change.
+
+**Write access**: `/dev/ptp*` is `root:clock 0664` on Debian; the postinst puts the app user into
+`clock` (effective once the user manager starts again: a reboot). Without it the role measures and
+reports a fault at its first write.
+
+**Clock master**: the AUDIO page offers one master, the Scarlett steering the PTP grandmaster. An
+external PTP grandmaster would make the Core a PTP client and need the Scarlett on word clock; not
+offered in this version.
+
+## The measured round trip
+
+**Why** (2026-10-30): the AUDIO page showed an estimate (capture + one period + playback latency as PipeWire
+reports them). The rig's Scarlett 18i20 has its S/PDIF out (device outputs 11-12) patched to its S/PDIF in (device
+inputs 11-12); the maintainer: "make 11-12 free for the measurement".
+
+**The loop** is `io.roundTripLoop` in `engine.json`: `{"output": 11, "input": 11, "channels": 2}` (device channels,
+1-based as the I/O page shows them; the probe uses the first of each side, all `channels` are reserved). A file
+without the key gets exactly that default, so the maintainer's existing file is covered; `null` is no loop.
+Reserved means: no dropdown offers those channels, the port editor refuses them, and a route onto them in a
+loaded file (a JACK peer, a device channel, a direct link) is dropped and listed (`AppConfig::loopDropped`: on
+the I/O page's notice, on stderr at start and from `--check-config` as `unrouted <route>: the round-trip loop`).
+A JACK peer counts as a device channel when it is `system:playback_N`/`system:capture_N` or PipeWire's pro-audio
+`…pro-output-*:playback_AUXn`/`…pro-input-*:capture_AUXn` (AUX0 = channel 1). On JACK the engine registers
+`roundtrip_out`/`roundtrip_in` (not engine ports of the map) and links them to `system:playback_<output>` /
+`system:capture_<input>` at link time, like the AES67 sender link; on a device it uses those device channels.
+
+**The measurement** (`app/RoundTripProbe.h`): an 8191-sample maximum-length sequence at -20 dBFS (0.19 s at
+44.1 kHz) only on the loop output, the loop input recorded for 24575 samples (loops up to 16384 samples), and
+the delay is the lag of the cross-correlation's peak (FFT, on the control thread). A peak less than 6 x the
+largest correlation away from it, or a recording that is less than half the signal at that lag (coherence
+< 0.5), is "no loop found", never a number. The audio thread only copies into buffers made at open and hands
+over through one atomic state. It runs 2 s after the backend opens, after a new quantum or rate, 3 s after WirePlumber is back from new periods, on
+`POST /api/engine/roundtrip` and on the AUDIO page's MEASURE. The number is the loop's out-to-in time as the
+engine sees it: playback + capture latency + one period.
+
+**Choosing the loop** (2026-10-30): the I/O page's `Digital loop` row, one channel per side; `none` is no loop
+(`null` in the file). A first channel sets both sides (out N -> in N, as an S/PDIF cable runs); the loop keeps its
+channel count. The reservation stays: a channel the loop would take that carries a route or the analog test pair
+is refused, naming its user, and never taken from it.
+
+**The AUDIO page** says `Round trip (measured, digital loop)   X ms (N samples), HH:MM`, or the estimate as the
+fallback, labelled with why: `Round trip (estimated, no loop configured | no loop found on output 11 -> input 11 |
+measuring | not measured yet)   …`. The digital loop leaves out the AD/DA converters.
+
+**The analog chain** (analog in -> AD -> engine -> DA -> analog out; the maintainer: what matters most). An
+optional `io.analogLoop` `{"output": 6, "input": 8}` names a pair for a temporary cable, chosen on the I/O page
+(not reserved: it is refused while any route uses either side). Only MEASURE ANALOG CHAIN (`POST
+/api/engine/roundtrip/analog`) runs it, never anything automatic: the same signal at -20 dBFS on the chosen output
+only, and the digital loop in the same run. The converters' share = analog - digital is written at once into
+the config file as `converterSamples`, `sampleRate` and `measuredOn` (only that key changes; the user's file,
+created from the running one if needed). The page then says `Analog chain   X ms (measured: digital loop now +
+converters measured on <date>)`, the digital part being the live loop measurement; without a share it says the
+converters are not measured yet. Clearing the pair on the I/O page keeps the share (it belongs to the hardware).
+
+## Block and periods on PipeWire
+
+**Why** (2026-10-30, the maintainer: "I want these settings in the Engine's AUDIO page"): the rig ran a fixed
+quantum of 128 from a3-core's PipeWire config and whatever periods PipeWire chose for the Scarlett (3 on the rig:
+ALSA period 128, buffer 384; measured digital loop 343 samples, 7.8 ms).
+
+**Stored** in `engine.json`'s backend section: `blockSize` (32..2048; the page offers 32, 64, 128, 256, 512,
+1024) and `periods` (2 or 3). Defaults 128 and 3: today's behaviour, nothing changes on install. A change on the
+page is written at once (only those two keys, like the converters' share), no Save.
+
+**Block**: `pw-metadata -n settings 0 clock.force-quantum N`, live; the engine follows through its buffer-size
+callback and measures the round trip again. 128 writes 0 (no force), so PipeWire's own quantum from a3-core's
+`pipewire.conf.d` runs as before. PipeWire 1.6 does not clamp a forced quantum to `clock.min-quantum`
+(`settings.check-quantum` is off by default; the graph takes min = max = force), so min-quantum 128 stays untouched
+and nothing needs restoring. The engine forces its stored block at every start: it remembers it, nothing else sets
+it. The engine requests no `node.latency` of its own (jack.conf's 128 applies to every JACK client); a forced
+quantum overrides every client's, so the REAPER/CLAP trap of 2026-10-25 (force above node.latency) is gone with
+REAPER, but another JACK client that cannot follow a buffer-size change would show it first.
+
+**Periods**: `api.alsa.period-num` in the engine's own WirePlumber 0.5 drop-in,
+`~/.config/wireplumber/wireplumber.conf.d/80-a3-engine-alsa.conf`, matching by exact `node.name` only the ALSA nodes
+the engine's I/O map reaches (`system:*` is the default sink and source, read with `pw-metadata -n default 0`; a
+peer `alsa_…:…` names its node; the loops are on `system`). Then `systemctl --user restart wireplumber`: the
+device's nodes go and come back (about two seconds of silence), the engine links its ports again (port
+registration and the once-a-second plan) and measures the round trip 3 s after WirePlumber is back. 3 removes the
+file; nothing else in that directory is touched. The file is written atomically (a hidden temporary renamed over
+it). Periods are never applied at the engine's start: WirePlumber reads the file at its own start.
+
+**The page**: a choice is applied only on APPLY; the line before it says "applies live" for a block and "the
+audio stops for about two seconds while WirePlumber restarts" for periods. REVERT goes back to the previous
+choice (a block at once, periods after the same question). The info below then shows the new `Block N frames x
+M periods`, DSP load and xruns, and the measured round trip. Commands run through `posix_spawn` (never fork, the
+engine is large; `app/CommandRunner.h`) on the control thread. Over the control API: `POST /api/engine/timing`
+`{"block", "periods"}`, and the status's `timing` (applied, previous, restarting, message). On a JUCE device type
+the block is the device's buffer size (Save) and there are no periods (JUCE's ALSA device fixes its own).
 
 ## Build and test
 

@@ -393,6 +393,139 @@ AppConfig withDeviceRoute (const AppConfig& config, const std::string& port, std
     return edited;
 }
 
+std::vector<RouteChoice> routeChoices (const AppConfig& config, const juce::StringArray& hardwarePorts, int deviceChannels, bool input)
+{
+    std::vector<RouteChoice> choices;
+    const auto& loop = config.io.roundTripLoop;
+    if (config.backend.type == BackendSettings::Type::device)
+    {
+        for (int channel = 1; channel <= deviceChannels; ++channel)
+            if (! loopHolds (loop, input, channel))
+                choices.push_back ({ "channel " + juce::String (channel), {}, channel - 1 });
+        return choices;
+    }
+    for (const auto& port : hardwarePorts)
+        if (! isLoopPeer (loop, port.toStdString()))
+            choices.push_back ({ port, port.toStdString(), std::nullopt });
+    return choices;
+}
+
+namespace
+{
+// The 1-based channels of one side: JACK: those of the hardware ports (RoundTripLoop.h deviceChannelOfPeer); a
+// device: 1..deviceChannels. Sorted, each once.
+std::vector<int> hardwareChannels (const AppConfig& config, const juce::StringArray& hardwarePorts, int deviceChannels, bool input)
+{
+    std::vector<int> channels;
+    if (config.backend.type == BackendSettings::Type::device)
+        for (int channel = 1; channel <= deviceChannels; ++channel)
+            channels.push_back (channel);
+    else
+        for (const auto& port : hardwarePorts)
+            if (const auto named = deviceChannelOfPeer (port.toStdString()); named && named->capture == input)
+                channels.push_back (named->channel);
+    std::sort (channels.begin(), channels.end());
+    channels.erase (std::unique (channels.begin(), channels.end()), channels.end());
+    return channels;
+}
+
+// Why the digital loop cannot reserve `loop`'s channels on one side ("" when it can).
+juce::String digitalLoopRefusal (const IoMap& io, const RoundTripLoop& loop, bool input)
+{
+    const int first = input ? loop.input : loop.output;
+    for (int channel = first; channel < first + loop.channels; ++channel)
+    {
+        const juce::String side = juce::String (input ? "input " : "output ") + juce::String (channel);
+        if (const auto users = routesOn (io, input, channel); ! users.isEmpty())
+            return side + " is in use (" + users.joinIntoString (", ") + "); unroute it first";
+        if (io.analogLoop && (input ? io.analogLoop->input : io.analogLoop->output) == channel)
+            return side + " is the analog test cable's";
+    }
+    return {};
+}
+}
+
+std::vector<int> analogTestChannels (const AppConfig& config, const juce::StringArray& hardwarePorts, int deviceChannels, bool input)
+{
+    auto channels = hardwareChannels (config, hardwarePorts, deviceChannels, input);
+    channels.erase (std::remove_if (channels.begin(), channels.end(),
+                                    [&] (int channel) { return loopHolds (config.io.roundTripLoop, input, channel); }),
+                    channels.end());
+    return channels;
+}
+
+std::vector<int> digitalLoopChannels (const AppConfig& config, const juce::StringArray& hardwarePorts, int deviceChannels, bool input)
+{
+    return hardwareChannels (config, hardwarePorts, deviceChannels, input);
+}
+
+std::optional<AppConfig> withDigitalLoopChannel (const AppConfig& config, bool input, int channel, juce::String& error)
+{
+    auto edited = config;
+    if (channel <= 0)
+    {
+        edited.io.roundTripLoop.reset();
+        return edited;
+    }
+    const bool fresh = ! config.io.roundTripLoop;
+    auto loop = config.io.roundTripLoop.value_or (RoundTripLoop { channel, channel, RoundTripLoop {}.channels });
+    (input ? loop.input : loop.output) = channel;
+    for (const bool side : { false, true })
+        if (fresh || side == input)
+            if (const auto refusal = digitalLoopRefusal (config.io, loop, side); refusal.isNotEmpty())
+            {
+                error = "digital loop: " + refusal;
+                return std::nullopt;
+            }
+    edited.io.roundTripLoop = loop;
+    return edited;
+}
+
+AppConfig withAnalogTestChannel (const AppConfig& config, bool input, int channel)
+{
+    auto edited = config;
+    auto loop = edited.io.analogLoop.value_or (AnalogLoop {});
+    (input ? loop.input : loop.output) = std::max (0, channel);
+    const bool empty = loop.output == 0 && loop.input == 0 && ! loop.converters;
+    edited.io.analogLoop = empty ? std::nullopt : std::optional<AnalogLoop> (loop);
+    return edited;
+}
+
+namespace
+{
+juce::String reservedText (const juce::String& what) { return what + " is the round-trip loop's (reserved)"; }
+}
+
+juce::String loopRefusal (const AppConfig& config, const std::vector<std::string>& peers)
+{
+    for (const auto& peer : peers)
+        if (isLoopPeer (config.io.roundTripLoop, peer))
+            return reservedText (juce::String (peer));
+    return {};
+}
+
+juce::String loopRefusal (const AppConfig& config, bool input, int channel0)
+{
+    if (! loopHolds (config.io.roundTripLoop, input, channel0 + 1))
+        return {};
+    return reservedText ("device " + juce::String (input ? "input " : "output ") + juce::String (channel0 + 1));
+}
+
+juce::String loopNotice (const AppConfig& config, const std::vector<std::string>& loopDropped)
+{
+    const auto& loop = config.io.roundTripLoop;
+    if (! loop)
+        return {};
+    auto notice = "Round-trip loop: device " + loopRangeText (*loop, false) + " -> " + loopRangeText (*loop, true)
+                + " (reserved for the measurement, not offered here).";
+    if (loopDropped.empty())
+        return notice;
+    juce::StringArray routes;
+    for (const auto& route : loopDropped)
+        routes.add (juce::String (route));
+    return notice + " Unrouted at load, they were on the loop: " + routes.joinIntoString (", ") + ".";
+}
+
 std::vector<std::string> portsRoutedTo (const AppConfig& config, const std::string& peer, const std::string& except)
 {
     std::vector<std::string> ports;

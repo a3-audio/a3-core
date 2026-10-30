@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "DeviceBackend.h"
+#include "ConnectionPlan.h"
 #include <algorithm>
 #include <cstdio>
 #include <set>
@@ -62,6 +63,17 @@ juce::String duplicateOutput (const std::vector<int>& channels, const PortNames&
 }
 }
 
+juce::String loopUnavailable (const std::optional<RoundTripLoop>& loop, int inputs, int outputs)
+{
+    if (! loop)
+        return {};
+    if (loop->output > outputs)
+        return "the device has no output " + juce::String (loop->output);
+    if (loop->input > inputs)
+        return "the device has no input " + juce::String (loop->input);
+    return {};
+}
+
 DeviceBackend::DeviceBackend() = default;
 DeviceBackend::~DeviceBackend() { close(); }
 
@@ -78,6 +90,12 @@ juce::Result DeviceBackend::open (EngineHost& engineHost, const AppConfig& confi
     const int numIn = channelsNeeded (inputChannels), numOut = channelsNeeded (outputChannels);
     if (numOut == 0)
         return juce::Result::fail ("io.deviceChannels maps no output: the device would stay silent");
+    // The loop's channels are opened too when the device has them; a device without them still runs, unmeasured.
+    const auto& loop = config.io.roundTripLoop;
+    const auto& analog = config.io.analogLoop;
+    const bool analogPair = hasAnalogTestPair (config.io);
+    const int openIn = std::max ({ numIn, loop ? loop->input : 0, analogPair ? analog->input : 0 });
+    const int openOut = std::max ({ numOut, loop ? loop->output : 0, analogPair ? analog->output : 0 });
 
     // The device passes only the channels it opened, packed in order: open 0..highest mapped,
     // so a device channel number is also the index into the callback's arrays.
@@ -93,8 +111,8 @@ juce::Result DeviceBackend::open (EngineHost& engineHost, const AppConfig& confi
     setup.useDefaultOutputChannels = false;
     setup.inputChannels.clear();
     setup.outputChannels.clear();
-    setup.inputChannels.setRange (0, numIn, true);
-    setup.outputChannels.setRange (0, numOut, true);
+    setup.inputChannels.setRange (0, openIn, true);
+    setup.outputChannels.setRange (0, openOut, true);
     if (error.isEmpty())
         error = manager.setAudioDeviceSetup (setup, true);
     auto* device = manager.getCurrentAudioDevice();
@@ -109,6 +127,18 @@ juce::Result DeviceBackend::open (EngineHost& engineHost, const AppConfig& confi
         close();
         return juce::Result::fail ("the device has fewer channels than io.deviceChannels needs");
     }
+
+    const int activeIn = device->getActiveInputChannels().countNumberOfSetBits();
+    const int activeOut = device->getActiveOutputChannels().countNumberOfSetBits();
+    const auto unavailable = loopUnavailable (loop, activeIn, activeOut);
+    auto analogRefusal = analogLoopRefusal (config.io);
+    if (analogRefusal.isEmpty() && (analog->output > activeOut || analog->input > activeIn))
+        analogRefusal = "the device has no output " + juce::String (analog->output) + " or no input " + juce::String (analog->input);
+    roundTrip = std::make_unique<RoundTripMeter> (loop, unavailable, analog, analogRefusal);
+    loopInputChannel = loop && unavailable.isEmpty() ? loop->input - 1 : -1;
+    loopOutputChannel = loop && unavailable.isEmpty() ? loop->output - 1 : -1;
+    analogInputChannel = analogRefusal.isEmpty() ? analog->input - 1 : -1;
+    analogOutputChannel = analogRefusal.isEmpty() ? analog->output - 1 : -1;
 
     settings = config.backend;
     slots = bindPortSlots (engineHost.engineConfig(), engineHost.spatialConfig(), inputs, outputs);
@@ -133,6 +163,8 @@ void DeviceBackend::close()
     manager.closeAudioDevice();
     host = nullptr;
     slots = {};
+    roundTrip.reset();
+    loopInputChannel = loopOutputChannel = analogInputChannel = analogOutputChannel = -1;
 }
 
 float combinedLoadPercent (float backendPercent, float engineBlockMs, int frames, double sampleRate)
@@ -163,6 +195,40 @@ juce::String roundTripText (const RoundTrip& trip)
            + ms (trip.captureSamples) + " + processing " + ms (trip.processingSamples) + " + playback " + ms (trip.playbackSamples) + " ms";
 }
 
+juce::String roundTripText (const RoundTrip& estimate, const RoundTripReport& measured)
+{
+    using State = RoundTripReport::State;
+    if (estimate.sampleRate <= 0)
+        return roundTripText (estimate);
+    if (measured.state == State::measured)
+        return "Round trip (measured, digital loop)   " + juce::String (estimate.ms (measured.samples), 1) + " ms ("
+               + juce::String (measured.samples) + " samples), " + juce::Time (measured.atMillis).formatted ("%H:%M")
+               + (measured.measuring ? ", measuring again" : "");
+    juce::String why;
+    if (measured.measuring)
+        why = "measuring";
+    else if (measured.state == State::noLoop || measured.state == State::noLoopFound)
+        why = measured.reason;
+    else if (measured.state == State::notMeasured)
+        why = "not measured yet";
+    const auto text = roundTripText (estimate);
+    return why.isEmpty() ? text : text.replaceFirstOccurrenceOf ("(estimated)", "(estimated, " + why + ")");
+}
+
+juce::String analogChainText (const RoundTrip& estimate, const RoundTripReport& measured)
+{
+    const juce::String measuring = measured.analogMeasuring ? ", measuring" : "";
+    if (measured.analog != RoundTripReport::Analog::measured)
+        return "Analog chain   converters not measured yet"
+               + (measured.analogReason.isEmpty() ? juce::String() : " (" + measured.analogReason + ")") + measuring;
+    const auto& converters = measured.converters;
+    if (measured.state == RoundTripReport::State::measured && estimate.sampleRate > 0)
+        return "Analog chain   " + juce::String (estimate.ms (measured.samples) + converters.ms(), 1)
+               + " ms (measured: digital loop now + converters measured on " + converters.measuredOn + ")" + measuring;
+    return "Analog chain   digital loop not measured now; converters " + juce::String (converters.ms(), 1) + " ms (measured on "
+           + converters.measuredOn + ")" + measuring;
+}
+
 BackendStatus DeviceBackend::status() const
 {
     BackendStatus s;
@@ -179,15 +245,35 @@ BackendStatus DeviceBackend::status() const
         s.deviceInputs = device->getActiveInputChannels().countNumberOfSetBits();
         s.deviceOutputs = device->getActiveOutputChannels().countNumberOfSetBits();
     }
+    if (roundTrip != nullptr)
+        s.roundTripMeasured = roundTrip->report();
     s.dspLoadPercent = combinedLoadPercent ((float) (manager.getCpuUsage() * 100.0), engineBlockMs.load(),
                                             lastBlockFrames.load(), s.sampleRate);
     return s;
 }
 
-void DeviceBackend::service (double)
+void DeviceBackend::measureRoundTrip()
+{
+    if (roundTrip != nullptr)
+        roundTrip->request();
+}
+
+void DeviceBackend::measureAnalogChain()
+{
+    if (roundTrip != nullptr)
+        roundTrip->requestAnalog();
+}
+
+std::optional<ConverterShare> DeviceBackend::takeNewConverterShare()
+{
+    return roundTrip != nullptr ? roundTrip->takeNewConverterShare() : std::nullopt;
+}
+
+void DeviceBackend::service (double nowSeconds)
 {
     if (host == nullptr)
         return;
+    roundTrip->service (nowSeconds, juce::Time::currentTimeMillis(), sampleRate);
     const int rate = pendingSampleRate.exchange (0);
     const int block = pendingBlockSize.exchange (0);
     const bool newRate = rate > 0 && (double) rate != sampleRate;
@@ -200,6 +286,7 @@ void DeviceBackend::service (double)
     if (built.failed())
         std::fprintf (stderr, "a3-engine: cannot rebuild for %.0f Hz / %d frames: %s\n", sampleRate, block,
                       built.getErrorMessage().toRawUTF8());
+    roundTrip->request();   // a new block size or rate is a new round trip
 }
 
 void DeviceBackend::audioDeviceIOCallbackWithContext (const float* const* deviceIn, int numIn, float* const* deviceOut,
@@ -209,6 +296,11 @@ void DeviceBackend::audioDeviceIOCallbackWithContext (const float* const* device
     const auto started = std::chrono::steady_clock::now();
     bindDeviceBuffers (inputChannels, outputChannels, deviceIn, numIn, deviceOut, numOut, numSamples, slots);
     host->audioCallback (inputs, outputs, numSamples);
+    if (loopOutputChannel >= 0 && loopOutputChannel < numOut)
+        roundTrip->process (loopInputChannel < numIn ? deviceIn[loopInputChannel] : nullptr, deviceOut[loopOutputChannel], numSamples);
+    if (analogOutputChannel >= 0 && analogOutputChannel < numOut)
+        roundTrip->processAnalog (analogInputChannel < numIn ? deviceIn[analogInputChannel] : nullptr, deviceOut[analogOutputChannel],
+                                  numSamples);
     engineBlockMs.store ((float) std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - started).count(),
                          std::memory_order_relaxed);
     lastBlockFrames.store (numSamples, std::memory_order_relaxed);

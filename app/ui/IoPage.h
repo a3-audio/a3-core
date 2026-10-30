@@ -13,7 +13,9 @@ namespace a3app
 // between two foreign ports. OUTPUT: per zone (MAIN, BOOTH, PHONES, REC) a dropdown per channel (the playback
 // port or device channel it goes to; one another channel uses is marked, not refused), and below it every engine
 // port as the I/O map names its peers (editable, comma separated) beside the live ones it does not (foreign:
-// shown in muted text, never edited). Every edit is pending until Save.
+// shown in muted text, never edited). At the bottom the two measurement pairs: the digital loop (the round trip)
+// and the analog test cable. The digital loop's channels are offered in no route; a notice names them and the
+// routes a load left out because they were on them. Every edit is pending until Save.
 class IoPage final : public juce::Component
 {
 public:
@@ -38,6 +40,15 @@ public:
     void setDirectLinks (const juce::String& linesOfFromArrowTo);
     void refresh (bool force = false);   // re-reads the config and the live links (throttled unless forced)
     const juce::Label& messageLabel() const { return message; }
+    const juce::Label& noticeLabel() const { return notice; }
+    // The analog test pair (a temporary cable for the AUDIO page's MEASURE ANALOG CHAIN): one side's channel, 0 = none.
+    juce::ComboBox& analogOutputBox() { return analogOutput; }
+    juce::ComboBox& analogInputBox() { return analogInput; }
+    void chooseAnalogPair (bool input, int channelOneBased);
+    // The digital loop the AUDIO page's MEASURE runs over: one side's first channel, 0 = no loop (withDigitalLoopChannel).
+    juce::ComboBox& digitalOutputBox() { return digitalOutput; }
+    juce::ComboBox& digitalInputBox() { return digitalInput; }
+    void chooseDigitalLoop (bool input, int channelOneBased);
     // The per-deck source chooser (1 = local StemDeck, 2 = AES67, 3 = the slot holds neither complete set); nullptr past the config's decks.
     juce::ComboBox* deckSourceBox (int slotOneBased);
 
@@ -56,7 +67,9 @@ private:
     void rebuildDeckChoosers();
     void rebuildRoutes();
     void fillRoutes();
-    juce::StringArray routeChoices (bool input) const;
+    std::vector<RouteChoice> choicesFor (bool input) const;
+    void fillAnalogPair();
+    void fillDigitalLoop();
     void layoutInput (juce::Rectangle<int> area, int row);
     void layoutOutput (juce::Rectangle<int> area, int row);
 
@@ -65,7 +78,8 @@ private:
     LiveLinks lastLinks;
     AppConfig shown;
     int ticks = 0;
-    juce::Label title, portCaption, linksCaption, message;
+    juce::Label title, portCaption, linksCaption, message, notice, analogCaption, digitalCaption;
+    juce::ComboBox analogOutput, analogInput, digitalOutput, digitalInput;
     std::unique_ptr<Model> model;
     juce::ListBox list;
     juce::TextEditor portEditor, linksEditor;

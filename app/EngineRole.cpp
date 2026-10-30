@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "EngineRole.h"
 
+#include <unistd.h>
+
 #include <atomic>
 #include <cstdio>
+#include <cstdlib>
 
 #include "ConfigEdits.h"
 #include "DeckAudioReport.h"
@@ -112,6 +115,9 @@ public:
 
     BackendStatus status() const { return backend != nullptr ? backend->status() : BackendStatus {}; }
     LiveLinks liveLinks() const { return backend != nullptr ? backend->liveLinks() : LiveLinks {}; }
+    void measureRoundTrip() { if (ready) backend->measureRoundTrip(); }
+    void measureAnalogChain() { if (ready) backend->measureAnalogChain(); }
+    std::optional<ConverterShare> takeNewConverterShare() { return ready ? backend->takeNewConverterShare() : std::nullopt; }
     EngineHost& engineHost() { return *host; }
     // Seconds on the app clock of Core's last message, or a negative number before the first.
     double lastCoreSeconds() const { return lastCoreMessage.load(); }
@@ -159,7 +165,13 @@ public:
         : role (r), file (std::move (saveFile)), edited (startConfig), startedWith (std::move (startConfig)), truth (std::move (engineTruth)),
           names (outputsOf (edited)) {}
 
-    BackendStatus status() const override { return live() ? role.session->status() : BackendStatus {}; }
+    BackendStatus status() const override
+    {
+        auto status = live() ? role.session->status() : BackendStatus {};
+        if (role.runsOnPipeWire())
+            status.timing = role.timing.report();
+        return status;
+    }
     std::vector<a3::Engine::OutputMeter> meters() override { return live() ? role.session->engineHost().meters() : std::vector<a3::Engine::OutputMeter> {}; }
     std::vector<std::string> outputNames() const override { return names; }
     bool coreHeard() const override { return live() && role.session->lastCoreSeconds() >= 0.0; }
@@ -173,6 +185,7 @@ public:
     juce::String engineProblem() const override { return problem; }
     std::vector<std::string> droppedLinks() const override { return startedWith.droppedLinks; }
     std::vector<std::string> ignoredKeys() const override { return startedWith.ignoredKeys; }
+    std::vector<std::string> loopDropped() const override { return startedWith.loopDropped; }
     juce::String truthNote() const override
     {
         juce::StringArray notes { a3app::truthNote (truth), unmeteredDecksNote (startedWith.engine.decks, truth.vuMeters),
@@ -182,6 +195,7 @@ public:
         return notes.joinIntoString ("; ");
     }
     int truthDecks() const override { return truth.decks; }
+    a3clock::ClockReport clock() const override { return clockReader.get (monotonicSeconds(), (double) juce::Time::currentTimeMillis() / 1000.0); }
     void edit (const AppConfig& config) override { edited = config; }
 
     // Fails when the new config did not open (the previous one is running again, or nothing is: then
@@ -196,6 +210,8 @@ public:
         edited.droppedLinks.clear();
         startedWith.ignoredKeys.clear();
         edited.ignoredKeys.clear();
+        startedWith.loopDropped.clear();
+        edited.loopDropped.clear();
         if (auto outputs = outputsOf (config); ! outputs.empty())
             names = std::move (outputs);
         return juce::Result::ok();
@@ -207,6 +223,20 @@ public:
             role.session->engineHost().controls().global().filter.kind.store (static_cast<int> (kind));
         edited.engine.filterKind = startedWith.engine.filterKind = kind;   // it runs now
     }
+
+    void measureRoundTrip() override
+    {
+        if (live())
+            role.session->measureRoundTrip();
+    }
+
+    void measureAnalogChain() override
+    {
+        if (live())
+            role.session->measureAnalogChain();
+    }
+
+    void applyTiming (const AudioTiming& wanted) override { role.applyTiming (wanted); }
 
     void playNoise (const NoiseRequest& request) override
     {
@@ -234,6 +264,14 @@ private:
     EngineTruth truth;
     std::vector<std::string> names;
     juce::String problem;
+    // The clock role (another process) writes its status into the runtime directory; read on the control thread.
+    mutable a3clock::ClockReportReader clockReader { a3clock::clockStatusFile (runtimeDirectory(), (unsigned) getuid()) };
+
+    static std::optional<std::string> runtimeDirectory()
+    {
+        const char* dir = std::getenv ("XDG_RUNTIME_DIR");
+        return dir != nullptr ? std::optional<std::string> (dir) : std::nullopt;
+    }
 
     friend class EngineRole;
 };
@@ -269,9 +307,11 @@ juce::Result EngineRole::restart (const AppConfig& config, juce::String& problem
     {
         case RestartOutcome::applied:
             problem = {};
+            startTiming();
             return juce::Result::ok();
         case RestartOutcome::previousRunning:
             problem = {};
+            startTiming();
             return juce::Result::fail (result.message + " (the previous setting is running again)");
         case RestartOutcome::nothingRunning:
             break;
@@ -322,13 +362,14 @@ std::variant<std::unique_ptr<EngineRole>, int> EngineRole::start (const AppArgs&
     for (const auto& line : droppedLinkLines (loaded->config))
         sayEngine (line);
 
-    std::unique_ptr<EngineRole> role (new EngineRole (args, std::move (*loaded)));
+    std::unique_ptr<EngineRole> role (new EngineRole (args, std::move (*loaded), home));
     const auto opened = role->session->open (! args.noConnect, args.hostname);
     if (opened.failed())
     {
         sayEngine (opened.getErrorMessage());
         return 1;
     }
+    role->startTiming();
     role->serveControl();
     const auto status = role->session->status();
     sayEngine (role->startup.configFile.getFullPathName() + ", " + juce::String (status.sampleRate, 0) + " Hz, "
@@ -336,9 +377,48 @@ std::variant<std::unique_ptr<EngineRole>, int> EngineRole::start (const AppArgs&
     return role;
 }
 
-EngineRole::EngineRole (const AppArgs& argsToUse, StartupData data)
-    : args (argsToUse), startup (std::move (data)), session (std::make_unique<EngineSession> (startup))
+EngineRole::EngineRole (const AppArgs& argsToUse, StartupData data, const juce::File& home)
+    : args (argsToUse), startup (std::move (data)),
+      timing ({ runner, periodsDropInFile (home), [this] (const AudioTiming& t) { return storeTiming (t); },
+                [this] { session->measureRoundTrip(); } }),
+      session (std::make_unique<EngineSession> (startup))
 {
+}
+
+bool EngineRole::runsOnPipeWire() const { return startup.config.backend.type == BackendSettings::Type::jack; }
+
+void EngineRole::startTiming()
+{
+    if (! runsOnPipeWire() || ! session->isReady())
+        return;
+    timing.start (timingOf (startup.config.backend));
+    if (const auto said = timing.report().message; said.isNotEmpty())
+        sayEngine (said);
+}
+
+// Like the converter share: into the config file at once (only backend.blockSize and backend.periods change), and
+// into what runs and what is pending, so the next session and the next Save keep it.
+juce::Result EngineRole::storeTiming (const AudioTiming& applied)
+{
+    const auto from = startup.saveFile.existsAsFile() ? startup.saveFile : startup.configFile;
+    const auto stored = storeBackendTiming (from, startup.saveFile, applied.block, applied.periods, startup.truth.decks);
+    for (auto* config : { &startup.config, view != nullptr ? &view->startedWith : nullptr, view != nullptr ? &view->edited : nullptr })
+        if (config != nullptr)
+        {
+            config->backend.blockSize = applied.block;
+            config->backend.periods = applied.periods;
+        }
+    return stored;
+}
+
+void EngineRole::applyTiming (const AudioTiming& wanted)
+{
+    if (! runsOnPipeWire())
+        return;   // a device's block size is an edit, applied by Save
+    if (const auto result = timing.apply (wanted, startup.config.io); result.failed())
+        sayEngine (result.getErrorMessage());
+    else
+        sayEngine ("timing " + timingText (wanted.block, wanted.periods) + ": " + timing.report().message);
 }
 
 EngineRole::~EngineRole()
@@ -356,9 +436,28 @@ EngineRole::~EngineRole()
     session.reset();
 }
 
+// A new converter share goes into the config file at once (only io.analogLoop changes) and into what runs and
+// what is pending, so the next session and the next Save keep it.
+void EngineRole::storeConverterShare()
+{
+    const auto share = session->takeNewConverterShare();
+    if (! share)
+        return;
+    const auto from = startup.saveFile.existsAsFile() ? startup.saveFile : startup.configFile;
+    const auto stored = a3app::storeConverterShare (from, startup.saveFile, *share, startup.truth.decks);
+    sayEngine ("analog chain: converters " + juce::String (share->samples) + " samples at " + juce::String (share->sampleRate, 0) + " Hz"
+               + (stored.wasOk() ? ", stored in " + startup.saveFile.getFullPathName() : ", NOT stored: " + stored.getErrorMessage()));
+    for (auto* config : { &startup.config, view != nullptr ? &view->startedWith : nullptr, view != nullptr ? &view->edited : nullptr })
+        if (config != nullptr && config->io.analogLoop)
+            config->io.analogLoop->converters = *share;
+}
+
 std::optional<int> EngineRole::tick (bool stopRequested)
 {
     session->tick();
+    if (runsOnPipeWire())
+        timing.service (monotonicSeconds());
+    storeConverterShare();
     api->tick (monotonicSeconds());
     if (session->lost())
     {

@@ -42,6 +42,7 @@ a3app::AppConfig sample()
     config.backend.outputDevice = "hw:2";
     config.backend.sampleRate = 48000;
     config.backend.blockSize = 256;
+    config.backend.periods = 2;
     config.io.jack["main_top_1"] = { "system:playback_1", "other:in" };
     config.io.jack["analog_1"] = { "system:capture_1" };
     config.io.directLinks = { { "system:capture_9", "analyzer:in_1" } };
@@ -85,6 +86,7 @@ TEST (ConfigFile, RoundTrips)
     EXPECT_EQ (loaded->backend.outputDevice, saved.backend.outputDevice);
     EXPECT_EQ (loaded->backend.sampleRate, 48000);
     EXPECT_EQ (loaded->backend.blockSize, 256);
+    EXPECT_EQ (loaded->backend.periods, 2);
     EXPECT_EQ (loaded->io.jack, saved.io.jack);
     EXPECT_EQ (loaded->io.directLinks, saved.io.directLinks);
     EXPECT_EQ (loaded->io.deviceChannels, saved.io.deviceChannels);
@@ -101,7 +103,8 @@ TEST (ConfigFile, MissingSectionsTakeTheDefaults)
     defaults.decks = a3apptest::truthDecks();
     EXPECT_EQ (loaded->engine, defaults);
     EXPECT_EQ (loaded->backend.type, a3app::BackendSettings::Type::jack);
-    EXPECT_EQ (loaded->backend.blockSize, 128);
+    EXPECT_EQ (loaded->backend.blockSize, 128);   // today's quantum: nothing changes on install
+    EXPECT_EQ (loaded->backend.periods, 3);       // today's ALSA periods: no WirePlumber drop-in
     EXPECT_EQ (loaded->backend.sampleRate, 44100);
     EXPECT_EQ (loaded->io.jack.size(), (size_t) defaults.decks * 41);   // only the slots' local StemDeck links
     EXPECT_TRUE (loaded->io.directLinks.empty());
@@ -195,7 +198,8 @@ TEST (ConfigFile, BadJsonIsRefusedWithFileAndReason)
     EXPECT_FALSE (a3app::loadAppConfig (badSpatial, error, a3apptest::truthDecks()).has_value());
     EXPECT_TRUE (error.contains (badSpatial.getFullPathName())) << error;
 
-    for (const char* section : { "\"backend\":{\"type\":\"pulse\"}", "\"backend\":{\"blockSize\":32}",
+    for (const char* section : { "\"backend\":{\"type\":\"pulse\"}", "\"backend\":{\"blockSize\":16}",
+                                 "\"backend\":{\"periods\":1}", "\"backend\":{\"periods\":4}", "\"backend\":{\"periods\":2.5}",
                                  "\"backend\":{\"blockSize\":4096}", "\"backend\":{\"sampleRate\":0}",
                                  "\"backend\":{\"mystery\":1}", "\"io\":{\"mystery\":1}", "\"mystery\":1" })
     {
@@ -369,4 +373,40 @@ TEST (ConfigFile, ZonesLoadFromTheirOwnVariants)
     broken.boothSpatialDirectory = scratch.dir.getChildFile ("missing");
     EXPECT_FALSE (a3app::loadZonesSpatial (broken, error));
     EXPECT_TRUE (error.contains ("missing")) << error;   // the refusal names the booth's directory
+}
+
+// The PipeWire block goes down to 32 frames (the AUDIO page's smallest choice).
+TEST (ConfigFile, ABlockOf32FramesLoads)
+{
+    Scratch scratch;
+    juce::String error;
+    const auto loaded = a3app::loadAppConfig (scratch.write ("engine.json", withSpatial ("\"backend\":{\"type\":\"jack\",\"blockSize\":32,\"periods\":2}")),
+                                              error, a3apptest::truthDecks());
+    ASSERT_TRUE (loaded.has_value()) << error;
+    EXPECT_EQ (loaded->backend.blockSize, 32);
+    EXPECT_EQ (loaded->backend.periods, 2);
+}
+
+// The AUDIO page's block and periods go into the file at once; nothing else in it changes.
+TEST (ConfigFile, StoringTheTimingChangesOnlyTheBackendsBlockAndPeriods)
+{
+    Scratch scratch;
+    const auto spatial = juce::JSON::toString (juce::var (a3test::shippedSpatialDirectory.getFullPathName()));
+    const auto running = scratch.write ("package/engine.json", "{\"engine\":{\"channels\":3},\"backend\":{\"type\":\"jack\"},"
+                                                              "\"io\":{\"jack\":{\"main_sub\":[\"system:playback_1\"]}},\"spatial\":" + spatial + "}");
+    const auto saved = scratch.dir.getChildFile ("home/engine.json");
+    const auto stored = a3app::storeBackendTiming (running, saved, 64, 2, a3apptest::truthDecks());
+    ASSERT_TRUE (stored.wasOk()) << stored.getErrorMessage();
+    juce::String error;
+    const auto loaded = a3app::loadAppConfig (saved, error, a3apptest::truthDecks());
+    ASSERT_TRUE (loaded.has_value()) << error;
+    EXPECT_EQ (loaded->backend.blockSize, 64);
+    EXPECT_EQ (loaded->backend.periods, 2);
+    EXPECT_EQ (loaded->backend.type, a3app::BackendSettings::Type::jack);
+    EXPECT_EQ (loaded->engine.channels, 3);
+    EXPECT_FALSE (juce::JSON::parse (saved)["io"].getDynamicObject()->hasProperty ("deviceChannels"));   // not rewritten whole
+
+    const auto refused = a3app::storeBackendTiming (running, saved, 16, 3, a3apptest::truthDecks());
+    EXPECT_TRUE (refused.failed());   // 16 is no block the file takes: the stored file stays
+    EXPECT_EQ (a3app::loadAppConfig (saved, error, a3apptest::truthDecks())->backend.blockSize, 64);
 }

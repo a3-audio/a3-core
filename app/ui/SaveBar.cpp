@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "SaveBar.h"
 
+#include "ClockPanel.h"
+
 namespace a3app
 {
 namespace
@@ -39,7 +41,8 @@ SaveBar::SaveBar (HostView& v) : view (v)
     look::warning (pending);
     look::failure (message);
     saveButton.onClick = [this] { save(); };
-    for (auto* child : std::initializer_list<juce::Component*> { &pending, &message, &saveButton })
+    clock.setJustificationType (juce::Justification::centredLeft);
+    for (auto* child : std::initializer_list<juce::Component*> { &pending, &message, &saveButton, &clock })
         addAndMakeVisible (child);
 }
 
@@ -58,6 +61,10 @@ void SaveBar::save()
 void SaveBar::refresh()
 {
     look::say (pending, sameConfig (view.config(), view.running()) ? juce::String() : "not saved - applies after Save");
+    const auto indicator = a3clock::clockIndicator (view.clock());
+    clock.setText ("CLOCK " + juce::String (indicator.word), juce::dontSendNotification);
+    clock.setColour (juce::Label::textColourId, toneColour (indicator.tone));
+    clock.setTooltip (juce::String::fromUTF8 (indicator.detail.c_str()));
 }
 
 void SaveBar::paint (juce::Graphics& g) { g.fillAll (palette::raised); }
@@ -66,6 +73,7 @@ void SaveBar::resized()
 {
     auto area = getLocalBounds().reduced (getWidth() / 80, getHeight() / 10);
     saveButton.setBounds (area.removeFromRight (juce::jmax (area.getHeight() * 2, getWidth() / 5)));
+    clock.setBounds (area.removeFromLeft (area.getWidth() / 3));
     // Two lines beside Save: in the window's footer the bar shares its row with KEYS and the switches.
     pending.setBounds (area.removeFromTop (area.getHeight() / 2));
     message.setBounds (area);

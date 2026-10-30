@@ -11,6 +11,12 @@ conffile) stays untouched.
 
 tools/tests/linuxptp-stock-ptp4l.conf is linuxptp's stock file (a3nuc1,
 unedited). Every key except the three we change must equal it.
+
+2026-10-30, one clock: ptp4l never steers the Core's PHC (--free_running 1).
+The clock role (a3-core --role clock) steers it from the Scarlett, and if a
+second grandmaster ever won the BMCA, two controllers must not fight over it.
+It is on the drop-in's command line, which beats the config file: the config
+is a conffile, and a hand-edited one is kept by dpkg with the old value.
 """
 
 import unittest
@@ -71,8 +77,26 @@ class TheDropIn(unittest.TestCase):
     def test_it_clears_then_sets_exec_start(self):
         self.assertEqual(
             ["ExecStart=",
-             "ExecStart=/usr/sbin/ptp4l -f /etc/linuxptp/a3-ptp4l.conf -i %I"],
+             "ExecStart=/usr/sbin/ptp4l -f /etc/linuxptp/a3-ptp4l.conf -i %I --free_running 1"],
             self.exec_lines())
+
+    def test_it_says_who_steers_the_clock_instead(self):
+        text = DROPIN.read_text()
+        self.assertIn("--role clock", text)
+
+    def test_its_settings_are_these_and_no_others(self):
+        # Debian's sandbox stays whole: the port state is read as root by
+        # a3-ptp-state (test_package_ptp_state.py), not by a user's pmc.
+        settings = [l.strip() for l in DROPIN.read_text().splitlines()
+                    if l.strip() and not l.strip().startswith("#")]
+        self.assertEqual(settings, [
+            "[Service]",
+            "ExecStart=",
+            "ExecStart=/usr/sbin/ptp4l -f /etc/linuxptp/a3-ptp4l.conf -i %I --free_running 1",
+        ])
+
+    def test_it_leaves_the_sandbox_alone(self):
+        self.assertNotIn("PrivateTmp", DROPIN.read_text())
 
     def test_it_is_a_service_section(self):
         self.assertIn("[Service]", DROPIN.read_text().splitlines())

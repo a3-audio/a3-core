@@ -90,6 +90,191 @@ TEST_F (Pages, AudioShowsTheEstimatedRoundTrip)
     expectPainted (a3apptest::snapshotAt (page, "audio-roundtrip-device", page.getWidth(), page.getHeight()));
 }
 
+namespace
+{
+a3clock::ClockReport clockReport (a3clock::Health health, const char* reason)
+{
+    a3clock::ClockReport report;
+    report.running = true;
+    report.status.health = health;
+    report.status.reason = reason;
+    report.status.device = "/dev/ptp0";
+    report.status.interface = "enp5s0";
+    report.status.portState = "MASTER";
+    report.status.frequencyPpm = 14.1023;
+    report.status.errorNs = 2'345.0;
+    report.status.ratePpm = 0.012;
+    report.status.lockedSeconds = health == a3clock::Health::locked ? 3725.0 : 0.0;
+    report.status.counters.corrections = 3990;
+    report.status.counters.reanchors = 1;
+    report.status.scarlettBreaks = 1;
+    report.status.observeOnly = health == a3clock::Health::observing;
+    return report;
+}
+
+int pixelsOf (const juce::Image& image, juce::Colour colour)
+{
+    int n = 0;
+    for (int y = 0; y < image.getHeight(); ++y)
+        for (int x = 0; x < image.getWidth(); ++x)
+            n += image.getPixelAt (x, y).getARGB() == colour.getARGB();
+    return n;
+}
+}
+
+// The one clock on the AUDIO page (2026-10-30): its state in every case the role can be in, and a
+// warning frame whenever the PTP clock is not locked to the Scarlett.
+TEST_F (Pages, AudioShowsTheClockInEveryState)
+{
+    struct Case
+    {
+        const char* name;
+        a3clock::ClockReport report;
+        const char* word;
+        juce::Colour warning;   // transparent: no warning
+    };
+    a3clock::ClockReport absent;
+    absent.why = "the clock role is not running (a3-clock.service): nothing steers the PTP clock";
+    const Case cases[] = {
+        { "locked", clockReport (a3clock::Health::locked, "the PTP clock follows the Scarlett"), "LOCKED", juce::Colours::transparentBlack },
+        { "acquiring", clockReport (a3clock::Health::acquiring, "anchored: steering towards the lock"), "ACQUIRING", a3app::palette::caution },
+        { "observing", clockReport (a3clock::Health::observing, "observing"), "OBSERVING", a3app::palette::caution },
+        { "locked-role-not-read", [] { auto r = clockReport (a3clock::Health::locked, ""); r.status.portState.clear(); return r; }(), "LOCKED",
+          juce::Colours::transparentBlack },
+        { "holdover", clockReport (a3clock::Health::holdover, "no measurement: the last frequency is held"), "HOLDOVER", a3app::palette::danger },
+        { "fault", clockReport (a3clock::Health::fault, "the PTP clock refused a frequency write"), "FAULT", a3app::palette::danger },
+        { "not-running", absent, "NOT RUNNING", a3app::palette::danger },
+    };
+    for (const auto& c : cases)
+    {
+        FakeView view;
+        view.clockReport = c.report;
+        a3app::AudioPage page (view, manager);
+        page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+        page.refresh();
+        const auto& clock = page.clockPanel();
+        EXPECT_TRUE (clock.stateLabel().getText().startsWith (c.word)) << c.name << ": " << clock.stateLabel().getText();
+        EXPECT_EQ (clock.warns(), ! c.warning.isTransparent()) << c.name;
+        EXPECT_TRUE (page.getLocalBounds().contains (clock.getBounds())) << c.name;
+        EXPECT_GT (clock.getHeight(), 0) << c.name;
+        const auto image = a3apptest::snapshotAt (page, juce::String ("audio-clock-") + c.name, page.getWidth(), page.getHeight());
+        expectPainted (image);
+        if (c.warning.isTransparent())
+        {
+            EXPECT_EQ (pixelsOf (image, a3app::palette::danger), 0) << c.name;
+            EXPECT_EQ (pixelsOf (image, a3app::palette::caution), 0) << c.name;
+        }
+        else
+            EXPECT_GT (pixelsOf (image, c.warning), 200) << c.name;   // the frame, not only text
+    }
+}
+
+// S4: the clock keeps its rows whatever else the page shows: the device choosers, a landscape window.
+TEST_F (Pages, TheClockKeepsItsRowsInEveryLayout)
+{
+    struct Layout
+    {
+        const char* name;
+        bool device;
+        int width, height;
+    };
+    for (const auto& layout : { Layout { "portrait-jack", false, 768, 1024 }, Layout { "portrait-device", true, 768, 1024 },
+                                Layout { "landscape-device", true, 1280, 600 }, Layout { "small-device", true, 900, 480 } })
+    {
+        FakeView view;
+        view.clockReport = clockReport (a3clock::Health::holdover, "no measurement: the last frequency is held");
+        if (layout.device)
+            view.runDevice();
+        a3app::AudioPage page (view, manager);
+        page.setSize (layout.width, layout.height);
+        page.refresh();
+        const auto& clock = page.clockPanel();
+        EXPECT_GE (clock.getHeight(), layout.height / 5) << layout.name;
+        EXPECT_GT (clock.stateLabel().getHeight(), 0) << layout.name;
+        EXPECT_TRUE (page.getLocalBounds().contains (clock.getBounds())) << layout.name;
+        expectPainted (a3apptest::snapshotAt (page, juce::String ("audio-clock-") + layout.name, layout.width, layout.height));
+    }
+}
+
+// S4: the window's footer carries the clock's one word on every page, coloured as the panel's frame.
+TEST_F (Pages, TheFooterShowsTheClockOnEveryPage)
+{
+    FakeView view;
+    view.clockReport = clockReport (a3clock::Health::locked, "");
+    a3app::SaveBar bar (view);
+    bar.setSize (900, 60);
+    bar.refresh();
+    EXPECT_TRUE (bar.clockLabel().getText().contains ("LOCKED")) << bar.clockLabel().getText();
+    EXPECT_EQ (bar.clockLabel().findColour (juce::Label::textColourId), a3app::palette::running);
+    view.clockReport.status.portState.clear();   // ptp4l's port state not read yet: still synced, still LOCKED
+    bar.refresh();
+    EXPECT_TRUE (bar.clockLabel().getText().contains ("LOCKED")) << bar.clockLabel().getText();
+    EXPECT_EQ (bar.clockLabel().findColour (juce::Label::textColourId), a3app::palette::running);
+    view.clockReport.status.health = a3clock::Health::holdover;
+    bar.refresh();
+    EXPECT_TRUE (bar.clockLabel().getText().contains ("HOLDOVER"));
+    EXPECT_EQ (bar.clockLabel().findColour (juce::Label::textColourId), a3app::palette::danger);
+    EXPECT_GT (bar.clockLabel().getWidth(), 0);
+}
+
+// The PTP role is its own line under the state: neutral while not read yet, a warning only when
+// known and not MASTER.
+TEST_F (Pages, ThePtpRoleIsASecondLine)
+{
+    FakeView view;
+    view.clockReport = clockReport (a3clock::Health::locked, "");
+    a3app::AudioPage page (view, manager);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    page.refresh();
+    const auto& clock = page.clockPanel();
+    EXPECT_EQ (clock.roleLabel().getText(), "PTP grandmaster: confirmed");
+    EXPECT_EQ (clock.roleLabel().findColour (juce::Label::textColourId), a3app::palette::textMuted);
+    EXPECT_GT (clock.roleLabel().getHeight(), 0);
+    view.clockReport.status.portState.clear();
+    view.clockReport.status.portProblem = "no PTP state from a3-ptp-state: /run/a3/ptp-state.json missing";
+    page.refresh();
+    EXPECT_TRUE (clock.roleLabel().getText().startsWith ("PTP role: not read yet")) << clock.roleLabel().getText();
+    EXPECT_EQ (clock.roleLabel().findColour (juce::Label::textColourId), a3app::palette::textMuted);
+    EXPECT_TRUE (clock.stateLabel().getText().startsWith ("LOCKED")) << clock.stateLabel().getText();
+    EXPECT_FALSE (clock.stateLabel().getText().containsIgnoreCase ("unverified"));
+    view.clockReport.status.health = a3clock::Health::holdover;
+    view.clockReport.status.portState = "SLAVE";
+    page.refresh();
+    EXPECT_EQ (clock.roleLabel().getText(), "PTP role: SLAVE, not the grandmaster");
+    EXPECT_EQ (clock.roleLabel().findColour (juce::Label::textColourId), a3app::palette::danger);
+}
+
+TEST_F (Pages, TheClockMasterHasOneChoiceAndSaysWhy)
+{
+    FakeView view;
+    view.clockReport = clockReport (a3clock::Health::locked, "");
+    a3app::AudioPage page (view, manager);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    const auto& clock = page.clockPanel();
+    ASSERT_EQ (clock.masterBox().getNumItems(), 1);
+    EXPECT_EQ (clock.masterBox().getText(), juce::String (juce::CharPointer_UTF8 ("Scarlett \xe2\x86\x92 PTP grandmaster")));
+    EXPECT_TRUE (clock.noteLabel().getText().contains ("external PTP grandmaster")) << clock.noteLabel().getText();
+}
+
+TEST_F (Pages, TheClockSaysItsNumbers)
+{
+    FakeView view;
+    view.clockReport = clockReport (a3clock::Health::locked, "");
+    a3app::AudioPage page (view, manager);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    page.refresh();
+    const auto& clock = page.clockPanel();
+    EXPECT_TRUE (clock.stateLabel().getText().contains ("+2.3")) << clock.stateLabel().getText();       // the phase error, us
+    EXPECT_TRUE (clock.stateLabel().getText().contains ("1 h 2 min")) << clock.stateLabel().getText();  // locked for
+    EXPECT_TRUE (clock.rateLabel().getText().contains ("+14.10 ppm")) << clock.rateLabel().getText();
+    EXPECT_TRUE (clock.rateLabel().getText().contains ("+0.012 ppm")) << clock.rateLabel().getText();
+    EXPECT_TRUE (clock.countersLabel().getText().contains ("corrections 3990")) << clock.countersLabel().getText();
+    EXPECT_TRUE (clock.countersLabel().getText().contains ("Scarlett breaks 1")) << clock.countersLabel().getText();
+    view.clockReport.status.health = a3clock::Health::holdover;   // the window's timer: refresh follows
+    page.refresh();
+    EXPECT_TRUE (clock.stateLabel().getText().startsWith ("HOLDOVER"));
+}
+
 TEST_F (Pages, JackRateIsReadOnly)
 {
     FakeView view;
@@ -102,17 +287,171 @@ TEST_F (Pages, JackRateIsReadOnly)
     EXPECT_FALSE (page.showsDeviceSelector());
 }
 
-TEST_F (Pages, ChoosingTheBackendEditsTheConfig)
+// 2026-10-30: one device-type list; PipeWire (JACK) is its first entry, beside JUCE's types. A config of
+// "type": "jack" shows as PipeWire (JACK); choosing a JUCE type is the device backend.
+TEST_F (Pages, PipeWireIsADeviceTypeBesideJucesTypes)
 {
-    FakeView view;
+    FakeView view;   // engine.json "type": "jack"
     a3app::AudioPage page (view, manager);
-    page.chooseBackend (a3app::BackendSettings::Type::device);
+    auto& types = page.typeChooser();
+    ASSERT_EQ (types.getNumItems(), 2);
+    EXPECT_EQ (types.getItemText (0), "PipeWire (JACK)");
+    EXPECT_EQ (types.getItemText (1), "none");   // the tests' JUCE type
+    EXPECT_EQ (types.getText(), "PipeWire (JACK)");
+
+    page.chooseDeviceType ("none");
     EXPECT_EQ (view.edited, 1);
     EXPECT_EQ (view.applied, 0);   // an edit, not a rebuild: Save applies
     EXPECT_EQ (view.cfg.backend.type, a3app::BackendSettings::Type::device);
+    EXPECT_EQ (view.cfg.backend.deviceType, "none");
     EXPECT_TRUE (page.showsDeviceSelector());
-    page.chooseBackend (a3app::BackendSettings::Type::device);   // no change, no second edit
+    EXPECT_FALSE (page.showsPeriods()) << "JUCE's ALSA device sets its own periods";
+    EXPECT_TRUE (page.blockChooser().isVisible());
+    page.chooseDeviceType ("none");   // no change, no second edit
     EXPECT_EQ (view.edited, 1);
+
+    page.chooseDeviceType (a3app::AudioPage::pipewireType);
+    EXPECT_EQ (view.cfg.backend.type, a3app::BackendSettings::Type::jack);
+    EXPECT_FALSE (page.showsDeviceSelector());
+}
+
+// The block and periods on PipeWire: the choices, and nothing applied before APPLY. A new block runs live; new
+// periods say first that the audio stops for about two seconds.
+TEST_F (Pages, PipeWireBlockAndPeriodsApplyOnlyOnApply)
+{
+    FakeView view;
+    view.state.timing.available = true;
+    a3app::AudioPage page (view, manager);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    page.refresh();
+    auto& block = page.blockChooser();
+    auto& periods = page.periodsChooser();
+    ASSERT_EQ (block.getNumItems(), 6);
+    for (const auto& [index, text] : { std::pair { 0, "32 frames" }, { 2, "128 frames" }, { 5, "1024 frames" } })
+        EXPECT_EQ (block.getItemText (index), text);
+    ASSERT_EQ (periods.getNumItems(), 2);
+    EXPECT_EQ (periods.getItemText (0), "2 periods");
+    EXPECT_EQ (periods.getItemText (1), "3 periods");
+    EXPECT_EQ (block.getText(), "128 frames");
+    EXPECT_EQ (periods.getText(), "3 periods");
+    EXPECT_TRUE (page.showsPeriods());
+    EXPECT_FALSE (page.applyButton().isVisible());
+
+    page.chooseBlock (64);
+    EXPECT_TRUE (view.timings.empty()) << "a choice is not applied on its own";
+    EXPECT_TRUE (page.applyButton().isVisible());
+    EXPECT_TRUE (page.confirmLabel().getText().contains ("live")) << page.confirmLabel().getText();
+    page.cancelButton().triggerClick();
+    juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
+    EXPECT_TRUE (view.timings.empty());
+    EXPECT_EQ (block.getText(), "128 frames");
+    EXPECT_FALSE (page.applyButton().isVisible());
+
+    page.choosePeriods (2);
+    EXPECT_TRUE (page.confirmLabel().getText().contains ("two seconds")) << page.confirmLabel().getText();
+    EXPECT_TRUE (page.confirmLabel().getText().contains ("WirePlumber")) << page.confirmLabel().getText();
+    EXPECT_TRUE (page.getLocalBounds().contains (page.applyButton().getBounds()));
+    expectPainted (a3apptest::snapshotAt (page, "audio-periods-confirm", page.getWidth(), page.getHeight()));
+    page.applyButton().triggerClick();
+    juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
+    ASSERT_EQ (view.timings.size(), 1u);
+    EXPECT_EQ (view.timings[0], (a3app::AudioTiming { 128, 2 }));
+    EXPECT_FALSE (page.applyButton().isVisible());
+}
+
+// After a change the page says what runs (block, periods, the measured round trip, DSP load and xruns), and REVERT
+// goes back to the previous choice: a block at once, periods only after the same question.
+TEST_F (Pages, PipeWireSaysWhatRunsAndReverts)
+{
+    FakeView view;
+    view.state.blockSize = 64;
+    view.state.dspLoadPercent = 41.0f;
+    view.state.xruns = 3;
+    view.state.timing.available = true;
+    view.state.timing.applied = { 64, 3 };
+    view.state.timing.previous = a3app::AudioTiming { 128, 3 };
+    a3app::AudioPage page (view, manager);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    page.refresh();
+    EXPECT_EQ (page.quantumLabel().getText(), juce::String (juce::CharPointer_UTF8 ("Block 64 frames \xc3\x97 3 periods")));
+    EXPECT_TRUE (page.loadLabel().getText().contains ("41")) << page.loadLabel().getText();
+    EXPECT_TRUE (page.loadLabel().getText().contains ("xruns 3")) << page.loadLabel().getText();
+    EXPECT_EQ (page.blockChooser().getText(), "64 frames");
+    ASSERT_TRUE (page.revertButton().isEnabled());
+    page.revertButton().triggerClick();
+    juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
+    ASSERT_EQ (view.timings.size(), 1u);
+    EXPECT_EQ (view.timings[0], (a3app::AudioTiming { 128, 3 }));
+
+    view.state.timing.applied = { 128, 2 };
+    view.state.timing.previous = a3app::AudioTiming { 128, 3 };
+    page.refresh();
+    page.revertButton().triggerClick();
+    juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
+    EXPECT_EQ (view.timings.size(), 1u) << "periods: asked first";
+    EXPECT_TRUE (page.confirmLabel().getText().contains ("two seconds")) << page.confirmLabel().getText();
+    page.applyButton().triggerClick();
+    juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
+    ASSERT_EQ (view.timings.size(), 2u);
+    EXPECT_EQ (view.timings[1], (a3app::AudioTiming { 128, 3 }));
+
+    view.state.timing.previous.reset();
+    view.state.timing.restarting = true;
+    page.refresh();
+    EXPECT_FALSE (page.revertButton().isEnabled());
+    EXPECT_FALSE (page.blockChooser().isEnabled()) << "nothing new while WirePlumber restarts";
+}
+
+// The sound-device settings come first, everything the page reports below them, the clock last.
+TEST_F (Pages, TheSettingsComeBeforeTheInfo)
+{
+    for (const bool device : { false, true })
+    {
+        FakeView view;
+        view.state.timing.available = ! device;
+        if (device)
+            view.runDevice();
+        a3app::AudioPage page (view, manager);
+        page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+        page.refresh();
+        const int settingsBottom = page.blockChooser().getBottom();
+        EXPECT_GT (page.typeChooser().getBottom(), 0);
+        EXPECT_LE (page.typeChooser().getBottom(), page.blockChooser().getY());
+        for (const auto* info : { &page.rateLabel(), &page.quantumLabel(), &page.rateSourceLabel(), &page.bitDepthLabel(),
+                                  &page.roundTripLabel(), &page.analogChainLabel() })
+        {
+            EXPECT_TRUE (info->isVisible()) << device;
+            EXPECT_GE (info->getY(), settingsBottom) << info->getText() << (device ? " (device)" : " (PipeWire)");
+        }
+        EXPECT_LE (page.analogChainLabel().getBottom(), page.clockPanel().getY());
+    }
+}
+
+// MEASURE and MEASURE ANALOG CHAIN stay on the page; without their pair set on the I/O page they are off and say so.
+TEST_F (Pages, MeasureButtonsSayWhichPairIsMissing)
+{
+    FakeView view;
+    view.cfg.io.roundTripLoop = view.runningCfg.io.roundTripLoop = a3app::RoundTripLoop {};
+    view.state.roundTripMeasured.state = a3app::RoundTripReport::State::measured;
+    view.state.roundTripMeasured.samples = 343;
+    a3app::AudioPage page (view, manager);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    page.refresh();
+    EXPECT_TRUE (page.measureButton().isEnabled());
+    EXPECT_FALSE (page.measureHintLabel().isVisible());
+    EXPECT_FALSE (page.analogButton().isEnabled());
+    EXPECT_EQ (page.analogHintLabel().getText(), "set the analog test pair on the I/O page");
+
+    view.cfg.io.roundTripLoop.reset();
+    view.runningCfg.io.roundTripLoop.reset();
+    view.state.roundTripMeasured = {};
+    view.state.roundTripMeasured.state = a3app::RoundTripReport::State::noLoop;
+    page.refresh();
+    EXPECT_FALSE (page.measureButton().isEnabled());
+    EXPECT_TRUE (page.measureHintLabel().isVisible());
+    EXPECT_EQ (page.measureHintLabel().getText(), "set the digital loop on the I/O page");
+    EXPECT_TRUE (page.getLocalBounds().contains (page.measureHintLabel().getBounds()));
+    expectPainted (a3apptest::snapshotAt (page, "audio-no-loop", page.getWidth(), page.getHeight()));
 }
 
 TEST_F (Pages, StatusPagePaintsEveryState)
@@ -192,7 +531,7 @@ TEST_F (Pages, OpenPutsTheWindowOnTheDesktop)
     EXPECT_NE (window.getPeer(), nullptr);
 }
 
-// An edit is not the engine: clicking "Device" on a running JACK engine changes the AUDIO page's
+// An edit is not the engine: choosing a JUCE device type on a running JACK engine changes the AUDIO page's
 // layout and says "not saved", but STATUS and the read-only values keep describing what runs.
 TEST_F (Pages, PendingEditDoesNotChangeWhatRuns)
 {
@@ -201,7 +540,7 @@ TEST_F (Pages, PendingEditDoesNotChangeWhatRuns)
     a3app::AudioPage audio (view, manager);
     EXPECT_TRUE (audio.pendingLabel().getText().isEmpty());
 
-    audio.chooseBackend (a3app::BackendSettings::Type::device);
+    audio.chooseDeviceType ("none");
     status.refresh();
     audio.refresh();
 
@@ -212,7 +551,7 @@ TEST_F (Pages, PendingEditDoesNotChangeWhatRuns)
     EXPECT_EQ (audio.bitDepthLabel().getText().indexOf ("set by the device"), -1);   // 32 is JACK's value
     EXPECT_NE (audio.bitDepthLabel().getText().indexOf ("JACK"), -1);
 
-    audio.chooseBackend (a3app::BackendSettings::Type::jack);   // back to what runs: nothing pending
+    audio.chooseDeviceType (a3app::AudioPage::pipewireType);   // back to what runs: nothing pending
     EXPECT_TRUE (audio.pendingLabel().getText().isEmpty());
 }
 
@@ -1396,4 +1735,189 @@ TEST_F (Pages, IoInputHasLeftAndRightPerChannelAndTheDecks)
     EXPECT_EQ (page.routeBox ("analog_1")->getNumItems(), 5);   // none + 4
     page.chooseRoute ("analog_1", 2);
     EXPECT_EQ (view.cfg.io.deviceChannels.at ("analog_1"), 1);   // channel 2, 0-based in the map
+}
+
+// AUDIO: the measured round trip replaces the estimate; MEASURE asks the engine for a new run.
+TEST_F (Pages, AudioShowsTheMeasuredRoundTripAndMeasuresOnRequest)
+{
+    FakeView view;
+    view.cfg.io.roundTripLoop = view.runningCfg.io.roundTripLoop = a3app::RoundTripLoop {};
+    view.state.sampleRate = 48000;
+    view.state.roundTripMeasured.state = a3app::RoundTripReport::State::measured;
+    view.state.roundTripMeasured.samples = 211;
+    view.state.roundTripMeasured.atMillis = juce::Time (2026, 9, 30, 14, 5, 0, 0, true).toMilliseconds();
+    a3app::AudioPage page (view, manager);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
+    page.refresh();
+    EXPECT_EQ (page.roundTripLabel().getText(), "Round trip (measured, digital loop)   4.4 ms (211 samples), 14:05");
+    ASSERT_TRUE (page.measureButton().isVisible());
+    EXPECT_TRUE (page.measureButton().isEnabled());
+    EXPECT_TRUE (page.getLocalBounds().contains (page.measureButton().getBounds()));
+    page.measureButton().triggerClick();
+    juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
+    EXPECT_EQ (view.roundTripRequests, 1);
+    expectPainted (a3apptest::snapshotAt (page, "audio-roundtrip-measured", page.getWidth(), page.getHeight()));
+
+    view.state.roundTripMeasured = {};
+    view.state.roundTripMeasured.state = a3app::RoundTripReport::State::noLoop;
+    view.state.roundTripMeasured.reason = "no loop configured";
+    view.cfg.io.roundTripLoop = view.runningCfg.io.roundTripLoop = std::nullopt;
+    page.refresh();
+    EXPECT_TRUE (page.roundTripLabel().getText().contains ("(estimated, no loop configured)")) << page.roundTripLabel().getText();
+    EXPECT_FALSE (page.measureButton().isEnabled());
+}
+
+// I/O: the loop's channels are offered in no dropdown, the notice names them and what a load unrouted, and the
+// editor refuses them.
+TEST_F (Pages, IoLeavesTheRoundTripLoopOut)
+{
+    FakeView view;
+    for (int i = 1; i <= 14; ++i)
+    {
+        view.state.capturePorts.add ("system:capture_" + juce::String (i));
+        view.state.playbackPorts.add ("system:playback_" + juce::String (i));
+    }
+    view.cfg.io.roundTripLoop = a3app::RoundTripLoop { 11, 11, 2 };
+    view.unroutedByLoop = { "booth_sub -> system:playback_11" };
+    a3app::IoPage page (view);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
+    page.showSub (a3app::IoPage::Sub::output);
+    auto* box = page.routeBox ("booth_sub");
+    ASSERT_NE (box, nullptr);
+    EXPECT_EQ (box->getNumItems(), 13);   // none + 14 - the loop's 2
+    for (int i = 0; i < box->getNumItems(); ++i)
+    {
+        EXPECT_FALSE (box->getItemText (i).contains ("playback_11")) << box->getItemText (i);
+        EXPECT_FALSE (box->getItemText (i).contains ("playback_12")) << box->getItemText (i);
+    }
+    page.chooseRoute ("booth_sub", 11);   // past the loop: system:playback_13
+    EXPECT_EQ (view.cfg.io.jack.at ("booth_sub"), std::vector<std::string> { "system:playback_13" });
+    EXPECT_TRUE (page.noticeLabel().getText().contains ("output 11-12")) << page.noticeLabel().getText();
+    EXPECT_TRUE (page.noticeLabel().getText().contains ("booth_sub -> system:playback_11")) << page.noticeLabel().getText();
+    EXPECT_TRUE (page.noticeLabel().isVisible());
+
+    page.setPeers ("booth_top_1", "system:playback_12");
+    EXPECT_EQ (view.cfg.io.jack.count ("booth_top_1"), 0u);
+    EXPECT_TRUE (page.messageLabel().getText().contains ("round-trip loop")) << page.messageLabel().getText();
+
+    view.runDevice();
+    view.state.deviceInputs = 14;
+    view.state.deviceOutputs = 14;
+    page.refresh (true);
+    page.showSub (a3app::IoPage::Sub::input);
+    EXPECT_EQ (page.routeBox ("analog_1")->getNumItems(), 13);
+    page.chooseRoute ("analog_1", 11);   // past the loop: channel 13
+    EXPECT_EQ (view.cfg.io.deviceChannels.at ("analog_1"), 12);
+    page.setDeviceChannel ("analog_2", 10);   // device input 11
+    EXPECT_EQ (view.cfg.io.deviceChannels.count ("analog_2"), 0u);
+    EXPECT_TRUE (page.messageLabel().getText().contains ("round-trip loop")) << page.messageLabel().getText();
+    expectPainted (a3apptest::snapshotAt (page, "io-roundtrip-loop", page.getWidth(), page.getHeight()));
+}
+
+// AUDIO: the analog chain's line and its button, which says what to plug first and runs only on a click.
+TEST_F (Pages, AudioMeasuresTheAnalogChainOnlyOnRequest)
+{
+    FakeView view;
+    view.state.sampleRate = 48000;
+    view.cfg.io.analogLoop = view.runningCfg.io.analogLoop = a3app::AnalogLoop { 6, 8, {} };
+    view.cfg.io.roundTripLoop = view.runningCfg.io.roundTripLoop = a3app::RoundTripLoop {};   // measured against it
+    view.state.roundTripMeasured.state = a3app::RoundTripReport::State::measured;
+    view.state.roundTripMeasured.samples = 211;
+    view.state.roundTripMeasured.analog = a3app::RoundTripReport::Analog::notMeasured;
+    a3app::AudioPage page (view, manager);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
+    page.refresh();
+    EXPECT_EQ (page.analogChainLabel().getText(), "Analog chain   converters not measured yet");
+    const auto hint = page.analogHintLabel().getText();
+    EXPECT_TRUE (hint.contains ("output 6") && hint.contains ("input 8") && hint.contains ("cable")) << hint;
+    EXPECT_TRUE (hint.contains ("not in use")) << hint;
+    EXPECT_TRUE (page.analogButton().isEnabled());
+    EXPECT_TRUE (page.getLocalBounds().contains (page.analogButton().getBounds()));
+    EXPECT_EQ (view.analogRequests, 0);
+    page.analogButton().triggerClick();
+    juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
+    EXPECT_EQ (view.analogRequests, 1);
+    EXPECT_EQ (view.roundTripRequests, 0);
+
+    view.state.roundTripMeasured.analog = a3app::RoundTripReport::Analog::measured;
+    view.state.roundTripMeasured.converters = { 48, 48000.0, "2026-10-30" };
+    page.refresh();
+    EXPECT_EQ (page.analogChainLabel().getText(), "Analog chain   5.4 ms (measured: digital loop now + converters measured on 2026-10-30)");
+    expectPainted (a3apptest::snapshotAt (page, "audio-analog-chain", page.getWidth(), page.getHeight()));
+
+    view.state.roundTripMeasured.analogReason = "no analog test pair chosen (I/O page)";
+    view.cfg.io.analogLoop.reset();
+    view.runningCfg.io.analogLoop.reset();
+    page.refresh();
+    EXPECT_FALSE (page.analogButton().isEnabled());
+}
+
+// I/O: the analog test pair is chosen from free channels off the digital loop; the stored share stays with it.
+TEST_F (Pages, IoChoosesTheAnalogTestPair)
+{
+    FakeView view;
+    for (int i = 1; i <= 14; ++i)
+    {
+        view.state.capturePorts.add ("system:capture_" + juce::String (i));
+        view.state.playbackPorts.add ("system:playback_" + juce::String (i));
+    }
+    view.cfg.io.roundTripLoop = a3app::RoundTripLoop { 11, 11, 2 };
+    a3app::IoPage page (view);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
+    auto& output = page.analogOutputBox();
+    auto& input = page.analogInputBox();
+    EXPECT_EQ (output.getNumItems(), 13);   // none + 14 - the digital loop's 2
+    EXPECT_TRUE (output.isVisible());
+    page.chooseAnalogPair (false, 6);
+    ASSERT_TRUE (view.cfg.io.analogLoop.has_value());
+    EXPECT_EQ (view.cfg.io.analogLoop->output, 6);
+    EXPECT_EQ (view.cfg.io.analogLoop->input, 0);
+    view.cfg.io.analogLoop->converters = a3app::ConverterShare { 40, 48000.0, "2026-10-30" };
+    page.chooseAnalogPair (true, 8);
+    EXPECT_EQ (view.cfg.io.analogLoop->input, 8);
+    EXPECT_TRUE (view.cfg.io.analogLoop->converters.has_value());
+    page.refresh (true);
+    EXPECT_TRUE (output.getText().contains ("6")) << output.getText();
+    EXPECT_TRUE (input.getText().contains ("8")) << input.getText();
+    page.chooseAnalogPair (false, 0);
+    page.chooseAnalogPair (true, 0);   // the cable is gone; the converters' share stays (it is the hardware's)
+    ASSERT_TRUE (view.cfg.io.analogLoop.has_value());
+    EXPECT_EQ (view.cfg.io.analogLoop->output, 0);
+    EXPECT_TRUE (view.cfg.io.analogLoop->converters.has_value());
+    view.cfg.io.analogLoop->converters.reset();
+    page.chooseAnalogPair (true, 0);
+    EXPECT_FALSE (view.cfg.io.analogLoop.has_value());   // nothing left to keep
+}
+
+// I/O: the digital loop is chosen here too (2026-10-30), beside the analog test cable; a channel in use is refused
+// with its reason and the choice stays as it was.
+TEST_F (Pages, IoChoosesTheDigitalLoop)
+{
+    FakeView view;
+    for (int i = 1; i <= 14; ++i)
+    {
+        view.state.capturePorts.add ("system:capture_" + juce::String (i));
+        view.state.playbackPorts.add ("system:playback_" + juce::String (i));
+    }
+    view.cfg.io.roundTripLoop = a3app::RoundTripLoop { 11, 11, 2 };
+    view.cfg.io.jack["main_top_4"] = { "system:playback_5" };
+    a3app::IoPage page (view);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
+    auto& output = page.digitalOutputBox();
+    auto& input = page.digitalInputBox();
+    EXPECT_TRUE (output.isVisible());
+    EXPECT_TRUE (page.getLocalBounds().contains (output.getBounds()));
+    EXPECT_EQ (output.getNumItems(), 15);   // none + 14
+    EXPECT_TRUE (output.getText().contains ("11-12")) << output.getText();
+    EXPECT_TRUE (input.getText().contains ("11-12")) << input.getText();
+
+    page.chooseDigitalLoop (false, 13);
+    ASSERT_TRUE (view.cfg.io.roundTripLoop.has_value());
+    EXPECT_EQ (view.cfg.io.roundTripLoop->output, 13);
+    page.chooseDigitalLoop (false, 4);   // 4-5: main_top_4 is on 5
+    EXPECT_EQ (view.cfg.io.roundTripLoop->output, 13);
+    EXPECT_TRUE (page.messageLabel().getText().contains ("main_top_4")) << page.messageLabel().getText();
+    page.chooseDigitalLoop (true, 0);
+    EXPECT_FALSE (view.cfg.io.roundTripLoop.has_value());
+    expectPainted (a3apptest::snapshotAt (page, "io-digital-loop", page.getWidth(), page.getHeight()));
 }

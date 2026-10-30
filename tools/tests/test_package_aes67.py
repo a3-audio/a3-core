@@ -194,7 +194,18 @@ class WhatTheRigSettledOn(unittest.TestCase):
         self.assertEqual(keys["node.virtual"], "false")
         self.assertEqual(keys["media.class"], "Audio/Source")
         self.assertEqual(keys["device.api"], "aes67")
-        self.assertEqual(keys["sess.latency.msec"], "12")
+        # 2026-10-30 on the rig, decks B and C: 4 ms clean, 2 ms crackled;
+        # 6 ms keeps one step of margin for a whole set.
+        self.assertEqual(keys["sess.latency.msec"], "6")
+
+    def test_every_receiver_keeps_its_resampler(self):
+        # 2026-10-30, review of the one clock: with the clock role steering
+        # the PTP clock to the Scarlett, the deck receivers' correction is
+        # about 1.0 and costs nothing. Without the resampler, any clock role
+        # that is not locked (no `clock` group yet, a fault, a holdover) walks
+        # the decks' 6 ms FIFO into a resync click within minutes. Turning it off
+        # is a later, separate, soak-gated step (PROGRAM.md, "The one clock").
+        self.assertNotIn("resample.disable", self.text)
 
     def test_deck_rule_receives_the_whole_packet(self):
         # rtp-source's receive buffer is net.mtu bytes (default 1280); the
@@ -352,6 +363,15 @@ class ThePostinstEnablesThem(unittest.TestCase):
         self.assertNotIn("enable ptp4l", log)
         self.assertNotIn("user enable a3-aes67", log)
         self.assertIn("no audio port", said)
+
+    def test_the_clock_role_comes_with_ptp(self):
+        log, _ = self.run_enable("enp9s0")
+        self.assertIn("user enable a3-clock.service", log)
+
+    def test_no_audio_port_no_clock_role(self):
+        log, _ = self.run_enable("")
+        self.assertNotIn("user enable a3-clock", log)
+        self.assertIn("user disable a3-clock.service", log)
 
     def test_the_postinst_calls_it(self):
         self.assertRegex(POSTINST.read_text(), r"(?m)^\s*enable_aes67\s*$")

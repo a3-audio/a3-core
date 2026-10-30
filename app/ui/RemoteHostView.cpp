@@ -170,7 +170,9 @@ AppConfig RemoteHostView::running() const { const std::lock_guard<std::mutex> g 
 juce::String RemoteHostView::engineProblem() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.problem; }
 std::vector<std::string> RemoteHostView::droppedLinks() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.report.droppedLinks; }
 std::vector<std::string> RemoteHostView::ignoredKeys() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.report.ignoredKeys; }
+std::vector<std::string> RemoteHostView::loopDropped() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.report.loopDropped; }
 juce::String RemoteHostView::truthNote() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.report.truthNote; }
+a3clock::ClockReport RemoteHostView::clock() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.report.clock; }
 int RemoteHostView::truthDecks() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.truthDecks; }
 juce::File RemoteHostView::configFile() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.file; }
 LiveLinks RemoteHostView::liveLinks() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.links; }
@@ -218,6 +220,24 @@ void RemoteHostView::playNoise (const NoiseRequest& request)
     wake.notify_all();
 }
 
+void RemoteHostView::measureRoundTrip()
+{
+    {
+        const std::lock_guard<std::mutex> posting (postLock);
+        posts.push_back ({ "/api/engine/roundtrip", "{}", false });
+    }
+    wake.notify_all();
+}
+
+void RemoteHostView::measureAnalogChain()
+{
+    {
+        const std::lock_guard<std::mutex> posting (postLock);
+        posts.push_back ({ "/api/engine/roundtrip/analog", "{}", false });
+    }
+    wake.notify_all();
+}
+
 juce::Result RemoteHostView::apply (const AppConfig& config)
 {
     const std::lock_guard<std::mutex> round (pollLock);
@@ -237,5 +257,15 @@ juce::Result RemoteHostView::apply (const AppConfig& config)
     cache.pending = cache.running = config;
     cache.configBody.clear();
     return juce::Result::ok();
+}
+
+void RemoteHostView::applyTiming (const AudioTiming& timing)
+{
+    {
+        const std::lock_guard<std::mutex> posting (postLock);
+        posts.push_back ({ "/api/engine/timing",
+                           "{\"block\":" + std::to_string (timing.block) + ",\"periods\":" + std::to_string (timing.periods) + "}", false });
+    }
+    wake.notify_all();
 }
 }

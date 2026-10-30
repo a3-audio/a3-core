@@ -17,7 +17,11 @@ struct BackendSettings
     enum class Type { jack, device } type = Type::jack;
     juce::String deviceType, inputDevice, outputDevice;
     double sampleRate = 44100;
+    // JACK (PipeWire): the forced graph quantum, applied live (AudioTiming.h); a device: its buffer size.
     int blockSize = 128;
+    // JACK (PipeWire) only: the sound card's ALSA periods, through the engine's WirePlumber drop-in. 3 is
+    // PipeWire's own choice on the rig, and no drop-in.
+    int periods = 3;
 };
 
 struct AppConfig
@@ -36,6 +40,9 @@ struct AppConfig
     std::vector<std::string> droppedLinks;
     // Retired keys the loaded file named ("engine.<key>"), ignored; a save never writes them.
     std::vector<std::string> ignoredKeys;
+    // Routes of the loaded io section onto the round-trip loop's channels (IoMap.h dropLoopRoutes), left out of
+    // `io`: those channels are the loop's. The I/O page names them; a save writes the map without them.
+    std::vector<std::string> loopDropped;
 };
 
 constexpr float minTrimDb = -90.0f, maxTrimDb = 6.0f;
@@ -53,7 +60,7 @@ std::optional<a3::SpatialConfig> loadZonesSpatial (const AppConfig&, juce::Strin
 
 std::optional<AppConfig> loadAppConfig (const juce::File&, juce::String& error, int truthDecks);
 // "dropped retired link <entry>" per entry of AppConfig::droppedLinks, then "ignored retired key <key>"
-// per entry of AppConfig::ignoredKeys.
+// per entry of AppConfig::ignoredKeys, then "unrouted <entry>: the round-trip loop" per AppConfig::loopDropped.
 juce::StringArray droppedLinkLines (const AppConfig&);
 // The four sections as saveAppConfig writes them, and back (an absolute "spatial" ignores `base`, a relative
 // one is read from it). The control API carries configs in this form. `error` is the reason alone.
@@ -61,6 +68,14 @@ juce::var toJson (const AppConfig&);
 std::optional<AppConfig> parseAppConfig (const juce::var&, const juce::File& base, juce::String& error, int truthDecks);
 // Atomic replace. Called only from the window's Save, never by a load.
 juce::Result saveAppConfig (const AppConfig&, const juce::File&);
+// Writes `to` as `from` with io.analogLoop's converter share set to `share` and nothing else changed (atomic
+// replace; `from` may be the package's file, `to` the user's). Refused, leaving `to` as it was, when `from`
+// names no io.analogLoop or the result would not load (truthDecks as for loadAppConfig).
+juce::Result storeConverterShare (const juce::File& from, const juce::File& to, const ConverterShare& share, int truthDecks);
+// Writes `to` as `from` with backend.blockSize and backend.periods set and nothing else changed, as
+// storeConverterShare (the AUDIO page's block and periods are kept at once, no Save). Refused, leaving `to` as it
+// was, when the result would not load.
+juce::Result storeBackendTiming (const juce::File& from, const juce::File& to, int blockSize, int periods, int truthDecks);
 inline const juce::File packageConfigFile { "/usr/share/a3-engine/engine.json" };
 
 // The spatial directories the ZONES page may offer, in order: the user's (<configDir>/engine/spatial), the

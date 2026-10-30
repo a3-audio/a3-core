@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: 2026 Raphael Eismann
+# SPDX-License-Identifier: GPL-3.0-or-later
+# ptp4l's port state as /run/a3/ptp-state.json, for the clock role: as root,
+# because ptp4l's sandboxed unit never answers a user's pmc. Run by the timer.
+[Unit]
+Description=a3-ptp-state, ptp4l's port state for the clock role
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/a3-core/a3-ptp-state
