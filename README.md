@@ -8,6 +8,8 @@ A³ Motion control it over OSC. This repository *is* the deployment: the `.deb`
 package tree under `platform-config/debian-x86_64/a3-core/`, not application
 source.
 
+![Four StemDecks around the A³ desk and A³ Motion, each deck playing its own track](docs/a3-setup.jpg)
+
 **Documentation: https://a3-audio.github.io/a3-doc/**
 
 - [Using A³ Core](https://a3-audio.github.io/a3-doc/user/a3core.html)
