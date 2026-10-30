@@ -49,6 +49,12 @@ class WhereThingsLive(unittest.TestCase):
         for criteria, name in expected.items():
             self.assertEqual(workspace_of(self.config, criteria), name, criteria)
 
+    def test_the_desk_opens_full_screen(self):
+        # 2026-10-30: the virtual desk fills its screen like the two touch UIs.
+        rule = next(line for line in self.config.splitlines()
+                    if line.startswith('for_window [class="A3 Desk"]'))
+        self.assertIn("fullscreen enable", rule)
+
     def test_workspace_4_keeps_its_number_and_names_nothing(self):
         self.assertEqual("4", workspace_variables(self.config)["ws4"])
 

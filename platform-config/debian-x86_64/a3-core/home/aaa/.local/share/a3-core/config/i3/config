@@ -206,9 +206,10 @@ exec /usr/bin/xrandr --dpi 120 &
 for_window [class="A3 Motion UI"] move container to workspace number $ws1
 for_window [class="a3-core"] move container to workspace number $ws3
 for_window [title="Scarlett 18i20 USB"] move container to workspace number $ws5
-# The virtual desk (a3-desk), on its own workspace (2026-10-25); the bar shows
-# there, since the desk has no way back to the other workspaces itself.
-for_window [class="A3 Desk"] move container to workspace number $ws7
+# The virtual desk (a3-desk), on its own workspace (2026-10-25), full screen
+# (2026-10-30). That hides the bar: until the desk has a way back itself, the
+# other workspaces are reached with $mod+number.
+for_window [class="A3 Desk"] move container to workspace number $ws7, fullscreen enable
 # StemDeck, always running (stemdeck.service), alone on workspace 2 and
 # filling it: tiled without a border rather than i3's full screen, which every
 # dialog it opens ended (2026-09-30). Its start takes the screen for a moment
