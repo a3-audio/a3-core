@@ -245,6 +245,7 @@ API, P2). The package ships it as `/usr/bin/a3-core` (Task 28); there is no `/us
                           [--check-config]
     a3-core --role screencast-fanout --port N [--linger SECONDS] -- COMMAND...
     a3-core --role i3-bar                     (not built yet)
+    a3-core --role clock [--device PATH] [--observe]   the PTP clock steered from the Scarlett
     a3-core --render-truth user|network-file|network      (not built yet)
     a3-core --truth host NAME | --truth port PROGRAM ROLE (not built yet)
     a3-core --links                           the JACK/PipeWire connections, explained
@@ -302,6 +303,50 @@ API, P2). The package ships it as `/usr/bin/a3-core` (Task 28); there is no `/us
 - Everything that asks the operating system (environment, home, host name, unit state, child
   processes) goes through `a3core::Platform` (`src/a3-core/Platform.h`, Linux only).
 - The journal: one whole line per write, flushed at once, from any thread.
+
+## The one clock: `--role clock`
+
+**Why** (2026-10-30, the maintainer): "core gets clock from scarlett. all devices must rely on it. no
+software clock at all. tight latency is mandatory for live setup. ... it should never break." Decks B
+and C crackled because the deck hosts' graphs followed PTP, and PTP was the Core's I210 hardware clock
+running free, 14.1 ppm away from the Scarlett; the Core's receivers resampled the decks all the time.
+Research and measurements: the workspace notes `2026-10-30-one-clock*.md`.
+
+**What runs** (stage 1): `a3-core --role clock` (`a3-clock.service`, a user unit in a3-core-app,
+enabled by a3-core's postinst where the Core has an audio socket) reads the Scarlett's sample clock
+from `pw-profiler -J` (the driver's clock record: position + delay against CLOCK_MONOTONIC; a client,
+not a node, so it cannot cause an xrun) and phase-locks `/dev/ptp0` to it with
+`clock_adjtime(ADJ_FREQUENCY)`. ptp4l on the Core stays the grandmaster with `free_running 1`, so it
+never touches that clock; the deck hosts follow PTP as before and with it the Scarlett. The Core's deck
+receivers run without a resampler (`resample.disable = true` in `pipewire-aes67.conf.in`), a plain
+FIFO of 12 ms.
+
+**The rules** (`src/a3-clock/ClockSteering.h`, tested against synthetic clocks in
+`tests/core/ClockSteering.cpp` and `ClockDaemon.cpp`): only the frequency changes, never the time
+(no step, whatever happens); the frequency stays within ±20 ppm of the free run and moves at most
+0.1 ppm/s; a PI on the phase error (time constant 60 s, the error low-passed over 8 s) locks the phase,
+not only the rate, because the phase error is every FIFO's fill walk; no measurement for 3 s is
+holdover (the last frequency held, nothing written); a Scarlett discontinuity (xrun, restart, replug)
+or a stepped PHC is re-anchored with the error it had; a refused write or a runaway error after a lock
+is a fault (steering stops, the last frequency is held). Lock: |error| < 50 µs for 10 updates. From
+the measured 14.1 ppm the simulated rig locks in about 7 minutes; the phase walks about 1 ms meanwhile.
+
+**Where it shows**: the role writes `$XDG_RUNTIME_DIR/a3/clock.json` once a second; the engine reads it
+(at most once a second) and serves it as `clock` in `/api/engine/status`; the window's AUDIO page
+shows a CLOCK section (master, lock state and phase error, the frequency, PTP against the Scarlett
+now, the counters) framed in caution (acquiring, observing) or danger (holdover, fault, not running).
+The journal gets one line every 10 s (`a3-core clock: locked error +2.3 us freq +14.102 ppm rate
++0.012 ppm corrections … reanchors … steps … holdovers … losses … breaks … feed-restarts …`) and one
+at every state change (`a3-core clock: acquiring -> locked (…)`).
+
+**Write access**: `/dev/ptp*` is `root:clock 0664` on Debian; the postinst puts the app user into
+`clock` (effective at the next login). Without it the role measures and reports a fault at its first
+write. `--observe` measures and reports, never writes (health `observing`: the rate the PTP clock runs
+against the Scarlett).
+
+**Clock master**: the AUDIO page offers one master, the Scarlett steering the PTP grandmaster. An
+external PTP grandmaster would make the Core a PTP client and need the Scarlett on word clock; not
+offered in this version.
 
 ## Build and test
 
