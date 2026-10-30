@@ -245,7 +245,7 @@ API, P2). The package ships it as `/usr/bin/a3-core` (Task 28); there is no `/us
                           [--check-config]
     a3-core --role screencast-fanout --port N [--linger SECONDS] -- COMMAND...
     a3-core --role i3-bar                     (not built yet)
-    a3-core --role clock [--device PATH] [--observe]   the PTP clock steered from the Scarlett
+    a3-core --role clock [--device PATH] [--scarlett NODE] [--observe]   the PTP clock steered from the Scarlett
     a3-core --render-truth user|network-file|network      (not built yet)
     a3-core --truth host NAME | --truth port PROGRAM ROLE (not built yet)
     a3-core --links                           the JACK/PipeWire connections, explained
@@ -315,34 +315,64 @@ Research and measurements: the workspace notes `2026-10-30-one-clock*.md`.
 **What runs** (stage 1): `a3-core --role clock` (`a3-clock.service`, a user unit in a3-core-app,
 enabled by a3-core's postinst where the Core has an audio socket) reads the Scarlett's sample clock
 from `pw-profiler -J` (the driver's clock record: position + delay against CLOCK_MONOTONIC; a client,
-not a node, so it cannot cause an xrun) and phase-locks `/dev/ptp0` to it with
-`clock_adjtime(ADJ_FREQUENCY)`. ptp4l on the Core stays the grandmaster with `free_running 1`, so it
-never touches that clock; the deck hosts follow PTP as before and with it the Scarlett. The Core's deck
-receivers run without a resampler (`resample.disable = true` in `pipewire-aes67.conf.in`), a plain
-FIFO of 12 ms.
+not a node, so it cannot cause an xrun) and phase-locks the audio port's PTP clock to it with
+`clock_adjtime(ADJ_FREQUENCY)`. ptp4l on the Core stays the grandmaster with `--free_running 1` on the
+drop-in's command line (it beats the conffile, which dpkg keeps old if it was ever edited), so it never
+touches that clock; the deck hosts follow PTP as before and with it the Scarlett.
+
+**The receivers keep their resampler.** With the clock locked their correction is about 1.0 and costs
+nothing; without it, a clock role that is not locked walks a 12 ms FIFO into a resync click about every
+10 minutes. `resample.disable` on the deck receivers is a later, separate step, only after the clock
+role has soaked on the rig (zero rtp-source resyncs, lock held for hours), and only for deck hosts with
+a healthy PTP lock (not the Pi). The deck C crackle measured on 2026-10-30 (one corrupted 11-sample
+packet about every 13) is a packetisation fault, not the clock.
+
+**Which clocks.** The PHC is the audio port's (the truth's `network.audio_port`, where `ptp4l@<port>`
+runs), found under `/sys/class/net/<port>/device/ptp/`; a `--device` that is not that clock, a port
+without a PHC or a truth without an audio port is a fault that steers nothing. The Scarlett is its
+capture node by name (`--scarlett NODE`, a prefix of node.name, default
+`alsa_input.usb-Focusrite_Scarlett_18i20`), learnt from the profiler's driver records; another ALSA
+driver is never used instead, it is "no measurement" and the journal names what was seen.
+
+**ptp4l's port state.** Asked every 30 s with `pmc` on the read-only socket `/var/run/ptp4lro`. Any
+state but MASTER pauses the steering (holdover). On the nucs that socket does not answer the user
+(ptp4l's unit is sandboxed); the state is then unverified and every surface shows UNVERIFIED instead of
+LOCKED.
 
 **The rules** (`src/a3-clock/ClockSteering.h`, tested against synthetic clocks in
-`tests/core/ClockSteering.cpp` and `ClockDaemon.cpp`): only the frequency changes, never the time
-(no step, whatever happens); the frequency stays within ±20 ppm of the free run and moves at most
-0.1 ppm/s; a PI on the phase error (time constant 60 s, the error low-passed over 8 s) locks the phase,
-not only the rate, because the phase error is every FIFO's fill walk; no measurement for 3 s is
-holdover (the last frequency held, nothing written); a Scarlett discontinuity (xrun, restart, replug)
-or a stepped PHC is re-anchored with the error it had; a refused write or a runaway error after a lock
-is a fault (steering stops, the last frequency is held). Lock: |error| < 50 µs for 10 updates. From
-the measured 14.1 ppm the simulated rig locks in about 7 minutes; the phase walks about 1 ms meanwhile.
+`tests/core/ClockSteering.cpp` and `ClockDaemon.cpp`): only the frequency changes, never the time (no
+step, whatever happens). Frequency first, then phase: the rate is measured over 30 s without writing
+(or taken from the last locked frequency, kept in `$XDG_STATE_HOME/a3-core/clock.json`, when the PHC
+reads 0 after a boot: a warm start), the frequency slews there at 0.1 ppm/s, and only then is the phase
+anchored; a PI (time constant 60 s, the error low-passed over 8 s) holds it. Measured in simulation:
+lock after about 3 min cold (2.5 min warm) from 14.1 ppm, the anchored phase error stays near 10 µs.
+The numbers against the 12 ms FIFO (about 9 ms of headroom): the range is ±40 ppm around the free run,
+narrowed to the device's max_adj minus 20 ppm (the I210 allows 62.5); a rate beyond it is a fault
+before any write; never locked and |error| above 2 ms is a fault; locked and |error| above 1 ms is a
+fault; a phase change above 200 µs plus 1 ppm of the gap (at most 1 ms) is a stepped PHC and is
+re-anchored. No measurement for 3 s is holdover (the last frequency held, nothing written); a Scarlett
+discontinuity (xrun, restart, replug) re-anchors with the error it had. A refused write or a runaway is
+a fault: steering stops, the last frequency is held, and it stays so until `a3-clock.service` is
+restarted.
+
+**One instance.** The steering role holds an flock on `<runtime dir>/a3/clock.lock` and on the PHC; a
+second one exits 1. Only the holder writes the status file. `--observe` measures and reports in the
+journal, never writes the PHC, takes no lock and writes no status. pw-profiler is started again when it
+ends or when it brings no Scarlett record for 10 s; a start that fails is said at most once a minute.
 
 **Where it shows**: the role writes `$XDG_RUNTIME_DIR/a3/clock.json` once a second; the engine reads it
-(at most once a second) and serves it as `clock` in `/api/engine/status`; the window's AUDIO page
-shows a CLOCK section (master, lock state and phase error, the frequency, PTP against the Scarlett
-now, the counters) framed in caution (acquiring, observing) or danger (holdover, fault, not running).
-The journal gets one line every 10 s (`a3-core clock: locked error +2.3 us freq +14.102 ppm rate
-+0.012 ppm corrections … reanchors … steps … holdovers … losses … breaks … feed-restarts …`) and one
-at every state change (`a3-core clock: acquiring -> locked (…)`).
+(at most once a second) and serves it as `clock` and `clockIndicator` (`word`, `tone`, `detail`: what
+Canvas shows) in `/api/engine/status`. The window shows the word in its footer on every page
+(`CLOCK LOCKED` in green, caution or danger otherwise) and a CLOCK section on the AUDIO page, which
+keeps at least a quarter of the page in every layout: master, state and phase error, device and port,
+the frequency, PTP against the Scarlett now, the counters, framed in caution (acquiring, observing,
+unverified) or danger (holdover, fault, not running). The journal gets one line every 10 s
+(`a3-core clock: locked error +2.3 us freq +14.102 ppm rate +0.012 ppm corrections … reanchors … steps
+… holdovers … losses … breaks … feed-restarts … port MASTER|unverified`) and one at every state change.
 
 **Write access**: `/dev/ptp*` is `root:clock 0664` on Debian; the postinst puts the app user into
-`clock` (effective at the next login). Without it the role measures and reports a fault at its first
-write. `--observe` measures and reports, never writes (health `observing`: the rate the PTP clock runs
-against the Scarlett).
+`clock` (effective once the user manager starts again: a reboot). Without it the role measures and
+reports a fault at its first write.
 
 **Clock master**: the AUDIO page offers one master, the Scarlett steering the PTP grandmaster. An
 external PTP grandmaster would make the Core a PTP client and need the Scarlett on word clock; not
