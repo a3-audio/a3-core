@@ -74,7 +74,6 @@ public:
         styleField (port, "port");
         port.setInputRestrictions (6, "0123456789");
         on.setToggleState (true, juce::dontSendNotification);
-        remove.setTooltip ("Take this department out of the list (SAVE makes it so)");
         look::caption (status);
         for (auto* field : { &name, &host, &port })
             field->onTextChange = [&owner] { owner.edited(); };
@@ -124,7 +123,6 @@ public:
     {
         tone (status);
         look::say (status, text);
-        status.setTooltip (text);
     }
 
     juce::String statusText() const { return status.getText(); }
@@ -169,7 +167,6 @@ public:
         look::say (host, utf8 (row.entry.host));
         look::say (port, juce::String (row.entry.port));
         look::say (status, statusText);
-        status.setTooltip ("Given by --subscriber in Core's service file (a systemd drop-in): change it there");
         entryName = row.entry.name;
     }
 
@@ -196,9 +193,6 @@ DepartmentsPage::DepartmentsPage (CoreClient& c, int askEveryMillis) : client (c
     look::caption (title);
     look::say (title, "Departments: a light or video desk that is told every A3 message, as the mixer and Motion are. "
                       "SAVE LIST applies it at once, without a restart.");
-    look::help ("A department gets every message Core passes on. Name it, give the host (an IPv4 address or a host name) and the "
-                "port it listens on. The rows on a grey ground come from Core's service file (--subscriber) and are changed there.",
-                { &title });
     const std::pair<juce::Label*, const char*> captions[] { { &nameCaption, "NAME" }, { &hostCaption, "HOST" }, { &portCaption, "PORT" },
                                                             { &onCaption, "ON" }, { &statusCaption, "STATUS" } };
     for (const auto& [label, text] : captions)
@@ -210,8 +204,6 @@ DepartmentsPage::DepartmentsPage (CoreClient& c, int askEveryMillis) : client (c
     look::caption (answer);
     viewport.setViewedComponent (&list, false);
     viewport.setScrollBarsShown (true, false);
-    addButton.setTooltip ("A new, empty department; SAVE when it is filled in");
-    saveButton.setTooltip ("Store the list in Core's config and apply it now");
     addButton.onClick = [this] { addEntry(); };
     saveButton.onClick = [this] { saveNow(); };
     for (auto* child : std::initializer_list<juce::Component*> { &title, &viewport, &addButton, &saveButton, &answer })

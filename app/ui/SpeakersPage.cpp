@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "SpeakersPage.h"
 #include "ConfigEdits.h"
-#include "TouchTooltips.h"
 
 namespace a3app
 {
@@ -52,13 +51,9 @@ SpeakersPage::SpeakersPage (HostView& v, juce::File root) : view (v), userRoot (
     look::caption (subCaption);
     look::caption (crossoverCaption);
     look::failure (message);
-    title.setText ("SPEAKERS", juce::dontSendNotification);
+    title.setText ("Zone", juce::dontSendNotification);
     subCaption.setText ("Sub", juce::dontSendNotification);
     crossoverCaption.setText ("Crossover", juce::dontSendNotification);
-    look::help ("IEM's AllRADecoder at order 3. Noise: 1 s of pink noise in the running engine, through the decoder that "
-                  "runs now, before MASTER/BOOTH and the gate (Alt: from that direction). SAVE TO ZONE writes your own variant (~/.config/a3/engine/spatial); "
-                "Save restarts the engine with it.",
-                { &title, &mainKey, &boothKey, &save });
 
     for (auto* key : { &mainKey, &boothKey })
     {
@@ -129,7 +124,7 @@ void SpeakersPage::load()
     sayOutcome (message, loaded.failed() ? decoderFile.getFullPathName() + ": " + loaded.getErrorMessage() : juce::String(), loaded.wasOk());
 
     iemEditor = designer.createEditor();
-    adoptTooltips (*iemEditor);   // IEM's own TooltipWindow then shows nothing; the window's switch decides
+    look::stripTooltips (*iemEditor);   // IEM's own TooltipWindow then has nothing to show
     addAndMakeVisible (*iemEditor);
     mainKey.setToggleState (shown == a3::SpeakerZone::main, juce::dontSendNotification);
     boothKey.setToggleState (shown == a3::SpeakerZone::booth, juce::dontSendNotification);
@@ -195,7 +190,7 @@ void SpeakersPage::refresh()
     if (zoneSpatialDirectory (view.config(), shown) != loadedFrom)
         load();
     else if (iemEditor != nullptr)
-        adoptTooltips (*iemEditor);   // IEM's table makes its rows' buttons (with tips) as it fills
+        look::stripTooltips (*iemEditor);   // IEM's table makes its rows' buttons (with tips) as it fills
 }
 
 void SpeakersPage::paint (juce::Graphics& g) { g.fillAll (palette::surface); }

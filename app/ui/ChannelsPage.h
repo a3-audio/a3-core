@@ -1,14 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+#include "Dropdown.h"
 #include "HostView.h"
 #include "Look.h"
 
 namespace a3app
 {
-// N, the number of channels (a spin box), with the DSP load beside it: the load is what N costs.
-// Below it the number of decks, with the count that runs. A change is a pending edit; Save
-// re-creates the engine.
+// The AUDIO page's CHANNELS card (the CHANNELS page until 2026-10-30): N, the number of channels, and the number of
+// decks, each a dropdown showing what is set, with the count that runs beside it. A change is a pending edit; Save
+// re-creates the engine. It paints no ground: it sits on its card.
 class ChannelsPage final : public juce::Component
 {
 public:
@@ -17,17 +18,20 @@ public:
 
     void setChannels (int);
     void setDecks (int);
+    void setTextHeight (float);
+    const juce::Label& channelsRunningLabel() const { return channelsRunning; }
     const juce::Label& decksRunningLabel() const { return decksRunning; }
+    juce::ComboBox& channelsChooser() { return channelsBox; }
+    juce::ComboBox& decksChooser() { return decksBox; }
     void refresh();
-    const juce::Label& loadLabel() const { return load; }
     const juce::Label& messageLabel() const { return message; }
     void resized() override;
-    void paint (juce::Graphics&) override;
 
 private:
     HostView& view;
-    juce::Label title, caption, load, decksCaption, decksRunning, message;
-    juce::Slider spin { juce::Slider::IncDecButtons, juce::Slider::TextBoxLeft };
-    juce::Slider decksSpin { juce::Slider::IncDecButtons, juce::Slider::TextBoxLeft };
+    juce::Label caption, channelsRunning, decksCaption, decksRunning, message;
+    Dropdown channelsBox, decksBox;
+    float textHeight = 16.0f;
+    bool filling = false;
 };
 }

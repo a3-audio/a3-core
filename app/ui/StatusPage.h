@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include "HostView.h"
+#include "ClockPanel.h"
 #include "Look.h"
 
 namespace a3app
@@ -21,8 +22,17 @@ juce::String droppedText (const std::vector<std::string>& droppedLinks, int maxL
 juce::String droppedText (const std::vector<std::string>& droppedLinks, const std::vector<std::string>& ignoredKeys,
                           int maxLines = 1000);
 
+// What the driver runs, as STATUS says it (the AUDIO page's info lines until 2026-10-30): "44100 Hz", "Block 64 frames
+// x 3 periods" (a device: no periods), where the rate comes from, the bit depth and who sets it, the DSP load, xruns.
+struct DriverInfo
+{
+    juce::String rate, timing, rateSource, bitDepth, load, xruns;
+};
+DriverInfo driverInfo (const AppConfig& running, const BackendStatus&);
+inline DriverInfo driverInfo (const HostView& view) { return driverInfo (view.running(), view.status()); }
+
 // Read-only: engine mode, Core's last word, the gate per zone, load and xruns, missing peers
-// and the per-port meters. refresh() re-reads the view (the window's timer calls it).
+// and the per-port meters; the driver's details (DriverInfo) and the clock's (ClockPanel::Mode::detail). refresh() re-reads the view (the window's timer calls it).
 class StatusPage final : public juce::Component
 {
 public:
@@ -31,6 +41,7 @@ public:
 
     void refresh();
     // What runs, not the pending edit; or why no engine runs.
+    const ClockPanel& clockPanel() const { return clock; }
     juce::String modeLine() const { return problem.isEmpty() ? modeText (config, status) : "NO ENGINE RUNNING - " + problem; }
     void resized() override;
     void paint (juce::Graphics&) override;
@@ -39,6 +50,7 @@ private:
     class Meters;
     HostView& view;
     std::unique_ptr<Meters> meters;
+    ClockPanel clock { ClockPanel::Mode::detail };
     AppConfig config;
     BackendStatus status;
     juce::String problem;

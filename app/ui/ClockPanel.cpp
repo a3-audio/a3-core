@@ -91,7 +91,7 @@ void fitText (juce::Label& label, juce::Rectangle<int> line, float share)
 }
 }
 
-ClockPanel::ClockPanel()
+ClockPanel::ClockPanel (Mode m) : mode (m)
 {
     title.setText ("CLOCK", juce::dontSendNotification);
     title.setColour (juce::Label::textColourId, palette::textMuted);
@@ -99,8 +99,6 @@ ClockPanel::ClockPanel()
     look::caption (masterCaption);
     master.addItem ("Scarlett " + arrow + " PTP grandmaster", 1);
     master.setSelectedId (1, juce::dontSendNotification);
-    look::help ("The Core's Scarlett is the only clock of the A3 system: the clock role steers the PTP grandmaster's hardware "
-                "clock to it, and every deck host follows PTP.", { &master });
     note.setText ("The only master in this version. An external PTP grandmaster would make the Core a PTP client and "
                   "need the Scarlett on word clock; not offered.",
                   juce::dontSendNotification);
@@ -113,14 +111,24 @@ ClockPanel::ClockPanel()
     }
     rate.setColour (juce::Label::textColourId, palette::textMuted);
     counters.setColour (juce::Label::textColourId, palette::textMuted);
-    for (auto* child : std::initializer_list<juce::Component*> { &title, &masterCaption, &master, &state, &role, &rate, &counters, &note })
+    for (auto* child : std::initializer_list<juce::Component*> { &title, &state })
         addAndMakeVisible (child);
+    for (auto* child : std::initializer_list<juce::Component*> { &masterCaption, &master })
+        addChildComponent (child);
+    for (auto* child : std::initializer_list<juce::Component*> { &role, &rate, &counters, &note })
+        addChildComponent (child);
+    const bool choice = mode == Mode::choice;
+    masterCaption.setVisible (choice);
+    master.setVisible (choice);
+    for (auto* child : std::initializer_list<juce::Component*> { &role, &rate, &counters, &note })
+        child->setVisible (! choice);
     show ({});
 }
 
 void ClockPanel::show (const a3clock::ClockReport& report)
 {
-    state.setText (stateText (report), juce::dontSendNotification);
+    state.setText (mode == Mode::choice ? juce::String::fromUTF8 (a3clock::clockIndicator (report).word.c_str()) : stateText (report),
+                   juce::dontSendNotification);
     const auto roleLine = a3clock::ptpRoleLine (report);
     role.setText (juce::String::fromUTF8 (roleLine.text.c_str()), juce::dontSendNotification);
     role.setColour (juce::Label::textColourId, roleLine.warns ? palette::danger : palette::textMuted);
@@ -136,14 +144,16 @@ void ClockPanel::show (const a3clock::ClockReport& report)
     resized();   // the texts' sizes follow their length
 }
 
+// A card as the page's others (look::card), framed in the warning's colour when not locked.
 void ClockPanel::paint (juce::Graphics& g)
 {
-    g.setColour (palette::raised);
-    g.fillRect (getLocalBounds());
+    const int pageWidth = getParentComponent() != nullptr ? getParentComponent()->getWidth() : getWidth();
+    look::card (g, getLocalBounds(), pageWidth);
     if (! warns())
         return;
     g.setColour (frame);
-    g.drawRect (getLocalBounds(), juce::jmax (2, getHeight() / 80));
+    const auto thickness = (float) juce::jmax (2, getHeight() / 80);
+    g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (thickness * 0.5f), (float) juce::jmax (2, pageWidth / 60), thickness);
 }
 
 void ClockPanel::setTextHeight (float height)
@@ -157,8 +167,9 @@ void ClockPanel::setTextHeight (float height)
 // One size for every line when the page gives one (squeezed across, never smaller); else each fitted to its row.
 void ClockPanel::resized()
 {
-    auto area = getLocalBounds().reduced (juce::jmax (4, getWidth() / 60), juce::jmax (2, getHeight() / 40));
-    const int row = area.getHeight() / 8;
+    const int pageWidth = getParentComponent() != nullptr ? getParentComponent()->getWidth() : getWidth();
+    auto area = getLocalBounds().reduced (juce::jmax (2, pageWidth / 60));
+    const int row = area.getHeight() / (mode == Mode::choice ? 3 : 8);
     const auto place = [&] (juce::Label& label, juce::Rectangle<int> line, float share)
     {
         if (textHeight <= 0.0f)
@@ -168,9 +179,16 @@ void ClockPanel::resized()
         label.setBounds (line);
     };
     place (title, area.removeFromTop (row), 0.5f);
-    auto choice = area.removeFromTop (row);
-    place (masterCaption, choice.removeFromLeft (choice.getWidth() / 4), 0.4f);
-    master.setBounds (choice.reduced (2));
+    if (mode == Mode::choice)
+    {
+        auto choice = area.removeFromTop (row);
+        place (masterCaption, choice.removeFromLeft (choice.getWidth() / 4), 0.4f);
+        master.setBounds (choice.reduced (2));
+        auto stateLine = area.removeFromTop (row);
+        stateLine.removeFromLeft (stateLine.getWidth() / 4);   // under the master: the dropdowns' column
+        place (state, stateLine, 0.45f);
+        return;
+    }
     place (state, area.removeFromTop (row), 0.45f);
     place (role, area.removeFromTop (row), 0.4f);
     place (rate, area.removeFromTop (row), 0.4f);

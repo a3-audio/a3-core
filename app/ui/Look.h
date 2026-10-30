@@ -49,6 +49,14 @@ inline void failure (juce::Label& label)   { label.setColour (juce::Label::textC
 // A page's row height as a share of the page, never below a fingertip-ish floor.
 inline int rowHeight (const juce::Component& page) { return juce::jmax (28, page.getHeight() / 14); }
 inline void say (juce::Label& label, const juce::String& message) { label.setText (message, juce::dontSendNotification); }
+// A card (E2) on a page: ZONES' info card, AUDIO's sections. Its corner a share of the page's width.
+inline void card (juce::Graphics& g, juce::Rectangle<int> area, int pageWidth)
+{
+    if (area.isEmpty())
+        return;
+    g.setColour (palette::raised);
+    g.fillRoundedRectangle (area.toFloat(), (float) juce::jmax (2, pageWidth / 60));
+}
 // Where a page's question opens: inside the window's content (as the quit question does), never a desktop window of
 // its own, which i3 would tile beside the window (for_window [class="a3-core"]).
 inline juce::Component* dialogParent (juce::Component& page)
@@ -58,12 +66,16 @@ inline juce::Component* dialogParent (juce::Component& page)
             return content;
     return page.getTopLevelComponent();
 }
-// A page's help: a tooltip on its title and the controls it explains, shown only while the window's
-// Tooltips switch is on. It takes no layout space.
-inline void help (const juce::String& text, std::initializer_list<juce::SettableTooltipClient*> parts)
+// No tooltips (2026-10-30): a help that matters is a line on its page. A hosted plugin's controls (IEM's
+// AllRADecoder brings a TooltipWindow of its own) lose theirs, so nothing pops up anywhere.
+inline void stripTooltips (juce::Component& root)
 {
-    for (auto* part : parts)
-        part->setTooltip (text);
+    for (auto* child : root.getChildren())
+    {
+        if (auto* client = dynamic_cast<juce::SettableTooltipClient*> (child); client != nullptr && client->getTooltip().isNotEmpty())
+            client->setTooltip ({});
+        stripTooltips (*child);
+    }
 }
 }
 
@@ -107,9 +119,6 @@ public:
         setColour (juce::AlertWindow::backgroundColourId, palette::raised);
         setColour (juce::AlertWindow::textColourId, palette::text);
         setColour (juce::AlertWindow::outlineColourId, palette::lifted);
-        setColour (juce::TooltipWindow::backgroundColourId, palette::raised);
-        setColour (juce::TooltipWindow::textColourId, palette::text);
-        setColour (juce::TooltipWindow::outlineColourId, palette::lifted);
     }
 
     // The share of the key's height, never below JUCE's own (which keeps short keys as they were); smaller

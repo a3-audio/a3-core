@@ -200,13 +200,15 @@ TEST_F (DepartmentsPageTest, TheWindowHasThePageWhenItHasCore)
     manager.addAudioDeviceType (std::make_unique<a3apptest::NoDevices>());
     {
         a3app::MainWindow window (view, manager, {}, false, [] {}, { rig.client.get(), {} });
-        EXPECT_TRUE (window.pageList().contains ("DEPARTMENTS"));   // not behind the monitor switch
+        EXPECT_FALSE (window.pageList().contains ("DEPARTMENTS")) << "a sub-page of I/O since 2026-10-30";
         window.showPage ("DEPARTMENTS");
-        EXPECT_EQ (window.currentPage(), "DEPARTMENTS");
+        EXPECT_EQ (window.currentPage(), "I/O");
+        EXPECT_EQ (window.currentSubPage(), "DEPARTMENTS");
         window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
         auto& content = *window.getContentComponent();
         expectPainted (a3apptest::snapshotAt (content, "portrait-departments", content.getWidth(), content.getHeight()));
     }
     a3app::MainWindow window (view, manager, {}, false, [] {}, {});
-    EXPECT_FALSE (window.pageList().contains ("DEPARTMENTS"));
+    window.showPage ("DEPARTMENTS");   // without Core there is none
+    EXPECT_NE (window.currentSubPage(), "DEPARTMENTS");
 }

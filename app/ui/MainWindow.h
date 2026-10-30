@@ -4,7 +4,6 @@
 #include "AudioPage.h"
 #include "CoreClient.h"
 #include "CalibrationPage.h"
-#include "ChannelsPage.h"
 #include "FilterPage.h"
 #include "IoPage.h"
 #include "OnScreenKeyboard.h"
@@ -32,13 +31,11 @@ struct KeyboardSetup
     KeyboardTimings timings;
 };
 
-// ~/.config/a3/core/window.settings, {"monitor": true|false, "tooltips": true|false}. Read: a missing or broken
-// file, or a missing key, is "off". A write of one switch keeps the other.
+// ~/.config/a3/core/window.settings, {"monitor": true|false}. Read: a missing or broken file, or a missing key, is
+// "off". A write keeps the file's other keys ("tooltips", from before 2026-10-30, is kept and ignored).
 juce::File windowSettingsFile (const juce::File& configDir);
 bool readMonitorSwitch (const juce::File& settings);
 void writeMonitorSwitch (const juce::File& settings, bool shown);
-bool readTooltipSwitch (const juce::File& settings);
-void writeTooltipSwitch (const juce::File& settings, bool shown);
 
 // The window's three bands, top to bottom, in its content's coordinates.
 struct WindowBands
@@ -46,11 +43,12 @@ struct WindowBands
     juce::Rectangle<int> navigation, page, footer;
 };
 
-// The window: the setup pages' keys (AUDIO, CHANNELS, ZONES, SPEAKERS, I/O, CALIBRATION, FILTER, STATUS, and with a
-// Core client DEPARTMENTS, which only asks Core while it is shown) in a row across the top; with a Core client and the OSC MONITOR switch on, the monitor's (TRAFFIC, TRUTH & DEVICES, NOT
-// UNDERSTOOD, REGISTER, BENCH) in a second row. The shown page below them at the full width, and a footer: KEYS,
-// the OSC MONITOR and Tooltips switches, and the Save bar. With service = true the close button only hides it
-// (the app is a unit that only SIGTERM ends); otherwise it asks the app to quit.
+// The window: the setup pages' keys (AUDIO, SPEAKERS with its sub-page ZONES, I/O with INPUT, OUTPUT and, with a Core
+// client, DEPARTMENTS, which only asks Core while it is shown; CALIBRATION, FILTER, STATUS) in a row across the top,
+// the workspace switch at its right end; with a Core client and the OSC MONITOR switch on, the monitor's (TRAFFIC,
+// TRUTH & DEVICES, NOT UNDERSTOOD, REGISTER, BENCH) in a second row. The shown page below them at the full width, and a
+// footer: KEYS, the OSC MONITOR switch, and the Save bar. No tooltips anywhere (2026-10-30). With service = true the
+// close button only hides it (the app is a unit that only SIGTERM ends); otherwise it asks the app to quit.
 class MainWindow final : public juce::DocumentWindow, private juce::Timer
 {
 public:
@@ -72,12 +70,8 @@ public:
     // writes the settings file (only here: a flip is the one write).
     void setMonitorShown (bool);
     bool monitorShown() const;
-    // The Tooltips switch: the pages' help shows as a tip only while it is on (TouchTooltips: after a touch, for a few
-    // seconds, gone at the next touch); off, nothing pops up anywhere. A flip is remembered in the settings file, as
-    // the monitor switch is.
-    void setTooltipsShown (bool);
-    bool tooltipsShown() const;
-    bool hasTooltipWindow() const;
+    // The sub-page shown when the page has them (ZONES, INPUT, ...), else "".
+    juce::String currentSubPage() const;
     WindowBands bands() const;
     // The KEYS button (nullptr without a keyboard) and the one line the window says about the keyboard ("" when nothing is wrong).
     juce::TextButton* keysButton();

@@ -3,6 +3,7 @@
 #pragma once
 #include "Dropdown.h"
 #include "AudioTiming.h"
+#include "ChannelsPage.h"
 #include "ClockPanel.h"
 #include "HostView.h"
 #include "Look.h"
@@ -11,15 +12,16 @@
 
 namespace a3app
 {
-// The audio page, three sections (2026-10-30): DRIVER, MEASURE and CLOCK, every text in one size. DRIVER: the sound-device settings: one device-type list, "PipeWire (JACK)" (the JACK backend) beside
-// JUCE's device types. PipeWire: Block (the forced quantum, live) and Periods (the sound card's ALSA periods, through
-// the engine's WirePlumber drop-in and a WirePlumber restart), applied by the engine only on APPLY, after the page
-// said what happens; REVERT goes back to the previous choice (TimingControl.h). A JUCE type: input and output device,
-// rate and block size, pending until Save (no periods: JUCE's ALSA device sets its own). Below the settings what
-// runs: rate, block and periods, where they come from, bit depth, DSP load and xruns, the round trip (measured over
-// the I/O page's digital loop, MEASURE runs it again, or estimated) and the analog chain in MEASURE; at the bottom the
-// CLOCK section (ClockPanel). MEASURE and MEASURE ANALOG CHAIN are off while the I/O page names no pair for them, and
-// their own line says so (no hint line under them). The page opens no device: the manager is a catalogue of device types and is never initialised.
+// The audio page (2026-10-30, second round), four cards in the ZONES card's style. DRIVER: one device-type list,
+// "PipeWire (JACK)" (the JACK backend) beside JUCE's device types; then every setting a dropdown showing what is set:
+// a JUCE type's input and output device, sample rate and block (pending until Save); PipeWire's sample rate (the
+// graph's, the one choice it shows: the engine does not change PipeWire's rate), Block (the forced quantum, live) and
+// Periods (the card's ALSA periods, through the engine's WirePlumber drop-in and a restart), applied only on APPLY
+// after the page said what happens; REVERT goes back to the previous choice (TimingControl.h). CHANNELS: N and the
+// deck count (ChannelsPage). MEASURE: the round trip (over the I/O page's digital loop) and the analog chain with
+// their keys, off while the I/O page names no pair, their line saying why. CLOCK: the master and the one-word
+// state (ClockPanel::Mode::choice). What runs in detail (rate source, bit depth, DSP load, xruns, the clock's
+// numbers) is on STATUS. Every text is one size. The page opens no device: the manager is a catalogue of device types.
 class AudioPage final : public juce::Component
 {
 public:
@@ -38,15 +40,14 @@ public:
     juce::ComboBox& typeChooser() { return typeBox; }
     juce::ComboBox& blockChooser() { return blockBox; }
     juce::ComboBox& periodsChooser() { return periodsBox; }
+    juce::ComboBox& rateChooser() { return rateBox; }
+    ChannelsPage& channelsCard() { return channels; }
+    // The cards, in the page's coordinates: DRIVER, CHANNELS, MEASURE, CLOCK.
+    std::vector<juce::Rectangle<int>> cardAreas() const { return { driverCard, channelsArea, measureCard, clock.getBounds() }; }
     juce::Button& applyButton() { return apply; }
     juce::Button& cancelButton() { return cancel; }
     juce::Button& revertButton() { return revert; }
     const juce::Label& confirmLabel() const { return confirm; }
-    const juce::Label& rateLabel() const { return rate; }
-    const juce::Label& quantumLabel() const { return quantum; }
-    const juce::Label& rateSourceLabel() const { return rateSource; }
-    const juce::Label& bitDepthLabel() const { return bitDepth; }
-    const juce::Label& loadLabel() const { return load; }
     const juce::Label& pendingLabel() const { return pending; }
     const juce::Label& roundTripLabel() const { return roundTrip; }
     juce::Button& measureButton() { return measure; }
@@ -73,17 +74,19 @@ private:
     void applyChosen();
     void revertTiming();
     void layoutSettings (juce::Rectangle<int>& area, int row);
-    void layoutInfo (juce::Rectangle<int>& area, int line);
     void layoutMeasure (juce::Rectangle<int>& area, int row);
+    void fillPipeWireRate();
 
     HostView& view;
     juce::AudioDeviceManager& manager;
-    juce::Label driverHeading, measureHeading, rate, quantum, rateSource, bitDepth, load, roundTrip, pending, analogChain, confirm;
+    juce::Label driverHeading, channelsHeading, measureHeading, roundTrip, pending, analogChain, confirm;
     juce::TextButton measure { "MEASURE" }, measureAnalog { "MEASURE ANALOG CHAIN" }, apply { "APPLY" }, cancel { "CANCEL" },
         revert { "REVERT" };
     juce::Label typeCaption, inputCaption, outputCaption, rateCaption, blockCaption, periodsCaption;
     Dropdown typeBox, inputBox, outputBox, rateBox, blockBox, periodsBox;
-    ClockPanel clock;
+    ChannelsPage channels;
+    ClockPanel clock { ClockPanel::Mode::choice };
+    juce::Rectangle<int> driverCard, channelsArea, measureCard;
     std::optional<AudioTiming> chosenTiming;   // PipeWire: chosen on the page, not applied yet
     bool deviceChoosers = false;
     bool filling = false;

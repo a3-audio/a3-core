@@ -8,7 +8,7 @@
 #include "MonitorTrafficPage.h"
 #include "MonitorTruthPage.h"
 #include "MonitorUnknownPage.h"
-#include "TouchTooltips.h"
+#include "SubPages.h"
 #include <limits>
 
 namespace a3app
@@ -22,7 +22,6 @@ constexpr int noteSeconds = 6;   // how long the keyboard's line stays before th
 constexpr int minimumKey = 28;   // a fingertip-ish floor under the shares below
 constexpr int keyRowShare = 18, footerShare = 16;   // a key row and the footer as shares of the window's height
 const juce::String monitorSwitchName = "OSC MONITOR";
-const juce::String tooltipSwitchName = "Tooltips";
 
 bool readSwitch (const juce::File& settings, const juce::Identifier& key)
 {
@@ -48,8 +47,6 @@ void writeSwitch (const juce::File& settings, const juce::Identifier& key, bool 
 juce::File windowSettingsFile (const juce::File& configDir) { return configDir.getChildFile ("core/window.settings"); }
 bool readMonitorSwitch (const juce::File& settings) { return readSwitch (settings, "monitor"); }
 void writeMonitorSwitch (const juce::File& settings, bool shown) { writeSwitch (settings, "monitor", shown); }
-bool readTooltipSwitch (const juce::File& settings) { return readSwitch (settings, "tooltips"); }
-void writeTooltipSwitch (const juce::File& settings, bool shown) { writeSwitch (settings, "tooltips", shown); }
 
 // The page keys in rows across the top (one radio group: the engine's row, then the monitor's), the shown
 // page below them at the full width, the footer (KEYS, the switches, the Save bar) at the bottom. Pages are
@@ -64,20 +61,27 @@ public:
         const auto userRoot = userSpatialRoot;
         if (keyboardSetup.link != nullptr)
             addKeyboard (std::move (keyboardSetup));
+        // 2026-10-30: CHANNELS is a card on AUDIO, ZONES a sub-page of SPEAKERS, DEPARTMENTS one of I/O.
         addPage ("AUDIO", std::make_unique<AudioPage> (view, manager));
-        addPage ("CHANNELS", std::make_unique<ChannelsPage> (view));
+        auto speakersAndZones = std::make_unique<SubPages> ("SPEAKERS");
+        speakers = speakersAndZones.get();
+        auto speakerMap = std::make_unique<SpeakersPage> (view, std::move (userSpatialRoot));
+        auto* speakerMapRaw = speakerMap.get();
+        speakers->add ("SPEAKERS", std::move (speakerMap), [speakerMapRaw] { speakerMapRaw->refresh(); });
         auto zones = std::make_unique<ZonesPage> (view, std::move (spatialChoices), userRoot);
-        zones->onOpenSpeakers = [this] { show ("SPEAKERS"); };
+        zones->onOpenSpeakers = [this] { speakers->show ("SPEAKERS"); showZonesKeys(); };
         zonesPage = zones.get();
+        speakers->add ("ZONES", std::move (zones), [this] { zonesPage->refresh(); });
+        for (const auto& name : { "SPEAKERS", "ZONES" })
+            speakers->key (name)->onClick = [this, name = juce::String (name)] { speakers->show (name); showZonesKeys(); };
         renameKey.onClick = [this] { zonesPage->askRename(); };
         deleteKey.onClick = [this] { zonesPage->askDelete(); };
-        renameKey.setTooltip ("Rename the variant picked in the list");
-        deleteKey.setTooltip ("Delete the variant picked in the list (asks first)");
         addChildComponent (renameKey);
         addChildComponent (deleteKey);
-        addPage ("ZONES", std::move (zones));
-        addPage ("SPEAKERS", std::make_unique<SpeakersPage> (view, std::move (userSpatialRoot)));
-        addPage ("I/O", std::make_unique<IoPage> (view));
+        addPage ("SPEAKERS", std::move (speakersAndZones));
+        auto io = std::make_unique<IoPage> (view);
+        ioPage = io.get();
+        addPage ("I/O", std::move (io));
         addPage ("CALIBRATION", std::make_unique<CalibrationPage> (view));
         addPage ("FILTER", std::make_unique<FilterPage> (view));
         addPage ("STATUS", std::make_unique<StatusPage> (view));
@@ -85,7 +89,8 @@ public:
         {
             auto& core = *monitor.core;
             // Core's, not the monitor's: no switch hides it. It asks Core only while it is shown.
-            addPage ("DEPARTMENTS", std::make_unique<DepartmentsPage> (core), false, true);
+            departments = std::make_unique<DepartmentsPage> (core);
+            ioPage->addDepartments (*departments, [this] { departments->refresh(); });
             addPage ("TRAFFIC", std::make_unique<MonitorTrafficPage> (core), true);
             addPage ("TRUTH & DEVICES", std::make_unique<MonitorTruthPage> (core), true);
             addPage ("NOT UNDERSTOOD", std::make_unique<MonitorUnknownPage> (core), true);
@@ -95,9 +100,6 @@ public:
             monitorSwitch.onClick = [this] { flip (monitorSwitch.getToggleState()); };
             addAndMakeVisible (monitorSwitch);
         }
-        tooltipSwitch.onClick = [this] { showTooltips (tooltipSwitch.getToggleState()); };
-        addAndMakeVisible (tooltipSwitch);
-        applyTooltips (readTooltipSwitch (monitor.settings));
         addAndMakeVisible (saveBar);
         applySwitch();
         show ("STATUS");
@@ -116,8 +118,19 @@ public:
 
     juce::String current() const { return pages[(size_t) shown].name; }
 
+    // A page, or a sub-page by its key's name: ZONES (SPEAKERS'), INPUT, OUTPUT, DEPARTMENTS (I/O's).
     void show (const juce::String& name)
     {
+        if (speakers != nullptr && speakers->has (name) && name != "SPEAKERS")
+        {
+            speakers->show (name);
+            return show ("SPEAKERS");
+        }
+        if (ioPage != nullptr && (name == "INPUT" || name == "OUTPUT" || (name == "DEPARTMENTS" && departments != nullptr)))
+        {
+            ioPage->showSub (name == "INPUT" ? IoPage::Sub::input : name == "OUTPUT" ? IoPage::Sub::output : IoPage::Sub::departments);
+            return show ("I/O");
+        }
         for (size_t i = 0; i < pages.size(); ++i)
         {
             const bool picked = pages[i].name == name && pages[i].key->isVisible();
@@ -136,19 +149,16 @@ public:
     }
 
     bool monitorShown() const { return monitorSwitch.getToggleState(); }
-    bool tooltipsShown() const { return tooltipSwitch.getToggleState(); }
-    bool hasTooltipWindow() const { return tooltipWindow != nullptr; }
-    WindowBands currentBands() const { return bands; }
-
-    // A flip of the Tooltips switch: shown or not, and remembered (the one moment it is written).
-    void showTooltips (bool wanted)
+    juce::String currentSub() const
     {
-        if (wanted == hasTooltipWindow())
-            return tooltipSwitch.setToggleState (wanted, juce::dontSendNotification);
-        applyTooltips (wanted);
-        if (monitor.settings != juce::File())
-            writeTooltipSwitch (monitor.settings, wanted);
+        const auto* page = pages[(size_t) shown].component.get();
+        if (page == speakers)
+            return speakers->shown();
+        if (page == ioPage)
+            return ioPage->shownSub() == IoPage::Sub::input ? "INPUT" : ioPage->shownSub() == IoPage::Sub::output ? "OUTPUT" : "DEPARTMENTS";
+        return {};
     }
+    WindowBands currentBands() const { return bands; }
 
     juce::TextButton* keysButton() { return keyboard != nullptr ? &keys : nullptr; }
 
@@ -242,7 +252,6 @@ private:
     {
         keyboard = std::make_unique<OnScreenKeyboard> (std::move (setup.link), setup.timings);
         keys.setMouseClickGrabsKeyboardFocus (false);
-        keys.setTooltip (restingTooltip());
         keys.onClick = [this] { keyboard->keysPressed(); };
         keyboard->onHint = [this] (const juce::String& line) { sayKeyboard (line); };
         look::warning (keyboardNoteLabel);
@@ -251,15 +260,8 @@ private:
         addChildComponent (keyboardNoteLabel);
     }
 
-    // What the tooltip says when no hint is up: the same whether onboard is there or not, as the hint was.
-    juce::String restingTooltip() const
-    {
-        return keyboard->isAvailable() ? "On-screen keyboard (onboard): show or hide" : "On-screen keyboard: onboard is not installed";
-    }
-
     void sayKeyboard (const juce::String& line)
     {
-        keys.setTooltip (line.isNotEmpty() ? line : restingTooltip());
         keyboardNoteLabel.setText (line, juce::dontSendNotification);
         keyboardNoteLabel.setVisible (line.isNotEmpty());
         noteTicksLeft = line.isNotEmpty() ? noteSeconds * refreshHz : 0;
@@ -306,7 +308,7 @@ private:
             page.key->getProperties().set (sharedKeyTextHeight, (double) shared);
     }
 
-    // KEYS, the monitor and Tooltips switches on the left; the Save bar (its Save on the right) takes the rest.
+    // KEYS and the monitor switch on the left; the Save bar (its Save on the right) takes the rest.
     void layoutFooter (juce::Rectangle<int> footer)
     {
         auto left = footer.reduced (getWidth() / 200, footer.getHeight() / 10);
@@ -314,7 +316,6 @@ private:
             keys.setBounds (left.removeFromLeft (getWidth() / 8));
         if (monitor.core != nullptr)
             monitorSwitch.setBounds (left.removeFromLeft (getWidth() / 5));
-        tooltipSwitch.setBounds (left.removeFromLeft (getWidth() / 7));
         if (renameKey.isVisible())
         {
             renameKey.setBounds (left.removeFromLeft (getWidth() / 8).reduced (left.getHeight() / 16, 0));
@@ -327,20 +328,12 @@ private:
     // page when pressed (and the page's line under its list says it beforehand); a disabled key answered nothing.
     void showZonesKeys()
     {
-        const bool onZones = ! pages.empty() && pages[(size_t) shown].component.get() == zonesPage;
+        const bool onZones = ! pages.empty() && pages[(size_t) shown].component.get() == speakers && speakers->shown() == "ZONES";
         if (renameKey.isVisible() == onZones)
             return;
         renameKey.setVisible (onZones);
         deleteKey.setVisible (onZones);
         resized();
-    }
-
-    void applyTooltips (bool on)
-    {
-        tooltipSwitch.setToggleState (on, juce::dontSendNotification);
-        // Ours, not JUCE's TooltipWindow (a hover model that flickered on the touch screen, TouchTooltips.h); without
-        // one no help pops up anywhere (the hosted IEM editor's tips are adopted, SpeakersPage).
-        tooltipWindow = on ? std::make_unique<TouchTooltips> (*this) : nullptr;
     }
 
     void applySwitch()
@@ -368,10 +361,11 @@ private:
     SaveBar saveBar;
     MonitorSetup monitor;
     juce::ToggleButton monitorSwitch { monitorSwitchName };
-    juce::ToggleButton tooltipSwitch { tooltipSwitchName };
     ZonesPage* zonesPage = nullptr;
     juce::TextButton renameKey { "RENAME" }, deleteKey { "DELETE" };
-    std::unique_ptr<TouchTooltips> tooltipWindow;
+    SubPages* speakers = nullptr;
+    IoPage* ioPage = nullptr;
+    std::unique_ptr<DepartmentsPage> departments;
     WindowBands bands;
     juce::TextButton keys { "KEYS" };
     juce::Label keyboardNoteLabel;
@@ -434,9 +428,7 @@ void MainWindow::setMonitorShown (bool shown) { content->flip (shown); }
 bool MainWindow::monitorShown() const { return content->monitorShown(); }
 juce::TextButton* MainWindow::keysButton() { return content->keysButton(); }
 juce::String MainWindow::keyboardNote() const { return content->keyboardNote(); }
-void MainWindow::setTooltipsShown (bool shown) { content->showTooltips (shown); }
-bool MainWindow::tooltipsShown() const { return content->tooltipsShown(); }
-bool MainWindow::hasTooltipWindow() const { return content->hasTooltipWindow(); }
+juce::String MainWindow::currentSubPage() const { return content->currentSub(); }
 WindowBands MainWindow::bands() const { return content->currentBands(); }
 void MainWindow::setWorkspaceRunner (screen::I3Runner runner) { content->setWorkspaceRunner (std::move (runner)); }
 WorkspaceSwitch* MainWindow::workspaceSwitch() { return content->workspaceSwitch(); }

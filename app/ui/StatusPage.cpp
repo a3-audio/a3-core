@@ -157,9 +157,22 @@ private:
     std::vector<std::string> names;
 };
 
+DriverInfo driverInfo (const AppConfig& running, const BackendStatus& status)
+{
+    const bool device = running.backend.type == BackendSettings::Type::device;
+    const int periods = status.timing.available ? status.timing.applied.periods : running.backend.periods;
+    return { juce::String (juce::roundToInt (status.sampleRate)) + " Hz",
+             device ? "Block " + juce::String (status.blockSize) + " frames" : timingText (status.blockSize, periods),
+             status.rateSource,
+             juce::String (status.bitDepth) + (device ? "  -  set by the device" : "  -  float samples, set by JACK"),
+             juce::String (status.dspLoadPercent, 1) + " %",
+             juce::String (status.xruns) };
+}
+
 StatusPage::StatusPage (HostView& v) : view (v), meters (std::make_unique<Meters>())
 {
     addAndMakeVisible (*meters);
+    addAndMakeVisible (clock);
     refresh();
 }
 
@@ -178,13 +191,18 @@ void StatusPage::refresh()
     gate = view.gateOpen();
     gates = view.gateLevels();
     meters->set (view.meters(), view.outputNames());
+    clock.show (view.clock());
     repaint (getLocalBounds().removeFromTop (getHeight() / 2));
 }
 
+// The lines on the top half, the clock's card and the meters below them.
 void StatusPage::resized()
 {
     auto area = getLocalBounds().reduced (getWidth() / 40);
-    meters->setBounds (area.removeFromBottom (area.getHeight() / 2));
+    area.removeFromTop (area.getHeight() / 2);
+    clock.setTextHeight ((float) getHeight() / 60.0f);
+    clock.setBounds (area.removeFromTop (area.getHeight() / 2).withTrimmedTop (getHeight() / 80));
+    meters->setBounds (area.withTrimmedTop (getHeight() / 80));
 }
 
 void StatusPage::paint (juce::Graphics& g)
@@ -192,7 +210,7 @@ void StatusPage::paint (juce::Graphics& g)
     g.fillAll (palette::surface);
     auto area = getLocalBounds().reduced (getWidth() / 40);
     area.removeFromBottom (area.getHeight() / 2 + getHeight() / 80);
-    constexpr int rowCount = 10;   // seven single lines; DROPPED takes the other three
+    constexpr int rowCount = 13;   // ten single lines; DROPPED takes the other three
     const int row = area.getHeight() / rowCount;
     g.setFont (juce::FontOptions ((float) row * 0.55f));
 
@@ -220,12 +238,15 @@ void StatusPage::paint (juce::Graphics& g)
     }
     line ("GATE", gateText + (gate ? "   (Core: open)" : "   (Core: closed)"), anyOpen ? palette::running : palette::textMuted);
 
-    const auto audioText = juce::String (juce::roundToInt (status.sampleRate)) + " Hz, " + juce::String (status.blockSize) + " frames";
+    const auto driver = driverInfo (config, status);
+    const auto audioText = driver.rate + ",  " + driver.timing;
     line ("AUDIO", truthWarning.isEmpty() ? audioText : audioText + "   (" + truthWarning + ")", palette::text);
+    line ("RATE FROM", driver.rateSource, palette::textMuted);
+    line ("BIT DEPTH", driver.bitDepth, palette::textMuted);
     constexpr float loadWarn = 70.0f, loadDanger = 90.0f;
-    line ("DSP LOAD", juce::String (status.dspLoadPercent, 1) + " %",
+    line ("DSP LOAD", driver.load,
           status.dspLoadPercent >= loadDanger ? palette::danger : status.dspLoadPercent >= loadWarn ? palette::caution : palette::text);
-    line ("XRUNS", juce::String (status.xruns), status.xruns > 0 ? palette::caution : palette::text);
+    line ("XRUNS", driver.xruns, status.xruns > 0 ? palette::caution : palette::text);
     std::vector<std::string> missing;
     for (const auto& peer : status.missingPeers)
         missing.push_back (peer.toStdString());

@@ -4,6 +4,7 @@
 #include "Dropdown.h"
 #include "HostView.h"
 #include "Look.h"
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -26,8 +27,11 @@ public:
     explicit IoPage (HostView&);
     ~IoPage() override;
 
-    enum class Sub { input, output };
+    enum class Sub { input, output, departments };
     void showSub (Sub);
+    // DEPARTMENTS beside INPUT and OUTPUT (2026-10-30; only with Core: its page asks Core, and only while shown).
+    void addDepartments (juce::Component& page, std::function<void()> refreshWhileShown);
+    juce::Button* departmentsKey() { return departments != nullptr ? &departmentsButton : nullptr; }
     Sub shownSub() const { return sub; }
     // A dropdown's port: its box (nullptr when the page has none for it), and a choice (0 = none, then the
     // offered capture/playback ports or device channels in order).
@@ -85,7 +89,9 @@ private:
     juce::String routeKey;   // the ports and choices the dropdowns were built for
     BackendStatus offered;   // the status the choices came from
     Sub sub = Sub::input;
-    juce::TextButton inputKey { "INPUT" }, outputKey { "OUTPUT" };
+    juce::TextButton inputKey { "INPUT" }, outputKey { "OUTPUT" }, departmentsButton { "DEPARTMENTS" };
+    juce::Component* departments = nullptr;
+    std::function<void()> refreshDepartments;
     juce::Label decksCaption;
     juce::Component inputContent, outputContent;   // the scrolled parts of the sub-pages
     juce::Viewport inputView, outputView;

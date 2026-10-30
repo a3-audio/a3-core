@@ -6,6 +6,7 @@
 #include <set>
 #include <juce_opengl/juce_opengl.h>
 #include "AppTruth.h"
+#include "CoreWindowRig.h"
 #include "EngineFixture.h"
 #include "FakeView.h"
 #include "PageSnapshot.h"
@@ -24,7 +25,6 @@
 #include "StatusPage.h"
 #include "ZonesPage.h"
 #include "Dropdown.h"
-#include "TouchTooltips.h"
 #include "WorkspaceSwitch.h"
 #include <array>
 #include <map>
@@ -36,6 +36,7 @@ using a3apptest::RemoteRig;
 using a3apptest::snapshot;
 using a3apptest::expectPainted;
 using a3apptest::NoDevices;
+using a3apptest::CoreWindowRig;
 
 struct Pages : ::testing::Test
 {
@@ -65,7 +66,7 @@ TEST_F (Pages, AudioPagePaintsForJackAndDevice)
     a3app::AudioPage page (view, manager);
     expectPainted (snapshot (page, "audio-device"));
     EXPECT_TRUE (page.showsDeviceSelector());
-    EXPECT_NE (page.bitDepthLabel().getText().indexOf ("set by the device"), -1);
+    EXPECT_NE (a3app::driverInfo (view).bitDepth.indexOf ("set by the device"), -1);   // on STATUS since 2026-10-30
 }
 
 // AUDIO shows the estimated round trip and its parts, for JACK and for a device, and follows a new quantum.
@@ -194,7 +195,7 @@ TEST_F (Pages, TheClockKeepsItsRowsInEveryLayout)
         page.setSize (layout.width, layout.height);
         page.refresh();
         const auto& clock = page.clockPanel();
-        EXPECT_GE (clock.getHeight(), layout.height / 5) << layout.name;
+        EXPECT_GE (clock.getHeight(), layout.height / 12) << layout.name << ": the master and the state (the detail is on STATUS)";
         EXPECT_GT (clock.stateLabel().getHeight(), 0) << layout.name;
         EXPECT_TRUE (page.getLocalBounds().contains (clock.getBounds())) << layout.name;
         expectPainted (a3apptest::snapshotAt (page, juce::String ("audio-clock-") + layout.name, layout.width, layout.height));
@@ -228,7 +229,7 @@ TEST_F (Pages, ThePtpRoleIsASecondLine)
 {
     FakeView view;
     view.clockReport = clockReport (a3clock::Health::locked, "");
-    a3app::AudioPage page (view, manager);
+    a3app::StatusPage page (view);   // the clock's detail is on STATUS since 2026-10-30
     page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     page.refresh();
     const auto& clock = page.clockPanel();
@@ -265,7 +266,7 @@ TEST_F (Pages, TheClockSaysItsNumbers)
 {
     FakeView view;
     view.clockReport = clockReport (a3clock::Health::locked, "");
-    a3app::AudioPage page (view, manager);
+    a3app::StatusPage page (view);   // the clock's detail is on STATUS since 2026-10-30
     page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     page.refresh();
     const auto& clock = page.clockPanel();
@@ -280,15 +281,19 @@ TEST_F (Pages, TheClockSaysItsNumbers)
     EXPECT_TRUE (clock.stateLabel().getText().startsWith ("HOLDOVER"));
 }
 
-TEST_F (Pages, JackRateIsReadOnly)
+// "The dropdown is the truth" (2026-10-30): PipeWire's rate is a dropdown showing the graph's rate, its one choice
+// (the engine does not change PipeWire's rate); where it comes from is on STATUS.
+TEST_F (Pages, PipeWireRateIsADropdownShowingWhatRuns)
 {
     FakeView view;
     a3app::AudioPage page (view, manager);
-    EXPECT_FALSE (page.rateLabel().isEditable());
-    EXPECT_FALSE (page.quantumLabel().isEditable());
-    EXPECT_NE (page.rateLabel().getText().indexOf ("44100"), -1);
-    EXPECT_NE (page.quantumLabel().getText().indexOf ("128"), -1);
-    EXPECT_NE (page.rateSourceLabel().getText().indexOf ("JACK server"), -1);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    page.refresh();
+    EXPECT_TRUE (page.rateChooser().isVisible());
+    EXPECT_EQ (page.rateChooser().getText(), "44100 Hz");
+    EXPECT_EQ (page.rateChooser().getNumItems(), 1);
+    EXPECT_NE (a3app::driverInfo (view).rateSource.indexOf ("JACK server"), -1);
+    EXPECT_NE (a3app::driverInfo (view).timing.indexOf ("128"), -1);
     EXPECT_FALSE (page.showsDeviceSelector());
 }
 
@@ -378,9 +383,10 @@ TEST_F (Pages, PipeWireSaysWhatRunsAndReverts)
     a3app::AudioPage page (view, manager);
     page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     page.refresh();
-    EXPECT_EQ (page.quantumLabel().getText(), juce::String (juce::CharPointer_UTF8 ("Block 64 frames \xc3\x97 3 periods")));
-    EXPECT_TRUE (page.loadLabel().getText().contains ("41")) << page.loadLabel().getText();
-    EXPECT_TRUE (page.loadLabel().getText().contains ("xruns 3")) << page.loadLabel().getText();
+    const auto driver = a3app::driverInfo (view);   // what runs: on STATUS since 2026-10-30
+    EXPECT_EQ (driver.timing, juce::String (juce::CharPointer_UTF8 ("Block 64 frames \xc3\x97 3 periods")));
+    EXPECT_TRUE (driver.load.contains ("41")) << driver.load;
+    EXPECT_EQ (driver.xruns, "3");
     EXPECT_EQ (page.blockChooser().getText(), "64 frames");
     ASSERT_TRUE (page.revertButton().isEnabled());
     page.revertButton().triggerClick();
@@ -422,8 +428,7 @@ TEST_F (Pages, TheSettingsComeBeforeTheInfo)
         const int settingsBottom = page.blockChooser().getBottom();
         EXPECT_GT (page.typeChooser().getBottom(), 0);
         EXPECT_LE (page.typeChooser().getBottom(), page.blockChooser().getY());
-        for (const auto* info : { &page.rateLabel(), &page.quantumLabel(), &page.rateSourceLabel(), &page.bitDepthLabel(),
-                                  &page.roundTripLabel(), &page.analogChainLabel() })
+        for (const auto* info : { &page.roundTripLabel(), &page.analogChainLabel() })
         {
             EXPECT_TRUE (info->isVisible()) << device;
             EXPECT_GE (info->getY(), settingsBottom) << info->getText() << (device ? " (device)" : " (PipeWire)");
@@ -555,8 +560,8 @@ TEST_F (Pages, PendingEditDoesNotChangeWhatRuns)
     EXPECT_EQ (status.modeLine(), "JACK, connecting");
     EXPECT_TRUE (audio.showsDeviceSelector());   // the edit is what the page edits
     EXPECT_NE (audio.pendingLabel().getText().indexOf ("not saved"), -1);
-    EXPECT_EQ (audio.bitDepthLabel().getText().indexOf ("set by the device"), -1);   // 32 is JACK's value
-    EXPECT_NE (audio.bitDepthLabel().getText().indexOf ("JACK"), -1);
+    EXPECT_EQ (a3app::driverInfo (view).bitDepth.indexOf ("set by the device"), -1);   // 32 is JACK's value
+    EXPECT_NE (a3app::driverInfo (view).bitDepth.indexOf ("JACK"), -1);
 
     audio.chooseDeviceType (a3app::AudioPage::pipewireType);   // back to what runs: nothing pending
     EXPECT_TRUE (audio.pendingLabel().getText().isEmpty());
@@ -649,7 +654,6 @@ TEST_F (Pages, ChannelsEditTheConfigAndShowTheLoad)
     view.state.dspLoadPercent = 12.5f;
     a3app::ChannelsPage page (view);
     page.refresh();
-    EXPECT_NE (page.loadLabel().getText().indexOf ("12.5"), -1);
     page.setChannels (6);
     EXPECT_EQ (view.edited, 1);
     EXPECT_EQ (view.cfg.engine.channels, 6);
@@ -1375,9 +1379,7 @@ TEST_F (Pages, PortraitWindowHasKeysOnTopPageBelowAndAFooter)
     ASSERT_EQ (saves.size(), 1u);
     EXPECT_TRUE (bands.footer.contains (areaIn (content, *saves.front())));
     EXPECT_GT (areaIn (content, *saves.front()).getCentreX(), whole.getCentreX());   // Save on the right
-    auto* tooltips = toggleLabelled (content, "Tooltips");
-    ASSERT_NE (tooltips, nullptr);
-    EXPECT_TRUE (bands.footer.contains (areaIn (content, *tooltips)));
+    EXPECT_EQ (toggleLabelled (content, "Tooltips"), nullptr) << "no tooltips since 2026-10-30";
 
     for (const auto& name : window.pageList())
     {
@@ -1402,7 +1404,7 @@ TEST_F (Pages, SpeakersEditorIsScaledIntoThePage)
     {
         window.setSize (size.x, size.y);
         window.showPage ("SPEAKERS");
-        auto* page = dynamic_cast<a3app::SpeakersPage*> (shownPage (window));
+        auto* page = firstDescendant<a3app::SpeakersPage> (*shownPage (window));
         ASSERT_NE (page, nullptr);
         auto* editor = page->editor();
         ASSERT_NE (editor, nullptr);
@@ -1426,64 +1428,30 @@ TEST_F (Pages, SpeakersEditorIsScaledIntoThePage)
     }
     window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     window.showPage ("SPEAKERS");
-    auto* page = dynamic_cast<a3app::SpeakersPage*> (shownPage (window));
+    auto* page = firstDescendant<a3app::SpeakersPage> (*shownPage (window));
     ASSERT_NE (page, nullptr);
-    // Portrait: the editor fills the width (it is the width that limits it there).
-    EXPECT_GE (areaIn (*page, *page->editor()).getWidth(), page->getWidth() * 9 / 10);
+    // Portrait: the editor nearly fills the width (since the sub-page keys of 2026-10-30 its height limits it a little).
+    EXPECT_GE (areaIn (*page, *page->editor()).getWidth(), page->getWidth() * 5 / 6);
 }
 
-// The pages' long help is a tooltip on the title (and the controls it explains), never a label taking space; except
-// CALIBRATION, whose page has the room (CalibrationHelpIsTextInTheFreeSpace).
-TEST_F (Pages, HelpIsATooltipNotALabel)
-{
-    SpeakerRig rig;
-    a3app::SpeakersPage speakers (rig.view, rig.userRoot);
-    a3app::ZonesPage zones (rig.view, { rig.installed.root() });
-    a3app::ChannelsPage channels (rig.view);
-    a3app::FilterPage filter (rig.view);
-    const std::vector<std::pair<juce::Component*, juce::String>> pages {
-        { &speakers, "SPEAKERS" }, { &zones, "ZONES" }, { &channels, "CHANNELS" }, { &filter, "FILTER" } };
-    for (const auto& [page, title] : pages)
-    {
-        page->setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
-        auto* titleLabel = labelSaying (*page, title);
-        ASSERT_NE (titleLabel, nullptr) << title;
-        const auto help = titleLabel->getTooltip();
-        EXPECT_GT (help.length(), 40) << title;
-        for (auto* child : descendants (*page))
-            if (auto* label = dynamic_cast<juce::Label*> (child); label != nullptr && label->isVisible())
-                EXPECT_NE (label->getText(), help) << title;
-    }
-}
-
-// The Tooltips switch: off by default, a TooltipWindow only while on, remembered in the window's settings.
-TEST_F (Pages, TooltipsSwitchIsOffByDefaultAndRemembered)
+// No tooltips (2026-10-30): no Tooltips switch, and the window.settings key "tooltips" from before is ignored and kept.
+TEST_F (Pages, TheTooltipsKeyIsIgnored)
 {
     FakeView view;
     const auto home = juce::File::createTempFile ("a3-window-home");
     const auto settings = a3app::windowSettingsFile (home);
+    settings.getParentDirectory().createDirectory();
+    settings.replaceWithText ("{\"tooltips\": true}\n");
     {
         a3app::MainWindow window (view, manager, {}, false, [] {}, { nullptr, settings });
-        EXPECT_FALSE (window.tooltipsShown());
-        EXPECT_FALSE (window.hasTooltipWindow());
-        EXPECT_FALSE (settings.exists());   // nothing is written without a flip
-        window.setTooltipsShown (true);
-        EXPECT_TRUE (window.tooltipsShown());
-        EXPECT_TRUE (window.hasTooltipWindow());
-        EXPECT_TRUE (a3app::readTooltipSwitch (settings));
-        EXPECT_FALSE (a3app::readMonitorSwitch (settings));
-    }
-    {
-        a3app::MainWindow window (view, manager, {}, false, [] {}, { nullptr, settings });
-        EXPECT_TRUE (window.tooltipsShown());   // remembered
-        EXPECT_TRUE (window.hasTooltipWindow());
-        window.setTooltipsShown (false);
-        EXPECT_FALSE (window.hasTooltipWindow());
+        window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+        EXPECT_EQ (toggleLabelled (*window.getContentComponent(), "Tooltips"), nullptr);
+        for (auto* child : descendants (*window.getContentComponent()))
+            EXPECT_EQ (dynamic_cast<juce::TooltipWindow*> (child), nullptr);
     }
     a3app::writeMonitorSwitch (settings, true);
-    a3app::writeTooltipSwitch (settings, true);
-    EXPECT_TRUE (a3app::readMonitorSwitch (settings));   // one switch's write keeps the other
-    EXPECT_TRUE (a3app::readTooltipSwitch (settings));
+    EXPECT_TRUE (a3app::readMonitorSwitch (settings));
+    EXPECT_TRUE (settings.loadFileAsString().contains ("tooltips")) << "another key of the file is kept";
     home.deleteRecursively();
 }
 
@@ -1604,7 +1572,7 @@ TEST_F (Pages, ZonesDropdownsFirstAndRenameDeleteInTheFooter)
     window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     auto& content = *window.getContentComponent();
     window.showPage ("ZONES");
-    auto* page = dynamic_cast<a3app::ZonesPage*> (shownPage (window));
+    auto* page = firstDescendant<a3app::ZonesPage> (*shownPage (window));
     ASSERT_NE (page, nullptr);
     const auto& mainBox = page->zoneChooser (a3::SpeakerZone::main);
     const auto& boothBox = page->zoneChooser (a3::SpeakerZone::booth);
@@ -1810,10 +1778,9 @@ TEST_F (Pages, AudioMeasuresTheAnalogChainOnlyOnRequest)
     a3app::AudioPage page (view, manager);
     page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
     page.refresh();
-    EXPECT_EQ (page.analogChainLabel().getText(), "Analog chain   converters not measured yet");
-    const auto hint = page.analogButton().getTooltip();   // what to plug first: the key's help (no hint line since 2026-10-30)
-    EXPECT_TRUE (hint.contains ("output 6") && hint.contains ("input 8") && hint.contains ("cable")) << hint;
-    EXPECT_TRUE (hint.contains ("not in use")) << hint;
+    EXPECT_TRUE (page.analogChainLabel().getText().startsWith ("Analog chain   converters not measured yet")) << page.analogChainLabel().getText();
+    const auto hint = page.analogChainLabel().getText();   // what to plug first: in the line (no tooltips since 2026-10-30)
+    EXPECT_TRUE (hint.contains ("cable output 6 to input 8")) << hint;
     EXPECT_TRUE (page.analogButton().isEnabled());
     EXPECT_TRUE (page.getLocalBounds().contains (page.analogButton().getBounds()));
     EXPECT_EQ (view.analogRequests, 0);
@@ -2040,40 +2007,28 @@ TEST_F (Pages, CalibrationHelpIsTextInTheFreeSpace)
     expectPainted (a3apptest::snapshotAt (page, "calibration-help-as-text", page.getWidth(), page.getHeight()));
 }
 
-// Tooltips off: nothing pops up anywhere. No tip window of ours, and the hosted AllRADecoder's own TooltipWindow has
-// nothing to show (its controls' tips are the window's). On: one tip window, the window's.
-TEST_F (Pages, TooltipsOffMeansNoPopupAnywhere)
+// No tooltips anywhere (2026-10-30): no control of the window carries one, the hosted AllRADecoder's included (its own
+// TooltipWindow then has nothing to show), on every page, with Core's pages too.
+TEST_F (Pages, NoTooltipsAnywhere)
 {
     SpeakerRig rig;
-    a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, {}, {}, rig.userRoot);
+    CoreWindowRig core;
+    a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, { core.client.get(), {} }, {}, rig.userRoot);
     window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
-    window.showPage ("SPEAKERS");
-    window.refreshNow();
-    auto& content = *window.getContentComponent();
-    EXPECT_FALSE (window.hasTooltipWindow());
-    for (auto* child : descendants (content))
+    window.setMonitorShown (true);
+    for (const auto& name : { "AUDIO", "SPEAKERS", "ZONES", "INPUT", "OUTPUT", "DEPARTMENTS", "CALIBRATION", "FILTER", "STATUS", "BENCH" })
     {
-        EXPECT_EQ (dynamic_cast<juce::TooltipWindow*> (child), nullptr);
-        EXPECT_EQ (dynamic_cast<a3app::TouchTooltips*> (child), nullptr);
+        window.showPage (name);
+        window.refreshNow();
     }
-    auto* page = dynamic_cast<a3app::SpeakersPage*> (shownPage (window));
-    ASSERT_NE (page, nullptr);
-    ASSERT_NE (page->editor(), nullptr);
-    int adopted = 0;
-    for (auto* part : descendants (*page->editor()))
+    int iem = 0;
+    for (auto* child : descendants (*window.getContentComponent()))
     {
-        if (auto* client = dynamic_cast<juce::SettableTooltipClient*> (part))
-            EXPECT_TRUE (client->getTooltip().isEmpty()) << part->getName() << ": " << client->getTooltip();
-        juce::Component* owner = nullptr;
-        adopted += a3app::helpFor (part, owner).isNotEmpty() && owner == part ? 1 : 0;
+        if (auto* client = dynamic_cast<juce::SettableTooltipClient*> (child))
+            EXPECT_TRUE (client->getTooltip().isEmpty()) << child->getName() << ": " << client->getTooltip();
+        iem += dynamic_cast<a3app::SpeakersPage*> (child) != nullptr ? 1 : 0;
     }
-    EXPECT_GT (adopted, 0) << "IEM's help is kept for the window's tip";
-    window.setTooltipsShown (true);
-    EXPECT_TRUE (window.hasTooltipWindow());
-    int ours = 0;
-    for (auto* child : descendants (content))
-        ours += dynamic_cast<a3app::TouchTooltips*> (child) != nullptr ? 1 : 0;
-    EXPECT_EQ (ours, 1);
+    EXPECT_EQ (iem, 1) << "the hosted editor was looked at";
 }
 
 // Every dropdown of the window is the touch list (Dropdown.h), on every page (the hosted IEM editor is IEM's).
@@ -2110,7 +2065,7 @@ TEST_F (Pages, ZonesKeysAlwaysAnswer)
     window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     auto& content = *window.getContentComponent();
     window.showPage ("ZONES");
-    auto* page = dynamic_cast<a3app::ZonesPage*> (shownPage (window));
+    auto* page = firstDescendant<a3app::ZonesPage> (*shownPage (window));
     ASSERT_NE (page, nullptr);
     page->selectVariant (rig.rowOf (*page, rig.club));
     window.refreshNow();
@@ -2145,7 +2100,7 @@ TEST_F (Pages, ZonesDialogsOpenInsideTheWindow)
     window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     auto& content = *window.getContentComponent();
     window.showPage ("ZONES");
-    auto* page = dynamic_cast<a3app::ZonesPage*> (shownPage (window));
+    auto* page = firstDescendant<a3app::ZonesPage> (*shownPage (window));
     ASSERT_NE (page, nullptr);
     page->selectVariant (rig.rowOf (*page, rig.spare));
     window.refreshNow();
@@ -2251,53 +2206,131 @@ TEST_F (Pages, TheAllRaEditorSitsOnThePagesGround)
         << "the margin beside IEM's table is the page's surface";
 }
 
-// AUDIO (2026-10-30, the maintainer): three sections, DRIVER (type, block, periods and what runs), MEASURE (the round
-// trip and the analog chain with their keys) and CLOCK; the driver's info a compact block, one line under the other;
-// one font size for every text on the page, the clock's included.
-TEST_F (Pages, AudioIsDriverMeasureAndClock)
+// AUDIO (2026-10-30, second round): cards in the ZONES card's style, DRIVER (type, rate, block, periods: every setting
+// a dropdown showing what is set), CHANNELS (N and decks, the CHANNELS page until then), MEASURE, CLOCK (the master
+// and the one-word state). No info lines: what runs in detail is on STATUS. One text size.
+TEST_F (Pages, AudioIsCards)
 {
     FakeView view;
     view.state.timing.available = true;
+    view.clockReport = clockReport (a3clock::Health::locked, "");
     a3app::AudioPage page (view, manager);
     page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 7 / 8);
     page.refresh();
-    auto* driver = labelSaying (page, "DRIVER");
-    auto* measure = labelSaying (page, "MEASURE");
-    auto* clock = labelSaying (page.clockPanel(), "CLOCK");
-    ASSERT_NE (driver, nullptr);
-    ASSERT_NE (measure, nullptr);
-    ASSERT_NE (clock, nullptr);
-    EXPECT_LT (driver->getBottom(), page.typeChooser().getY() + 1);
-    EXPECT_LT (page.periodsChooser().getBottom(), page.rateLabel().getY() + 1);
-    const std::vector<const juce::Label*> info { &page.rateLabel(), &page.quantumLabel(), &page.rateSourceLabel(), &page.bitDepthLabel(),
-                                                 &page.loadLabel() };
-    for (size_t i = 1; i < info.size(); ++i)
-        EXPECT_EQ (info[i]->getY(), info[i - 1]->getBottom()) << "no empty line in the driver's info: " << info[i]->getText();
-    EXPECT_LT (page.loadLabel().getBottom(), measure->getY() + 1);
-    EXPECT_LT (measure->getBottom(), page.roundTripLabel().getY() + 1);
-    EXPECT_LT (page.analogChainLabel().getBottom(), page.clockPanel().getY() + 1);
-
-    std::set<int> sizes;
-    std::function<void (juce::Component&)> collect = [&] (juce::Component& parent)
+    const auto cards = page.cardAreas();
+    ASSERT_EQ (cards.size(), 4u);
+    for (size_t i = 0; i < cards.size(); ++i)
     {
-        for (auto* child : parent.getChildren())
+        EXPECT_TRUE (page.getLocalBounds().contains (cards[i])) << i;
+        if (i > 0)
+            EXPECT_GT (cards[i].getY(), cards[i - 1].getBottom()) << "a gap between the cards";
+    }
+    const auto in = [&] (size_t card, const juce::Component& c) { return cards[card].contains (c.getBounds()); };
+    for (const auto* box : { &page.typeChooser(), &page.rateChooser(), &page.blockChooser(), &page.periodsChooser() })
+    {
+        EXPECT_TRUE (box->isVisible());
+        EXPECT_TRUE (in (0, *box)) << "DRIVER";
+        EXPECT_NE (box->getText(), "") << "the dropdown shows what is set";
+    }
+    EXPECT_TRUE (cards[1].contains (page.channelsCard().getBounds())) << "CHANNELS";
+    EXPECT_EQ (page.channelsCard().channelsChooser().getText(), "4");
+    EXPECT_TRUE (in (2, page.roundTripLabel()) && in (2, page.measureButton())) << "MEASURE";
+    EXPECT_EQ (page.clockPanel().getBounds(), cards[3]);
+    EXPECT_EQ (page.clockPanel().stateLabel().getText(), "LOCKED") << "one word";
+    EXPECT_TRUE (page.clockPanel().masterBox().isVisible());
+    EXPECT_FALSE (page.clockPanel().countersLabel().isVisible()) << "the numbers are on STATUS";
+    for (const auto* heading : { "DRIVER", "CHANNELS", "MEASURE" })
+        EXPECT_NE (labelSaying (page, heading), nullptr) << heading;
+    std::set<int> sizes;
+    for (auto* child : descendants (page))
+        if (auto* label = dynamic_cast<juce::Label*> (child); label != nullptr && label->isVisible() && label->getText().isNotEmpty()
+                                                               && dynamic_cast<juce::ComboBox*> (child->getParentComponent()) == nullptr)
         {
-            if (! child->isVisible())
-                continue;
-            if (auto* label = dynamic_cast<juce::Label*> (child); label != nullptr && dynamic_cast<juce::ComboBox*> (parent.getParentComponent()) == nullptr
-                                                                   && dynamic_cast<juce::ComboBox*> (&parent) == nullptr && label->getText().isNotEmpty())
-                sizes.insert (juce::roundToInt (label->getFont().getHeight() * 10.0f));
-            collect (*child);
+            sizes.insert (juce::roundToInt (label->getFont().getHeight() * 10.0f));
+            for (const auto* gone : { "Bit depth", "DSP load", "xruns", "set by", "Sample rate   " })
+                EXPECT_FALSE (label->getText().contains (gone)) << label->getText();
         }
-    };
-    collect (page);
     EXPECT_EQ (sizes.size(), 1u) << "one font size on the page";
-    expectPainted (a3apptest::snapshotAt (page, "window-audio", page.getWidth(), page.getHeight()));
+    const auto shot = a3apptest::snapshotAt (page, "window2-audio", page.getWidth(), page.getHeight());
+    expectPainted (shot);
+    EXPECT_EQ (shot.getPixelAt (cards[1].getRight() - 3, cards[1].getCentreY()).getARGB(), a3app::palette::raised.getARGB())
+        << "a card is the ZONES card's ground";
 }
 
+// STATUS has what AUDIO no longer shows (2026-10-30): rate and block x periods, where the rate comes from, the bit
+// depth, DSP load and xruns, and the clock's detail.
+TEST_F (Pages, StatusHasTheDriverAndTheClocksDetail)
+{
+    FakeView view;
+    view.state.timing.available = true;
+    view.state.dspLoadPercent = 23.0f;
+    view.state.xruns = 2;
+    view.clockReport = clockReport (a3clock::Health::locked, "");
+    a3app::StatusPage page (view);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 7 / 8);
+    page.refresh();
+    const auto driver = a3app::driverInfo (view);
+    EXPECT_EQ (driver.rate, "44100 Hz");
+    EXPECT_TRUE (driver.timing.contains ("3 periods")) << driver.timing;
+    EXPECT_TRUE (driver.rateSource.isNotEmpty());
+    EXPECT_TRUE (driver.bitDepth.contains ("32")) << driver.bitDepth;
+    EXPECT_EQ (driver.load, "23.0 %");
+    EXPECT_EQ (driver.xruns, "2");
+    const auto& clock = page.clockPanel();
+    EXPECT_TRUE (clock.isVisible());
+    EXPECT_TRUE (page.getLocalBounds().contains (clock.getBounds()));
+    EXPECT_TRUE (clock.countersLabel().isVisible());
+    EXPECT_TRUE (clock.countersLabel().getText().contains ("corrections")) << clock.countersLabel().getText();
+    EXPECT_TRUE (clock.stateLabel().getText().contains ("phase error")) << clock.stateLabel().getText();
+    EXPECT_FALSE (clock.masterBox().isVisible()) << "the choice is AUDIO's";
+    expectPainted (a3apptest::snapshotAt (page, "window2-status", page.getWidth(), page.getHeight()));
+}
 
-// The window's way to StemDeck and the other workspaces (2026-10-30): the switch of StemDeck, A3 Motion and the desk
-// at the right end of the page keys' row, there without Core, the page keys beside it, never under it.
+// The window's keys (2026-10-30): CHANNELS, ZONES and DEPARTMENTS have none (AUDIO's card, SPEAKERS' and I/O's
+// sub-pages), so six keys share the row beside the switch and their text is larger again.
+TEST_F (Pages, SixPageKeysAndTheSubPages)
+{
+    SpeakerRig rig;
+    CoreWindowRig core;
+    a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, { core.client.get(), {} }, {}, rig.userRoot);
+    window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    window.setWorkspaceRunner ([] (const std::vector<std::string>&) { return std::string(); });
+    EXPECT_EQ (window.pageList(), (juce::StringArray { "AUDIO", "SPEAKERS", "I/O", "CALIBRATION", "FILTER", "STATUS", "OSC MONITOR" }));
+    auto& content = *window.getContentComponent();
+    juce::TextButton* calibration = nullptr;
+    for (auto* key : buttonsLabelled (content, "CALIBRATION"))
+        if (key->getParentComponent() == &content)
+            calibration = key;
+    ASSERT_NE (calibration, nullptr);
+    const auto text = look.getTextButtonFont (*calibration, calibration->getHeight()).getHeight();
+    EXPECT_GE (text, (float) calibration->getHeight() * 0.25f) << "the longest name, at a quarter of the key at least";
+
+    window.showPage ("ZONES");
+    EXPECT_EQ (window.currentPage(), "SPEAKERS");
+    EXPECT_EQ (window.currentSubPage(), "ZONES");
+    EXPECT_TRUE (buttonsLabelled (content, "RENAME").front()->isVisible());
+    expectPainted (a3apptest::snapshotAt (content, "window2-zones", content.getWidth(), content.getHeight()));
+    window.showPage ("SPEAKERS");
+    EXPECT_EQ (window.currentSubPage(), "ZONES") << "the page keeps the sub-page last shown";
+    auto* speakersKey = buttonsLabelled (*shownPage (window), "SPEAKERS").front();
+    speakersKey->triggerClick();
+    juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
+    EXPECT_EQ (window.currentSubPage(), "SPEAKERS");
+    EXPECT_FALSE (buttonsLabelled (content, "RENAME").front()->isVisible());
+    expectPainted (a3apptest::snapshotAt (content, "window2-speakers", content.getWidth(), content.getHeight()));
+
+    window.showPage ("DEPARTMENTS");
+    EXPECT_EQ (window.currentPage(), "I/O");
+    EXPECT_EQ (window.currentSubPage(), "DEPARTMENTS");
+    expectPainted (a3apptest::snapshotAt (content, "window2-io-departments", content.getWidth(), content.getHeight()));
+    window.showPage ("INPUT");
+    expectPainted (a3apptest::snapshotAt (content, "window2-io-input", content.getWidth(), content.getHeight()));
+    window.showPage ("AUDIO");
+    expectPainted (a3apptest::snapshotAt (content, "window2-window-audio", content.getWidth(), content.getHeight()));
+    window.showPage ("STATUS");
+    expectPainted (a3apptest::snapshotAt (content, "window2-window-status", content.getWidth(), content.getHeight()));
+}
+
 TEST_F (Pages, TheWindowHasTheWorkspaceSwitch)
 {
     FakeView view;

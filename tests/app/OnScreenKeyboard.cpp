@@ -266,7 +266,8 @@ TEST_F (KeysInTheWindow, WithoutOnboardTheWindowSaysSoInOneLineWherePeopleLook)
     EXPECT_FALSE (bands.page.intersects (bands.footer));
 }
 
-TEST_F (KeysInTheWindow, WhenTheHintHasExpiredTheTooltipStillSaysOnboardIsMissing)
+// No tooltips (2026-10-30): once the hint has expired, a press of KEYS says it again, in the line.
+TEST_F (KeysInTheWindow, WhenTheHintHasExpiredAPressSaysItAgain)
 {
     onboard->isInstalled = false;
     a3app::MainWindow window (view, manager, {}, false, [] {}, {}, { onboard, quick });
@@ -275,7 +276,10 @@ TEST_F (KeysInTheWindow, WhenTheHintHasExpiredTheTooltipStillSaysOnboardIsMissin
     for (int tick = 0; tick < 200 && window.keyboardNote().isNotEmpty(); ++tick)
         window.refreshNow();
     ASSERT_TRUE (window.keyboardNote().isEmpty());
-    EXPECT_EQ (window.keysButton()->getTooltip(), "On-screen keyboard: onboard is not installed");
+    EXPECT_TRUE (window.keysButton()->getTooltip().isEmpty());
+    window.keysButton()->triggerClick();
+    ASSERT_TRUE (pumpUntil ([&] { return window.keyboardNote().isNotEmpty(); }));
+    EXPECT_EQ (window.keyboardNote(), "On-screen keyboard: onboard is not installed");
 }
 
 TEST_F (KeysInTheWindow, AFailedStartIsSaidInTheWindowToo)

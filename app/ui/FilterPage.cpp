@@ -14,8 +14,6 @@ FilterPage::FilterPage (HostView& v) : view (v)
     why.setJustificationType (juce::Justification::topLeft);
     why.setMinimumHorizontalScale (1.0f);
     title.setText ("FILTER", juce::dontSendNotification);
-    look::help ("Live: the choice acts at once and needs no Save (the next Save keeps it in the file). "
-                "The line under the keys says what it is for.", { &title, &svfButton, &ladderButton });
     svfButton.setRadioGroupId (2);
     ladderButton.setRadioGroupId (2);
     for (auto* button : { &svfButton, &ladderButton })

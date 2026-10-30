@@ -17,10 +17,14 @@ juce::Colour toneColour (a3clock::ClockIndicator::Tone);
 // the soak test reads. Anything but a lock is framed in a warning colour: caution while it acquires or
 // only observes, danger in holdover, at a fault or when the clock role is not running.
 // The deck hosts' own PTP offsets are not shown: Core does not know them yet.
+// Two forms (2026-10-30, second round): AUDIO's card shows the choice, the master and the one-word state (LOCKED,
+// ACQUIRING, ...); STATUS shows the detail, the state with its phase error, the PTP role, the rates, the counters and
+// the note, without the master.
 class ClockPanel final : public juce::Component
 {
 public:
-    ClockPanel();
+    enum class Mode { choice, detail };
+    explicit ClockPanel (Mode = Mode::detail);
 
     void show (const a3clock::ClockReport&);
     // Every line of the panel at this height (the AUDIO page's one size); 0: a share of the panel's rows.
@@ -41,6 +45,7 @@ private:
     juce::Label title, masterCaption, state, role, rate, counters, note;
     Dropdown master;
     juce::Colour frame = juce::Colours::transparentBlack;
+    const Mode mode;
     float textHeight = 0.0f;
 };
 }

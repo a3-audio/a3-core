@@ -200,13 +200,7 @@ ZonesPage::ZonesPage (HostView& v, std::vector<juce::File> choices, juce::File r
         { askNameWithBox (look::dialogParent (*this), current, std::move (onName)); };
     look::caption (title);
     look::failure (message);
-    title.setText ("ZONES", juce::dontSendNotification);
-    look::help ("The spatial data per zone: decoders, layouts and zone stages. MAIN's variant also gives the files both "
-                "zones share (encoder, rec, fx, phones). Installed variants and your own (~/.config/a3/engine/spatial). "
-                "Layouts are edited on SPEAKERS. Save restarts the engine.",
-                { &title, &mainBox, &boothBox });
-    look::help ("Pick a variant to see what it holds; RENAME and DELETE (in the footer) act on it, only on your own and "
-                "only on one neither what runs nor the pending edit uses.", { &list });
+    title.setText ("Spatial data", juce::dontSendNotification);
     const std::pair<juce::Label*, const char*> captions[] = { { &mainCaption, "MAIN" }, { &boothCaption, "BOOTH" },
                                                               { &headphonesCaption, "PHONES" } };
     for (const auto& [label, text] : captions)
@@ -214,7 +208,6 @@ ZonesPage::ZonesPage (HostView& v, std::vector<juce::File> choices, juce::File r
         look::caption (*label);
         label->setText (text, juce::dontSendNotification);
     }
-    headphonesCaption.setTooltip ("The phones decoder's headphone EQ (never the rec decoder's)");
     look::caption (actions);
     actions.setMinimumHorizontalScale (0.6f);
     openSpeakers.onClick = [this] { if (onOpenSpeakers) onOpenSpeakers(); };

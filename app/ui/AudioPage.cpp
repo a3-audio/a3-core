@@ -38,53 +38,35 @@ juce::String chosenName (const juce::ComboBox& box)
 const juce::String restartWarning = "the audio stops for about two seconds while WirePlumber restarts";
 }
 
-AudioPage::AudioPage (HostView& v, juce::AudioDeviceManager& m) : view (v), manager (m)
+AudioPage::AudioPage (HostView& v, juce::AudioDeviceManager& m) : view (v), manager (m), channels (v)
 {
-    for (auto [heading, text] : { std::pair { &driverHeading, "DRIVER" }, std::pair { &measureHeading, "MEASURE" } })
+    for (auto [heading, text] : { std::pair { &driverHeading, "DRIVER" }, std::pair { &channelsHeading, "CHANNELS" },
+                                  std::pair { &measureHeading, "MEASURE" } })
     {
         heading->setText (text, juce::dontSendNotification);
         heading->setColour (juce::Label::textColourId, palette::textMuted);
     }
-    for (auto* label : { &rate, &quantum, &rateSource, &bitDepth, &load, &roundTrip, &analogChain })
+    for (auto* label : { &roundTrip, &analogChain })
     {
         styleValue (*label);
         label->setMinimumHorizontalScale (0.6f);   // one font size: a long line is squeezed, never set smaller
     }
-    look::help ("The analog chain (analog in, AD, engine, DA, analog out) is the digital loop as measured now plus the "
-                "converters' share, measured once: MEASURE ANALOG CHAIN plays the same quiet test signal on the chosen "
-                "output and the digital loop at once and stores the difference with its date. It never runs on its own. "
-                "The pair is set on the I/O page.",
-                { &analogChain });
     measureAnalog.onClick = [this] { view.measureAnalogChain(); };
     roundTrip.setMinimumHorizontalScale (1.0f);
-    look::help ("Input-to-output round trip of what runs. Measured: a quiet test signal (-20 dBFS, 0.2 s) on the "
-                "digital loop's output, found again on its input (the I/O page's digital loop, S/PDIF out to S/PDIF in), "
-                "once after the start, after a new block or periods, and on MEASURE. The digital loop excludes the AD/DA "
-                "converters: analog in to the speakers takes about 0.5-1 ms more. Estimated (without a measurement): the "
-                "capture latency the backend reports, one period of the engine's processing, and the playback latency it reports.",
-                { &roundTrip, &measure });
     measure.onClick = [this] { view.measureRoundTrip(); };
     pending.setColour (juce::Label::textColourId, palette::caution);
     confirm.setColour (juce::Label::textColourId, palette::caution);
     confirm.setMinimumHorizontalScale (0.5f);
-    rateSource.setColour (juce::Label::textColourId, palette::textMuted);
-    bitDepth.setColour (juce::Label::textColourId, palette::textMuted);
-    load.setColour (juce::Label::textColourId, palette::textMuted);
 
     apply.onClick = [this] { applyChosen(); };
     cancel.onClick = [this] { chosenTiming.reset(); refresh(); };
     revert.onClick = [this] { revertTiming(); };
-    look::help ("PipeWire: the block is the graph's quantum, forced by the engine and changed live. The periods are the "
-                "sound card's ALSA buffer in blocks (2 is shorter, 3 is safer); a change restarts WirePlumber, and the "
-                "audio stops for about two seconds. Nothing changes before APPLY; REVERT goes back to the previous choice. "
-                "After a change the round trip is measured again; watch DSP load and xruns.",
-                { &blockBox, &periodsBox, &apply, &revert, &confirm });
 
-    for (auto* child : std::initializer_list<juce::Component*> { &driverHeading, &measureHeading, &rate, &quantum, &rateSource, &bitDepth,
-                                                                &load, &roundTrip, &measure, &analogChain, &measureAnalog,
-                                                                &pending, &clock, &typeCaption, &typeBox, &blockCaption, &blockBox })
+    for (auto* child : std::initializer_list<juce::Component*> { &driverHeading, &channelsHeading, &measureHeading, &roundTrip, &measure,
+                                                                &analogChain, &measureAnalog, &pending, &clock, &channels, &typeCaption,
+                                                                &typeBox, &rateCaption, &rateBox, &blockCaption, &blockBox })
         addAndMakeVisible (child);
-    for (auto* child : std::initializer_list<juce::Component*> { &inputCaption, &outputCaption, &rateCaption, &periodsCaption,
+    for (auto* child : std::initializer_list<juce::Component*> { &inputCaption, &outputCaption, &periodsCaption,
                                                                 &periodsBox, &confirm, &apply, &cancel, &revert })
         addChildComponent (child);
     const std::pair<juce::Label*, const char*> captions[] = { { &typeCaption, "Device type" }, { &inputCaption, "Input device" },
@@ -95,11 +77,12 @@ AudioPage::AudioPage (HostView& v, juce::AudioDeviceManager& m) : view (v), mana
         look::caption (*label);
     }
     typeBox.onChange = [this] { if (! filling) chooseDeviceType (typeBox.getText()); };
-    for (auto* box : { &inputBox, &outputBox, &rateBox })
+    for (auto* box : { &inputBox, &outputBox })
     {
         box->onChange = [this] { editDevice(); };
         addChildComponent (*box);
     }
+    rateBox.onChange = [this] { if (deviceChoosers) editDevice(); };   // PipeWire's rate is the graph's: its one choice
     blockBox.onChange = [this] { if (! filling && blockBox.getSelectedId() > 0) chooseBlock (blockBox.getSelectedId()); };
     periodsBox.onChange = [this] { if (! filling && periodsBox.getSelectedId() > 0) choosePeriods (periodsBox.getSelectedId()); };
     rebuildForType();
@@ -175,6 +158,21 @@ void AudioPage::fillTiming()
             periodsBox.addItem (juce::String (periods) + " periods", periods);
     blockBox.setSelectedId (shown.block, juce::dontSendNotification);
     periodsBox.setSelectedId (shown.periods, juce::dontSendNotification);
+    filling = false;
+    fillPipeWireRate();
+}
+
+// PipeWire: the graph's rate, the one item (the dropdown shows what runs; the engine does not change PipeWire's rate).
+void AudioPage::fillPipeWireRate()
+{
+    const int running = juce::roundToInt (view.status().sampleRate);
+    if (rateBox.getNumItems() == 1 && rateBox.getItemId (0) == running)
+        return;
+    filling = true;
+    rateBox.clear (juce::dontSendNotification);
+    if (running > 0)
+        rateBox.addItem (juce::String (running) + " Hz", running);
+    rateBox.setSelectedId (running, juce::dontSendNotification);
     filling = false;
 }
 
@@ -294,7 +292,7 @@ void AudioPage::rebuildForType()
         fillChoosers();
     else
         fillTiming();
-    for (auto* child : std::initializer_list<juce::Component*> { &inputCaption, &outputCaption, &rateCaption, &inputBox, &outputBox, &rateBox })
+    for (auto* child : std::initializer_list<juce::Component*> { &inputCaption, &outputCaption, &inputBox, &outputBox })
         child->setVisible (device);
     for (auto* child : std::initializer_list<juce::Component*> { &periodsCaption, &periodsBox, &confirm, &revert })
         child->setVisible (! device);
@@ -304,10 +302,6 @@ void AudioPage::rebuildForType()
 
 void AudioPage::showTiming (const BackendStatus& status)
 {
-    const bool runsDevice = view.running().backend.type == BackendSettings::Type::device;
-    const int periods = status.timing.available ? status.timing.applied.periods : view.running().backend.periods;
-    quantum.setText (runsDevice ? "Block " + juce::String (status.blockSize) + " frames" : timingText (status.blockSize, periods),
-                     juce::dontSendNotification);
     if (deviceChoosers)
         return;
 
@@ -345,14 +339,12 @@ void AudioPage::showMeasurements (const BackendStatus& status)
     measure.setEnabled (loopSet && ! measured.measuring && measured.state != State::noLoop && measured.state != State::notReported);
     const auto pair = view.running().io.analogLoop;
     const bool chosen = pair && pair->output > 0 && pair->input > 0;
+    const bool converted = measured.analog == RoundTripReport::Analog::measured;
     analogChain.setText (analogChainText (estimatedRoundTrip (status), measured)
-                             + (chosen ? juce::String() : juce::String ("  -  no analog test pair (I/O page)")),
+                             + (! chosen ? juce::String ("  -  no analog test pair (I/O page)")
+                                         : converted ? juce::String()
+                                                     : "  -  cable output " + juce::String (pair->output) + " to input " + juce::String (pair->input)),
                          juce::dontSendNotification);
-    // What to plug first: the key's help (the line under it is gone, 2026-10-30).
-    measureAnalog.setTooltip (chosen ? "Before MEASURE ANALOG CHAIN: plug a temporary cable from output " + juce::String (pair->output)
-                                           + " to input " + juce::String (pair->input) + "; input " + juce::String (pair->input)
-                                           + " must be free (not in use). The test signal is -20 dBFS, on output " + juce::String (pair->output) + " only."
-                                     : juce::String ("Set the analog test pair on the I/O page first."));
     measureAnalog.setEnabled (chosen && loopSet && ! measured.analogMeasuring && ! measured.measuring && measured.state != State::noLoop
                               && measured.state != State::notReported);
 }
@@ -365,19 +357,22 @@ void AudioPage::refresh()
         return rebuildForType();
     const bool runsDevice = view.running().backend.type == BackendSettings::Type::device;   // the values below describe what runs
     pending.setText (device != runsDevice ? "not saved - applies after Save" : juce::String(), juce::dontSendNotification);
-    rate.setText ("Sample rate   " + juce::String (juce::roundToInt (status.sampleRate)) + " Hz", juce::dontSendNotification);
-    rateSource.setText (status.rateSource, juce::dontSendNotification);
-    bitDepth.setText ("Bit depth   " + juce::String (status.bitDepth) + (runsDevice ? "  -  set by the device" : "  -  float samples, set by JACK"),
-                      juce::dontSendNotification);
-    load.setText ("DSP load   " + juce::String (juce::roundToInt (status.dspLoadPercent)) + " %      xruns " + juce::String (status.xruns),
-                  juce::dontSendNotification);
+    if (! device)
+        fillPipeWireRate();
     showTiming (status);
+    channels.refresh();
     showMeasurements (status);
     clock.show (view.clock());
     resized();
 }
 
-void AudioPage::paint (juce::Graphics& g) { g.fillAll (palette::surface); }
+// The cards on the page's surface, as ZONES' info card (look::card); CLOCK paints its own.
+void AudioPage::paint (juce::Graphics& g)
+{
+    g.fillAll (palette::surface);
+    for (const auto& card : { driverCard, channelsArea, measureCard })
+        look::card (g, card, getWidth());
+}
 
 // The settings: the device type, then a JUCE type's devices, rate and block, or PipeWire's block and periods with
 // the question before APPLY.
@@ -398,6 +393,7 @@ void AudioPage::layoutSettings (juce::Rectangle<int>& area, int row)
         line (blockCaption, blockBox);
         return;
     }
+    line (rateCaption, rateBox);
     line (blockCaption, blockBox);
     line (periodsCaption, periodsBox);
     auto buttons = area.removeFromTop (row);
@@ -408,13 +404,6 @@ void AudioPage::layoutSettings (juce::Rectangle<int>& area, int row)
         apply.setBounds (buttons.removeFromRight (buttons.getWidth() / 4).reduced (2));
     }
     confirm.setBounds (buttons);
-}
-
-// What runs, one compact block: a line of text each, no gap between them.
-void AudioPage::layoutInfo (juce::Rectangle<int>& area, int line)
-{
-    for (auto* label : { &rate, &quantum, &rateSource, &bitDepth, &load })
-        label->setBounds (area.removeFromTop (line));
 }
 
 // The round trip and the analog chain, each a row with its key at the right.
@@ -428,34 +417,43 @@ void AudioPage::layoutMeasure (juce::Rectangle<int>& area, int row)
     analogChain.setBounds (analogLine);
 }
 
-// DRIVER, MEASURE, CLOCK top to bottom; every text at one height, a share of the row.
+// DRIVER, CHANNELS, MEASURE and CLOCK cards top to bottom; every text at one height, a share of the row.
 void AudioPage::resized()
 {
     auto page = getLocalBounds().reduced (getWidth() / 40);
-    const int settingsRows = deviceChoosers ? 5 : 4;
-    const int rows = settingsRows + 2 + 2 + 1;   // the settings, the two key rows of MEASURE, two headings, the pending line
-    const int infoLines = 5;
-    // The clock keeps at least a quarter of the page; the rest is rows (a heading or an info line is 0.6 of one).
-    const int clockHeight = juce::jmax (page.getHeight() / 4, juce::jmin (page.getHeight() / 2, 6 * 24));
-    const int available = page.getHeight() - clockHeight - page.getHeight() / 40;
-    const int row = juce::jmax (12, juce::jmin (getHeight() / 14, (int) ((float) available / ((float) rows + 0.6f * (float) infoLines + 0.5f))));
-    const int line = row * 3 / 5;
+    const int gap = juce::jmax (2, getHeight() / 80);
+    const int driverRows = deviceChoosers ? 6 : 5;   // the type, the devices or not, rate, block, periods, the APPLY line
+    const int rows = 1 + driverRows + 1 + 1 + 3 + 1 + 2 + 3;   // headings, DRIVER, pending, CHANNELS, MEASURE, CLOCK
+    const int inset = juce::jmax (2, getWidth() / 60);
+    // Four cards (each with an inset above and below) and the gaps between them must fit, whatever the window's shape.
+    const int row = juce::jmax (8, juce::jmin (getHeight() / 14, (page.getHeight() - 3 * gap - 8 * inset) / (rows + 1)));
     const auto text = juce::FontOptions ((float) row * 0.36f);
-    for (auto* label : { &driverHeading, &measureHeading, &rate, &quantum, &rateSource, &bitDepth, &load, &roundTrip, &pending,
-                         &analogChain, &confirm, &typeCaption, &inputCaption, &outputCaption, &rateCaption, &blockCaption, &periodsCaption })
+    for (auto* label : { &driverHeading, &channelsHeading, &measureHeading, &roundTrip, &pending, &analogChain, &confirm, &typeCaption,
+                         &inputCaption, &outputCaption, &rateCaption, &blockCaption, &periodsCaption })
         label->setFont (text);
+    channels.setTextHeight ((float) row * 0.36f);
     clock.setTextHeight ((float) row * 0.36f);
 
-    auto area = page;
-    driverHeading.setBounds (area.removeFromTop (line));
+    const auto card = [&] (int contentRows, int extra) { return page.removeFromTop (contentRows * row + extra + 2 * inset); };
+    driverCard = card (driverRows + 1, pending.getText().isEmpty() ? 0 : row * 3 / 5);
+    page.removeFromTop (gap);
+    auto area = driverCard.reduced (inset);
+    driverHeading.setBounds (area.removeFromTop (row));
     layoutSettings (area, row);
-    pending.setBounds (area.removeFromTop (pending.getText().isEmpty() ? 0 : line));
-    layoutInfo (area, line);
-    area.removeFromTop (row / 4);
-    measureHeading.setBounds (area.removeFromTop (line));
+    pending.setBounds (area);
+
+    channelsArea = card (4, 0);
+    page.removeFromTop (gap);
+    area = channelsArea.reduced (inset);
+    channelsHeading.setBounds (area.removeFromTop (row));
+    channels.setBounds (area);
+
+    measureCard = card (3, 0);
+    page.removeFromTop (gap);
+    area = measureCard.reduced (inset);
+    measureHeading.setBounds (area.removeFromTop (row));
     layoutMeasure (area, row);
-    area.removeFromTop (row / 4);
-    // CLOCK under MEASURE, down to the page's end (never less than the share reserved above).
-    clock.setBounds (area.getHeight() >= clockHeight ? area : page.withTop (page.getBottom() - clockHeight));
+
+    clock.setBounds (page.withHeight (juce::jmin (page.getHeight(), 3 * row + 2 * inset)));
 }
 }

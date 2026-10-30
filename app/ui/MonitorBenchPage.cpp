@@ -18,7 +18,6 @@ MonitorBenchPage::MonitorBenchPage (CoreClient& c) : client (c)
     styleField (address, "an OSC address");
     styleField (value, "1, 0.5 or \"text\"");
     recallButton.setButtonText (juce::String::fromUTF8 (client.recallAddress().c_str()));
-    recallButton.setTooltip ("Core says its state again, to everyone");
     sendButton.onClick = [this] { sendNow(); };
     recallButton.onClick = [this] { recallNow(); };
     value.onReturnKey = [this] { sendNow(); };

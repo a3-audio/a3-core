@@ -64,7 +64,6 @@ void SaveBar::refresh()
     const auto indicator = a3clock::clockIndicator (view.clock());
     clock.setText ("CLOCK " + juce::String (indicator.word), juce::dontSendNotification);
     clock.setColour (juce::Label::textColourId, toneColour (indicator.tone));
-    clock.setTooltip (juce::String::fromUTF8 (indicator.detail.c_str()));
 }
 
 void SaveBar::paint (juce::Graphics& g) { g.fillAll (palette::raised); }

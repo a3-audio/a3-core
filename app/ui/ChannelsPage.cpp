@@ -6,38 +6,29 @@ namespace a3app
 {
 namespace
 {
-void makeSpin (juce::Slider& spin, int maximum, std::function<void (int)> onChange)
+void show (juce::ComboBox& box, int value)
 {
-    spin.setRange (1, maximum, 1);
-    spin.setIncDecButtonsMode (juce::Slider::incDecButtonsNotDraggable);
-    spin.onValueChange = [&spin, onChange] { onChange ((int) spin.getValue()); };
-}
-
-void show (juce::Slider& spin, int value)
-{
-    if (! spin.hasKeyboardFocus (true) && (int) spin.getValue() != value)
-        spin.setValue (value, juce::dontSendNotification);
+    if (box.getSelectedId() != value)
+        box.setSelectedId (value, juce::dontSendNotification);
 }
 }
 
 ChannelsPage::ChannelsPage (HostView& v) : view (v)
 {
-    look::caption (title);
     look::caption (caption);
-    look::value (load);
     look::caption (decksCaption);
-    look::value (decksRunning);
+    look::caption (channelsRunning);
+    look::caption (decksRunning);
     look::failure (message);
-    title.setText ("CHANNELS", juce::dontSendNotification);
     caption.setText ("Channels (N)", juce::dontSendNotification);
     decksCaption.setText ("Decks", juce::dontSendNotification);
-    look::help ("N sets the channel strips, the encoder inputs and the per-channel meter outputs. Decks sets the "
-                "deck slots, 1.." + juce::String (maxDecksOnPage) + " (one letter each, A..Z); a new slot links "
-                "to its local StemDeck. Save restarts the engine; Core replays its state.",
-                { &title, &caption, &spin, &decksCaption, &decksSpin });
-    makeSpin (spin, maxChannelsOnPage, [this] (int n) { setChannels (n); });
-    makeSpin (decksSpin, maxDecksOnPage, [this] (int n) { setDecks (n); });
-    for (auto* child : std::initializer_list<juce::Component*> { &title, &caption, &spin, &load, &decksCaption, &decksSpin,
+    for (int n = 1; n <= maxChannelsOnPage; ++n)
+        channelsBox.addItem (juce::String (n), n);
+    for (int n = 1; n <= maxDecksOnPage; ++n)
+        decksBox.addItem (juce::String (n) + "   (A" + (n > 1 ? juce::String ("-") + juce::String (deckLetters (n)) : juce::String()) + ")", n);
+    channelsBox.onChange = [this] { if (! filling) setChannels (channelsBox.getSelectedId()); };
+    decksBox.onChange = [this] { if (! filling) setDecks (decksBox.getSelectedId()); };
+    for (auto* child : std::initializer_list<juce::Component*> { &caption, &channelsBox, &channelsRunning, &decksCaption, &decksBox,
                                                                  &decksRunning, &message })
         addAndMakeVisible (child);
     refresh();
@@ -50,10 +41,9 @@ void ChannelsPage::setChannels (int channels)
     juce::String error;
     const auto edited = withChannels (view.config(), channels, error);
     look::say (message, edited ? juce::String() : error);
-    if (! edited)
-        return;
-    if (edited->engine.channels != view.config().engine.channels)
+    if (edited && edited->engine.channels != view.config().engine.channels)
         view.edit (*edited);
+    refresh();
 }
 
 void ChannelsPage::setDecks (int decks)
@@ -61,37 +51,43 @@ void ChannelsPage::setDecks (int decks)
     juce::String error;
     const auto edited = withDecks (view.config(), decks, error);
     look::say (message, edited ? juce::String() : error);
-    if (! edited)
-        return;
-    if (edited->engine.decks != view.config().engine.decks)
+    if (edited && edited->engine.decks != view.config().engine.decks)
         view.edit (*edited);
+    refresh();
+}
+
+void ChannelsPage::setTextHeight (float height)
+{
+    textHeight = height;
+    for (auto* label : { &caption, &channelsRunning, &decksCaption, &decksRunning, &message })
+        label->setFont (juce::FontOptions (height));
+    resized();
 }
 
 void ChannelsPage::refresh()
 {
-    show (spin, view.config().engine.channels);
-    show (decksSpin, view.config().engine.decks);
-    look::say (load, "DSP load   " + juce::String (view.status().dspLoadPercent, 1) + " %   with N = "
-                         + juce::String (view.running().engine.channels));
+    filling = true;
+    show (channelsBox, view.config().engine.channels);
+    show (decksBox, view.config().engine.decks);
+    filling = false;
+    look::say (channelsRunning, "running: " + juce::String (view.running().engine.channels));
     look::say (decksRunning, "running: " + juce::String (view.running().engine.decks));
 }
 
-void ChannelsPage::paint (juce::Graphics& g) { g.fillAll (palette::surface); }
-
+// AUDIO's rows: the caption in the first quarter, the dropdown, what runs at the right; the message below them.
 void ChannelsPage::resized()
 {
-    auto area = getLocalBounds().reduced (getWidth() / 40);
-    const int row = look::rowHeight (*this);
-    title.setBounds (area.removeFromTop (row));
-    const auto layoutRow = [&] (juce::Label& label, juce::Slider& slider, juce::Label& value)
+    auto area = getLocalBounds();
+    const int row = juce::jmax (1, area.getHeight() / 3);
+    const auto line = [&] (juce::Label& label, juce::ComboBox& box, juce::Label& running)
     {
-        auto line = area.removeFromTop (row);
-        label.setBounds (line.removeFromLeft (line.getWidth() / 4));
-        slider.setBounds (line.removeFromLeft (line.getWidth() / 3));
-        value.setBounds (line.reduced (row / 4, 0));
+        auto r = area.removeFromTop (row);
+        label.setBounds (r.removeFromLeft (r.getWidth() / 4));
+        running.setBounds (r.removeFromRight (r.getWidth() / 4).withTrimmedLeft (row / 4));
+        box.setBounds (r.reduced (2));
     };
-    layoutRow (caption, spin, load);
-    layoutRow (decksCaption, decksSpin, decksRunning);
-    message.setBounds (area.removeFromTop (row));
+    line (caption, channelsBox, channelsRunning);
+    line (decksCaption, decksBox, decksRunning);
+    message.setBounds (area.removeFromTop (row).withTrimmedLeft (getWidth() / 4));
 }
 }

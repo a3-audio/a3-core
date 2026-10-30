@@ -39,11 +39,6 @@ IoPage::IoPage (HostView& v)
         rows.analog.setText ("analog test cable", juce::dontSendNotification);
         content.addAndMakeVisible (digital);
         content.addAndMakeVisible (analog);
-        look::help ("The digital loop the engine measures its round trip over (AUDIO: MEASURE): one digital output patched to "
-                    "one digital input (on the rig S/PDIF out 11 to S/PDIF in 11). That channel of each side is reserved: no "
-                    "route may use it, so a channel in use is refused. None: no measurement, only the estimate.", { &rows.digital, &digital });
-        look::help ("A one-time measurement of the converters (AUDIO: MEASURE ANALOG CHAIN): plug a temporary cable from one "
-                    "free output to one free input, choose both sides, Save, and run it on the AUDIO page.", { &rows.analog, &analog });
     };
     addMeasureRows (outputMeasure, outputContent, digitalOutput, analogOutput);
     addMeasureRows (inputMeasure, inputContent, digitalInput, analogInput);
@@ -55,12 +50,11 @@ IoPage::IoPage (HostView& v)
         key->setRadioGroupId (3);
         key->setClickingTogglesState (false);
     }
+    departmentsButton.setRadioGroupId (3);
+    departmentsButton.setClickingTogglesState (false);
+    departmentsButton.onClick = [this] { showSub (Sub::departments); };
     inputKey.onClick = [this] { showSub (Sub::input); };
     outputKey.onClick = [this] { showSub (Sub::output); };
-    look::help ("INPUT: what feeds each channel's L and R, and the decks' sources. OUTPUT: where each "
-                "zone's channels go; REC is free for an analog recorder. A port another channel already uses is marked in "
-                "the list, not refused. The engine links exactly this and removes anything else on its ports. Every edit "
-                "applies after Save.", { &title, &inputKey, &outputKey });
     look::caption (decksCaption);
     decksCaption.setText ("DECKS", juce::dontSendNotification);
     inputContent.addAndMakeVisible (decksCaption);
@@ -134,6 +128,8 @@ void IoPage::showDeckSources()
 
 void IoPage::refresh (bool force)
 {
+    if (sub == Sub::departments && refreshDepartments && isShowing())
+        refreshDepartments();   // it asks Core: only while shown
     if (! force && ++ticks < reloadEveryTicks)
         return;
     ticks = 0;
@@ -156,14 +152,29 @@ void IoPage::reload()
     showDeckSources();
 }
 
+void IoPage::addDepartments (juce::Component& page, std::function<void()> refreshWhileShown)
+{
+    departments = &page;
+    refreshDepartments = std::move (refreshWhileShown);
+    addAndMakeVisible (departmentsButton);
+    addChildComponent (page);
+    resized();
+}
+
 void IoPage::showSub (Sub wanted)
 {
-    sub = wanted;
-    const bool input = sub == Sub::input;
-    inputKey.setToggleState (input, juce::dontSendNotification);
-    outputKey.setToggleState (! input, juce::dontSendNotification);
-    inputView.setVisible (input);
-    outputView.setVisible (! input);
+    sub = wanted == Sub::departments && departments == nullptr ? Sub::input : wanted;
+    inputKey.setToggleState (sub == Sub::input, juce::dontSendNotification);
+    outputKey.setToggleState (sub == Sub::output, juce::dontSendNotification);
+    departmentsButton.setToggleState (sub == Sub::departments, juce::dontSendNotification);
+    inputView.setVisible (sub == Sub::input);
+    outputView.setVisible (sub == Sub::output);
+    for (auto* line : { &message, &notice })
+        line->setVisible (sub != Sub::departments);
+    if (departments != nullptr)
+        departments->setVisible (sub == Sub::departments);
+    if (sub == Sub::departments && refreshDepartments)
+        refreshDepartments();
 }
 
 // JACK: the hardware's capture (input) or playback ports; a device: its channels, "channel 1" on. Never the loop's.
@@ -383,8 +394,15 @@ void IoPage::resized()
     const int row = look::rowHeight (*this);
     auto top = area.removeFromTop (row);
     title.setBounds (top.removeFromLeft (top.getWidth() / 4));
-    inputKey.setBounds (top.removeFromLeft (top.getWidth() / 2).reduced (row / 16));
-    outputKey.setBounds (top.reduced (row / 16));
+    const int keys = departments != nullptr ? 3 : 2;
+    const int keyWidth = top.getWidth() / keys;
+    inputKey.setBounds (top.removeFromLeft (keyWidth).reduced (row / 16));
+    outputKey.setBounds (top.removeFromLeft (keyWidth).reduced (row / 16));
+    if (departments != nullptr)
+    {
+        departmentsButton.setBounds (top.reduced (row / 16));
+        departments->setBounds (getLocalBounds().withTrimmedTop (area.getY()));
+    }
     message.setBounds (area.removeFromBottom (row));
     notice.setBounds (area.removeFromBottom (shown.io.roundTripLoop ? row : 0));
     layoutInput (area, row);
