@@ -456,7 +456,8 @@ juce::String DepartmentsPage::serviceStatusOf (const juce::String& name) const
 void DepartmentsPage::paint (juce::Graphics& g)
 {
     g.fillAll (palette::surface);
-    g.setColour (palette::raised);
+    paintCards (g, *this, layout::tokens (*this));
+    g.setColour (palette::face);   // the service file's rows: a face on the card, read-only
     for (const auto& row : serviceRows)
         g.fillRect (viewport.getBounds().getIntersection (row->getBounds() + viewport.getPosition() - viewport.getViewPosition()));
 }
@@ -481,26 +482,28 @@ void DepartmentsPage::layoutRows()
     repaint();
 }
 
+// Two cards (layout::Stack): what departments are, and the list (its column captions, the rows, ADD and SAVE LIST as
+// equal keys with the answer beside them).
 void DepartmentsPage::resized()
 {
-    auto area = getLocalBounds().reduced (getWidth() / 40);
-    const int row = look::rowHeight (*this);
-    const int gap = row / 4;
-    title.setBounds (area.removeFromTop (row * 3 / 2));
+    const auto t = layout::tokens (*this);
+    for (auto* label : { &title, &nameCaption, &hostCaption, &portCaption, &onCaption, &statusCaption, &answer })
+        label->setFont (juce::FontOptions (t.text));
+    layout::Stack stack (getLocalBounds().reduced (t.margin), t, cards);
+    title.setBounds (stack.card (2 * t.padding + 2 * t.heading).reduced (t.padding));
     title.setMinimumHorizontalScale (1.0f);
-    auto captions = columnsOf (area.removeFromTop (row));
+    auto area = stack.rest().reduced (t.padding);
+    auto captions = columnsOf (area.removeFromTop (t.heading));
     nameCaption.setBounds (captions.name);
     hostCaption.setBounds (captions.host);
     portCaption.setBounds (captions.port);
     onCaption.setBounds (captions.on);
     statusCaption.setBounds (captions.status);
-    auto bottom = area.removeFromBottom (row);
-    area.removeFromBottom (gap);
-    addButton.setBounds (bottom.removeFromLeft (getWidth() / 7));
-    bottom.removeFromLeft (gap);
-    saveButton.setBounds (bottom.removeFromLeft (getWidth() / 7));
-    bottom.removeFromLeft (gap * 2);
-    answer.setBounds (bottom);
+    auto bottom = area.removeFromBottom (t.row);
+    area.removeFromBottom (t.unit);
+    auto keys = layout::control (bottom.removeFromLeft (bottom.getWidth() / 2), t);
+    layout::equalRow (keys, { &addButton, &saveButton }, t);
+    answer.setBounds (bottom.withTrimmedLeft (t.unit));
     viewport.setBounds (area);
     layoutRows();
 }

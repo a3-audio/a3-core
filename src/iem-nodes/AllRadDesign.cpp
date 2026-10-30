@@ -28,13 +28,64 @@ std::optional<AmbisonicWeights> weightsNamed (const juce::String& name)
 }
 }
 
+// IEM's HammerAitovGrid (the energy map's front view) fills what lies outside its ellipse with a fixed 0xff2d2d2d. As
+// a component effect (JUCE's ImageEffectFilter, applied to the component's image before it is drawn), that grey becomes
+// `ground`, keeping each pixel's alpha (the ellipse's antialiased edge). IEM's code is untouched.
+class RecolourGround final : public juce::ImageEffectFilter
+{
+public:
+    explicit RecolourGround (juce::Colour toUse) : ground (toUse) {}
+    void applyEffect (juce::Image& image, juce::Graphics& g, float scaleFactor, float alpha) override
+    {
+        static const juce::Colour iemGround { 0xff2d2d2d };
+        juce::Image::BitmapData pixels (image, juce::Image::BitmapData::readWrite);
+        for (int y = 0; y < pixels.height; ++y)
+            for (int x = 0; x < pixels.width; ++x)
+            {
+                const auto c = pixels.getPixelColour (x, y);
+                if (c.getAlpha() > 0 && c.withAlpha ((juce::uint8) 255) == iemGround)
+                    pixels.setPixelColour (x, y, ground.withAlpha (c.getAlpha()));
+            }
+        g.setOpacity (alpha);
+        g.drawImage (image, juce::Rectangle<float> ((float) image.getWidth(), (float) image.getHeight()) / scaleFactor);
+    }
+
+private:
+    juce::Colour ground;
+};
+
 // IEM's editor as the window hosts it: it draws no ground of its own (IEM fills its LaF's ClBackground, a lighter
 // grey than the window's), so it sits on the page's surface. IEM's own code is untouched: only paint() is ours.
 class HostedAllRadEditor final : public AllRADecoderAudioProcessorEditor
 {
 public:
-    using AllRADecoderAudioProcessorEditor::AllRADecoderAudioProcessorEditor;
+    HostedAllRadEditor (AllRADecoderAudioProcessor& p, juce::AudioProcessorValueTreeState& v, juce::Colour ground)
+        : AllRADecoderAudioProcessorEditor (p, v), recolour (ground)
+    {
+        recolourGrids (*this);
+    }
+    ~HostedAllRadEditor() override { unsetEffects (*this); }
     void paint (juce::Graphics&) override {}
+
+private:
+    void recolourGrids (juce::Component& parent)
+    {
+        for (auto* child : parent.getChildren())
+        {
+            if (dynamic_cast<HammerAitovGrid*> (child) != nullptr)
+                child->setComponentEffect (&recolour);
+            recolourGrids (*child);
+        }
+    }
+    static void unsetEffects (juce::Component& parent)
+    {
+        for (auto* child : parent.getChildren())
+        {
+            child->setComponentEffect (nullptr);
+            unsetEffects (*child);
+        }
+    }
+    RecolourGround recolour;
 };
 
 struct AllRadDesigner::Impl
@@ -110,9 +161,9 @@ std::optional<juce::String> AllRadDesigner::design (juce::String& error)
     return file.getFile().loadFileAsString();
 }
 
-std::unique_ptr<juce::AudioProcessorEditor> AllRadDesigner::createEditor()
+std::unique_ptr<juce::AudioProcessorEditor> AllRadDesigner::createEditor (juce::Colour ground)
 {
-    auto editor = std::make_unique<HostedAllRadEditor> (impl->processor, impl->processor.parameters);
+    auto editor = std::make_unique<HostedAllRadEditor> (impl->processor, impl->processor.parameters, ground);
     editor->setOpaque (false);
     // IEM's footer opens the processor's OSC receiver; the window's never listens (see listensForOsc).
     for (auto* child : editor->getChildren())

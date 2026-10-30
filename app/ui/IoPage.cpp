@@ -61,7 +61,7 @@ IoPage::IoPage (HostView& v)
     inputView.setViewedComponent (&inputContent, false);
     outputView.setViewedComponent (&outputContent, false);
     for (auto* scroller : { &inputView, &outputView })
-        scroller->setScrollBarsShown (true, false);
+        scroller->setScrollBarsShown (false, false);   // a finger scrolls it; the cards run its whole width
     refresh (true);
     showSub (Sub::input);
 }
@@ -388,86 +388,100 @@ void IoPage::chooseRoute (const std::string& port, int item)
 
 void IoPage::paint (juce::Graphics& g) { g.fillAll (palette::surface); }
 
+// The title and the sub-page keys in the window's key row (the margin, the title's quarter, equal keys a unit apart);
+// below them the list of cards scrolled by a finger (no scroll bar: the cards run its width), the notice and the
+// message at the foot.
 void IoPage::resized()
 {
-    auto area = getLocalBounds().reduced (getWidth() / 40);
-    const int row = look::rowHeight (*this);
-    auto top = area.removeFromTop (row);
+    const auto t = layout::tokens (*this);
+    auto top = getLocalBounds().reduced (t.margin, 0).withTrimmedTop (t.margin).withHeight (t.row);
+    for (auto* label : { &title, &message, &notice })
+        label->setFont (juce::FontOptions (t.text));
     title.setBounds (top.removeFromLeft (top.getWidth() / 4));
-    const int keys = departments != nullptr ? 3 : 2;
-    const int keyWidth = top.getWidth() / keys;
-    inputKey.setBounds (top.removeFromLeft (keyWidth).reduced (row / 16));
-    outputKey.setBounds (top.removeFromLeft (keyWidth).reduced (row / 16));
+    std::vector<juce::Component*> keys { &inputKey, &outputKey };
     if (departments != nullptr)
-    {
-        departmentsButton.setBounds (top.reduced (row / 16));
-        departments->setBounds (getLocalBounds().withTrimmedTop (area.getY()));
-    }
-    message.setBounds (area.removeFromBottom (row));
-    notice.setBounds (area.removeFromBottom (shown.io.roundTripLoop ? row : 0));
-    layoutInput (area, row);
-    layoutOutput (area, row);
+        keys.push_back (&departmentsButton);
+    layout::equalRow (layout::control (top, t), keys, t);
+    if (departments != nullptr)
+        departments->setBounds (getLocalBounds().withTrimmedTop (t.row + t.gap));
+    auto area = getLocalBounds().reduced (t.margin).withTrimmedTop (t.row + t.gap);
+    message.setBounds (area.removeFromBottom (t.heading));
+    notice.setBounds (area.removeFromBottom (shown.io.roundTripLoop ? t.heading : 0));
+    layoutInput (area, t);
+    layoutOutput (area, t);
 }
 
 namespace
 {
-// One row of a scrolled list: the caption on the first quarter, the dropdown on the rest.
-int layoutRow (juce::Label& caption, juce::Component& box, juce::Rectangle<int>& content, int line)
+// One line of a card: the caption on the first quarter, the dropdown on the rest.
+void layoutRow (juce::Label& caption, juce::Component& box, juce::Rectangle<int>& card, const layout::Tokens& t)
 {
-    auto slice = content.removeFromTop (line).reduced (0, line / 12);
-    caption.setBounds (slice.removeFromLeft (slice.getWidth() / 4));
-    box.setBounds (slice);
-    return line;
+    auto line = card.removeFromTop (t.row);
+    caption.setBounds (line.removeFromLeft (line.getWidth() / 4));
+    box.setBounds (layout::control (line, t));
 }
 
-// Groups of dropdown rows in a scrolled content: a caption row per group, then one row per route.
+// A card per group: its caption as the heading, then a line per route.
 template <class Group>
-int layoutGroups (std::vector<std::unique_ptr<Group>>& groups, juce::Rectangle<int>& content, int line)
+void layoutGroups (std::vector<std::unique_ptr<Group>>& groups, layout::Stack& stack, const layout::Tokens& t)
 {
-    int used = 0;
     for (auto& group : groups)
     {
-        group->caption.setBounds (content.removeFromTop (line));
-        used += line;
+        auto card = stack.card (layout::cardHeight (t, (int) group->routes.size())).reduced (t.padding);
+        group->caption.setFont (juce::FontOptions (t.text));
+        group->caption.setBounds (card.removeFromTop (t.heading));
         for (auto& route : group->routes)
-            used += layoutRow (route->caption, route->box, content, line);
+        {
+            route->caption.setFont (juce::FontOptions (t.text));
+            layoutRow (route->caption, route->box, card, t);
+        }
     }
-    return used;
 }
 
-// The MEASURE group that ends a list: its caption, the digital loop's row and the analog test cable's.
+// The MEASURE card that ends a list: its heading, the digital loop's line and the analog test cable's.
 template <class Rows>
-int layoutMeasure (Rows& rows, juce::Component& digital, juce::Component& analog, juce::Rectangle<int>& content, int line)
+void layoutMeasure (Rows& rows, juce::Component& digital, juce::Component& analog, layout::Stack& stack, const layout::Tokens& t)
 {
-    rows.caption.setBounds (content.removeFromTop (line));
-    return line + layoutRow (rows.digital, digital, content, line) + layoutRow (rows.analog, analog, content, line);
-}
+    auto card = stack.card (layout::cardHeight (t, 2)).reduced (t.padding);
+    for (auto* label : { &rows.caption, &rows.digital, &rows.analog })
+        label->setFont (juce::FontOptions (t.text));
+    rows.caption.setBounds (card.removeFromTop (t.heading));
+    layoutRow (rows.digital, digital, card, t);
+    layoutRow (rows.analog, analog, card, t);
 }
 
-// INPUT: the channels' L/R dropdowns, the deck sources and the measurement rows, scrolled together.
-void IoPage::layoutInput (juce::Rectangle<int> area, int row)
+int bottomOf (const std::vector<juce::Rectangle<int>>& cards) { return cards.empty() ? 0 : cards.back().getBottom(); }
+}
+
+// INPUT: a card per channel (its L and R), the DECKS card, the MEASURE card, scrolled together.
+void IoPage::layoutInput (juce::Rectangle<int> area, const layout::Tokens& t)
 {
     inputView.setBounds (area);
-    const int line = row * 3 / 4;
-    const int width = area.getWidth() - inputView.getScrollBarThickness();
-    auto content = juce::Rectangle<int> (0, 0, width, 1 << 20);
-    int used = layoutGroups (inputGroups, content, line);
-    decksCaption.setBounds (content.removeFromTop (line));
-    used += line;
+    std::vector<juce::Rectangle<int>> made;
+    layout::Stack stack ({ 0, 0, area.getWidth(), 1 << 20 }, t, made);
+    layoutGroups (inputGroups, stack, t);
+    auto decks = stack.card (layout::cardHeight (t, (int) deckChoosers.size())).reduced (t.padding);
+    decksCaption.setFont (juce::FontOptions (t.text));
+    decksCaption.setBounds (decks.removeFromTop (t.heading));
     for (auto& chooser : deckChoosers)
-        used += layoutRow (chooser->label, chooser->box, content, line);
-    used += layoutMeasure (inputMeasure, digitalInput, analogInput, content, line);
-    inputContent.setSize (width, used);
+    {
+        chooser->label.setFont (juce::FontOptions (t.text));
+        layoutRow (chooser->label, chooser->box, decks, t);
+    }
+    layoutMeasure (inputMeasure, digitalInput, analogInput, stack, t);
+    inputContent.setSize (area.getWidth(), bottomOf (made));
+    inputContent.setCards (std::move (made));
 }
 
-// OUTPUT: the zones' dropdowns scrolled, the measurement pairs' outputs last.
-void IoPage::layoutOutput (juce::Rectangle<int> area, int row)
+// OUTPUT: a card per zone (MAIN, BOOTH, PHONES, REC), the MEASURE card last.
+void IoPage::layoutOutput (juce::Rectangle<int> area, const layout::Tokens& t)
 {
     outputView.setBounds (area);
-    const int line = row * 3 / 4;
-    const int width = area.getWidth() - outputView.getScrollBarThickness();
-    auto content = juce::Rectangle<int> (0, 0, width, 1 << 20);
-    const int used = layoutGroups (outputGroups, content, line);
-    outputContent.setSize (width, used + layoutMeasure (outputMeasure, digitalOutput, analogOutput, content, line));
+    std::vector<juce::Rectangle<int>> made;
+    layout::Stack stack ({ 0, 0, area.getWidth(), 1 << 20 }, t, made);
+    layoutGroups (outputGroups, stack, t);
+    layoutMeasure (outputMeasure, digitalOutput, analogOutput, stack, t);
+    outputContent.setSize (area.getWidth(), bottomOf (made));
+    outputContent.setCards (std::move (made));
 }
 }

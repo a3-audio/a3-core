@@ -166,7 +166,8 @@ DriverInfo driverInfo (const AppConfig& running, const BackendStatus& status)
              status.rateSource,
              juce::String (status.bitDepth) + (device ? "  -  set by the device" : "  -  float samples, set by JACK"),
              juce::String (status.dspLoadPercent, 1) + " %",
-             juce::String (status.xruns) };
+             juce::String (status.xruns),
+             roundTripText (estimatedRoundTrip (status)).fromFirstOccurrenceOf ("Round trip ", false, false) };
 }
 
 StatusPage::StatusPage (HostView& v) : view (v), meters (std::make_unique<Meters>())
@@ -195,24 +196,40 @@ void StatusPage::refresh()
     repaint (getLocalBounds().removeFromTop (getHeight() / 2));
 }
 
-// The lines on the top half, the clock's card and the meters below them.
+namespace
+{
+constexpr int statusLines = 9, linkLines = 4, clockLines = 7;   // MODE..ROUND TRIP; MISSING and DROPPED (3); the clock's
+constexpr float lineShare = 0.55f;                              // a status line as a share of the row
+}
+
+// Cards (layout::Stack): what runs, what is missing, the clock, the meters (the rest).
 void StatusPage::resized()
 {
-    auto area = getLocalBounds().reduced (getWidth() / 40);
-    area.removeFromTop (area.getHeight() / 2);
-    clock.setTextHeight ((float) getHeight() / 60.0f);
-    clock.setBounds (area.removeFromTop (area.getHeight() / 2).withTrimmedTop (getHeight() / 80));
-    meters->setBounds (area.withTrimmedTop (getHeight() / 80));
+    const auto t = layout::tokens (*this);
+    const int line = juce::roundToInt ((float) t.row * lineShare);
+    layout::Stack stack (getLocalBounds().reduced (t.margin), t, cards);
+    stack.card (2 * t.padding + statusLines * line);
+    stack.card (2 * t.padding + linkLines * line);
+    clock.setTokens (t);
+    clock.setBounds (stack.card (2 * t.padding + t.heading + clockLines * line).reduced (t.padding));
+    meters->setBounds (stack.rest().reduced (t.padding));
 }
 
 void StatusPage::paint (juce::Graphics& g)
 {
     g.fillAll (palette::surface);
-    auto area = getLocalBounds().reduced (getWidth() / 40);
-    area.removeFromBottom (area.getHeight() / 2 + getHeight() / 80);
-    constexpr int rowCount = 13;   // ten single lines; DROPPED takes the other three
-    const int row = area.getHeight() / rowCount;
-    g.setFont (juce::FontOptions ((float) row * 0.55f));
+    const auto t = layout::tokens (*this);
+    paintCards (g, *this, t);
+    if (cards.size() < 3)
+        return;
+    if (! clock.frameColour().isTransparent())   // the clock's card framed in its warning's colour
+    {
+        g.setColour (clock.frameColour());
+        g.drawRoundedRectangle (cards[2].toFloat().reduced (1.0f), t.radius, 2.0f);
+    }
+    auto area = cards[0].reduced (t.padding);
+    const int row = juce::roundToInt ((float) t.row * lineShare);
+    g.setFont (juce::FontOptions (t.text));
 
     auto line = [&] (const juce::String& caption, const juce::String& value, juce::Colour colour)
     {
@@ -220,7 +237,7 @@ void StatusPage::paint (juce::Graphics& g)
         g.setColour (palette::textMuted);
         g.drawText (caption, r.removeFromLeft (r.getWidth() / 4), juce::Justification::centredLeft, true);
         g.setColour (colour);
-        g.drawText (value, r, juce::Justification::centredLeft, true);
+        g.drawFittedText (value, r, juce::Justification::centredLeft, 1, 0.7f);
     };
 
     line ("MODE", modeLine(), ! problem.isEmpty() ? palette::danger : status.connecting ? palette::text : palette::caution);
@@ -247,6 +264,8 @@ void StatusPage::paint (juce::Graphics& g)
     line ("DSP LOAD", driver.load,
           status.dspLoadPercent >= loadDanger ? palette::danger : status.dspLoadPercent >= loadWarn ? palette::caution : palette::text);
     line ("XRUNS", driver.xruns, status.xruns > 0 ? palette::caution : palette::text);
+    line ("ROUND TRIP", driver.roundTrip, palette::textMuted);
+    area = cards[1].reduced (t.padding);
     std::vector<std::string> missing;
     for (const auto& peer : status.missingPeers)
         missing.push_back (peer.toStdString());
@@ -258,7 +277,7 @@ void StatusPage::paint (juce::Graphics& g)
     g.setColour (palette::textMuted);
     g.drawText ("DROPPED", rest.removeFromLeft (rest.getWidth() / 4), juce::Justification::topLeft, true);
     g.setColour (none ? palette::textMuted : palette::caution);
-    const int maxLines = juce::jmax (2, (int) ((float) rest.getHeight() / ((float) row * 0.65f)));
+    const int maxLines = juce::jmax (2, rest.getHeight() / juce::jmax (1, row));
     g.drawFittedText (droppedText (dropped, ignored, maxLines), rest, juce::Justification::topLeft, maxLines, 0.8f);
 }
 }

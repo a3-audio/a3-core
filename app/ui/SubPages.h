@@ -33,10 +33,10 @@ private:
         juce::String name;
         std::unique_ptr<juce::Component> page;
         std::function<void()> refresh;
-        std::unique_ptr<juce::TextButton> key;
     };
     std::vector<Sub> subs;
     int current = 0;
     juce::Label title;
+    SubPageKeys keys { {} };
 };
 }

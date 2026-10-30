@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include <algorithm>
 #include <cmath>
+#include <limits>
 #include <cstdlib>
 #include <gtest/gtest.h>
 #include <set>
@@ -69,31 +71,30 @@ TEST_F (Pages, AudioPagePaintsForJackAndDevice)
     EXPECT_NE (a3app::driverInfo (view).bitDepth.indexOf ("set by the device"), -1);   // on STATUS since 2026-10-30
 }
 
-// AUDIO shows the estimated round trip and its parts, for JACK and for a device, and follows a new quantum.
-TEST_F (Pages, AudioShowsTheEstimatedRoundTrip)
+// AUDIO's MEASURE (third round): "Digital roundtrip" and its value only, no estimate in brackets; the estimate with its
+// parts is STATUS' ROUND TRIP line, which follows a new quantum.
+TEST_F (Pages, AudioSaysTheDigitalRoundtripAndStatusTheEstimate)
 {
     FakeView view;
     view.state.captureLatency = 256;
     view.state.playbackLatency = 384;
-    {
-        a3app::AudioPage page (view, manager);
-        page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
-        const auto text = page.roundTripLabel().getText();
-        EXPECT_TRUE (text.contains ("estimated")) << text;
-        EXPECT_TRUE (text.contains ("768 samples")) << text;   // 256 + 128 + 384
-        EXPECT_TRUE (page.roundTripLabel().isVisible());
-        EXPECT_TRUE (page.getLocalBounds().contains (page.roundTripLabel().getBounds()));
-        expectPainted (a3apptest::snapshotAt (page, "audio-roundtrip-jack", page.getWidth(), page.getHeight()));
-        view.state.blockSize = 256;
-        page.refresh();
-        EXPECT_TRUE (page.roundTripLabel().getText().contains ("896 samples")) << page.roundTripLabel().getText();
-    }
-    view.runDevice();
+    view.cfg.io.roundTripLoop = view.runningCfg.io.roundTripLoop = a3app::RoundTripLoop {};
+    view.state.roundTripMeasured.state = a3app::RoundTripReport::State::notMeasured;
     a3app::AudioPage page (view, manager);
     page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
-    EXPECT_TRUE (page.roundTripLabel().isVisible());
-    EXPECT_TRUE (page.getLocalBounds().contains (page.roundTripLabel().getBounds()));
-    expectPainted (a3apptest::snapshotAt (page, "audio-roundtrip-device", page.getWidth(), page.getHeight()));
+    page.refresh();
+    juce::StringArray captions;
+    for (auto* child : page.getChildren())
+        if (auto* label = dynamic_cast<juce::Label*> (child))
+            captions.add (label->getText());
+    EXPECT_TRUE (captions.contains ("Digital roundtrip")) << captions.joinIntoString (", ");
+    EXPECT_TRUE (captions.contains ("Analog roundtrip")) << captions.joinIntoString (", ");
+    EXPECT_EQ (page.roundTripLabel().getText(), "not measured yet");
+    EXPECT_FALSE (page.roundTripLabel().getText().containsAnyOf ("()")) << "no brackets";
+    EXPECT_TRUE (a3app::driverInfo (view).roundTrip.contains ("768 samples")) << a3app::driverInfo (view).roundTrip;   // 256 + 128 + 384
+    view.state.blockSize = 256;
+    EXPECT_TRUE (a3app::driverInfo (view).roundTrip.contains ("896 samples")) << a3app::driverInfo (view).roundTrip;
+    expectPainted (a3apptest::snapshotAt (page, "audio-roundtrip-jack", page.getWidth(), page.getHeight()));
 }
 
 namespace
@@ -130,7 +131,8 @@ int pixelsOf (const juce::Image& image, juce::Colour colour)
 
 // The one clock on the AUDIO page (2026-10-30): its state in every case the role can be in, and a
 // warning frame whenever the PTP clock is not locked to the Scarlett.
-TEST_F (Pages, AudioShowsTheClockInEveryState)
+
+TEST_F (Pages, StatusShowsTheClockInEveryState)
 {
     struct Case
     {
@@ -155,7 +157,7 @@ TEST_F (Pages, AudioShowsTheClockInEveryState)
     {
         FakeView view;
         view.clockReport = c.report;
-        a3app::AudioPage page (view, manager);
+        a3app::StatusPage page (view);
         page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
         page.refresh();
         const auto& clock = page.clockPanel();
@@ -163,7 +165,7 @@ TEST_F (Pages, AudioShowsTheClockInEveryState)
         EXPECT_EQ (clock.warns(), ! c.warning.isTransparent()) << c.name;
         EXPECT_TRUE (page.getLocalBounds().contains (clock.getBounds())) << c.name;
         EXPECT_GT (clock.getHeight(), 0) << c.name;
-        const auto image = a3apptest::snapshotAt (page, juce::String ("audio-clock-") + c.name, page.getWidth(), page.getHeight());
+        const auto image = a3apptest::snapshotAt (page, juce::String ("status-clock-") + c.name, page.getWidth(), page.getHeight());
         expectPainted (image);
         if (c.warning.isTransparent())
         {
@@ -196,7 +198,7 @@ TEST_F (Pages, TheClockKeepsItsRowsInEveryLayout)
         page.refresh();
         const auto& clock = page.clockPanel();
         EXPECT_GE (clock.getHeight(), layout.height / 12) << layout.name << ": the master and the state (the detail is on STATUS)";
-        EXPECT_GT (clock.stateLabel().getHeight(), 0) << layout.name;
+        EXPECT_GT (clock.masterBox().getHeight(), 0) << layout.name;
         EXPECT_TRUE (page.getLocalBounds().contains (clock.getBounds())) << layout.name;
         expectPainted (a3apptest::snapshotAt (page, juce::String ("audio-clock-") + layout.name, layout.width, layout.height));
     }
@@ -1408,7 +1410,7 @@ TEST_F (Pages, SpeakersEditorIsScaledIntoThePage)
         ASSERT_NE (page, nullptr);
         auto* editor = page->editor();
         ASSERT_NE (editor, nullptr);
-        EXPECT_EQ (editor->getParentComponent(), page) << "no viewport: nothing to scroll";
+        EXPECT_EQ (editor->getParentComponent()->getParentComponent(), page) << "on its card, no viewport: nothing to scroll";
         EXPECT_EQ (firstDescendant<juce::Viewport> (*page), firstDescendant<juce::Viewport> (*editor)) << "the page has no viewport of its own";
         const auto pageArea = page->getLocalBounds();
         const auto editorArea = areaIn (*page, *editor);
@@ -1709,7 +1711,7 @@ TEST_F (Pages, AudioShowsTheMeasuredRoundTripAndMeasuresOnRequest)
     a3app::AudioPage page (view, manager);
     page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
     page.refresh();
-    EXPECT_EQ (page.roundTripLabel().getText(), "Round trip (measured, digital loop)   4.4 ms (211 samples), 14:05");
+    EXPECT_EQ (page.roundTripLabel().getText(), "4.4 ms   14:05");
     ASSERT_TRUE (page.measureButton().isVisible());
     EXPECT_TRUE (page.measureButton().isEnabled());
     EXPECT_TRUE (page.getLocalBounds().contains (page.measureButton().getBounds()));
@@ -1723,7 +1725,7 @@ TEST_F (Pages, AudioShowsTheMeasuredRoundTripAndMeasuresOnRequest)
     view.state.roundTripMeasured.reason = "no loop configured";
     view.cfg.io.roundTripLoop = view.runningCfg.io.roundTripLoop = std::nullopt;
     page.refresh();
-    EXPECT_TRUE (page.roundTripLabel().getText().contains ("(estimated, no loop configured)")) << page.roundTripLabel().getText();
+    EXPECT_EQ (page.roundTripLabel().getText(), "no digital loop (I/O page)");
     EXPECT_FALSE (page.measureButton().isEnabled());
 }
 
@@ -1778,9 +1780,7 @@ TEST_F (Pages, AudioMeasuresTheAnalogChainOnlyOnRequest)
     a3app::AudioPage page (view, manager);
     page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
     page.refresh();
-    EXPECT_TRUE (page.analogChainLabel().getText().startsWith ("Analog chain   converters not measured yet")) << page.analogChainLabel().getText();
-    const auto hint = page.analogChainLabel().getText();   // what to plug first: in the line (no tooltips since 2026-10-30)
-    EXPECT_TRUE (hint.contains ("cable output 6 to input 8")) << hint;
+    EXPECT_EQ (page.analogChainLabel().getText(), "not measured yet: cable output 6 to input 8");   // what to plug first
     EXPECT_TRUE (page.analogButton().isEnabled());
     EXPECT_TRUE (page.getLocalBounds().contains (page.analogButton().getBounds()));
     EXPECT_EQ (view.analogRequests, 0);
@@ -1792,7 +1792,7 @@ TEST_F (Pages, AudioMeasuresTheAnalogChainOnlyOnRequest)
     view.state.roundTripMeasured.analog = a3app::RoundTripReport::Analog::measured;
     view.state.roundTripMeasured.converters = { 48, 48000.0, "2026-10-30" };
     page.refresh();
-    EXPECT_EQ (page.analogChainLabel().getText(), "Analog chain   5.4 ms (measured: digital loop now + converters measured on 2026-10-30)");
+    EXPECT_EQ (page.analogChainLabel().getText(), "5.4 ms   2026-10-30");
     expectPainted (a3apptest::snapshotAt (page, "audio-analog-chain", page.getWidth(), page.getHeight()));
 
     view.state.roundTripMeasured.analogReason = "no analog test pair chosen (I/O page)";
@@ -1900,7 +1900,7 @@ TEST_F (Pages, IoDropdownsNameTheDevicesPortsAndNothingStandsBesideThem)
         if (auto* label = dynamic_cast<juce::Label*> (child))
             EXPECT_FALSE (label->getText().contains ("AES67")) << label->getText();
     }
-    EXPECT_GE (box->getRight(), row->getWidth() - 4) << "the box runs to the row's end";
+    EXPECT_GE (box->getRight(), row->getWidth() - a3app::layout::tokens (*row).padding - 4) << "the box runs to its card's end";
     std::function<void (juce::Component&)> noEditors = [&] (juce::Component& parent)
     {
         for (auto* child : parent.getChildren())
@@ -2202,8 +2202,8 @@ TEST_F (Pages, TheAllRaEditorSitsOnThePagesGround)
     const auto shot = a3apptest::snapshotAt (page, "speakers-on-the-page-ground", page.getWidth(), page.getHeight());
     expectPainted (shot);
     const auto area = areaIn (page, *page.editor());
-    EXPECT_EQ (shot.getPixelAt (area.getX() + 2, area.getY() + area.getHeight() / 2).getARGB(), a3app::palette::surface.getARGB())
-        << "the margin beside IEM's table is the page's surface";
+    EXPECT_EQ (shot.getPixelAt (area.getX() + 2, area.getY() + area.getHeight() / 2).getARGB(), a3app::palette::raised.getARGB())
+        << "the margin beside IEM's table is the card's (third round: the editor sits on a card)";
 }
 
 // AUDIO (2026-10-30, second round): cards in the ZONES card's style, DRIVER (type, rate, block, periods: every setting
@@ -2235,8 +2235,8 @@ TEST_F (Pages, AudioIsCards)
     EXPECT_TRUE (cards[1].contains (page.channelsCard().getBounds())) << "CHANNELS";
     EXPECT_EQ (page.channelsCard().channelsChooser().getText(), "4");
     EXPECT_TRUE (in (2, page.roundTripLabel()) && in (2, page.measureButton())) << "MEASURE";
-    EXPECT_EQ (page.clockPanel().getBounds(), cards[3]);
-    EXPECT_EQ (page.clockPanel().stateLabel().getText(), "LOCKED") << "one word";
+    EXPECT_EQ (page.clockPanel().getBounds(), cards[3].reduced (a3app::layout::tokens (page).padding));
+    EXPECT_FALSE (page.clockPanel().stateLabel().isVisible()) << "the word is in the footer (third round)";
     EXPECT_TRUE (page.clockPanel().masterBox().isVisible());
     EXPECT_FALSE (page.clockPanel().countersLabel().isVisible()) << "the numbers are on STATUS";
     for (const auto* heading : { "DRIVER", "CHANNELS", "MEASURE" })
@@ -2354,4 +2354,91 @@ TEST_F (Pages, TheWindowHasTheWorkspaceSwitch)
     keys->appKey().onTap();
     EXPECT_EQ (calls, (std::vector<std::vector<std::string>> { a3app::screen::goToCommand (2) })) << "StemDeck, whatever Core does";
     expectPainted (a3apptest::snapshotAt (content, "window-workspace-switch", content.getWidth(), content.getHeight()));
+}
+
+namespace
+{
+// Whether `c` sits in a scrolled list (its cards run the list's width, not the page's margin).
+bool inViewport (juce::Component& c)
+{
+    for (auto* p = c.getParentComponent(); p != nullptr; p = p->getParentComponent())
+        if (dynamic_cast<juce::Viewport*> (p) != nullptr)
+            return true;
+    return false;
+}
+
+// One page's cards against the window's tokens: each card from margin to margin (a scrolled list's from edge to edge),
+// neighbours one gap apart, and what is on a card one padding in from its edges.
+void expectTheGrid (juce::Component& c, const a3app::CardPage& page, const a3app::layout::Tokens& t, const juce::String& where)
+{
+    auto cards = page.cardAreas();
+    ASSERT_FALSE (cards.empty()) << where;
+    const bool scrolled = inViewport (c);
+    for (const auto& card : cards)
+    {
+        EXPECT_EQ (card.getX(), scrolled ? 0 : t.margin) << where << " " << card.toString();
+        EXPECT_EQ (card.getRight(), c.getWidth() - (scrolled ? 0 : t.margin)) << where << " " << card.toString();
+    }
+    std::sort (cards.begin(), cards.end(), [] (auto a, auto b) { return a.getY() < b.getY(); });
+    for (size_t i = 1; i < cards.size(); ++i)
+        EXPECT_EQ (cards[i].getY() - cards[i - 1].getBottom(), t.gap) << where << ": between " << cards[i - 1].toString() << " and "
+                                                                      << cards[i].toString();
+    for (const auto& card : cards)
+    {
+        int left = std::numeric_limits<int>::max(), top = std::numeric_limits<int>::max(), parts = 0;
+        for (auto* child : c.getChildren())
+        {
+            if (! child->isVisible() || dynamic_cast<a3app::DropdownList*> (child) != nullptr)
+                continue;
+            const auto area = c.getLocalArea (child, child->getLocalBounds());
+            if (! area.intersects (card))
+                continue;
+            ++parts;
+            EXPECT_TRUE (card.reduced (t.padding).contains (area)) << where << ": " << child->getName() << " " << area.toString()
+                                                                   << " on " << card.toString();
+            left = juce::jmin (left, area.getX());
+            top = juce::jmin (top, area.getY());
+        }
+        if (parts == 0)
+            continue;   // a card whose content is painted (STATUS' lines)
+        EXPECT_EQ (left, card.getX() + t.padding) << where << " " << card.toString();
+        EXPECT_EQ (top, card.getY() + t.padding) << where << " " << card.toString();
+    }
+}
+}
+
+// One design system (2026-10-30, the maintainer: "aren't there standards for what looks symmetric and correct?"):
+// every page, every sub-page, is cards on the window's tokens (layout::Tokens): the same margin, padding and gap.
+TEST_F (Pages, EveryPageIsCardsOnOneGrid)
+{
+    SpeakerRig rig;
+    CoreWindowRig core;
+    a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, { core.client.get(), {} }, {}, rig.userRoot);
+    window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    auto& content = *window.getContentComponent();
+    for (const auto& name : { "AUDIO", "SPEAKERS", "ZONES", "INPUT", "OUTPUT", "DEPARTMENTS", "CALIBRATION", "FILTER", "STATUS" })
+    {
+        window.showPage (name);
+        window.refreshNow();
+        auto* page = shownPage (window);
+        ASSERT_NE (page, nullptr) << name;
+        const auto t = a3app::layout::tokens (*page);
+        int pages = 0;
+        std::function<void (juce::Component&)> walk = [&] (juce::Component& c)
+        {
+            if (! c.isVisible())
+                return;
+            if (auto* cards = dynamic_cast<a3app::CardPage*> (&c))
+            {
+                ++pages;
+                expectTheGrid (c, *cards, t, juce::String (name) + " / " + c.getName());
+            }
+            for (auto* child : c.getChildren())
+                walk (*child);
+        };
+        walk (*page);
+        EXPECT_GT (pages, 0) << name << ": no cards";
+        expectPainted (a3apptest::snapshotAt (content, "window3-" + juce::String (name).toLowerCase().removeCharacters ("/"),
+                                              content.getWidth(), content.getHeight()));
+    }
 }

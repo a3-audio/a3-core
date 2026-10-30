@@ -101,18 +101,16 @@ public:
 
     void paint (juce::Graphics& g) override
     {
-        const auto bounds = getLocalBounds().toFloat();
-        const auto inset = (float) getWidth() / 60.0f;
-        g.setColour (palette::raised);
-        g.fillRoundedRectangle (bounds, inset);
-        auto area = getLocalBounds().reduced (juce::roundToInt (inset));
+        // On its page's card (it paints no ground): two columns a unit apart either side of a hairline.
+        const auto t = layout::tokens (getParentComponent() != nullptr ? *getParentComponent() : *this);   // the page's text
+        auto area = getLocalBounds();
         const int line = juce::jmax (1, area.getHeight() / juce::jmax (1, lines()));
-        g.setFont (juce::FontOptions ((float) line * 0.72f));
+        g.setFont (juce::FontOptions (juce::jmin (t.text, (float) line * 0.72f)));
         auto left = area.removeFromLeft (area.getWidth() / 2);
-        paintZone (g, zones[0], left.withTrimmedRight (juce::roundToInt (inset)), line);
+        paintZone (g, zones[0], left.withTrimmedRight (t.unit), line);
         g.setColour (palette::lifted);
         g.fillRect (area.getX(), area.getY(), 1, area.getHeight());
-        paintZone (g, zones[1], area.withTrimmedLeft (juce::roundToInt (inset)), line);
+        paintZone (g, zones[1], area.withTrimmedLeft (t.unit), line);
     }
 
 private:
@@ -422,34 +420,46 @@ void ZonesPage::refresh()
     else
         list.deselectAllRows();
     sayActions();
+    if (message.getText().isEmpty() != messageLaidOutEmpty)
+        resized();   // the choices' card takes the message's line only while there is one
 }
 
-void ZonesPage::paint (juce::Graphics& g) { g.fillAll (palette::surface); }
+void ZonesPage::paint (juce::Graphics& g)
+{
+    g.fillAll (palette::surface);
+    paintCards (g, *this, layout::tokens (*this));
+}
 
-// Dropdowns first (MAIN, BOOTH, PHONES), the message, then the list over the info viewer.
+// Three cards (layout::Stack): the zones' choices (with EDIT SPEAKERS and the message), the variants with what RENAME
+// and DELETE would do, and the picked variant's info in the rest.
 void ZonesPage::resized()
 {
-    auto area = getLocalBounds().reduced (getWidth() / 40);
-    const int row = look::rowHeight (*this);
-    auto top = area.removeFromTop (row);
-    openSpeakers.setBounds (top.removeFromRight (top.getWidth() / 3).reduced (row / 16));
+    const auto t = layout::tokens (*this);
+    for (auto* label : { &title, &mainCaption, &boothCaption, &headphonesCaption, &message, &actions })
+        label->setFont (juce::FontOptions (t.text));
+    layout::Stack stack (getLocalBounds().reduced (t.margin), t, cards);
+    messageLaidOutEmpty = message.getText().isEmpty();
+    auto area = stack.card (layout::cardHeight (t, messageLaidOutEmpty ? 4 : 5, false)).reduced (t.padding);
+    auto top = area.removeFromTop (t.row);
+    openSpeakers.setBounds (layout::control (top.removeFromRight (top.getWidth() / 3), t));
     title.setBounds (top);
     const auto chooserRow = [&] (juce::Label& caption, juce::ComboBox& box)
     {
-        auto line = area.removeFromTop (row).reduced (0, row / 16);
-        caption.setBounds (line.removeFromLeft (line.getWidth() / 5));
-        box.setBounds (line);
+        auto line = area.removeFromTop (t.row);
+        caption.setBounds (line.removeFromLeft (line.getWidth() / 4));
+        box.setBounds (layout::control (line, t));
     };
     chooserRow (mainCaption, mainBox);
     chooserRow (boothCaption, boothBox);
     chooserRow (headphonesCaption, headphones);
-    message.setBounds (area.removeFromTop (row));
-    // The list as tall as its rows (scrolling past five), the line under it, and the card in all that is left.
-    const int listRow = row * 3 / 4;
+    message.setBounds (area);
+    // The list as tall as its rows (scrolling past five) and the line under it.
+    const int listRow = t.row * 3 / 4;
     list.setRowHeight (listRow);
-    list.setBounds (area.removeFromTop (juce::jmin (area.getHeight() / 3, listRow * juce::jlimit (1, 5, rowCount()) + 2)));
-    actions.setBounds (area.removeFromTop (listRow));
-    area.removeFromTop (row / 4);
-    info->setBounds (area.withHeight (juce::jmin (area.getHeight(), (info->lines() + 1) * row * 2 / 3)));
+    const int listHeight = listRow * juce::jlimit (1, 5, rowCount()) + 2;
+    area = stack.card (2 * t.padding + listHeight + t.row).reduced (t.padding);
+    list.setBounds (area.removeFromTop (listHeight));
+    actions.setBounds (area);
+    info->setBounds (stack.rest().reduced (t.padding));
 }
 }

@@ -56,11 +56,11 @@ void ChannelsPage::setDecks (int decks)
     refresh();
 }
 
-void ChannelsPage::setTextHeight (float height)
+void ChannelsPage::setTokens (const layout::Tokens& t)
 {
-    textHeight = height;
+    tokens = t;
     for (auto* label : { &caption, &channelsRunning, &decksCaption, &decksRunning, &message })
-        label->setFont (juce::FontOptions (height));
+        label->setFont (juce::FontOptions (t.text));
     resized();
 }
 
@@ -78,13 +78,13 @@ void ChannelsPage::refresh()
 void ChannelsPage::resized()
 {
     auto area = getLocalBounds();
-    const int row = juce::jmax (1, area.getHeight() / 3);
+    const int row = tokens.row > 0 ? tokens.row : juce::jmax (1, area.getHeight() / 3);
     const auto line = [&] (juce::Label& label, juce::ComboBox& box, juce::Label& running)
     {
         auto r = area.removeFromTop (row);
         label.setBounds (r.removeFromLeft (r.getWidth() / 4));
-        running.setBounds (r.removeFromRight (r.getWidth() / 4).withTrimmedLeft (row / 4));
-        box.setBounds (r.reduced (2));
+        running.setBounds (r.removeFromRight (r.getWidth() / 3).withTrimmedLeft (tokens.unit));
+        box.setBounds (tokens.row > 0 ? layout::control (r, tokens) : r);
     };
     line (caption, channelsBox, channelsRunning);
     line (decksCaption, decksBox, decksRunning);

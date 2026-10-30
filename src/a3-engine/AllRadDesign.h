@@ -41,7 +41,8 @@ public:
     std::optional<juce::String> design (juce::String& error);
 
     // IEM's AllRADecoderAudioProcessorEditor on this processor; it must not outlive the designer.
-    std::unique_ptr<juce::AudioProcessorEditor> createEditor();
+    // `ground`: what IEM's energy map shows around its ellipse (its own grey otherwise), the host's card colour.
+    std::unique_ptr<juce::AudioProcessorEditor> createEditor (juce::Colour ground = juce::Colour (0xff2d2d2d));
 
     // What IEM's noise buttons do (a channel's Noise; Alt: a burst from that row's direction) goes to these
     // hooks instead of the processor's own bursts: the window has no audio, the engine plays them.

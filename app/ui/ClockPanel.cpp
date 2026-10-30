@@ -79,16 +79,6 @@ juce::Colour warningOf (const a3clock::ClockReport& report)
     return tone == a3clock::ClockIndicator::Tone::ok ? juce::Colours::transparentBlack : toneColour (tone);
 }
 
-void fitText (juce::Label& label, juce::Rectangle<int> line, float share)
-{
-    if (line.getHeight() <= 0 || line.getWidth() <= 0)   // a page too short for the section: nothing to size
-    {
-        label.setBounds (line);
-        return;
-    }
-    label.setFont (juce::FontOptions (fittedTextHeight (label.getText(), (float) line.getHeight() * share, (float) line.getWidth() * 0.95f)));
-    label.setBounds (line);
-}
 }
 
 ClockPanel::ClockPanel (Mode m) : mode (m)
@@ -111,13 +101,14 @@ ClockPanel::ClockPanel (Mode m) : mode (m)
     }
     rate.setColour (juce::Label::textColourId, palette::textMuted);
     counters.setColour (juce::Label::textColourId, palette::textMuted);
-    for (auto* child : std::initializer_list<juce::Component*> { &title, &state })
-        addAndMakeVisible (child);
+    addAndMakeVisible (title);
+    addChildComponent (state);
     for (auto* child : std::initializer_list<juce::Component*> { &masterCaption, &master })
         addChildComponent (child);
     for (auto* child : std::initializer_list<juce::Component*> { &role, &rate, &counters, &note })
         addChildComponent (child);
     const bool choice = mode == Mode::choice;
+    state.setVisible (! choice);   // AUDIO's card: the master only, the state word is in the footer
     masterCaption.setVisible (choice);
     master.setVisible (choice);
     for (auto* child : std::initializer_list<juce::Component*> { &role, &rate, &counters, &note })
@@ -144,57 +135,40 @@ void ClockPanel::show (const a3clock::ClockReport& report)
     resized();   // the texts' sizes follow their length
 }
 
-// A card as the page's others (look::card), framed in the warning's colour when not locked.
-void ClockPanel::paint (juce::Graphics& g)
-{
-    const int pageWidth = getParentComponent() != nullptr ? getParentComponent()->getWidth() : getWidth();
-    look::card (g, getLocalBounds(), pageWidth);
-    if (! warns())
-        return;
-    g.setColour (frame);
-    const auto thickness = (float) juce::jmax (2, getHeight() / 80);
-    g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (thickness * 0.5f), (float) juce::jmax (2, pageWidth / 60), thickness);
-}
+// The panel paints no ground: it sits in its page's card, and the page frames the card in frameColour().
+void ClockPanel::paint (juce::Graphics&) {}
 
-void ClockPanel::setTextHeight (float height)
+void ClockPanel::setTokens (const layout::Tokens& t)
 {
-    if (height == textHeight)
-        return;
-    textHeight = height;
+    tokens = t;
     resized();
 }
 
-// One size for every line when the page gives one (squeezed across, never smaller); else each fitted to its row.
+// The page's one text size; the choice is a heading and the master's line, the detail a heading and its lines.
 void ClockPanel::resized()
 {
-    const int pageWidth = getParentComponent() != nullptr ? getParentComponent()->getWidth() : getWidth();
-    auto area = getLocalBounds().reduced (juce::jmax (2, pageWidth / 60));
-    const int row = area.getHeight() / (mode == Mode::choice ? 3 : 8);
-    const auto place = [&] (juce::Label& label, juce::Rectangle<int> line, float share)
+    auto area = getLocalBounds();
+    const auto place = [&] (juce::Label& label, juce::Rectangle<int> line)
     {
-        if (textHeight <= 0.0f)
-            return fitText (label, line, share);
-        label.setFont (juce::FontOptions (textHeight));
+        label.setFont (juce::FontOptions (tokens.text > 0 ? tokens.text : (float) line.getHeight() * 0.5f));
         label.setMinimumHorizontalScale (0.5f);
         label.setBounds (line);
     };
-    place (title, area.removeFromTop (row), 0.5f);
+    const int heading = tokens.heading > 0 ? tokens.heading : area.getHeight() / 4;
+    place (title, area.removeFromTop (heading));
     if (mode == Mode::choice)
     {
-        auto choice = area.removeFromTop (row);
-        place (masterCaption, choice.removeFromLeft (choice.getWidth() / 4), 0.4f);
-        master.setBounds (choice.reduced (2));
-        auto stateLine = area.removeFromTop (row);
-        stateLine.removeFromLeft (stateLine.getWidth() / 4);   // under the master: the dropdowns' column
-        place (state, stateLine, 0.45f);
+        auto choice = area;
+        place (masterCaption, choice.removeFromLeft (choice.getWidth() / 4));
+        master.setBounds (tokens.row > 0 ? layout::control (choice, tokens) : choice);
         return;
     }
-    place (state, area.removeFromTop (row), 0.45f);
-    place (role, area.removeFromTop (row), 0.4f);
-    place (rate, area.removeFromTop (row), 0.4f);
-    place (counters, area.removeFromTop (row), 0.4f);
-    place (note, area, 0.36f);   // the rest: two lines at the page's size
-    if (textHeight > 0.0f)
-        note.setMinimumHorizontalScale (1.0f);
+    const int line = juce::jmax (1, area.getHeight() / 6);
+    place (state, area.removeFromTop (line));
+    place (role, area.removeFromTop (line));
+    place (rate, area.removeFromTop (line));
+    place (counters, area.removeFromTop (line));
+    place (note, area);   // the rest: two lines
+    note.setMinimumHorizontalScale (1.0f);
 }
 }

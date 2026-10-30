@@ -43,24 +43,28 @@ void FilterPage::refresh()
     ladderButton.setToggleState (ladder, juce::dontSendNotification);
 }
 
-void FilterPage::paint (juce::Graphics& g) { g.fillAll (palette::surface); }
+void FilterPage::paint (juce::Graphics& g)
+{
+    g.fillAll (palette::surface);
+    paintCards (g, *this, layout::tokens (*this));
+}
 
+// One card (layout::Stack): the heading, the two filters as equal keys two rows tall, and why below them.
 void FilterPage::resized()
 {
-    auto area = getLocalBounds().reduced (getWidth() / 40);
-    const int row = look::rowHeight (*this);
-    title.setBounds (area.removeFromTop (row));
-    auto keys = area.removeFromTop (row * 2);
-    svfButton.setBounds (keys.removeFromLeft (keys.getWidth() / 2).reduced (row / 16));
-    ladderButton.setBounds (keys.reduced (row / 16));
+    const auto t = layout::tokens (*this);
+    layout::Stack stack (getLocalBounds().reduced (t.margin), t, cards);
+    auto area = stack.card (2 * t.padding + t.heading + 2 * t.row + 2 * t.heading).reduced (t.padding);
+    title.setFont (juce::FontOptions (t.text));
+    title.setBounds (area.removeFromTop (t.heading));
+    layout::equalRow (area.removeFromTop (2 * t.row).reduced (0, t.inset), { &svfButton, &ladderButton }, t);
     auto shared = std::numeric_limits<float>::max();   // both keys at one size: the longer text decides
     for (auto* key : { &svfButton, &ladderButton })
         shared = juce::jmin (shared, fittedTextHeight (key->getButtonText(), (float) key->getHeight() * keyTextShare * 0.7f,
                                                        (float) key->getWidth() * keyTextWidthShare));
     for (auto* key : { &svfButton, &ladderButton })
         key->getProperties().set (sharedKeyTextHeight, (double) shared);
-    area.removeFromTop (row / 4);
-    why.setFont (juce::FontOptions ((float) row * 0.36f));
-    why.setBounds (area.removeFromTop (row * 2));
+    why.setFont (juce::FontOptions (t.text));
+    why.setBounds (area);
 }
 }

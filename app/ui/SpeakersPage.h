@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
-#include "Dropdown.h"
+#include "Look.h"
 #include "AllRadDesign.h"
 #include "HostView.h"
 #include "Look.h"
@@ -14,7 +14,7 @@ namespace a3app
 // SAVE TO ZONE: IEM's calculateDecoder and saveConfigurationToFile make the file, withZoneDecoder writes the
 // user variant and makes it the pending edit for the shown zone only; Save restarts the engine. A noise button plays a 1 s pink-noise
 // burst in the shown zone of the running engine (its running decoder), before its level stage and gate.
-class SpeakersPage final : public juce::Component
+class SpeakersPage final : public juce::Component, public CardPage
 {
 public:
     // `userRoot`: where user variants are written (<configDir>/engine/spatial); empty: SAVE TO ZONE refuses.
@@ -48,7 +48,9 @@ private:
     int subChannel = 0;     // 0 = no sub
     float crossoverHz = 150.0f;
     a3::AllRadDesigner designer;
-    std::unique_ptr<juce::AudioProcessorEditor> iemEditor;   // scaled into the page, never scrolled
+    bool messageLaidOutEmpty = true;
+    juce::Component editorCard;                               // the second card's content: IEM's editor scaled into it
+    std::unique_ptr<juce::AudioProcessorEditor> iemEditor;   // scaled into editorCard, never scrolled
     juce::TextButton mainKey { "MAIN" }, boothKey { "BOOTH" }, save { "SAVE TO ZONE" };
     juce::Label title, subCaption, crossoverCaption, message;
     Dropdown sub;

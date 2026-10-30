@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
-#include "Dropdown.h"
+#include "Look.h"
 #include "HostView.h"
 #include "Look.h"
 #include <functional>
@@ -21,6 +21,14 @@ namespace a3app
 // measurement pairs, its side of them: the digital loop (the round trip, one channel a side) and the analog test
 // cable (one channel a side). The digital loop's channels are offered in no route; a notice names them and the routes a load left out because they were
 // on them. Every edit is pending until Save.
+// A scrolled list's content: cards from its edge to its edge, painted on its ground (the page's surface shows around).
+class CardList final : public juce::Component, public CardPage
+{
+public:
+    void setCards (std::vector<juce::Rectangle<int>> made) { cards = std::move (made); repaint(); }
+    void paint (juce::Graphics& g) override { paintCards (g, *this, layout::tokens (*this)); }
+};
+
 class IoPage final : public juce::Component
 {
 public:
@@ -68,8 +76,8 @@ private:
     std::vector<RouteChoice> choicesFor (bool input) const;
     void fillAnalogPair();
     void fillDigitalLoop();
-    void layoutInput (juce::Rectangle<int> area, int row);
-    void layoutOutput (juce::Rectangle<int> area, int row);
+    void layoutInput (juce::Rectangle<int> area, const layout::Tokens&);
+    void layoutOutput (juce::Rectangle<int> area, const layout::Tokens&);
 
     HostView& view;
     AppConfig shown;
@@ -93,7 +101,7 @@ private:
     juce::Component* departments = nullptr;
     std::function<void()> refreshDepartments;
     juce::Label decksCaption;
-    juce::Component inputContent, outputContent;   // the scrolled parts of the sub-pages
+    CardList inputContent, outputContent;   // the scrolled parts of the sub-pages
     juce::Viewport inputView, outputView;
 };
 }

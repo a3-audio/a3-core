@@ -4,28 +4,21 @@
 
 namespace a3app
 {
-namespace
-{
-constexpr int subGroup = 4;   // the keys' radio group
-}
-
 SubPages::SubPages (const juce::String& text)
 {
     look::caption (title);
     look::say (title, text);
     addAndMakeVisible (title);
+    addAndMakeVisible (keys);
+    keys.onChoose = [this] (int index) { show (subs[(size_t) index].name); };
 }
 SubPages::~SubPages() = default;
 
 void SubPages::add (const juce::String& name, std::unique_ptr<juce::Component> made, std::function<void()> refreshIt)
 {
-    auto key = std::make_unique<juce::TextButton> (name);
-    key->setRadioGroupId (subGroup);
-    key->setClickingTogglesState (false);   // show() decides which one is on
-    key->onClick = [this, name] { show (name); };
-    addAndMakeVisible (*key);
+    keys.add (name);
     addChildComponent (*made);
-    subs.push_back ({ name, std::move (made), std::move (refreshIt), std::move (key) });
+    subs.push_back ({ name, std::move (made), std::move (refreshIt) });
     show (subs.front().name);
 }
 
@@ -35,10 +28,8 @@ void SubPages::show (const juce::String& name)
         if (subs[i].name == name)
             current = (int) i;
     for (size_t i = 0; i < subs.size(); ++i)
-    {
         subs[i].page->setVisible ((int) i == current);
-        subs[i].key->setToggleState ((int) i == current, juce::dontSendNotification);
-    }
+    keys.select (current);
 }
 
 bool SubPages::has (const juce::String& name) const { return page (name) != nullptr; }
@@ -53,13 +44,7 @@ juce::Component* SubPages::page (const juce::String& name) const
     return nullptr;
 }
 
-juce::TextButton* SubPages::key (const juce::String& name) const
-{
-    for (const auto& sub : subs)
-        if (sub.name == name)
-            return sub.key.get();
-    return nullptr;
-}
+juce::TextButton* SubPages::key (const juce::String& name) const { return keys.key (name); }
 
 void SubPages::refresh()
 {
@@ -70,19 +55,17 @@ void SubPages::refresh()
 
 void SubPages::paint (juce::Graphics& g) { g.fillAll (palette::surface); }
 
-// The title and the keys in the row I/O has its INPUT and OUTPUT in (its margin, the title's quarter), the sub-page
-// below them.
+// The title and the keys in the row I/O has its INPUT and OUTPUT in (the margin, the title's quarter, equal keys a unit
+// apart), the sub-page below them: its first card a gap under the keys.
 void SubPages::resized()
 {
-    auto area = getLocalBounds();
-    const int row = look::rowHeight (*this);
-    const int margin = getWidth() / 40;
-    auto top = area.removeFromTop (row + margin).reduced (margin, 0).withTrimmedTop (margin);
+    const auto t = layout::tokens (*this);
+    auto top = getLocalBounds().reduced (t.margin, 0).withTrimmedTop (t.margin).withHeight (t.row);
+    title.setFont (juce::FontOptions (t.text));
     title.setBounds (top.removeFromLeft (top.getWidth() / 4));
-    const int width = subs.empty() ? 0 : top.getWidth() / (int) subs.size();
+    keys.setBounds (layout::control (top, t));
+    const auto below = getLocalBounds().withTrimmedTop (t.row + t.gap);   // the sub-page's own margin then sits under the keys
     for (auto& sub : subs)
-        sub.key->setBounds (top.removeFromLeft (width).reduced (row / 16));
-    for (auto& sub : subs)
-        sub.page->setBounds (area);
+        sub.page->setBounds (below);
 }
 }

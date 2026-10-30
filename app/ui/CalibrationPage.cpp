@@ -118,24 +118,34 @@ void CalibrationPage::refresh()
         look::say (row->current, describe (trimOf (config, row->zone)));
 }
 
-void CalibrationPage::paint (juce::Graphics& g) { g.fillAll (palette::surface); }
+void CalibrationPage::paint (juce::Graphics& g)
+{
+    g.fillAll (palette::surface);
+    paintCards (g, *this, layout::tokens (*this));
+}
 
+// Two cards (layout::Stack): the trims (heading, a line per zone, the message) and the help in the room below.
 void CalibrationPage::resized()
 {
-    auto area = getLocalBounds().reduced (getWidth() / 40);
-    const int row = look::rowHeight (*this);
-    title.setBounds (area.removeFromTop (row));
+    const auto t = layout::tokens (*this);
+    layout::Stack stack (getLocalBounds().reduced (t.margin), t, cards);
+    auto area = stack.card (layout::cardHeight (t, (int) rows.size() + 1)).reduced (t.padding);
+    for (auto* label : { &title, &message, &helpText })
+        label->setFont (juce::FontOptions (t.text));
+    title.setBounds (area.removeFromTop (t.heading));
     for (auto& rowPtr : rows)
     {
         auto& r = *rowPtr;
-        auto line = area.removeFromTop (row);
+        auto line = area.removeFromTop (t.row);
+        for (auto* label : { &r.name, &r.current })
+            label->setFont (juce::FontOptions (t.text));
         r.name.setBounds (line.removeFromLeft (line.getWidth() / 8));
         r.current.setBounds (line.removeFromLeft (line.getWidth() * 2 / 7));
-        r.set.setBounds (line.removeFromRight (line.getWidth() / 5).reduced (2));
-        r.proposal.setBounds (line);
+        r.set.setBounds (layout::control (line.removeFromRight (line.getWidth() / 5), t));
+        line.removeFromRight (t.unit);
+        r.proposal.setBounds (layout::control (line, t));
     }
-    message.setBounds (area.removeFromTop (row));
-    helpText.setFont (juce::FontOptions ((float) row * 0.36f));
-    helpText.setBounds (area.removeFromTop (row * 3));
+    message.setBounds (area);
+    helpText.setBounds (stack.card (2 * t.padding + 3 * t.heading).reduced (t.padding));
 }
 }

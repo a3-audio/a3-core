@@ -8,7 +8,7 @@ namespace a3app
 {
 // SVF or Ladder for the channels' DJ filter. Live: the choice acts at once (FilterControls::kind),
 // no Save needed; the next Save writes it into the file.
-class FilterPage final : public juce::Component
+class FilterPage final : public juce::Component, public CardPage
 {
 public:
     explicit FilterPage (HostView&);

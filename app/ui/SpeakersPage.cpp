@@ -90,7 +90,7 @@ SpeakersPage::SpeakersPage (HostView& v, juce::File root) : view (v), userRoot (
     });
 
     for (auto* child : std::initializer_list<juce::Component*> { &title, &mainKey, &boothKey, &save, &subCaption, &sub,
-                                                                 &crossoverCaption, &crossover, &message })
+                                                                 &crossoverCaption, &crossover, &message, &editorCard })
         addAndMakeVisible (child);
     load();
 }
@@ -123,9 +123,9 @@ void SpeakersPage::load()
         designer.setLoudspeakers ({});
     sayOutcome (message, loaded.failed() ? decoderFile.getFullPathName() + ": " + loaded.getErrorMessage() : juce::String(), loaded.wasOk());
 
-    iemEditor = designer.createEditor();
+    iemEditor = designer.createEditor (palette::raised);   // the energy map's ground is the card's
     look::stripTooltips (*iemEditor);   // IEM's own TooltipWindow then has nothing to show
-    addAndMakeVisible (*iemEditor);
+    editorCard.addAndMakeVisible (*iemEditor);
     mainKey.setToggleState (shown == a3::SpeakerZone::main, juce::dontSendNotification);
     boothKey.setToggleState (shown == a3::SpeakerZone::booth, juce::dontSendNotification);
     showParameters();
@@ -191,35 +191,47 @@ void SpeakersPage::refresh()
         load();
     else if (iemEditor != nullptr)
         look::stripTooltips (*iemEditor);   // IEM's table makes its rows' buttons (with tips) as it fills
+    if (message.getText().isEmpty() != messageLaidOutEmpty)
+        resized();   // the settings card takes the message's line only while there is one
 }
 
-void SpeakersPage::paint (juce::Graphics& g) { g.fillAll (palette::surface); }
+void SpeakersPage::paint (juce::Graphics& g)
+{
+    g.fillAll (palette::surface);
+    paintCards (g, *this, layout::tokens (*this));
+}
 
-// The bar in the rows of AUDIO and I/O: the title row (title, the zone keys, SAVE TO ZONE at the right), then one
-// row per setting, the caption in the first quarter and the control on the rest, the message, a gap, the editor.
+// Two cards (layout::Stack): the settings (the zone keys with SAVE TO ZONE, Sub, Crossover, the message when there is
+// one) and IEM's editor. SAVE TO ZONE is as wide as the ZONES key above it (SubPages: the title's quarter, then two
+// keys a unit apart), MAIN and BOOTH share what is left beside the caption.
 void SpeakersPage::resized()
 {
-    auto area = getLocalBounds().reduced (getWidth() / 40, getWidth() / 80);
-    const int row = look::rowHeight (*this);
-    const int gap = juce::jmax (1, row / 14);
-    auto top = area.removeFromTop (row);
+    const auto t = layout::tokens (*this);
+    messageLaidOutEmpty = message.getText().isEmpty();
+    const int lines = messageLaidOutEmpty ? 3 : 4;
+    layout::Stack stack (getLocalBounds().reduced (t.margin), t, cards);
+    auto area = stack.card (layout::cardHeight (t, lines, false)).reduced (t.padding);
+    for (auto* label : { &title, &subCaption, &crossoverCaption, &message })
+        label->setFont (juce::FontOptions (t.text));
+    auto top = area.removeFromTop (t.row);
     title.setBounds (top.removeFromLeft (top.getWidth() / 4));
-    const int key = top.getWidth() / 4;
-    mainKey.setBounds (top.removeFromLeft (key).reduced (gap));
-    boothKey.setBounds (top.removeFromLeft (key).reduced (gap));
-    save.setBounds (top.removeFromRight (key * 3 / 2).reduced (gap));
+    const int pageKeys = getWidth() - 2 * t.margin;
+    const int subKey = (pageKeys - pageKeys / 4 - t.unit) / 2;
+    save.setBounds (layout::control (top.removeFromRight (subKey), t));
+    top.removeFromRight (t.unit);
+    layout::equalRow (layout::control (top, t), { &mainKey, &boothKey }, t);
     const auto line = [&] (juce::Label& caption, juce::Component& control)
     {
-        auto r = area.removeFromTop (row);
+        auto r = area.removeFromTop (t.row);
         caption.setBounds (r.removeFromLeft (r.getWidth() / 4));
-        control.setBounds (r.reduced (gap));
+        control.setBounds (layout::control (r, t));
     };
     line (subCaption, sub);
     line (crossoverCaption, crossover);
-    crossover.setTextBoxStyle (juce::Slider::TextBoxRight, false, getWidth() / 6, row - 2 * gap);
-    message.setBounds (area.removeFromTop (row));
-    area.removeFromTop (row / 4);
-    placeEditor (area);
+    crossover.setTextBoxStyle (juce::Slider::TextBoxRight, false, getWidth() / 6, t.row - 2 * t.inset);
+    message.setBounds (area.removeFromTop (lines == 4 ? t.row : 0));
+    editorCard.setBounds (stack.rest().reduced (t.padding));
+    placeEditor (editorCard.getLocalBounds());
 }
 
 // IEM's editor at its own size, scaled (aspect kept) to fill `area`'s width, or its height when that is

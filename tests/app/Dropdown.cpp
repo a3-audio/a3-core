@@ -24,7 +24,7 @@ struct Rig
         box.onChange = [this] { ++changes; };
     }
     juce::Component window;
-    a3app::Dropdown box;
+    a3look::Dropdown box;
     int changes = 0;
 };
 

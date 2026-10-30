@@ -4,11 +4,11 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <memory>
 
-namespace a3app
+namespace a3look
 {
 class DropdownList;
 
-// Every dropdown of the window. JUCE's ComboBox opens a PopupMenu, which scrolls only while the pointer rests on an
+// Every dropdown of an A3 window (the A3 look; only JUCE). JUCE's ComboBox opens a PopupMenu, which scrolls only while the pointer rests on an
 // arrow at its edge and takes a drag across it as choosing: on the touch screen a long list could not be scrolled.
 // This one opens its items as a ListBox (a Viewport, which JUCE scrolls by a finger drag with momentum) inside the
 // window, under the box or above it, and opens on a tap (released without a drag), so a drag that starts on a box

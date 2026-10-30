@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
-#include "Dropdown.h"
+#include "Look.h"
 #include "HostView.h"
 #include "Look.h"
 
@@ -18,7 +18,7 @@ public:
 
     void setChannels (int);
     void setDecks (int);
-    void setTextHeight (float);
+    void setTokens (const layout::Tokens&);   // the page's: its row, its text size
     const juce::Label& channelsRunningLabel() const { return channelsRunning; }
     const juce::Label& decksRunningLabel() const { return decksRunning; }
     juce::ComboBox& channelsChooser() { return channelsBox; }
@@ -31,7 +31,7 @@ private:
     HostView& view;
     juce::Label caption, channelsRunning, decksCaption, decksRunning, message;
     Dropdown channelsBox, decksBox;
-    float textHeight = 16.0f;
+    layout::Tokens tokens;
     bool filling = false;
 };
 }

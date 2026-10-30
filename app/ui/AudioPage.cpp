@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "AudioPage.h"
+#include <tuple>
 
 namespace a3app
 {
@@ -38,8 +39,49 @@ juce::String chosenName (const juce::ComboBox& box)
 const juce::String restartWarning = "the audio stops for about two seconds while WirePlumber restarts";
 }
 
+juce::String digitalRoundtripValue (const RoundTrip& estimate, const RoundTripReport& measured, bool loopSet)
+{
+    using State = RoundTripReport::State;
+    if (! loopSet)
+        return "no digital loop (I/O page)";
+    if (measured.state == State::measured && estimate.sampleRate > 0)
+        return juce::String (estimate.ms (measured.samples), 1) + " ms   " + juce::Time (measured.atMillis).formatted ("%H:%M")
+               + (measured.measuring ? "   measuring" : "");
+    if (measured.measuring)
+        return "measuring";
+    if ((measured.state == State::noLoop || measured.state == State::noLoopFound) && measured.reason.isNotEmpty())
+        return measured.reason;
+    if (estimate.sampleRate <= 0)
+        return "no engine runs";
+    return "not measured yet";
+}
+
+juce::String analogRoundtripValue (const RoundTrip& estimate, const RoundTripReport& measured, const std::optional<AnalogLoop>& pair)
+{
+    if (! pair || pair->output <= 0 || pair->input <= 0)
+        return "no analog test pair (I/O page)";
+    if (measured.analogMeasuring)
+        return "measuring";
+    if (measured.analog == RoundTripReport::Analog::measured)
+    {
+        if (measured.state != RoundTripReport::State::measured || estimate.sampleRate <= 0)
+            return "digital roundtrip not measured now";
+        return juce::String (estimate.ms (measured.samples) + measured.converters.ms(), 1) + " ms   " + measured.converters.measuredOn;
+    }
+    if (measured.analogReason.isNotEmpty())
+        return measured.analogReason;
+    return "not measured yet: cable output " + juce::String (pair->output) + " to input " + juce::String (pair->input);
+}
+
 AudioPage::AudioPage (HostView& v, juce::AudioDeviceManager& m) : view (v), manager (m), channels (v)
 {
+    for (auto* caption : { &digitalCaption, &analogCaption })
+    {
+        look::caption (*caption);
+        addAndMakeVisible (*caption);
+    }
+    look::say (digitalCaption, "Digital roundtrip");
+    look::say (analogCaption, "Analog roundtrip");
     for (auto [heading, text] : { std::pair { &driverHeading, "DRIVER" }, std::pair { &channelsHeading, "CHANNELS" },
                                   std::pair { &measureHeading, "MEASURE" } })
     {
@@ -332,19 +374,12 @@ void AudioPage::showMeasurements (const BackendStatus& status)
 {
     using State = RoundTripReport::State;
     const auto& measured = status.roundTripMeasured;
-    const bool loopSet = view.running().io.roundTripLoop.has_value();
-    roundTrip.setText (roundTripText (estimatedRoundTrip (status), measured)
-                           + (loopSet ? juce::String() : juce::String ("  -  no digital loop (I/O page)")),
-                       juce::dontSendNotification);
+    const auto& io = view.running().io;
+    const bool loopSet = io.roundTripLoop.has_value();
+    roundTrip.setText (digitalRoundtripValue (estimatedRoundTrip (status), measured, loopSet), juce::dontSendNotification);
     measure.setEnabled (loopSet && ! measured.measuring && measured.state != State::noLoop && measured.state != State::notReported);
-    const auto pair = view.running().io.analogLoop;
-    const bool chosen = pair && pair->output > 0 && pair->input > 0;
-    const bool converted = measured.analog == RoundTripReport::Analog::measured;
-    analogChain.setText (analogChainText (estimatedRoundTrip (status), measured)
-                             + (! chosen ? juce::String ("  -  no analog test pair (I/O page)")
-                                         : converted ? juce::String()
-                                                     : "  -  cable output " + juce::String (pair->output) + " to input " + juce::String (pair->input)),
-                         juce::dontSendNotification);
+    const bool chosen = io.analogLoop && io.analogLoop->output > 0 && io.analogLoop->input > 0;
+    analogChain.setText (analogRoundtripValue (estimatedRoundTrip (status), measured, io.analogLoop), juce::dontSendNotification);
     measureAnalog.setEnabled (chosen && loopSet && ! measured.analogMeasuring && ! measured.measuring && measured.state != State::noLoop
                               && measured.state != State::notReported);
 }
@@ -366,23 +401,21 @@ void AudioPage::refresh()
     resized();
 }
 
-// The cards on the page's surface, as ZONES' info card (look::card); CLOCK paints its own.
 void AudioPage::paint (juce::Graphics& g)
 {
     g.fillAll (palette::surface);
-    for (const auto& card : { driverCard, channelsArea, measureCard })
-        look::card (g, card, getWidth());
+    paintCards (g, *this, tokens);
 }
 
-// The settings: the device type, then a JUCE type's devices, rate and block, or PipeWire's block and periods with
-// the question before APPLY.
-void AudioPage::layoutSettings (juce::Rectangle<int>& area, int row)
+// The settings: the device type, then a JUCE type's devices, rate and block, or PipeWire's rate, block and periods
+// with the question before APPLY: APPLY, CANCEL and REVERT equal keys on the line's right half.
+void AudioPage::layoutSettings (juce::Rectangle<int>& area)
 {
     const auto line = [&] (juce::Label& caption, juce::Component& box)
     {
-        auto r = area.removeFromTop (row);
+        auto r = area.removeFromTop (tokens.row);
         caption.setBounds (r.removeFromLeft (r.getWidth() / 4));
-        box.setBounds (r.reduced (2));
+        box.setBounds (layout::control (r, tokens));
     };
     line (typeCaption, typeBox);
     if (deviceChoosers)
@@ -396,64 +429,62 @@ void AudioPage::layoutSettings (juce::Rectangle<int>& area, int row)
     line (rateCaption, rateBox);
     line (blockCaption, blockBox);
     line (periodsCaption, periodsBox);
-    auto buttons = area.removeFromTop (row);
-    revert.setBounds (buttons.removeFromRight (buttons.getWidth() / 6).reduced (2));
+    auto buttons = area.removeFromTop (tokens.row);
+    auto keys = layout::control (buttons.removeFromRight (buttons.getWidth() / 2), tokens);
+    std::vector<juce::Component*> shown { &revert };
     if (apply.isVisible())
-    {
-        cancel.setBounds (buttons.removeFromRight (buttons.getWidth() / 5).reduced (2));
-        apply.setBounds (buttons.removeFromRight (buttons.getWidth() / 4).reduced (2));
-    }
-    confirm.setBounds (buttons);
+        shown = { &apply, &cancel, &revert };
+    const int slot = (keys.getWidth() - 2 * tokens.unit) / 3;
+    layout::equalRow (keys.removeFromRight (slot * (int) shown.size() + tokens.unit * ((int) shown.size() - 1)), shown, tokens);
+    confirm.setBounds (buttons.withTrimmedRight (tokens.unit));
 }
 
-// The round trip and the analog chain, each a row with its key at the right.
-void AudioPage::layoutMeasure (juce::Rectangle<int>& area, int row)
+// The digital and the analog roundtrip: the caption, the value, the key; the two keys of one width.
+void AudioPage::layoutMeasure (juce::Rectangle<int>& area)
 {
-    auto line = area.removeFromTop (row);
-    measure.setBounds (line.removeFromRight (line.getWidth() / 6).reduced (2));
-    roundTrip.setBounds (line);
-    auto analogLine = area.removeFromTop (row);
-    measureAnalog.setBounds (analogLine.removeFromRight (analogLine.getWidth() / 4).reduced (2));
-    analogChain.setBounds (analogLine);
+    for (auto [caption, value, key] : { std::tuple<juce::Label*, juce::Label*, juce::Button*> { &digitalCaption, &roundTrip, &measure },
+                                        std::tuple<juce::Label*, juce::Label*, juce::Button*> { &analogCaption, &analogChain, &measureAnalog } })
+    {
+        auto line = area.removeFromTop (tokens.row);
+        caption->setBounds (line.removeFromLeft (line.getWidth() / 4));
+        key->setBounds (layout::control (line.removeFromRight (line.getWidth() / 3), tokens));
+        value->setBounds (line.withTrimmedRight (tokens.unit));
+    }
 }
 
-// DRIVER, CHANNELS, MEASURE and CLOCK cards top to bottom; every text at one height, a share of the row.
+// DRIVER, CHANNELS, MEASURE and CLOCK cards down the page (layout::Stack); the row shrinks so that all of them fit,
+// the margins, paddings and gaps are the window's.
 void AudioPage::resized()
 {
-    auto page = getLocalBounds().reduced (getWidth() / 40);
-    const int gap = juce::jmax (2, getHeight() / 80);
-    const int driverRows = deviceChoosers ? 6 : 5;   // the type, the devices or not, rate, block, periods, the APPLY line
-    const int rows = 1 + driverRows + 1 + 1 + 3 + 1 + 2 + 3;   // headings, DRIVER, pending, CHANNELS, MEASURE, CLOCK
-    const int inset = juce::jmax (2, getWidth() / 60);
-    // Four cards (each with an inset above and below) and the gaps between them must fit, whatever the window's shape.
-    const int row = juce::jmax (8, juce::jmin (getHeight() / 14, (page.getHeight() - 3 * gap - 8 * inset) / (rows + 1)));
-    const auto text = juce::FontOptions ((float) row * 0.36f);
+    const auto base = layout::tokens (*this);
+    const int driverLines = deviceChoosers ? 5 : 5;   // type, devices or rate, block, periods, the APPLY line
+    const int lines = driverLines + 3 + 2 + 1;           // DRIVER, CHANNELS (two and the message), MEASURE, CLOCK
+    const int fixed = 2 * base.margin + 3 * base.gap + 4 * 2 * base.padding;
+    const int pendingLines = pending.getText().isEmpty() ? 0 : 1;
+    // Four headings (3/5 of a row each) and the lines share what is left.
+    const int fitting = (int) ((float) (getHeight() - fixed) / ((float) (lines + pendingLines) + 4.0f * 0.6f));
+    tokens = layout::tokens (*this, juce::jmax (12, juce::jmin (base.row, fitting)));
+    const auto text = juce::FontOptions (tokens.text);
     for (auto* label : { &driverHeading, &channelsHeading, &measureHeading, &roundTrip, &pending, &analogChain, &confirm, &typeCaption,
-                         &inputCaption, &outputCaption, &rateCaption, &blockCaption, &periodsCaption })
+                         &inputCaption, &outputCaption, &rateCaption, &blockCaption, &periodsCaption, &digitalCaption, &analogCaption })
         label->setFont (text);
-    channels.setTextHeight ((float) row * 0.36f);
-    clock.setTextHeight ((float) row * 0.36f);
+    channels.setTokens (tokens);
+    clock.setTokens (tokens);
 
-    const auto card = [&] (int contentRows, int extra) { return page.removeFromTop (contentRows * row + extra + 2 * inset); };
-    driverCard = card (driverRows + 1, pending.getText().isEmpty() ? 0 : row * 3 / 5);
-    page.removeFromTop (gap);
-    auto area = driverCard.reduced (inset);
-    driverHeading.setBounds (area.removeFromTop (row));
-    layoutSettings (area, row);
+    layout::Stack stack (getLocalBounds().reduced (tokens.margin), tokens, cards);
+    auto area = stack.card (layout::cardHeight (tokens, driverLines + pendingLines)).reduced (tokens.padding);
+    driverHeading.setBounds (area.removeFromTop (tokens.heading));
+    layoutSettings (area);
     pending.setBounds (area);
 
-    channelsArea = card (4, 0);
-    page.removeFromTop (gap);
-    area = channelsArea.reduced (inset);
-    channelsHeading.setBounds (area.removeFromTop (row));
+    area = stack.card (layout::cardHeight (tokens, 3)).reduced (tokens.padding);
+    channelsHeading.setBounds (area.removeFromTop (tokens.heading));
     channels.setBounds (area);
 
-    measureCard = card (3, 0);
-    page.removeFromTop (gap);
-    area = measureCard.reduced (inset);
-    measureHeading.setBounds (area.removeFromTop (row));
-    layoutMeasure (area, row);
+    area = stack.card (layout::cardHeight (tokens, 2)).reduced (tokens.padding);
+    measureHeading.setBounds (area.removeFromTop (tokens.heading));
+    layoutMeasure (area);
 
-    clock.setBounds (page.withHeight (juce::jmin (page.getHeight(), 3 * row + 2 * inset)));
+    clock.setBounds (stack.card (layout::cardHeight (tokens, 1)).reduced (tokens.padding));
 }
 }

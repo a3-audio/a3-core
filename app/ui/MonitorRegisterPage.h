@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
-#include "Dropdown.h"
+#include "Look.h"
 #include "CoreClient.h"
 #include "Look.h"
 #include "MonitorTable.h"

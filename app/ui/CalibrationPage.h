@@ -11,7 +11,7 @@ namespace a3app
 {
 // Trim per zone in dB, -90..+6. The sliders only propose a value; the trim changes after a
 // confirmation naming the old and the new value. A zone without a trim is closed ("not set").
-class CalibrationPage final : public juce::Component
+class CalibrationPage final : public juce::Component, public CardPage
 {
 public:
     // Asks the person; calls onYes if they agree. The default is a modal box; tests pass their own.

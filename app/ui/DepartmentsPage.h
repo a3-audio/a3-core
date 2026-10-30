@@ -16,7 +16,7 @@ namespace a3app
 // and SAVE LIST stays off while one is wrong; whether a host name resolves, Core decides when it is saved.
 // Core applies a saved list at once, without a restart. Each row says what Core does with it: sending (how many messages,
 // the last how long ago), quiet, off, not saved, or that the service file's entry of that name wins.
-class DepartmentsPage final : public juce::Component
+class DepartmentsPage final : public juce::Component, public CardPage
 {
 public:
     // `askEveryMillis`: how often the page asks Core for its report while it is shown.

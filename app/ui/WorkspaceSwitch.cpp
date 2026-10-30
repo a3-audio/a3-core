@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "WorkspaceSwitch.h"
+#include "look/A3LookAndFeel.h"
 
 #include <cctype>
 #include <chrono>
@@ -137,10 +138,6 @@ namespace a3app
 {
 namespace
 {
-// StemDeck's Theme.h, as A3 Motion's switcherLook has it: the switch looks the same in every app.
-const juce::Colour keyFace { 0xff26282c }, currentFace { 0xff58595c }, outline { 0xff34363b }, text { 0xffdcdcdc },
-    currentText { 0xff000000 }, panelFace { 0xff1c1d20 };
-constexpr float cornerSize = 6.f, outlineWidth = 1.f, halfPixel = 0.5f;
 
 std::pair<juce::MouseInputSource::InputSourceType, int> sourceOf (const juce::MouseEvent& e)
 {
@@ -179,22 +176,7 @@ void SwitchKey::setCurrent (bool current)
     repaint();
 }
 
-void SwitchKey::paint (juce::Graphics& g)
-{
-    // A3 Motion's switcherLook::paintKey: LookAndFeel_V4's button, which is what StemDeck's keys are.
-    const auto area = getLocalBounds();
-    const auto face = area.toFloat().reduced (halfPixel);
-    g.setColour (_current ? currentFace : keyFace);
-    g.fillRoundedRectangle (face, cornerSize);
-    g.setColour (outline);
-    g.drawRoundedRectangle (face, cornerSize, outlineWidth);
-    const auto font = juce::Font (juce::FontOptions (juce::jmin (16.f, static_cast<float> (area.getHeight()) * 0.6f)));
-    const auto yIndent = juce::jmin (4, juce::roundToInt (static_cast<float> (area.getHeight()) * 0.3f));
-    const auto indent = juce::jmin (juce::roundToInt (font.getHeight() * 0.6f), 2 + juce::jmin (area.getWidth(), area.getHeight()) / 4);
-    g.setFont (font);
-    g.setColour (_current ? currentText : text);
-    g.drawFittedText (_label, area.reduced (indent, yIndent), juce::Justification::centred, 2);
-}
+void SwitchKey::paint (juce::Graphics& g) { a3look::lookOf (*this).drawSwitchKey (g, getLocalBounds(), _label, _current); }
 
 void SwitchKey::mouseDown (const juce::MouseEvent& e) { _gate.press (e); }
 
@@ -237,13 +219,7 @@ void WorkspacePanel::resized()
     }
 }
 
-void WorkspacePanel::paint (juce::Graphics& g)
-{
-    g.setColour (panelFace);
-    g.fillRoundedRectangle (_column.toFloat(), cornerSize);
-    g.setColour (outline);
-    g.drawRoundedRectangle (_column.toFloat(), cornerSize, outlineWidth);
-}
+void WorkspacePanel::paint (juce::Graphics& g) { a3look::lookOf (*this).drawSwitchPanel (g, _column.toFloat()); }
 
 void WorkspacePanel::mouseDown (const juce::MouseEvent& e) { _gate.press (e); }
 

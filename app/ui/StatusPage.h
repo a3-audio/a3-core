@@ -26,14 +26,14 @@ juce::String droppedText (const std::vector<std::string>& droppedLinks, const st
 // x 3 periods" (a device: no periods), where the rate comes from, the bit depth and who sets it, the DSP load, xruns.
 struct DriverInfo
 {
-    juce::String rate, timing, rateSource, bitDepth, load, xruns;
+    juce::String rate, timing, rateSource, bitDepth, load, xruns, roundTrip;   // roundTrip: the estimate (AUDIO says the measured)
 };
 DriverInfo driverInfo (const AppConfig& running, const BackendStatus&);
 inline DriverInfo driverInfo (const HostView& view) { return driverInfo (view.running(), view.status()); }
 
 // Read-only: engine mode, Core's last word, the gate per zone, load and xruns, missing peers
 // and the per-port meters; the driver's details (DriverInfo) and the clock's (ClockPanel::Mode::detail). refresh() re-reads the view (the window's timer calls it).
-class StatusPage final : public juce::Component
+class StatusPage final : public juce::Component, public CardPage
 {
 public:
     explicit StatusPage (HostView&);

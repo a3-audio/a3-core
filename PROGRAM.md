@@ -151,6 +151,14 @@ says hello on `core.osc` and shows a window.
   (a unit without a screen). `--service`: closing the window only hides it.
 - `--check-config`: prints `ok` or `<file>: <reason>`, exit 0 or 1, opens nothing.
 
+The window's look is its own small module, `app/ui/look/` (2026-10-30): `Tokens.h` (the palette and the layout grid:
+every size a share of the page's row height; unit = a sixth of the window's row, page margin 2 units, card padding 1,
+gap between cards 1, a card's heading 3/5 of a row, a control's inset half a unit, card radius 1 unit and no outline,
+one text height of 0.36 rows), `A3LookAndFeel` (JUCE's widgets, cards, the touch dropdown's rows, the workspace switch's
+keys), `Card.h` (a page of cards), `Dropdown`, `SubPageKeys`. It depends on JUCE only and knows no page: it is the seed of
+a shared `a3_look` JUCE module for every A3 app (StemDeck, the desk, Motion UI, Canvas). Every page is cards on that grid
+(a test walks them all: margins, paddings, gaps).
+
 The window has one page per job and a Save bar under them; no tooltips (2026-10-30: help that matters is a line on its page):
 
 | Page | What it edits |

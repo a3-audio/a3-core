@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
-#include "Dropdown.h"
+#include "Look.h"
 #include "AudioTiming.h"
 #include "ChannelsPage.h"
 #include "ClockPanel.h"
@@ -22,7 +22,13 @@ namespace a3app
 // their keys, off while the I/O page names no pair, their line saying why. CLOCK: the master and the one-word
 // state (ClockPanel::Mode::choice). What runs in detail (rate source, bit depth, DSP load, xruns, the clock's
 // numbers) is on STATUS. Every text is one size. The page opens no device: the manager is a catalogue of device types.
-class AudioPage final : public juce::Component
+// The MEASURE card's values (2026-10-30, third round): "7.8 ms   21:05" once measured, else why not ("no digital loop
+// (I/O page)", "not measured yet", ...); the analog roundtrip is the digital one now plus the converters' stored share
+// ("9.1 ms   2026-10-30"), else why not, and what to plug before the first run.
+juce::String digitalRoundtripValue (const RoundTrip& estimate, const RoundTripReport&, bool loopSet);
+juce::String analogRoundtripValue (const RoundTrip& estimate, const RoundTripReport&, const std::optional<AnalogLoop>& pair);
+
+class AudioPage final : public juce::Component, public CardPage
 {
 public:
     static inline const juce::String pipewireType { "PipeWire (JACK)" };
@@ -42,8 +48,7 @@ public:
     juce::ComboBox& periodsChooser() { return periodsBox; }
     juce::ComboBox& rateChooser() { return rateBox; }
     ChannelsPage& channelsCard() { return channels; }
-    // The cards, in the page's coordinates: DRIVER, CHANNELS, MEASURE, CLOCK.
-    std::vector<juce::Rectangle<int>> cardAreas() const { return { driverCard, channelsArea, measureCard, clock.getBounds() }; }
+    // The cards (CardPage::cardAreas): DRIVER, CHANNELS, MEASURE, CLOCK.
     juce::Button& applyButton() { return apply; }
     juce::Button& cancelButton() { return cancel; }
     juce::Button& revertButton() { return revert; }
@@ -73,20 +78,20 @@ private:
     void choose (const AudioTiming&);
     void applyChosen();
     void revertTiming();
-    void layoutSettings (juce::Rectangle<int>& area, int row);
-    void layoutMeasure (juce::Rectangle<int>& area, int row);
+    void layoutSettings (juce::Rectangle<int>& area);
+    void layoutMeasure (juce::Rectangle<int>& area);
     void fillPipeWireRate();
 
     HostView& view;
     juce::AudioDeviceManager& manager;
-    juce::Label driverHeading, channelsHeading, measureHeading, roundTrip, pending, analogChain, confirm;
+    juce::Label driverHeading, channelsHeading, measureHeading, digitalCaption, analogCaption, roundTrip, pending, analogChain, confirm;
+    layout::Tokens tokens;
     juce::TextButton measure { "MEASURE" }, measureAnalog { "MEASURE ANALOG CHAIN" }, apply { "APPLY" }, cancel { "CANCEL" },
         revert { "REVERT" };
     juce::Label typeCaption, inputCaption, outputCaption, rateCaption, blockCaption, periodsCaption;
     Dropdown typeBox, inputBox, outputBox, rateBox, blockBox, periodsBox;
     ChannelsPage channels;
     ClockPanel clock { ClockPanel::Mode::choice };
-    juce::Rectangle<int> driverCard, channelsArea, measureCard;
     std::optional<AudioTiming> chosenTiming;   // PipeWire: chosen on the page, not applied yet
     bool deviceChoosers = false;
     bool filling = false;

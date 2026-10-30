@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
-#include "Dropdown.h"
+#include "Look.h"
 #include "HostView.h"
 #include "Look.h"
 #include <array>
@@ -26,7 +26,7 @@ ZoneInfo zoneInfo (a3::SpeakerZone, const juce::File& variant);
 // and DELETE (in the window's footer) do for the picked one, and an info card for it (its MAIN and BOOTH decoders
 // side by side as tables, zoneInfo). Picking in the list edits nothing: RENAME and DELETE act only on an unused
 // variant of the user's own, and say why not on any other.
-class ZonesPage final : public juce::Component
+class ZonesPage final : public juce::Component, public CardPage
 {
 public:
     // How the page asks: a yes/no question (DELETE), and a new name (RENAME). Empty: JUCE's AlertWindow.
@@ -83,6 +83,7 @@ private:
     juce::String summarisedKey;
 
     juce::Label actions;
+    bool messageLaidOutEmpty = true;
     juce::Label title, message, mainCaption, boothCaption, headphonesCaption;
     std::unique_ptr<Info> info;
     juce::TextButton openSpeakers { "EDIT SPEAKERS" };
