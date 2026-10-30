@@ -39,6 +39,22 @@ def function(name):
 
 
 class TheUnit(unittest.TestCase):
+    def test_its_settings_are_these_and_no_others(self):
+        settings = [line for line in UNIT.read_text().splitlines()
+                    if line and not line.startswith("#")]
+        self.assertEqual(settings, [
+            "[Unit]",
+            "Description=a3-clock, the Core's PTP clock steered from the Scarlett",
+            "ConditionPathExists=%h/.config/pipewire/pipewire-aes67.conf",
+            "After=pipewire.service wireplumber.service",
+            "[Service]",
+            "ExecStart=/usr/bin/a3-core --role clock",
+            "Restart=always",
+            "RestartSec=2",
+            "[Install]",
+            "WantedBy=default.target",
+        ])
+
     def test_it_runs_the_clock_role(self):
         self.assertEqual(unit_value("ExecStart"), "/usr/bin/a3-core --role clock")
 

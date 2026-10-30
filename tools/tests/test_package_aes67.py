@@ -196,15 +196,14 @@ class WhatTheRigSettledOn(unittest.TestCase):
         self.assertEqual(keys["device.api"], "aes67")
         self.assertEqual(keys["sess.latency.msec"], "12")
 
-    def test_deck_streams_are_a_plain_fifo_without_a_resampler(self):
-        # 2026-10-30, one clock: the deck hosts follow PTP, and the PTP clock
-        # follows the Scarlett (a3-core --role clock), so a deck stream runs at
-        # the Scarlett's rate and the receiver has nothing to correct. Its DLL
-        # resampling the stream all the time was the crackle.
-        self.assertEqual(value(self.rule("~^AES67 deck "), "resample.disable"), "true")
-
-    def test_other_streams_keep_their_resampler(self):
-        self.assertNotIn("resample.disable", dict(settings(self.rule("~ out$"))))
+    def test_every_receiver_keeps_its_resampler(self):
+        # 2026-10-30, review of the one clock: with the clock role steering
+        # the PTP clock to the Scarlett, the deck receivers' correction is
+        # about 1.0 and costs nothing. Without the resampler, any clock role
+        # that is not locked (no `clock` group yet, a fault, a holdover) walks
+        # the 12 ms FIFO into a resync click every ~10 minutes. Turning it off
+        # is a later, separate, soak-gated step (PROGRAM.md, "The one clock").
+        self.assertNotIn("resample.disable", self.text)
 
     def test_deck_rule_receives_the_whole_packet(self):
         # rtp-source's receive buffer is net.mtu bytes (default 1280); the

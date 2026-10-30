@@ -10,11 +10,13 @@ drop-in on linuxptp's unit; the stock /etc/linuxptp/ptp4l.conf (a linuxptp
 conffile) stays untouched.
 
 tools/tests/linuxptp-stock-ptp4l.conf is linuxptp's stock file (a3nuc1,
-unedited). Every key except the four we change must equal it.
+unedited). Every key except the three we change must equal it.
 
-2026-10-30, one clock: ptp4l never steers the Core's PHC (free_running 1).
+2026-10-30, one clock: ptp4l never steers the Core's PHC (--free_running 1).
 The clock role (a3-core --role clock) steers it from the Scarlett, and if a
 second grandmaster ever won the BMCA, two controllers must not fight over it.
+It is on the drop-in's command line, which beats the config file: the config
+is a conffile, and a hand-edited one is kept by dpkg with the old value.
 """
 
 import unittest
@@ -28,8 +30,7 @@ STOCK = Path(__file__).resolve().parent / "linuxptp-stock-ptp4l.conf"
 CONFFILES = DEBIAN / "conffiles"
 POSTINST = DEBIAN / "postinst"
 
-CHANGED = {"step_threshold": "0.001", "priority1": "100", "clientOnly": "0",
-           "free_running": "1"}
+CHANGED = {"step_threshold": "0.001", "priority1": "100", "clientOnly": "0"}
 
 
 def keys(path):
@@ -50,14 +51,6 @@ class TheConfig(unittest.TestCase):
     def test_it_is_the_grandmaster_that_wins(self):
         self.assertEqual("100", keys(CONF)["priority1"])
         self.assertEqual("0", keys(CONF)["clientOnly"])
-
-    def test_it_never_steers_its_own_clock(self):
-        self.assertEqual("1", keys(CONF)["free_running"])
-
-    def test_it_says_who_steers_the_clock_instead(self):
-        header = CONF.read_text().split("[global]")[0]
-        self.assertIn("free_running", header)
-        self.assertIn("--role clock", header)
 
     def test_every_other_key_is_the_stock_value(self):
         ours, stock = keys(CONF), keys(STOCK)
@@ -84,8 +77,12 @@ class TheDropIn(unittest.TestCase):
     def test_it_clears_then_sets_exec_start(self):
         self.assertEqual(
             ["ExecStart=",
-             "ExecStart=/usr/sbin/ptp4l -f /etc/linuxptp/a3-ptp4l.conf -i %I"],
+             "ExecStart=/usr/sbin/ptp4l -f /etc/linuxptp/a3-ptp4l.conf -i %I --free_running 1"],
             self.exec_lines())
+
+    def test_it_says_who_steers_the_clock_instead(self):
+        text = DROPIN.read_text()
+        self.assertIn("--role clock", text)
 
     def test_it_is_a_service_section(self):
         self.assertIn("[Service]", DROPIN.read_text().splitlines())
