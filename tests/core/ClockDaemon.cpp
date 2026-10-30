@@ -212,7 +212,7 @@ TEST (ClockDaemon, StartsTheProfilerAndLocksThePhcToTheScarlett)
 {
     Rig rig;
     EXPECT_EQ (rig.feed.starts, 1);
-    const double seconds = rig.secondsUntilLocked (300.0);
+    const double seconds = rig.secondsUntilLocked (30.0);
     ASSERT_GT (seconds, 0.0);
     rig.run (600.0);
     const auto& s = rig.daemon.status();
@@ -238,17 +238,40 @@ TEST (ClockDaemon, PublishesOnceAnUpdateAndLogsOnceEveryTenSeconds)
     EXPECT_DOUBLE_EQ (rig.published.back().writtenAtUnix, 1'761'800'000.0 + rig.world.now);
 }
 
-TEST (ClockDaemon, NeverSlewsFasterThanTheLimit)
+// 2026-10-30, the maintainer: the Scarlett's clock is there at once, the PTP clock has to follow at
+// once. Cold: about 5 s of rate, one write to it, the phase anchored, locked.
+TEST (ClockDaemon, LocksWithinFifteenSecondsWithOneWriteToTheRate)
+{
+    Rig rig;
+    const double seconds = rig.secondsUntilLocked (30.0);
+    ASSERT_GT (seconds, 0.0);
+    EXPECT_LE (seconds, 15.0);
+    ASSERT_FALSE (rig.phc.written.empty());
+    EXPECT_NEAR (rig.phc.written.front(), 14.1, 1.5);   // the single jump, straight to the measured rate
+    for (std::size_t i = 1; i < rig.phc.written.size(); ++i)
+        EXPECT_LE (std::abs (rig.phc.written[i] - rig.phc.written[i - 1]), 0.1 + 1e-9);
+}
+
+TEST (ClockDaemon, AWarmStartLocksWithinTenSeconds)
+{
+    DaemonOptions options;
+    options.warmFrequencyPpm = 14.1;
+    Rig rig (options);
+    const double seconds = rig.secondsUntilLocked (30.0);
+    ASSERT_GT (seconds, 0.0);
+    EXPECT_LE (seconds, 10.0);
+    ASSERT_FALSE (rig.phc.written.empty());
+    EXPECT_DOUBLE_EQ (rig.phc.written.front(), 14.1);
+}
+
+TEST (ClockDaemon, NeverSlewsFasterThanTheLimitAfterTheJump)
 {
     Rig rig;
     rig.run (1200.0);
     ASSERT_GT (rig.phc.written.size(), 10u);
-    double previous = 0.0, worst = 0.0;
-    for (const double f : rig.phc.written)
-    {
-        worst = std::max (worst, std::abs (f - previous));
-        previous = f;
-    }
+    double worst = 0.0;
+    for (std::size_t i = 1; i < rig.phc.written.size(); ++i)
+        worst = std::max (worst, std::abs (rig.phc.written[i] - rig.phc.written[i - 1]));
     EXPECT_LE (worst, 0.1 + 1e-9);
 }
 
@@ -267,7 +290,7 @@ TEST (ClockDaemon, AnotherAlsaDriverInterleavedChangesNothing)
 {
     Rig rig;
     rig.otherDriver = true;
-    ASSERT_GT (rig.secondsUntilLocked (300.0), 0.0);
+    ASSERT_GT (rig.secondsUntilLocked (30.0), 0.0);
     rig.run (300.0);
     EXPECT_EQ (rig.daemon.status().health, Health::locked);
     EXPECT_EQ (rig.daemon.status().scarlettBreaks, 0);
@@ -325,7 +348,7 @@ TEST (ClockDaemon, ARefusedPhcIsNeverMeasuredNorWritten)
 TEST (ClockDaemon, APortThatIsNotMasterPausesTheSteering)
 {
     Rig rig;
-    ASSERT_GT (rig.secondsUntilLocked (300.0), 0.0);
+    ASSERT_GT (rig.secondsUntilLocked (30.0), 0.0);
     rig.port.state = std::string ("SLAVE");   // another grandmaster won
     rig.run (40.0);
     const auto writes = rig.phc.written.size();
@@ -342,7 +365,7 @@ TEST (ClockDaemon, APortStateNobodyCanReadIsReportedEmpty)
 {
     Rig rig;
     rig.port.state.reset();
-    ASSERT_GT (rig.secondsUntilLocked (300.0), 0.0);   // it still steers ...
+    ASSERT_GT (rig.secondsUntilLocked (30.0), 0.0);   // it still steers ...
     EXPECT_EQ (rig.daemon.status().portState, "");      // ... and the window shows it as unverified
     EXPECT_GE (rig.linesContaining ("unverified"), 1);
 }
@@ -353,8 +376,8 @@ TEST (ClockDaemon, AWarmStartIsUsedWhenThePhcWasReset)
     options.warmFrequencyPpm = 14.1;
     Rig rig (options);
     rig.run (1.5);
-    ASSERT_FALSE (rig.phc.written.empty());   // slewing from the first update, no rate measurement
-    EXPECT_GT (rig.secondsUntilLocked (200.0), 0.0);
+    ASSERT_FALSE (rig.phc.written.empty());   // written at the first update, no rate measurement
+    EXPECT_GT (rig.secondsUntilLocked (30.0), 0.0);
 }
 
 TEST (ClockDaemon, AWarmStartIsNotUsedOnAPhcThatRuns)
@@ -363,7 +386,8 @@ TEST (ClockDaemon, AWarmStartIsNotUsedOnAPhcThatRuns)
     options.warmFrequencyPpm = 20.0;
     Rig rig (options, [] (Rig& r) { r.phc.frequency = 14.1; });   // the daemon restarted; the PHC kept its frequency
     rig.run (10.0);
-    EXPECT_TRUE (rig.phc.written.empty());   // measuring the rate, not slewing to the file's value
+    for (const double f : rig.phc.written)   // at most the PI's small corrections, never the file's value
+        EXPECT_NEAR (f, 14.1, 1.0);
     ASSERT_GT (rig.secondsUntilLocked (120.0), 0.0);
     rig.run (300.0);
     EXPECT_NEAR (rig.daemon.status().frequencyPpm, 14.1, 0.05);
@@ -372,9 +396,9 @@ TEST (ClockDaemon, AWarmStartIsNotUsedOnAPhcThatRuns)
 TEST (ClockDaemon, ALockedFrequencyIsRememberedOnceAMinute)
 {
     Rig rig;
-    ASSERT_GT (rig.secondsUntilLocked (300.0), 0.0);
+    ASSERT_GT (rig.secondsUntilLocked (30.0), 0.0);
     rig.run (125.0);
-    ASSERT_EQ (rig.remembered.size(), 3u);
+    ASSERT_EQ (rig.remembered.size(), 2u);   // after a minute of lock, then once a minute
     EXPECT_NEAR (rig.remembered.back(), 14.1, 0.05);
 }
 
@@ -390,7 +414,7 @@ TEST (ClockDaemon, TheRangeStaysInsideTheDevicesOwnLimit)
 TEST (ClockDaemon, ALostProfilerIsHoldoverThenStartedAgain)
 {
     Rig rig;
-    ASSERT_GT (rig.secondsUntilLocked (300.0), 0.0);
+    ASSERT_GT (rig.secondsUntilLocked (30.0), 0.0);
     const auto writes = rig.phc.written.size();
     rig.feed.alive = false;
     rig.feed.refuseStarts = 2;   // pw-profiler does not come back at once (PipeWire restarting)
@@ -407,7 +431,7 @@ TEST (ClockDaemon, ALostProfilerIsHoldoverThenStartedAgain)
 TEST (ClockDaemon, ASilentProfilerIsStartedAgain)
 {
     Rig rig;
-    ASSERT_GT (rig.secondsUntilLocked (300.0), 0.0);
+    ASSERT_GT (rig.secondsUntilLocked (30.0), 0.0);
     rig.recording = false;   // alive, but no Scarlett record: a hung PipeWire
     rig.run (12.0);
     EXPECT_EQ (rig.feed.starts, 2);
@@ -429,7 +453,7 @@ TEST (ClockDaemon, AnUnreadablePhcIsHoldoverAndSaidOnce)
 TEST (ClockDaemon, AScarlettXrunIsCountedAndReanchored)
 {
     Rig rig;
-    ASSERT_GT (rig.secondsUntilLocked (300.0), 0.0);
+    ASSERT_GT (rig.secondsUntilLocked (30.0), 0.0);
     rig.world.xrun += 1;
     rig.world.samples += 4410.0L;   // and 100 ms lost
     rig.run (60.0);
@@ -442,6 +466,6 @@ TEST (ClockDaemon, AScarlettXrunIsCountedAndReanchored)
 TEST (ClockDaemon, StateChangesAreSaidAtOnce)
 {
     Rig rig;
-    ASSERT_GT (rig.secondsUntilLocked (300.0), 0.0);
+    ASSERT_GT (rig.secondsUntilLocked (30.0), 0.0);
     EXPECT_EQ (rig.linesContaining ("acquiring -> locked"), 1);
 }

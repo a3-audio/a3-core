@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace a3clock
 {
@@ -30,24 +31,43 @@ const char* healthWord (Health health)
 ClockSteering::ClockSteering (const SteeringConfig& config, double startFrequencyPpm, double nowSeconds,
                               std::optional<double> warmFrequencyPpm)
     : cfg (config),
-      kp (2.0 * damping / config.timeConstantSeconds),
-      ki (1.0 / (config.timeConstantSeconds * config.timeConstantSeconds)),
       frequency (startFrequencyPpm),
       integral (startFrequencyPpm),
       lastMeasurementAt (nowSeconds)
 {
     if (warmFrequencyPpm && inRange (*warmFrequencyPpm))
     {
-        stage = Stage::slewing;
-        target = *warmFrequencyPpm;
-        why = "warm start: slewing to the last locked frequency";
+        pendingWarm = warmFrequencyPpm;
+        why = "warm start: the last locked frequency";
     }
+}
+
+// Critically damped PI: kp = 2/tau (ppm per us), ki = 1/tau^2 (ppm per us*s).
+double ClockSteering::gainFor (double timeConstant, bool proportional) const
+{
+    return proportional ? 2.0 * damping / timeConstant : 1.0 / (timeConstant * timeConstant);
 }
 
 bool ClockSteering::inRange (double ppm) const { return std::abs (ppm - cfg.centreFrequencyPpm) <= cfg.frequencyRangePpm; }
 
-// Frequency first: the phase's slope over rateUpdates measurements, at the frequency as found (nothing
-// is written meanwhile), says where the PHC has to run.
+// One write straight to `ppm`, then the phase is anchored afresh. Only while acquiring: once tracking,
+// every change goes through the slew limit.
+Decision ClockSteering::jumpTo (double ppm, const char* reason)
+{
+    auto decision = hold();
+    frequency = integral = ppm;
+    decision.write = ppm;
+    decision.jump = true;
+    decision.frequencyPpm = ppm;
+    ++count.corrections;
+    stage = Stage::tracking;
+    anchored = false;
+    why = decision.reason = reason;
+    return decision;
+}
+
+// Frequency first: the phase's slope over rateUpdates measurements (about 5 s), at the frequency as
+// found (nothing is written meanwhile), says where the PHC has to run.
 Decision ClockSteering::measureRate (double nowSeconds, const Measurement& m)
 {
     if (rate.count() == 0 || m.epoch != epoch)
@@ -61,39 +81,43 @@ Decision ClockSteering::measureRate (double nowSeconds, const Measurement& m)
     const auto slope = rate.ppm();
     if (rate.count() < cfg.rateUpdates || ! slope)
         return hold();
-    target = frequency - *slope;
-    if (! inRange (target))
+    const double measured = frequency - *slope;
+    // A rate just past the edge may be the 5 s measurement's noise: steer from the edge, the PI (and
+    // the acquire limit, if it really is beyond) decides. Clearly beyond: refused before any write.
+    const double low = cfg.centreFrequencyPpm - cfg.frequencyRangePpm, high = cfg.centreFrequencyPpm + cfg.frequencyRangePpm;
+    const double target = std::clamp (measured, low, high);
+    if (std::abs (measured - target) > cfg.atRatePpm)
     {
         writeFailed ("the PTP clock is further from the Scarlett than the frequency range: not steered");
         return hold();
     }
-    stage = Stage::slewing;
-    why = "slewing to the Scarlett's rate";
-    return hold();
+    rate.clear();
+    if (std::abs (*slope) <= cfg.atRatePpm)
+    {
+        // Already at the rate, within what 5 s can tell (a restart on a locked PHC): nothing is written.
+        stage = Stage::tracking;
+        anchored = false;
+        integral = frequency;
+        why = "already at the Scarlett's rate: anchoring the phase";
+        return hold();
+    }
+    return jumpTo (target, "at the Scarlett's rate: anchoring the phase");
 }
 
-// Towards the target at the slew limit; the phase is anchored once there.
-Decision ClockSteering::slew (double dtSeconds)
+// A warm start is checked: the anchored error's slope over the first rateUpdates measurements is what
+// the saved frequency is off by. Beyond the tolerance, one more write corrects it; the anchor stays.
+std::optional<double> ClockSteering::warmCorrection (double nowSeconds)
 {
-    const double maxStep = cfg.maxSlewPpmPerSecond * dtSeconds;
-    auto decision = hold();
-    const double next = frequency + std::clamp (target - frequency, -maxStep, maxStep);
-    if (next != frequency)
-    {
-        frequency = next;
-        decision.write = next;
-        ++count.corrections;
-    }
-    if (frequency == target)
-    {
-        stage = Stage::tracking;
-        integral = target;
-        anchored = false;
-        why = "at the Scarlett's rate: anchoring the phase";
-    }
-    decision.frequencyPpm = frequency;
-    decision.reason = why;
-    return decision;
+    rate.add (epoch, nowSeconds, error);
+    const auto slope = rate.ppm();
+    if (rate.count() < cfg.rateUpdates || ! slope)
+        return std::nullopt;
+    verifyingWarm = false;
+    rate.clear();
+    const double corrected = frequency - *slope;
+    if (std::abs (*slope) <= cfg.warmTolerancePpm || ! inRange (corrected))
+        return std::nullopt;
+    return corrected;
 }
 
 Decision ClockSteering::hold() const
@@ -166,6 +190,10 @@ double ClockSteering::nextFrequency (double errorNs, double dtSeconds)
     const double weight = std::min (1.0, dtSeconds / std::max (cfg.errorSmoothingSeconds, dtSeconds));
     smoothed += weight * (errorNs - smoothed);
     const double errorUs = smoothed / nsPerUs;
+    // The quiet time constant only once the lock has held a while: a residual the 5 s rate left is
+    // pulled in by the fast one first.
+    const double tau = inThreshold >= cfg.settleUpdates ? cfg.timeConstantSeconds : cfg.acquireTimeConstantSeconds;
+    const double kp = gainFor (tau, true), ki = gainFor (tau, false);
     const double low = cfg.centreFrequencyPpm - cfg.frequencyRangePpm, high = cfg.centreFrequencyPpm + cfg.frequencyRangePpm;
     const double candidate = std::clamp (integral - ki * errorUs * dtSeconds, low, high);
     const double desired = candidate - kp * errorUs;
@@ -188,7 +216,7 @@ void ClockSteering::judge (double errorNs)
         why = "lock lost: steering back";
         ++count.lockLosses;
     }
-    if (state != Health::locked && inThreshold >= cfg.lockUpdates)
+    if (state != Health::locked && inThreshold >= cfg.lockUpdates && ! verifyingWarm)   // a warm start is checked first
     {
         state = Health::locked;
         why = "the PTP clock follows the Scarlett";
@@ -201,9 +229,13 @@ Decision ClockSteering::update (double nowSeconds, std::optional<Measurement> me
     ++count.updates;
     if (state == Health::fault)
         return hold();
-    // Slewing to a known frequency needs no measurement, only no holdover.
-    if (! measurement && stage == Stage::slewing && nowSeconds - lastMeasurementAt < cfg.holdoverAfterSeconds)
-        return slew (cfg.updateSeconds);
+    // A warm start is written at once, with or without a measurement.
+    if (pendingWarm)
+    {
+        verifyingWarm = true;
+        rate.clear();
+        return jumpTo (*std::exchange (pendingWarm, std::nullopt), "warm start: the last locked frequency, anchoring the phase");
+    }
     if (! measurement)
         return noMeasurement (nowSeconds);
 
@@ -219,8 +251,6 @@ Decision ClockSteering::update (double nowSeconds, std::optional<Measurement> me
     }
     if (stage == Stage::measuringRate)
         return measureRate (nowSeconds, *measurement);
-    if (stage == Stage::slewing)
-        return slew (gap);
     const bool first = ! anchored;
     error = anchoredError (*measurement, sinceLast);
     if (first)
@@ -236,6 +266,33 @@ Decision ClockSteering::update (double nowSeconds, std::optional<Measurement> me
     {
         writeFailed ("could not acquire inside the frequency range: steering stopped, the last frequency is held");
         return hold();
+    }
+
+    if (verifyingWarm && ! first)
+    {
+        const auto corrected = warmCorrection (nowSeconds);
+        if (verifyingWarm)
+        {
+            // Still measuring the warm start's residual: the PI waits, so it does not hide it.
+            judge (error);
+            auto decision = hold();
+            decision.health = state;
+            decision.reason = why;
+            return decision;
+        }
+        if (corrected)
+        {
+            auto decision = hold();
+            frequency = integral = *corrected;   // the anchor and the error stay: the PI goes on from here
+            decision.write = *corrected;
+            decision.jump = true;
+            decision.frequencyPpm = *corrected;
+            ++count.corrections;
+            judge (error);
+            decision.health = state;
+            decision.reason = why;
+            return decision;
+        }
     }
 
     auto decision = hold();

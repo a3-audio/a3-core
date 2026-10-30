@@ -177,7 +177,8 @@ void ClockDaemon::steer (double nowSeconds, std::optional<Measurement> measureme
     current.counters = steering->counters();
     if (measurement && steering->tracking())
         rate.add (measurement->epoch, nowSeconds, current.errorNs);
-    if (current.health == Health::locked && remember && nowSeconds >= nextRemember)
+    // Only a lock that has held a while is worth a warm start (the first seconds still settle).
+    if (current.health == Health::locked && current.lockedSeconds >= options.rememberSeconds && remember && nowSeconds >= nextRemember)
     {
         remember (current.frequencyPpm);
         nextRemember = nowSeconds + options.rememberSeconds;

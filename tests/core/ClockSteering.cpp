@@ -9,6 +9,7 @@
 #include <functional>
 #include <random>
 #include <utility>
+#include <vector>
 
 #include "ClockSteering.h"
 
@@ -42,7 +43,8 @@ struct Loop
     Plant plant;
     ClockSteering steering;
     double now = 0.0;
-    double maxSlew = 0.0;                 // the largest |frequency change| per second seen
+    double maxSlew = 0.0;                 // the largest |frequency change| per second once tracking
+    std::vector<double> jumps;            // writes before tracking: the acquisition's single jump
     double minFrequency = 1e9, maxFrequency = -1e9;
     int writes = 0;
     std::uint64_t epoch = 1;
@@ -72,7 +74,10 @@ struct Loop
         }
         if (steering.tracking() && decision.health != Health::fault)
             worstError = std::max (worstError, std::abs (decision.errorNs));
-        maxSlew = std::max (maxSlew, std::abs (steering.frequencyPpm() - before));
+        if (decision.jump)
+            jumps.push_back (*decision.write);
+        else
+            maxSlew = std::max (maxSlew, std::abs (steering.frequencyPpm() - before));
         minFrequency = std::min (minFrequency, steering.frequencyPpm());
         maxFrequency = std::max (maxFrequency, steering.frequencyPpm());
         return decision;
@@ -97,10 +102,12 @@ struct Loop
 constexpr double slewTolerance = 1e-9;
 }
 
-TEST (ClockSteering, LocksFromTheMeasuredFourteenPpmWithinFiveMinutes)
+// 2026-10-30, on the rig: the Scarlett's rate is there at once, so the clock has to be too. About 5 s
+// of measuring, one write straight to the measured rate, then the phase: locked within 15 s.
+TEST (ClockSteering, LocksFromTheMeasuredFourteenPpmWithinFifteenSeconds)
 {
     Loop run;
-    const int seconds = run.untilLocked (300);
+    const int seconds = run.untilLocked (15);
     ASSERT_GT (seconds, 0);
     double worst = 0.0;
     for (int i = 0; i < 3600; ++i)
@@ -113,15 +120,26 @@ TEST (ClockSteering, LocksFromTheMeasuredFourteenPpmWithinFiveMinutes)
     EXPECT_NEAR (run.steering.frequencyPpm(), 14.1, 0.1);
 }
 
-// The phase error from the anchor on is every receiver's FIFO walk: frequency first keeps it small.
+TEST (ClockSteering, AcquiresWithOneWriteToTheMeasuredRate)
+{
+    Loop run;
+    run.run (4);
+    EXPECT_EQ (run.writes, 0);   // measuring
+    ASSERT_GT (run.untilLocked (15), 0);
+    ASSERT_EQ (run.jumps.size(), 1u);
+    EXPECT_NEAR (run.jumps[0], 14.1, 1.5);   // five seconds at 3 us per centroid
+}
+
+// The phase error from the anchor on is every receiver's FIFO walk.
 TEST (ClockSteering, ThePhaseWalkWhileAcquiringStaysSmall)
 {
     Loop run;
-    ASSERT_GT (run.untilLocked (300), 0);
-    EXPECT_LT (run.worstError, 150'000.0);
+    ASSERT_GT (run.untilLocked (15), 0);
+    run.run (600);
+    EXPECT_LT (run.worstError, 50'000.0);
 }
 
-TEST (ClockSteering, NeverSlewsFasterThanTheLimitWhileAcquiring)
+TEST (ClockSteering, NeverSlewsFasterThanTheLimitOnceTracking)
 {
     Loop run;
     run.run (1800);
@@ -131,8 +149,8 @@ TEST (ClockSteering, NeverSlewsFasterThanTheLimitWhileAcquiring)
 TEST (ClockSteering, NeverLeavesItsRangeAndLocksNearItsEdge)
 {
     Loop run;
-    run.plant.naturalPpm = -39.0;   // close to the edge: the phase pull pushes against it
-    EXPECT_GT (run.untilLocked (900), 0);
+    run.plant.naturalPpm = -39.0;
+    EXPECT_GT (run.untilLocked (30), 0);
     run.run (3600);
     EXPECT_LE (run.maxFrequency, 40.0 + slewTolerance);
     EXPECT_GE (run.minFrequency, -40.0 - slewTolerance);
@@ -143,44 +161,59 @@ TEST (ClockSteering, LocksAtNineteenAndAHalfPpm)
 {
     Loop run;
     run.plant.naturalPpm = -19.5;
-    EXPECT_GT (run.untilLocked (600), 0);
-    EXPECT_LT (run.worstError, 150'000.0);
+    EXPECT_GT (run.untilLocked (15), 0);
+    run.run (600);
+    EXPECT_LT (run.worstError, 50'000.0);
 }
 
-TEST (ClockSteering, AWarmStartSlewsToTheLastLockAndLocksSooner)
+TEST (ClockSteering, AWarmStartWritesTheLastLockAtOnceAndLocksWithinTenSeconds)
 {
     Loop run ({}, 0.0, 14.1);   // after a boot the driver reset the PHC to 0; the state file says 14.1
-    EXPECT_TRUE (run.step().write);   // no rate measurement: it slews from the first update
-    const int seconds = run.untilLocked (300);
+    const auto first = run.step();
+    ASSERT_TRUE (first.write);   // no measurement wait
+    EXPECT_DOUBLE_EQ (*first.write, 14.1);
+    const int seconds = run.untilLocked (15);
     ASSERT_GT (seconds, 0);
-    EXPECT_LT (seconds, 141 + 30);   // 14.1 ppm at 0.1 ppm/s, then the lock
+    EXPECT_LE (seconds + 1, 10);
+    EXPECT_LE (run.jumps.size(), 2u);   // the saved value, then at most one correction to the measured rate
+    run.run (600);
     EXPECT_LT (run.worstError, 50'000.0);
-    EXPECT_LE (run.maxSlew, 0.1 + slewTolerance);
+}
+
+TEST (ClockSteering, AWarmStartIsCheckedAgainstTheMeasuredRate)
+{
+    Loop run ({}, 0.0, 8.0);   // the saved value is 6.1 ppm off (the Scarlett was replaced)
+    ASSERT_GT (run.untilLocked (15), 0);
+    ASSERT_EQ (run.jumps.size(), 2u);
+    EXPECT_DOUBLE_EQ (run.jumps[0], 8.0);
+    EXPECT_NEAR (run.jumps[1], 14.1, 2.5);   // five seconds of rate: about 1 ppm rms
+    run.run (600);
+    EXPECT_NEAR (run.steering.frequencyPpm(), 14.1, 0.1);
 }
 
 TEST (ClockSteering, AWarmStartOutsideTheRangeIsIgnored)
 {
     Loop run ({}, 0.0, 55.0);
     EXPECT_FALSE (run.step().write);   // measures the rate instead
-    EXPECT_GT (run.untilLocked (300), 0);
+    EXPECT_GT (run.untilLocked (15), 0);
 }
 
 TEST (ClockSteering, LocksWithAWriteThatTakesEffectOneUpdateLate)
 {
     Loop run;
     run.writeLatency = true;
-    ASSERT_GT (run.untilLocked (400), 0);
+    ASSERT_GT (run.untilLocked (20), 0);
     double worst = 0.0;
     for (int i = 0; i < 1800; ++i)
         worst = std::max (worst, std::abs (run.step().errorNs));
     EXPECT_LT (worst, 50'000.0);
 }
 
-TEST (ClockSteering, LocksWithTheJitterOfSingleProfilerRecords)
+TEST (ClockSteering, LocksWithTwiceTheRigsJitter)
 {
     Loop run;
-    run.plant.noiseNs = 12'500.0;   // one record's jitter, measured on the rig
-    ASSERT_GT (run.untilLocked (600), 0);
+    run.plant.noiseNs = 6'000.0;    // twice the centroid jitter of the rig's records (12.5 us each, 20 a second)
+    ASSERT_GT (run.untilLocked (60), 0);
     double worst = 0.0;
     for (int i = 0; i < 1800; ++i)
         worst = std::max (worst, std::abs (run.step().errorNs));
@@ -191,7 +224,7 @@ TEST (ClockSteering, LocksWithTheJitterOfSingleProfilerRecords)
 TEST (ClockSteering, FollowsATemperatureDriftWhileLocked)
 {
     Loop run;
-    ASSERT_GT (run.untilLocked (900), 0);
+    ASSERT_GT (run.untilLocked (30), 0);
     for (int i = 0; i < 600; ++i)   // one ppm in ten minutes, far more than the Scarlett's 0.33 ppm sd
     {
         run.plant.naturalPpm -= 1.0 / 600.0;
@@ -225,7 +258,7 @@ TEST (ClockSteering, NoMeasurementAtStartIsHoldover)
 TEST (ClockSteering, HoldsTheFrequencyThroughADropoutAndLocksAgain)
 {
     Loop run;
-    ASSERT_GT (run.untilLocked (900), 0);
+    ASSERT_GT (run.untilLocked (30), 0);
     run.run (60);
     const double held = run.steering.frequencyPpm();
     const int writesBefore = run.writes;
@@ -249,7 +282,7 @@ TEST (ClockSteering, HoldsTheFrequencyThroughADropoutAndLocksAgain)
 TEST (ClockSteering, ReanchorsAScarlettDiscontinuityKeepingTheError)
 {
     Loop run;
-    ASSERT_GT (run.untilLocked (900), 0);
+    ASSERT_GT (run.untilLocked (30), 0);
     run.run (30);
     const double before = run.steering.errorNs();
     run.epoch = 2;                         // an xrun: the Scarlett's count starts again ...
@@ -266,7 +299,7 @@ TEST (ClockSteering, ReanchorsAScarlettDiscontinuityKeepingTheError)
 TEST (ClockSteering, ASteppedPtpClockIsReanchoredNotSlewed)
 {
     Loop run;
-    ASSERT_GT (run.untilLocked (900), 0);
+    ASSERT_GT (run.untilLocked (30), 0);
     run.plant.phaseNs += 5'000'000.0;      // somebody stepped the PHC by 5 ms
     const auto decision = run.step();
     EXPECT_EQ (run.steering.counters().phcSteps, 1);
@@ -280,7 +313,7 @@ TEST (ClockSteering, ASteppedPtpClockIsReanchoredNotSlewed)
 TEST (ClockSteering, StopsWhenTheErrorRunsAwayAfterALock)
 {
     Loop run;
-    ASSERT_GT (run.untilLocked (900), 0);
+    ASSERT_GT (run.untilLocked (30), 0);
     run.plant.ignoresWrites = true;        // a loop bug: the clock no longer follows what is written
     run.plant.naturalPpm += 5.0;
     Decision decision;

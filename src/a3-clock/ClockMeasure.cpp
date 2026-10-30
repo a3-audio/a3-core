@@ -204,7 +204,7 @@ void RateEstimate::add (std::uint64_t sampleEpoch, double seconds, double phaseN
 
 std::optional<double> RateEstimate::ppm() const
 {
-    if (size < 10)
+    if (size < 3)
         return std::nullopt;
     double mt = 0, mp = 0;
     for (int i = 0; i < size; ++i)
