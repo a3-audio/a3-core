@@ -258,7 +258,8 @@ API, P2). The package ships it as `/usr/bin/a3-core` (Task 28); there is no `/us
   `any`, `--port` `core.osc`, `--mixer`/`--motion` their `osc` listeners, `--web-bind` `core.web`.
   The truth is `$A3_OSC_TRUTH`, else `/usr/share/a3/a3-osc.json`; the network file `$A3_NETWORK`,
   else `~/.config/a3/network.json` (never with an explicit truth); the state under
-  `$XDG_STATE_HOME/a3-core`, else `~/.local/state/a3-core`. SIGTERM/SIGINT write state, evening and
+  `$XDG_STATE_HOME/a3-core`, else `~/.local/state/a3-core`. Departments (see "Departments" below) in
+  `~/.config/a3/core/departments.json`. SIGTERM/SIGINT write state, evening and
   the address list and exit 0; a serve loop that ends by itself exits 1 (the unit decides whether to restart). A
   start that is refused says why on stderr and exits 1.
 - **engine**: Plan 4c's flags; `--no-window` and `--service` are still accepted and do nothing.
@@ -272,6 +273,19 @@ API, P2). The package ships it as `/usr/bin/a3-core` (Task 28); there is no `/us
   window's STATUS page, which lists them. It only reads: no JACK server is exit 1 with one line on
   stderr; anything else is exit 0. The wording is `app/LinksOverview.cpp` (a pure function, tested in
   `tests/app/LinksOverview.cpp`); reading the graph is `app/LinksCommand.cpp`.
+- **Departments** (light and video desks told every A³ message, as Mixer and Motion are): the window's
+  DEPARTMENTS page (`app/ui/DepartmentsPage.cpp`) edits the list Core keeps in
+  `~/.config/a3/core/departments.json` (`src/a3-core/Departments.cpp`), over `GET`/`POST /api/departments`
+  (`CoreApi.h`). An entry is checked as it is typed (name non-empty, unique, no space, `@` or `=`, not
+  `mixer`/`motion`/`engine`/`self`; host an IPv4 address or a host name; port 1–65535); the POST checks it
+  again and also that a host name resolves, so a refused list is never stored. A stored list is written
+  atomically and handed to the serve thread: Core subscribes the entries that are on, drops the rest and
+  tells one that joins or moved the whole state, all without a restart. At the start a bad file or entry is
+  said and left out; it never stops Core. `--subscriber` keeps working: those entries are shown as
+  "service file, read-only". **Ruling: a name in both, the command line wins** -- the stored entry is kept,
+  reported `overridden`, and Core sends only to the service file's address (a drop-in is the deliberate,
+  machine-level choice; the window must not silently re-route it). The report per entry: subscribed, sent
+  (messages Core sent that name), `last_sent` (seconds ago, null before the first).
 - **screencast-fanout**: `--port` defaults to `$A3_SCREENCAST_PORT`; a port of 0 or no command is
   refused as the Python fan-out refused it (exit 2).
 - **--headless**: starts `a3-core --role core` and `a3-core --role engine` and keeps them as the
@@ -290,7 +304,8 @@ API, P2). The package ships it as `/usr/bin/a3-core` (Task 28); there is no `/us
   only the ones it started); Stop ends only those, Leave running (or Escape) leaves them; a second
   close or a SIGTERM while the question is open is ignored. It never stops a role it did not start
   and never touches a unit; SIGTERM without a question open ends the window and asks nobody. The page list on the
-  left carries the engine's pages (AUDIO … STATUS, over the remote view) and, below them, the OSC
+  left carries the engine's pages (AUDIO … STATUS, over the remote view), DEPARTMENTS (Core's; asked only
+  while shown, not behind the monitor switch) and, below them, the OSC
   monitor that replaces the Python Core's HTML page: TRAFFIC (direction, address, peer, count, rate,
   last value, age; filter by address, only active = younger than 6 s, one device; the picked row's
   history), TRUTH & DEVICES (Core's fingerprint, each device "is Core's" or "DIFFERS", the audio
