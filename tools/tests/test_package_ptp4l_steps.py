@@ -84,6 +84,21 @@ class TheDropIn(unittest.TestCase):
         text = DROPIN.read_text()
         self.assertIn("--role clock", text)
 
+    def test_its_settings_are_these_and_no_others(self):
+        # PrivateTmp=no (2026-10-30): the clock role asks ptp4l's port state with pmc, whose
+        # reply socket is under /tmp; with Debian's PrivateTmp=yes ptp4l never reached it.
+        settings = [l.strip() for l in DROPIN.read_text().splitlines()
+                    if l.strip() and not l.strip().startswith("#")]
+        self.assertEqual(settings, [
+            "[Service]",
+            "PrivateTmp=no",
+            "ExecStart=",
+            "ExecStart=/usr/sbin/ptp4l -f /etc/linuxptp/a3-ptp4l.conf -i %I --free_running 1",
+        ])
+
+    def test_it_says_why_tmp_is_shared(self):
+        self.assertIn("pmc", DROPIN.read_text())
+
     def test_it_is_a_service_section(self):
         self.assertIn("[Service]", DROPIN.read_text().splitlines())
 

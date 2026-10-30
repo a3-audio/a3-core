@@ -334,10 +334,14 @@ capture node by name (`--scarlett NODE`, a prefix of node.name, default
 `alsa_input.usb-Focusrite_Scarlett_18i20`), learnt from the profiler's driver records; another ALSA
 driver is never used instead, it is "no measurement" and the journal names what was seen.
 
-**ptp4l's port state.** Asked every 30 s with `pmc` on the read-only socket `/var/run/ptp4lro`. Any
-state but MASTER pauses the steering (holdover). On the nucs that socket does not answer the user
-(ptp4l's unit is sandboxed); the state is then unverified and every surface shows UNVERIFIED instead of
-LOCKED.
+**ptp4l's port state.** Asked every 30 s with `pmc` on the read-only socket `/var/run/ptp4lro`, through
+a client socket `/tmp/a3-clock-pmc.<pid>.<n>` (one per query, removed after it; bound with umask 000,
+since ptp4l's unit has no CAP_DAC_OVERRIDE). Debian's `ptp4l@` unit gives ptp4l a private /tmp and hides
+/run/user (ProtectHome), so its reply never arrived; a3-core's drop-in sets `PrivateTmp=no` (the other
+protections stay: a datagram send to a socket works on a read-only mount). Any state but MASTER pauses
+the steering (holdover); a state nobody can read shows as UNVERIFIED, never LOCKED. The drop-in takes
+effect after `systemctl daemon-reload` and a restart of `ptp4l@<port>`; the postinst does neither (it
+never restarts ptp4l), so that is the maintainer's, or the next boot.
 
 **The rules** (`src/a3-clock/ClockSteering.h`, tested against synthetic clocks in
 `tests/core/ClockSteering.cpp` and `ClockDaemon.cpp`): only the frequency changes, never the time (no

@@ -15,8 +15,9 @@
 // sysfs as PipeWire's clock.interface finds it; a --device that is not that clock is refused. One
 // instance steers: it holds an flock on the PHC and on <runtime dir>/a3/clock.lock, and owns the
 // status file; --observe takes no lock and writes no status. ptp4l's port state is asked through
-// its read-only management socket with pmc; on the nucs that socket does not answer the user
-// (ptp4l's unit is sandboxed), and the state is then reported as unverified, never as LOCKED.
+// its read-only management socket with pmc, whose reply socket is under /tmp (a3-core's ptp4l@
+// drop-in turns Debian's PrivateTmp off for it); a state nobody can read is reported as unverified,
+// never as LOCKED.
 #pragma once
 
 #include <memory>
@@ -67,6 +68,12 @@ std::optional<std::string> phcOfInterface (const juce::File& sysClassNet, const 
 // Why the role must not steer, or empty: no audio port, a port without a PHC, or a --device that is
 // not the port's.
 std::string phcRefusal (const std::string& audioPort, const std::optional<std::string>& portsPhc, const std::string& given);
+// pmc's client socket for one query: /tmp/a3-clock-pmc.<pid>.<query>. Under /tmp because ptp4l@'s
+// unit hides /run/user (ProtectHome); a3-core's drop-in shares /tmp with it (PrivateTmp=no).
+juce::File pmcClientSocket (int pid, unsigned query);
+// The command that asks ptp4l's read-only socket for the port data set through that client socket,
+// started with umask 000: ptp4l's unit has no CAP_DAC_OVERRIDE and may only send to a socket others may write.
+std::vector<std::string> pmcCommand (const juce::File& clientSocket);
 // The portState word of pmc's answer to GET PORT_DATA_SET, or nullopt when nobody answered.
 std::optional<std::string> portStateOf (const std::string& pmcOutput);
 // The last locked frequency, kept in the state directory for a warm start after a boot.
@@ -78,14 +85,15 @@ bool rememberFrequency (const juce::File&, double ppm);
 class PmcPortState final : public a3clock::PtpPortState
 {
 public:
-    PmcPortState (const a3core::Platform&, juce::File clientSocket);
+    explicit PmcPortState (const a3core::Platform&);
     ~PmcPortState() override;
     std::optional<std::string> portState() override;
 
 private:
     void collect();
     const a3core::Platform& platform;
-    juce::File socket;
+    juce::File socket;                 // the running query's, removed when it is collected
+    unsigned queries = 0;
     std::unique_ptr<a3core::Child> child;
     std::string output;
     double startedAt = 0.0;

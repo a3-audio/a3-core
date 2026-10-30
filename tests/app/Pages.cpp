@@ -206,6 +206,10 @@ TEST_F (Pages, TheFooterShowsTheClockOnEveryPage)
     bar.refresh();
     EXPECT_TRUE (bar.clockLabel().getText().contains ("LOCKED")) << bar.clockLabel().getText();
     EXPECT_EQ (bar.clockLabel().findColour (juce::Label::textColourId), a3app::palette::running);
+    view.clockReport.status.portState.clear();   // ptp4l's port state not readable
+    bar.refresh();
+    EXPECT_TRUE (bar.clockLabel().getText().contains ("UNVERIFIED")) << bar.clockLabel().getText();
+    EXPECT_EQ (bar.clockLabel().findColour (juce::Label::textColourId), a3app::palette::caution);
     view.clockReport.status.health = a3clock::Health::holdover;
     bar.refresh();
     EXPECT_TRUE (bar.clockLabel().getText().contains ("HOLDOVER"));

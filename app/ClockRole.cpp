@@ -192,7 +192,18 @@ constexpr double pmcWaitSeconds = 3.0;
 const char* const ptp4lReadOnlySocket = "/var/run/ptp4lro";
 }
 
-PmcPortState::PmcPortState (const a3core::Platform& p, juce::File clientSocket) : platform (p), socket (std::move (clientSocket)) {}
+juce::File pmcClientSocket (int pid, unsigned query)
+{
+    return juce::File ("/tmp").getChildFile ("a3-clock-pmc." + juce::String (pid) + "." + juce::String (query));
+}
+
+std::vector<std::string> pmcCommand (const juce::File& clientSocket)
+{
+    return { "sh", "-c", "umask 000 && exec pmc \"$@\"", "pmc", "-u", "-b", "0", "-i", clientSocket.getFullPathName().toStdString(),
+             "-s", ptp4lReadOnlySocket, "GET PORT_DATA_SET" };
+}
+
+PmcPortState::PmcPortState (const a3core::Platform& p) : platform (p) {}
 
 PmcPortState::~PmcPortState()
 {
@@ -227,13 +238,12 @@ std::optional<std::string> PmcPortState::portState()
         collect();
         last = portStateOf (output);
         child.reset();
+        socket.deleteFile();   // pmc binds it and leaves it behind
     }
     output.clear();
-    socket.deleteFile();   // pmc binds its own socket here and leaves it behind
-    socket.getParentDirectory().createDirectory();
-    child = platform.spawn ({ "pmc", "-u", "-b", "0", "-i", socket.getFullPathName().toStdString(), "-s", ptp4lReadOnlySocket,
-                              "GET PORT_DATA_SET" },
-                            true, a3core::ProcessGroup::inherit, a3core::ErrorOutput::discard);
+    socket = pmcClientSocket ((int) getpid(), ++queries);
+    socket.deleteFile();
+    child = platform.spawn (pmcCommand (socket), true, a3core::ProcessGroup::inherit, a3core::ErrorOutput::discard);
     startedAt = monotonicSeconds();
     return last;
 }
@@ -343,7 +353,7 @@ ClockRunner::ClockRunner (const ProgramArgs& args, const a3core::Platform& platf
       journal (a3core::streamJournal (stdout, stderr)),
       phc (plan.device),
       feed (platform),
-      port (platform, runtimeFile (platform, "pmc.sock"))
+      port (platform)
 {
     // One steering instance: it holds the lock and owns the status file. An observer takes neither.
     if (! observe && ! takeInstanceLock())
