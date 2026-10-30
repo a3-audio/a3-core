@@ -634,8 +634,79 @@ class TheMachinesByRole(unittest.TestCase):
 
     def test_each_deck_has_its_host(self):
         self.assertEqual(self.truth.host("deckhost-a"), self.truth.host("core"))
-        self.assertEqual(self.truth.host("deckhost-b"), "192.168.8.23")
+        self.assertEqual(self.truth.host("deckhost-b"), "192.168.8.13")
         self.assertEqual(self.truth.host("deckhost-c"), "192.168.8.20")
+
+
+class EveryMachineOnBothNetworks(unittest.TestCase):
+    """2026-10-30: a machine sits on the control network (OSC, 192.168.8.x)
+    and the audio network (AES67 and PTP, 192.168.9.x). The audio address of
+    the machine playing a role is the host "<role>-audio" beside "<role>":
+    plain strings like every other host, so every reader and the maintainer's
+    network.json keep working, and no address is written in code."""
+
+    MACHINES = ("core", "motion", "deckhost-a", "deckhost-b", "deckhost-c")
+
+    def setUp(self):
+        self.truth = a3_osc.load(TRUTH)
+
+    def test_the_rig_as_it_stands(self):
+        expected = {"core": ("192.168.8.10", "192.168.9.10"),
+                    "motion": ("192.168.8.20", "192.168.9.20"),
+                    "deckhost-a": ("192.168.8.10", "192.168.9.10"),
+                    "deckhost-b": ("192.168.8.13", "192.168.9.23"),
+                    "deckhost-c": ("192.168.8.20", "192.168.9.20")}
+        for role, (control, audio) in expected.items():
+            with self.subTest(role=role):
+                self.assertEqual(self.truth.host(role), control)
+                self.assertEqual(self.truth.host(f"{role}-audio"), audio)
+
+    def test_the_cores_audio_host_is_its_audio_address(self):
+        audio = self.truth.network()["audio_address"].split("/")[0]
+        self.assertEqual(self.truth.host("core-audio"), audio)
+
+    def test_each_on_its_own_network(self):
+        control = self.truth.network()["address"].rsplit(".", 1)[0] + "."
+        audio = self.truth.network()["audio_address"].rsplit(".", 1)[0] + "."
+        for role in self.MACHINES:
+            with self.subTest(role=role):
+                self.assertTrue(self.truth.host(role).startswith(control))
+                self.assertTrue(self.truth.host(f"{role}-audio").startswith(audio))
+
+    def test_one_machine_one_audio_address(self):
+        """Two roles on one control address are one machine: one audio address."""
+        audio_of = {}
+        for role in self.MACHINES:
+            control = self.truth.host(role)
+            audio = self.truth.host(f"{role}-audio")
+            self.assertEqual(audio_of.setdefault(control, audio), audio, role)
+
+
+class DevicesSayTheirVersion(unittest.TestCase):
+    """2026-10-30: every device tells Core its version, its firmware and its
+    audio address, so the Canvas shows what runs where. A new address beside
+    device.hello, not more arguments on it: every sender of the old hello and
+    every test pinning its "ss" keeps working."""
+
+    def setUp(self):
+        self.entry = truth().addresses()["device.version"]
+
+    def test_the_address(self):
+        self.assertEqual((self.entry["pattern"], self.entry["args"], self.entry["to"]),
+                         ("/device/version", "ssss", ["core"]))
+
+    def test_everyone_who_says_hello_may_say_it_and_the_analyzer(self):
+        hello = truth().addresses()["device.hello"]
+        self.assertEqual(set(self.entry["from"]), set(hello["from"]) | {"beat-analyzer"})
+
+    def test_the_hello_is_unchanged(self):
+        hello = truth().addresses()["device.hello"]
+        self.assertEqual((hello["pattern"], hello["args"]), ("/device/hello", "ss"))
+
+    def test_the_meaning_names_the_four_arguments(self):
+        for word in ("name", "version", "firmware", "audio", '""', "30 s"):
+            with self.subTest(word=word):
+                self.assertIn(word, self.entry["meaning"])
 
 
 class TheDeckStreams(unittest.TestCase):
