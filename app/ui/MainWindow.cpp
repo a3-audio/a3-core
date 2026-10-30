@@ -55,7 +55,7 @@ class MainWindow::Content final : public juce::Component
 {
 public:
     Content (HostView& view, juce::AudioDeviceManager& manager, std::vector<juce::File> spatialChoices, MonitorSetup monitorToUse,
-             KeyboardSetup keyboardSetup, juce::File userSpatialRoot)
+             KeyboardSetup keyboardSetup, juce::File userSpatialRoot, SystemSetup systemSetup)
         : saveBar (view), monitor (std::move (monitorToUse))
     {
         const auto userRoot = userSpatialRoot;
@@ -84,7 +84,23 @@ public:
         addPage ("I/O", std::move (io));
         addPage ("CALIBRATION", std::make_unique<CalibrationPage> (view));
         addPage ("FILTER", std::make_unique<FilterPage> (view));
-        addPage ("STATUS", std::make_unique<StatusPage> (view));
+        // 2026-10-30: the Canvas's content (the rig, the project, the A³ System card) is STATUS' SYSTEM and ABOUT; a
+        // seventh key in the row made the key text smaller than a quarter of the key.
+        if (systemSetup.probe == nullptr)
+            idleProbe = std::make_unique<SystemProbe> (SystemSources {}, false);
+        systemProbe = systemSetup.probe != nullptr ? systemSetup.probe : idleProbe.get();
+        auto statusAndSystem = std::make_unique<SubPages> ("STATUS");
+        status = statusAndSystem.get();
+        auto statusPage = std::make_unique<StatusPage> (view);
+        auto rigView = std::make_unique<SystemRigView> (*systemProbe, SystemConfirm {});
+        auto aboutView = std::make_unique<SystemAboutView> (*systemProbe);
+        auto* statusRaw = statusPage.get();
+        auto* rigRaw = rigView.get();
+        auto* aboutRaw = aboutView.get();
+        status->add ("STATUS", std::move (statusPage), [statusRaw] { statusRaw->refresh(); });
+        status->add ("SYSTEM", std::move (rigView), [rigRaw] { rigRaw->refresh(); });
+        status->add ("ABOUT", std::move (aboutView), [aboutRaw] { aboutRaw->refresh(); });
+        addPage ("STATUS", std::move (statusAndSystem));
         if (monitor.core != nullptr)
         {
             auto& core = *monitor.core;
@@ -126,6 +142,11 @@ public:
             speakers->show (name);
             return show ("SPEAKERS");
         }
+        if (status != nullptr && status->has (name) && name != "STATUS")
+        {
+            status->show (name);
+            return show ("STATUS");
+        }
         if (ioPage != nullptr && (name == "INPUT" || name == "OUTPUT" || (name == "DEPARTMENTS" && departments != nullptr)))
         {
             ioPage->showSub (name == "INPUT" ? IoPage::Sub::input : name == "OUTPUT" ? IoPage::Sub::output : IoPage::Sub::departments);
@@ -142,6 +163,7 @@ public:
                 pages[j].component->setVisible (j == i);
                 pages[j].key->setToggleState (j == i, juce::dontSendNotification);
             }
+            askTheMachineWhileShown();
             refreshShown();
             showZonesKeys();
             return;
@@ -154,6 +176,8 @@ public:
         const auto* page = pages[(size_t) shown].component.get();
         if (page == speakers)
             return speakers->shown();
+        if (page == status)
+            return status->shown();
         if (page == ioPage)
             return ioPage->shownSub() == IoPage::Sub::input ? "INPUT" : ioPage->shownSub() == IoPage::Sub::output ? "OUTPUT" : "DEPARTMENTS";
         return {};
@@ -187,6 +211,7 @@ public:
 
     void refresh()
     {
+        askTheMachineWhileShown();   // a sub-page key does not pass show()
         for (auto& page : pages)
             if (! page.monitor && ! page.onlyWhenShown)
                 page.refresh();   // the engine pages keep their pending edits current even when hidden
@@ -336,6 +361,13 @@ private:
         resized();
     }
 
+    // systemd, git and Core's rig are asked only while SYSTEM or ABOUT is shown.
+    void askTheMachineWhileShown()
+    {
+        const bool shownNow = ! pages.empty() && pages[(size_t) shown].component.get() == status && status->shown() != "STATUS";
+        systemProbe->setWanted (shownNow);
+    }
+
     void applySwitch()
     {
         const bool on = monitor.core != nullptr && monitorSwitch.getToggleState();
@@ -366,6 +398,9 @@ private:
     SubPages* speakers = nullptr;
     IoPage* ioPage = nullptr;
     std::unique_ptr<DepartmentsPage> departments;
+    std::unique_ptr<SystemProbe> idleProbe;
+    SystemProbe* systemProbe = nullptr;
+    SubPages* status = nullptr;
     WindowBands bands;
     juce::TextButton keys { "KEYS" };
     juce::Label keyboardNoteLabel;
@@ -377,12 +412,12 @@ private:
 
 MainWindow::MainWindow (HostView& view, juce::AudioDeviceManager& manager, std::vector<juce::File> spatialChoices,
                         bool serviceMode, std::function<void()> quitApp, MonitorSetup monitor, KeyboardSetup keyboard,
-                        juce::File userSpatialRoot)
+                        juce::File userSpatialRoot, SystemSetup system)
     : juce::DocumentWindow ("a3-core", palette::ground, juce::DocumentWindow::closeButton, false), quit (std::move (quitApp)), service (serviceMode)
 {
     setLookAndFeel (&look);
     auto page = std::make_unique<Content> (view, manager, std::move (spatialChoices), std::move (monitor), std::move (keyboard),
-                                           std::move (userSpatialRoot));
+                                           std::move (userSpatialRoot), system);
     content = page.get();
     setContentOwned (page.release(), false);
     setResizable (true, false);

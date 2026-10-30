@@ -2016,7 +2016,8 @@ TEST_F (Pages, NoTooltipsAnywhere)
     a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, { core.client.get(), {} }, {}, rig.userRoot);
     window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     window.setMonitorShown (true);
-    for (const auto& name : { "AUDIO", "SPEAKERS", "ZONES", "INPUT", "OUTPUT", "DEPARTMENTS", "CALIBRATION", "FILTER", "STATUS", "BENCH" })
+    for (const auto& name : { "AUDIO", "SPEAKERS", "ZONES", "INPUT", "OUTPUT", "DEPARTMENTS", "CALIBRATION", "FILTER", "STATUS", "SYSTEM",
+                              "ABOUT", "BENCH" })
     {
         window.showPage (name);
         window.refreshNow();
@@ -2287,7 +2288,8 @@ TEST_F (Pages, StatusHasTheDriverAndTheClocksDetail)
 }
 
 // The window's keys (2026-10-30): CHANNELS, ZONES and DEPARTMENTS have none (AUDIO's card, SPEAKERS' and I/O's
-// sub-pages), so six keys share the row beside the switch and their text is larger again.
+// sub-pages), so six keys share the row beside the switch and their text is larger again. SYSTEM and ABOUT (the Canvas's
+// content) are STATUS' sub-pages: as a seventh key SYSTEM made the text smaller than a quarter of the key (11.95 < 12.25 px).
 TEST_F (Pages, SixPageKeysAndTheSubPages)
 {
     SpeakerRig rig;
@@ -2416,10 +2418,11 @@ TEST_F (Pages, EveryPageIsCardsOnOneGrid)
     a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, { core.client.get(), {} }, {}, rig.userRoot);
     window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     auto& content = *window.getContentComponent();
-    for (const auto& name : { "AUDIO", "SPEAKERS", "ZONES", "INPUT", "OUTPUT", "DEPARTMENTS", "CALIBRATION", "FILTER", "STATUS" })
+    for (const auto& name : { "AUDIO", "SPEAKERS", "ZONES", "INPUT", "OUTPUT", "DEPARTMENTS", "CALIBRATION", "FILTER", "STATUS", "SYSTEM", "ABOUT" })
     {
         window.showPage (name);
         window.refreshNow();
+        EXPECT_TRUE (window.currentPage() == name || window.currentSubPage() == name) << name << ": not reached";
         auto* page = shownPage (window);
         ASSERT_NE (page, nullptr) << name;
         const auto t = a3app::layout::tokens (*page);
@@ -2441,4 +2444,34 @@ TEST_F (Pages, EveryPageIsCardsOnOneGrid)
         expectPainted (a3apptest::snapshotAt (content, "window3-" + juce::String (name).toLowerCase().removeCharacters ("/"),
                                               content.getWidth(), content.getHeight()));
     }
+}
+
+// SYSTEM and ABOUT (2026-10-30, "all content from the Canvas goes to the Engine"): STATUS' sub-pages beside STATUS --
+// the rig (its programs, Start all, Stop all) and the project (Support A³, the A³ System card, the licences).
+TEST_F (Pages, SystemAndAboutAreSubPagesOfStatus)
+{
+    SpeakerRig rig;
+    a3app::SystemProbe probe ({}, false);
+    a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, {}, {}, rig.userRoot, { &probe });
+    window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    EXPECT_FALSE (window.pageList().contains ("SYSTEM")) << "no seventh key";
+    window.showPage ("STATUS");
+    EXPECT_EQ (window.currentSubPage(), "STATUS");
+    EXPECT_FALSE (probe.isWanted()) << "the machine is asked only while SYSTEM or ABOUT is shown";
+    window.showPage ("SYSTEM");
+    EXPECT_TRUE (probe.isWanted());
+    EXPECT_EQ (window.currentPage(), "STATUS");
+    EXPECT_EQ (window.currentSubPage(), "SYSTEM");
+    auto& content = *window.getContentComponent();
+    EXPECT_FALSE (buttonsLabelled (content, "Start all").empty());
+    expectPainted (a3apptest::snapshotAt (content, "system-window-rig", content.getWidth(), content.getHeight()));
+    window.showPage ("ABOUT");
+    EXPECT_EQ (window.currentPage(), "STATUS");
+    EXPECT_EQ (window.currentSubPage(), "ABOUT");
+    expectPainted (a3apptest::snapshotAt (content, "system-window-about", content.getWidth(), content.getHeight()));
+    EXPECT_TRUE (probe.isWanted());
+    window.showPage ("STATUS");
+    EXPECT_EQ (window.currentSubPage(), "ABOUT") << "the page keeps the sub-page last shown";
+    window.showPage ("AUDIO");
+    EXPECT_FALSE (probe.isWanted());
 }

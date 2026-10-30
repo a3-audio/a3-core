@@ -140,7 +140,8 @@ public:
     WindowRunner (const a3core::Platform& platform, const a3core::Truth& truth)
         : core (a3app::coreClientFor (truth)),
           engine (makeEngineView (truth)),
-          process (platform, *core, *engine)
+          process (platform, *core, *engine),
+          system (a3app::machineSystemSources (truth, platform.home(), platform.configDir(), truthDecks (truth)))
     {
         for (const auto role : process.attach())
             std::printf ("a3-core: started --role %s, it was not running\n", a3app::roleWord (role).c_str());
@@ -151,7 +152,8 @@ public:
                                                       [this] { quitFlow.close(); },
                                                       a3app::MonitorSetup { core.get(), a3app::windowSettingsFile (platform.configDir()) },
                                                       a3app::KeyboardSetup { a3app::makeOnboardLink (platform), {} },   // the rig's touch screen types through onboard
-                                                      platform.configDir().getChildFile ("engine/spatial"));
+                                                      platform.configDir().getChildFile ("engine/spatial"),
+                                                      a3app::SystemSetup { &system });
         core->refreshNow (0);   // the window has said whether the monitor shows: only then does this ask Core
         window->setWorkspaceRunner (a3app::screen::systemI3Runner());
         window->open();
@@ -182,6 +184,12 @@ public:
     }
 
 private:
+    // The rig's deck slots as the Canvas counted them: stemdeck.deck-hello's range (0: the page's default).
+    static int truthDecks (const a3core::Truth& truth)
+    {
+        return truth.hasAddress ("stemdeck.deck-hello") ? truth.indexRange ("stemdeck.deck-hello", "deck").second : 0;
+    }
+
     static std::unique_ptr<a3app::RemoteHostView> makeEngineView (const a3core::Truth& truth)
     {
         const auto control = truth.endpoint ("engine", "control");
@@ -211,6 +219,7 @@ private:
     std::unique_ptr<a3app::CoreClient> core;
     std::unique_ptr<a3app::RemoteHostView> engine;
     a3app::WindowProcess process;
+    a3app::SystemProbe system;   // before the window: its SYSTEM page reads it
     a3app::QuitFlow quitFlow { process, askOnTheWindow() };
     juce::AudioDeviceManager pageDevices;   // only a catalogue of device types for the AUDIO page; never initialised
     std::unique_ptr<a3app::MainWindow> window;

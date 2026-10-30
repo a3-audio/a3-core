@@ -202,10 +202,21 @@ constexpr int statusLines = 9, linkLines = 4, clockLines = 7;   // MODE..ROUND T
 constexpr float lineShare = 0.55f;                              // a status line as a share of the row
 }
 
+// The page's row, or less so that the three cards of lines leave the meters two rows (STATUS is a sub-page beside SYSTEM
+// and ABOUT since 2026-10-30, under their keys).
+int StatusPage::row() const
+{
+    const auto t = layout::tokens (*this);
+    constexpr int cardsOfLines = 3, meterRows = 2;
+    const int fixed = 2 * t.margin + (cardsOfLines + 1) * 2 * t.padding + cardsOfLines * t.gap;
+    const float lines = (float) (statusLines + linkLines + clockLines) * lineShare + 0.6f + (float) meterRows;   // and the clock's heading
+    return juce::jmax (1, juce::jmin (t.row, (int) ((float) (getHeight() - fixed) / lines)));
+}
+
 // Cards (layout::Stack): what runs, what is missing, the clock, the meters (the rest).
 void StatusPage::resized()
 {
-    const auto t = layout::tokens (*this);
+    const auto t = layout::tokens (*this, row());
     const int line = juce::roundToInt ((float) t.row * lineShare);
     layout::Stack stack (getLocalBounds().reduced (t.margin), t, cards);
     stack.card (2 * t.padding + statusLines * line);
@@ -218,7 +229,7 @@ void StatusPage::resized()
 void StatusPage::paint (juce::Graphics& g)
 {
     g.fillAll (palette::surface);
-    const auto t = layout::tokens (*this);
+    const auto t = layout::tokens (*this, row());
     paintCards (g, *this, t);
     if (cards.size() < 3)
         return;

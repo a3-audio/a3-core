@@ -48,6 +48,7 @@ public:
 
 private:
     class Meters;
+    int row() const;
     HostView& view;
     std::unique_ptr<Meters> meters;
     ClockPanel clock { ClockPanel::Mode::detail };

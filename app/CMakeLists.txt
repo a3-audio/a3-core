@@ -9,7 +9,8 @@ add_library(a3-engine-app-lib STATIC EngineHost.cpp OscVocabulary.cpp HelloSende
     ui/MonitorTrafficPage.cpp ui/MonitorTruthPage.cpp ui/MonitorUnknownPage.cpp ui/MonitorRegisterPage.cpp ui/MonitorBenchPage.cpp ui/DepartmentsPage.cpp
     ui/AudioPage.cpp ui/ClockPanel.cpp ui/StatusPage.cpp ui/MainWindow.cpp
     ui/ChannelsPage.cpp ui/ZonesPage.cpp ui/SpeakersPage.cpp ui/IoPage.cpp ui/CalibrationPage.cpp ui/FilterPage.cpp ui/SaveBar.cpp
-    ui/KeyboardPolicy.cpp ui/OnboardLink.cpp ui/OnScreenKeyboard.cpp ui/look/Dropdown.cpp ui/look/A3LookAndFeel.cpp ui/SubPages.cpp ui/WorkspaceSwitch.cpp RoundTripProbe.cpp RoundTripLoop.cpp
+    ui/KeyboardPolicy.cpp ui/OnboardLink.cpp ui/OnScreenKeyboard.cpp ui/look/Dropdown.cpp ui/look/A3LookAndFeel.cpp ui/SubPages.cpp ui/WorkspaceSwitch.cpp
+    ui/SystemAbout.cpp ui/SystemCheckout.cpp ui/RigModel.cpp ui/RigPlan.cpp ui/SystemProbe.cpp ui/SystemPage.cpp RoundTripProbe.cpp RoundTripLoop.cpp
     AudioTiming.cpp TimingControl.cpp CommandRunner.cpp SystemDevice.cpp)
 target_include_directories(a3-engine-app-lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/ui ${CMAKE_CURRENT_SOURCE_DIR}/ui/look)
 target_link_libraries(a3-engine-app-lib PUBLIC a3-engine a3-links a3-engine-bench-lib a3-core-lib a3-clock)

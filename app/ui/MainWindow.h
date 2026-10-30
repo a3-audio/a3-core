@@ -10,6 +10,7 @@
 #include "SaveBar.h"
 #include "SpeakersPage.h"
 #include "StatusPage.h"
+#include "SystemPage.h"
 #include "ZonesPage.h"
 #include "WorkspaceSwitch.h"
 #include <functional>
@@ -31,6 +32,12 @@ struct KeyboardSetup
     KeyboardTimings timings;
 };
 
+// STATUS' SYSTEM and ABOUT read the machine through it (SystemProbe.h). No probe: the window makes one that asks nothing (tests).
+struct SystemSetup
+{
+    SystemProbe* probe = nullptr;
+};
+
 // ~/.config/a3/core/window.settings, {"monitor": true|false}. Read: a missing or broken file, or a missing key, is
 // "off". A write keeps the file's other keys ("tooltips", from before 2026-10-30, is kept and ignored).
 juce::File windowSettingsFile (const juce::File& configDir);
@@ -44,7 +51,8 @@ struct WindowBands
 };
 
 // The window: the setup pages' keys (AUDIO, SPEAKERS with its sub-page ZONES, I/O with INPUT, OUTPUT and, with a Core
-// client, DEPARTMENTS, which only asks Core while it is shown; CALIBRATION, FILTER, STATUS) in a row across the top,
+// client, DEPARTMENTS, which only asks Core while it is shown; CALIBRATION, FILTER, STATUS with SYSTEM and ABOUT, which
+// ask the machine only while one of them is shown) in a row across the top,
 // the workspace switch at its right end; with a Core client and the OSC MONITOR switch on, the monitor's (TRAFFIC,
 // TRUTH & DEVICES, NOT UNDERSTOOD, REGISTER, BENCH) in a second row. The shown page below them at the full width, and a
 // footer: KEYS, the OSC MONITOR switch, and the Save bar. No tooltips anywhere (2026-10-30). With service = true the
@@ -55,7 +63,7 @@ public:
     // `spatialChoices` are the directories the ZONES page offers; `userSpatialRoot` is where SPEAKERS saves
     // user variants (<configDir>/engine/spatial; empty: it cannot save).
     MainWindow (HostView&, juce::AudioDeviceManager&, std::vector<juce::File> spatialChoices, bool service, std::function<void()> quit,
-                MonitorSetup monitor = {}, KeyboardSetup keyboard = {}, juce::File userSpatialRoot = {});
+                MonitorSetup monitor = {}, KeyboardSetup keyboard = {}, juce::File userSpatialRoot = {}, SystemSetup system = {});
     ~MainWindow() override;
     // Puts the window on the desktop (needs a display); the constructor builds it without one,
     // so the pages and the close behaviour are testable headless.
