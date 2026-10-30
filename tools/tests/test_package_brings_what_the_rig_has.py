@@ -152,7 +152,7 @@ class AaaJoinsTheAudioGroup(unittest.TestCase):
             (bin_dir / "usermod").write_text(f'#!/bin/sh\necho "$@" >> {log}\n')
             for fake in ("id", "usermod"):
                 (bin_dir / fake).chmod(0o755)
-            subprocess.run(["sh", "-c", f"set -e\n{function('join_audio_group')}\n"
+            subprocess.run(["sh", "-c", f"set -e\n{function('join_group')}\n{function('join_audio_group')}\n"
                             'join_audio_group aaa'],
                            env={"PATH": f"{bin_dir}:/usr/bin:/bin"},
                            check=True, capture_output=True, text=True)

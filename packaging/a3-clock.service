@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2026 Raphael Eismann
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=a3-clock, the Core's PTP clock steered from the Scarlett
+# The one clock (2026-10-30): the clock role of the a3-core program reads the Scarlett's sample clock from
+# PipeWire's profiler and phase-locks the PTP hardware clock to it, so every deck host that follows PTP
+# runs at the Scarlett's rate. It is not in the audio path: when it stops, the PTP clock keeps its last
+# frequency (holdover) and the engine's AUDIO page says so.
+# Only where the Core runs AES67 and PTP (a3-osc-render writes this config from the audio socket).
+ConditionPathExists=%h/.config/pipewire/pipewire-aes67.conf
+After=pipewire.service wireplumber.service
+# Not PartOf=a3-main.service: restarting the rig's programs must not take the clock down with them.
+
+[Service]
+# Write access to /dev/ptp0 comes from the device's group (clock, root:clock 0664 on Debian), which the
+# postinst gives the app user; no capability. Without it the role measures and reports a fault.
+ExecStart=/usr/bin/a3-core --role clock
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target

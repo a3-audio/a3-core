@@ -196,6 +196,16 @@ class WhatTheRigSettledOn(unittest.TestCase):
         self.assertEqual(keys["device.api"], "aes67")
         self.assertEqual(keys["sess.latency.msec"], "12")
 
+    def test_deck_streams_are_a_plain_fifo_without_a_resampler(self):
+        # 2026-10-30, one clock: the deck hosts follow PTP, and the PTP clock
+        # follows the Scarlett (a3-core --role clock), so a deck stream runs at
+        # the Scarlett's rate and the receiver has nothing to correct. Its DLL
+        # resampling the stream all the time was the crackle.
+        self.assertEqual(value(self.rule("~^AES67 deck "), "resample.disable"), "true")
+
+    def test_other_streams_keep_their_resampler(self):
+        self.assertNotIn("resample.disable", dict(settings(self.rule("~ out$"))))
+
     def test_deck_rule_receives_the_whole_packet(self):
         # rtp-source's receive buffer is net.mtu bytes (default 1280); the
         # deck's packet is 1365 B and was cut to 10 of 11 frames.
@@ -352,6 +362,15 @@ class ThePostinstEnablesThem(unittest.TestCase):
         self.assertNotIn("enable ptp4l", log)
         self.assertNotIn("user enable a3-aes67", log)
         self.assertIn("no audio port", said)
+
+    def test_the_clock_role_comes_with_ptp(self):
+        log, _ = self.run_enable("enp9s0")
+        self.assertIn("user enable a3-clock.service", log)
+
+    def test_no_audio_port_no_clock_role(self):
+        log, _ = self.run_enable("")
+        self.assertNotIn("user enable a3-clock", log)
+        self.assertIn("user disable a3-clock.service", log)
 
     def test_the_postinst_calls_it(self):
         self.assertRegex(POSTINST.read_text(), r"(?m)^\s*enable_aes67\s*$")

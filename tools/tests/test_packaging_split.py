@@ -100,6 +100,7 @@ class TheAppIsTheProgram(unittest.TestCase):
                      "/usr/lib/systemd/user/a3-engine.service",
                      "/usr/lib/systemd/user/a3-core-window.service",
                      "/usr/lib/systemd/user/a3-core.service",
+                     "/usr/lib/systemd/user/a3-clock.service",
                      "/usr/lib/a3-core/libjack-rt-priority.so",
                      "/usr/lib/a3-core/a3-wait-for-the-screen",
                      "/etc/security/limits.d/a3-audio.conf",

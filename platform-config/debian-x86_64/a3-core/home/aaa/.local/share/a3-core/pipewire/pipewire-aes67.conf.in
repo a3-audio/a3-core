@@ -96,6 +96,11 @@ context.modules = [
                             media.class = "Audio/Source"
                             device.api = aes67
                             sess.latency.msec = 12
+                            # One clock (2026-10-30): the deck host follows PTP and PTP follows
+                            # the Scarlett (a3-core --role clock), so the stream already runs at
+                            # the Scarlett's rate. No resampler: a plain FIFO, refilled at an
+                            # under- or overrun. Needs the clock role locked (Engine AUDIO page).
+                            resample.disable = true
                             # rtp-source's receive buffer is net.mtu bytes (default 1280);
                             # the deck's packet is 1365 B and was cut to 10 of 11 frames.
                             net.mtu = 1500

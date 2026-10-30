@@ -68,7 +68,7 @@ files() {
 
 install_user_units() {
     local src=$1 stage=$2 unit
-    for unit in a3-engine.service a3-core-window.service a3-core.service; do
+    for unit in a3-engine.service a3-core-window.service a3-core.service a3-clock.service; do
         install -D -m 644 "$src/packaging/$unit" "$stage/usr/lib/systemd/user/$unit"
     done
 }
