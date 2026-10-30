@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include "AudioBackend.h"
+#include "ClockStatus.h"
 #include "ConfigEdits.h"
 #include "ConfigFile.h"
 #include <string>
@@ -45,6 +46,8 @@ public:
     virtual std::vector<std::string> ignoredKeys() const { return {}; }
     // Non-empty when the truth in use lacks a key the engine would send with (an older a3-osc.json).
     virtual juce::String truthNote() const { return {}; }
+    // The clock role's report (ClockStatus.h): the one clock's lock, or why nobody reports it.
+    virtual a3clock::ClockReport clock() const { return {}; }
     virtual juce::File configFile() const = 0;                     // where Save writes
     virtual int truthDecks() const = 0;                            // EngineTruth::decks: the count of a config that names none
     virtual LiveLinks liveLinks() const = 0;                       // the engine ports' live JACK links, foreign ones included

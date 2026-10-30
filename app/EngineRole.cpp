@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "EngineRole.h"
 
+#include <unistd.h>
+
 #include <atomic>
 #include <cstdio>
+#include <cstdlib>
 
 #include "ConfigEdits.h"
 #include "DeckAudioReport.h"
@@ -182,6 +185,7 @@ public:
         return notes.joinIntoString ("; ");
     }
     int truthDecks() const override { return truth.decks; }
+    a3clock::ClockReport clock() const override { return clockReader.get (monotonicSeconds(), (double) juce::Time::currentTimeMillis() / 1000.0); }
     void edit (const AppConfig& config) override { edited = config; }
 
     // Fails when the new config did not open (the previous one is running again, or nothing is: then
@@ -234,6 +238,14 @@ private:
     EngineTruth truth;
     std::vector<std::string> names;
     juce::String problem;
+    // The clock role (another process) writes its status into the runtime directory; read on the control thread.
+    mutable a3clock::ClockReportReader clockReader { a3clock::clockStatusFile (runtimeDirectory(), (unsigned) getuid()) };
+
+    static std::optional<std::string> runtimeDirectory()
+    {
+        const char* dir = std::getenv ("XDG_RUNTIME_DIR");
+        return dir != nullptr ? std::optional<std::string> (dir) : std::nullopt;
+    }
 
     friend class EngineRole;
 };

@@ -105,7 +105,8 @@ juce::var toJson (const EngineStatusReport& report)
                      { "engineProblem", report.engineProblem },
                      { "droppedLinks", dropped },
                      { "ignoredKeys", ignored },
-                     { "truthNote", report.truthNote } });
+                     { "truthNote", report.truthNote },
+                     { "clock", a3clock::toJson (report.clock) } });
 }
 
 std::optional<EngineStatusReport> statusFromJson (const juce::var& v)
@@ -145,6 +146,7 @@ std::optional<EngineStatusReport> statusFromJson (const juce::var& v)
         report.ignoredKeys.push_back (v["ignoredKeys"][i].toString().toStdString());
     if (v["truthNote"].isString())
         report.truthNote = v["truthNote"].toString();
+    report.clock = a3clock::clockReportFromJson (v["clock"]);   // an engine before the clock: not reported
     return report;
 }
 
@@ -342,6 +344,7 @@ void EngineControlApi::publishStatus()
     report.droppedLinks = view.droppedLinks();
     report.ignoredKeys = view.ignoredKeys();
     report.truthNote = view.truthNote();
+    report.clock = view.clock();
     auto text = juce::JSON::toString (toJson (report), true).toStdString();
     auto outputs = view.outputNames();
 

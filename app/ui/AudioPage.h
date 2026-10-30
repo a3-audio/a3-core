@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+#include "ClockPanel.h"
 #include "HostView.h"
 #include "Look.h"
 #include <juce_audio_utils/juce_audio_utils.h>
@@ -9,7 +10,8 @@ namespace a3app
 {
 // The audio page. JACK: rate and quantum are read-only (the server owns them) with where they
 // come from. Device: choosers for device type, input and output device, rate and block size, and
-// the bit depth as the device reports it. Both: the estimated input-to-output round trip and its parts. Every choice only edits the pending config (HostView::edit);
+// the bit depth as the device reports it. Both: the estimated input-to-output round trip and its parts,
+// and the CLOCK section (ClockPanel: the one clock's master and lock). Every choice only edits the pending config (HostView::edit);
 // Save applies it through the backend. The page opens no device: the manager is a catalogue of
 // device types and is never initialised.
 class AudioPage final : public juce::Component
@@ -28,6 +30,7 @@ public:
     const juce::Label& bitDepthLabel() const { return bitDepth; }
     const juce::Label& pendingLabel() const { return pending; }
     const juce::Label& roundTripLabel() const { return roundTrip; }
+    const ClockPanel& clockPanel() const { return clock; }
 
     void resized() override;
     void paint (juce::Graphics&) override;
@@ -37,6 +40,7 @@ private:
     void fillChoosers();
     void editDevice();
     void layoutRoundTrip (juce::Rectangle<int>& area, int row);
+    void layoutClock (juce::Rectangle<int>& area, int row);
 
     HostView& view;
     juce::AudioDeviceManager& manager;
@@ -44,6 +48,7 @@ private:
     juce::TextButton jackButton { "JACK" }, deviceButton { "Device" };
     juce::Label typeCaption, inputCaption, outputCaption, rateCaption, blockCaption;
     juce::ComboBox typeBox, inputBox, outputBox, rateBox, blockBox;
+    ClockPanel clock;
     bool deviceChoosers = false;
     bool filling = false;
 };

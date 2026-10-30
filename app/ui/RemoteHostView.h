@@ -48,6 +48,7 @@ public:
     std::vector<std::string> droppedLinks() const override;
     std::vector<std::string> ignoredKeys() const override;
     juce::String truthNote() const override;
+    a3clock::ClockReport clock() const override;
     int truthDecks() const override;
     juce::File configFile() const override;
     LiveLinks liveLinks() const override;

@@ -236,3 +236,27 @@ TEST (RemoteHostView, NoiseReachesTheEnginesZone)
     EXPECT_TRUE (rig.fake.noises[0].ambisonic);
     EXPECT_FLOAT_EQ (rig.fake.noises[0].azimuth, -135.0f);
 }
+
+// The clock role's report reaches the AUDIO page over the control API.
+TEST (RemoteHostView, SaysTheClock)
+{
+    RemoteRig rig;
+    rig.fake.clockReport.running = true;
+    rig.fake.clockReport.status.health = a3clock::Health::locked;
+    rig.fake.clockReport.status.frequencyPpm = 14.1;
+    rig.fake.clockReport.status.counters.corrections = 42;
+    rig.tick();
+    rig.remote->refreshNow();
+    const auto clock = rig.remote->clock();
+    EXPECT_TRUE (clock.running);
+    EXPECT_EQ (clock.status.health, a3clock::Health::locked);
+    EXPECT_DOUBLE_EQ (clock.status.frequencyPpm, 14.1);
+    EXPECT_EQ (clock.status.counters.corrections, 42);
+
+    rig.fake.clockReport = {};
+    rig.fake.clockReport.why = "the clock role is not running (a3-clock.service)";
+    rig.tick();
+    rig.remote->refreshNow();
+    EXPECT_FALSE (rig.remote->clock().running);
+    EXPECT_EQ (rig.remote->clock().why, "the clock role is not running (a3-clock.service)");
+}

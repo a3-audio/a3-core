@@ -41,7 +41,7 @@ AudioPage::AudioPage (HostView& v, juce::AudioDeviceManager& m) : view (v), mana
     deviceButton.onClick = [this] { chooseBackend (BackendSettings::Type::device); };
 
     for (auto* child : std::initializer_list<juce::Component*> { &title, &backendCaption, &rate, &quantum, &rateSource, &bitDepth,
-                                                                &roundTrip, &applyMessage, &pending, &jackButton, &deviceButton })
+                                                                &roundTrip, &applyMessage, &pending, &jackButton, &deviceButton, &clock })
         addAndMakeVisible (child);
     const std::pair<juce::Label*, const char*> captions[] = { { &typeCaption, "Device type" }, { &inputCaption, "Input device" },
         { &outputCaption, "Output device" }, { &rateCaption, "Sample rate" }, { &blockCaption, "Block size" } };
@@ -181,6 +181,7 @@ void AudioPage::refresh()
     bitDepth.setText ("Bit depth   " + juce::String (status.bitDepth) + (runsDevice ? "  -  set by the device" : "  -  float samples, set by JACK"),
                       juce::dontSendNotification);
     roundTrip.setText (roundTripText (estimatedRoundTrip (status)), juce::dontSendNotification);
+    clock.show (view.clock());
     if (device != deviceChoosers)
         rebuildForBackend();
 }
@@ -193,6 +194,13 @@ void AudioPage::layoutRoundTrip (juce::Rectangle<int>& area, int row)
     const auto line = area.removeFromTop (row);
     roundTrip.setFont (juce::FontOptions (fittedTextHeight (roundTrip.getText(), (float) row * 0.4f, (float) line.getWidth() * 0.95f)));
     roundTrip.setBounds (line);
+}
+
+// The clock below the rest, in what is left of the page.
+void AudioPage::layoutClock (juce::Rectangle<int>& area, int row)
+{
+    area.removeFromTop (row / 2);
+    clock.setBounds (area);
 }
 
 void AudioPage::resized()
@@ -224,6 +232,7 @@ void AudioPage::resized()
         rateSource.setBounds (area.removeFromTop (row));
         bitDepth.setBounds (area.removeFromTop (row));
         layoutRoundTrip (area, row);
+        layoutClock (area, row);
         return;
     }
     rate.setBounds (area.removeFromTop (row));
@@ -231,5 +240,6 @@ void AudioPage::resized()
     rateSource.setBounds (area.removeFromTop (row));
     bitDepth.setBounds (area.removeFromTop (row));
     layoutRoundTrip (area, row);
+    layoutClock (area, row);
 }
 }

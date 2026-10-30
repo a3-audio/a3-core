@@ -37,6 +37,7 @@ struct FakeView final : a3app::HostView
     std::vector<std::string> droppedLinks() const override { return dropped; }
     std::vector<std::string> ignoredKeys() const override { return ignored; }
     juce::String truthNote() const override { return note; }
+    a3clock::ClockReport clock() const override { return clockReport; }
     juce::File configFile() const override { return file; }
     int truthDecks() const override { return truthDeckCount; }
     a3app::LiveLinks liveLinks() const override { return links; }
@@ -66,6 +67,7 @@ struct FakeView final : a3app::HostView
     juce::String problem;
     std::vector<std::string> dropped, ignored;
     juce::String note;
+    a3clock::ClockReport clockReport;
     int truthDeckCount = 4;   // the truth copy's stemdeck.deck-hello range
     bool fileExistedAtApply = false;
     int edited = 0, applied = 0, filterSets = 0;

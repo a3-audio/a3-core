@@ -34,6 +34,7 @@ struct EngineStatusReport
     std::vector<std::string> droppedLinks;   // HostView::droppedLinks
     std::vector<std::string> ignoredKeys;    // HostView::ignoredKeys
     juce::String truthNote;                  // HostView::truthNote
+    a3clock::ClockReport clock;              // HostView::clock
 };
 juce::var toJson (const EngineStatusReport&);
 std::optional<EngineStatusReport> statusFromJson (const juce::var&);

@@ -90,6 +90,112 @@ TEST_F (Pages, AudioShowsTheEstimatedRoundTrip)
     expectPainted (a3apptest::snapshotAt (page, "audio-roundtrip-device", page.getWidth(), page.getHeight()));
 }
 
+namespace
+{
+a3clock::ClockReport clockReport (a3clock::Health health, const char* reason)
+{
+    a3clock::ClockReport report;
+    report.running = true;
+    report.status.health = health;
+    report.status.reason = reason;
+    report.status.device = "/dev/ptp0";
+    report.status.frequencyPpm = 14.1023;
+    report.status.errorNs = 2'345.0;
+    report.status.ratePpm = 0.012;
+    report.status.lockedSeconds = health == a3clock::Health::locked ? 3725.0 : 0.0;
+    report.status.counters.corrections = 3990;
+    report.status.counters.reanchors = 1;
+    report.status.scarlettBreaks = 1;
+    report.status.observeOnly = health == a3clock::Health::observing;
+    return report;
+}
+
+int pixelsOf (const juce::Image& image, juce::Colour colour)
+{
+    int n = 0;
+    for (int y = 0; y < image.getHeight(); ++y)
+        for (int x = 0; x < image.getWidth(); ++x)
+            n += image.getPixelAt (x, y).getARGB() == colour.getARGB();
+    return n;
+}
+}
+
+// The one clock on the AUDIO page (2026-10-30): its state in every case the role can be in, and a
+// warning frame whenever the PTP clock is not locked to the Scarlett.
+TEST_F (Pages, AudioShowsTheClockInEveryState)
+{
+    struct Case
+    {
+        const char* name;
+        a3clock::ClockReport report;
+        const char* word;
+        juce::Colour warning;   // transparent: no warning
+    };
+    a3clock::ClockReport absent;
+    absent.why = "the clock role is not running (a3-clock.service): nothing steers the PTP clock";
+    const Case cases[] = {
+        { "locked", clockReport (a3clock::Health::locked, "the PTP clock follows the Scarlett"), "LOCKED", juce::Colours::transparentBlack },
+        { "acquiring", clockReport (a3clock::Health::acquiring, "anchored: steering towards the lock"), "ACQUIRING", a3app::palette::caution },
+        { "observing", clockReport (a3clock::Health::observing, "observing"), "OBSERVING", a3app::palette::caution },
+        { "holdover", clockReport (a3clock::Health::holdover, "no measurement: the last frequency is held"), "HOLDOVER", a3app::palette::danger },
+        { "fault", clockReport (a3clock::Health::fault, "the PTP clock refused a frequency write"), "FAULT", a3app::palette::danger },
+        { "not-running", absent, "NOT RUNNING", a3app::palette::danger },
+    };
+    for (const auto& c : cases)
+    {
+        FakeView view;
+        view.clockReport = c.report;
+        a3app::AudioPage page (view, manager);
+        page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+        page.refresh();
+        const auto& clock = page.clockPanel();
+        EXPECT_TRUE (clock.stateLabel().getText().startsWith (c.word)) << c.name << ": " << clock.stateLabel().getText();
+        EXPECT_EQ (clock.warns(), ! c.warning.isTransparent()) << c.name;
+        EXPECT_TRUE (page.getLocalBounds().contains (clock.getBounds())) << c.name;
+        EXPECT_GT (clock.getHeight(), 0) << c.name;
+        const auto image = a3apptest::snapshotAt (page, juce::String ("audio-clock-") + c.name, page.getWidth(), page.getHeight());
+        expectPainted (image);
+        if (c.warning.isTransparent())
+        {
+            EXPECT_EQ (pixelsOf (image, a3app::palette::danger), 0) << c.name;
+            EXPECT_EQ (pixelsOf (image, a3app::palette::caution), 0) << c.name;
+        }
+        else
+            EXPECT_GT (pixelsOf (image, c.warning), 200) << c.name;   // the frame, not only text
+    }
+}
+
+TEST_F (Pages, TheClockMasterHasOneChoiceAndSaysWhy)
+{
+    FakeView view;
+    view.clockReport = clockReport (a3clock::Health::locked, "");
+    a3app::AudioPage page (view, manager);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    const auto& clock = page.clockPanel();
+    ASSERT_EQ (clock.masterBox().getNumItems(), 1);
+    EXPECT_EQ (clock.masterBox().getText(), juce::String (juce::CharPointer_UTF8 ("Scarlett \xe2\x86\x92 PTP grandmaster")));
+    EXPECT_TRUE (clock.noteLabel().getText().contains ("external PTP grandmaster")) << clock.noteLabel().getText();
+}
+
+TEST_F (Pages, TheClockSaysItsNumbers)
+{
+    FakeView view;
+    view.clockReport = clockReport (a3clock::Health::locked, "");
+    a3app::AudioPage page (view, manager);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    page.refresh();
+    const auto& clock = page.clockPanel();
+    EXPECT_TRUE (clock.stateLabel().getText().contains ("+2.3")) << clock.stateLabel().getText();       // the phase error, us
+    EXPECT_TRUE (clock.stateLabel().getText().contains ("1 h 2 min")) << clock.stateLabel().getText();  // locked for
+    EXPECT_TRUE (clock.rateLabel().getText().contains ("+14.10 ppm")) << clock.rateLabel().getText();
+    EXPECT_TRUE (clock.rateLabel().getText().contains ("+0.012 ppm")) << clock.rateLabel().getText();
+    EXPECT_TRUE (clock.countersLabel().getText().contains ("corrections 3990")) << clock.countersLabel().getText();
+    EXPECT_TRUE (clock.countersLabel().getText().contains ("Scarlett breaks 1")) << clock.countersLabel().getText();
+    view.clockReport.status.health = a3clock::Health::holdover;   // the window's timer: refresh follows
+    page.refresh();
+    EXPECT_TRUE (clock.stateLabel().getText().startsWith ("HOLDOVER"));
+}
+
 TEST_F (Pages, JackRateIsReadOnly)
 {
     FakeView view;
