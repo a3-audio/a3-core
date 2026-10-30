@@ -155,10 +155,10 @@ The window has one page per job and a Save bar under them:
 
 | Page | What it edits |
 |---|---|
-| AUDIO | JACK: rate and quantum, read-only (the server owns them). Device: type, input, output, rate, block size. A choice only edits the config; it opens no device. The round trip, measured over the digital loop (MEASURE), and the analog chain (MEASURE ANALOG CHAIN); see "The measured round trip" |
+| AUDIO | The sound-device settings first: one device-type list, `PipeWire (JACK)` (the JACK backend; `"type": "jack"` in the file) beside JUCE's types. PipeWire: Block and Periods, applied by the engine on APPLY (see "Block and periods on PipeWire"). A JUCE type: input, output, rate, block size, an edit that Save applies; it opens no device. Below them what runs: rate, block x periods, rate source, bit depth, DSP load and xruns, the round trip, measured over the digital loop (MEASURE), and the analog chain (MEASURE ANALOG CHAIN); see "The measured round trip". Each MEASURE is off, with a line naming the I/O page, while its pair is not set |
 | CHANNELS | N (1..128) with the DSP load beside it; the deck count (1..26, one letter a slot A..Z; the engine has no cap) with the count that runs |
 | ZONES | which spatial directory: the installed `spatial` and `spatial-reaper-booth-6.1`, and `~/.config/a3/engine/spatial`. No layout editor |
-| I/O | per engine port its JACK peers (editable) and the live ones the map does not name (foreign: shown, never edited), or its device channel; the direct links the engine makes between two foreign ports; the analog test pair. The round-trip loop's channels are offered nowhere, and a notice names them and what a load unrouted |
+| I/O | per engine port its JACK peers (editable) and the live ones the map does not name (foreign: shown, never edited), or its device channel; the direct links the engine makes between two foreign ports; the digital loop and the analog test pair. The digital loop's channels are offered in no route, and a notice names them and what a load unrouted |
 | CALIBRATION | trim per zone, -90..+6 dB; a slider only proposes, a dialog names the old and the new value, a zone without a trim stays closed |
 | FILTER | SVF or Ladder, live: acts at once, needs no Save |
 | STATUS | what runs: mode, Core's last word, gate, load, xruns, missing peers, meters |
@@ -415,9 +415,14 @@ A JACK peer counts as a device channel when it is `system:playback_N`/`system:ca
 the delay is the lag of the cross-correlation's peak (FFT, on the control thread). A peak less than 6 x the
 largest correlation away from it, or a recording that is less than half the signal at that lag (coherence
 < 0.5), is "no loop found", never a number. The audio thread only copies into buffers made at open and hands
-over through one atomic state. It runs 2 s after the backend opens, after a new quantum or rate, on
+over through one atomic state. It runs 2 s after the backend opens, after a new quantum or rate, 3 s after WirePlumber is back from new periods, on
 `POST /api/engine/roundtrip` and on the AUDIO page's MEASURE. The number is the loop's out-to-in time as the
 engine sees it: playback + capture latency + one period.
+
+**Choosing the loop** (2026-10-30): the I/O page's `Digital loop` row, one channel per side; `none` is no loop
+(`null` in the file). A first channel sets both sides (out N -> in N, as an S/PDIF cable runs); the loop keeps its
+channel count. The reservation stays: a channel the loop would take that carries a route or the analog test pair
+is refused, naming its user, and never taken from it.
 
 **The AUDIO page** says `Round trip (measured, digital loop)   X ms (N samples), HH:MM`, or the estimate as the
 fallback, labelled with why: `Round trip (estimated, no loop configured | no loop found on output 11 -> input 11 |
@@ -432,6 +437,42 @@ the config file as `converterSamples`, `sampleRate` and `measuredOn` (only that 
 created from the running one if needed). The page then says `Analog chain   X ms (measured: digital loop now +
 converters measured on <date>)`, the digital part being the live loop measurement; without a share it says the
 converters are not measured yet. Clearing the pair on the I/O page keeps the share (it belongs to the hardware).
+
+## Block and periods on PipeWire
+
+**Why** (2026-10-30, the maintainer: "I want these settings in the Engine's AUDIO page"): the rig ran a fixed
+quantum of 128 from a3-core's PipeWire config and whatever periods PipeWire chose for the Scarlett (3 on the rig:
+ALSA period 128, buffer 384; measured digital loop 343 samples, 7.8 ms).
+
+**Stored** in `engine.json`'s backend section: `blockSize` (32..2048; the page offers 32, 64, 128, 256, 512,
+1024) and `periods` (2 or 3). Defaults 128 and 3: today's behaviour, nothing changes on install. A change on the
+page is written at once (only those two keys, like the converters' share), no Save.
+
+**Block**: `pw-metadata -n settings 0 clock.force-quantum N`, live; the engine follows through its buffer-size
+callback and measures the round trip again. 128 writes 0 (no force), so PipeWire's own quantum from a3-core's
+`pipewire.conf.d` runs as before. PipeWire 1.6 does not clamp a forced quantum to `clock.min-quantum`
+(`settings.check-quantum` is off by default; the graph takes min = max = force), so min-quantum 128 stays untouched
+and nothing needs restoring. The engine forces its stored block at every start: it remembers it, nothing else sets
+it. The engine requests no `node.latency` of its own (jack.conf's 128 applies to every JACK client); a forced
+quantum overrides every client's, so the REAPER/CLAP trap of 2026-10-25 (force above node.latency) is gone with
+REAPER, but another JACK client that cannot follow a buffer-size change would show it first.
+
+**Periods**: `api.alsa.period-num` in the engine's own WirePlumber 0.5 drop-in,
+`~/.config/wireplumber/wireplumber.conf.d/80-a3-engine-alsa.conf`, matching by exact `node.name` only the ALSA nodes
+the engine's I/O map reaches (`system:*` is the default sink and source, read with `pw-metadata -n default 0`; a
+peer `alsa_…:…` names its node; the loops are on `system`). Then `systemctl --user restart wireplumber`: the
+device's nodes go and come back (about two seconds of silence), the engine links its ports again (port
+registration and the once-a-second plan) and measures the round trip 3 s after WirePlumber is back. 3 removes the
+file; nothing else in that directory is touched. The file is written atomically (a hidden temporary renamed over
+it). Periods are never applied at the engine's start: WirePlumber reads the file at its own start.
+
+**The page**: a choice is applied only on APPLY; the line before it says "applies live" for a block and "the
+audio stops for about two seconds while WirePlumber restarts" for periods. REVERT goes back to the previous
+choice (a block at once, periods after the same question). The info below then shows the new `Block N frames x
+M periods`, DSP load and xruns, and the measured round trip. Commands run through `posix_spawn` (never fork, the
+engine is large; `app/CommandRunner.h`) on the control thread. Over the control API: `POST /api/engine/timing`
+`{"block", "periods"}`, and the status's `timing` (applied, previous, restarting, message). On a JUCE device type
+the block is the device's buffer size (Save) and there are no periods (JUCE's ALSA device fixes its own).
 
 ## Build and test
 
