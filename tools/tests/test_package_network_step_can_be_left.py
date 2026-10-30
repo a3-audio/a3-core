@@ -34,7 +34,7 @@ FUNCTIONS = ("forget_retired_network", "ask_address_questions",
              "other_wired_interface", "write_network_config",
              "ask_audio_questions", "disable_ifupdown_for",
              "installer_answered_network", "ask_configure_network",
-             "network_left", "network_step")
+             "network_left", "network_question_due", "network_step")
 
 # debconf, as files in $DB: a question's value in $DB/<name>, a flag in
 # $DB/<name>.<flag>. db_go "answers" every question put since the last go
@@ -118,7 +118,7 @@ class NetworkStep(unittest.TestCase):
         path = self.db / question
         return path.read_text() if path.exists() else ""
 
-    def run_step(self, esc_at=""):
+    def run_step(self, esc_at="", **env):
         script = ("set -e\n" + "\n".join(function(n) for n in FUNCTIONS) + "\n"
                   + STUBS
                   + 'network_step "$NET" "$IFACES" "$HOME_DIR"\necho "after the network step"\n')
@@ -126,7 +126,7 @@ class NetworkStep(unittest.TestCase):
             ["sh", "-c", script], capture_output=True, text=True,
             env={"PATH": "/usr/bin:/bin", "DB": str(self.db), "ANSWERS": str(self.answers),
                  "ESC_AT": esc_at, "NET": str(self.net), "IFACES": str(self.ifaces),
-                 "HOME_DIR": str(self.home)})
+                 "HOME_DIR": str(self.home), **env})
         self.assertEqual(0, done.returncode, done.stderr)
         self.calls = done.stdout.splitlines()
         self.assertEqual("after the network step", self.calls[-1])

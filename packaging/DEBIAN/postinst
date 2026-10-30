@@ -9,6 +9,13 @@ fi
 # the pre-filled answer. The network step leaves on it (a3-core#68).
 db_capb backup
 
+# dpkg-reconfigure runs the postinst with "reconfigure"; it is the way to ask
+# the network questions again once they have been answered.
+RECONFIGURING=false
+if [ "$1" = reconfigure ] || [ -n "$DEBCONF_RECONFIGURE" ]; then
+  RECONFIGURING=true
+fi
+
 APPUSER="aaa"
 UID=$(id -u $APPUSER)
 USER_HOME=$(getent passwd "$APPUSER" | cut -d: -f6 || echo "/home/$APPUSER")
@@ -637,9 +644,23 @@ installer_answered_network() {
   [ "x$answered" = "xtrue" ]
 }
 
+# The network question is put once: on the first install, or under
+# dpkg-reconfigure. It was asked on every install (until 2026-10-31), which
+# walked a machine whose network was long set up through it again and again.
+# A Core network unit already in place counts as answered, so machines set up
+# before the marker existed are not asked once more.
+network_question_due() {
+  netdir="$1"
+  [ "$RECONFIGURING" = true ] && return 0
+  db_get a3-core/network-asked || true
+  [ "x$RET" = "xtrue" ] && return 1
+  [ -f "$netdir/10-a3.network" ] && return 1
+  return 0
+}
+
 # Ask whether to configure network. High: at medium a fresh machine never saw
 # it, took the default (no) and got no network at all. Asked every time, with
-# no as the answer offered: debconf would offer the stored answer and skip a
+# no as the answer offered (when it is due at all): debconf would offer the stored answer and skip a
 # seen question, and one "yes" walked every later install through the whole
 # network setup again (2026-10-01). Enter leaves the network as it is.
 # Fails on ESC.
@@ -691,11 +712,19 @@ network_step() {
   netdir="$1"; interfaces="$2"
   if installer_answered_network; then
     preseeded=true
+    db_set a3-core/network-asked true || true
+  elif ! network_question_due "$netdir"; then
+    echo "a3-core: network already set up, not asked again (dpkg-reconfigure a3-core asks)"
+    return 0
   else
     preseeded=false
     if ! ask_configure_network; then
       network_left
       return 0
+    fi
+    # Nobody saw the question of an unattended install: it is still due.
+    if [ "$DEBIAN_FRONTEND" != noninteractive ]; then
+      db_set a3-core/network-asked true || true
     fi
   fi
   db_get a3-core/configure-network
