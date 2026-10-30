@@ -8,21 +8,17 @@ kernel dropped 14,461 packets in seven minutes. Unpinned live, three minutes of
 play: no drop, the queue peaked at 8.8 KB, and no crackle -- the audio threads
 on CPUs 1-3 run real-time, so an ordinary Core only takes what they leave.
 
-It ships as a drop-in because the postinst then copied the config with
-`cp -rn`, which never overwrote: a changed line in a3-core.service reached
-fresh installs only, while a new file reached every rig on the next upgrade.
-(The postinst now replaces changed files too; see
-test_package_installs_its_config.)
+It first shipped as a drop-in (a3-core.service.d/cpu.conf) that reset the
+mask of the deployment's copy in ~/.config. Since 2026-10-31 there is one
+a3-core.service, a3-core-app's, and it never pinned: neither it nor anything
+packaged on top of it names CPUAffinity.
 """
 
 import unittest
-from pathlib import Path
 
-UNITS = (Path(__file__).resolve().parents[2]
-         / "platform-config/debian-x86_64/a3-core/home/aaa/.local"
-         / "share/a3-core/config/systemd/user")
-UNIT = UNITS / "a3-core.service"
-DROP_IN = UNITS / "a3-core.service.d" / "cpu.conf"
+from tools.tests.paths import DEPLOYMENT_UNITS, ROOT
+
+UNIT = ROOT / "packaging" / "a3-core.service"
 
 
 def service_lines(path):
@@ -31,19 +27,11 @@ def service_lines(path):
 
 
 class CoreIsNotPinned(unittest.TestCase):
-    def test_the_drop_in_allows_every_cpu(self):
-        """An empty CPUAffinity= resets the mask: every CPU the machine has,
-        without this file having to know how many that is."""
-        self.assertTrue(DROP_IN.is_file(), "no a3-core.service.d/cpu.conf shipped")
-        lines = service_lines(DROP_IN)
-        self.assertIn("[Service]", lines)
-        self.assertEqual(["CPUAffinity="],
-                         [l for l in lines if l.startswith("CPUAffinity")])
+    def test_the_unit_does_not_pin(self):
+        self.assertEqual([], [l for l in service_lines(UNIT) if l.startswith("CPUAffinity")])
 
-    def test_the_unit_itself_no_longer_pins(self):
-        """A fresh install should read the same in the unit as it runs."""
-        self.assertEqual([], [l for l in service_lines(UNIT)
-                              if l.startswith("CPUAffinity")])
+    def test_no_packaged_drop_in_pins_it(self):
+        self.assertEqual([], sorted(DEPLOYMENT_UNITS.glob("a3-core.service.d/*")))
 
 
 if __name__ == "__main__":

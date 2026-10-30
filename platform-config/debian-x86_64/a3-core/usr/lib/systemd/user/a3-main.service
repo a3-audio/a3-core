@@ -1,4 +1,4 @@
-[Unit]                                                                                     
+[Unit]
 Description=a3-main
 After=graphical.target
 # Wants, not Requires.
@@ -18,8 +18,10 @@ After=graphical.target
 # it runs whether a3-main does or not (jackd and a3-jack are gone since
 # 2026-10-14).
 Wants=a3-engine.service a3-core.service a3-core-window.service beat-analyzer.service a3-motion.service stemdeck@A.service
-# a3-engine.service and a3-core-window.service are the program's units, laid
-# into this package from packaging/ beside the deployment.
+# a3-engine.service, a3-core.service and a3-core-window.service are the
+# program's units, shipped by a3-core-app; this one is the deployment's. All of
+# them live in /usr/lib/systemd/user; a machine changes a line with a drop-in in
+# ~/.config/systemd/user/<unit>.d/ (since 2026-10-31).
 # stemdeck@A.service is the B-format deck A. Deck B is not listed: it will run
 # on a3nuc2, over AES67. The two-deck stemdeck.service stays off on a Core
 # (stemdeck.service.d/two-deck-off.conf).

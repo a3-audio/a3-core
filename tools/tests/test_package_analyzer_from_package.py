@@ -16,9 +16,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools.tests.paths import DEBIAN, PACKAGE
+from tools.tests.paths import DEBIAN, DEPLOYMENT_UNITS, PACKAGE
 
-UNITS = PACKAGE / "home/aaa/.local/share/a3-core/config/systemd/user"
+UNITS = DEPLOYMENT_UNITS
 DROP_IN = UNITS / "beat-analyzer.service.d/a3-core.conf"
 USER_INSTALL = PACKAGE / "home/aaa/.local/share/a3-core/recipes/user_install.sh"
 CONTROL = DEBIAN / "control"

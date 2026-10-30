@@ -322,6 +322,138 @@ retire_reaper_files() {
   done
 }
 
+# Every version of a unit or drop-in that this package once copied into
+# ~/.config/systemd/user, by sha256 and path: what move_aside_unit_copies
+# recognises as the deployment's own. From git history, by
+# tools/units_before_one_place.py; a test holds the two equal.
+units_before_one_place() {
+  cat <<'VERSIONS'
+34c4fbffc8b4646f668fc7897aead769e46a094e5b64c2696bb75cb48bceb9ac  a3-aes67.service
+fa0a1b71e07f740c16b13803cdd60e22c8234f2c994cb369d3e27142a2331cd0  a3-bar-per-workspace.service
+03d5855b27ce0e07aad77923885a51c695eb768cefe013a6d8f39134d3fafbf6  a3-bar-per-workspace.service.d/program.conf
+13f1e531d5b4ba56272651d7fa36ba52be87ed77a1e04d8588856a704e02e519  a3-bar-per-workspace.service.d/program.conf
+01845bd314e791c021ce67b89b5b9b9a1612bb89c6a4b0ffbb2a3f3465b9dcc5  a3-core.service
+196649ae0a91906a2084e16d00409890686f6cfa3ad6803a5a3277520d83d815  a3-core.service
+1abb61ecaebfe39e97dcae678588d50d130a01c392c39a68654b8257838f1ec4  a3-core.service
+3d6f249d2e3998cb314da3f33ffb04d5012dd56d1025f0a94c659a709e970659  a3-core.service
+5d87b50276b0d6f36a3695eeaa540bb7fe9916dda5f1cc0e9bdd583f808e3914  a3-core.service
+68399b8bdc57d0a72bf95413ba27dc2b9827ebd66ca5edc5af166fb981eb9795  a3-core.service
+6ac19b443d9c83392de261b9715a9e24691a0e5dfad378173545e630c1aec1d7  a3-core.service
+71ecfa426b0465b539e05a066c585108c42935d28616db2c11a553828b271d52  a3-core.service
+73be000bd8815441d1780fe3f58a1653abbb7e679ec6a59df7b0f4d3b592348e  a3-core.service
+79b70dcf0d66b510466b1e676daac38320f0c8f2527d130485dc28b4570391fa  a3-core.service
+82b97b82b93f81c0c2396b8c55a3a156735af0ad5b153dea3034195d865362d1  a3-core.service
+94ddc10b995cd00021a3634283c8a6e51f7e9365b96cf74ef12748d38f002d61  a3-core.service
+b8f4129b406ec08a246cf97aa7f9d393db6ab09ddb70a550e137319de53d8846  a3-core.service
+c4422805aea215a1f1fec37d9ad2c57af494e3db0d3cf89ad0b132cda3611679  a3-core.service
+c65f4b42d3d53d3a0a3640348be54e7b15dff2ccb4f836d638780f8697de942a  a3-core.service
+cd3df95ff7f23bc8feb4ab1b60e06f4423bc61ac7d3b18c5d87e018d17797363  a3-core.service
+dcfda3b68848906242981f9709ffddb44eab733ba014af5a7b40ac9a1aa566c1  a3-core.service
+6c47f85f480d49e461adcb563a4fe04e7f756e3aed9461eac94c186bdf9fe79f  a3-core.service.d/cpu.conf
+9bf7be9edc5d220f9d786b67f0a8f65641b8c01331a6b50be2e3fe2c16fcb791  a3-core.service.d/program.conf
+b31dd2862e2fb71cc5472002363e9a305db9fa15d48e783e7fd641f29e0ca7fa  a3-core.service.d/program.conf
+02ae728b9b93455419152fe94bf60de4d70a5069fd8c2f144b3f91e6f047eb58  a3-main.service
+08d65d12f99a68d2667f16550f6759b8ef57433e2f3cb8c7d04fa1ba031362b9  a3-main.service
+0a49471b8351d119cc38231f6de6d581921837462f267ebfd15b4d47d9c32a2c  a3-main.service
+10a2231dbf4b9f36b21140d063c48439c531f5038a3bbd484c1fcbd8aad1c093  a3-main.service
+171a7c47ced475e66be8e5beca791b60c198c0d61e2e2c0d5625203c17b3790c  a3-main.service
+207e0b03178185bda262576c89fa5993dfc3fea9ed68505c6a7dd1bed691d3a2  a3-main.service
+29bc20f2d743d7a05032bec110a4c417e4741bc90f19457da986d9fd4f627ca4  a3-main.service
+3f774f665d9d34a32bb2fb78a345532c92abbd02ef1952e6f2292f502de01b31  a3-main.service
+50c2b4adccd14f537d484bc1e56095a5daeeaa5ed4789e469a284b88b6b2f815  a3-main.service
+622365b4141751779f9bbbc2a6c845a7862dc37a0267cf4f587154f49cd019e8  a3-main.service
+664ed61c5d7e4c5e2d8a7a58b053d7691d205779740d81c4781702e98e25a255  a3-main.service
+686e688c2a86c7f1cc78542acd5c1a27b9ca5484700ed0e573ffb7dd2aa926b1  a3-main.service
+831a4679d80bbc4d684a9e3f74075fb64e57764c0e51ea47ecaea299227bb039  a3-main.service
+857ef75a596af6182db6c61ebdb760b7fda6e263561af56cf00a7e7d80784b54  a3-main.service
+87f70cd7e9e26a10c3986e3017e7c248daa2a1d715f4199aacc373894d2dd8a4  a3-main.service
+971c3fc7614d07b2bdf9c39bd7feebef92d3fa80ffee261c436d5f78d0ac8c5e  a3-main.service
+9866d9eac236c8ea517cbc33fdbf332d38637da3f3c3f1b8a929bf15f88c1423  a3-main.service
+cb054db3a7f6bc84f135dd39d128c680f841daddae6703fc8e218bdf2c137e55  a3-main.service
+d34484890da71785bbb3fddd3e1c7bd581b0c863bdc5274b113b9403710fa490  a3-main.service
+d91e2e23be083f90dad323281f96ac77bfd9dd0b171e83d7d2fa89c94f7a8131  a3-main.service
+fe9d13ad91e7d53e8f335ff246f7533af457df9ca1f4e9ce75ea3696912d4e60  a3-main.service
+b87a766aa414ec8caeec3b4718656053c7fc31143ed92c6ec2652f3d73a3abe6  a3-screencast.service
+d4a1ceb5b0b8795780c8a5a25647025ea11f38de8b436b7191880b2a9654f514  a3-screencast.service
+faee07120914adb45b8a959b0afd9f631090baa4b1d243e0075781ba8ac6a0b5  a3-screencast.service
+9e6e57a53674ad36ab304466efed5c9eefca4043b78228d6ca612017163c414f  beat-analyzer.service.d/a3-core.conf
+c23a288fd6474fe7dfb7221d0b14a075191bdb1844657a548558384348d48713  beat-analyzer.service.d/a3-core.conf
+298adbe6df0c49e3a37944552e990fa4d8cb6abf6e2caceb5a15005780fef36c  stemdeck.service.d/a3-core.conf
+70ff585b9ff61f4b9a1dc0246709514d12a9cd10ca07c6b7968bf75fda8f71fa  stemdeck.service.d/a3-core.conf
+7eaae796ccdc3507b4fa5d569548004dbd3bbb2562f849e0fc88afd5903a7119  stemdeck.service.d/two-deck-off.conf
+VERSIONS
+}
+
+# A link in a .wants or .requires folder that pointed at the copy now aside
+# points at the package's unit: what was enabled stays enabled. The rig's links
+# name the copy by its whole path (/home/aaa/.config/systemd/user/<name>).
+repoint_wants_links() {
+  units_dir="$1"; name="$2"; package_dir="$3"
+  for link in "$units_dir"/*.wants/"$name" "$units_dir"/*.requires/"$name"; do
+    [ -L "$link" ] || continue
+    case "$(readlink "$link")" in
+      "$units_dir/$name"|*/.config/systemd/user/"$name"|"../$name"|"$name") ;;
+      *) continue ;;
+    esac
+    ln -sfn "$package_dir/$name" "$link"
+    chown -h --reference="$units_dir" "$link" 2>/dev/null || true
+  done
+}
+
+# Every A3 user unit ships under /usr/lib/systemd/user since 2026-10-31: the
+# program's from a3-core-app, the rig's (a3-main, a3-aes67, a3-screencast, the
+# bar) and the drop-ins for StemDeck and the analyzer from this package.
+# ~/.config/systemd/user keeps only the machine's own drop-ins. A copy this
+# package once put there would hide the packaged unit, so it is moved aside
+# to <name>.before-one-place -- systemd reads no such name -- never deleted,
+# and its .wants links follow the packaged unit. Only a copy whose checksum is
+# one of units_before_one_place: a file changed by hand stays and is named.
+move_aside_unit_copies() {
+  units_dir="$1"; package_dir="${2:-/usr/lib/systemd/user}"
+  units_before_one_place | cut -d' ' -f3 | sort -u | while IFS= read -r rel; do
+    copy="$units_dir/$rel"
+    [ -f "$copy" ] && [ ! -L "$copy" ] || continue
+    sum="$(sha256sum < "$copy" | cut -d' ' -f1)"
+    if ! units_before_one_place | grep -qxF "$sum  $rel"; then
+      echo "a3-core: kept the hand-changed ~/.config/systemd/user/$rel -- it comes before the package's units in $package_dir; move it aside to run the package's"
+      continue
+    fi
+    if [ -e "$copy.before-one-place" ] || [ -L "$copy.before-one-place" ]; then
+      echo "a3-core: kept ~/.config/systemd/user/$rel -- $rel.before-one-place is in the way" >&2
+      continue
+    fi
+    if ! mv "$copy" "$copy.before-one-place"; then
+      echo "a3-core: could not move ~/.config/systemd/user/$rel aside -- it still hides the package's" >&2
+      continue
+    fi
+    echo "a3-core: moved ~/.config/systemd/user/$rel aside to $rel.before-one-place -- the package's in $package_dir runs"
+    case "$rel" in
+      */*) ;;
+      *) repoint_wants_links "$units_dir" "$rel" "$package_dir" ;;
+    esac
+  done
+}
+
+# A drop-in that starts the old Core script (a3-core.py, gone since the cut to
+# the program). a3nuc1 had one, override.conf; the deployment's program.conf
+# sorted after it and started the program instead. With that copy aside the
+# drop-in would start a file that is not there, so it goes to the backup,
+# named, like the REAPER drop-ins.
+retire_core_script_drop_ins() {
+  config="$1"; backup="$2"
+  for drop_in in "$config"/systemd/user/a3-core.service.d/*.conf; do
+    [ -f "$drop_in" ] || continue
+    grep -Eq '^ExecStart=.*a3-core\.py' "$drop_in" || continue
+    rel="${drop_in#"$config"/}"
+    if mkdir -p "$(dirname "$backup/$rel")" 2>/dev/null \
+       && mv "$drop_in" "$backup/$rel"; then
+      echo "a3-core: moved ~/.config/$rel (it started the old Core script, which is gone) to $backup"
+    else
+      echo "a3-core: could not move ~/.config/$rel -- the Core would not start" >&2
+    fi
+  done
+}
+
 # Stop what retire_jack_and_zita_units and retire_reaper_files took away and
 # still runs.
 stop_retired_units() {
@@ -640,6 +772,8 @@ retire_checkout_analyzer_unit "${USER_HOME}/.config" "$CONFIG_BACKUP"
 RETIRED_UNITS=""
 retire_jack_and_zita_units "${USER_HOME}/.config" "$CONFIG_BACKUP"
 retire_reaper_files "${USER_HOME}/.config" "$CONFIG_BACKUP"
+retire_core_script_drop_ins "${USER_HOME}/.config" "$CONFIG_BACKUP"
+move_aside_unit_copies "${USER_HOME}/.config/systemd/user"
 echo "a3-core: nothing restarted; restart a3-main to run the new config"
 
 ssh_key_step "${USER_HOME}/.ssh"
@@ -707,10 +841,13 @@ run_user_install() {
 }
 
 # a3-main wants the engine, Core, the window, the analyzer, Motion and deck A:
-# enabled, the rig comes up at the next login. The shipped units arrive as files only, never
-# with their .wants links, and replacing the systemd group took the link away.
+# enabled, the rig comes up at the next login, and the bar with it. Both used
+# to be enabled by links the deployment copied into ~/.config; the units ship
+# under /usr/lib/systemd/user now and come without links. The screencast stays
+# each machine's choice, and a3-core is pulled in by a3-main.
 enable_the_rig() {
   user_systemctl enable a3-main.service || true
+  user_systemctl enable a3-bar-per-workspace.service || true
 }
 
 # The audio network's socket, from the truth joined with network.json --

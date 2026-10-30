@@ -14,11 +14,11 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tools.tests.paths import DEBIAN, PACKAGE
+from tools.tests.paths import DEBIAN, DEPLOYMENT_UNITS, PACKAGE
 
 LIB = Path(__file__).resolve().parents[1] / "lib"
 TRUTH_FILE = PACKAGE / "usr/share/a3/a3-osc.json"
-UNITS = PACKAGE / "home/aaa/.local/share/a3-core/config/systemd/user"
+UNITS = DEPLOYMENT_UNITS
 POSTINST = DEBIAN / "postinst"
 TEMPLATES = DEBIAN / "templates"
 

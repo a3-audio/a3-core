@@ -191,8 +191,12 @@ class TheDeploymentIsTheMachine(unittest.TestCase):
         self.assertEqual(app & deployment, set())
 
     def test_the_deployment_ships_no_program(self):
+        # Its user units and drop-ins live beside the app's (every A3 unit in
+        # one place, 2026-10-31); nothing else of it is under /usr.
         shipped = shipped_paths(staged(self, DEPLOYMENT_STAGE))
         for path in shipped:
+            if path.startswith("/usr/lib/systemd/user/"):
+                continue
             self.assertFalse(path.startswith(("/usr/bin/", "/usr/lib/", "/usr/share/a3")), path)
 
     def test_the_deployment_builds_nothing(self):

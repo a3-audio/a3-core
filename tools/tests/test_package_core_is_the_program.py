@@ -6,9 +6,9 @@
 package since the a3-engine repo moved in) is the Core, and no Python runs on
 the rig.
 
-The units switch by drop-ins, not by edits: the postinst installs a missing
-file but may keep a unit the rig already has, so only a new drop-in reaches an
-installed machine. REAPER, which stayed frozen beside the program until
+The units switched by drop-ins first, while the deployment copied them into
+~/.config; since 2026-10-31 every unit ships under /usr/lib/systemd/user and
+names the program itself. REAPER, which stayed frozen beside the program until
 2026-10-27, is gone from the package."""
 
 import os
@@ -18,10 +18,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools.tests.paths import DEBIAN, LOCAL, PACKAGE, ROOT
+from tools.tests.paths import DEBIAN, DEPLOYMENT_UNITS, LOCAL, PACKAGE, ROOT
 from tools.tests.test_package_installs_what_its_units_run import exec_lines
 
-UNITS = LOCAL / "share/a3-core/config/systemd/user"
+UNITS = DEPLOYMENT_UNITS
 SYSTEM_UNITS = PACKAGE / "etc/systemd/system"
 RECIPES = LOCAL / "share/a3-core/recipes"
 PROGRAM = "/usr/bin/a3-core"
@@ -66,30 +66,19 @@ def code(path):
     return "\n".join(l.split("#", 1)[0] for l in path.read_text().splitlines())
 
 
-def drop_in_lines(path):
-    return [l for l in path.read_text().splitlines()
-            if l.strip() and not l.startswith("#")]
-
-
 def run(command, env_extra=None, **kwargs):
     env = dict(os.environ, **(env_extra or {}))
     return subprocess.run(command, capture_output=True, text=True, env=env, **kwargs)
 
 
 class TheUnitsRunTheProgram(unittest.TestCase):
-    def check_switched(self, unit_name, command):
-        unit = UNITS / unit_name
-        drop_in = unit.with_name(unit_name + ".d") / "program.conf"
-        lines = drop_in_lines(drop_in)
-        self.assertIn("ExecStart=", lines)
-        self.assertLess(lines.index("ExecStart="), lines.index(f"ExecStart={command}"))
-        self.assertEqual([command], exec_lines(unit)["ExecStart"])
+    def test_the_core_unit_runs_the_program(self):
+        self.assertEqual([f"{PROGRAM} --role core"],
+                         exec_lines(ROOT / "packaging/a3-core.service")["ExecStart"])
 
-    def test_the_core_unit_runs_the_program_by_a_drop_in(self):
-        self.check_switched("a3-core.service", f"{PROGRAM} --role core")
-
-    def test_the_bar_unit_runs_the_program_by_a_drop_in(self):
-        self.check_switched("a3-bar-per-workspace.service", f"{PROGRAM} --role i3-bar")
+    def test_the_bar_unit_runs_the_program(self):
+        self.assertEqual([f"{PROGRAM} --role i3-bar"],
+                         exec_lines(UNITS / "a3-bar-per-workspace.service")["ExecStart"])
 
 
 class NoPythonAtRuntime(unittest.TestCase):
@@ -102,15 +91,9 @@ class NoPythonAtRuntime(unittest.TestCase):
                 if first.startswith(b"#!"):
                     self.assertNotIn(b"python", first)
 
-        switched = {u.parent.name[:-len(".d")]
-                    for u in UNITS.glob("*.service.d/program.conf")}
         for unit in [*UNITS.glob("*.service"), *SYSTEM_UNITS.glob("*.service")]:
             with self.subTest(unit=unit.name):
-                for commands in exec_lines(unit).values():
-                    for command in commands:
-                        self.assertNotIn("python", command.lower())
-                if unit.name not in switched:
-                    self.assertNotIn("python", unit.read_text().lower())
+                self.assertNotIn("python", unit.read_text().lower())
         for drop_in in [*UNITS.glob("*.d/*.conf"), *SYSTEM_UNITS.glob("*.d/*.conf")]:
             with self.subTest(drop_in=drop_in.relative_to(PACKAGE)):
                 self.assertNotIn("python", drop_in.read_text().lower())

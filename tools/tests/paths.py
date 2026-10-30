@@ -15,3 +15,6 @@ LOCAL = PACKAGE / "home/aaa/.local"
 DEBIAN = ROOT / "packaging/DEBIAN"
 APP_RECIPE = ROOT / "packaging/app"
 APP_DEBIAN = APP_RECIPE / "DEBIAN"
+#: The deployment's user units and drop-ins, under /usr/lib/systemd/user like
+#: the program's (packaging/*.service): every A3 unit in one place (2026-10-31).
+DEPLOYMENT_UNITS = PACKAGE / "usr/lib/systemd/user"
