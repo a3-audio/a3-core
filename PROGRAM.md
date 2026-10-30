@@ -341,11 +341,17 @@ LOCKED.
 
 **The rules** (`src/a3-clock/ClockSteering.h`, tested against synthetic clocks in
 `tests/core/ClockSteering.cpp` and `ClockDaemon.cpp`): only the frequency changes, never the time (no
-step, whatever happens). Frequency first, then phase: the rate is measured over 30 s without writing
-(or taken from the last locked frequency, kept in `$XDG_STATE_HOME/a3-core/clock.json`, when the PHC
-reads 0 after a boot: a warm start), the frequency slews there at 0.1 ppm/s, and only then is the phase
-anchored; a PI (time constant 60 s, the error low-passed over 8 s) holds it. Measured in simulation:
-lock after about 3 min cold (2.5 min warm) from 14.1 ppm, the anchored phase error stays near 10 µs.
+step, whatever happens). Fast acquisition (2026-10-30, the maintainer: the Scarlett's clock is there at
+once, so the PTP clock has to follow at once): the rate is measured for 5 s without writing, the PHC is
+set to it in one ADJ_FREQUENCY write, and the phase is anchored. Five seconds tell the rate to about
+0.9 ppm rms (12.5 µs per profiler record, 20 a second); a PI with a 20 s time constant pulls the rest in
+and goes over to 60 s once the error has stayed inside the lock for a minute. A PHC found within 3 ppm of
+the measured rate (a restart on a locked clock) is not written at all. A warm start (the last frequency
+locked for at least a minute, kept in `$XDG_STATE_HOME/a3-core/clock.json`, used when the PHC reads 0
+after a boot) is written at the first update, checked against the next 5 s, and corrected once if it is
+more than 1.5 ppm off. These acquisition writes are the only ones not slew-limited; once tracking, the
+frequency moves at most 0.1 ppm/s. Measured in simulation over 200 noise seeds: locked within 10 s cold
+and 7 s warm, the anchored error at most about 35 µs (cold) and 55 µs (warm), no lock lost.
 The numbers against the 12 ms FIFO (about 9 ms of headroom): the range is ±40 ppm around the free run,
 narrowed to the device's max_adj minus 20 ppm (the I210 allows 62.5); a rate beyond it is a fault
 before any write; never locked and |error| above 2 ms is a fault; locked and |error| above 1 ms is a
