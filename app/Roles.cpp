@@ -52,6 +52,7 @@ std::string unitOf (Role role)
     {
         case Role::core: return "a3-core.service";
         case Role::engine: return "a3-engine.service";
+        case Role::clock: return "a3-clock.service";
         case Role::window:
         case Role::screencastFanout:
         case Role::i3Bar:

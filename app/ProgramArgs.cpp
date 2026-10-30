@@ -21,12 +21,14 @@ const char* const usage =
     "       a3-core --role window\n"
     "       a3-core --role screencast-fanout --port N [--linger SECONDS] -- COMMAND...\n"
     "       a3-core --role i3-bar\n"
+    "       a3-core --role clock [--device PATH] [--observe]\n"
     "       a3-core --render-truth user|network-file|network\n"
     "       a3-core --truth host NAME | --truth port PROGRAM ROLE\n"
     "       a3-core --links              the JACK/PipeWire connections, explained\n"
     "  core: every default from the truth (A3_OSC_TRUTH, else /usr/share/a3/a3-osc.json)\n"
     "  engine: --no-window and --service are accepted and do nothing (the engine role has no window)\n"
-    "  screencast-fanout: --port defaults to A3_SCREENCAST_PORT\n";
+    "  screencast-fanout: --port defaults to A3_SCREENCAST_PORT\n"
+    "  clock: steers the PTP clock (--device, default /dev/ptp0) from the Scarlett; --observe only measures\n";
 
 namespace
 {
@@ -43,6 +45,7 @@ const std::vector<Flag> engineFlags { { "--config", true }, { "--spatial", true 
                                       { "--timing", false }, { "--check-config", false }, { "--no-window", false },
                                       { "--service", false } };
 const std::vector<Flag> fanoutFlags { { "--port", true }, { "--linger", true } };
+const std::vector<Flag> clockFlags { { "--device", true }, { "--observe", false } };
 const std::vector<Flag> noFlags;
 
 const char* const dashes = "--";
@@ -54,7 +57,8 @@ struct RoleName
     const char* name;
 };
 const std::vector<RoleName> roleNames { { Role::core, "core" }, { Role::engine, "engine" }, { Role::window, "window" },
-                                        { Role::screencastFanout, "screencast-fanout" }, { Role::i3Bar, "i3-bar" } };
+                                        { Role::screencastFanout, "screencast-fanout" }, { Role::i3Bar, "i3-bar" },
+                                        { Role::clock, "clock" } };
 const juce::StringArray renderTargets { "user", "network-file", "network" };
 
 const std::vector<Flag>& flagsOf (Role role)
@@ -64,6 +68,7 @@ const std::vector<Flag>& flagsOf (Role role)
         case Role::core: return coreFlags;
         case Role::engine: return engineFlags;
         case Role::screencastFanout: return fanoutFlags;
+        case Role::clock: return clockFlags;
         case Role::window:
         case Role::i3Bar:
         case Role::supervisor:
@@ -86,7 +91,8 @@ juce::String phraseOf (Role role)
         case Role::core:
         case Role::engine:
         case Role::screencastFanout:
-        case Role::i3Bar: break;
+        case Role::i3Bar:
+        case Role::clock: break;
     }
     return "--role " + roleWord (role);
 }
@@ -101,7 +107,7 @@ const Flag* find (const std::vector<Flag>& flags, const juce::String& word)
 
 bool anyRoleKnows (const juce::String& word)
 {
-    for (const auto* flags : { &coreFlags, &engineFlags, &fanoutFlags })
+    for (const auto* flags : { &coreFlags, &engineFlags, &fanoutFlags, &clockFlags })
         if (find (*flags, word) != nullptr)
             return true;
     return word == dashes;
@@ -205,7 +211,7 @@ std::optional<Selection> selectRole (const juce::StringArray& words, juce::Strin
             const auto role = roleNamed (value);
             if (! role)
             {
-                error = "--role: no role " + value + " (core, engine, window, screencast-fanout or i3-bar)";
+                error = "--role: no role " + value + " (core, engine, window, screencast-fanout, i3-bar or clock)";
                 return std::nullopt;
             }
             if (! choose (*role, word))
@@ -343,11 +349,25 @@ bool fillFanout (ProgramArgs& args, const juce::StringArray& rest, juce::String&
     return true;
 }
 
+void fillClock (ProgramArgs& args, const juce::StringArray& rest)
+{
+    for (int i = 0; i < rest.size(); ++i)
+    {
+        if (rest[i] == "--observe")
+            args.clockObserve = true;
+        else
+            args.clockDevice = rest[++i].toStdString();   // --device; checkFlags made sure it has a value
+    }
+}
+
 bool fillRole (ProgramArgs& args, const juce::StringArray& rest, juce::String& error)
 {
     switch (args.role)
     {
         case Role::core: return fillCore (args, rest, error);
+        case Role::clock:
+            fillClock (args, rest);
+            return true;
         case Role::screencastFanout: return fillFanout (args, rest, error);
         case Role::engine:
         {
