@@ -321,6 +321,52 @@ API, P2). The package ships it as `/usr/bin/a3-core` (Task 28); there is no `/us
   processes) goes through `a3core::Platform` (`src/a3-core/Platform.h`, Linux only).
 - The journal: one whole line per write, flushed at once, from any thread.
 
+## What each device reports: `device.version`
+
+**Why** (2026-10-30): the Canvas shows, for every row of the rig, the software and firmware it runs and
+the machine's two addresses; most rows read "not reported" because no device told Core anything but its
+truth hash. This is the contract the devices follow (Motion UI, the desk, the Mixer script, StemDeck,
+the beat analyzer). It is **additive**: `device.hello` (`ss`) and `stemdeck.deck-hello` (`s`) are
+unchanged, an old sender keeps working and simply reads "not reported".
+
+**What a device sends**, to Core's `core.osc` (the truth's `core` host, port 9000), right after each
+`device.hello` -- at start and every 30 s:
+
+    /device/version  s:name  s:version  s:firmware  s:audio
+
+- `name`: the same word as in its `device.hello`: `motion`, `desk`, `mixer`, `prodj`, `stemdeck`, and
+  `beat-analyzer` (which sends no hello; the truth lists it as a sender of this word only).
+- `version`: its own software version as its package carries it (`03.0+855`, the newest `v*` tag and
+  the commits since, as installer/package.py stamps it -- e.g. a3-canvas's `A3_PACKAGE_VERSION` route);
+  a build no package made says what it knows (`dev`).
+- `firmware`: the version of the firmware on its own board -- Motion: the ESP32 panel's; the Mixer
+  script: the Pico's -- as the firmware says it (a tag such as `v03.0+80`, else what it has). `""` for
+  a device without a board, or while the board has not answered.
+- `audio`: its own IPv4 address on the audio network (AES67/PTP, the truth's `network.audio_address`
+  subnet, 192.168.9.0/24 on the rig); `""` for a device on none (the Mixer).
+- All four are OSC strings (`ssss`). Core needs `name` and `version`; a shorter message (`ss`, `sss`)
+  is taken with the rest as `""`. Its control address is not sent: Core takes the packet's source.
+- StemDeck sends it once per instance (from each deck's host); a deck's version is the `stemdeck`
+  report from that deck's host.
+
+**What Core does with it**: keeps the newest per name and sending host (a desk or pro-DJ app as
+`desk@<host>`/`prodj@<host>`, as its hello is named) and shows it in `GET /api/rig`:
+
+- `devices`: each row as before (`device`, `hash`, `matches`, `age`) plus `host` (the control address of
+  its last hello) and that host's `version`, `firmware`, `audio` -- `null` where it has sent no
+  `device.version`. `/api/devices` (B1's) is unchanged.
+- `versions`: every report, `[{device, host, version, firmware, audio, age}]` sorted by device and host,
+  also of a device that says no hello (the analyzer) and of each host a name runs on (StemDeck's decks).
+
+Core's own version is in `GET /api/status` as `version` (the package's, handed in at build time:
+`A3_PACKAGE_VERSION` → `packaging/app/stage` → `-DA3_CORE_VERSION`; `dev` for a build no package
+made). Core's window API (`core.web`) listens on every interface, so a Canvas on another machine asks
+it at the truth's `core` host.
+
+**The machines' addresses** come from the truth's `hosts`, never from code: `<role>` is the machine's
+control address (`core`, `motion`, `deckhost-a`…`c`), `<role>-audio` the same machine on the audio
+network. A device's own report of `audio` wins over the truth's.
+
 ## The one clock: `--role clock`
 
 **Why** (2026-10-30, the maintainer): "core gets clock from scarlett. all devices must rely on it. no
