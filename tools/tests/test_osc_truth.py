@@ -779,7 +779,7 @@ class TheDeckStreams(unittest.TestCase):
             value = words["aux-return.delay.%s" % name]
             with self.subTest(name=name):
                 self.assertEqual((turn["pattern"], turn["args"], turn["from"], turn["to"]),
-                                 ("/aux-return/delay/%s/turn" % name, "i", ["mixer"], ["core"]))
+                                 ("/aux-return/delay/%s/turn" % name, "i", ["mixer", "desk", "prodj"], ["core"]))
                 self.assertEqual((value["pattern"], value["args"], value["from"], value["to"]),
                                  ("/aux-return/delay/%s" % name, "f", ["core"], ["engine", "mixer", "desk", "motion"]))
                 self.assertIn("default", value["meaning"])
@@ -797,9 +797,16 @@ class TheDeckStreams(unittest.TestCase):
         carries = self.truth.listener("engine", "osc")["carries"]
         self.assertIn("aux-return.delay.*", carries)
 
-    def test_the_fx_return_push_steps_the_page_and_holds_for_cue(self):
+    def test_the_fx_return_push_is_the_delay_cue_key(self):
+        """2026-10-30 (a3-mixer feat/desk-delay-display): sent on press by the
+        DELAY CUE key, strip 3's first key, on the Mixer and the desk; no hold,
+        no page stepping, and the display has no CUE row."""
         meaning = self.truth.addresses()["aux-return.stem.push"]["meaning"]
-        self.assertIn("hold", meaning)
+        for word in ("DELAY CUE", "on press", "strip 3's first key", "aux-return.cue.led",
+                     "BEAT, FEEDBK, COLOR, SPREAD", "no CUE row"):
+            with self.subTest(word=word):
+                self.assertIn(word, meaning)
+        self.assertNotIn("hold", meaning)
         self.assertNotIn("Its turn does nothing", meaning)
 
     def test_the_fx_return_push_toggles_its_cue(self):

@@ -62,13 +62,10 @@ class TheDeskTalks(unittest.TestCase):
         self.assertIn(("stemdeck", "core.vu-relay", "vu"), self.routes)
 
 
-# The AUX-RTN delay turns come from the hardware mixer only: the A3 Desk app has no
-# delay page yet (ruling R8 of the delay-parameters feature). The value words name
-# the desk as a receiver, like every lamp: Core broadcasts them (R21).
-HARDWARE_ONLY = {
-    f"aux-return.delay.{name}.turn"
-    for name in ("beat", "feedback", "color", "spread")
-}
+# Nothing is the hardware mixer's alone any more: the AUX-RTN delay turns, its only
+# words until 2026-10-30, come from the desk's delay display too (a3-mixer
+# feat/desk-delay-display).
+HARDWARE_ONLY = set()
 
 
 class TheDeskMirrorsTheHardware(unittest.TestCase):
