@@ -155,7 +155,7 @@ The window has one page per job and a Save bar under them:
 
 | Page | What it edits |
 |---|---|
-| AUDIO | The sound-device settings first: one device-type list, `PipeWire (JACK)` (the JACK backend; `"type": "jack"` in the file) beside JUCE's types. PipeWire: Block, applied by the engine on APPLY (see "Block on PipeWire"). A JUCE type: input, output, rate, block size, an edit that Save applies; it opens no device. Below them what runs: rate, block, rate source, bit depth, DSP load and xruns, the round trip, measured over the digital loop (MEASURE), and the analog chain (MEASURE ANALOG CHAIN); see "The measured round trip". Each MEASURE is off, with a line naming the I/O page, while its pair is not set |
+| AUDIO | The sound-device settings first: one device-type list, `PipeWire (JACK)` (the JACK backend; `"type": "jack"` in the file) beside JUCE's types. PipeWire: Block and Periods, applied by the engine on APPLY (see "Block on PipeWire"). A JUCE type: input, output, rate, block size, an edit that Save applies; it opens no device. Below them what runs: rate, block, rate source, bit depth, DSP load and xruns, the round trip, measured over the digital loop (MEASURE), and the analog chain (MEASURE ANALOG CHAIN); see "The measured round trip". Each MEASURE is off, with a line naming the I/O page, while its pair is not set |
 | CHANNELS | N (1..128) with the DSP load beside it; the deck count (1..26, one letter a slot A..Z; the engine has no cap) with the count that runs |
 | ZONES | which spatial directory: the installed `spatial` and `spatial-reaper-booth-6.1`, and `~/.config/a3/engine/spatial`. No layout editor |
 | I/O | INPUT: per channel L/R a dropdown and the decks' sources; no direct links (2026-10-30: a file's `io.directLinks` still loads and the engine still makes them, but the page neither shows nor edits them). OUTPUT: per zone channel a dropdown; REC is empty by default (for an analog recorder). A dropdown runs the row's width and names the device's port as the user means it (`Scarlett 18i20 USB out 1`, from the configured ALSA node; `Device out 1` without one), never a raw `system:*` and nothing beside it. Each list ends with MEASURE: the digital loop and the analog test cable, its side of each, one channel a side. The digital loop's channels are offered in no route, and a one-line notice names them and what a load unrouted. No list of foreign links and no free-text port field: the engine removes every link on its ports it does not plan (see "Who owns a link") |
@@ -238,7 +238,7 @@ running), so the REC row stays free for an analog recorder; a loaded file whose 
 
 ### Who owns a link (2026-10-30)
 
-**Why**: on 2026-10-30 a WirePlumber restart (then written by the AUDIO page's Periods) took the Scarlett away for
+**Why**: on 2026-10-30 a WirePlumber restart (written by the AUDIO page's Periods) took the Scarlett away for
 seconds. PipeWire's `system:*` is whatever the default sink and source are (`jack.default-as-system`), and they were
 the AES67 receiver `AES67 deck C` and the AES67 sender: the engine linked deck C to analog 1-8 and main into the
 sender, and when the Scarlett came back nothing removed those links.
@@ -531,15 +531,18 @@ converters are not measured yet. Clearing the pair on the I/O page keeps the sha
 **Why** (2026-10-30, the maintainer: "I want these settings in the Engine's AUDIO page"): the rig ran a fixed
 quantum of 128 from a3-core's PipeWire config (measured digital loop 343 samples, 7.8 ms).
 
-**No periods** (removed the same day): PipeWire drives the Scarlett by timer; 2 periods measured 348 samples and
-3 periods 344, so they changed nothing, and the WirePlumber restart they needed took the device away and let the
-engine link the wrong nodes (see "Who owns a link"). An `engine.json` with `backend.periods` loads and ignores it;
-storing the block drops the key. At its start the engine deletes its own former drop-in
-`~/.config/wireplumber/wireplumber.conf.d/80-a3-engine-alsa.conf` if it is there (that file only, said on stderr);
-WirePlumber forgets it at its next start. The engine never restarts WirePlumber.
+**Periods** (removed the same day as they came, back the same evening, the maintainer: "it should stay"): the
+sound card's ALSA periods (2 or 3), through the engine's own WirePlumber drop-in
+`~/.config/wireplumber/wireplumber.conf.d/80-a3-engine-alsa.conf` (`api.alsa.period-num` on the engine's ALSA nodes
+only; 3, PipeWire's own choice on the rig, writes no file) and a WirePlumber restart (`systemctl --user restart
+wireplumber`), which takes the device away for about two seconds; the page says so before APPLY. What made the first
+attempt unsafe is closed: the drop-in names the configured device (`default.configured.audio.*`, SystemDevice.h), never
+the default of the moment, and while WirePlumber restarts the engine links nothing to `system:*` and removes what is
+linked there (see "Who owns a link"; tested as a restart window in `tests/app/SystemDevice.cpp`). Measured on the rig:
+2 periods 348 samples, 3 periods 344 (PipeWire drives the Scarlett by timer).
 
 **Stored** in `engine.json`'s backend section: `blockSize` (32..2048; the page offers 32, 64, 128, 256, 512,
-1024). Default 128: today's behaviour, nothing changes on install. A change on the page is written at once (only
+1024) and `periods` (2 or 3, default 3). Default 128: today's behaviour, nothing changes on install. A change on the page is written at once (only
 that key, like the converters' share), no Save.
 
 **Block**: `pw-metadata -n settings 0 clock.force-quantum N`, live; the engine follows through its buffer-size
@@ -551,11 +554,10 @@ it. The engine requests no `node.latency` of its own (jack.conf's 128 applies to
 quantum overrides every client's, so the REAPER/CLAP trap of 2026-10-25 (force above node.latency) is gone with
 REAPER, but another JACK client that cannot follow a buffer-size change would show it first.
 
-**The page**: a choice is applied only on APPLY; the line before it says it applies live. REVERT goes back to the
-previous block. The info below then shows the new `Block N frames`, DSP load and xruns, and the measured round
+**The page**: a choice is applied only on APPLY; the line before it says a block applies live and new periods
+restart WirePlumber. REVERT goes back to the previous choice (previous periods after the same question). The info below then shows the new `Block N frames`, DSP load and xruns, and the measured round
 trip. Commands run through `posix_spawn` (never fork, the engine is large; `app/CommandRunner.h`) on the control
-thread. Over the control API: `POST /api/engine/timing` `{"block"}` (a `periods` from an older window is
-ignored), and the status's `timing` (applied, previous, message). On a JUCE device type the block is the device's
+thread. Over the control API: `POST /api/engine/timing` `{"block", "periods"}`, and the status's `timing` (applied, previous, message). On a JUCE device type the block is the device's
 buffer size (Save).
 
 ## Build and test

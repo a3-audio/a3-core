@@ -61,7 +61,8 @@ public:
     virtual void playNoise (const NoiseRequest&) = 0;              // live, on the running engine; nothing when none runs
     virtual void measureRoundTrip() {}                             // over the loop, on the running engine; the result comes with status()
     virtual void measureAnalogChain() {}                           // over the test cable and the loop at once; only ever on request
-    // PipeWire (JACK) only: the block, live; kept in the config file at once, no Save. The outcome comes with status().timing.
+    // PipeWire (JACK) only: the block live, the periods with a WirePlumber restart (the page asked first); kept in
+    // the config file at once, no Save. The outcome comes with status().timing.
     virtual void applyTiming (const AudioTiming&) {}
 };
 }

@@ -264,7 +264,7 @@ void RemoteHostView::applyTiming (const AudioTiming& timing)
     {
         const std::lock_guard<std::mutex> posting (postLock);
         posts.push_back ({ "/api/engine/timing",
-                           "{\"block\":" + std::to_string (timing.block) + "}", false });
+                           "{\"block\":" + std::to_string (timing.block) + ",\"periods\":" + std::to_string (timing.periods) + "}", false });
     }
     wake.notify_all();
 }

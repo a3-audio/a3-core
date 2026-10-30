@@ -12,10 +12,11 @@
 namespace a3app
 {
 // The audio page. First the sound-device settings: one device-type list, "PipeWire (JACK)" (the JACK backend) beside
-// JUCE's device types. PipeWire: Block (the forced quantum, live), applied by the engine only on APPLY, after the
-// page said what happens; REVERT goes back to the previous choice (TimingControl.h). No periods (2026-10-30: PipeWire
-// drives the card by timer, they changed nothing measurable). A JUCE type: input and output device, rate and block
-// size, pending until Save. Below the settings what runs: rate, block, where they come from, bit depth, DSP load and xruns, the round trip (measured over
+// JUCE's device types. PipeWire: Block (the forced quantum, live) and Periods (the sound card's ALSA periods, through
+// the engine's WirePlumber drop-in and a WirePlumber restart), applied by the engine only on APPLY, after the page
+// said what happens; REVERT goes back to the previous choice (TimingControl.h). A JUCE type: input and output device,
+// rate and block size, pending until Save (no periods: JUCE's ALSA device sets its own). Below the settings what
+// runs: rate, block and periods, where they come from, bit depth, DSP load and xruns, the round trip (measured over
 // the I/O page's digital loop, MEASURE runs it again, or estimated) and the analog chain; at the bottom the CLOCK
 // section (ClockPanel). MEASURE and MEASURE ANALOG CHAIN are off, with a line saying so, while the I/O page names no
 // pair for them. The page opens no device: the manager is a catalogue of device types and is never initialised.
@@ -29,11 +30,14 @@ public:
 
     void chooseDeviceType (const juce::String& name);   // pipewireType or one of JUCE's; an edit, Save applies
     void chooseBlock (int frames);
+    void choosePeriods (int periods);
     void refresh();   // re-reads the view's status (the window's timer)
 
     bool showsDeviceSelector() const { return deviceChoosers; }   // a JUCE type: input, output, rate
+    bool showsPeriods() const { return periodsBox.isVisible(); }
     juce::ComboBox& typeChooser() { return typeBox; }
     juce::ComboBox& blockChooser() { return blockBox; }
+    juce::ComboBox& periodsChooser() { return periodsBox; }
     juce::Button& applyButton() { return apply; }
     juce::Button& cancelButton() { return cancel; }
     juce::Button& revertButton() { return revert; }
@@ -77,8 +81,8 @@ private:
     juce::Label title, rate, quantum, rateSource, bitDepth, load, roundTrip, measureHint, pending, analogChain, analogHint, confirm;
     juce::TextButton measure { "MEASURE" }, measureAnalog { "MEASURE ANALOG CHAIN" }, apply { "APPLY" }, cancel { "CANCEL" },
         revert { "REVERT" };
-    juce::Label typeCaption, inputCaption, outputCaption, rateCaption, blockCaption;
-    Dropdown typeBox, inputBox, outputBox, rateBox, blockBox;
+    juce::Label typeCaption, inputCaption, outputCaption, rateCaption, blockCaption, periodsCaption;
+    Dropdown typeBox, inputBox, outputBox, rateBox, blockBox, periodsBox;
     ClockPanel clock;
     std::optional<AudioTiming> chosenTiming;   // PipeWire: chosen on the page, not applied yet
     bool deviceChoosers = false;

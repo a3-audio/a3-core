@@ -362,10 +362,7 @@ std::variant<std::unique_ptr<EngineRole>, int> EngineRole::start (const AppArgs&
     for (const auto& line : droppedLinkLines (loaded->config))
         sayEngine (line);
 
-    if (removeRetiredPeriodsDropIn (home))
-        sayEngine ("removed " + retiredPeriodsDropIn (home).getFullPathName()
-                   + " (the periods are gone); WirePlumber forgets them at its next start");
-    std::unique_ptr<EngineRole> role (new EngineRole (args, std::move (*loaded)));
+    std::unique_ptr<EngineRole> role (new EngineRole (args, std::move (*loaded), home));
     const auto opened = role->session->open (! args.noConnect, args.hostname);
     if (opened.failed())
     {
@@ -380,9 +377,10 @@ std::variant<std::unique_ptr<EngineRole>, int> EngineRole::start (const AppArgs&
     return role;
 }
 
-EngineRole::EngineRole (const AppArgs& argsToUse, StartupData data)
+EngineRole::EngineRole (const AppArgs& argsToUse, StartupData data, const juce::File& home)
     : args (argsToUse), startup (std::move (data)),
-      timing ({ runner, [this] (const AudioTiming& t) { return storeTiming (t); } }),
+      timing ({ runner, periodsDropInFile (home), [this] (const AudioTiming& t) { return storeTiming (t); },
+                [this] { session->measureRoundTrip(); } }),
       session (std::make_unique<EngineSession> (startup))
 {
 }
@@ -398,15 +396,18 @@ void EngineRole::startTiming()
         sayEngine (said);
 }
 
-// Like the converter share: into the config file at once (only backend.blockSize changes), and
+// Like the converter share: into the config file at once (only backend.blockSize and backend.periods change), and
 // into what runs and what is pending, so the next session and the next Save keep it.
 juce::Result EngineRole::storeTiming (const AudioTiming& applied)
 {
     const auto from = startup.saveFile.existsAsFile() ? startup.saveFile : startup.configFile;
-    const auto stored = storeBackendTiming (from, startup.saveFile, applied.block, startup.truth.decks);
+    const auto stored = storeBackendTiming (from, startup.saveFile, applied.block, applied.periods, startup.truth.decks);
     for (auto* config : { &startup.config, view != nullptr ? &view->startedWith : nullptr, view != nullptr ? &view->edited : nullptr })
         if (config != nullptr)
+        {
             config->backend.blockSize = applied.block;
+            config->backend.periods = applied.periods;
+        }
     return stored;
 }
 
@@ -414,10 +415,10 @@ void EngineRole::applyTiming (const AudioTiming& wanted)
 {
     if (! runsOnPipeWire())
         return;   // a device's block size is an edit, applied by Save
-    if (const auto result = timing.apply (wanted); result.failed())
+    if (const auto result = timing.apply (wanted, startup.config.io); result.failed())
         sayEngine (result.getErrorMessage());
     else
-        sayEngine ("timing " + timingText (wanted.block) + ": " + timing.report().message);
+        sayEngine ("timing " + timingText (wanted.block, wanted.periods) + ": " + timing.report().message);
 }
 
 EngineRole::~EngineRole()
@@ -454,6 +455,8 @@ void EngineRole::storeConverterShare()
 std::optional<int> EngineRole::tick (bool stopRequested)
 {
     session->tick();
+    if (runsOnPipeWire())
+        timing.service (monotonicSeconds());
     storeConverterShare();
     api->tick (monotonicSeconds());
     if (session->lost())

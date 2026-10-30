@@ -77,6 +77,6 @@ struct FakeView final : a3app::HostView
     bool fileExistedAtApply = false;
     int edited = 0, applied = 0, filterSets = 0;
     std::vector<a3app::NoiseRequest> noises;
-    std::vector<a3app::AudioTiming> timings;   // the AUDIO page's block, as asked
+    std::vector<a3app::AudioTiming> timings;   // the AUDIO page's block and periods, as asked
 };
 }
