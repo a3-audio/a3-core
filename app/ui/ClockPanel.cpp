@@ -30,8 +30,7 @@ juce::String stateText (const a3clock::ClockReport& report)
     const auto word = juce::String (indicator.word);
     const auto& s = report.status;
     if (report.running && s.health == Health::locked)
-        return word + dot + errorText (s) + dot + "for " + duration (s.lockedSeconds)
-               + (s.portState == "MASTER" ? juce::String() : dot + "ptp4l's port state not readable: the PTP side is not checked");
+        return word + dot + errorText (s) + dot + "for " + duration (s.lockedSeconds);
     if (report.running && s.health == Health::acquiring)
         return word + dot + errorText (s) + dot + juce::String::fromUTF8 (indicator.detail.c_str());
     return word + dot + juce::String::fromUTF8 (indicator.detail.c_str());
@@ -106,7 +105,7 @@ ClockPanel::ClockPanel()
                   "need the Scarlett on word clock; not offered.",
                   juce::dontSendNotification);
     note.setColour (juce::Label::textColourId, palette::textMuted);
-    for (auto* label : { &state, &rate, &counters })
+    for (auto* label : { &state, &role, &rate, &counters })
     {
         label->setColour (juce::Label::textColourId, palette::text);
         label->setJustificationType (juce::Justification::centredLeft);
@@ -114,7 +113,7 @@ ClockPanel::ClockPanel()
     }
     rate.setColour (juce::Label::textColourId, palette::textMuted);
     counters.setColour (juce::Label::textColourId, palette::textMuted);
-    for (auto* child : std::initializer_list<juce::Component*> { &title, &masterCaption, &master, &state, &rate, &counters, &note })
+    for (auto* child : std::initializer_list<juce::Component*> { &title, &masterCaption, &master, &state, &role, &rate, &counters, &note })
         addAndMakeVisible (child);
     show ({});
 }
@@ -122,6 +121,9 @@ ClockPanel::ClockPanel()
 void ClockPanel::show (const a3clock::ClockReport& report)
 {
     state.setText (stateText (report), juce::dontSendNotification);
+    const auto roleLine = a3clock::ptpRoleLine (report);
+    role.setText (juce::String::fromUTF8 (roleLine.text.c_str()), juce::dontSendNotification);
+    role.setColour (juce::Label::textColourId, roleLine.warns ? palette::danger : palette::textMuted);
     rate.setText (rateText (report), juce::dontSendNotification);
     counters.setText (countersText (report), juce::dontSendNotification);
     const auto warning = warningOf (report);
@@ -147,12 +149,13 @@ void ClockPanel::paint (juce::Graphics& g)
 void ClockPanel::resized()
 {
     auto area = getLocalBounds().reduced (juce::jmax (4, getWidth() / 60), juce::jmax (2, getHeight() / 40));
-    const int row = area.getHeight() / 6;
+    const int row = area.getHeight() / 7;
     fitText (title, area.removeFromTop (row), 0.5f);
     auto choice = area.removeFromTop (row);
     masterCaption.setBounds (choice.removeFromLeft (choice.getWidth() / 4));
     master.setBounds (choice.reduced (2));
     fitText (state, area.removeFromTop (row), 0.45f);
+    fitText (role, area.removeFromTop (row), 0.4f);
     fitText (rate, area.removeFromTop (row), 0.4f);
     fitText (counters, area.removeFromTop (row), 0.4f);
     fitText (note, area.removeFromTop (row), 0.36f);

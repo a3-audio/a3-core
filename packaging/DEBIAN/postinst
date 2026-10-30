@@ -724,8 +724,9 @@ audio_port() {
 
 # AES67 and PTP on the audio socket: ptp4l@<port> (linuxptp's unit, run with
 # /etc/linuxptp/a3-ptp4l.conf by a drop-in: master, steps clients, never steers
-# its own clock), the AES67 instance in aaa's user manager and the clock role
-# that steers the PTP clock from the Scarlett (a3-clock.service, a3-core-app's).
+# its own clock), the AES67 instance in aaa's user manager, the clock role
+# that steers the PTP clock from the Scarlett (a3-clock.service, a3-core-app's)
+# and the root timer that hands it ptp4l's port state (a3-ptp-state.timer).
 # Enabled, not started: they come up with the next boot or login. Without an
 # audio socket none is enabled.
 enable_aes67() {
@@ -734,9 +735,11 @@ enable_aes67() {
     echo "a3-core: no audio port in the network -- AES67 and PTP not enabled"
     user_systemctl disable a3-aes67.service || true
     user_systemctl disable a3-clock.service || true
+    systemctl disable a3-ptp-state.timer || true
     return 0
   fi
   systemctl enable "ptp4l@${port}.service" || true
+  systemctl enable a3-ptp-state.timer || true
   user_systemctl enable a3-aes67.service || true
   user_systemctl enable a3-clock.service || true
 }

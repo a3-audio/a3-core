@@ -129,12 +129,14 @@ void ClockDaemon::checkPort (double nowSeconds)
     if (port == nullptr || nowSeconds < nextPortCheck)
         return;
     nextPortCheck = nowSeconds + options.portCheckSeconds;
-    const auto state = port->portState();
-    const auto word = state.value_or ("");
-    if (word != current.portState)
-        say ("a3-core clock: ptp4l's port on " + options.interface + " is " + (state ? word : std::string ("not readable (unverified)")));
+    const auto reading = port->portState();
+    const auto word = reading.state.value_or ("");
+    if (word != current.portState || reading.problem != current.portProblem)
+        say ("a3-core clock: ptp4l's port on " + options.interface + " is "
+             + (reading.state ? word : "not known: " + reading.problem));
     current.portState = word;
-    portPaused = state && word != "MASTER";
+    current.portProblem = reading.problem;
+    portPaused = reading.state && word != "MASTER";
 }
 
 std::optional<Measurement> ClockDaemon::measure()

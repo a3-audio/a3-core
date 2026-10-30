@@ -115,7 +115,8 @@ struct FakeFeed final : ProfilerFeed
 struct FakePort final : PtpPortState
 {
     std::optional<std::string> state = std::string ("MASTER");
-    std::optional<std::string> portState() override { return state; }
+    std::string problem;
+    PortReading portState() override { return { state, problem }; }
 };
 
 struct Rig
@@ -365,9 +366,12 @@ TEST (ClockDaemon, APortStateNobodyCanReadIsReportedEmpty)
 {
     Rig rig;
     rig.port.state.reset();
+    rig.port.problem = "no PTP state from a3-ptp-state: /run/a3/ptp-state.json missing";
     ASSERT_GT (rig.secondsUntilLocked (30.0), 0.0);   // it still steers ...
-    EXPECT_EQ (rig.daemon.status().portState, "");      // ... and the window shows it as unverified
-    EXPECT_GE (rig.linesContaining ("unverified"), 1);
+    EXPECT_EQ (rig.daemon.status().portState, "");      // ... locked, the port role "not read yet", with why
+    EXPECT_EQ (rig.daemon.status().health, Health::locked);
+    EXPECT_EQ (rig.daemon.status().portProblem, rig.port.problem);
+    EXPECT_GE (rig.linesContaining ("not known"), 1);
 }
 
 TEST (ClockDaemon, AWarmStartIsUsedWhenThePhcWasReset)

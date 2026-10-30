@@ -1,0 +1,25 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Raphael Eismann
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# ptp4l's port state for the clock role (a3-core --role clock), run as root by
+# a3-ptp-state.timer every 10 s. On the Core, Debian's sandboxed ptp4l@ unit never
+# answers a user's pmc; root's pmc on ptp4l's own socket it does. Writes
+# {"portState", "problem", "writtenAtUnix"} whole (a temporary renamed over it),
+# readable by everyone. A3_PTP_STATE_FILE names another file (the tests).
+set -u
+out="${A3_PTP_STATE_FILE:-/run/a3/ptp-state.json}"
+dir=$(dirname "$out")
+mkdir -p "$dir"
+chmod 0755 "$dir"
+
+answer=$(pmc -u -b 0 'GET PORT_DATA_SET' 2>&1) || true
+state=$(printf '%s\n' "$answer" | awk '$1 == "portState" { print $2; exit }')
+problem=""
+[ -n "$state" ] || problem="no answer from ptp4l (pmc on its own socket, as root)"
+
+tmp=$(mktemp "$dir/.ptp-state.XXXXXX")
+printf '{ "portState": "%s", "problem": "%s", "writtenAtUnix": %s }\n' \
+  "$state" "$problem" "$(date +%s)" > "$tmp"
+chmod 0644 "$tmp"
+mv -f "$tmp" "$out"

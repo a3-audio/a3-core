@@ -25,7 +25,8 @@ struct ClockStatus
     std::string reason;
     std::string device;                    // the PHC steered
     std::string interface;                 // the audio port it belongs to
-    std::string portState;                 // ptp4l's port state there ("MASTER"); empty: not readable
+    std::string portState;                 // ptp4l's port state there ("MASTER"); empty: not known
+    std::string portProblem;               // why it is not known
     bool observeOnly = false;
     double frequencyPpm = 0.0;             // what the PHC runs at against its free run
     double errorNs = 0.0;                  // PHC minus Scarlett, after anchoring
@@ -73,8 +74,9 @@ private:
 };
 
 // What every surface shows of the clock in one word (the AUDIO page, the window's footer, Canvas
-// through /api/engine/status): LOCKED only when locked and ptp4l's port is known to be MASTER;
-// locked with a port state nobody could read is UNVERIFIED.
+// through /api/engine/status). The maintainer, 2026-10-30: a clock that is synced says LOCKED. Only a
+// real problem gets a warning word: not locked, or ptp4l known to be in another state than MASTER
+// (the daemon then holds: HOLDOVER). Whether the role is confirmed is ptpRoleLine, a second line.
 struct ClockIndicator
 {
     enum class Tone { ok, caution, danger };
@@ -83,6 +85,15 @@ struct ClockIndicator
     std::string detail;
 };
 ClockIndicator clockIndicator (const ClockReport&);
+
+// The AUDIO page's line under the state: "PTP grandmaster: confirmed", "PTP role: not read yet (...)"
+// (neutral), or "PTP role: <state>, not the grandmaster" (a warning). Empty when the role is not running.
+struct PtpRoleLine
+{
+    std::string text;
+    bool warns = false;
+};
+PtpRoleLine ptpRoleLine (const ClockReport&);
 juce::var toJson (const ClockIndicator&);
 
 // The journal line: health, error, frequency, rate and every counter, on one line.

@@ -159,17 +159,53 @@ TEST (ClockStatus, TheReaderReadsTheFileOnceAPeriod)
     EXPECT_EQ (reader.get (11.0, s.writtenAtUnix).status.counters.corrections, 4000);
 }
 
-TEST (ClockStatus, LockedIsLockedOnlyWithTheGrandmasterKnown)
+// The maintainer, 2026-10-30: a clock that is synced says so. Whether ptp4l is known to be the
+// grandmaster is a second, neutral line; only a real problem gets a warning word.
+TEST (ClockStatus, LockedIsLockedWhetherOrNotThePortStateIsKnown)
 {
     ClockReport report;
     report.running = true;
     report.status = locked();
     EXPECT_EQ (clockIndicator (report).word, "LOCKED");
     EXPECT_EQ (clockIndicator (report).tone, ClockIndicator::Tone::ok);
+    EXPECT_EQ (ptpRoleLine (report).text, "PTP grandmaster: confirmed");
+    EXPECT_FALSE (ptpRoleLine (report).warns);
     report.status.portState.clear();
-    EXPECT_EQ (clockIndicator (report).word, "UNVERIFIED");
-    EXPECT_EQ (clockIndicator (report).tone, ClockIndicator::Tone::caution);
-    EXPECT_NE (logLine (report.status).find ("port unverified"), std::string::npos);
+    report.status.portProblem = "no PTP state from a3-ptp-state: /run/a3/ptp-state.json is 42 s old";
+    EXPECT_EQ (clockIndicator (report).word, "LOCKED");
+    EXPECT_EQ (clockIndicator (report).tone, ClockIndicator::Tone::ok);
+    EXPECT_EQ (ptpRoleLine (report).text.rfind ("PTP role: not read yet", 0), 0u) << ptpRoleLine (report).text;
+    EXPECT_NE (ptpRoleLine (report).text.find ("a3-ptp-state"), std::string::npos);
+    EXPECT_FALSE (ptpRoleLine (report).warns);
+    EXPECT_EQ (clockStatusFromJson (toJson (report.status))->portProblem, report.status.portProblem);
+    EXPECT_NE (logLine (report.status).find ("port unknown"), std::string::npos);
+    EXPECT_EQ (toJson (clockIndicator (report))["word"].toString(), "LOCKED");
+}
+
+TEST (ClockStatus, AKnownPortStateOtherThanMasterWarns)
+{
+    ClockReport report;
+    report.running = true;
+    report.status = locked();
+    report.status.health = Health::holdover;   // the daemon pauses the steering
+    report.status.portState = "SLAVE";
+    EXPECT_EQ (clockIndicator (report).word, "HOLDOVER");
+    EXPECT_EQ (ptpRoleLine (report).text, "PTP role: SLAVE, not the grandmaster");
+    EXPECT_TRUE (ptpRoleLine (report).warns);
+}
+
+TEST (ClockStatus, NoWordSoundsBrokenWhenNothingIs)
+{
+    ClockReport report;
+    report.running = true;
+    report.status = locked();
+    report.status.portState.clear();
+    for (const auto* word : { "UNVERIFIED", "unverified" })
+    {
+        EXPECT_EQ (clockIndicator (report).word.find (word), std::string::npos);
+        EXPECT_EQ (clockIndicator (report).detail.find (word), std::string::npos);
+        EXPECT_EQ (ptpRoleLine (report).text.find (word), std::string::npos);
+    }
 }
 
 TEST (ClockStatus, EveryOtherStateWarns)

@@ -25,6 +25,7 @@ public:
 
     bool warns() const { return ! frame.isTransparent(); }
     const juce::Label& stateLabel() const { return state; }
+    const juce::Label& roleLabel() const { return role; }   // the PTP role, a second line
     const juce::Label& rateLabel() const { return rate; }
     const juce::Label& countersLabel() const { return counters; }
     const juce::Label& noteLabel() const { return note; }
@@ -34,7 +35,7 @@ public:
     void paint (juce::Graphics&) override;
 
 private:
-    juce::Label title, masterCaption, state, rate, counters, note;
+    juce::Label title, masterCaption, state, role, rate, counters, note;
     juce::ComboBox master;
     juce::Colour frame = juce::Colours::transparentBlack;
 };

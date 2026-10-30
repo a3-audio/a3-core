@@ -50,7 +50,7 @@ target_compile_options(a3-delay PRIVATE -Wall -Wextra -Werror=switch)
 # The one clock (src/a3-clock/ClockSteering.h): steering the Core's PTP hardware clock from the
 # Scarlett. The loop and the measurements are plain C++; the status file and the daemon use juce_core.
 add_library(a3-clock STATIC src/a3-clock/ClockSteering.cpp src/a3-clock/ClockMeasure.cpp
-    src/a3-clock/ClockStatus.cpp src/a3-clock/ClockDaemon.cpp)
+    src/a3-clock/ClockStatus.cpp src/a3-clock/ClockDaemon.cpp src/a3-clock/ClockPtpState.cpp)
 target_include_directories(a3-clock PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/a3-clock)
 target_link_libraries(a3-clock PUBLIC a3-engine-juce)
 target_compile_options(a3-clock PRIVATE -Wall -Wextra -Werror=switch)

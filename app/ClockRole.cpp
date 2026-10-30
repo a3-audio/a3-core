@@ -153,18 +153,6 @@ std::string phcRefusal (const std::string& audioPort, const std::optional<std::s
     return {};
 }
 
-std::optional<std::string> portStateOf (const std::string& pmcOutput)
-{
-    const auto at = pmcOutput.find ("portState");
-    if (at == std::string::npos)
-        return std::nullopt;
-    const auto start = pmcOutput.find_first_not_of (" \t", at + 9);
-    const auto end = pmcOutput.find_first_of (" \t\r\n", start);
-    if (start == std::string::npos || start == end)
-        return std::nullopt;
-    return pmcOutput.substr (start, end == std::string::npos ? std::string::npos : end - start);
-}
-
 std::optional<double> rememberedFrequency (const juce::File& file)
 {
     if (! file.existsAsFile())
@@ -184,68 +172,6 @@ bool rememberFrequency (const juce::File& file, double ppm)
     return file.getParentDirectory().createDirectory()
            && temporary.getFile().replaceWithText (juce::JSON::toString (juce::var (o), true))
            && temporary.overwriteTargetFileWithTemporary();
-}
-
-namespace
-{
-constexpr double pmcWaitSeconds = 3.0;
-const char* const ptp4lReadOnlySocket = "/var/run/ptp4lro";
-}
-
-juce::File pmcClientSocket (int pid, unsigned query)
-{
-    return juce::File ("/tmp").getChildFile ("a3-clock-pmc." + juce::String (pid) + "." + juce::String (query));
-}
-
-std::vector<std::string> pmcCommand (const juce::File& clientSocket)
-{
-    return { "sh", "-c", "umask 000 && exec pmc \"$@\"", "pmc", "-u", "-b", "0", "-i", clientSocket.getFullPathName().toStdString(),
-             "-s", ptp4lReadOnlySocket, "GET PORT_DATA_SET" };
-}
-
-PmcPortState::PmcPortState (const a3core::Platform& p) : platform (p) {}
-
-PmcPortState::~PmcPortState()
-{
-    if (child && ! child->poll())
-    {
-        child->kill();
-        child->wait (-1.0);
-    }
-    socket.deleteFile();
-}
-
-void PmcPortState::collect()
-{
-    char buffer[4096];
-    for (ssize_t got; (got = ::read (child->stdoutFd(), buffer, sizeof buffer)) > 0;)
-        output.append (buffer, (std::size_t) got);
-}
-
-std::optional<std::string> PmcPortState::portState()
-{
-    if (child)
-    {
-        collect();
-        const bool ended = child->poll().has_value();
-        if (! ended && monotonicSeconds() - startedAt < pmcWaitSeconds)
-            return last;   // still asking; the answer comes with the next call
-        if (! ended)
-        {
-            child->kill();
-            child->wait (-1.0);
-        }
-        collect();
-        last = portStateOf (output);
-        child.reset();
-        socket.deleteFile();   // pmc binds it and leaves it behind
-    }
-    output.clear();
-    socket = pmcClientSocket ((int) getpid(), ++queries);
-    socket.deleteFile();
-    child = platform.spawn (pmcCommand (socket), true, a3core::ProcessGroup::inherit, a3core::ErrorOutput::discard);
-    startedAt = monotonicSeconds();
-    return last;
 }
 
 ProfilerProcess::ProfilerProcess (const a3core::Platform& p, std::vector<std::string> words)
@@ -316,6 +242,12 @@ bool ProfilerProcess::drain (const std::function<void (std::string_view)>& line)
 namespace
 {
 double unixSeconds() { return (double) juce::Time::currentTimeMillis() / 1000.0; }
+}
+
+a3clock::PortReading FilePortState::portState() { return a3clock::readPtpState (a3clock::ptpStateFile(), unixSeconds()); }
+
+namespace
+{
 
 juce::File runtimeFile (const a3core::Platform& platform, const char* name)
 {
@@ -353,7 +285,7 @@ ClockRunner::ClockRunner (const ProgramArgs& args, const a3core::Platform& platf
       journal (a3core::streamJournal (stdout, stderr)),
       phc (plan.device),
       feed (platform),
-      port (platform)
+      port()
 {
     // One steering instance: it holds the lock and owns the status file. An observer takes neither.
     if (! observe && ! takeInstanceLock())

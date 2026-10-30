@@ -1,6 +1,8 @@
 /etc/default/grub
 /etc/X11/xorg.conf.d/10-a3-display.conf
 /etc/systemd/system/set_irq_prio.service
+/etc/systemd/system/a3-ptp-state.service
+/etc/systemd/system/a3-ptp-state.timer
 /etc/systemd/system/vnc-display.service
 /etc/systemd/system/x11vnc.service
 /etc/systemd/system/x11vnc.service.d/cpu.conf

@@ -93,17 +93,6 @@ TEST (ClockRole, ItRefusesAPhcThatIsNotTheAudioPorts)
     EXPECT_NE (a3app::phcRefusal ("enp5s0", std::nullopt, "").find ("enp5s0 has no PTP hardware clock"), std::string::npos);
 }
 
-TEST (ClockRole, ReadsThePortStateFromPmc)
-{
-    const std::string answer = "sending: GET PORT_DATA_SET\n"
-                               "\ta0369f.fffe.1d2e3f-1 seq 0 RESPONSE MANAGEMENT PORT_DATA_SET \n"
-                               "\t\tportIdentity            a0369f.fffe.1d2e3f-1\n"
-                               "\t\tportState               MASTER\n"
-                               "\t\tlogMinDelayReqInterval  0\n";
-    EXPECT_EQ (a3app::portStateOf (answer), std::optional<std::string> ("MASTER"));
-    EXPECT_FALSE (a3app::portStateOf ("sending: GET PORT_DATA_SET\n"));   // nobody answered
-}
-
 TEST (ClockRole, TheLastLockedFrequencyIsKept)
 {
     TempDir state;
@@ -126,29 +115,4 @@ TEST (ClockRole, OnlyOneInstanceSteersAClock)
     EXPECT_TRUE (first.claim());
     EXPECT_FALSE (second.claim());
     EXPECT_NE (second.problem().find ("another clock role"), std::string::npos);
-}
-
-// ptp4l@'s unit runs with ProtectHome on the nucs: its reply never reaches a socket under /run/user. The
-// pmc client's socket lives under /tmp (ptp4l's PrivateTmp is off by a3-core's drop-in), one per query.
-TEST (ClockRole, ThePmcClientSocketIsUnderTmpAndNewEachQuery)
-{
-    const auto first = a3app::pmcClientSocket (4242, 1), second = a3app::pmcClientSocket (4242, 2);
-    EXPECT_EQ (first.getParentDirectory().getFullPathName(), "/tmp");
-    EXPECT_TRUE (first.getFileName().startsWith ("a3-clock-pmc."));
-    EXPECT_TRUE (first.getFileName().contains ("4242"));
-    EXPECT_NE (first, second);
-}
-
-// ptp4l's unit has no CAP_DAC_OVERRIDE: root as it is, it may only send to a socket that others may
-// write. pmc binds with the umask it is started with, so it is started with umask 000.
-TEST (ClockRole, PmcIsAskedWithASocketPtp4lMaySendTo)
-{
-    const auto argv = a3app::pmcCommand (juce::File ("/tmp/a3-clock-pmc.1.1"));
-    ASSERT_GE (argv.size(), 4u);
-    EXPECT_EQ (argv[0], "sh");
-    EXPECT_EQ (argv[1], "-c");
-    EXPECT_EQ (argv[2], "umask 000 && exec pmc \"$@\"");
-    const std::vector<std::string> rest (argv.begin() + 3, argv.end());
-    EXPECT_EQ (rest, (std::vector<std::string> { "pmc", "-u", "-b", "0", "-i", "/tmp/a3-clock-pmc.1.1", "-s", "/var/run/ptp4lro",
-                                                 "GET PORT_DATA_SET" }));
 }

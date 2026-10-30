@@ -14,10 +14,9 @@
 // The PHC is the audio port's (the truth's network.audio_port, where ptp4l@<port> runs), found in
 // sysfs as PipeWire's clock.interface finds it; a --device that is not that clock is refused. One
 // instance steers: it holds an flock on the PHC and on <runtime dir>/a3/clock.lock, and owns the
-// status file; --observe takes no lock and writes no status. ptp4l's port state is asked through
-// its read-only management socket with pmc, whose reply socket is under /tmp (a3-core's ptp4l@
-// drop-in turns Debian's PrivateTmp off for it); a state nobody can read is reported as unverified,
-// never as LOCKED.
+// status file; --observe takes no lock and writes no status. ptp4l's port state comes from
+// /run/a3/ptp-state.json, which a root timer writes (ptp4l's sandboxed unit never answers a user's
+// pmc); a state not known yet is said beside the lock, a known state other than MASTER pauses it.
 #pragma once
 
 #include <memory>
@@ -68,36 +67,15 @@ std::optional<std::string> phcOfInterface (const juce::File& sysClassNet, const 
 // Why the role must not steer, or empty: no audio port, a port without a PHC, or a --device that is
 // not the port's.
 std::string phcRefusal (const std::string& audioPort, const std::optional<std::string>& portsPhc, const std::string& given);
-// pmc's client socket for one query: /tmp/a3-clock-pmc.<pid>.<query>. Under /tmp because ptp4l@'s
-// unit hides /run/user (ProtectHome); a3-core's drop-in shares /tmp with it (PrivateTmp=no).
-juce::File pmcClientSocket (int pid, unsigned query);
-// The command that asks ptp4l's read-only socket for the port data set through that client socket,
-// started with umask 000: ptp4l's unit has no CAP_DAC_OVERRIDE and may only send to a socket others may write.
-std::vector<std::string> pmcCommand (const juce::File& clientSocket);
-// The portState word of pmc's answer to GET PORT_DATA_SET, or nullopt when nobody answered.
-std::optional<std::string> portStateOf (const std::string& pmcOutput);
 // The last locked frequency, kept in the state directory for a warm start after a boot.
 std::optional<double> rememberedFrequency (const juce::File&);
 bool rememberFrequency (const juce::File&, double ppm);
 
-// ptp4l's port state through pmc on the read-only socket, without blocking: each call collects the
-// answer to the last one and asks again.
-class PmcPortState final : public a3clock::PtpPortState
+// ptp4l's port state from the file a3-ptp-state.timer writes as root (ClockPtpState.h).
+class FilePortState final : public a3clock::PtpPortState
 {
 public:
-    explicit PmcPortState (const a3core::Platform&);
-    ~PmcPortState() override;
-    std::optional<std::string> portState() override;
-
-private:
-    void collect();
-    const a3core::Platform& platform;
-    juce::File socket;                 // the running query's, removed when it is collected
-    unsigned queries = 0;
-    std::unique_ptr<a3core::Child> child;
-    std::string output;
-    double startedAt = 0.0;
-    std::optional<std::string> last;
+    a3clock::PortReading portState() override;
 };
 
 // A command's stdout as lines, from a child started through the platform (posix_spawn: a fork of a
@@ -142,7 +120,7 @@ private:
     a3core::Journal journal;
     LinuxPhc phc;
     ProfilerProcess feed;
-    PmcPortState port;
+    FilePortState port;
     int lockFd = -1;
     bool ownsLock = false;
     std::optional<int> exitCode;

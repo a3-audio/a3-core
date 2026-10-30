@@ -139,8 +139,8 @@ TEST_F (Pages, AudioShowsTheClockInEveryState)
         { "locked", clockReport (a3clock::Health::locked, "the PTP clock follows the Scarlett"), "LOCKED", juce::Colours::transparentBlack },
         { "acquiring", clockReport (a3clock::Health::acquiring, "anchored: steering towards the lock"), "ACQUIRING", a3app::palette::caution },
         { "observing", clockReport (a3clock::Health::observing, "observing"), "OBSERVING", a3app::palette::caution },
-        { "unverified", [] { auto r = clockReport (a3clock::Health::locked, ""); r.status.portState.clear(); return r; }(), "UNVERIFIED",
-          a3app::palette::caution },
+        { "locked-role-not-read", [] { auto r = clockReport (a3clock::Health::locked, ""); r.status.portState.clear(); return r; }(), "LOCKED",
+          juce::Colours::transparentBlack },
         { "holdover", clockReport (a3clock::Health::holdover, "no measurement: the last frequency is held"), "HOLDOVER", a3app::palette::danger },
         { "fault", clockReport (a3clock::Health::fault, "the PTP clock refused a frequency write"), "FAULT", a3app::palette::danger },
         { "not-running", absent, "NOT RUNNING", a3app::palette::danger },
@@ -206,15 +206,42 @@ TEST_F (Pages, TheFooterShowsTheClockOnEveryPage)
     bar.refresh();
     EXPECT_TRUE (bar.clockLabel().getText().contains ("LOCKED")) << bar.clockLabel().getText();
     EXPECT_EQ (bar.clockLabel().findColour (juce::Label::textColourId), a3app::palette::running);
-    view.clockReport.status.portState.clear();   // ptp4l's port state not readable
+    view.clockReport.status.portState.clear();   // ptp4l's port state not read yet: still synced, still LOCKED
     bar.refresh();
-    EXPECT_TRUE (bar.clockLabel().getText().contains ("UNVERIFIED")) << bar.clockLabel().getText();
-    EXPECT_EQ (bar.clockLabel().findColour (juce::Label::textColourId), a3app::palette::caution);
+    EXPECT_TRUE (bar.clockLabel().getText().contains ("LOCKED")) << bar.clockLabel().getText();
+    EXPECT_EQ (bar.clockLabel().findColour (juce::Label::textColourId), a3app::palette::running);
     view.clockReport.status.health = a3clock::Health::holdover;
     bar.refresh();
     EXPECT_TRUE (bar.clockLabel().getText().contains ("HOLDOVER"));
     EXPECT_EQ (bar.clockLabel().findColour (juce::Label::textColourId), a3app::palette::danger);
     EXPECT_GT (bar.clockLabel().getWidth(), 0);
+}
+
+// The PTP role is its own line under the state: neutral while not read yet, a warning only when
+// known and not MASTER.
+TEST_F (Pages, ThePtpRoleIsASecondLine)
+{
+    FakeView view;
+    view.clockReport = clockReport (a3clock::Health::locked, "");
+    a3app::AudioPage page (view, manager);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    page.refresh();
+    const auto& clock = page.clockPanel();
+    EXPECT_EQ (clock.roleLabel().getText(), "PTP grandmaster: confirmed");
+    EXPECT_EQ (clock.roleLabel().findColour (juce::Label::textColourId), a3app::palette::textMuted);
+    EXPECT_GT (clock.roleLabel().getHeight(), 0);
+    view.clockReport.status.portState.clear();
+    view.clockReport.status.portProblem = "no PTP state from a3-ptp-state: /run/a3/ptp-state.json missing";
+    page.refresh();
+    EXPECT_TRUE (clock.roleLabel().getText().startsWith ("PTP role: not read yet")) << clock.roleLabel().getText();
+    EXPECT_EQ (clock.roleLabel().findColour (juce::Label::textColourId), a3app::palette::textMuted);
+    EXPECT_TRUE (clock.stateLabel().getText().startsWith ("LOCKED")) << clock.stateLabel().getText();
+    EXPECT_FALSE (clock.stateLabel().getText().containsIgnoreCase ("unverified"));
+    view.clockReport.status.health = a3clock::Health::holdover;
+    view.clockReport.status.portState = "SLAVE";
+    page.refresh();
+    EXPECT_EQ (clock.roleLabel().getText(), "PTP role: SLAVE, not the grandmaster");
+    EXPECT_EQ (clock.roleLabel().findColour (juce::Label::textColourId), a3app::palette::danger);
 }
 
 TEST_F (Pages, TheClockMasterHasOneChoiceAndSaysWhy)

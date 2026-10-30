@@ -8,8 +8,8 @@
 // Fail safe: a PHC that cannot be read or a profiler that is gone or silent is holdover (nothing
 // written, the last frequency held, the profiler started again); a write that fails is a fault. A PHC
 // that is not the audio port's is never steered (the role refuses before it starts). ptp4l's port in
-// any state but MASTER pauses the steering; a port state nobody can read is reported as unverified,
-// so the window never shows a plain LOCKED for it. Nothing here can set the PHC's time: PhcDevice has
+// any state but MASTER pauses the steering; a port state not known yet is reported beside the lock
+// ("PTP role: not read yet"), not as a problem. Nothing here can set the PHC's time: PhcDevice has
 // no such call.
 #pragma once
 
@@ -19,6 +19,7 @@
 #include <string_view>
 
 #include "ClockMeasure.h"
+#include "ClockPtpState.h"
 #include "ClockStatus.h"
 #include "ClockSteering.h"
 
@@ -47,12 +48,12 @@ public:
     virtual bool drain (const std::function<void (std::string_view)>& line) = 0;
 };
 
-// ptp4l's port state on the audio port ("MASTER", "SLAVE", ...), or nullopt when it cannot be read.
+// ptp4l's port state on the audio port, or why it is not known.
 class PtpPortState
 {
 public:
     virtual ~PtpPortState() = default;
-    virtual std::optional<std::string> portState() = 0;
+    virtual PortReading portState() = 0;
 };
 
 struct DaemonOptions
@@ -66,7 +67,7 @@ struct DaemonOptions
     double feedRestartSeconds = 2.0;     // a profiler that ended is started again after this
     double feedSilenceSeconds = 10.0;    // ... and one alive without a Scarlett record for this long, too
     double failedStartLogSeconds = 60.0; // a profiler that cannot be started is said at most this often
-    double portCheckSeconds = 30.0;      // ptp4l's port state is asked this often
+    double portCheckSeconds = 10.0;      // ptp4l's port state is read this often (a3-ptp-state writes every 10 s)
     double rememberSeconds = 60.0;       // a locked frequency is handed to `remember` this often
     double rangeMarginPpm = 20.0;        // the range stays this far inside the device's own limit
     SteeringConfig steering;             // its updateSeconds is the daemon's update period

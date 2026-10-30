@@ -53,6 +53,7 @@ juce::var toJson (const ClockStatus& s)
     o->setProperty ("device", text (s.device));
     o->setProperty ("interface", text (s.interface));
     o->setProperty ("portState", text (s.portState));
+    o->setProperty ("portProblem", text (s.portProblem));
     o->setProperty ("observeOnly", s.observeOnly);
     o->setProperty ("frequencyPpm", s.frequencyPpm);
     o->setProperty ("errorNs", s.errorNs);
@@ -76,6 +77,7 @@ std::optional<ClockStatus> clockStatusFromJson (const juce::var& v)
     s.device = v["device"].toString().toStdString();
     s.interface = v["interface"].toString().toStdString();
     s.portState = v["portState"].toString().toStdString();
+    s.portProblem = v["portProblem"].toString().toStdString();
     s.observeOnly = (bool) v["observeOnly"];
     s.frequencyPpm = *frequency;
     s.errorNs = *error;
@@ -185,17 +187,25 @@ ClockIndicator clockIndicator (const ClockReport& report)
     const auto& s = report.status;
     switch (s.health)
     {
-        case Health::locked:
-            if (s.portState == "MASTER")
-                return { "LOCKED", Tone::ok, "the PTP clock follows the Scarlett, ptp4l is the grandmaster" };
-            return { "UNVERIFIED", Tone::caution,
-                     "locked to the Scarlett, but ptp4l's port state cannot be read: whether the decks follow this clock is not checked" };
+        case Health::locked: return { "LOCKED", Tone::ok, "the PTP clock follows the Scarlett; " + ptpRoleLine (report).text };
         case Health::acquiring: return { "ACQUIRING", Tone::caution, s.reason };
         case Health::observing: return { "OBSERVING", Tone::caution, "measuring only (--observe): nothing steers the PTP clock" };
         case Health::holdover: return { "HOLDOVER", Tone::danger, s.reason };
         case Health::fault: return { "FAULT", Tone::danger, s.reason + " - restart a3-clock.service once the cause is fixed" };
     }
     return { "FAULT", Tone::danger, s.reason };
+}
+
+PtpRoleLine ptpRoleLine (const ClockReport& report)
+{
+    if (! report.running)
+        return {};
+    const auto& s = report.status;
+    if (s.portState == "MASTER")
+        return { "PTP grandmaster: confirmed", false };
+    if (s.portState.empty())
+        return { "PTP role: not read yet" + (s.portProblem.empty() ? std::string() : " (" + s.portProblem + ")"), false };
+    return { "PTP role: " + s.portState + ", not the grandmaster", true };
 }
 
 juce::var toJson (const ClockIndicator& indicator)
@@ -221,7 +231,7 @@ std::string logLine (const ClockStatus& s)
                    healthWord (s.health), s.errorNs / 1000.0, s.frequencyPpm, rate, (long long) s.counters.corrections,
                    (long long) s.counters.reanchors, (long long) s.counters.phcSteps, (long long) s.counters.holdovers,
                    (long long) s.counters.lockLosses, (long long) s.scarlettBreaks, (long long) s.feedRestarts,
-                   s.portState.empty() ? "unverified" : s.portState.c_str());
+                   s.portState.empty() ? "unknown" : s.portState.c_str());
     return line;
 }
 }
