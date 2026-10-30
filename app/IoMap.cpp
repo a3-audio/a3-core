@@ -176,9 +176,6 @@ juce::var toJson (const IoMap& map)
     return root;
 }
 
-namespace
-{
-// The engine ports (or direct links) the map routes to device channel `channel` (1-based) on one side.
 juce::StringArray routesOn (const IoMap& map, bool input, int channel)
 {
     juce::StringArray users;
@@ -198,7 +195,6 @@ juce::StringArray routesOn (const IoMap& map, bool input, int channel)
         if (isThat (from) || isThat (to))
             users.addIfNotAlreadyThere (juce::String (from) + " -> " + juce::String (to));
     return users;
-}
 }
 
 juce::String analogLoopRefusal (const IoMap& map)

@@ -225,3 +225,49 @@ TEST (RoundTripLoop, TheLoopsOwnPortsAreLinkedToItsChannels)
     config.io.roundTripLoop.reset();
     EXPECT_EQ (a3app::linkMapFor (config, "").jack.count (a3app::loopOutputPort), 0u);
 }
+
+// The I/O page chooses the digital loop (2026-10-30): a channel per side, 0 is no loop. A first choice sets both
+// sides (an S/PDIF or ADAT loop is out N -> in N); the loop keeps its channel count.
+TEST (RoundTripLoop, TheIoPageChoosesTheDigitalLoop)
+{
+    a3app::AppConfig config;
+    config.io.roundTripLoop = a3app::RoundTripLoop { 11, 11, 2 };
+    juce::String error;
+    const auto moved = a3app::withDigitalLoopChannel (config, false, 13, error);
+    ASSERT_TRUE (moved) << error;
+    EXPECT_EQ (moved->io.roundTripLoop, std::optional<a3app::RoundTripLoop> (a3app::RoundTripLoop { 13, 11, 2 }));
+
+    const auto none = a3app::withDigitalLoopChannel (config, true, 0, error);
+    ASSERT_TRUE (none) << error;
+    EXPECT_FALSE (none->io.roundTripLoop.has_value());
+
+    const auto again = a3app::withDigitalLoopChannel (*none, true, 7, error);
+    ASSERT_TRUE (again) << error;
+    EXPECT_EQ (again->io.roundTripLoop, std::optional<a3app::RoundTripLoop> (a3app::RoundTripLoop { 7, 7, 2 }));
+}
+
+// The reservation stays as built: the loop's channels carry no route and not the analog test pair, so a channel
+// in use is refused (naming who uses it), never taken from them.
+TEST (RoundTripLoop, TheDigitalLoopIsRefusedOnChannelsInUse)
+{
+    a3app::AppConfig config;
+    config.io.roundTripLoop = a3app::RoundTripLoop { 11, 11, 2 };
+    config.io.jack["main_top_4"] = { "system:playback_5" };
+    config.io.analogLoop = a3app::AnalogLoop { 8, 3, {} };
+    juce::String error;
+    EXPECT_FALSE (a3app::withDigitalLoopChannel (config, false, 4, error));   // 4-5: 5 is main_top_4's
+    EXPECT_TRUE (error.contains ("output 5") && error.contains ("main_top_4")) << error;
+    EXPECT_FALSE (a3app::withDigitalLoopChannel (config, false, 7, error));   // 7-8: 8 is the analog test output
+    EXPECT_TRUE (error.contains ("output 8") && error.contains ("analog test")) << error;
+    EXPECT_TRUE (a3app::withDigitalLoopChannel (config, true, 4, error)) << error << ": input 4-5 are free";
+    EXPECT_FALSE (a3app::withDigitalLoopChannel (config, true, 2, error)) << "input 3 is the analog test input";
+
+    juce::StringArray playback;
+    for (int channel = 1; channel <= 14; ++channel)
+        playback.add ("system:playback_" + juce::String (channel));
+    const auto offered = a3app::digitalLoopChannels (config, playback, 0, false);
+    EXPECT_EQ (offered, (std::vector<int> { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 }))
+        << "every channel the device has is offered; a taken one is refused with its reason";
+    config.backend.type = a3app::BackendSettings::Type::device;
+    EXPECT_EQ (a3app::digitalLoopChannels (config, {}, 4, true), (std::vector<int> { 1, 2, 3, 4 }));
+}

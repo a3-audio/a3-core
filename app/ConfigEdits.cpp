@@ -410,24 +410,75 @@ std::vector<RouteChoice> routeChoices (const AppConfig& config, const juce::Stri
     return choices;
 }
 
-std::vector<int> analogTestChannels (const AppConfig& config, const juce::StringArray& hardwarePorts, int deviceChannels, bool input)
+namespace
+{
+// The 1-based channels of one side: JACK: those of the hardware ports (RoundTripLoop.h deviceChannelOfPeer); a
+// device: 1..deviceChannels. Sorted, each once.
+std::vector<int> hardwareChannels (const AppConfig& config, const juce::StringArray& hardwarePorts, int deviceChannels, bool input)
 {
     std::vector<int> channels;
-    const auto offer = [&] (int channel)
-    {
-        if (! loopHolds (config.io.roundTripLoop, input, channel)
-            && std::find (channels.begin(), channels.end(), channel) == channels.end())
-            channels.push_back (channel);
-    };
     if (config.backend.type == BackendSettings::Type::device)
         for (int channel = 1; channel <= deviceChannels; ++channel)
-            offer (channel);
+            channels.push_back (channel);
     else
         for (const auto& port : hardwarePorts)
             if (const auto named = deviceChannelOfPeer (port.toStdString()); named && named->capture == input)
-                offer (named->channel);
+                channels.push_back (named->channel);
     std::sort (channels.begin(), channels.end());
+    channels.erase (std::unique (channels.begin(), channels.end()), channels.end());
     return channels;
+}
+
+// Why the digital loop cannot reserve `loop`'s channels on one side ("" when it can).
+juce::String digitalLoopRefusal (const IoMap& io, const RoundTripLoop& loop, bool input)
+{
+    const int first = input ? loop.input : loop.output;
+    for (int channel = first; channel < first + loop.channels; ++channel)
+    {
+        const juce::String side = juce::String (input ? "input " : "output ") + juce::String (channel);
+        if (const auto users = routesOn (io, input, channel); ! users.isEmpty())
+            return side + " is in use (" + users.joinIntoString (", ") + "); unroute it first";
+        if (io.analogLoop && (input ? io.analogLoop->input : io.analogLoop->output) == channel)
+            return side + " is the analog test cable's";
+    }
+    return {};
+}
+}
+
+std::vector<int> analogTestChannels (const AppConfig& config, const juce::StringArray& hardwarePorts, int deviceChannels, bool input)
+{
+    auto channels = hardwareChannels (config, hardwarePorts, deviceChannels, input);
+    channels.erase (std::remove_if (channels.begin(), channels.end(),
+                                    [&] (int channel) { return loopHolds (config.io.roundTripLoop, input, channel); }),
+                    channels.end());
+    return channels;
+}
+
+std::vector<int> digitalLoopChannels (const AppConfig& config, const juce::StringArray& hardwarePorts, int deviceChannels, bool input)
+{
+    return hardwareChannels (config, hardwarePorts, deviceChannels, input);
+}
+
+std::optional<AppConfig> withDigitalLoopChannel (const AppConfig& config, bool input, int channel, juce::String& error)
+{
+    auto edited = config;
+    if (channel <= 0)
+    {
+        edited.io.roundTripLoop.reset();
+        return edited;
+    }
+    const bool fresh = ! config.io.roundTripLoop;
+    auto loop = config.io.roundTripLoop.value_or (RoundTripLoop { channel, channel, RoundTripLoop {}.channels });
+    (input ? loop.input : loop.output) = channel;
+    for (const bool side : { false, true })
+        if (fresh || side == input)
+            if (const auto refusal = digitalLoopRefusal (config.io, loop, side); refusal.isNotEmpty())
+            {
+                error = "digital loop: " + refusal;
+                return std::nullopt;
+            }
+    edited.io.roundTripLoop = loop;
+    return edited;
 }
 
 AppConfig withAnalogTestChannel (const AppConfig& config, bool input, int channel)

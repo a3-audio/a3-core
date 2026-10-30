@@ -26,6 +26,9 @@ std::optional<IoMap> parseIoMap (const juce::var& section, const PortNames& port
 // loop end) and returns them, "<port> -> <peer>" / "<port> -> device channel <n>" (1-based) / "<from> -> <to>".
 std::vector<std::string> dropLoopRoutes (IoMap&);
 
+// The engine ports (or direct links, "<from> -> <to>") the map routes to device channel `channel` (1-based) on one side.
+juce::StringArray routesOn (const IoMap&, bool input, int channel);
+
 // Why the analog chain cannot be measured with this map ("" when it can): no pair chosen, a side on the digital
 // loop, or a side some route of the map uses ("output 6 is in use (main_top_1)").
 juce::String analogLoopRefusal (const IoMap&);

@@ -1731,3 +1731,36 @@ TEST_F (Pages, IoChoosesTheAnalogTestPair)
     page.chooseAnalogPair (true, 0);
     EXPECT_FALSE (view.cfg.io.analogLoop.has_value());   // nothing left to keep
 }
+
+// I/O: the digital loop is chosen here too (2026-10-30), beside the analog test cable; a channel in use is refused
+// with its reason and the choice stays as it was.
+TEST_F (Pages, IoChoosesTheDigitalLoop)
+{
+    FakeView view;
+    for (int i = 1; i <= 14; ++i)
+    {
+        view.state.capturePorts.add ("system:capture_" + juce::String (i));
+        view.state.playbackPorts.add ("system:playback_" + juce::String (i));
+    }
+    view.cfg.io.roundTripLoop = a3app::RoundTripLoop { 11, 11, 2 };
+    view.cfg.io.jack["main_top_4"] = { "system:playback_5" };
+    a3app::IoPage page (view);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
+    auto& output = page.digitalOutputBox();
+    auto& input = page.digitalInputBox();
+    EXPECT_TRUE (output.isVisible());
+    EXPECT_TRUE (page.getLocalBounds().contains (output.getBounds()));
+    EXPECT_EQ (output.getNumItems(), 15);   // none + 14
+    EXPECT_TRUE (output.getText().contains ("11-12")) << output.getText();
+    EXPECT_TRUE (input.getText().contains ("11-12")) << input.getText();
+
+    page.chooseDigitalLoop (false, 13);
+    ASSERT_TRUE (view.cfg.io.roundTripLoop.has_value());
+    EXPECT_EQ (view.cfg.io.roundTripLoop->output, 13);
+    page.chooseDigitalLoop (false, 4);   // 4-5: main_top_4 is on 5
+    EXPECT_EQ (view.cfg.io.roundTripLoop->output, 13);
+    EXPECT_TRUE (page.messageLabel().getText().contains ("main_top_4")) << page.messageLabel().getText();
+    page.chooseDigitalLoop (true, 0);
+    EXPECT_FALSE (view.cfg.io.roundTripLoop.has_value());
+    expectPainted (a3apptest::snapshotAt (page, "io-digital-loop", page.getWidth(), page.getHeight()));
+}

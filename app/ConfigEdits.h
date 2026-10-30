@@ -142,6 +142,14 @@ std::vector<int> analogTestChannels (const AppConfig&, const juce::StringArray& 
 // cable's); with neither side nor a share there is no analog loop.
 AppConfig withAnalogTestChannel (const AppConfig&, bool input, int channel);
 
+// The 1-based channels a side offers for the digital loop: every one of the hardware (JACK) or device. One in use is
+// refused by withDigitalLoopChannel, which names who uses it.
+std::vector<int> digitalLoopChannels (const AppConfig&, const juce::StringArray& hardwarePorts, int deviceChannels, bool input);
+// One side of the digital loop (the I/O page): 0 is no loop at all. Without a loop, a channel sets both sides (out N
+// -> in N, as an S/PDIF cable runs); the loop keeps its channel count. Refused, naming the channel and its user, when
+// a channel the loop would reserve carries a route or the analog test pair (the reservation is never taken from them).
+std::optional<AppConfig> withDigitalLoopChannel (const AppConfig&, bool input, int channel, juce::String& error);
+
 // The engine ports other than `except` the map routes to `peer` (a JACK peer, or "#<n>" for device channel n, 0-based).
 std::vector<std::string> portsRoutedTo (const AppConfig&, const std::string& peer, const std::string& except);
 }
