@@ -45,8 +45,8 @@
 
 namespace a3clock
 {
-// The numbers against the receivers (12 ms FIFO, refilled below one 128-frame cycle, ~2.9 ms: about
-// 9 ms of headroom): the loop gives up acquiring at 2 ms and calls a locked loop broken at 1 ms, both
+// The numbers against the receivers (6 ms FIFO for the decks, refilled below one 128-frame cycle,
+// ~2.9 ms: about 3 ms of headroom): the loop gives up acquiring at 2 ms and calls a locked loop broken at 1 ms, both
 // far inside it; the lock is 50 us. The range is +-40 ppm around the free run (the I210 allows 62.5;
 // the daemon narrows it to the device's own limit minus a margin), the measured offset is 14.1 ppm.
 enum class Health

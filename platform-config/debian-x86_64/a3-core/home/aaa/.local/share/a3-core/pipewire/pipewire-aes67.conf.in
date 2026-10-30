@@ -95,7 +95,7 @@ context.modules = [
                             node.virtual = false
                             media.class = "Audio/Source"
                             device.api = aes67
-                            sess.latency.msec = 12
+                            sess.latency.msec = 6
                             # rtp-source's receive buffer is net.mtu bytes (default 1280);
                             # the deck's packet is 1365 B and was cut to 10 of 11 frames.
                             net.mtu = 1500

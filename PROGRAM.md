@@ -321,8 +321,8 @@ drop-in's command line (it beats the conffile, which dpkg keeps old if it was ev
 touches that clock; the deck hosts follow PTP as before and with it the Scarlett.
 
 **The receivers keep their resampler.** With the clock locked their correction is about 1.0 and costs
-nothing; without it, a clock role that is not locked walks a 12 ms FIFO into a resync click about every
-10 minutes. `resample.disable` on the deck receivers is a later, separate step, only after the clock
+nothing; without it, a clock role that is not locked walks the decks' 6 ms FIFO into a resync click within a
+few minutes. `resample.disable` on the deck receivers is a later, separate step, only after the clock
 role has soaked on the rig (zero rtp-source resyncs, lock held for hours), and only for deck hosts with
 a healthy PTP lock (not the Pi). The deck C crackle measured on 2026-10-30 (one corrupted 11-sample
 packet about every 13) is a packetisation fault, not the clock.
@@ -359,7 +359,8 @@ after a boot) is written at the first update, checked against the next 5 s, and 
 more than 1.5 ppm off. These acquisition writes are the only ones not slew-limited; once tracking, the
 frequency moves at most 0.1 ppm/s. Measured in simulation over 200 noise seeds: locked within 10 s cold
 and 7 s warm, the anchored error at most about 35 µs (cold) and 55 µs (warm), no lock lost.
-The numbers against the 12 ms FIFO (about 9 ms of headroom): the range is ±40 ppm around the free run,
+The numbers against the decks' 6 ms FIFO (about 3 ms of headroom; 4 ms played clean on the rig,
+2 ms crackled): the range is ±40 ppm around the free run,
 narrowed to the device's max_adj minus 20 ppm (the I210 allows 62.5); a rate beyond it is a fault
 before any write; never locked and |error| above 2 ms is a fault; locked and |error| above 1 ms is a
 fault; a phase change above 200 µs plus 1 ppm of the gap (at most 1 ms) is a stepped PHC and is

@@ -194,14 +194,16 @@ class WhatTheRigSettledOn(unittest.TestCase):
         self.assertEqual(keys["node.virtual"], "false")
         self.assertEqual(keys["media.class"], "Audio/Source")
         self.assertEqual(keys["device.api"], "aes67")
-        self.assertEqual(keys["sess.latency.msec"], "12")
+        # 2026-10-30 on the rig, decks B and C: 4 ms clean, 2 ms crackled;
+        # 6 ms keeps one step of margin for a whole set.
+        self.assertEqual(keys["sess.latency.msec"], "6")
 
     def test_every_receiver_keeps_its_resampler(self):
         # 2026-10-30, review of the one clock: with the clock role steering
         # the PTP clock to the Scarlett, the deck receivers' correction is
         # about 1.0 and costs nothing. Without the resampler, any clock role
         # that is not locked (no `clock` group yet, a fault, a holdover) walks
-        # the 12 ms FIFO into a resync click every ~10 minutes. Turning it off
+        # the decks' 6 ms FIFO into a resync click within minutes. Turning it off
         # is a later, separate, soak-gated step (PROGRAM.md, "The one clock").
         self.assertNotIn("resample.disable", self.text)
 
