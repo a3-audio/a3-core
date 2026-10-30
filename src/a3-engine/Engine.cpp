@@ -138,6 +138,7 @@ struct Engine::Impl
     bool placeZoneTap (const std::string& name, const std::string& zoneName, const ZoneDecoder&,
                        std::vector<std::pair<int, VuTap*>>&, VuTap&);
     void pushVu (const EngineInputs&, int offset, int n);
+    void pushZoneVu (int n);
 
     const float* analogInput (const EngineInputs&, int index, int offset) const;
     const DeckInputs* deckInputs (const EngineInputs&, int slot) const;
@@ -627,8 +628,11 @@ void Engine::Impl::decode (const EngineInputs& in, const EngineOutputs& out, int
     for (int k = 0; k < busChannels; ++k)
         juce::FloatVectorOperations::add (busMain.getWritePointer (k), busFx.getReadPointer (k), n);
     addStemCues (in, offset, n);
-    main->process (busMain, out.main, offset, n, gates[(size_t) GatedZone::main], gateOpen);
-    booth->process (busMain, out.booth, offset, n, gates[(size_t) GatedZone::booth], gateOpen);
+    main->render (busMain, n);
+    booth->render (busMain, n);
+    pushZoneVu (n);   // after MASTER/BOOTH, before the trim and gate: the desk's master meters
+    main->emit (out.main, offset, n, gates[(size_t) GatedZone::main], gateOpen);
+    booth->emit (out.booth, offset, n, gates[(size_t) GatedZone::booth], gateOpen);
 
     rec->process (busMain, n);   // trims.rec, never gated (Scope 7)
     for (int side = 0; side < sides; ++side)
@@ -739,14 +743,20 @@ bool Engine::Impl::placeZoneTap (const std::string& name, const std::string& zon
     return true;
 }
 
-// Audio thread: each tap reads its point as this chunk leaves it.
+// Audio thread, between the zones' render and emit: main_* and booth_* read the zone after
+// MASTER/BOOTH and before its calibration trim and gate, as a DJ mixer's master meter does.
+void Engine::Impl::pushZoneVu (int n)
+{
+    for (auto [zone, list] : { std::pair { main.get(), &vuMain }, { booth.get(), &vuBooth } })
+        for (const auto& [port, tap] : *list)
+            tap->processMono (zone->port (port), n);
+}
+
+// Audio thread: each other tap reads its point as this chunk leaves it.
 void Engine::Impl::pushVu (const EngineInputs& in, int offset, int n)
 {
     for (const auto& [index, tap] : vuInputs)
         tap->processMono (analogInput (in, index, offset), n);
-    for (auto [zone, list] : { std::pair { main.get(), &vuMain }, { booth.get(), &vuBooth } })
-        for (const auto& [port, tap] : *list)
-            tap->processMono (zone->port (port), n);
     for (int side = 0; side < sides; ++side)
     {
         if (vuRec[(size_t) side] != nullptr)

@@ -103,6 +103,12 @@ void ZoneDecoder::prepare (double sampleRate, int blockSize)
 void ZoneDecoder::process (const juce::AudioBuffer<float>& bus16, const ZoneOutputs& out, int offset, int count,
                            OutputGate& gate, bool open)
 {
+    render (bus16, count);
+    emit (out, offset, count, gate, open);
+}
+
+void ZoneDecoder::render (const juce::AudioBuffer<float>& bus16, int count)
+{
     for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
     {
         if (ch < engine::busChannels)
@@ -112,6 +118,10 @@ void ZoneDecoder::process (const juce::AudioBuffer<float>& bus16, const ZoneOutp
     }
     engine::runNode (*decoder, buffer, count);
     stage.process (buffer.getArrayOfWritePointers(), count, outputs);
+}
+
+void ZoneDecoder::emit (const ZoneOutputs& out, int offset, int count, OutputGate& gate, bool open)
+{
     gate.process (buffer.getArrayOfWritePointers(), outputs, count, open);
 
     const auto route = [&] (float* destination, int channel)

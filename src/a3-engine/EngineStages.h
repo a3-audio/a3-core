@@ -46,6 +46,8 @@ private:
 
 // IEM's SimpleDecoder for one zone, its level stage (MASTER or BOOTH) and its gate:
 //   outputs = route (gate (stage (SimpleDecoder (bus16))))
+// process is render then emit; between the two, port() reads the zone after its
+// level and before the trim and gate -- the desk's master meters (2026-10-30).
 // The stage sits after the decoder so that 0 is exact silence at once: in front
 // of it the crossover filters would ring out. PurestGain is linear, so the
 // place does not change the level. ZoneConfig::fixedGainDb is not applied (R1):
@@ -57,8 +59,10 @@ public:
     void prepare (double sampleRate, int blockSize);
     void setLevel (float control) { stage.set (control); }
     void process (const juce::AudioBuffer<float>& bus16, const ZoneOutputs& out, int offset, int count, OutputGate&, bool open);
+    void render (const juce::AudioBuffer<float>& bus16, int count);                     // decoder and level
+    void emit (const ZoneOutputs& out, int offset, int count, OutputGate&, bool open);  // gate and route
     // The zone's ports in order (sub when the layout has one, then the tops) and what
-    // each carried in the last process call.
+    // each carried in the last call: after render, before the gate; after emit, as they leave.
     bool hasSub() const { return subChannel > 0; }
     int ports() const { return (hasSub() ? 1 : 0) + (int) topChannels.size(); }
     const float* port (int index) const;
