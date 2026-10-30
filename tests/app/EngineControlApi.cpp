@@ -328,6 +328,10 @@ TEST (EngineControlApi, TheClockIsServedInTheStatus)
     EXPECT_TRUE (report->clock.running);
     EXPECT_EQ (report->clock.status.health, a3clock::Health::holdover);
     EXPECT_EQ (report->clock.status.reason, "no measurement: the last frequency is held");
+    // Canvas reads the one word without knowing the clock's states.
+    const auto served = parse (reply.body);
+    EXPECT_EQ (served["clockIndicator"]["word"].toString(), "HOLDOVER");
+    EXPECT_EQ (served["clockIndicator"]["tone"].toString(), "danger");
 
     auto older = parse (reply.body);
     older.getDynamicObject()->removeProperty ("clock");

@@ -26,19 +26,15 @@ juce::String errorText (const a3clock::ClockStatus& s) { return "phase error " +
 
 juce::String stateText (const a3clock::ClockReport& report)
 {
-    if (! report.running)
-        return "NOT RUNNING" + dot + juce::String::fromUTF8 (report.why.c_str());
+    const auto indicator = a3clock::clockIndicator (report);
+    const auto word = juce::String (indicator.word);
     const auto& s = report.status;
-    const auto reason = juce::String::fromUTF8 (s.reason.c_str());
-    switch (s.health)
-    {
-        case Health::locked: return "LOCKED" + dot + errorText (s) + dot + "for " + duration (s.lockedSeconds);
-        case Health::acquiring: return "ACQUIRING" + dot + errorText (s) + dot + reason;
-        case Health::observing: return "OBSERVING" + dot + "measuring only (--observe): nothing steers the PTP clock";
-        case Health::holdover: return "HOLDOVER" + dot + reason;
-        case Health::fault: return "FAULT" + dot + reason;
-    }
-    return "FAULT";
+    if (report.running && s.health == Health::locked)
+        return word + dot + errorText (s) + dot + "for " + duration (s.lockedSeconds)
+               + (s.portState == "MASTER" ? juce::String() : dot + "ptp4l's port state not readable: the PTP side is not checked");
+    if (report.running && s.health == Health::acquiring)
+        return word + dot + errorText (s) + dot + juce::String::fromUTF8 (indicator.detail.c_str());
+    return word + dot + juce::String::fromUTF8 (indicator.detail.c_str());
 }
 
 juce::String rateText (const a3clock::ClockReport& report)
@@ -49,7 +45,8 @@ juce::String rateText (const a3clock::ClockReport& report)
     const auto now = s.ratePpm ? signedFixed (*s.ratePpm, 3) + " ppm" : juce::String ("not measured yet");
     if (s.health == Health::observing)
         return "PTP clock against the Scarlett " + now + " (not steered)";
-    return "PTP clock steered " + signedFixed (s.frequencyPpm, 2) + " ppm" + dot + "against the Scarlett now " + now;
+    return "PTP clock " + juce::String (s.device) + " (" + juce::String (s.interface) + ") steered " + signedFixed (s.frequencyPpm, 2) + " ppm"
+           + dot + "against the Scarlett now " + now;
 }
 
 juce::String countersText (const a3clock::ClockReport& report)
@@ -62,19 +59,25 @@ juce::String countersText (const a3clock::ClockReport& report)
            + "Scarlett breaks " + juce::String (s.scarlettBreaks);
 }
 
-juce::Colour warningOf (const a3clock::ClockReport& report)
+}
+
+juce::Colour toneColour (a3clock::ClockIndicator::Tone tone)
 {
-    if (! report.running)
-        return palette::danger;
-    switch (report.status.health)
+    switch (tone)
     {
-        case Health::locked: return juce::Colours::transparentBlack;
-        case Health::acquiring:
-        case Health::observing: return palette::caution;
-        case Health::holdover:
-        case Health::fault: return palette::danger;
+        case a3clock::ClockIndicator::Tone::ok: return palette::running;
+        case a3clock::ClockIndicator::Tone::caution: return palette::caution;
+        case a3clock::ClockIndicator::Tone::danger: return palette::danger;
     }
     return palette::danger;
+}
+
+namespace
+{
+juce::Colour warningOf (const a3clock::ClockReport& report)
+{
+    const auto tone = a3clock::clockIndicator (report).tone;
+    return tone == a3clock::ClockIndicator::Tone::ok ? juce::Colours::transparentBlack : toneColour (tone);
 }
 
 void fitText (juce::Label& label, juce::Rectangle<int> line, float share)

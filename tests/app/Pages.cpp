@@ -99,6 +99,8 @@ a3clock::ClockReport clockReport (a3clock::Health health, const char* reason)
     report.status.health = health;
     report.status.reason = reason;
     report.status.device = "/dev/ptp0";
+    report.status.interface = "enp5s0";
+    report.status.portState = "MASTER";
     report.status.frequencyPpm = 14.1023;
     report.status.errorNs = 2'345.0;
     report.status.ratePpm = 0.012;
@@ -137,6 +139,8 @@ TEST_F (Pages, AudioShowsTheClockInEveryState)
         { "locked", clockReport (a3clock::Health::locked, "the PTP clock follows the Scarlett"), "LOCKED", juce::Colours::transparentBlack },
         { "acquiring", clockReport (a3clock::Health::acquiring, "anchored: steering towards the lock"), "ACQUIRING", a3app::palette::caution },
         { "observing", clockReport (a3clock::Health::observing, "observing"), "OBSERVING", a3app::palette::caution },
+        { "unverified", [] { auto r = clockReport (a3clock::Health::locked, ""); r.status.portState.clear(); return r; }(), "UNVERIFIED",
+          a3app::palette::caution },
         { "holdover", clockReport (a3clock::Health::holdover, "no measurement: the last frequency is held"), "HOLDOVER", a3app::palette::danger },
         { "fault", clockReport (a3clock::Health::fault, "the PTP clock refused a frequency write"), "FAULT", a3app::palette::danger },
         { "not-running", absent, "NOT RUNNING", a3app::palette::danger },
@@ -163,6 +167,50 @@ TEST_F (Pages, AudioShowsTheClockInEveryState)
         else
             EXPECT_GT (pixelsOf (image, c.warning), 200) << c.name;   // the frame, not only text
     }
+}
+
+// S4: the clock keeps its rows whatever else the page shows: the device choosers, a landscape window.
+TEST_F (Pages, TheClockKeepsItsRowsInEveryLayout)
+{
+    struct Layout
+    {
+        const char* name;
+        bool device;
+        int width, height;
+    };
+    for (const auto& layout : { Layout { "portrait-jack", false, 768, 1024 }, Layout { "portrait-device", true, 768, 1024 },
+                                Layout { "landscape-device", true, 1280, 600 }, Layout { "small-device", true, 900, 480 } })
+    {
+        FakeView view;
+        view.clockReport = clockReport (a3clock::Health::holdover, "no measurement: the last frequency is held");
+        if (layout.device)
+            view.runDevice();
+        a3app::AudioPage page (view, manager);
+        page.setSize (layout.width, layout.height);
+        page.refresh();
+        const auto& clock = page.clockPanel();
+        EXPECT_GE (clock.getHeight(), layout.height / 5) << layout.name;
+        EXPECT_GT (clock.stateLabel().getHeight(), 0) << layout.name;
+        EXPECT_TRUE (page.getLocalBounds().contains (clock.getBounds())) << layout.name;
+        expectPainted (a3apptest::snapshotAt (page, juce::String ("audio-clock-") + layout.name, layout.width, layout.height));
+    }
+}
+
+// S4: the window's footer carries the clock's one word on every page, coloured as the panel's frame.
+TEST_F (Pages, TheFooterShowsTheClockOnEveryPage)
+{
+    FakeView view;
+    view.clockReport = clockReport (a3clock::Health::locked, "");
+    a3app::SaveBar bar (view);
+    bar.setSize (900, 60);
+    bar.refresh();
+    EXPECT_TRUE (bar.clockLabel().getText().contains ("LOCKED")) << bar.clockLabel().getText();
+    EXPECT_EQ (bar.clockLabel().findColour (juce::Label::textColourId), a3app::palette::running);
+    view.clockReport.status.health = a3clock::Health::holdover;
+    bar.refresh();
+    EXPECT_TRUE (bar.clockLabel().getText().contains ("HOLDOVER"));
+    EXPECT_EQ (bar.clockLabel().findColour (juce::Label::textColourId), a3app::palette::danger);
+    EXPECT_GT (bar.clockLabel().getWidth(), 0);
 }
 
 TEST_F (Pages, TheClockMasterHasOneChoiceAndSaysWhy)

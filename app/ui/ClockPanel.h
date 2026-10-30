@@ -7,6 +7,9 @@
 
 namespace a3app
 {
+// The colour of a clock indicator's tone (the panel's frame, the footer's word).
+juce::Colour toneColour (a3clock::ClockIndicator::Tone);
+
 // The AUDIO page's CLOCK section: the one clock of the A³ system (src/a3-clock/ClockSteering.h). The
 // clock master (one choice in this version, and why), the lock state with its phase error, the
 // frequency the PTP clock is steered by and how far it runs from the Scarlett now, and the counters

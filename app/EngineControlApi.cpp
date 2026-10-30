@@ -106,7 +106,8 @@ juce::var toJson (const EngineStatusReport& report)
                      { "droppedLinks", dropped },
                      { "ignoredKeys", ignored },
                      { "truthNote", report.truthNote },
-                     { "clock", a3clock::toJson (report.clock) } });
+                     { "clock", a3clock::toJson (report.clock) },
+                     { "clockIndicator", a3clock::toJson (a3clock::clockIndicator (report.clock)) } });
 }
 
 std::optional<EngineStatusReport> statusFromJson (const juce::var& v)

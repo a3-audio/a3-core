@@ -22,12 +22,13 @@ public:
     void refresh();
     const juce::Label& pendingLabel() const { return pending; }
     const juce::Label& messageLabel() const { return message; }
+    const juce::Label& clockLabel() const { return clock; }   // the clock's one word, on every page
     void resized() override;
     void paint (juce::Graphics&) override;
 
 private:
     HostView& view;
-    juce::Label pending, message;
+    juce::Label pending, message, clock;
     juce::TextButton saveButton { "Save" };
 };
 }

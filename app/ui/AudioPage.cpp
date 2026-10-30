@@ -196,17 +196,21 @@ void AudioPage::layoutRoundTrip (juce::Rectangle<int>& area, int row)
     roundTrip.setBounds (line);
 }
 
-// The clock below the rest, in what is left of the page.
-void AudioPage::layoutClock (juce::Rectangle<int>& area, int row)
+// The clock at the bottom, reserved before anything else: whatever the page shows, the clock keeps
+// at least a quarter of it (the rows above shrink first).
+void AudioPage::layoutClock (juce::Rectangle<int>& area, int)
 {
-    area.removeFromTop (row / 2);
     clock.setBounds (area);
 }
 
 void AudioPage::resized()
 {
-    auto area = getLocalBounds().reduced (getWidth() / 40);
-    const int row = juce::jmax (24, getHeight() / 14);
+    auto page = getLocalBounds().reduced (getWidth() / 40);
+    auto clockArea = page.removeFromBottom (juce::jmax (page.getHeight() / 4, juce::jmin (page.getHeight() / 2, 6 * 24)));
+    page.removeFromBottom (page.getHeight() / 40);
+    layoutClock (clockArea, 0);
+    auto area = page;
+    const int row = juce::jmax (12, juce::jmin (getHeight() / 14, page.getHeight() / (deviceChoosers ? 11 : 8)));
     title.setBounds (area.removeFromTop (row));
     auto choice = area.removeFromTop (row);
     backendCaption.setBounds (choice.removeFromLeft (choice.getWidth() / 4));
@@ -232,7 +236,6 @@ void AudioPage::resized()
         rateSource.setBounds (area.removeFromTop (row));
         bitDepth.setBounds (area.removeFromTop (row));
         layoutRoundTrip (area, row);
-        layoutClock (area, row);
         return;
     }
     rate.setBounds (area.removeFromTop (row));
@@ -240,6 +243,5 @@ void AudioPage::resized()
     rateSource.setBounds (area.removeFromTop (row));
     bitDepth.setBounds (area.removeFromTop (row));
     layoutRoundTrip (area, row);
-    layoutClock (area, row);
 }
 }
