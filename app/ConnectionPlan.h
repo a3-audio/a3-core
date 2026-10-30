@@ -18,6 +18,12 @@ juce::Result refuseBesideReaper (const std::vector<std::string>& clients, bool c
 // before M10. Applied at link time only: the user's file is never rewritten. No host name, no link.
 void addRecToAes67Sender (a3::links::LinkMap&, const std::string& hostname);
 
+// rec_L -> beat-analyzer:bpm_1, the beat clock's input, as the patchbay wired it. Built in like the sender link
+// (2026-10-30): the REC row of the I/O map stays free for an analog recorder, and the analyzer is always linked
+// while its port exists. An old file's REC entry naming the analyzer is dropped at load (ConfigFile.h).
+inline constexpr const char* beatAnalyzerInput = "beat-analyzer:bpm_1";
+void addBeatAnalyzerLink (a3::links::LinkMap&);
+
 // The loop's own ports to the loop's channels: roundtrip_out -> system:playback_<output>, system:capture_<input>
 // -> roundtrip_in (the device's JACK names; RoundTripLoop.h), and likewise analogtest_out/in to a chosen analog test
 // pair (both sides chosen). Nothing without a loop. Built in like the sender link above: never written to the file.

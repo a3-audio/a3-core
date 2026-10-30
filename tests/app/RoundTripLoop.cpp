@@ -171,20 +171,29 @@ TEST (RoundTripLoop, TheRouteChoicesLeaveTheLoopOut)
     juce::StringArray playback;
     for (int channel = 1; channel <= 14; ++channel)
         playback.add ("system:playback_" + juce::String (channel));
-    const auto jack = a3app::routeChoices (config, playback, 0, false);
+    const auto jack = a3app::routeChoices (config, playback, 0, false, "Scarlett 18i20 USB");
     ASSERT_EQ (jack.size(), 12u);
     EXPECT_EQ (jack[9].peer, "system:playback_10");
     EXPECT_EQ (jack[10].peer, "system:playback_13");
-    EXPECT_EQ (jack[10].label, "system:playback_13");
+    EXPECT_EQ (jack[10].label, "Scarlett 18i20 USB out 13") << "the device's port as the user means it, not system:*";
 
     config.backend.type = a3app::BackendSettings::Type::device;
-    const auto device = a3app::routeChoices (config, {}, 14, true);
+    const auto device = a3app::routeChoices (config, {}, 14, true, "Scarlett 18i20 USB");
     ASSERT_EQ (device.size(), 12u);
     EXPECT_EQ (device[10].channel, std::optional<int> (12));   // 0-based: device channel 13
     EXPECT_EQ (device[10].label, "channel 13");
 
     config.io.roundTripLoop.reset();
-    EXPECT_EQ (a3app::routeChoices (config, {}, 14, true).size(), 14u);
+    EXPECT_EQ (a3app::routeChoices (config, {}, 14, true, {}).size(), 14u);
+}
+
+// A peer's name on the I/O page: a device channel by the device ("Scarlett 18i20 USB in 3"), anything else as it is.
+TEST (RoundTripLoop, APeerIsNamedByTheDevice)
+{
+    EXPECT_EQ (a3app::peerLabel ("system:capture_3", "Scarlett 18i20 USB"), "Scarlett 18i20 USB in 3");
+    EXPECT_EQ (a3app::peerLabel ("system:playback_12", "Scarlett 18i20 USB"), "Scarlett 18i20 USB out 12");
+    EXPECT_EQ (a3app::peerLabel ("system:playback_1", ""), "Device out 1");
+    EXPECT_EQ (a3app::peerLabel ("AES67 deck B:receive_MAIN1", "Scarlett 18i20 USB"), "AES67 deck B:receive_MAIN1");
 }
 
 TEST (RoundTripLoop, TheIoPageNoticeNamesTheLoopAndWhatWasUnrouted)

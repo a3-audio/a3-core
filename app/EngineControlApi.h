@@ -52,7 +52,7 @@ std::optional<EngineMetersReport> metersFromJson (const juce::var&);
 // POST /api/engine/roundtrip: measure the round trip over the loop now (the result comes with the status).
 // POST /api/engine/roundtrip/analog: measure the analog chain (both loops, one run) over the chosen test cable.
 
-// POST /api/engine/timing: {"block": one of pipewireBlocks(), "periods": one of pipewirePeriods()}.
+// POST /api/engine/timing: {"block": one of pipewireBlocks()}.
 std::optional<AudioTiming> timingFromJson (const juce::var&, juce::String& why);
 
 // POST /api/engine/noise: {"zone": "main"|"booth", "channel": 1..64} or {"zone", "azimuth", "elevation"}.

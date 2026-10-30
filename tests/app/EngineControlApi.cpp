@@ -29,6 +29,7 @@ TEST (EngineControlApi, StatusAsTheHostViewSaysIt)
     rig.fake.state.capturePorts = { "system:capture_1", "system:capture_2" };
     rig.fake.state.playbackPorts = { "system:playback_1" };
     rig.fake.state.deviceInputs = 2;
+    rig.fake.state.deviceName = "Scarlett 18i20 USB";
     rig.fake.state.deviceOutputs = 6;
     rig.fake.state.missingPeers = { "system:capture_9" };
     rig.fake.heard = true;
@@ -52,6 +53,7 @@ TEST (EngineControlApi, StatusAsTheHostViewSaysIt)
     EXPECT_EQ (report->backend.capturePorts, (juce::StringArray { "system:capture_1", "system:capture_2" }));   // the I/O page's choices
     EXPECT_EQ (report->backend.playbackPorts, juce::StringArray { "system:playback_1" });
     EXPECT_EQ (report->backend.deviceInputs, 2);
+    EXPECT_EQ (report->backend.deviceName, "Scarlett 18i20 USB");
     EXPECT_EQ (report->backend.deviceOutputs, 6);
     EXPECT_TRUE (report->backend.connecting);
     ASSERT_EQ (report->backend.missingPeers.size(), 1u);
@@ -341,16 +343,18 @@ TEST (EngineControlApi, TheClockIsServedInTheStatus)
     EXPECT_NE (fromOlder->clock.why.find ("does not report the clock"), std::string::npos);
 }
 
-// POST /api/engine/timing takes only the AUDIO page's choices.
+// POST /api/engine/timing takes only the AUDIO page's choices. A "periods" (an older window) is ignored.
 TEST (EngineControlApi, TheTimingTakesOnlyThePagesChoices)
 {
     juce::String why;
-    const auto chosen = a3app::timingFromJson (parse ("{\"block\":64,\"periods\":2}"), why);
+    const auto chosen = a3app::timingFromJson (parse ("{\"block\":64}"), why);
     ASSERT_TRUE (chosen) << why;
-    EXPECT_EQ (*chosen, (a3app::AudioTiming { 64, 2 }));
+    EXPECT_EQ (*chosen, (a3app::AudioTiming { 64 }));
+    const auto older = a3app::timingFromJson (parse ("{\"block\":256,\"periods\":2}"), why);
+    ASSERT_TRUE (older) << why;
+    EXPECT_EQ (*older, (a3app::AudioTiming { 256 }));
     RemoteRig rig;
-    for (const char* body : { "{\"block\":48,\"periods\":3}", "{\"block\":64,\"periods\":4}", "{\"block\":64}",
-                              "{\"block\":\"64\",\"periods\":3}", "[]" })
+    for (const char* body : { "{\"block\":48}", "{\"block\":2048}", "{\"periods\":3}", "{\"block\":\"64\"}", "[]" })
     {
         EXPECT_FALSE (a3app::timingFromJson (parse (body), why)) << body;
         EXPECT_EQ (httpclient::post (rig.server->port(), "/api/engine/timing", body).status, 400) << body;

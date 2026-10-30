@@ -12,7 +12,6 @@ namespace a3app
 namespace
 {
 constexpr int minBlock = 32, maxBlock = 2048;
-constexpr int minPeriods = 2, maxPeriods = 3;
 
 using a3::jsonparse::Refusal;
 using a3::jsonparse::refuse;
@@ -38,6 +37,7 @@ double numberProperty (const juce::DynamicObject& object, const char* key)
 BackendSettings parseBackend (const juce::var& section)
 {
     const auto& object = objectOf (section, "backend");
+    // "periods": written by the engine until 2026-10-30, accepted and ignored.
     rejectUnknownKeys (object, { "type", "deviceType", "inputDevice", "outputDevice", "sampleRate", "blockSize", "periods" }, "backend");
     BackendSettings backend;
     if (object.hasProperty ("type"))
@@ -68,13 +68,6 @@ BackendSettings parseBackend (const juce::var& section)
         if (size != std::floor (size) || size < minBlock || size > maxBlock)
             refuse ("backend.blockSize must be a whole number within 32..2048");
         backend.blockSize = (int) size;
-    }
-    if (object.hasProperty ("periods"))
-    {
-        const double periods = numberProperty (object, "periods");
-        if (periods != std::floor (periods) || periods < minPeriods || periods > maxPeriods)
-            refuse ("backend.periods must be 2 or 3");
-        backend.periods = (int) periods;
     }
     return backend;
 }
@@ -171,6 +164,23 @@ void parseSpatial (const juce::var& spatial, const juce::File& base, AppConfig& 
     config.boothSpatialDirectory = booth == config.spatialDirectory ? juce::File() : booth;
 }
 
+// Until 2026-10-30 the REC row named the beat-analyzer; it is a built-in link now (addBeatAnalyzerLink).
+void dropBeatAnalyzerFromRec (IoMap& io)
+{
+    for (const char* port : { "rec_L", "rec_R" })
+    {
+        const auto found = io.jack.find (port);
+        if (found == io.jack.end())
+            continue;
+        auto& peers = found->second;
+        peers.erase (std::remove_if (peers.begin(), peers.end(),
+                                     [] (const std::string& peer) { return peer.rfind ("beat-analyzer:", 0) == 0; }),
+                     peers.end());
+        if (peers.empty())
+            io.jack.erase (found);
+    }
+}
+
 AppConfig parseRoot (const juce::var& root, const juce::File& base, int truthDecks)
 {
     const auto& object = objectOf (root, "the file");
@@ -203,6 +213,7 @@ AppConfig parseRoot (const juce::var& root, const juce::File& base, int truthDec
     else
         refuse (error);
     config.loopDropped = dropLoopRoutes (config.io);
+    dropBeatAnalyzerFromRec (config.io);
     return config;
 }
 
@@ -277,7 +288,6 @@ juce::var toJson (const AppConfig& config)
     backend->setProperty ("outputDevice", config.backend.outputDevice);
     backend->setProperty ("sampleRate", config.backend.sampleRate);
     backend->setProperty ("blockSize", config.backend.blockSize);
-    backend->setProperty ("periods", config.backend.periods);
 
     auto* root = new juce::DynamicObject();
     root->setProperty ("engine", a3::toJson (config.engine));
@@ -354,7 +364,7 @@ juce::Result storeConverterShare (const juce::File& from, const juce::File& to, 
     });
 }
 
-juce::Result storeBackendTiming (const juce::File& from, const juce::File& to, int blockSize, int periods, int truthDecks)
+juce::Result storeBackendTiming (const juce::File& from, const juce::File& to, int blockSize, int truthDecks)
 {
     return storeEdited (from, to, truthDecks, [&] (juce::DynamicObject& root)
     {
@@ -362,7 +372,7 @@ juce::Result storeBackendTiming (const juce::File& from, const juce::File& to, i
             root.setProperty ("backend", juce::var (new juce::DynamicObject()));
         auto* backend = root.getProperty ("backend").getDynamicObject();
         backend->setProperty ("blockSize", blockSize);
-        backend->setProperty ("periods", periods);
+        backend->removeProperty ("periods");
         return juce::Result::ok();
     });
 }

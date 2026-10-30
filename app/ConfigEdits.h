@@ -126,7 +126,12 @@ struct RouteChoice
 };
 // The I/O page's choices for an input (capture side) or an output: JACK: `hardwarePorts` (the backend's physical
 // capture or playback ports); a device: its channels 1..deviceChannels. The round-trip loop's are left out.
-std::vector<RouteChoice> routeChoices (const AppConfig&, const juce::StringArray& hardwarePorts, int deviceChannels, bool input);
+// A JACK port's label is peerLabel's. `deviceName`: BackendStatus::deviceName.
+std::vector<RouteChoice> routeChoices (const AppConfig&, const juce::StringArray& hardwarePorts, int deviceChannels, bool input,
+                                       const juce::String& deviceName);
+// How the I/O page names a JACK peer: a device channel by the device ("Scarlett 18i20 USB out 1"; "Device" when the
+// name is empty), anything else by its port name.
+juce::String peerLabel (const std::string& port, const juce::String& deviceName);
 // Why a route the editor was given cannot be taken ("" when it can): a peer, or a device channel (0-based) of
 // an input or an output, that is the round-trip loop's.
 juce::String loopRefusal (const AppConfig&, const std::vector<std::string>& peers);

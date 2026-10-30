@@ -10,7 +10,8 @@
 
 namespace a3::links
 {
-// Makes the links of a LinkMap in a JACK graph and removes only the ones it made itself.
+// Makes the links of a LinkMap in a JACK graph and removes the ones it no longer wants: those it made, and any
+// other on its own ports unless a client that links itself owns it (planConnections, linksItself).
 // Message thread only: every call here is a JACK graph call.
 class JackLinker
 {

@@ -5,6 +5,7 @@
 #include "ConnectionPlan.h"
 #include "IoMap.h"
 #include "EnginePorts.h"
+#include "SystemDevice.h"
 #include "a3-links/JackLinker.h"
 #include <atomic>
 #include <memory>
@@ -52,6 +53,7 @@ private:
     bool registerPorts (const PortNames&);
     bool registerLoopPorts (jack_port_t*& in, jack_port_t*& out, const std::string& inName, const std::string& outName);
     void rebuildOnNewQuantumOrRate();
+    void applyLinks();   // the map, minus the device while "system" is not the configured one (SystemDevice.h)
 
     const bool connecting;
     const std::string hostname;
@@ -80,6 +82,9 @@ private:
 
     std::unique_ptr<a3::links::JackLinker> linker;   // exists while the client is open
     bool linksPlanned = false;
+    SpawnRunner runner;                              // pw-metadata, once a link pass
+    SystemDeviceWatch deviceWatch { runner };
+    std::vector<std::string> absentDevicePeers;      // system:* peers left out because the device is not there
     double lastConnectSeconds = -1.0e9;
 };
 }

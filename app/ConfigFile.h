@@ -19,9 +19,7 @@ struct BackendSettings
     double sampleRate = 44100;
     // JACK (PipeWire): the forced graph quantum, applied live (AudioTiming.h); a device: its buffer size.
     int blockSize = 128;
-    // JACK (PipeWire) only: the sound card's ALSA periods, through the engine's WirePlumber drop-in. 3 is
-    // PipeWire's own choice on the rig, and no drop-in.
-    int periods = 3;
+    // No periods (2026-10-30, AudioTiming.h): an older file's "periods" loads and is ignored; a save leaves it out.
 };
 
 struct AppConfig
@@ -53,6 +51,7 @@ constexpr float minTrimDb = -90.0f, maxTrimDb = 6.0f;
 // deck ports (EnginePorts.h) are dropped, not refused, and listed in droppedLinks. truthDecks is the
 // deck count of a file that names none (EngineTruth::decks). Every slot whose ports the file links
 // nowhere links to its local StemDeck (A9); parseAppConfig does not fill (A10: a posted body is kept).
+// Both drop a rec_L/rec_R peer naming beat-analyzer (a built-in link since 2026-10-30, ConnectionPlan.h).
 // The directory a zone's decoder, parameters and zone files come from.
 juce::File zoneSpatialDirectory (const AppConfig&, a3::SpeakerZone);
 // The spatial config the engine runs on: MAIN's variant, with the booth's zone from BOOTH's.
@@ -72,10 +71,10 @@ juce::Result saveAppConfig (const AppConfig&, const juce::File&);
 // replace; `from` may be the package's file, `to` the user's). Refused, leaving `to` as it was, when `from`
 // names no io.analogLoop or the result would not load (truthDecks as for loadAppConfig).
 juce::Result storeConverterShare (const juce::File& from, const juce::File& to, const ConverterShare& share, int truthDecks);
-// Writes `to` as `from` with backend.blockSize and backend.periods set and nothing else changed, as
-// storeConverterShare (the AUDIO page's block and periods are kept at once, no Save). Refused, leaving `to` as it
+// Writes `to` as `from` with backend.blockSize set, an old backend.periods removed and nothing else changed, as
+// storeConverterShare (the AUDIO page's block is kept at once, no Save). Refused, leaving `to` as it
 // was, when the result would not load.
-juce::Result storeBackendTiming (const juce::File& from, const juce::File& to, int blockSize, int periods, int truthDecks);
+juce::Result storeBackendTiming (const juce::File& from, const juce::File& to, int blockSize, int truthDecks);
 inline const juce::File packageConfigFile { "/usr/share/a3-engine/engine.json" };
 
 // The spatial directories the ZONES page may offer, in order: the user's (<configDir>/engine/spatial), the

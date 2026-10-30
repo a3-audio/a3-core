@@ -85,10 +85,7 @@ juce::Result JackBackend::open (EngineHost& engineHost, const AppConfig& config)
         return juce::Result::fail ("cannot activate the JACK client");
     }
     if (connecting)
-    {
-        linker->apply (map);
-        linksPlanned = true;
-    }
+        applyLinks();
     return juce::Result::ok();
 }
 
@@ -102,6 +99,7 @@ void JackBackend::close()
         jack_deactivate (client);
     }
     linker.reset();
+    absentDevicePeers.clear();
     linksPlanned = false;
     jack_client_close (client);
     client = nullptr;
@@ -143,6 +141,9 @@ BackendStatus JackBackend::status() const
     if (linker != nullptr)
         for (const auto& peer : linker->missingPeers())
             s.missingPeers.push_back (juce::String (peer));
+    for (const auto& peer : absentDevicePeers)
+        s.missingPeers.push_back (juce::String (peer));
+    s.deviceName = deviceNameOf (deviceWatch.nodes());
     if (client == nullptr || serverGone.load())
         return s;
 
@@ -184,7 +185,12 @@ void JackBackend::service (double nowSeconds)
     if (! linkPlanDue (connecting, portsCameOrWent, nowSeconds, lastConnectSeconds))
         return;
     lastConnectSeconds = nowSeconds;
-    linker->apply (map);
+    applyLinks();
+}
+
+void JackBackend::applyLinks()
+{
+    linker->apply (withoutAbsentDevice (map, deviceWatch.read(), absentDevicePeers));
     linksPlanned = true;
 }
 

@@ -24,10 +24,18 @@ struct ConnectionPlan
 // a peer feeds an input, an output feeds a peer.
 bool isInputPort (const std::string& ownPort, const std::vector<std::string>& ownInputs);
 
+// Whether a port belongs to a client that makes its own links to the engine: StemDeck-<X> (it links its recorder
+// from a3-engine:rec_L/R itself) and beat-analyzer. A link between one of the engine's ports and such a port is
+// that client's; the engine never removes it, planned or not.
+bool linksItself (const std::string& port);
+
 // What the map wants (spec D9): every jack entry as a link between our port ("client:port") and
 // its peer, in the port's direction, plus every direct link.
-// add: a wanted link whose ports both exist and that is not live. remove: a link we made that is
-// live and no longer wanted. A link we did not make is never removed, however it touches our ports.
+// add: a wanted link whose ports both exist and that is not live. remove: a link we made that is live and no
+// longer wanted, and every live link on one of our own ports that is not wanted, whoever made it, unless its other
+// end linksItself(). The engine owns its ports' links to the device, AES67 and anything else it plans: when PipeWire
+// pointed system:* elsewhere for a moment (2026-10-30), the links made then must not outlive the moment. Links
+// between two ports that are not ours are removed only when we made them (direct links).
 ConnectionPlan planConnections (const LinkMap& wanted, const std::vector<Link>& live, const std::vector<Link>& madeByUs,
                                 const std::vector<std::string>& existingPorts, const std::vector<std::string>& ownInputs,
                                 const std::string& client = "a3-engine");

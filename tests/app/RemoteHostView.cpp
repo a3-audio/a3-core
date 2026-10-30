@@ -261,29 +261,27 @@ TEST (RemoteHostView, SaysTheClock)
     EXPECT_EQ (rig.remote->clock().why, "the clock role is not running (a3-clock.service)");
 }
 
-// The AUDIO page's block and periods: the choice reaches the engine, and the engine's report (what is set, what
-// Revert goes back to, a WirePlumber restart under way) comes back with the status.
+// The AUDIO page's block: the choice reaches the engine, and the engine's report (what is set, what Revert goes back
+// to) comes back with the status.
 TEST (RemoteHostView, TheTimingReachesTheEngineAndItsReportComesBack)
 {
     RemoteRig rig;
-    rig.remote->applyTiming ({ 64, 2 });
+    rig.remote->applyTiming ({ 64 });
     rig.sync();
     ASSERT_EQ (rig.fake.timings.size(), 1u);
-    EXPECT_EQ (rig.fake.timings[0], (a3app::AudioTiming { 64, 2 }));
+    EXPECT_EQ (rig.fake.timings[0], (a3app::AudioTiming { 64 }));
 
     rig.fake.state.timing.available = true;
-    rig.fake.state.timing.applied = { 64, 2 };
-    rig.fake.state.timing.previous = a3app::AudioTiming { 128, 3 };
-    rig.fake.state.timing.restarting = true;
+    rig.fake.state.timing.applied = { 64 };
+    rig.fake.state.timing.previous = a3app::AudioTiming { 128 };
     rig.fake.state.timing.message = "set: Block 64";
     rig.tick();
     rig.remote->refreshNow();
     const auto timing = rig.remote->status().timing;
     EXPECT_TRUE (timing.available);
-    EXPECT_EQ (timing.applied, (a3app::AudioTiming { 64, 2 }));
+    EXPECT_EQ (timing.applied, (a3app::AudioTiming { 64 }));
     ASSERT_TRUE (timing.previous.has_value());
-    EXPECT_EQ (*timing.previous, (a3app::AudioTiming { 128, 3 }));
-    EXPECT_TRUE (timing.restarting);
+    EXPECT_EQ (*timing.previous, (a3app::AudioTiming { 128 }));
     EXPECT_EQ (timing.message, "set: Block 64");
 
     rig.fake.state.timing = {};

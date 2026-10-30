@@ -30,9 +30,11 @@ struct BackendStatus
     // input and output channel counts.
     juce::StringArray capturePorts, playbackPorts;
     int deviceInputs = 0, deviceOutputs = 0;
+    // JACK: the configured device's name for the I/O page ("Scarlett 18i20 USB", SystemDevice.h); empty elsewhere.
+    juce::String deviceName;
     // The round trip measured over the I/O map's digital loop (RoundTripProbe.h).
     RoundTripReport roundTripMeasured;
-    // The engine's block and periods on PipeWire (TimingControl.h); not available on a device.
+    // The engine's block on PipeWire (TimingControl.h); not available on a device.
     TimingReport timing;
 };
 
