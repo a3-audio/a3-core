@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "LinksOverview.h"
+#include "RoundTripLoop.h"
 
 #include <algorithm>
 #include <cctype>
@@ -175,6 +176,10 @@ std::string categoryOf (const Connection& link, const a3::EngineConfig& engine)
 {
     const auto& own = link.enginePort();
     const auto& other = link.otherPort();
+    if (own.base == loopOutputPort || own.base == loopInputPort)
+        return "round-trip loop";
+    if (own.base == analogOutputPort || own.base == analogInputPort)
+        return "analog test cable";
     if (own.base == "analog")
     {
         const int pair = (own.number + 1) / 2;

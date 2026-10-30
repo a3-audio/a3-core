@@ -192,3 +192,14 @@ TEST (LinksOverview, NothingConnectedSaysSo)
     const auto text = show (graph);
     EXPECT_NE (text.find ("No connections"), std::string::npos) << text;
 }
+
+TEST (LinksOverview, TheRoundTripLoopsPortsSayWhatTheyAreFor)
+{
+    Graph graph;
+    graph.link ("a3-engine:roundtrip_out", "system:playback_11");
+    graph.link ("system:capture_11", "a3-engine:roundtrip_in");
+    graph.link ("a3-engine:analogtest_out", "system:playback_6");
+    const auto text = show (graph);
+    EXPECT_NE (text.find ("(round-trip loop)"), std::string::npos) << text;
+    EXPECT_NE (text.find ("(analog test cable)"), std::string::npos) << text;
+}
