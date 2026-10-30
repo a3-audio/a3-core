@@ -46,7 +46,7 @@ void JackLinker::apply (const LinkMap& map)
     }
     for (const auto& link : plan.remove)
         if (jack_disconnect (client, link.from.c_str(), link.to.c_str()) == 0)
-            madeByUs.erase (std::find (madeByUs.begin(), madeByUs.end(), link));
+            madeByUs.erase (std::remove (madeByUs.begin(), madeByUs.end(), link), madeByUs.end());   // a foreign one is not in it
     missing = plan.missingPeers;
 }
 

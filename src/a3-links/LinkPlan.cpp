@@ -35,6 +35,12 @@ std::vector<Link> wantedLinks (const LinkMap& wanted, const std::vector<std::str
 }
 }
 
+bool linksItself (const std::string& port)
+{
+    const auto client = port.substr (0, port.find (':'));
+    return client.rfind ("StemDeck", 0) == 0 || client == "beat-analyzer";
+}
+
 bool isInputPort (const std::string& ownPort, const std::vector<std::string>& ownInputs)
 {
     return std::find (ownInputs.begin(), ownInputs.end(), ownPort) != ownInputs.end();
@@ -61,6 +67,15 @@ ConnectionPlan planConnections (const LinkMap& wanted, const std::vector<Link>& 
     for (const auto& link : madeByUs)
         if (contains (live, link) && ! contains (links, link) && ! contains (plan.remove, link))
             plan.remove.push_back (link);
+    const auto ownPrefix = client + ":";
+    const auto ours = [&] (const std::string& port) { return port.rfind (ownPrefix, 0) == 0; };
+    for (const auto& link : live)
+    {
+        const bool onOurPort = ours (link.from) || ours (link.to);
+        const bool theirs = linksItself (link.from) || linksItself (link.to);
+        if (onOurPort && ! theirs && ! contains (links, link) && ! contains (plan.remove, link))
+            plan.remove.push_back (link);
+    }
     return plan;
 }
 

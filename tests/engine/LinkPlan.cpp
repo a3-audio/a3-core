@@ -69,24 +69,41 @@ TEST (LinkPlan, MakesWhatTheMapSays)
     EXPECT_EQ (other.add, (Links { { "system:capture_1", "eng:analog_1" } }));
 }
 
-TEST (LinkPlan, NeverRemovesAForeignLink)
+// The engine owns every link between its ports and the device, AES67 or any other port it plans (2026-10-30: a
+// WirePlumber restart pointed system:* at "AES67 deck C" and the sender, and those links stayed). Only clients
+// that make their own links to the engine (StemDeck-<X>, beat-analyzer) keep theirs.
+TEST (LinkPlan, RemovesUnplannedLinksOnItsOwnPorts)
 {
-    // StemDeck feeds an engine port the map does not name; the engine did not make it.
-    const Links live { { "StemDeck-A:out_1", "a3-engine:deckA_1" },
-                       { "system:capture_2", "a3-engine:analog_1" } };
+    const Link wrongDevice { "AES67 deck C:receive_MAIN1", "a3-engine:analog_1" };
+    const Link wrongSender { "a3-engine:main_top_1", "AES67 a3nuc1 out:send_CH2" };
+    const Link wrongChannel { "system:capture_2", "a3-engine:analog_1" };
+    const Links live { wrongDevice, wrongSender, wrongChannel, { "system:capture_1", "a3-engine:analog_1" } };
     const auto plan = planWith (rigMap(), live, {}, rigPorts());
-    EXPECT_TRUE (plan.remove.empty());
+    EXPECT_EQ (plan.remove, (Links { wrongDevice, wrongSender, wrongChannel }));
 
-    // Not even with an empty map.
-    const auto empty = planWith ({}, live, {}, rigPorts());
-    EXPECT_TRUE (empty.remove.empty());
-    EXPECT_TRUE (empty.add.empty());
+    // Links between two ports that are not the engine's are none of its business.
+    const auto others = planWith (rigMap(), { { "system:capture_2", "beat-analyzer:in_1" } }, {}, rigPorts());
+    EXPECT_TRUE (others.remove.empty());
+}
+
+TEST (LinkPlan, KeepsTheLinksOfClientsThatLinkThemselves)
+{
+    // StemDeck links its recorder from the engine and may feed a slot the map does not name; the analyzer's beat input.
+    const Links live { { "StemDeck-A:out_1", "a3-engine:deckA_1" },
+                       { "a3-engine:rec_L", "StemDeck-A:rec_L" },
+                       { "a3-engine:rec_L", "beat-analyzer:bpm_1" } };
+    EXPECT_TRUE (planWith (rigMap(), live, {}, rigPorts()).remove.empty());
+    EXPECT_TRUE (planWith ({}, live, {}, rigPorts()).remove.empty());
+    EXPECT_TRUE (a3::links::linksItself ("StemDeck-B:rec_R"));
+    EXPECT_TRUE (a3::links::linksItself ("beat-analyzer:bpm_1"));
+    EXPECT_FALSE (a3::links::linksItself ("AES67 deck C:receive_MAIN1"));
+    EXPECT_FALSE (a3::links::linksItself ("system:capture_1"));
 }
 
 TEST (LinkPlan, RemovesOnlyItsOwnStaleLinks)
 {
     const Link own { "system:capture_1", "a3-engine:analog_1" };
-    const Link foreign { "system:capture_2", "a3-engine:analog_2" };
+    const Link foreign { "StemDeck-A:out_1", "a3-engine:analog_2" };
     // The map moved analog_1 to capture_2.
     auto map = rigMap();
     map.jack["analog_1"] = { "system:capture_2" };
