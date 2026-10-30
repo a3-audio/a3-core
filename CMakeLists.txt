@@ -47,6 +47,14 @@ add_library(a3-delay STATIC src/a3-delay/DelayParameters.cpp)
 target_include_directories(a3-delay PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_compile_options(a3-delay PRIVATE -Wall -Wextra -Werror=switch)
 
+# The one clock (src/a3-clock/ClockSteering.h): steering the Core's PTP hardware clock from the
+# Scarlett. The loop and the measurements are plain C++; the status file and the daemon use juce_core.
+add_library(a3-clock STATIC src/a3-clock/ClockSteering.cpp src/a3-clock/ClockMeasure.cpp
+    src/a3-clock/ClockStatus.cpp src/a3-clock/ClockDaemon.cpp)
+target_include_directories(a3-clock PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/a3-clock)
+target_link_libraries(a3-clock PUBLIC a3-engine-juce)
+target_compile_options(a3-clock PRIVATE -Wall -Wextra -Werror=switch)
+
 add_library(a3-engine STATIC src/a3-engine/Laws.cpp src/a3-engine/PurestGain.cpp
     src/a3-engine/SmoothEQ3.cpp src/a3-engine/Isolator3.cpp src/a3-engine/Meters.cpp src/a3-engine/DjFilter.cpp
     src/a3-engine/ChannelStrip.cpp src/a3-engine/DeckStrip.cpp src/a3-engine/ChannelSelect.cpp src/a3-engine/SpatialConfig.cpp src/a3-engine/SpatialBus.cpp src/a3-engine/AmbiEncoderBus.cpp src/a3-engine/EngineConfig.cpp
