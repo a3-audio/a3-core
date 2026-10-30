@@ -30,6 +30,10 @@ public:
     // The row's key: "Start" or "Stop", and "Restart"; nullptr for a program of another machine.
     juce::TextButton* startStopKey (const juce::String& label) const;
     juce::TextButton* restartKey (const juce::String& label) const;
+    // The a3-core card's service lines as painted ("a3-engine.service  active · enabled"), and whether a program has a
+    // row of its own (the beat analyzer sits inside the a3-core card when it is one of the Core's units).
+    juce::StringArray serviceLines() const;
+    bool hasOwnRow (const juce::String& label) const;
     // The programs' rows inside ENTITIES, scrolled (the list's children are their names and keys).
     int programRows() const { return (int) rows.size(); }
     juce::Component& programList();
@@ -54,6 +58,7 @@ private:
     std::unique_ptr<List> list;
     juce::Viewport scroller;
     juce::Rectangle<int> planArea;
+    juce::String listLayout;
 };
 
 class SystemAboutView final : public juce::Component, public CardPage

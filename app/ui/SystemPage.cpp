@@ -92,6 +92,8 @@ struct SystemRigView::ProgramRow
     juce::Label name;
     juce::TextButton startStop { "Start" }, restart { "Restart" };
     juce::Rectangle<int> first, second, light;
+    std::vector<juce::Rectangle<int>> serviceAreas;   // the a3-core row's: a compact line per service
+    bool shown = true;                                 // false: inside the a3-core card (the beat analyzer)
 };
 
 // ENTITIES' scrolled rows: each its light, name and state with its keys on the first line, where it runs and what it
@@ -108,11 +110,26 @@ public:
         bottoms.clear();
         for (auto& r : rows)
         {
-            auto area = juce::Rectangle<int> (0, y, width, t.row + layout::compactLine (t));
+            r->shown = ! r->row.insideCore;
+            for (auto* part : std::initializer_list<juce::Component*> { &r->name })
+                part->setVisible (r->shown);
+            if (! r->shown)
+            {
+                r->startStop.setVisible (false);
+                r->restart.setVisible (false);
+                bottoms.push_back (-1);
+                continue;
+            }
+            const int line = layout::compactLine (t);
+            const int services = (int) r->row.services.size();
+            auto area = juce::Rectangle<int> (0, y, width, t.row + line * (1 + services));
             y = area.getBottom() + t.unit;
             bottoms.push_back (area.getBottom() + t.unit / 2);
             auto first = area.removeFromTop (t.row);
-            r->second = area;
+            r->second = area.removeFromTop (line);
+            r->serviceAreas.clear();
+            for (int i = 0; i < services; ++i)
+                r->serviceAreas.push_back (area.removeFromTop (line));
             const int keyWidth = width / 6;
             r->restart.setBounds (layout::control (first.removeFromRight (keyWidth), t));
             first.removeFromRight (t.unit);
@@ -127,6 +144,8 @@ public:
             r->name.setBounds (first.removeFromLeft (nameWidth));
             r->first = first.withTrimmedLeft (t.unit);
             r->second = r->second.withTrimmedLeft (lightSide + t.unit);
+            for (auto& serviceArea : r->serviceAreas)
+                serviceArea = serviceArea.withTrimmedLeft (lightSide + t.unit);
         }
         return juce::jmax (0, y - t.unit);
     }
@@ -134,9 +153,15 @@ public:
     void paint (juce::Graphics& g) override
     {
         g.setFont (juce::FontOptions (textHeight));
+        int lastShown = -1;
+        for (size_t i = 0; i < rows.size(); ++i)
+            if (rows[i]->shown)
+                lastShown = (int) i;
         for (size_t i = 0; i < rows.size(); ++i)
         {
             const auto& r = rows[i];
+            if (! r->shown)
+                continue;
             g.setColour (lightColour (r->row.light));
             g.fillEllipse (r->light.toFloat().withSizeKeepingCentre ((float) r->light.getWidth(), (float) r->light.getWidth()));
             const bool news = r->row.light == rig::Light::degraded || r->row.light == rig::Light::failed;
@@ -144,7 +169,20 @@ public:
             g.drawFittedText (r->row.state, r->first, juce::Justification::centredLeft, 1, 0.8f);
             g.setColour (palette::textMuted);
             g.drawFittedText (details (r->row), r->second, juce::Justification::centredLeft, 1, 0.7f);
-            if (i + 1 < rows.size() && i < bottoms.size())
+            // The a3-core card's services: a small light, the unit's name, its state.
+            for (size_t s = 0; s < r->row.services.size() && s < r->serviceAreas.size(); ++s)
+            {
+                const auto& service = r->row.services[s];
+                auto area = r->serviceAreas[s];
+                const auto side = (float) area.getHeight() * 0.35f;
+                g.setColour (lightColour (service.light));
+                g.fillEllipse (area.removeFromLeft (area.getHeight()).toFloat().withSizeKeepingCentre (side, side));
+                g.setColour (service.light == rig::Light::failed ? palette::danger : palette::text);
+                g.drawFittedText (service.name, area.removeFromLeft (area.getWidth() / 2), juce::Justification::centredLeft, 1, 0.7f);
+                g.setColour (lightColour (service.light) == palette::textMuted ? palette::textMuted : lightColour (service.light));
+                g.drawFittedText (service.state, area, juce::Justification::centredLeft, 1, 0.7f);
+            }
+            if ((int) i != lastShown && i < bottoms.size() && bottoms[i] >= 0)
             {
                 g.setColour (palette::face);
                 g.fillRect (0, bottoms[i], getWidth(), 1);
@@ -232,10 +270,12 @@ void SystemRigView::refresh()
         return;
     seen = snapshot.generation;
     shown = snapshot;
+    juce::String laidOut;   // what the list's layout depends on: the services' count, which rows sit inside a3-core
     for (auto& r : rows)
     {
         r->row = rig::describe (r->program, shown.facts);
-        const bool acts = r->row.here && r->row.installed;
+        laidOut << (int) r->row.services.size() << (r->row.insideCore ? "i" : "-");
+        const bool acts = r->row.here && r->row.installed && ! r->row.insideCore;
         r->startStop.setVisible (acts);
         r->restart.setVisible (acts);
         r->startStop.setButtonText (r->row.up ? "Stop" : "Start");
@@ -246,6 +286,11 @@ void SystemRigView::refresh()
     const bool any = ! programsHere().empty();
     startAll.setEnabled (any && ! shown.busy);
     stopAll.setEnabled (any && ! shown.busy);
+    if (laidOut != listLayout)
+    {
+        listLayout = laidOut;
+        resized();
+    }
     repaint();
     list->repaint();
 }
@@ -268,6 +313,21 @@ juce::String SystemRigView::detailLine (const juce::String& label) const
 {
     const auto* r = rowOf (label);
     return r != nullptr ? details (r->row) : juce::String();
+}
+
+juce::StringArray SystemRigView::serviceLines() const
+{
+    juce::StringArray lines;
+    for (const auto& r : rows)
+        for (const auto& service : r->row.services)
+            lines.add (service.name + "  " + service.state);
+    return lines;
+}
+
+bool SystemRigView::hasOwnRow (const juce::String& label) const
+{
+    const auto* r = rowOf (label);
+    return r != nullptr && ! r->row.insideCore;
 }
 
 juce::TextButton* SystemRigView::startStopKey (const juce::String& label) const

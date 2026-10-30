@@ -28,12 +28,33 @@ struct Program
 // Engine, a deck per slot (A … Z, AA, …), Mixer, Motion, Beat analyzer.
 std::vector<Program> programs (int decks);
 
-// What `systemctl --user show` says about one unit.
+enum class Light { missing, stopped, starting, running, degraded, failed, elsewhere, unknown };
+
+// What `systemctl [--user] show` says about one unit (fileState: UnitFileState, "enabled", "disabled", "static", ...).
 struct UnitFacts
 {
-    juce::String load, active, sub, result;
+    juce::String load, active, sub, result, fileState;
 };
 std::vector<std::string> showCommand (const std::vector<Program>&);
+
+// A unit of the Core on this machine, the user's or the system's (read-only: the window never acts on a system unit).
+struct ServiceUnit
+{
+    juce::String name;
+    bool system = false;
+    bool operator== (const ServiceUnit& other) const { return name == other.name && system == other.system; }
+};
+// The packages that make the Core (a3-core, the deployment; a3-core-app, the program): their unit files.
+std::vector<std::string> packageUnitsCommand();
+// `dpkg-query -L` output: the .service and .timer files under a systemd user or system directory (not the .wants links).
+std::vector<ServiceUnit> packageUnits (const juce::String& dpkgList);
+std::vector<std::string> mainWantsCommand();                  // systemctl --user show -p Wants --value a3-main.service
+std::vector<juce::String> parseWants (const juce::String& output);
+// The Core's services (2026-10-31, the maintainer: the a3-core card lists every unit that belongs to the Core here): the
+// packages' units and what a3-main.service Wants, less the units that are another row's (the decks, the desk, Motion).
+std::vector<ServiceUnit> coreServices (const std::vector<ServiceUnit>& packaged, const std::vector<juce::String>& mainWants,
+                                       const std::vector<Program>&);
+std::vector<std::string> showCommand (const std::vector<ServiceUnit>&, bool system);
 // Blocks split on blank lines, each named by its Id=. A block without an Id is dropped.
 std::map<juce::String, UnitFacts> parseSystemctlShow (const juce::String& text);
 
@@ -77,9 +98,15 @@ std::vector<juce::String> ownAddresses (const std::vector<InterfaceAddress>&, co
 // This machine's IPv4 addresses with their interfaces' names (getifaddrs).
 std::vector<InterfaceAddress> listInterfaces();
 
-enum class Light { missing, stopped, starting, running, degraded, failed, elsewhere, unknown };
 
 // The row the page writes for one program.
+// One line of the a3-core card: a service, its state ("active · enabled") and the light for it.
+struct ServiceLine
+{
+    juce::String name, state;
+    Light light = Light::unknown;
+};
+
 struct Row
 {
     Light light = Light::unknown;
@@ -91,6 +118,8 @@ struct Row
     bool here = false;       // runs on this machine: its keys act here
     bool installed = false;  // here, and systemd knows its units (the desk: its program is installed)
     bool up = false;         // something of it runs or tries to: its one key is Stop
+    std::vector<ServiceLine> services;   // the a3-core row's: every unit of the Core here
+    bool insideCore = false;             // a program whose unit is one of the Core's (the beat analyzer): no row of its own
 };
 
 // Everything the rows are written from.
@@ -100,6 +129,8 @@ struct Facts
     CoreFacts core;
     Network network;
     bool deskInstalled = false;   // /usr/bin/a3-desk: the desk has no unit file, it runs as a transient one
+    std::vector<ServiceUnit> coreServices;          // what the a3-core card lists
+    std::map<juce::String, UnitFacts> systemUnits;  // `systemctl show` of the Core's system units
 };
 
 Row describe (const Program&, const Facts&);

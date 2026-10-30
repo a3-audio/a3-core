@@ -4,6 +4,8 @@
 #include "LoopbackHttp.h"
 #include "Truth.h"
 
+#include <algorithm>
+
 namespace a3app
 {
 namespace
@@ -71,8 +73,22 @@ void SystemProbe::poll (bool withCheckout)
     facts.network = sources.truth;
     if (sources.interfaces)
         facts.network.own = rig::ownAddresses (sources.interfaces(), sources.truth);
+    if (withCheckout && sources.runner != nullptr)   // what belongs to the Core changes with an install, not by the second
+        services = rig::coreServices (rig::packageUnits (sources.runner->run (rig::packageUnitsCommand()).output),
+                                      rig::parseWants (sources.runner->run (rig::mainWantsCommand()).output), rigPrograms);
+    facts.coreServices = services;
     if (sources.runner != nullptr)
+    {
         facts.units = rig::parseSystemctlShow (sources.runner->run (rig::showCommand (rigPrograms)).output);
+        const auto has = [this] (bool system) {
+            return std::any_of (services.begin(), services.end(), [system] (const rig::ServiceUnit& u) { return u.system == system; });
+        };
+        if (has (false))
+            for (const auto& [name, unit] : rig::parseSystemctlShow (sources.runner->run (rig::showCommand (services, false)).output))
+                facts.units[name] = unit;
+        if (has (true))
+            facts.systemUnits = rig::parseSystemctlShow (sources.runner->run (rig::showCommand (services, true)).output);
+    }
     if (sources.askCore)
     {
         const auto [rigBody, statusBody] = sources.askCore();

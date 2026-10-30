@@ -317,6 +317,37 @@ TEST (RigModel, OwnAddressesSkipBridgesAndLoopback)
     EXPECT_EQ (own, (std::vector<juce::String> { host ("core"), host ("core-audio") })) << "control first";
 }
 
+namespace
+{
+// dpkg-query -L a3-core a3-core-app as on the rig (2026-10-31), cut to the unit files and a few others.
+const juce::String rigPackageFiles = "/etc/systemd/system/a3-ptp-state.service\n/etc/systemd/system/a3-ptp-state.timer\n"
+                                     "/home/aaa/.local/share/a3-core/config/systemd/user/a3-aes67.service\n"
+                                     "/home/aaa/.local/share/a3-core/config/systemd/user/a3-core.service\n"
+                                     "/home/aaa/.local/share/a3-core/config/systemd/user/a3-main.service\n"
+                                     "/home/aaa/.local/share/a3-core/config/systemd/user/default.target.wants/a3-main.service\n"
+                                     "/usr/share/a3/a3-osc.json\n/usr/lib/systemd/user/a3-clock.service\n"
+                                     "/usr/lib/systemd/user/a3-core-window.service\n/usr/lib/systemd/user/a3-engine.service\n"
+                                     "/usr/lib/systemd/user/a3-core.service\n";
+const juce::String rigMainWants = "stemdeck@A.service a3-core.service a3-engine.service a3-motion.service beat-analyzer.service a3-core-window.service\n";
+}
+
+// The a3-core card's services (2026-10-31): the a3-core and a3-core-app packages' unit files and what a3-main Wants, less
+// the units that are another row's (deck A, Motion); the beat analyzer is the Core's.
+TEST (RigModel, TheCoresServicesComeFromThePackagesAndA3Main)
+{
+    const auto packaged = rig::packageUnits (rigPackageFiles);
+    EXPECT_EQ (packaged.size(), 8u) << "a .wants link is no unit of its own, a3-core.service once";
+    const auto services = rig::coreServices (packaged, rig::parseWants (rigMainWants), rig::programs (4));
+    juce::StringArray names;
+    for (const auto& service : services)
+        names.add (service.name + (service.system ? " (system)" : ""));
+    EXPECT_EQ (names, (juce::StringArray { "a3-aes67.service", "a3-clock.service", "a3-core-window.service", "a3-core.service",
+                                           "a3-engine.service", "a3-main.service", "beat-analyzer.service",
+                                           "a3-ptp-state.service (system)", "a3-ptp-state.timer (system)" }));
+    const auto system = rig::showCommand (services, true);
+    EXPECT_EQ (system[1], "show") << "the system's units without --user";
+}
+
 TEST (RigPlan, StartAllInTheRigsOrderAndOnlyWhatRunsHere)
 {
     const auto list = rig::programs (2);
@@ -378,6 +409,15 @@ std::shared_ptr<ScriptedRunner> rigRunner()
         units << unitBlock (unit, "active");
     units << unitBlock ("stemdeck@D.service", "inactive");
     runner->answers[joined (rig::showCommand (rig::programs (4)))] = { 0, units.toStdString() };
+    runner->answers[joined (rig::packageUnitsCommand())] = { 0, rigPackageFiles.toStdString() };
+    runner->answers[joined (rig::mainWantsCommand())] = { 0, rigMainWants.toStdString() };
+    const auto services = rig::coreServices (rig::packageUnits (rigPackageFiles), rig::parseWants (rigMainWants), rig::programs (4));
+    juce::String userUnits, systemUnits;
+    for (const auto& service : services)
+        (service.system ? systemUnits : userUnits)
+            << unitBlock (service.name, service.name == "a3-clock.service" ? "failed" : "active").replace ("Result=success", "Result=success\nUnitFileState=enabled");
+    runner->answers[joined (rig::showCommand (services, false))] = { 0, userUnits.toStdString() };
+    runner->answers[joined (rig::showCommand (services, true))] = { 0, systemUnits.toStdString() };
     const juce::File repo ("/home/someone/a3-system");
     runner->answers["git -C " + repo.getFullPathName() + " ls-tree HEAD"] = { 0, "160000 commit aaa\ta3-core\n160000 commit ddd\tstemdeck\n" };
     runner->answers["git -C " + repo.getFullPathName() + " describe --tags --match v* --always HEAD"] = { 0, "v03.0-12-g1234567\n" };
@@ -433,6 +473,14 @@ TEST_F (SystemPageTest, RigRowsKeysAndPlans)
     EXPECT_EQ (rigView.startStopKey (engine)->getButtonText(), "Stop");
     ASSERT_NE (rigView.startStopKey ("Deck D"), nullptr);
     EXPECT_EQ (rigView.startStopKey ("Deck D")->getButtonText(), "Start");
+    // The a3-core card lists every unit of the Core here, the beat analyzer among them (no row of its own then).
+    const auto services = rigView.serviceLines();
+    EXPECT_TRUE (services.contains (juce::String::fromUTF8 ("a3-engine.service  active · enabled"))) << services.joinIntoString (" | ");
+    EXPECT_TRUE (services.contains (juce::String::fromUTF8 ("a3-clock.service  failed · enabled"))) << services.joinIntoString (" | ");
+    EXPECT_TRUE (services.contains (juce::String::fromUTF8 ("a3-ptp-state.timer  active · enabled · system"))) << services.joinIntoString (" | ");
+    EXPECT_TRUE (services.contains (juce::String::fromUTF8 ("beat-analyzer.service  active · enabled"))) << services.joinIntoString (" | ");
+    EXPECT_FALSE (rigView.hasOwnRow ("Beat analyzer"));
+    EXPECT_TRUE (rigView.hasOwnRow ("Deck A"));
     // 2026-10-31: MAIN, then ENTITIES with a row per program, its name on it.
     EXPECT_EQ (rigView.programRows(), (int) probe.programs().size());
     ASSERT_EQ (rigView.cardAreas().size(), 2u) << "MAIN and ENTITIES";

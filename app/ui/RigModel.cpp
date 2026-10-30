@@ -256,13 +256,93 @@ std::vector<Program> programs (int decks)
     return made;
 }
 
+namespace
+{
+const char* const showProperties = "Id,LoadState,ActiveState,SubState,Result,UnitFileState";
+}
+
 std::vector<std::string> showCommand (const std::vector<Program>& list)
 {
-    std::vector<std::string> argv { "systemctl", "--user", "show", "-p", "Id,LoadState,ActiveState,SubState,Result" };
+    std::vector<std::string> argv { "systemctl", "--user", "show", "-p", showProperties };
     for (const auto& program : list)
         for (const auto& unit : program.units)
             argv.push_back (unit.toStdString());
     return argv;
+}
+
+std::vector<std::string> showCommand (const std::vector<ServiceUnit>& units, bool system)
+{
+    std::vector<std::string> argv { "systemctl" };
+    if (! system)
+        argv.push_back ("--user");
+    for (const auto* word : { "show", "-p", showProperties })
+        argv.push_back (word);
+    for (const auto& unit : units)
+        if (unit.system == system)
+            argv.push_back (unit.name.toStdString());
+    return argv;
+}
+
+std::vector<std::string> packageUnitsCommand() { return { "dpkg-query", "-L", "a3-core", "a3-core-app" }; }
+
+std::vector<ServiceUnit> packageUnits (const juce::String& dpkgList)
+{
+    std::vector<ServiceUnit> units;
+    for (const auto& line : juce::StringArray::fromLines (dpkgList))
+    {
+        const auto path = line.trim();
+        if (! (path.endsWith (".service") || path.endsWith (".timer")) || path.contains (".wants/") || path.contains (".requires/"))
+            continue;
+        const bool user = path.contains ("/systemd/user/");
+        const bool system = path.startsWith ("/etc/systemd/system/") || path.startsWith ("/lib/systemd/system/")
+                            || path.startsWith ("/usr/lib/systemd/system/");
+        if (! user && ! system)
+            continue;
+        ServiceUnit unit { path.fromLastOccurrenceOf ("/", false, false), system };
+        if (std::find (units.begin(), units.end(), unit) == units.end())
+            units.push_back (unit);
+    }
+    return units;
+}
+
+std::vector<std::string> mainWantsCommand() { return { "systemctl", "--user", "show", "-p", "Wants", "--value", "a3-main.service" }; }
+
+std::vector<juce::String> parseWants (const juce::String& output)
+{
+    std::vector<juce::String> wants;
+    for (const auto& word : juce::StringArray::fromTokens (output.trim(), " \t\n", ""))
+        if (word.isNotEmpty())
+            wants.push_back (word);
+    return wants;
+}
+
+std::vector<ServiceUnit> coreServices (const std::vector<ServiceUnit>& packaged, const std::vector<juce::String>& mainWants,
+                                       const std::vector<Program>& list)
+{
+    const auto anotherRows = [&list] (const juce::String& unit) {
+        if (unit.startsWith ("stemdeck@") || unit.startsWith ("stemdeck."))
+            return true;
+        for (const auto& program : list)
+            if (program.kind == Kind::deck || program.kind == Kind::mixer || program.kind == Kind::motion)
+                if (std::find (program.units.begin(), program.units.end(), unit) != program.units.end())
+                    return true;
+        return false;
+    };
+    std::vector<ServiceUnit> users, systems;
+    const auto add = [&] (const ServiceUnit& unit) {
+        auto& into = unit.system ? systems : users;
+        if (! anotherRows (unit.name) && std::find (into.begin(), into.end(), unit) == into.end())
+            into.push_back (unit);
+    };
+    for (const auto& unit : packaged)
+        add (unit);
+    for (const auto& unit : mainWants)
+        add ({ unit, false });
+    const auto byName = [] (const ServiceUnit& a, const ServiceUnit& b) { return a.name < b.name; };
+    std::sort (users.begin(), users.end(), byName);
+    std::sort (systems.begin(), systems.end(), byName);
+    users.insert (users.end(), systems.begin(), systems.end());
+    return users;
 }
 
 std::map<juce::String, UnitFacts> parseSystemctlShow (const juce::String& text)
@@ -295,6 +375,8 @@ std::map<juce::String, UnitFacts> parseSystemctlShow (const juce::String& text)
             unit.sub = value;
         else if (key == "Result")
             unit.result = value;
+        else if (key == "UnitFileState")
+            unit.fileState = value;
     }
     finish();
     return units;
@@ -413,6 +495,52 @@ std::vector<InterfaceAddress> listInterfaces()
     return found;
 }
 
+namespace
+{
+Light serviceLight (const UnitFacts& unit)
+{
+    if (unit.active == "active")
+        return Light::running;
+    if (unit.active == "failed")
+        return Light::failed;
+    if (isStarting (unit.active) || unit.active == "deactivating")
+        return Light::starting;
+    return unit.load == "not-found" ? Light::missing : Light::stopped;
+}
+
+std::vector<ServiceLine> serviceLines (const Facts& facts)
+{
+    std::vector<ServiceLine> lines;
+    for (const auto& service : facts.coreServices)
+    {
+        const auto& table = service.system ? facts.systemUnits : facts.units;
+        const auto found = table.find (service.name);
+        if (found == table.end())
+        {
+            lines.push_back ({ service.name, "not read yet", Light::unknown });
+            continue;
+        }
+        const auto& unit = found->second;
+        juce::String state = unit.load == "not-found" ? juce::String ("not installed") : unit.active;
+        if (unit.fileState.isNotEmpty() && unit.load != "not-found")
+            state << dot << unit.fileState;
+        if (service.system)
+            state << dot << "system";
+        lines.push_back ({ service.name, state, serviceLight (unit) });
+    }
+    return lines;
+}
+
+bool coreHas (const Facts& facts, const std::vector<juce::String>& units)
+{
+    for (const auto& unit : units)
+        for (const auto& service : facts.coreServices)
+            if (! service.system && service.name == unit)
+                return true;
+    return false;
+}
+}
+
 Row describe (const Program& program, const Facts& facts)
 {
     Row row;
@@ -428,6 +556,9 @@ Row describe (const Program& program, const Facts& facts)
     else
         stateElsewhere (program, facts, row);
     row.up = row.here && (row.light == Light::running || row.light == Light::starting || row.light == Light::degraded);
+    if (program.kind == Kind::engine)
+        row.services = serviceLines (facts);
+    row.insideCore = program.kind == Kind::analyzer && row.here && coreHas (facts, program.units);
     return row;
 }
 }

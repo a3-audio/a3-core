@@ -178,9 +178,16 @@ says status, values and short errors, nothing else):
 the model in `SystemAbout`, `SystemCheckout`, `RigModel`, `RigPlan`, read by `SystemProbe`). RIG is the rig: MAIN (Start
 all, Stop all and the plan's word) and ENTITIES, a row per program scrolled by a finger inside the card (a3-core = `a3-engine.service` and `a3-core.service` -- "A³ Engine" until 2026-10-31: the Engine is only the audio backend, never the window's own unit; a deck per slot of the truth's
 `stemdeck.deck-hello` range as `stemdeck@<letter>.service`; A³ Mixer = the desk, a transient `a3-desk` unit run by
-`systemd-run`; A³ Motion; Beat analyzer) with its light and state, where it runs (Core's `/api/rig` first, then the truth's
+`systemd-run`; A³ Motion; Beat analyzer -- inside the a3-core card when it is one of the Core's units, as on a3nuc1) with
+its light and state; the a3-core card adds a compact line per unit of the Core here, its name and state
+(`active · enabled`, `· system` for a system unit, read-only): the unit files of the packages a3-core and a3-core-app
+(`dpkg-query -L`, the `.wants` links left out) and what `a3-main.service` Wants (`systemctl --user show -p Wants`), less the
+units that are another row's (the decks, the desk, Motion), read every 30 s; on a3nuc1 that is a3-aes67,
+a3-bar-per-workspace, a3-clock, a3-core, a3-core-window, a3-engine, a3-main, a3-screencast, beat-analyzer and the system's
+a3-ptp-state (service and timer), set_irq_prio, vnc-display, x11vnc. Start and Stop stay on the card (a3-engine and
+a3-core); the units have no keys. Each row has where it runs (Core's `/api/rig` first, then the truth's
 `hosts`; `local · <address>` on this machine), its audio address (the device's report, else the truth's `<host>-audio`), its
-software (the device's `device.version` in `/api/rig`'s `versions`; the Engine's is Core's `/api/status` version) and, for the
+software (the device's `device.version` in `/api/rig`'s `versions`; a3-core's is Core's `/api/status` version) and, for the
 Mixer and Motion, its firmware -- "not reported" only where the device said nothing. A program of this machine has Start/Stop and
 Restart (Stop and Restart ask first); Start all and Stop all act on this machine's programs in the Canvas's order (engine and
 Core first and waited for, then the analyzer, the decks -- skipped when the engine did not come up --, the desk, Motion; Stop
