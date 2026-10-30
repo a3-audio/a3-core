@@ -17,7 +17,7 @@ namespace a3app
 // a JUCE type's input and output device, sample rate and block (pending until Save); PipeWire's sample rate (the
 // graph's, the one choice it shows: the engine does not change PipeWire's rate), Block (the forced quantum, live) and
 // Periods (the card's ALSA periods, through the engine's WirePlumber drop-in and a restart), applied only on APPLY
-// after the page said what happens; REVERT goes back to the previous choice (TimingControl.h). CHANNELS: N and the
+// after the page said what happens; REVERT goes back to the previous choice (TimingControl.h). STEREO CHANNELS AND STEMDECKS: N and the
 // deck count (ChannelsPage). MEASURE: the round trip (over the I/O page's digital loop) and the analog chain with
 // their keys, off while the I/O page names no pair, their line saying why. CLOCK: the master and the one-word
 // state (ClockPanel::Mode::choice). What runs in detail (rate source, bit depth, DSP load, xruns, the clock's

@@ -20,8 +20,8 @@ ChannelsPage::ChannelsPage (HostView& v) : view (v)
     look::caption (channelsRunning);
     look::caption (decksRunning);
     look::failure (message);
-    caption.setText ("Channels (N)", juce::dontSendNotification);
-    decksCaption.setText ("Decks", juce::dontSendNotification);
+    caption.setText ("Stereo channels", juce::dontSendNotification);
+    decksCaption.setText ("StemDecks", juce::dontSendNotification);
     for (int n = 1; n <= maxChannelsOnPage; ++n)
         channelsBox.addItem (juce::String (n), n);
     for (int n = 1; n <= maxDecksOnPage; ++n)

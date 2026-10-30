@@ -82,7 +82,7 @@ AudioPage::AudioPage (HostView& v, juce::AudioDeviceManager& m) : view (v), mana
     }
     look::say (digitalCaption, "Digital roundtrip");
     look::say (analogCaption, "Analog roundtrip");
-    for (auto [heading, text] : { std::pair { &driverHeading, "DRIVER" }, std::pair { &channelsHeading, "CHANNELS" },
+    for (auto [heading, text] : { std::pair { &driverHeading, "DRIVER" }, std::pair { &channelsHeading, "STEREO CHANNELS AND STEMDECKS" },
                                   std::pair { &measureHeading, "MEASURE" } })
     {
         heading->setText (text, juce::dontSendNotification);
@@ -452,7 +452,7 @@ void AudioPage::layoutMeasure (juce::Rectangle<int>& area)
     }
 }
 
-// DRIVER, CHANNELS, MEASURE and CLOCK cards down the page (layout::Stack); the row shrinks so that all of them fit,
+// DRIVER, STEREO CHANNELS AND STEMDECKS, MEASURE and CLOCK cards down the page (layout::Stack); the row shrinks so that all of them fit,
 // the margins, paddings and gaps are the window's.
 void AudioPage::resized()
 {

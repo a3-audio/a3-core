@@ -7,8 +7,8 @@
 
 namespace a3app
 {
-// The AUDIO page's CHANNELS card (the CHANNELS page until 2026-10-30): N, the number of channels, and the number of
-// decks, each a dropdown showing what is set, with the count that runs beside it. A change is a pending edit; Save
+// The AUDIO page's STEREO CHANNELS AND STEMDECKS card (the CHANNELS page, then card, until 2026-10-30): N, the stereo channels, and the
+// StemDecks, each a dropdown showing what is set, with the count that runs beside it. A change is a pending edit; Save
 // re-creates the engine. It paints no ground: it sits on its card.
 class ChannelsPage final : public juce::Component
 {

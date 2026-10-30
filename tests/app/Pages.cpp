@@ -2233,15 +2233,22 @@ TEST_F (Pages, AudioIsCards)
         EXPECT_TRUE (in (0, *box)) << "DRIVER";
         EXPECT_NE (box->getText(), "") << "the dropdown shows what is set";
     }
-    EXPECT_TRUE (cards[1].contains (page.channelsCard().getBounds())) << "CHANNELS";
+    EXPECT_TRUE (cards[1].contains (page.channelsCard().getBounds())) << "STEREO CHANNELS AND STEMDECKS";
     EXPECT_EQ (page.channelsCard().channelsChooser().getText(), "4");
     EXPECT_TRUE (in (2, page.roundTripLabel()) && in (2, page.measureButton())) << "MEASURE";
     EXPECT_EQ (page.clockPanel().getBounds(), cards[3].reduced (a3app::layout::tokens (page).padding));
     EXPECT_FALSE (page.clockPanel().stateLabel().isVisible()) << "the word is in the footer (third round)";
     EXPECT_TRUE (page.clockPanel().masterBox().isVisible());
     EXPECT_FALSE (page.clockPanel().countersLabel().isVisible()) << "the numbers are on STATUS";
-    for (const auto* heading : { "DRIVER", "CHANNELS", "MEASURE" })
+    // 2026-10-30: "CHANNELS" was not understood; the card says what it counts.
+    for (const auto* heading : { "DRIVER", "STEREO CHANNELS AND STEMDECKS", "MEASURE" })
         EXPECT_NE (labelSaying (page, heading), nullptr) << heading;
+    for (const auto* caption : { "STEREO CHANNELS AND STEMDECKS", "Stereo channels", "StemDecks" })
+        if (const auto* label = labelSaying (page, caption); label != nullptr)
+            EXPECT_LE (juce::GlyphArrangement::getStringWidth (label->getFont(), caption),
+                       (float) label->getBorderSize().subtractedFrom (label->getLocalBounds()).getWidth()) << caption << ": whole, not squeezed";
+        else
+            ADD_FAILURE() << caption;
     std::set<int> sizes;
     for (auto* child : descendants (page))
         if (auto* label = dynamic_cast<juce::Label*> (child); label != nullptr && label->isVisible() && label->getText().isNotEmpty()
