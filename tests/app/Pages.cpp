@@ -2156,7 +2156,7 @@ TEST_F (Pages, ZonesDialogsOpenInsideTheWindow)
         auto* alert = findAlertIn (window);
         ASSERT_NE (alert, nullptr) << name;
         EXPECT_FALSE (alert->isOnDesktop()) << name;
-        EXPECT_TRUE (window.getLocalBounds().contains (alert->getBounds())) << name;
+        EXPECT_TRUE (content.getLocalBounds().contains (alert->getBounds())) << name;
         expectPainted (a3apptest::snapshotAt (window, "portrait-zones-dialog-" + juce::String (name).toLowerCase(),
                                               window.getWidth(), window.getHeight()));
         alert->exitModalState (0);

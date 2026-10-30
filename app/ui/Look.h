@@ -49,6 +49,15 @@ inline void failure (juce::Label& label)   { label.setColour (juce::Label::textC
 // A page's row height as a share of the page, never below a fingertip-ish floor.
 inline int rowHeight (const juce::Component& page) { return juce::jmax (28, page.getHeight() / 14); }
 inline void say (juce::Label& label, const juce::String& message) { label.setText (message, juce::dontSendNotification); }
+// Where a page's question opens: inside the window's content (as the quit question does), never a desktop window of
+// its own, which i3 would tile beside the window (for_window [class="a3-core"]).
+inline juce::Component* dialogParent (juce::Component& page)
+{
+    if (auto* window = page.findParentComponentOfClass<juce::ResizableWindow>())
+        if (auto* content = window->getContentComponent())
+            return content;
+    return page.getTopLevelComponent();
+}
 // A page's help: a tooltip on its title and the controls it explains, shown only while the window's
 // Tooltips switch is on. It takes no layout space.
 inline void help (const juce::String& text, std::initializer_list<juce::SettableTooltipClient*> parts)

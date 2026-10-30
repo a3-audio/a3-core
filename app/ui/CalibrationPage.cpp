@@ -48,7 +48,7 @@ juce::String CalibrationPage::describe (std::optional<float> db)
 
 CalibrationPage::CalibrationPage (HostView& v, Confirm c)
     : view (v), confirm (c ? std::move (c) : Confirm ([this] (const juce::String& text, std::function<void()> onYes)
-                                                             { askWithBox (getTopLevelComponent(), text, std::move (onYes)); }))
+                                                             { askWithBox (look::dialogParent (*this), text, std::move (onYes)); }))
 {
     for (const auto zone : { TrimZone::main, TrimZone::booth, TrimZone::phones, TrimZone::rec })
         rows.push_back (std::make_unique<Row> (zone));

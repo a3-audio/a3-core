@@ -194,10 +194,10 @@ ZonesPage::ZonesPage (HostView& v, std::vector<juce::File> choices, juce::File r
 {
     if (! dialogs.confirm)
         dialogs.confirm = [this] (const juce::String& question, std::function<void()> onYes)
-        { confirmWithBox (getTopLevelComponent(), question, std::move (onYes)); };
+        { confirmWithBox (look::dialogParent (*this), question, std::move (onYes)); };
     if (! dialogs.askName)
         dialogs.askName = [this] (const juce::String& current, std::function<void (const juce::String&)> onName)
-        { askNameWithBox (getTopLevelComponent(), current, std::move (onName)); };
+        { askNameWithBox (look::dialogParent (*this), current, std::move (onName)); };
     look::caption (title);
     look::failure (message);
     title.setText ("ZONES", juce::dontSendNotification);
