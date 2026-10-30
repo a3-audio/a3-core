@@ -34,8 +34,6 @@ juce::String chosenName (const juce::ComboBox& box)
         return {};
     return box.getText().upToFirstOccurrenceOf ("  (not found)", false, false);
 }
-
-const juce::String restartWarning = "the audio stops for about two seconds while WirePlumber restarts";
 }
 
 AudioPage::AudioPage (HostView& v, juce::AudioDeviceManager& m) : view (v), manager (m)
@@ -58,7 +56,7 @@ AudioPage::AudioPage (HostView& v, juce::AudioDeviceManager& m) : view (v), mana
     roundTrip.setMinimumHorizontalScale (1.0f);
     look::help ("Input-to-output round trip of what runs. Measured: a quiet test signal (-20 dBFS, 0.2 s) on the "
                 "digital loop's output, found again on its input (the I/O page's digital loop, S/PDIF out to S/PDIF in), "
-                "once after the start, after a new block or periods, and on MEASURE. The digital loop excludes the AD/DA "
+                "once after the start, after a new block, and on MEASURE. The digital loop excludes the AD/DA "
                 "converters: analog in to the speakers takes about 0.5-1 ms more. Estimated (without a measurement): the "
                 "capture latency the backend reports, one period of the engine's processing, and the playback latency it reports.",
                 { &roundTrip, &measure, &measureHint });
@@ -73,21 +71,20 @@ AudioPage::AudioPage (HostView& v, juce::AudioDeviceManager& m) : view (v), mana
     apply.onClick = [this] { applyChosen(); };
     cancel.onClick = [this] { chosenTiming.reset(); refresh(); };
     revert.onClick = [this] { revertTiming(); };
-    look::help ("PipeWire: the block is the graph's quantum, forced by the engine and changed live. The periods are the "
-                "sound card's ALSA buffer in blocks (2 is shorter, 3 is safer); a change restarts WirePlumber, and the "
-                "audio stops for about two seconds. Nothing changes before APPLY; REVERT goes back to the previous choice. "
-                "After a change the round trip is measured again; watch DSP load and xruns.",
-                { &blockBox, &periodsBox, &apply, &revert, &confirm });
+    look::help ("PipeWire: the block is the graph's quantum, forced by the engine and changed live. Nothing changes "
+                "before APPLY; REVERT goes back to the previous choice. After a change the round trip is measured again; "
+                "watch DSP load and xruns.",
+                { &blockBox, &apply, &revert, &confirm });
 
     for (auto* child : std::initializer_list<juce::Component*> { &title, &rate, &quantum, &rateSource, &bitDepth, &load, &roundTrip,
                                                                 &measure, &measureHint, &analogChain, &analogHint, &measureAnalog,
                                                                 &pending, &clock, &typeCaption, &typeBox, &blockCaption, &blockBox })
         addAndMakeVisible (child);
-    for (auto* child : std::initializer_list<juce::Component*> { &inputCaption, &outputCaption, &rateCaption, &periodsCaption,
-                                                                &periodsBox, &confirm, &apply, &cancel, &revert })
+    for (auto* child : std::initializer_list<juce::Component*> { &inputCaption, &outputCaption, &rateCaption, &confirm, &apply,
+                                                                &cancel, &revert })
         addChildComponent (child);
     const std::pair<juce::Label*, const char*> captions[] = { { &typeCaption, "Device type" }, { &inputCaption, "Input device" },
-        { &outputCaption, "Output device" }, { &rateCaption, "Sample rate" }, { &blockCaption, "Block" }, { &periodsCaption, "Periods" } };
+        { &outputCaption, "Output device" }, { &rateCaption, "Sample rate" }, { &blockCaption, "Block" } };
     for (const auto& [label, text] : captions)
     {
         label->setText (text, juce::dontSendNotification);
@@ -100,7 +97,6 @@ AudioPage::AudioPage (HostView& v, juce::AudioDeviceManager& m) : view (v), mana
         addChildComponent (*box);
     }
     blockBox.onChange = [this] { if (! filling && blockBox.getSelectedId() > 0) chooseBlock (blockBox.getSelectedId()); };
-    periodsBox.onChange = [this] { if (! filling && periodsBox.getSelectedId() > 0) choosePeriods (periodsBox.getSelectedId()); };
     rebuildForType();
 }
 
@@ -158,7 +154,7 @@ void AudioPage::fillChoosers()
     filling = false;
 }
 
-// PipeWire: the block and periods the page offers, showing the choice not applied yet, else what runs.
+// PipeWire: the blocks the page offers, showing the choice not applied yet, else what runs.
 void AudioPage::fillTiming()
 {
     const auto shown = shownTiming();
@@ -169,11 +165,7 @@ void AudioPage::fillTiming()
         for (const int frames : pipewireBlocks())
             blockBox.addItem (juce::String (frames) + " frames", frames);
     }
-    if (periodsBox.getNumItems() == 0)
-        for (const int periods : pipewirePeriods())
-            periodsBox.addItem (juce::String (periods) + " periods", periods);
     blockBox.setSelectedId (shown.block, juce::dontSendNotification);
-    periodsBox.setSelectedId (shown.periods, juce::dontSendNotification);
     filling = false;
 }
 
@@ -221,7 +213,7 @@ bool AudioPage::timingLive() const
 {
     const auto status = view.status();
     return view.running().backend.type == BackendSettings::Type::jack && view.config().backend.type == BackendSettings::Type::jack
-           && status.timing.available && ! status.timing.restarting;
+           && status.timing.available;
 }
 
 AudioTiming AudioPage::currentTiming() const
@@ -255,13 +247,6 @@ void AudioPage::chooseBlock (int frames)
     choose (timing);
 }
 
-void AudioPage::choosePeriods (int periods)
-{
-    auto timing = shownTiming();
-    timing.periods = periods;
-    choose (timing);
-}
-
 void AudioPage::applyChosen()
 {
     if (! chosenTiming || ! timingLive())
@@ -271,14 +256,12 @@ void AudioPage::applyChosen()
     refresh();
 }
 
-// A previous block comes back at once (it is live); previous periods restart WirePlumber, so the page asks first.
+// A previous block comes back at once (it is live).
 void AudioPage::revertTiming()
 {
     const auto previous = view.status().timing.previous;
     if (! previous || ! timingLive())
         return;
-    if (previous->periods != currentTiming().periods)
-        return choose (*previous);
     chosenTiming.reset();
     view.applyTiming (*previous);
     refresh();
@@ -295,7 +278,7 @@ void AudioPage::rebuildForType()
         fillTiming();
     for (auto* child : std::initializer_list<juce::Component*> { &inputCaption, &outputCaption, &rateCaption, &inputBox, &outputBox, &rateBox })
         child->setVisible (device);
-    for (auto* child : std::initializer_list<juce::Component*> { &periodsCaption, &periodsBox, &confirm, &revert })
+    for (auto* child : std::initializer_list<juce::Component*> { &confirm, &revert })
         child->setVisible (! device);
     refresh();
     resized();
@@ -303,34 +286,26 @@ void AudioPage::rebuildForType()
 
 void AudioPage::showTiming (const BackendStatus& status)
 {
-    const bool runsDevice = view.running().backend.type == BackendSettings::Type::device;
-    const int periods = status.timing.available ? status.timing.applied.periods : view.running().backend.periods;
-    quantum.setText (runsDevice ? "Block " + juce::String (status.blockSize) + " frames" : timingText (status.blockSize, periods),
-                     juce::dontSendNotification);
+    quantum.setText (timingText (status.blockSize), juce::dontSendNotification);
     if (deviceChoosers)
         return;
 
     fillTiming();
     const bool live = timingLive();
     blockBox.setEnabled (live);
-    periodsBox.setEnabled (live);
     revert.setEnabled (live && status.timing.previous.has_value());
     const bool asking = chosenTiming.has_value() && live;
     apply.setVisible (asking);
     cancel.setVisible (asking);
     juce::String line;
     if (asking)
-        line = chosenTiming->periods != currentTiming().periods
-                   ? "Periods " + juce::String (chosenTiming->periods) + ": " + restartWarning + ". APPLY?"
-                   : "Block " + juce::String (chosenTiming->block) + " frames applies live, without a restart. APPLY?";
-    else if (status.timing.restarting)
-        line = "WirePlumber is restarting; the device comes back on its own";
+        line = "Block " + juce::String (chosenTiming->block) + " frames applies live, without a restart. APPLY?";
     else if (! status.timing.available)
-        line = "Block and periods apply once the engine runs on PipeWire (Save)";
+        line = "The block applies once the engine runs on PipeWire (Save)";
     else
         line = status.timing.message;
     confirm.setText (line, juce::dontSendNotification);
-    confirm.setColour (juce::Label::textColourId, asking || status.timing.restarting ? palette::caution : palette::textMuted);
+    confirm.setColour (juce::Label::textColourId, asking ? palette::caution : palette::textMuted);
 }
 
 void AudioPage::showMeasurements (const BackendStatus& status)
@@ -376,7 +351,7 @@ void AudioPage::refresh()
 
 void AudioPage::paint (juce::Graphics& g) { g.fillAll (palette::surface); }
 
-// The settings: the device type, then a JUCE type's devices, rate and block, or PipeWire's block and periods with
+// The settings: the device type, then a JUCE type's devices, rate and block, or PipeWire's block with
 // the question before APPLY.
 void AudioPage::layoutSettings (juce::Rectangle<int>& area, int row)
 {
@@ -396,7 +371,6 @@ void AudioPage::layoutSettings (juce::Rectangle<int>& area, int row)
         return;
     }
     line (blockCaption, blockBox);
-    line (periodsCaption, periodsBox);
     auto buttons = area.removeFromTop (row);
     revert.setBounds (buttons.removeFromRight (buttons.getWidth() / 6).reduced (2));
     if (apply.isVisible())

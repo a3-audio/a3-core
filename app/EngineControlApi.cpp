@@ -124,10 +124,8 @@ RoundTripReport roundTripFromJson (const juce::var& v)
 
 juce::var toJson (const TimingReport& report)
 {
-    return object ({ { "available", report.available }, { "block", report.applied.block }, { "periods", report.applied.periods },
-                     { "previousBlock", report.previous ? report.previous->block : 0 },
-                     { "previousPeriods", report.previous ? report.previous->periods : 0 },
-                     { "restarting", report.restarting }, { "message", report.message } });
+    return object ({ { "available", report.available }, { "block", report.applied.block },
+                     { "previousBlock", report.previous ? report.previous->block : 0 }, { "message", report.message } });
 }
 
 // An engine before the timing sends none: not available.
@@ -135,11 +133,10 @@ TimingReport timingReportFromJson (const juce::var& v)
 {
     TimingReport report;
     report.available = (bool) v["available"];
-    report.applied = { (int) number (v["block"]).value_or (defaultBlock), (int) number (v["periods"]).value_or (defaultPeriods) };
+    report.applied = { (int) number (v["block"]).value_or (defaultBlock) };
     const int previousBlock = (int) number (v["previousBlock"]).value_or (0.0);
     if (previousBlock > 0)
-        report.previous = AudioTiming { previousBlock, (int) number (v["previousPeriods"]).value_or (defaultPeriods) };
-    report.restarting = (bool) v["restarting"];
+        report.previous = AudioTiming { previousBlock };
     report.message = v["message"].toString();
     return report;
 }
@@ -601,7 +598,7 @@ HttpResponse EngineControlApi::measureAnalogChain()
 
 std::optional<AudioTiming> timingFromJson (const juce::var& v, juce::String& why)
 {
-    const auto block = v["block"], periods = v["periods"];
+    const auto block = v["block"];
     const auto whole = [] (const juce::var& n) { return n.isInt() || n.isInt64() || (n.isDouble() && (double) n == std::floor ((double) n)); };
     const auto among = [] (const std::vector<int>& choices, int n) { return std::find (choices.begin(), choices.end(), n) != choices.end(); };
     if (! whole (block) || ! among (pipewireBlocks(), (int) block))
@@ -609,12 +606,7 @@ std::optional<AudioTiming> timingFromJson (const juce::var& v, juce::String& why
         why = "block must be one of 32, 64, 128, 256, 512, 1024";
         return std::nullopt;
     }
-    if (! whole (periods) || ! among (pipewirePeriods(), (int) periods))
-    {
-        why = "periods must be 2 or 3";
-        return std::nullopt;
-    }
-    return AudioTiming { (int) block, (int) periods };
+    return AudioTiming { (int) block };   // a "periods" from an older window is ignored
 }
 
 HttpResponse EngineControlApi::timing (const HttpRequest& request)

@@ -40,7 +40,7 @@ public:
 
 private:
     friend class EngineView;
-    EngineRole (const AppArgs&, StartupData, const juce::File& home);
+    EngineRole (const AppArgs&, StartupData);
 
     // Save of a changed config: the whole session is dropped and built again (new host, new boot id, new
     // ports; Core replays through the hello). The old gates close first (no hard cut on the PA); the old

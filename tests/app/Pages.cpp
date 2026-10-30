@@ -305,7 +305,6 @@ TEST_F (Pages, PipeWireIsADeviceTypeBesideJucesTypes)
     EXPECT_EQ (view.cfg.backend.type, a3app::BackendSettings::Type::device);
     EXPECT_EQ (view.cfg.backend.deviceType, "none");
     EXPECT_TRUE (page.showsDeviceSelector());
-    EXPECT_FALSE (page.showsPeriods()) << "JUCE's ALSA device sets its own periods";
     EXPECT_TRUE (page.blockChooser().isVisible());
     page.chooseDeviceType ("none");   // no change, no second edit
     EXPECT_EQ (view.edited, 1);
@@ -315,9 +314,9 @@ TEST_F (Pages, PipeWireIsADeviceTypeBesideJucesTypes)
     EXPECT_FALSE (page.showsDeviceSelector());
 }
 
-// The block and periods on PipeWire: the choices, and nothing applied before APPLY. A new block runs live; new
-// periods say first that the audio stops for about two seconds.
-TEST_F (Pages, PipeWireBlockAndPeriodsApplyOnlyOnApply)
+// The block on PipeWire: the choices, and nothing applied before APPLY; a new block runs live. No periods
+// (2026-10-30): nothing on the page names them.
+TEST_F (Pages, PipeWireBlockAppliesOnlyOnApply)
 {
     FakeView view;
     view.state.timing.available = true;
@@ -325,16 +324,13 @@ TEST_F (Pages, PipeWireBlockAndPeriodsApplyOnlyOnApply)
     page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     page.refresh();
     auto& block = page.blockChooser();
-    auto& periods = page.periodsChooser();
     ASSERT_EQ (block.getNumItems(), 6);
     for (const auto& [index, text] : { std::pair { 0, "32 frames" }, { 2, "128 frames" }, { 5, "1024 frames" } })
         EXPECT_EQ (block.getItemText (index), text);
-    ASSERT_EQ (periods.getNumItems(), 2);
-    EXPECT_EQ (periods.getItemText (0), "2 periods");
-    EXPECT_EQ (periods.getItemText (1), "3 periods");
     EXPECT_EQ (block.getText(), "128 frames");
-    EXPECT_EQ (periods.getText(), "3 periods");
-    EXPECT_TRUE (page.showsPeriods());
+    for (auto* child : page.getChildren())
+        if (auto* label = dynamic_cast<juce::Label*> (child))
+            EXPECT_FALSE (label->getText().containsIgnoreCase ("period")) << label->getText();
     EXPECT_FALSE (page.applyButton().isVisible());
 
     page.chooseBlock (64);
@@ -347,20 +343,18 @@ TEST_F (Pages, PipeWireBlockAndPeriodsApplyOnlyOnApply)
     EXPECT_EQ (block.getText(), "128 frames");
     EXPECT_FALSE (page.applyButton().isVisible());
 
-    page.choosePeriods (2);
-    EXPECT_TRUE (page.confirmLabel().getText().contains ("two seconds")) << page.confirmLabel().getText();
-    EXPECT_TRUE (page.confirmLabel().getText().contains ("WirePlumber")) << page.confirmLabel().getText();
+    page.chooseBlock (256);
     EXPECT_TRUE (page.getLocalBounds().contains (page.applyButton().getBounds()));
-    expectPainted (a3apptest::snapshotAt (page, "audio-periods-confirm", page.getWidth(), page.getHeight()));
+    expectPainted (a3apptest::snapshotAt (page, "audio-block-confirm", page.getWidth(), page.getHeight()));
     page.applyButton().triggerClick();
     juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
     ASSERT_EQ (view.timings.size(), 1u);
-    EXPECT_EQ (view.timings[0], (a3app::AudioTiming { 128, 2 }));
+    EXPECT_EQ (view.timings[0], (a3app::AudioTiming { 256 }));
     EXPECT_FALSE (page.applyButton().isVisible());
 }
 
-// After a change the page says what runs (block, periods, the measured round trip, DSP load and xruns), and REVERT
-// goes back to the previous choice: a block at once, periods only after the same question.
+// After a change the page says what runs (block, the measured round trip, DSP load and xruns), and REVERT goes back
+// to the previous block at once.
 TEST_F (Pages, PipeWireSaysWhatRunsAndReverts)
 {
     FakeView view;
@@ -368,12 +362,12 @@ TEST_F (Pages, PipeWireSaysWhatRunsAndReverts)
     view.state.dspLoadPercent = 41.0f;
     view.state.xruns = 3;
     view.state.timing.available = true;
-    view.state.timing.applied = { 64, 3 };
-    view.state.timing.previous = a3app::AudioTiming { 128, 3 };
+    view.state.timing.applied = { 64 };
+    view.state.timing.previous = a3app::AudioTiming { 128 };
     a3app::AudioPage page (view, manager);
     page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     page.refresh();
-    EXPECT_EQ (page.quantumLabel().getText(), juce::String (juce::CharPointer_UTF8 ("Block 64 frames \xc3\x97 3 periods")));
+    EXPECT_EQ (page.quantumLabel().getText(), juce::String ("Block 64 frames"));
     EXPECT_TRUE (page.loadLabel().getText().contains ("41")) << page.loadLabel().getText();
     EXPECT_TRUE (page.loadLabel().getText().contains ("xruns 3")) << page.loadLabel().getText();
     EXPECT_EQ (page.blockChooser().getText(), "64 frames");
@@ -381,25 +375,11 @@ TEST_F (Pages, PipeWireSaysWhatRunsAndReverts)
     page.revertButton().triggerClick();
     juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
     ASSERT_EQ (view.timings.size(), 1u);
-    EXPECT_EQ (view.timings[0], (a3app::AudioTiming { 128, 3 }));
-
-    view.state.timing.applied = { 128, 2 };
-    view.state.timing.previous = a3app::AudioTiming { 128, 3 };
-    page.refresh();
-    page.revertButton().triggerClick();
-    juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
-    EXPECT_EQ (view.timings.size(), 1u) << "periods: asked first";
-    EXPECT_TRUE (page.confirmLabel().getText().contains ("two seconds")) << page.confirmLabel().getText();
-    page.applyButton().triggerClick();
-    juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
-    ASSERT_EQ (view.timings.size(), 2u);
-    EXPECT_EQ (view.timings[1], (a3app::AudioTiming { 128, 3 }));
+    EXPECT_EQ (view.timings[0], (a3app::AudioTiming { 128 }));
 
     view.state.timing.previous.reset();
-    view.state.timing.restarting = true;
     page.refresh();
     EXPECT_FALSE (page.revertButton().isEnabled());
-    EXPECT_FALSE (page.blockChooser().isEnabled()) << "nothing new while WirePlumber restarts";
 }
 
 // The sound-device settings come first, everything the page reports below them, the clock last.
