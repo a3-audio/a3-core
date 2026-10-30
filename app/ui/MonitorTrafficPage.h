@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+#include "Dropdown.h"
 #include "CoreClient.h"
 #include "Look.h"
 #include "MonitorTable.h"
@@ -45,7 +46,7 @@ private:
     std::string pickedDirection, pickedAddress;
     juce::TextEditor search;
     juce::ToggleButton onlyActive { "only active" };
-    juce::ComboBox device;
+    Dropdown device;
     juce::Label status, historyTitle;
     MonitorTable table, historyTable;
 };

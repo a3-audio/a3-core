@@ -338,15 +338,18 @@ TEST (DefaultConfig, NothingButTheRecBusFeedsARecorder)
     EXPECT_EQ (recorders ("rec_R"), (std::set<std::string> { "AES67 a3nuc1 out:send_CH2" }));
 }
 
-// The rig's S/PDIF out 11-12 is patched to S/PDIF in 11-12: the round-trip loop (decided 2026-10-30). The booth
+// The rig's S/PDIF out 11 is patched to S/PDIF in 11: the round-trip loop (decided 2026-10-30, one channel a side). The booth
 // is left unwired (the maintainer: "leave booth unwired"; the I/O page assigns it), analog 11/12 come from
 // device inputs 13/14, and nothing else routes onto the loop, so the default loads with nothing dropped.
 TEST (DefaultConfig, LeavesTheRoundTripLoopFree)
 {
     const auto config = loadDefault();
     ASSERT_TRUE (config.io.roundTripLoop.has_value());
-    EXPECT_EQ (*config.io.roundTripLoop, (a3app::RoundTripLoop { 11, 11, 2 }));
+    EXPECT_EQ (*config.io.roundTripLoop, (a3app::RoundTripLoop { 11, 11 }));
     EXPECT_TRUE (juce::JSON::parse (defaultConfigFile)["io"].getDynamicObject()->hasProperty ("roundTripLoop"));   // written, not implied
+    EXPECT_FALSE (juce::JSON::parse (defaultConfigFile)["io"]["roundTripLoop"].getDynamicObject()->hasProperty ("channels"))
+        << "one channel a side (2026-10-30): the key is gone";
+    EXPECT_FALSE (a3app::loopHolds (config.io.roundTripLoop, false, 12));
     EXPECT_TRUE (config.loopDropped.empty());
     for (const auto* port : { "booth_sub", "booth_top_1", "booth_top_2", "booth_top_3", "booth_top_4" })
         EXPECT_EQ (config.io.jack.count (port), 0u) << port;

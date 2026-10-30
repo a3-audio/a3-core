@@ -5,6 +5,8 @@
 // AES67 receiver "AES67 deck C" and the AES67 sender, and the engine linked them).
 #include <gtest/gtest.h>
 #include "SystemDevice.h"
+#include "a3-links/LinkPlan.h"
+#include <algorithm>
 
 namespace
 {
@@ -134,4 +136,63 @@ TEST (SystemDevice, TheDeviceIsNamedFromItsNode)
     EXPECT_EQ (a3app::deviceNameOf (DefaultNodes { "rtp-sink", "AES67 deck C", scarlettOut, scarlettIn }), "Scarlett 18i20 USB");
     EXPECT_EQ (a3app::deviceNameOf (DefaultNodes { scarlettOut, "", "", "" }), "Scarlett 18i20 USB");
     EXPECT_EQ (a3app::deviceNameOf (DefaultNodes {}), "Device");
+}
+
+namespace
+{
+// One link pass of the engine (JackBackend::applyLinks): the device gate, then the plan against the graph, applied.
+struct Graph
+{
+    std::vector<a3::links::Link> live, madeByUs;
+    std::vector<std::string> ports { "a3-engine:analog_1", "a3-engine:main_sub", "system:capture_1", "system:playback_1" };
+
+    void pass (const a3app::IoMap& io, DevicePresence presence)
+    {
+        std::vector<std::string> dropped;
+        const auto plan = a3::links::planConnections (a3app::withoutAbsentDevice (io, presence, dropped), live, madeByUs, ports,
+                                                      { "analog_1" });
+        for (const auto& link : plan.remove)
+        {
+            live.erase (std::remove (live.begin(), live.end(), link), live.end());
+            madeByUs.erase (std::remove (madeByUs.begin(), madeByUs.end(), link), madeByUs.end());
+        }
+        for (const auto& link : plan.add)
+        {
+            live.push_back (link);
+            madeByUs.push_back (link);
+        }
+    }
+    bool has (const a3::links::Link& link) const { return std::find (live.begin(), live.end(), link) != live.end(); }
+};
+}
+
+// The window a WirePlumber restart opens (Periods, back on the AUDIO page since 2026-10-30): the device goes, PipeWire
+// points system:* at whatever default is left (AES67) and links engine ports to it on its own; then the device comes
+// back. Nothing foreign survives: during the window the engine links nothing to system and removes what was linked
+// there, and after it exactly the plan is back.
+TEST (SystemDevice, AWirePlumberRestartLeavesNoForeignLink)
+{
+    a3app::IoMap io;
+    io.jack["analog_1"] = { "system:capture_1" };
+    io.jack["main_sub"] = { "system:playback_1" };
+    const a3::links::Link capture { "system:capture_1", "a3-engine:analog_1" }, playback { "a3-engine:main_sub", "system:playback_1" };
+    Graph graph;
+    graph.pass (io, a3app::devicePresenceOf (a3app::parseDefaultNodes (rigMetadata)));
+    EXPECT_TRUE (graph.has (capture) && graph.has (playback));
+
+    // The restart: the Scarlett's ports go (its links die with them); system:* is now AES67, and something links to it.
+    graph.live.clear();
+    const auto restart = a3app::devicePresenceOf (a3app::parseDefaultNodes (restartMetadata));
+    graph.live = { capture, playback };   // made by someone else on the AES67 "system" while the device is away
+    graph.pass (io, restart);
+    EXPECT_TRUE (graph.live.empty()) << "nothing of the engine's goes to system while it is not the device";
+    graph.pass (io, restart);
+    EXPECT_TRUE (graph.live.empty());
+
+    // The device is back: the plan, and nothing else.
+    graph.live.push_back ({ "a3-engine:main_sub", "system:playback_9" });   // a stray link onto an engine port
+    graph.ports.push_back ("system:playback_9");
+    graph.pass (io, a3app::devicePresenceOf (a3app::parseDefaultNodes (rigMetadata)));
+    EXPECT_TRUE (graph.has (capture) && graph.has (playback));
+    EXPECT_EQ (graph.live.size(), 2u);
 }

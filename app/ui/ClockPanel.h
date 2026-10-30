@@ -3,6 +3,7 @@
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "Dropdown.h"
 #include "ClockStatus.h"
 
 namespace a3app
@@ -36,7 +37,7 @@ public:
 
 private:
     juce::Label title, masterCaption, state, role, rate, counters, note;
-    juce::ComboBox master;
+    Dropdown master;
     juce::Colour frame = juce::Colours::transparentBlack;
 };
 }

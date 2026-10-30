@@ -71,8 +71,9 @@ public:
     // writes the settings file (only here: a flip is the one write).
     void setMonitorShown (bool);
     bool monitorShown() const;
-    // The Tooltips switch: the pages' help shows as tooltips only while it is on (a TooltipWindow exists only
-    // then). A flip is remembered in the settings file, as the monitor switch is.
+    // The Tooltips switch: the pages' help shows as a tip only while it is on (TouchTooltips: after a touch, for a few
+    // seconds, gone at the next touch); off, nothing pops up anywhere. A flip is remembered in the settings file, as
+    // the monitor switch is.
     void setTooltipsShown (bool);
     bool tooltipsShown() const;
     bool hasTooltipWindow() const;

@@ -14,49 +14,27 @@ juce::String degrees (float value)
     return value == std::round (value) ? juce::String (juce::roundToInt (value)) : juce::String (value, 1);
 }
 
-juce::String speakerList (const std::vector<a3::Loudspeaker>& speakers)
-{
-    juce::StringArray rows;
-    for (const auto& s : speakers)
-        rows.add ((s.imaginary ? juce::String ("imaginary") : "ch " + juce::String (s.channel)) + " az " + degrees (s.azimuth)
-                  + " el " + degrees (s.elevation));
-    return rows.isEmpty() ? juce::String ("no loudspeaker table in the file") : rows.joinIntoString ("  ·  ");
-}
-
 juce::String crossoverText (const a3::DecoderSummary& s)
 {
     if (s.lowPassHz == s.highPassHz)
-        return "crossover " + degrees (s.lowPassHz) + " Hz";
-    return "sub below " + degrees (s.lowPassHz) + " Hz, tops above " + degrees (s.highPassHz) + " Hz";
+        return degrees (s.lowPassHz) + " Hz";
+    return "sub < " + degrees (s.lowPassHz) + " Hz, tops > " + degrees (s.highPassHz) + " Hz";
 }
 
-// Three lines: the zone and its directory; tool, date, order, weights, sub and crossover; the loudspeakers.
-juce::String zoneSummary (a3::SpeakerZone zone, const juce::File& directory)
-{
-    const juce::String name = a3::zoneName (zone);
-    const auto head = name.toUpperCase() + "   " + directory.getFullPathName();
-    const auto decoderFile = directory.getChildFile (name + ".decoder.json");
-    juce::String error;
-    const auto summary = a3::decoderSummary (decoderFile.loadFileAsString(),
-                                             juce::JSON::parse (directory.getChildFile (name + ".parameters.json").loadFileAsString()), error);
-    if (! summary)
-        return head + "\n" + decoderFile.getFullPathName() + ": " + error;
-    const auto made = summary->madeWith.isNotEmpty() ? summary->madeWith + ", " + summary->exportedOn : juce::String ("tool not named");
-    return head + "\n" + made + "  ·  order " + juce::String (summary->order) + "  ·  weights " + summary->weights + "  ·  "
-           + (summary->subChannel > 0 ? "sub ch " + juce::String (summary->subChannel) : juce::String ("no sub")) + "  ·  "
-           + crossoverText (*summary) + "\n" + speakerList (summary->loudspeakers);
-}
-
+juce::String inDegrees (float value) { return degrees (value) + juce::String::fromUTF8 ("\xc2\xb0"); }
 bool holdsAVariant (const juce::File& directory) { return directory.getChildFile ("main.decoder.json").existsAsFile(); }
 
-void confirmWithBox (const juce::String& question, std::function<void()> onYes)
+// The questions open inside the window (`window`, the page's top level): as desktop windows of class a3-core, i3
+// tiled them beside the window on its workspace (for_window [class="a3-core"]).
+void confirmWithBox (juce::Component* window, const juce::String& question, std::function<void()> onYes)
 {
     const auto options = juce::MessageBoxOptions().withIconType (juce::MessageBoxIconType::WarningIcon)
-                             .withTitle ("Delete variant").withMessage (question).withButton ("DELETE").withButton ("Cancel");
+                             .withTitle ("Delete variant").withMessage (question).withButton ("DELETE").withButton ("Cancel")
+                             .withParentComponent (window);
     juce::AlertWindow::showAsync (options, [onYes = std::move (onYes)] (int result) { if (result == 1 && onYes) onYes(); });
 }
 
-void askNameWithBox (const juce::String& current, std::function<void (const juce::String&)> onName)
+void askNameWithBox (juce::Component* window, const juce::String& current, std::function<void (const juce::String&)> onName)
 {
     auto* box = new juce::AlertWindow ("Rename variant", "A new name for " + current
                                            + " (no slash, not starting with a dot, not one that exists).",
@@ -64,6 +42,11 @@ void askNameWithBox (const juce::String& current, std::function<void (const juce
     box->addTextEditor ("name", current);
     box->addButton ("RENAME", 1, juce::KeyPress (juce::KeyPress::returnKey));
     box->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+    if (window != nullptr)
+    {
+        window->addAndMakeVisible (box);
+        box->setCentrePosition (window->getLocalBounds().getCentre());
+    }
     box->enterModalState (true, juce::ModalCallbackFunction::create ([box, onName = std::move (onName)] (int result)
     {
         if (result == 1 && onName)
@@ -71,6 +54,106 @@ void askNameWithBox (const juce::String& current, std::function<void (const juce
     }), true);   // deleted once dismissed, after this callback
 }
 }
+
+ZoneInfo zoneInfo (a3::SpeakerZone zone, const juce::File& directory)
+{
+    const juce::String name = a3::zoneName (zone);
+    ZoneInfo info { name.toUpperCase(), directory.getFullPathName(), {}, {}, {} };
+    const auto decoderFile = directory.getChildFile (name + ".decoder.json");
+    const auto summary = a3::decoderSummary (decoderFile.loadFileAsString(),
+                                             juce::JSON::parse (directory.getChildFile (name + ".parameters.json").loadFileAsString()), info.error);
+    if (! summary)
+    {
+        info.error = decoderFile.getFileName() + ": " + info.error;
+        return info;
+    }
+    info.facts = { { "Decoder", summary->madeWith.isNotEmpty() ? summary->madeWith : juce::String ("not named") },
+                   { "Exported", summary->exportedOn.isNotEmpty() ? summary->exportedOn : juce::String ("-") },
+                   { "Order", juce::String (summary->order) },
+                   { "Weights", summary->weights },
+                   { "Sub", summary->subChannel > 0 ? "ch " + juce::String (summary->subChannel) : juce::String ("none") },
+                   { "Crossover", crossoverText (*summary) } };
+    for (const auto& s : summary->loudspeakers)
+        info.speakers.push_back ({ s.imaginary ? juce::String ("imaginary") : juce::String (s.channel), inDegrees (s.azimuth), inDegrees (s.elevation) });
+    return info;
+}
+
+// The picked variant's two zones side by side on a card: per zone its facts (label, value) and its loudspeakers as a
+// table (channel, azimuth, elevation), every column aligned, sizes in shares of one line.
+class ZonesPage::Info final : public juce::Component
+{
+public:
+    void show (ZoneInfo mainZone, ZoneInfo boothZone)
+    {
+        zones = { std::move (mainZone), std::move (boothZone) };
+        repaint();
+    }
+    const ZoneInfo& zone (a3::SpeakerZone which) const { return zones[which == a3::SpeakerZone::main ? 0 : 1]; }
+
+    // Lines a zone's column needs: its name, the facts, the table's head and rows (or the error).
+    int lines() const
+    {
+        int most = 0;
+        for (const auto& z : zones)
+            most = juce::jmax (most, z.error.isNotEmpty() ? 2 : 2 + (int) z.facts.size() + (int) z.speakers.size());
+        return most;
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        const auto bounds = getLocalBounds().toFloat();
+        const auto inset = (float) getWidth() / 60.0f;
+        g.setColour (palette::raised);
+        g.fillRoundedRectangle (bounds, inset);
+        auto area = getLocalBounds().reduced (juce::roundToInt (inset));
+        const int line = juce::jmax (1, area.getHeight() / juce::jmax (1, lines()));
+        g.setFont (juce::FontOptions ((float) line * 0.72f));
+        auto left = area.removeFromLeft (area.getWidth() / 2);
+        paintZone (g, zones[0], left.withTrimmedRight (juce::roundToInt (inset)), line);
+        g.setColour (palette::lifted);
+        g.fillRect (area.getX(), area.getY(), 1, area.getHeight());
+        paintZone (g, zones[1], area.withTrimmedLeft (juce::roundToInt (inset)), line);
+    }
+
+private:
+    static void paintZone (juce::Graphics& g, const ZoneInfo& z, juce::Rectangle<int> area, int line)
+    {
+        g.setColour (palette::text);
+        g.drawText (z.zone, area.removeFromTop (line), juce::Justification::centredLeft, true);
+        if (z.error.isNotEmpty())
+        {
+            g.setColour (palette::danger);
+            g.drawFittedText (z.error, area.removeFromTop (line), juce::Justification::centredLeft, 1, 0.7f);
+            return;
+        }
+        const int labelWidth = area.getWidth() * 2 / 5;
+        for (const auto& [label, value] : z.facts)
+        {
+            auto row = area.removeFromTop (line);
+            g.setColour (palette::textMuted);
+            g.drawText (label, row.removeFromLeft (labelWidth), juce::Justification::centredLeft, true);
+            g.setColour (palette::text);
+            g.drawFittedText (value, row, juce::Justification::centredLeft, 1, 0.7f);
+        }
+        const auto columns = [&] (juce::Rectangle<int> row, const std::array<juce::String, 3>& cells)
+        {
+            const int width = row.getWidth() / 3;
+            g.drawText (cells[0], row.removeFromLeft (width), juce::Justification::centredLeft, true);
+            g.drawText (cells[1], row.removeFromLeft (width).withTrimmedRight (width / 4), juce::Justification::centredRight, true);
+            g.drawText (cells[2], row.withTrimmedRight (width / 4), juce::Justification::centredRight, true);
+        };
+        g.setColour (palette::textMuted);
+        columns (area.removeFromTop (line), { "Speaker", "Azimuth", "Elevation" });
+        for (const auto& row : z.speakers)
+        {
+            g.setColour (row[0] == "imaginary" ? palette::textMuted : palette::text);
+            columns (area.removeFromTop (line), row);
+        }
+    }
+
+    std::array<ZoneInfo, 2> zones;
+};
+
 
 class ZonesPage::Model final : public juce::ListBoxModel
 {
@@ -90,8 +173,13 @@ public:
         g.drawText (directory.getFileName(), width / 40, 0, width / 2, height, juce::Justification::centredLeft);
         g.setColour (palette::textMuted);
         const bool own = isUserVariant (directory, page.userRoot);
-        g.drawText (own ? juce::String ("yours") : directory.getParentDirectory().getFullPathName(), width / 2 + width / 20, 0,
-                    width / 2 - width / 10, height, juce::Justification::centredRight);
+        juce::StringArray tags { own ? juce::String ("yours") : directory.getParentDirectory().getFullPathName() };
+        if (usesVariant (page.view.running(), directory))
+            tags.add ("runs");
+        else if (usesVariant (page.view.config(), directory))
+            tags.add ("pending");
+        g.drawFittedText (tags.joinIntoString (juce::String::fromUTF8 ("  \xc2\xb7  ")), width / 2 + width / 20, 0, width / 2 - width / 10, height,
+                          juce::Justification::centredRight, 1, 0.6f);
     }
 
     void listBoxItemClicked (int row, const juce::MouseEvent&) override { page.selectVariant (row); }
@@ -102,12 +190,14 @@ private:
 
 ZonesPage::ZonesPage (HostView& v, std::vector<juce::File> choices, juce::File root, Dialogs d)
     : view (v), installedChoices (std::move (choices)), userRoot (std::move (root)), dialogs (std::move (d)),
-      model (std::make_unique<Model> (*this)), list ("variants", model.get())
+      info (std::make_unique<Info>()), model (std::make_unique<Model> (*this)), list ("variants", model.get())
 {
     if (! dialogs.confirm)
-        dialogs.confirm = confirmWithBox;
+        dialogs.confirm = [this] (const juce::String& question, std::function<void()> onYes)
+        { confirmWithBox (getTopLevelComponent(), question, std::move (onYes)); };
     if (! dialogs.askName)
-        dialogs.askName = askNameWithBox;
+        dialogs.askName = [this] (const juce::String& current, std::function<void (const juce::String&)> onName)
+        { askNameWithBox (getTopLevelComponent(), current, std::move (onName)); };
     look::caption (title);
     look::failure (message);
     title.setText ("ZONES", juce::dontSendNotification);
@@ -125,12 +215,8 @@ ZonesPage::ZonesPage (HostView& v, std::vector<juce::File> choices, juce::File r
         label->setText (text, juce::dontSendNotification);
     }
     headphonesCaption.setTooltip ("The phones decoder's headphone EQ (never the rec decoder's)");
-    for (auto* summary : { &mainSummary, &boothSummary })
-    {
-        look::value (*summary);
-        summary->setJustificationType (juce::Justification::topLeft);
-        summary->setMinimumHorizontalScale (1.0f);
-    }
+    look::caption (actions);
+    actions.setMinimumHorizontalScale (0.6f);
     openSpeakers.onClick = [this] { if (onOpenSpeakers) onOpenSpeakers(); };
     mainBox.onChange = [this] { chooseZone (a3::SpeakerZone::main, mainBox.getSelectedItemIndex()); };
     boothBox.onChange = [this] { chooseZone (a3::SpeakerZone::booth, boothBox.getSelectedItemIndex()); };
@@ -140,7 +226,7 @@ ZonesPage::ZonesPage (HostView& v, std::vector<juce::File> choices, juce::File r
         headphones.addItem (name, id++);
     headphones.onChange = [this] { chooseHeadphoneEq (headphones.getSelectedItemIndex()); };
     for (auto* child : std::initializer_list<juce::Component*> { &title, &openSpeakers, &mainCaption, &mainBox, &boothCaption, &boothBox,
-                                                                 &headphonesCaption, &headphones, &message, &list, &mainSummary, &boothSummary })
+                                                                 &headphonesCaption, &headphones, &message, &list, &actions, info.get() })
         addAndMakeVisible (child);
     selected = view.config().spatialDirectory;
     rescan();
@@ -218,7 +304,9 @@ void ZonesPage::selectVariant (int row)
         return;
     selected = directories[(size_t) row];
     list.selectRow (row, true, true);
+    look::say (message, {});   // a refusal belonged to the variant picked before
     summarise();
+    sayActions();
 }
 
 void ZonesPage::chooseHeadphoneEq (int item)
@@ -282,7 +370,30 @@ void ZonesPage::askRename()
 
 juce::String ZonesPage::summaryText (a3::SpeakerZone zone) const
 {
-    return (zone == a3::SpeakerZone::main ? mainSummary : boothSummary).getText();
+    const auto& z = info->zone (zone);
+    juce::StringArray lines { z.zone, z.error };
+    for (const auto& [label, value] : z.facts)
+        lines.add (label + "  " + value);
+    for (const auto& row : z.speakers)
+        lines.add (row[0] + "  " + row[1] + "  " + row[2]);
+    lines.removeEmptyStrings();
+    return lines.joinIntoString ("\n");
+}
+
+// What RENAME and DELETE do for the picked variant, said before a key is pressed.
+void ZonesPage::sayActions()
+{
+    const auto name = selected.getFileName();
+    const auto renameWhy = renameRefusal(), deleteWhy = deleteRefusal();
+    juce::String text;
+    if (renameWhy.isEmpty() && deleteWhy.isEmpty())
+        text = "RENAME and DELETE act on " + name + ".";
+    else if (renameWhy == deleteWhy || ! isUserVariant (selected, userRoot))
+        text = name + ": no RENAME or DELETE, " + deleteWhy + ".";
+    else
+        text = name + ": " + (renameWhy.isEmpty() ? juce::String ("RENAME acts on it") : "no RENAME, " + renameWhy) + "; "
+               + (deleteWhy.isEmpty() ? juce::String ("DELETE acts on it") : "no DELETE, " + deleteWhy) + ".";
+    look::say (actions, text);
 }
 
 // The selected variant and when its zone files last changed: a variant saved in place shows at once.
@@ -297,8 +408,8 @@ juce::String ZonesPage::summaryKey() const
 void ZonesPage::summarise()
 {
     summarisedKey = summaryKey();
-    look::say (mainSummary, zoneSummary (a3::SpeakerZone::main, selected));
-    look::say (boothSummary, zoneSummary (a3::SpeakerZone::booth, selected));
+    info->show (zoneInfo (a3::SpeakerZone::main, selected), zoneInfo (a3::SpeakerZone::booth, selected));
+    resized();
 }
 
 void ZonesPage::refresh()
@@ -317,6 +428,7 @@ void ZonesPage::refresh()
         list.selectRow (row, true, true);
     else
         list.deselectAllRows();
+    sayActions();
 }
 
 void ZonesPage::paint (juce::Graphics& g) { g.fillAll (palette::surface); }
@@ -339,14 +451,12 @@ void ZonesPage::resized()
     chooserRow (boothCaption, boothBox);
     chooserRow (headphonesCaption, headphones);
     message.setBounds (area.removeFromTop (row));
-    const auto summaryFont = juce::FontOptions ((float) row * 0.3f);
-    for (auto* summary : { &boothSummary, &mainSummary })
-    {
-        summary->setFont (summaryFont);
-        summary->setBounds (area.removeFromBottom (row * 2));   // five lines of the summary at its font
-    }
-    area.removeFromBottom (row / 4);
-    list.setRowHeight (row * 3 / 4);
-    list.setBounds (area);
+    // The list as tall as its rows (scrolling past five), the line under it, and the card in all that is left.
+    const int listRow = row * 3 / 4;
+    list.setRowHeight (listRow);
+    list.setBounds (area.removeFromTop (juce::jmin (area.getHeight() / 3, listRow * juce::jlimit (1, 5, rowCount()) + 2)));
+    actions.setBounds (area.removeFromTop (listRow));
+    area.removeFromTop (row / 4);
+    info->setBounds (area.withHeight (juce::jmin (area.getHeight(), (info->lines() + 1) * row * 2 / 3)));
 }
 }

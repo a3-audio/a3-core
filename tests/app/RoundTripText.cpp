@@ -103,7 +103,7 @@ TEST (RoundTripText, TheStatusCarriesTheMeasurement)
 
 TEST (RoundTripText, TheMeterMeasuresOnceAfterTheStartAndOnRequest)
 {
-    a3app::RoundTripMeter meter (a3app::RoundTripLoop { 11, 11, 2 });
+    a3app::RoundTripMeter meter (a3app::RoundTripLoop { 11, 11 });
     double now = 100.0;
     meter.service (now, at (14, 0));
     EXPECT_EQ (meter.report().state, State::notMeasured);
@@ -131,7 +131,7 @@ TEST (RoundTripText, WithoutALoopTheMeterSaysWhy)
     EXPECT_EQ (none.report().reason, "no loop configured");
     EXPECT_FALSE (none.report().measuring);
 
-    a3app::RoundTripMeter absent (a3app::RoundTripLoop { 11, 11, 2 }, "the device has no output 11");
+    a3app::RoundTripMeter absent (a3app::RoundTripLoop { 11, 11 }, "the device has no output 11");
     absent.request();
     EXPECT_EQ (absent.report().state, State::noLoop);
     EXPECT_EQ (absent.report().reason, "the device has no output 11");

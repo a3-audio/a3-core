@@ -438,18 +438,15 @@ std::vector<int> hardwareChannels (const AppConfig& config, const juce::StringAr
     return channels;
 }
 
-// Why the digital loop cannot reserve `loop`'s channels on one side ("" when it can).
+// Why the digital loop cannot reserve `loop`'s channel on one side ("" when it can).
 juce::String digitalLoopRefusal (const IoMap& io, const RoundTripLoop& loop, bool input)
 {
-    const int first = input ? loop.input : loop.output;
-    for (int channel = first; channel < first + loop.channels; ++channel)
-    {
-        const juce::String side = juce::String (input ? "input " : "output ") + juce::String (channel);
-        if (const auto users = routesOn (io, input, channel); ! users.isEmpty())
-            return side + " is in use (" + users.joinIntoString (", ") + "); unroute it first";
-        if (io.analogLoop && (input ? io.analogLoop->input : io.analogLoop->output) == channel)
-            return side + " is the analog test cable's";
-    }
+    const int channel = input ? loop.input : loop.output;
+    const juce::String side = juce::String (input ? "input " : "output ") + juce::String (channel);
+    if (const auto users = routesOn (io, input, channel); ! users.isEmpty())
+        return side + " is in use (" + users.joinIntoString (", ") + "); unroute it first";
+    if (io.analogLoop && (input ? io.analogLoop->input : io.analogLoop->output) == channel)
+        return side + " is the analog test cable's";
     return {};
 }
 }
@@ -477,7 +474,7 @@ std::optional<AppConfig> withDigitalLoopChannel (const AppConfig& config, bool i
         return edited;
     }
     const bool fresh = ! config.io.roundTripLoop;
-    auto loop = config.io.roundTripLoop.value_or (RoundTripLoop { channel, channel, RoundTripLoop {}.channels });
+    auto loop = config.io.roundTripLoop.value_or (RoundTripLoop { channel, channel });
     (input ? loop.input : loop.output) = channel;
     for (const bool side : { false, true })
         if (fresh || side == input)

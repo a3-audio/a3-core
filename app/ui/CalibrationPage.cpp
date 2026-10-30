@@ -31,11 +31,12 @@ std::optional<float> trimOf (const AppConfig& config, TrimZone zone)
     return std::nullopt;
 }
 
-void askWithBox (const juce::String& message, std::function<void()> onYes)
+// Inside the window: a desktop window of class a3-core would be tiled beside it by i3 (for_window [class="a3-core"]).
+void askWithBox (juce::Component* window, const juce::String& message, std::function<void()> onYes)
 {
     const auto options = juce::MessageBoxOptions().withIconType (juce::MessageBoxIconType::QuestionIcon)
                              .withTitle ("Change trim").withMessage (message)
-                             .withButton ("Change").withButton ("Cancel");
+                             .withButton ("Change").withButton ("Cancel").withParentComponent (window);
     juce::AlertWindow::showAsync (options, [onYes = std::move (onYes)] (int result) { if (result == 1 && onYes) onYes(); });
 }
 }
@@ -46,7 +47,8 @@ juce::String CalibrationPage::describe (std::optional<float> db)
 }
 
 CalibrationPage::CalibrationPage (HostView& v, Confirm c)
-    : view (v), confirm (c ? std::move (c) : Confirm (askWithBox))
+    : view (v), confirm (c ? std::move (c) : Confirm ([this] (const juce::String& text, std::function<void()> onYes)
+                                                             { askWithBox (getTopLevelComponent(), text, std::move (onYes)); }))
 {
     for (const auto zone : { TrimZone::main, TrimZone::booth, TrimZone::phones, TrimZone::rec })
         rows.push_back (std::make_unique<Row> (zone));
@@ -55,8 +57,12 @@ CalibrationPage::CalibrationPage (HostView& v, Confirm c)
     title.setText ("CALIBRATION", juce::dontSendNotification);
     const juce::String help ("A slider only proposes a value. Set... asks, naming the old and the new trim; nothing "
                              "changes before you agree. Save applies it. A zone without a trim stays closed.");
-    look::help (help, { &title });
-    for (auto* child : std::initializer_list<juce::Component*> { &title, &message })
+    // The page has room below its rows: the help is text there, not a tip (2026-10-30, the maintainer).
+    look::caption (helpText);
+    helpText.setJustificationType (juce::Justification::topLeft);
+    helpText.setMinimumHorizontalScale (1.0f);
+    look::say (helpText, help);
+    for (auto* child : std::initializer_list<juce::Component*> { &title, &message, &helpText })
         addAndMakeVisible (child);
     for (auto& rowPtr : rows)
     {
@@ -70,7 +76,6 @@ CalibrationPage::CalibrationPage (HostView& v, Confirm c)
         // Starts at what the zone has now (the lowest for a zone without a trim), so it never reads as a pending change.
         row.proposal.setValue (trimOf (view.config(), row.zone).value_or (minTrimDb), juce::dontSendNotification);
         row.set.onClick = [this, zone = row.zone] { proposeTrim (zone, (float) rows[(size_t) zone]->proposal.getValue()); };
-        look::help (help, { &row.proposal, &row.set });
         for (auto* child : std::initializer_list<juce::Component*> { &row.name, &row.current, &row.proposal, &row.set })
             addAndMakeVisible (child);
     }
@@ -130,5 +135,7 @@ void CalibrationPage::resized()
         r.proposal.setBounds (line);
     }
     message.setBounds (area.removeFromTop (row));
+    helpText.setFont (juce::FontOptions ((float) row * 0.36f));
+    helpText.setBounds (area.removeFromTop (row * 3));
 }
 }

@@ -158,7 +158,7 @@ The window has one page per job and a Save bar under them:
 | AUDIO | The sound-device settings first: one device-type list, `PipeWire (JACK)` (the JACK backend; `"type": "jack"` in the file) beside JUCE's types. PipeWire: Block, applied by the engine on APPLY (see "Block on PipeWire"). A JUCE type: input, output, rate, block size, an edit that Save applies; it opens no device. Below them what runs: rate, block, rate source, bit depth, DSP load and xruns, the round trip, measured over the digital loop (MEASURE), and the analog chain (MEASURE ANALOG CHAIN); see "The measured round trip". Each MEASURE is off, with a line naming the I/O page, while its pair is not set |
 | CHANNELS | N (1..128) with the DSP load beside it; the deck count (1..26, one letter a slot A..Z; the engine has no cap) with the count that runs |
 | ZONES | which spatial directory: the installed `spatial` and `spatial-reaper-booth-6.1`, and `~/.config/a3/engine/spatial`. No layout editor |
-| I/O | INPUT: per channel L/R a dropdown, the decks' sources, the direct links the engine makes between two foreign ports. OUTPUT: per zone channel a dropdown; REC is empty by default (for an analog recorder). A dropdown runs the row's width and names the device's port as the user means it (`Scarlett 18i20 USB out 1`, from the configured ALSA node; `Device out 1` without one), never a raw `system:*` and nothing beside it. Each list ends with MEASURE: the digital loop and the analog test cable, its side of each. The digital loop's channels are offered in no route, and a one-line notice names them and what a load unrouted. No list of foreign links and no free-text port field: the engine removes every link on its ports it does not plan (see "Who owns a link") |
+| I/O | INPUT: per channel L/R a dropdown and the decks' sources; no direct links (2026-10-30: a file's `io.directLinks` still loads and the engine still makes them, but the page neither shows nor edits them). OUTPUT: per zone channel a dropdown; REC is empty by default (for an analog recorder). A dropdown runs the row's width and names the device's port as the user means it (`Scarlett 18i20 USB out 1`, from the configured ALSA node; `Device out 1` without one), never a raw `system:*` and nothing beside it. Each list ends with MEASURE: the digital loop and the analog test cable, its side of each, one channel a side. The digital loop's channels are offered in no route, and a one-line notice names them and what a load unrouted. No list of foreign links and no free-text port field: the engine removes every link on its ports it does not plan (see "Who owns a link") |
 | CALIBRATION | trim per zone, -90..+6 dB; a slider only proposes, a dialog names the old and the new value, a zone without a trim stays closed |
 | FILTER | SVF or Ladder, live: acts at once, needs no Save |
 | STATUS | what runs: mode, Core's last word, gate, load, xruns, missing peers, meters |
@@ -216,7 +216,7 @@ modulation (R5), the JACK backend, and the rig's connections: what `a3-patchbay.
 moved to the engine's ports (analog capture and Scarlett playback; the analyzer's beat input `bpm_1` is a built-in
 link since 2026-10-30, see below, so the REC row is empty), except
 what the round-trip loop needs (2026-10-30): the booth is left unwired (assigned on the I/O page) and analog
-11/12 come from device inputs 13/14, because device channels 11-12 are the loop;
+11/12 come from device inputs 13/14, because device channels 11-12 were the loop (since it is one channel a side, 12 is free again; the default leaves that routing as it was);
 deck A to `StemDeck-A` (`bformat_1..16`, `aux_1..16`, `cue_1..9`), deck B to `AES67 deck B` (`receive_MAIN/AUX/CUE…`), and
 every other slot to its local `StemDeck-<X>` by the rule above (a StemDeck's ports exist once StemDeck's S4 is
 installed; until then they are reported as missing, not an error). Since Task 24 the links into the
@@ -483,12 +483,13 @@ offered in this version.
 ## The measured round trip
 
 **Why** (2026-10-30): the AUDIO page showed an estimate (capture + one period + playback latency as PipeWire
-reports them). The rig's Scarlett 18i20 has its S/PDIF out (device outputs 11-12) patched to its S/PDIF in (device
-inputs 11-12); the maintainer: "make 11-12 free for the measurement".
+reports them). The rig's Scarlett 18i20 has its S/PDIF out patched to its S/PDIF in; the maintainer: "make 11-12
+free for the measurement", and the same day: one channel a side is enough, so 12 is free again.
 
-**The loop** is `io.roundTripLoop` in `engine.json`: `{"output": 11, "input": 11, "channels": 2}` (device channels,
-1-based as the I/O page shows them; the probe uses the first of each side, all `channels` are reserved). A file
-without the key gets exactly that default, so the maintainer's existing file is covered; `null` is no loop.
+**The loop** is `io.roundTripLoop` in `engine.json`: `{"output": 11, "input": 11}` (device channels, 1-based as the
+I/O page shows them; only those two are reserved). A file that still says `"channels": 2` (written until then) loads,
+reserves only the two channels, and a save leaves the key out. A file without the key gets exactly that default, so
+the maintainer's existing file is covered; `null` is no loop.
 Reserved means: no dropdown offers those channels, the port editor refuses them, and a route onto them in a
 loaded file (a JACK peer, a device channel, a direct link) is dropped and listed (`AppConfig::loopDropped`: on
 the I/O page's notice, on stderr at start and from `--check-config` as `unrouted <route>: the round-trip loop`).
@@ -506,9 +507,9 @@ over through one atomic state. It runs 2 s after the backend opens, after a new 
 `POST /api/engine/roundtrip` and on the AUDIO page's MEASURE. The number is the loop's out-to-in time as the
 engine sees it: playback + capture latency + one period.
 
-**Choosing the loop** (2026-10-30): the I/O page's `Digital loop` row, one channel per side; `none` is no loop
-(`null` in the file). A first channel sets both sides (out N -> in N, as an S/PDIF cable runs); the loop keeps its
-channel count. The reservation stays: a channel the loop would take that carries a route or the analog test pair
+**Choosing the loop** (2026-10-30): the I/O page's `Digital loop` row, one channel per side (`output 11`,
+`input 11`); `none` is no loop (`null` in the file). A first channel sets both sides (out N -> in N, as an S/PDIF cable
+runs). The reservation stays: a channel the loop would take that carries a route or the analog test pair
 is refused, naming its user, and never taken from it.
 
 **The AUDIO page** says `Round trip (measured, digital loop)   X ms (N samples), HH:MM`, or the estimate as the

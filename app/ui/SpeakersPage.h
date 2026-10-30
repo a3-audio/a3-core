@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+#include "Dropdown.h"
 #include "AllRadDesign.h"
 #include "HostView.h"
 #include "Look.h"
@@ -50,7 +51,7 @@ private:
     std::unique_ptr<juce::AudioProcessorEditor> iemEditor;   // scaled into the page, never scrolled
     juce::TextButton mainKey { "MAIN" }, boothKey { "BOOTH" }, save { "SAVE TO ZONE" };
     juce::Label title, subCaption, crossoverCaption, message;
-    juce::ComboBox sub;
+    Dropdown sub;
     juce::Slider crossover { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
 };
 }

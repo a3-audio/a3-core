@@ -323,8 +323,7 @@
   "directLinks": [],
   "roundTripLoop": {
    "output": 11,
-   "input": 11,
-   "channels": 2
+   "input": 11
   }
  },
  "spatial": "spatial"

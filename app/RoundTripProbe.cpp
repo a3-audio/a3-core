@@ -253,8 +253,8 @@ void RoundTripMeter::service (double now, juce::int64 wallMillis, double sampleR
         return;
     }
     last = { RoundTripReport::State::noLoopFound, false, 0, wallMillis,
-             "no loop found on " + loopRangeText ({ loop->output, loop->input, 1 }, false) + " -> "
-                 + loopRangeText ({ loop->output, loop->input, 1 }, true) };
+             "no loop found on " + loopRangeText (*loop, false) + " -> "
+                 + loopRangeText (*loop, true) };
 }
 
 RoundTripReport RoundTripMeter::report() const

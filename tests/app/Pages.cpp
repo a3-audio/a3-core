@@ -23,6 +23,10 @@
 #include "SpatialTestData.h"
 #include "StatusPage.h"
 #include "ZonesPage.h"
+#include "Dropdown.h"
+#include "TouchTooltips.h"
+#include <array>
+#include <map>
 
 namespace
 {
@@ -702,19 +706,30 @@ TEST_F (Pages, ZonesPaintsTheHeadphonesChooser)
     EXPECT_EQ (view.cfg.engine.phonesHeadphoneEq, "off");
 }
 
-TEST_F (Pages, IoEditsDirectLinks)
+// I/O INPUT (2026-10-30, the maintainer): no direct links section. The page has no text field and no word of them;
+// a file's io.directLinks is not the page's to show or edit, so it is kept as loaded (the engine still makes them).
+TEST_F (Pages, IoInputHasNoDirectLinks)
 {
     FakeView view;
+    view.cfg.io.directLinks = { { "y:out", "z:in" } };
     a3app::IoPage page (view);
-
-    page.setDirectLinks ("system:capture_9 -> beat-analyzer:in_1\n  \nsystem:capture_10 -> beat-analyzer:in_2");
-    EXPECT_EQ (view.cfg.io.directLinks.size(), 2u);
-    EXPECT_EQ (view.cfg.io.directLinks[1].second, "beat-analyzer:in_2");
-    const auto edits = view.edited;
-    page.setDirectLinks ("a -> b\nnot a link");   // refused as a whole
-    EXPECT_EQ (view.edited, edits);
-    EXPECT_EQ (view.cfg.io.directLinks.size(), 2u);
-    EXPECT_NE (page.messageLabel().getText().indexOf ("not a link"), -1);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
+    page.showSub (a3app::IoPage::Sub::input);
+    std::function<void (juce::Component&)> look = [&] (juce::Component& parent)
+    {
+        for (auto* child : parent.getChildren())
+        {
+            EXPECT_EQ (dynamic_cast<juce::TextEditor*> (child), nullptr) << "no free-text field";
+            if (auto* label = dynamic_cast<juce::Label*> (child))
+                EXPECT_FALSE (label->getText().containsIgnoreCase ("direct link")) << label->getText();
+            look (*child);
+        }
+    };
+    look (page);
+    page.refresh (true);
+    EXPECT_EQ (view.edited, 0);
+    EXPECT_EQ (view.cfg.io.directLinks, (std::vector<std::pair<std::string, std::string>> { { "y:out", "z:in" } }));
+    expectPainted (a3apptest::snapshotAt (page, "io-input-without-direct-links", page.getWidth(), page.getHeight()));
 }
 
 TEST_F (Pages, CalibrationNeedsConfirmation)
@@ -1055,8 +1070,7 @@ TEST_F (Pages, ZonesSummariseTheVariantPickedInTheList)
     for (const auto zone : { a3::SpeakerZone::main, a3::SpeakerZone::booth })
     {
         const auto text = page.summaryText (zone);
-        for (const auto* part : { "AllRADecoder v0.9.5", "28 Feb 2026", "order 3", "inPhase", "sub ch 1", "150 Hz", "ch 2 az 45 el 0",
-                                  "ch 5 az 135 el 0", "imaginary az 0 el 90" })
+        for (const auto* part : { "AllRADecoder v0.9.5", "28 Feb 2026", "inPhase", "ch 1", "150 Hz", "imaginary" })
             EXPECT_TRUE (text.contains (part)) << a3::zoneName (zone) << ": " << part << " in " << text;
     }
     EXPECT_TRUE (page.summaryText (a3::SpeakerZone::main).startsWith ("MAIN"));
@@ -1066,7 +1080,7 @@ TEST_F (Pages, ZonesSummariseTheVariantPickedInTheList)
     page.selectVariant (1);   // picking in the list edits nothing
     EXPECT_EQ (view.edited, 0);
     EXPECT_TRUE (page.summaryText (a3::SpeakerZone::booth).contains ("booth.decoder.json")) << page.summaryText (a3::SpeakerZone::booth);
-    EXPECT_TRUE (page.summaryText (a3::SpeakerZone::main).contains ("order 3"));
+    EXPECT_TRUE (page.summaryText (a3::SpeakerZone::main).contains ("Order  3"));
     expectPainted (snapshot (page, "zones-summary-unreadable"));
 
     bool opened = false;
@@ -1395,17 +1409,17 @@ TEST_F (Pages, SpeakersEditorIsScaledIntoThePage)
     EXPECT_GE (areaIn (*page, *page->editor()).getWidth(), page->getWidth() * 9 / 10);
 }
 
-// The pages' long help is a tooltip on the title (and the controls it explains), never a label taking space.
+// The pages' long help is a tooltip on the title (and the controls it explains), never a label taking space; except
+// CALIBRATION, whose page has the room (CalibrationHelpIsTextInTheFreeSpace).
 TEST_F (Pages, HelpIsATooltipNotALabel)
 {
     SpeakerRig rig;
     a3app::SpeakersPage speakers (rig.view, rig.userRoot);
     a3app::ZonesPage zones (rig.view, { rig.installed.root() });
     a3app::ChannelsPage channels (rig.view);
-    a3app::CalibrationPage calibration (rig.view);
     a3app::FilterPage filter (rig.view);
     const std::vector<std::pair<juce::Component*, juce::String>> pages {
-        { &speakers, "SPEAKERS" }, { &zones, "ZONES" }, { &channels, "CHANNELS" }, { &calibration, "CALIBRATION" }, { &filter, "FILTER" } };
+        { &speakers, "SPEAKERS" }, { &zones, "ZONES" }, { &channels, "CHANNELS" }, { &filter, "FILTER" } };
     for (const auto& [page, title] : pages)
     {
         page->setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
@@ -1587,8 +1601,7 @@ TEST_F (Pages, ZonesDropdownsFirstAndRenameDeleteInTheFooter)
     page->selectVariant (rig.rowOf (*page, rig.club));
     window.refreshNow();
     auto* deleteKey = buttonsLabelled (content, "DELETE").front();
-    EXPECT_FALSE (deleteKey->isEnabled());   // what runs uses it
-    EXPECT_TRUE (deleteKey->getTooltip().contains ("runs")) << deleteKey->getTooltip();
+    EXPECT_TRUE (deleteKey->isEnabled()) << "a key that cannot act still answers (ZonesKeysAlwaysAnswer)";
     expectPainted (a3apptest::snapshotAt (content, "portrait-zones-refused", content.getWidth(), content.getHeight()));
     page->selectVariant (rig.rowOf (*page, rig.spare));
     window.refreshNow();
@@ -1733,22 +1746,20 @@ TEST_F (Pages, IoLeavesTheRoundTripLoopOut)
         view.state.capturePorts.add ("system:capture_" + juce::String (i));
         view.state.playbackPorts.add ("system:playback_" + juce::String (i));
     }
-    view.cfg.io.roundTripLoop = a3app::RoundTripLoop { 11, 11, 2 };
+    view.cfg.io.roundTripLoop = a3app::RoundTripLoop { 11, 11 };
     view.unroutedByLoop = { "booth_sub -> system:playback_11" };
     a3app::IoPage page (view);
     page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
     page.showSub (a3app::IoPage::Sub::output);
     auto* box = page.routeBox ("booth_sub");
     ASSERT_NE (box, nullptr);
-    EXPECT_EQ (box->getNumItems(), 13);   // none + 14 - the loop's 2
+    EXPECT_EQ (box->getNumItems(), 14);   // none + 14 - the loop's one
     for (int i = 0; i < box->getNumItems(); ++i)
-    {
         EXPECT_FALSE (box->getItemText (i).endsWith (" out 11")) << box->getItemText (i);
-        EXPECT_FALSE (box->getItemText (i).endsWith (" out 12")) << box->getItemText (i);
-    }
-    page.chooseRoute ("booth_sub", 11);   // past the loop: system:playback_13
-    EXPECT_EQ (view.cfg.io.jack.at ("booth_sub"), std::vector<std::string> { "system:playback_13" });
-    EXPECT_TRUE (page.noticeLabel().getText().contains ("output 11-12")) << page.noticeLabel().getText();
+    page.chooseRoute ("booth_sub", 11);   // past the loop: system:playback_12, free again
+    EXPECT_EQ (view.cfg.io.jack.at ("booth_sub"), std::vector<std::string> { "system:playback_12" });
+    EXPECT_TRUE (page.noticeLabel().getText().contains ("output 11 ")) << page.noticeLabel().getText();
+    EXPECT_FALSE (page.noticeLabel().getText().contains ("11-12")) << page.noticeLabel().getText();
     EXPECT_TRUE (page.noticeLabel().getText().contains ("booth_sub -> system:playback_11")) << page.noticeLabel().getText();
     EXPECT_TRUE (page.noticeLabel().isVisible());
 
@@ -1757,9 +1768,9 @@ TEST_F (Pages, IoLeavesTheRoundTripLoopOut)
     view.state.deviceOutputs = 14;
     page.refresh (true);
     page.showSub (a3app::IoPage::Sub::input);
-    EXPECT_EQ (page.routeBox ("analog_1")->getNumItems(), 13);
-    page.chooseRoute ("analog_1", 11);   // past the loop: channel 13
-    EXPECT_EQ (view.cfg.io.deviceChannels.at ("analog_1"), 12);
+    EXPECT_EQ (page.routeBox ("analog_1")->getNumItems(), 14);
+    page.chooseRoute ("analog_1", 11);   // past the loop: channel 12
+    EXPECT_EQ (view.cfg.io.deviceChannels.at ("analog_1"), 11);
     expectPainted (a3apptest::snapshotAt (page, "io-roundtrip-loop", page.getWidth(), page.getHeight()));
 }
 
@@ -1810,12 +1821,12 @@ TEST_F (Pages, IoChoosesTheAnalogTestPair)
         view.state.capturePorts.add ("system:capture_" + juce::String (i));
         view.state.playbackPorts.add ("system:playback_" + juce::String (i));
     }
-    view.cfg.io.roundTripLoop = a3app::RoundTripLoop { 11, 11, 2 };
+    view.cfg.io.roundTripLoop = a3app::RoundTripLoop { 11, 11 };
     a3app::IoPage page (view);
     page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
     auto& output = page.analogOutputBox();
     auto& input = page.analogInputBox();
-    EXPECT_EQ (output.getNumItems(), 13);   // none + 14 - the digital loop's 2
+    EXPECT_EQ (output.getNumItems(), 14);   // none + 14 - the digital loop's one
     EXPECT_TRUE (output.isVisible());
     page.chooseAnalogPair (false, 6);
     ASSERT_TRUE (view.cfg.io.analogLoop.has_value());
@@ -1848,7 +1859,7 @@ TEST_F (Pages, IoChoosesTheDigitalLoop)
         view.state.capturePorts.add ("system:capture_" + juce::String (i));
         view.state.playbackPorts.add ("system:playback_" + juce::String (i));
     }
-    view.cfg.io.roundTripLoop = a3app::RoundTripLoop { 11, 11, 2 };
+    view.cfg.io.roundTripLoop = a3app::RoundTripLoop { 11, 11 };
     view.cfg.io.jack["main_top_4"] = { "system:playback_5" };
     a3app::IoPage page (view);
     page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
@@ -1858,13 +1869,13 @@ TEST_F (Pages, IoChoosesTheDigitalLoop)
     ASSERT_NE (output.getParentComponent(), nullptr);   // a row of the OUTPUT list (IoMeasurementPairsAreTheListsLastRows)
     EXPECT_TRUE (output.getParentComponent()->getLocalBounds().contains (output.getBounds()));
     EXPECT_EQ (output.getNumItems(), 15);   // none + 14
-    EXPECT_TRUE (output.getText().contains ("11-12")) << output.getText();
-    EXPECT_TRUE (input.getText().contains ("11-12")) << input.getText();
+    EXPECT_EQ (output.getText(), "output 11") << "one channel a side";
+    EXPECT_EQ (input.getText(), "input 11");
 
     page.chooseDigitalLoop (false, 13);
     ASSERT_TRUE (view.cfg.io.roundTripLoop.has_value());
     EXPECT_EQ (view.cfg.io.roundTripLoop->output, 13);
-    page.chooseDigitalLoop (false, 4);   // 4-5: main_top_4 is on 5
+    page.chooseDigitalLoop (false, 5);   // main_top_4 is on 5
     EXPECT_EQ (view.cfg.io.roundTripLoop->output, 13);
     EXPECT_TRUE (page.messageLabel().getText().contains ("main_top_4")) << page.messageLabel().getText();
     page.chooseDigitalLoop (true, 0);
@@ -1941,7 +1952,7 @@ TEST_F (Pages, IoMeasurementPairsAreTheListsLastRows)
         view.state.capturePorts.add ("system:capture_" + juce::String (i));
         view.state.playbackPorts.add ("system:playback_" + juce::String (i));
     }
-    view.cfg.io.roundTripLoop = a3app::RoundTripLoop { 11, 11, 2 };
+    view.cfg.io.roundTripLoop = a3app::RoundTripLoop { 11, 11 };
     a3app::IoPage page (view);
     page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
 
@@ -1956,7 +1967,7 @@ TEST_F (Pages, IoMeasurementPairsAreTheListsLastRows)
         EXPECT_EQ (box->getWidth(), lastOutput->getWidth());
     }
     EXPECT_GT (page.analogOutputBox().getY(), page.digitalOutputBox().getY());
-    EXPECT_TRUE (page.digitalOutputBox().getText().contains ("output 11-12")) << page.digitalOutputBox().getText();
+    EXPECT_TRUE (page.digitalOutputBox().getText().contains ("output 11")) << page.digitalOutputBox().getText();
     scrollToTheEnd (page);
     expectPainted (a3apptest::snapshotAt (page, "io-output-measure-rows", page.getWidth(), page.getHeight()));
 
@@ -1969,7 +1980,250 @@ TEST_F (Pages, IoMeasurementPairsAreTheListsLastRows)
         EXPECT_GT (box->getY(), page.deckSourceBox (1)->getY()) << "after the decks: the list's end";
         EXPECT_EQ (box->getWidth(), firstInput->getWidth());
     }
-    EXPECT_TRUE (page.digitalInputBox().getText().contains ("input 11-12")) << page.digitalInputBox().getText();
+    EXPECT_TRUE (page.digitalInputBox().getText().contains ("input 11")) << page.digitalInputBox().getText();
     scrollToTheEnd (page);
     expectPainted (a3apptest::snapshotAt (page, "io-input-measure-rows", page.getWidth(), page.getHeight()));
+}
+
+namespace
+{
+juce::Component* findAlertIn (juce::Component& parent)
+{
+    for (auto* child : descendants (parent))
+        if (dynamic_cast<juce::AlertWindow*> (child) != nullptr)
+            return child;
+    return nullptr;
+}
+}
+
+// CALIBRATION (2026-10-30, the maintainer: the info pops up although there is room below): its help is text in the
+// free space under the rows, and nothing on the page carries a tooltip.
+TEST_F (Pages, CalibrationHelpIsTextInTheFreeSpace)
+{
+    FakeView view;
+    a3app::CalibrationPage page (view);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
+    juce::Label* help = nullptr;
+    for (auto* child : descendants (page))
+        if (auto* label = dynamic_cast<juce::Label*> (child); label != nullptr && label->getText().contains ("only proposes"))
+            help = label;
+    ASSERT_NE (help, nullptr);
+    EXPECT_TRUE (help->isVisible());
+    EXPECT_TRUE (page.getLocalBounds().contains (help->getBounds()));
+    EXPECT_GE (help->getY(), page.messageLabel().getBottom()) << "below the rows and the message";
+    for (auto* child : descendants (page))
+        if (auto* client = dynamic_cast<juce::SettableTooltipClient*> (child))
+            EXPECT_TRUE (client->getTooltip().isEmpty()) << child->getName() << ": " << client->getTooltip();
+    expectPainted (a3apptest::snapshotAt (page, "calibration-help-as-text", page.getWidth(), page.getHeight()));
+}
+
+// Tooltips off: nothing pops up anywhere. No tip window of ours, and the hosted AllRADecoder's own TooltipWindow has
+// nothing to show (its controls' tips are the window's). On: one tip window, the window's.
+TEST_F (Pages, TooltipsOffMeansNoPopupAnywhere)
+{
+    SpeakerRig rig;
+    a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, {}, {}, rig.userRoot);
+    window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    window.showPage ("SPEAKERS");
+    window.refreshNow();
+    auto& content = *window.getContentComponent();
+    EXPECT_FALSE (window.hasTooltipWindow());
+    for (auto* child : descendants (content))
+    {
+        EXPECT_EQ (dynamic_cast<juce::TooltipWindow*> (child), nullptr);
+        EXPECT_EQ (dynamic_cast<a3app::TouchTooltips*> (child), nullptr);
+    }
+    auto* page = dynamic_cast<a3app::SpeakersPage*> (shownPage (window));
+    ASSERT_NE (page, nullptr);
+    ASSERT_NE (page->editor(), nullptr);
+    int adopted = 0;
+    for (auto* part : descendants (*page->editor()))
+    {
+        if (auto* client = dynamic_cast<juce::SettableTooltipClient*> (part))
+            EXPECT_TRUE (client->getTooltip().isEmpty()) << part->getName() << ": " << client->getTooltip();
+        juce::Component* owner = nullptr;
+        adopted += a3app::helpFor (part, owner).isNotEmpty() && owner == part ? 1 : 0;
+    }
+    EXPECT_GT (adopted, 0) << "IEM's help is kept for the window's tip";
+    window.setTooltipsShown (true);
+    EXPECT_TRUE (window.hasTooltipWindow());
+    int ours = 0;
+    for (auto* child : descendants (content))
+        ours += dynamic_cast<a3app::TouchTooltips*> (child) != nullptr ? 1 : 0;
+    EXPECT_EQ (ours, 1);
+}
+
+// Every dropdown of the window is the touch list (Dropdown.h), on every page (the hosted IEM editor is IEM's).
+TEST_F (Pages, EveryDropdownScrollsByTouch)
+{
+    SpeakerRig rig;
+    a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, {}, {}, rig.userRoot);
+    window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    window.refreshNow();
+    auto& content = *window.getContentComponent();
+    std::set<juce::Component*> iem;
+    for (auto* child : descendants (content))
+        if (auto* speakers = dynamic_cast<a3app::SpeakersPage*> (child); speakers != nullptr && speakers->editor() != nullptr)
+            for (auto* part : descendants (*speakers->editor()))
+                iem.insert (part);
+    int boxes = 0;
+    for (auto* child : descendants (content))
+        if (dynamic_cast<juce::ComboBox*> (child) != nullptr && iem.count (child) == 0)
+        {
+            ++boxes;
+            EXPECT_NE (dynamic_cast<a3app::Dropdown*> (child), nullptr) << child->getName() << " in "
+                                                                       << child->getParentComponent()->getName();
+        }
+    EXPECT_GT (boxes, 10);
+}
+
+// ZONES (2026-10-30, the maintainer: RENAME and DELETE do not work). The rig's only own variant is the one that runs,
+// so both keys were disabled for every row, the reason only in a tooltip that was off. Now the keys always answer: a
+// refusal is said on the page, and a line under the list says what they would do for the picked variant.
+TEST_F (Pages, ZonesKeysAlwaysAnswer)
+{
+    ZonesRig rig;
+    a3app::MainWindow window (rig.speakers.view, manager, { rig.speakers.installed.root() }, false, [] {}, {}, {}, rig.speakers.userRoot);
+    window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    auto& content = *window.getContentComponent();
+    window.showPage ("ZONES");
+    auto* page = dynamic_cast<a3app::ZonesPage*> (shownPage (window));
+    ASSERT_NE (page, nullptr);
+    page->selectVariant (rig.rowOf (*page, rig.club));
+    window.refreshNow();
+    EXPECT_TRUE (page->actionsLabel().isVisible());
+    EXPECT_TRUE (page->actionsLabel().getText().contains ("runs")) << page->actionsLabel().getText();
+    for (const auto& name : { "RENAME", "DELETE" })
+    {
+        auto* key = buttonsLabelled (content, name).front();
+        EXPECT_TRUE (key->isEnabled()) << name;
+        key->triggerClick();
+        juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
+        EXPECT_TRUE (page->messageLabel().getText().contains ("runs")) << name << ": " << page->messageLabel().getText();
+        EXPECT_EQ (findAlertIn (window), nullptr) << name << ": refused before anything is asked";
+    }
+    EXPECT_TRUE (rig.club.isDirectory());
+    page->selectVariant (rig.rowOf (*page, rig.spare));
+    window.refreshNow();
+    EXPECT_TRUE (page->actionsLabel().getText().contains ("RENAME")) << page->actionsLabel().getText();
+    expectPainted (a3apptest::snapshotAt (content, "portrait-zones-keys-answer", content.getWidth(), content.getHeight()));
+}
+
+// The questions RENAME and DELETE ask open inside the window: as a desktop window of class a3-core, i3 would tile it
+// beside the window on its workspace (for_window [class="a3-core"]).
+TEST_F (Pages, ZonesDialogsOpenInsideTheWindow)
+{
+    // A JUCE AlertWindow makes a desktop peer as it is built (TopLevelWindow), before it is put into the window.
+    const char* display = std::getenv ("DISPLAY");
+    if (display == nullptr || *display == '\0')
+        GTEST_SKIP() << "needs an X display (e.g. DISPLAY=:2)";
+    ZonesRig rig;
+    a3app::MainWindow window (rig.speakers.view, manager, { rig.speakers.installed.root() }, false, [] {}, {}, {}, rig.speakers.userRoot);
+    window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    auto& content = *window.getContentComponent();
+    window.showPage ("ZONES");
+    auto* page = dynamic_cast<a3app::ZonesPage*> (shownPage (window));
+    ASSERT_NE (page, nullptr);
+    page->selectVariant (rig.rowOf (*page, rig.spare));
+    window.refreshNow();
+    for (const auto& name : { "DELETE", "RENAME" })
+    {
+        buttonsLabelled (content, name).front()->triggerClick();
+        juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
+        auto* alert = findAlertIn (window);
+        ASSERT_NE (alert, nullptr) << name;
+        EXPECT_FALSE (alert->isOnDesktop()) << name;
+        EXPECT_TRUE (window.getLocalBounds().contains (alert->getBounds())) << name;
+        expectPainted (a3apptest::snapshotAt (window, "portrait-zones-dialog-" + juce::String (name).toLowerCase(),
+                                              window.getWidth(), window.getHeight()));
+        alert->exitModalState (0);
+        juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
+    }
+    EXPECT_TRUE (rig.spare.isDirectory()) << "cancelled: nothing changed";
+}
+
+// ZONES' info (2026-10-30, the maintainer: present it more nicely): per zone a grid of what the decoder is (label,
+// value with unit) and its loudspeakers as a table, one row each, columns aligned.
+TEST_F (Pages, ZonesInfoIsATable)
+{
+    FakeView view;
+    a3app::ZonesPage page (view, { a3test::shippedSpatialDirectory });
+    page.selectVariant (0);
+    const auto info = a3app::zoneInfo (a3::SpeakerZone::main, a3test::shippedSpatialDirectory);
+    EXPECT_EQ (info.zone, "MAIN");
+    EXPECT_TRUE (info.error.isEmpty()) << info.error;
+    const std::map<juce::String, juce::String> facts (info.facts.begin(), info.facts.end());
+    EXPECT_TRUE (facts.at ("Decoder").contains ("AllRADecoder v0.9.5")) << facts.at ("Decoder");
+    EXPECT_TRUE (facts.at ("Exported").startsWith ("28 Feb 2026")) << facts.at ("Exported");
+    EXPECT_EQ (facts.at ("Order"), "3");
+    EXPECT_EQ (facts.at ("Weights"), "inPhase");
+    EXPECT_EQ (facts.at ("Sub"), "ch 1");
+    EXPECT_EQ (facts.at ("Crossover"), "150 Hz");
+    ASSERT_EQ (info.speakers.size(), 6u);
+    EXPECT_EQ (info.speakers[0], (std::array<juce::String, 3> { "2", juce::String::fromUTF8 ("45\xc2\xb0"), juce::String::fromUTF8 ("0\xc2\xb0") }));
+    bool imaginary = false;
+    for (const auto& row : info.speakers)
+        imaginary |= row[0] == "imaginary" && row[2] == juce::String::fromUTF8 ("90\xc2\xb0");
+    EXPECT_TRUE (imaginary);
+    const auto broken = a3app::zoneInfo (a3::SpeakerZone::booth, juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("a3-none"));
+    EXPECT_TRUE (broken.error.isNotEmpty());
+    expectPainted (a3apptest::snapshotAt (page, "zones-info-table", a3apptest::portraitWidth, a3apptest::portraitHeight * 7 / 8));
+}
+
+// SPEAKERS tidy (2026-10-30): the bar above the editor in the rows of AUDIO and I/O: a title row with the zone keys
+// and SAVE TO ZONE, then caption + control rows whose captions share one column and whose controls share one row
+// height; the editor below with a gap.
+TEST_F (Pages, SpeakersBarIsInTheRowsOfTheOtherPages)
+{
+    SpeakerRig rig;
+    a3app::SpeakersPage page (rig.view, rig.userRoot);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 7 / 8);
+    auto* main = buttonsLabelled (page, "MAIN").front();
+    auto* booth = buttonsLabelled (page, "BOOTH").front();
+    auto* save = buttonsLabelled (page, "SAVE TO ZONE").front();
+    EXPECT_EQ (main->getHeight(), booth->getHeight());
+    EXPECT_EQ (main->getHeight(), save->getHeight());
+    EXPECT_EQ (main->getY(), save->getY());
+    auto* sub = labelSaying (page, "Sub");
+    auto* crossover = labelSaying (page, "Crossover");
+    ASSERT_NE (sub, nullptr);
+    ASSERT_NE (crossover, nullptr);
+    EXPECT_EQ (sub->getX(), crossover->getX()) << "one caption column";
+    EXPECT_LT (sub->getY(), crossover->getY()) << "a row each";
+    EXPECT_EQ (sub->getHeight(), crossover->getHeight());
+    auto* subBox = firstDescendant<juce::ComboBox> (page);
+    auto* crossoverSlider = firstDescendant<juce::Slider> (page);
+    ASSERT_NE (subBox, nullptr);
+    ASSERT_NE (crossoverSlider, nullptr);
+    EXPECT_EQ (subBox->getX(), crossoverSlider->getX()) << "one control column";
+    EXPECT_EQ (subBox->getHeight(), crossoverSlider->getHeight());
+    EXPECT_EQ (subBox->getHeight(), main->getHeight()) << "one row height";
+    const auto editorTop = areaIn (page, *page.editor()).getY();
+    EXPECT_GT (editorTop, page.messageLabel().getBottom());
+    expectPainted (a3apptest::snapshotAt (page, "speakers-tidy", page.getWidth(), page.getHeight()));
+}
+
+// The hosted AllRADecoder draws no ground of its own (IEM fills 0xff2d2d2d): it sits on the page's surface.
+TEST_F (Pages, TheAllRaEditorSitsOnThePagesGround)
+{
+    SpeakerRig rig;
+    a3app::SpeakersPage page (rig.view, rig.userRoot);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 7 / 8);
+    ASSERT_NE (page.editor(), nullptr);
+    EXPECT_FALSE (page.editor()->isOpaque());
+    juce::Image picture (juce::Image::ARGB, page.editor()->getWidth(), page.editor()->getHeight(), true);
+    {
+        juce::Graphics g (picture);
+        page.editor()->paint (g);
+    }
+    int iemGrey = 0;
+    for (int y = 0; y < picture.getHeight(); y += 7)
+        for (int x = 0; x < picture.getWidth(); x += 7)
+            iemGrey += picture.getPixelAt (x, y).getARGB() == 0xff2d2d2d ? 1 : 0;
+    EXPECT_EQ (iemGrey, 0) << "the editor's own paint leaves its ground to the page";
+    const auto shot = a3apptest::snapshotAt (page, "speakers-on-the-page-ground", page.getWidth(), page.getHeight());
+    expectPainted (shot);
+    const auto area = areaIn (page, *page.editor());
+    EXPECT_EQ (shot.getPixelAt (area.getX() + 2, area.getY() + area.getHeight() / 2).getARGB(), a3app::palette::surface.getARGB())
+        << "the margin beside IEM's table is the page's surface";
 }

@@ -48,7 +48,24 @@ TEST (RoundTripLoop, AFileThatNamesNoLoopGetsTheRigsSpdifPair)
     ASSERT_TRUE (config.io.roundTripLoop.has_value());
     EXPECT_EQ (config.io.roundTripLoop->output, 11);
     EXPECT_EQ (config.io.roundTripLoop->input, 11);
-    EXPECT_EQ (config.io.roundTripLoop->channels, 2);
+    EXPECT_FALSE (a3app::loopHolds (config.io.roundTripLoop, false, 12)) << "one channel a side (2026-10-30): 12 is free";
+}
+
+// The loop is one channel a side (2026-10-30). A file that still says "channels": 2 (the window wrote it until then)
+// loads, reserves only output 11 and input 11, and a save leaves the key out.
+TEST (RoundTripLoop, AnOlderFilesChannelsAreIgnored)
+{
+    juce::String error;
+    const auto config = load ("{\"roundTripLoop\":{\"output\":11,\"input\":11,\"channels\":2}}", error);
+    ASSERT_TRUE (error.isEmpty()) << error;
+    ASSERT_TRUE (config.io.roundTripLoop.has_value());
+    EXPECT_TRUE (a3app::loopHolds (config.io.roundTripLoop, false, 11));
+    EXPECT_FALSE (a3app::loopHolds (config.io.roundTripLoop, false, 12));
+    EXPECT_FALSE (a3app::loopHolds (config.io.roundTripLoop, true, 12));
+    EXPECT_EQ (a3app::loopRangeText (*config.io.roundTripLoop, false), "output 11");
+    EXPECT_EQ (a3app::loopRangeText (*config.io.roundTripLoop, true), "input 11");
+    const auto saved = a3app::toJson (config.io)["roundTripLoop"];
+    EXPECT_FALSE (saved.getDynamicObject()->hasProperty ("channels")) << juce::JSON::toString (saved);
 }
 
 TEST (RoundTripLoop, NullMeansNoLoopAndAnObjectIsTakenAsWritten)
@@ -59,13 +76,11 @@ TEST (RoundTripLoop, NullMeansNoLoopAndAnObjectIsTakenAsWritten)
     ASSERT_TRUE (config.io.roundTripLoop.has_value()) << error;
     EXPECT_EQ (config.io.roundTripLoop->output, 3);
     EXPECT_EQ (config.io.roundTripLoop->input, 5);
-    EXPECT_EQ (config.io.roundTripLoop->channels, 1);
 }
 
 TEST (RoundTripLoop, ABrokenLoopIsRefusedNamingIt)
 {
     for (const auto* io : { "{\"roundTripLoop\":{\"output\":0,\"input\":11}}", "{\"roundTripLoop\":{\"output\":11}}",
-                            "{\"roundTripLoop\":{\"output\":11,\"input\":11,\"channels\":0}}",
                             "{\"roundTripLoop\":{\"output\":11,\"input\":11,\"extra\":1}}", "{\"roundTripLoop\":11}" })
     {
         juce::String error;
@@ -76,7 +91,7 @@ TEST (RoundTripLoop, ABrokenLoopIsRefusedNamingIt)
 
 TEST (RoundTripLoop, SavedAndLoadedAgain)
 {
-    for (const auto& loop : { std::optional<a3app::RoundTripLoop> {}, std::optional<a3app::RoundTripLoop> ({ 3, 4, 1 }) })
+    for (const auto& loop : { std::optional<a3app::RoundTripLoop> {}, std::optional<a3app::RoundTripLoop> ({ 3, 4 }) })
     {
         a3app::IoMap map;
         map.roundTripLoop = loop;
@@ -109,18 +124,19 @@ TEST (RoundTripLoop, NamesTheDeviceChannelOfAPeer)
 
 TEST (RoundTripLoop, ReservesItsChannelsOnTheirSideOnly)
 {
-    const std::optional<a3app::RoundTripLoop> loop (a3app::RoundTripLoop { 11, 11, 2 });
+    const std::optional<a3app::RoundTripLoop> loop (a3app::RoundTripLoop { 11, 11 });
     EXPECT_TRUE (a3app::isLoopPeer (loop, "system:playback_11"));
-    EXPECT_TRUE (a3app::isLoopPeer (loop, "system:playback_12"));
+    EXPECT_FALSE (a3app::isLoopPeer (loop, "system:playback_12"));
     EXPECT_FALSE (a3app::isLoopPeer (loop, "system:playback_13"));
     EXPECT_FALSE (a3app::isLoopPeer (loop, "system:playback_10"));
-    EXPECT_TRUE (a3app::isLoopPeer (loop, "system:capture_12"));
+    EXPECT_TRUE (a3app::isLoopPeer (loop, "system:capture_11"));
+    EXPECT_FALSE (a3app::isLoopPeer (loop, "system:capture_12"));
     EXPECT_FALSE (a3app::isLoopPeer (std::nullopt, "system:playback_11"));
-    const std::optional<a3app::RoundTripLoop> crossed (a3app::RoundTripLoop { 3, 7, 1 });
+    const std::optional<a3app::RoundTripLoop> crossed (a3app::RoundTripLoop { 3, 7 });
     EXPECT_TRUE (a3app::isLoopPeer (crossed, "system:playback_3"));
     EXPECT_FALSE (a3app::isLoopPeer (crossed, "system:capture_3"));
     EXPECT_TRUE (a3app::isLoopPeer (crossed, "system:capture_7"));
-    EXPECT_TRUE (a3app::loopHolds (loop, false, 12));
+    EXPECT_FALSE (a3app::loopHolds (loop, false, 12));
     EXPECT_FALSE (a3app::loopHolds (loop, true, 13));
 }
 
@@ -132,25 +148,24 @@ TEST (RoundTripLoop, RoutesOntoTheLoopAreDroppedOnLoadAndListed)
                               "\"booth_top_2\":[\"system:playback_13\"],\"analog_11\":[\"system:capture_11\"],"
                               "\"analog_1\":[\"system:capture_1\",\"alsa_input.x.pro-input-0:capture_AUX10\"]},"
                               "\"deviceChannels\":{\"main_sub\":10,\"main_top_1\":2,\"analog_2\":11},"
-                              "\"directLinks\":[[\"system:capture_12\",\"x:in\"],[\"y:out\",\"z:in\"]]}", error);
+                              "\"directLinks\":[[\"system:capture_11\",\"x:in\"],[\"system:capture_12\",\"w:in\"],[\"y:out\",\"z:in\"]]}", error);
     ASSERT_TRUE (error.isEmpty()) << error;
     EXPECT_EQ (config.io.jack.count ("booth_sub"), 0u);
-    EXPECT_EQ (config.io.jack.count ("booth_top_1"), 0u);
     EXPECT_EQ (config.io.jack.count ("analog_11"), 0u);
+    EXPECT_EQ (config.io.jack.at ("booth_top_1"), std::vector<std::string> { "system:playback_12" }) << "12 is free again";
     EXPECT_EQ (config.io.jack.at ("booth_top_2"), std::vector<std::string> { "system:playback_13" });
     EXPECT_EQ (config.io.jack.at ("analog_1"), std::vector<std::string> { "system:capture_1" });
     EXPECT_EQ (config.io.deviceChannels.count ("main_sub"), 0u);    // device output 11
-    EXPECT_EQ (config.io.deviceChannels.count ("analog_2"), 0u);    // device input 12
+    EXPECT_EQ (config.io.deviceChannels.at ("analog_2"), 11);       // device input 12, free
     EXPECT_EQ (config.io.deviceChannels.at ("main_top_1"), 2);
-    EXPECT_EQ (config.io.directLinks, (std::vector<std::pair<std::string, std::string>> { { "y:out", "z:in" } }));
+    EXPECT_EQ (config.io.directLinks, (std::vector<std::pair<std::string, std::string>> { { "system:capture_12", "w:in" }, { "y:out", "z:in" } }));
 
     const auto& dropped = config.loopDropped;
-    EXPECT_EQ (dropped.size(), 7u);
+    EXPECT_EQ (dropped.size(), 5u);
     EXPECT_TRUE (contains (dropped, "booth_sub -> system:playback_11"));
     EXPECT_TRUE (contains (dropped, "analog_1 -> alsa_input.x.pro-input-0:capture_AUX10"));
     EXPECT_TRUE (contains (dropped, "main_sub -> device channel 11"));
-    EXPECT_TRUE (contains (dropped, "analog_2 -> device channel 12"));
-    EXPECT_TRUE (contains (dropped, "system:capture_12 -> x:in"));
+    EXPECT_TRUE (contains (dropped, "system:capture_11 -> x:in"));
     EXPECT_TRUE (a3app::droppedLinkLines (config).contains ("unrouted booth_sub -> system:playback_11: the round-trip loop"));
 }
 
@@ -167,21 +182,21 @@ TEST (RoundTripLoop, WithoutALoopNothingIsDropped)
 TEST (RoundTripLoop, TheRouteChoicesLeaveTheLoopOut)
 {
     a3app::AppConfig config;
-    config.io.roundTripLoop = a3app::RoundTripLoop { 11, 11, 2 };
+    config.io.roundTripLoop = a3app::RoundTripLoop { 11, 11 };
     juce::StringArray playback;
     for (int channel = 1; channel <= 14; ++channel)
         playback.add ("system:playback_" + juce::String (channel));
     const auto jack = a3app::routeChoices (config, playback, 0, false, "Scarlett 18i20 USB");
-    ASSERT_EQ (jack.size(), 12u);
+    ASSERT_EQ (jack.size(), 13u);
     EXPECT_EQ (jack[9].peer, "system:playback_10");
-    EXPECT_EQ (jack[10].peer, "system:playback_13");
-    EXPECT_EQ (jack[10].label, "Scarlett 18i20 USB out 13") << "the device's port as the user means it, not system:*";
+    EXPECT_EQ (jack[10].peer, "system:playback_12") << "12 is free again: the loop is output 11 only";
+    EXPECT_EQ (jack[11].label, "Scarlett 18i20 USB out 13") << "the device's port as the user means it, not system:*";
 
     config.backend.type = a3app::BackendSettings::Type::device;
     const auto device = a3app::routeChoices (config, {}, 14, true, "Scarlett 18i20 USB");
-    ASSERT_EQ (device.size(), 12u);
-    EXPECT_EQ (device[10].channel, std::optional<int> (12));   // 0-based: device channel 13
-    EXPECT_EQ (device[10].label, "channel 13");
+    ASSERT_EQ (device.size(), 13u);
+    EXPECT_EQ (device[10].channel, std::optional<int> (11));   // 0-based: device channel 12
+    EXPECT_EQ (device[10].label, "channel 12");
 
     config.io.roundTripLoop.reset();
     EXPECT_EQ (a3app::routeChoices (config, {}, 14, true, {}).size(), 14u);
@@ -200,23 +215,25 @@ TEST (RoundTripLoop, TheIoPageNoticeNamesTheLoopAndWhatWasUnrouted)
 {
     a3app::AppConfig config;
     EXPECT_TRUE (a3app::loopNotice (config, {}).isEmpty());
-    config.io.roundTripLoop = a3app::RoundTripLoop { 11, 11, 2 };
+    config.io.roundTripLoop = a3app::RoundTripLoop { 11, 11 };
     const auto plain = a3app::loopNotice (config, {});
-    EXPECT_TRUE (plain.contains ("output 11-12")) << plain;
-    EXPECT_TRUE (plain.contains ("input 11-12")) << plain;
+    EXPECT_TRUE (plain.contains ("output 11 ")) << plain;
+    EXPECT_TRUE (plain.contains ("input 11 ")) << plain;
+    EXPECT_FALSE (plain.contains ("11-12")) << plain;
     EXPECT_TRUE (plain.containsIgnoreCase ("round-trip")) << plain;
     const auto dropped = a3app::loopNotice (config, { "booth_sub -> system:playback_11", "analog_11 -> system:capture_11" });
     EXPECT_TRUE (dropped.contains ("booth_sub -> system:playback_11")) << dropped;
     EXPECT_TRUE (dropped.contains ("analog_11 -> system:capture_11")) << dropped;
-    config.io.roundTripLoop = a3app::RoundTripLoop { 3, 5, 1 };
+    config.io.roundTripLoop = a3app::RoundTripLoop { 3, 5 };
     EXPECT_TRUE (a3app::loopNotice (config, {}).contains ("output 3 ")) << a3app::loopNotice (config, {});
 }
 
 TEST (RoundTripLoop, TheEditorRefusesALoopRoute)
 {
     a3app::AppConfig config;
-    config.io.roundTripLoop = a3app::RoundTripLoop { 11, 11, 2 };
-    EXPECT_TRUE (a3app::loopRefusal (config, { "system:playback_1", "system:playback_12" }).contains ("system:playback_12"));
+    config.io.roundTripLoop = a3app::RoundTripLoop { 11, 11 };
+    EXPECT_TRUE (a3app::loopRefusal (config, { "system:playback_1", "system:playback_11" }).contains ("system:playback_11"));
+    EXPECT_TRUE (a3app::loopRefusal (config, { "system:playback_12" }).isEmpty()) << "12 is free again";
     EXPECT_TRUE (a3app::loopRefusal (config, { "system:playback_1" }).isEmpty());
     EXPECT_TRUE (a3app::loopRefusal (config, false, 10).contains ("11"));   // 0-based 10: device output 11
     EXPECT_TRUE (a3app::loopRefusal (config, true, 12).isEmpty());
@@ -226,7 +243,7 @@ TEST (RoundTripLoop, TheEditorRefusesALoopRoute)
 TEST (RoundTripLoop, TheLoopsOwnPortsAreLinkedToItsChannels)
 {
     a3app::AppConfig config;
-    config.io.roundTripLoop = a3app::RoundTripLoop { 11, 11, 2 };
+    config.io.roundTripLoop = a3app::RoundTripLoop { 11, 11 };
     const auto map = a3app::linkMapFor (config, "");
     EXPECT_EQ (map.jack.at (a3app::loopOutputPort), std::vector<std::string> { "system:playback_11" });
     EXPECT_EQ (map.jack.at (a3app::loopInputPort), std::vector<std::string> { "system:capture_11" });
@@ -236,15 +253,15 @@ TEST (RoundTripLoop, TheLoopsOwnPortsAreLinkedToItsChannels)
 }
 
 // The I/O page chooses the digital loop (2026-10-30): a channel per side, 0 is no loop. A first choice sets both
-// sides (an S/PDIF or ADAT loop is out N -> in N); the loop keeps its channel count.
+// sides (an S/PDIF or ADAT loop is out N -> in N).
 TEST (RoundTripLoop, TheIoPageChoosesTheDigitalLoop)
 {
     a3app::AppConfig config;
-    config.io.roundTripLoop = a3app::RoundTripLoop { 11, 11, 2 };
+    config.io.roundTripLoop = a3app::RoundTripLoop { 11, 11 };
     juce::String error;
     const auto moved = a3app::withDigitalLoopChannel (config, false, 13, error);
     ASSERT_TRUE (moved) << error;
-    EXPECT_EQ (moved->io.roundTripLoop, std::optional<a3app::RoundTripLoop> (a3app::RoundTripLoop { 13, 11, 2 }));
+    EXPECT_EQ (moved->io.roundTripLoop, std::optional<a3app::RoundTripLoop> (a3app::RoundTripLoop { 13, 11 }));
 
     const auto none = a3app::withDigitalLoopChannel (config, true, 0, error);
     ASSERT_TRUE (none) << error;
@@ -252,7 +269,7 @@ TEST (RoundTripLoop, TheIoPageChoosesTheDigitalLoop)
 
     const auto again = a3app::withDigitalLoopChannel (*none, true, 7, error);
     ASSERT_TRUE (again) << error;
-    EXPECT_EQ (again->io.roundTripLoop, std::optional<a3app::RoundTripLoop> (a3app::RoundTripLoop { 7, 7, 2 }));
+    EXPECT_EQ (again->io.roundTripLoop, std::optional<a3app::RoundTripLoop> (a3app::RoundTripLoop { 7, 7 }));
 }
 
 // The reservation stays as built: the loop's channels carry no route and not the analog test pair, so a channel
@@ -260,16 +277,17 @@ TEST (RoundTripLoop, TheIoPageChoosesTheDigitalLoop)
 TEST (RoundTripLoop, TheDigitalLoopIsRefusedOnChannelsInUse)
 {
     a3app::AppConfig config;
-    config.io.roundTripLoop = a3app::RoundTripLoop { 11, 11, 2 };
+    config.io.roundTripLoop = a3app::RoundTripLoop { 11, 11 };
     config.io.jack["main_top_4"] = { "system:playback_5" };
     config.io.analogLoop = a3app::AnalogLoop { 8, 3, {} };
     juce::String error;
-    EXPECT_FALSE (a3app::withDigitalLoopChannel (config, false, 4, error));   // 4-5: 5 is main_top_4's
+    EXPECT_FALSE (a3app::withDigitalLoopChannel (config, false, 5, error));   // 5 is main_top_4's
     EXPECT_TRUE (error.contains ("output 5") && error.contains ("main_top_4")) << error;
-    EXPECT_FALSE (a3app::withDigitalLoopChannel (config, false, 7, error));   // 7-8: 8 is the analog test output
+    EXPECT_FALSE (a3app::withDigitalLoopChannel (config, false, 8, error));   // 8 is the analog test output
     EXPECT_TRUE (error.contains ("output 8") && error.contains ("analog test")) << error;
-    EXPECT_TRUE (a3app::withDigitalLoopChannel (config, true, 4, error)) << error << ": input 4-5 are free";
-    EXPECT_FALSE (a3app::withDigitalLoopChannel (config, true, 2, error)) << "input 3 is the analog test input";
+    EXPECT_TRUE (a3app::withDigitalLoopChannel (config, false, 4, error)) << error << ": one channel, 5 beside it is not taken";
+    EXPECT_TRUE (a3app::withDigitalLoopChannel (config, true, 2, error)) << error << ": input 2 is free, 3 beside it is not taken";
+    EXPECT_FALSE (a3app::withDigitalLoopChannel (config, true, 3, error)) << "input 3 is the analog test input";
 
     juce::StringArray playback;
     for (int channel = 1; channel <= 14; ++channel)

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "SpeakersPage.h"
 #include "ConfigEdits.h"
+#include "TouchTooltips.h"
 
 namespace a3app
 {
@@ -128,6 +129,7 @@ void SpeakersPage::load()
     sayOutcome (message, loaded.failed() ? decoderFile.getFullPathName() + ": " + loaded.getErrorMessage() : juce::String(), loaded.wasOk());
 
     iemEditor = designer.createEditor();
+    adoptTooltips (*iemEditor);   // IEM's own TooltipWindow then shows nothing; the window's switch decides
     addAndMakeVisible (*iemEditor);
     mainKey.setToggleState (shown == a3::SpeakerZone::main, juce::dontSendNotification);
     boothKey.setToggleState (shown == a3::SpeakerZone::booth, juce::dontSendNotification);
@@ -192,25 +194,36 @@ void SpeakersPage::refresh()
 {
     if (zoneSpatialDirectory (view.config(), shown) != loadedFrom)
         load();
+    else if (iemEditor != nullptr)
+        adoptTooltips (*iemEditor);   // IEM's table makes its rows' buttons (with tips) as it fills
 }
 
 void SpeakersPage::paint (juce::Graphics& g) { g.fillAll (palette::surface); }
 
+// The bar in the rows of AUDIO and I/O: the title row (title, the zone keys, SAVE TO ZONE at the right), then one
+// row per setting, the caption in the first quarter and the control on the rest, the message, a gap, the editor.
 void SpeakersPage::resized()
 {
-    auto area = getLocalBounds().reduced (getWidth() / 80);
+    auto area = getLocalBounds().reduced (getWidth() / 40, getWidth() / 80);
     const int row = look::rowHeight (*this);
+    const int gap = juce::jmax (1, row / 14);
     auto top = area.removeFromTop (row);
-    title.setBounds (top.removeFromLeft (top.getWidth() / 6));
-    mainKey.setBounds (top.removeFromLeft (top.getWidth() / 5).reduced (2));
-    boothKey.setBounds (top.removeFromLeft (top.getWidth() / 4).reduced (2));
-    save.setBounds (top.removeFromRight (top.getWidth() / 2).reduced (2));
-    auto settings = area.removeFromTop (row);
-    subCaption.setBounds (settings.removeFromLeft (settings.getWidth() / 8));
-    sub.setBounds (settings.removeFromLeft (settings.getWidth() / 5).reduced (2));
-    crossoverCaption.setBounds (settings.removeFromLeft (settings.getWidth() / 5));
-    crossover.setBounds (settings.reduced (2));
+    title.setBounds (top.removeFromLeft (top.getWidth() / 4));
+    const int key = top.getWidth() / 4;
+    mainKey.setBounds (top.removeFromLeft (key).reduced (gap));
+    boothKey.setBounds (top.removeFromLeft (key).reduced (gap));
+    save.setBounds (top.removeFromRight (key * 3 / 2).reduced (gap));
+    const auto line = [&] (juce::Label& caption, juce::Component& control)
+    {
+        auto r = area.removeFromTop (row);
+        caption.setBounds (r.removeFromLeft (r.getWidth() / 4));
+        control.setBounds (r.reduced (gap));
+    };
+    line (subCaption, sub);
+    line (crossoverCaption, crossover);
+    crossover.setTextBoxStyle (juce::Slider::TextBoxRight, false, getWidth() / 6, row - 2 * gap);
     message.setBounds (area.removeFromTop (row));
+    area.removeFromTop (row / 4);
     placeEditor (area);
 }
 

@@ -1,18 +1,31 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+#include "Dropdown.h"
 #include "HostView.h"
 #include "Look.h"
+#include <array>
 #include <functional>
 
 namespace a3app
 {
+// What the info viewer shows of one zone of a variant (ZONES, 2026-10-30): the decoder's facts as label and value
+// (with units), and the loudspeakers as table rows: channel (or "imaginary"), azimuth, elevation in degrees.
+struct ZoneInfo
+{
+    juce::String zone, directory, error;   // error: the file did not read; facts and speakers are then empty
+    std::vector<std::pair<juce::String, juce::String>> facts;
+    std::vector<std::array<juce::String, 3>> speakers;
+};
+ZoneInfo zoneInfo (a3::SpeakerZone, const juce::File& variant);
+
 // The spatial data (decoders, layouts, zone stages) per zone, top to bottom: MAIN's and BOOTH's variant and the
 // phones' headphone EQ as dropdowns (each a pending edit; a variant that does not load is refused with the
 // reason and the choice stays where it was); then the variants in a list (the installed ones and the user's
-// own under ~/.config/a3/engine/spatial) and an info viewer showing only the one picked in the list (its MAIN
-// and BOOTH decoders, decoderSummary). Picking in the list edits nothing: it is what RENAME and DELETE (in the
-// window's footer) act on, and only on an unused variant of the user's own.
+// own under ~/.config/a3/engine/spatial, each marked when it runs or is the pending edit), a line saying what RENAME
+// and DELETE (in the window's footer) do for the picked one, and an info card for it (its MAIN and BOOTH decoders
+// side by side as tables, zoneInfo). Picking in the list edits nothing: RENAME and DELETE act only on an unused
+// variant of the user's own, and say why not on any other.
 class ZonesPage final : public juce::Component
 {
 public:
@@ -44,13 +57,16 @@ public:
 
     void refresh();
     const juce::Label& messageLabel() const { return message; }
-    juce::String summaryText (a3::SpeakerZone) const;   // the info viewer's, for the selected variant
+    const juce::Label& actionsLabel() const { return actions; }   // what RENAME and DELETE do for the picked variant
+    juce::String summaryText (a3::SpeakerZone) const;   // the info card's, for the selected variant, as text
     std::function<void()> onOpenSpeakers;               // EDIT SPEAKERS
     void resized() override;
     void paint (juce::Graphics&) override;
 
 private:
     class Model;
+    class Info;
+    void sayActions();
     void rescan();
     void fillZoneChoosers();
     void summarise();
@@ -66,9 +82,11 @@ private:
     juce::File selected;
     juce::String summarisedKey;
 
-    juce::Label title, message, mainCaption, boothCaption, headphonesCaption, mainSummary, boothSummary;
+    juce::Label actions;
+    juce::Label title, message, mainCaption, boothCaption, headphonesCaption;
+    std::unique_ptr<Info> info;
     juce::TextButton openSpeakers { "EDIT SPEAKERS" };
-    juce::ComboBox mainBox, boothBox, headphones;
+    Dropdown mainBox, boothBox, headphones;
     std::unique_ptr<Model> model;
     juce::ListBox list;
 };

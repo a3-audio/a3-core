@@ -8,6 +8,7 @@
 #include "MonitorTrafficPage.h"
 #include "MonitorTruthPage.h"
 #include "MonitorUnknownPage.h"
+#include "TouchTooltips.h"
 #include <limits>
 
 namespace a3app
@@ -70,6 +71,8 @@ public:
         zonesPage = zones.get();
         renameKey.onClick = [this] { zonesPage->askRename(); };
         deleteKey.onClick = [this] { zonesPage->askDelete(); };
+        renameKey.setTooltip ("Rename the variant picked in the list");
+        deleteKey.setTooltip ("Delete the variant picked in the list (asks first)");
         addChildComponent (renameKey);
         addChildComponent (deleteKey);
         addPage ("ZONES", std::move (zones));
@@ -300,16 +303,11 @@ private:
         saveBar.setBounds (footer.withLeft (left.getX()));
     }
 
-    // RENAME and DELETE belong to ZONES: shown on it only, each disabled with the reason as its tooltip.
+    // RENAME and DELETE belong to ZONES: shown on it only. They are never disabled: a refused one says why on the
+    // page when pressed (and the page's line under its list says it beforehand); a disabled key answered nothing.
     void showZonesKeys()
     {
         const bool onZones = ! pages.empty() && pages[(size_t) shown].component.get() == zonesPage;
-        const auto deleteWhy = onZones ? zonesPage->deleteRefusal() : juce::String();
-        const auto renameWhy = onZones ? zonesPage->renameRefusal() : juce::String();
-        deleteKey.setEnabled (deleteWhy.isEmpty());
-        deleteKey.setTooltip (deleteWhy.isEmpty() ? "Delete the variant picked in the list (asks first)" : "Cannot delete: " + deleteWhy);
-        renameKey.setEnabled (renameWhy.isEmpty());
-        renameKey.setTooltip (renameWhy.isEmpty() ? "Rename the variant picked in the list" : "Cannot rename: " + renameWhy);
         if (renameKey.isVisible() == onZones)
             return;
         renameKey.setVisible (onZones);
@@ -320,7 +318,9 @@ private:
     void applyTooltips (bool on)
     {
         tooltipSwitch.setToggleState (on, juce::dontSendNotification);
-        tooltipWindow = on ? std::make_unique<juce::TooltipWindow> (this) : nullptr;   // without one JUCE shows no tooltip
+        // Ours, not JUCE's TooltipWindow (a hover model that flickered on the touch screen, TouchTooltips.h); without
+        // one no help pops up anywhere (the hosted IEM editor's tips are adopted, SpeakersPage).
+        tooltipWindow = on ? std::make_unique<TouchTooltips> (*this) : nullptr;
     }
 
     void applySwitch()
@@ -351,7 +351,7 @@ private:
     juce::ToggleButton tooltipSwitch { tooltipSwitchName };
     ZonesPage* zonesPage = nullptr;
     juce::TextButton renameKey { "RENAME" }, deleteKey { "DELETE" };
-    std::unique_ptr<juce::TooltipWindow> tooltipWindow;
+    std::unique_ptr<TouchTooltips> tooltipWindow;
     WindowBands bands;
     juce::TextButton keys { "KEYS" };
     juce::Label keyboardNoteLabel;

@@ -60,7 +60,7 @@ std::optional<RoundTripLoop> parseLoop (const juce::DynamicObject& object)
     RoundTripLoop parsed;
     parsed.output = loopChannel (loop, "output", true, 0);
     parsed.input = loopChannel (loop, "input", true, 0);
-    parsed.channels = loopChannel (loop, "channels", false, 1);
+    // "channels": the loop was a pair until 2026-10-30; an older file's key is accepted and ignored (one channel a side).
     return parsed;
 }
 
@@ -156,7 +156,6 @@ juce::var toJson (const IoMap& map)
         auto* object = new juce::DynamicObject();
         object->setProperty ("output", map.roundTripLoop->output);
         object->setProperty ("input", map.roundTripLoop->input);
-        object->setProperty ("channels", map.roundTripLoop->channels);
         loop = juce::var (object);
     }
     root.getDynamicObject()->setProperty ("roundTripLoop", loop);

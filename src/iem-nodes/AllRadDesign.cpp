@@ -28,6 +28,15 @@ std::optional<AmbisonicWeights> weightsNamed (const juce::String& name)
 }
 }
 
+// IEM's editor as the window hosts it: it draws no ground of its own (IEM fills its LaF's ClBackground, a lighter
+// grey than the window's), so it sits on the page's surface. IEM's own code is untouched: only paint() is ours.
+class HostedAllRadEditor final : public AllRADecoderAudioProcessorEditor
+{
+public:
+    using AllRADecoderAudioProcessorEditor::AllRADecoderAudioProcessorEditor;
+    void paint (juce::Graphics&) override {}
+};
+
 struct AllRadDesigner::Impl
 {
     AllRADecoderAudioProcessor processor;
@@ -103,7 +112,8 @@ std::optional<juce::String> AllRadDesigner::design (juce::String& error)
 
 std::unique_ptr<juce::AudioProcessorEditor> AllRadDesigner::createEditor()
 {
-    std::unique_ptr<juce::AudioProcessorEditor> editor (impl->processor.createEditor());
+    auto editor = std::make_unique<HostedAllRadEditor> (impl->processor, impl->processor.parameters);
+    editor->setOpaque (false);
     // IEM's footer opens the processor's OSC receiver; the window's never listens (see listensForOsc).
     for (auto* child : editor->getChildren())
         if (dynamic_cast<OSCFooter*> (child) != nullptr)
@@ -111,7 +121,7 @@ std::unique_ptr<juce::AudioProcessorEditor> AllRadDesigner::createEditor()
             child->setVisible (false);
             child->setEnabled (false);
         }
-    return editor;
+    return std::unique_ptr<juce::AudioProcessorEditor> (std::move (editor));
 }
 
 void AllRadDesigner::setNoiseHooks (std::function<void (int)> channel, std::function<void (float, float)> direction)

@@ -92,14 +92,16 @@ TEST (AnalogChain, ThePairAndTheStoredShareRoundTripThroughTheConfig)
 TEST (AnalogChain, OnlyAFreePairOffTheDigitalLoopCanBeMeasured)
 {
     a3app::IoMap map;
-    map.roundTripLoop = a3app::RoundTripLoop { 11, 11, 2 };
+    map.roundTripLoop = a3app::RoundTripLoop { 11, 11 };
     EXPECT_EQ (a3app::analogLoopRefusal (map), "no analog test pair chosen (I/O page)");
     map.analogLoop = a3app::AnalogLoop { 6, 0, {} };
     EXPECT_EQ (a3app::analogLoopRefusal (map), "no analog test input chosen (I/O page)");
     map.analogLoop = a3app::AnalogLoop { 6, 8, {} };
     EXPECT_TRUE (a3app::analogLoopRefusal (map).isEmpty());
+    map.analogLoop = a3app::AnalogLoop { 11, 8, {} };
+    EXPECT_TRUE (a3app::analogLoopRefusal (map).contains ("output 11")) << a3app::analogLoopRefusal (map);
     map.analogLoop = a3app::AnalogLoop { 12, 8, {} };
-    EXPECT_TRUE (a3app::analogLoopRefusal (map).contains ("output 12")) << a3app::analogLoopRefusal (map);
+    EXPECT_TRUE (a3app::analogLoopRefusal (map).isEmpty()) << "12 is free: the loop is one channel a side";
     map.analogLoop = a3app::AnalogLoop { 6, 8, {} };
     map.jack["main_top_1"] = { "system:playback_6" };
     EXPECT_EQ (a3app::analogLoopRefusal (map), "output 6 is in use (main_top_1)");
@@ -110,7 +112,7 @@ TEST (AnalogChain, OnlyAFreePairOffTheDigitalLoopCanBeMeasured)
 
 TEST (AnalogChain, OneRunMeasuresBothLoopsAndYieldsTheConverterShareOnce)
 {
-    a3app::RoundTripMeter meter (a3app::RoundTripLoop { 11, 11, 2 }, {}, a3app::AnalogLoop { 6, 8, {} }, {});
+    a3app::RoundTripMeter meter (a3app::RoundTripLoop { 11, 11 }, {}, a3app::AnalogLoop { 6, 8, {} }, {});
     double now = 0.0;
     run (meter, now, 300, 300, true, 1000);   // the automatic digital run: the analog loop is never run on its own
     EXPECT_EQ (meter.report().state, State::measured);
@@ -135,7 +137,7 @@ TEST (AnalogChain, OneRunMeasuresBothLoopsAndYieldsTheConverterShareOnce)
 TEST (AnalogChain, NoCableIsNoResultAndTheStoredShareStays)
 {
     const a3app::ConverterShare stored { 40, 48000.0, "2026-09-01" };
-    a3app::RoundTripMeter meter (a3app::RoundTripLoop { 11, 11, 2 }, {}, a3app::AnalogLoop { 6, 8, stored }, {});
+    a3app::RoundTripMeter meter (a3app::RoundTripLoop { 11, 11 }, {}, a3app::AnalogLoop { 6, 8, stored }, {});
     EXPECT_EQ (meter.report().analog, Analog::measured);
     double now = 0.0;
     meter.requestAnalog();
@@ -147,7 +149,7 @@ TEST (AnalogChain, NoCableIsNoResultAndTheStoredShareStays)
 
 TEST (AnalogChain, ARefusedPairIsNeverRun)
 {
-    a3app::RoundTripMeter meter (a3app::RoundTripLoop { 11, 11, 2 }, {}, a3app::AnalogLoop { 6, 8, {} }, "output 6 is in use (main_top_1)");
+    a3app::RoundTripMeter meter (a3app::RoundTripLoop { 11, 11 }, {}, a3app::AnalogLoop { 6, 8, {} }, "output 6 is in use (main_top_1)");
     meter.requestAnalog();
     EXPECT_FALSE (meter.report().analogMeasuring);
     EXPECT_EQ (meter.report().analogReason, "output 6 is in use (main_top_1)");

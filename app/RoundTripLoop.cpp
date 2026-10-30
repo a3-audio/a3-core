@@ -41,8 +41,7 @@ bool loopHolds (const std::optional<RoundTripLoop>& loop, bool input, int channe
 {
     if (! loop)
         return false;
-    const int first = input ? loop->input : loop->output;
-    return channel >= first && channel < first + loop->channels;
+    return channel == (input ? loop->input : loop->output);
 }
 
 bool isLoopPeer (const std::optional<RoundTripLoop>& loop, const std::string& port)
@@ -53,8 +52,6 @@ bool isLoopPeer (const std::optional<RoundTripLoop>& loop, const std::string& po
 
 juce::String loopRangeText (const RoundTripLoop& loop, bool input)
 {
-    const int first = input ? loop.input : loop.output;
-    const juce::String side = input ? "input " : "output ";
-    return side + juce::String (first) + (loop.channels > 1 ? "-" + juce::String (first + loop.channels - 1) : juce::String());
+    return juce::String (input ? "input " : "output ") + juce::String (input ? loop.input : loop.output);
 }
 }

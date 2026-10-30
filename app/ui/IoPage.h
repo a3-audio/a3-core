@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+#include "Dropdown.h"
 #include "HostView.h"
 #include "Look.h"
 #include <memory>
@@ -9,15 +10,15 @@
 namespace a3app
 {
 // Two sub-pages, chosen by INPUT and OUTPUT at the top. INPUT: per channel a dropdown for L and R (the capture
-// port or device channel feeding its analog pair), the deck slots' sources, and the direct links the engine makes
-// between two foreign ports. OUTPUT: per zone (MAIN, BOOTH, PHONES, REC) a dropdown per channel (the playback
+// port or device channel feeding its analog pair) and the deck slots' sources; no direct links (2026-10-30: a file's
+// io.directLinks is kept as loaded and the engine still makes them, but the page neither shows nor edits them). OUTPUT: per zone (MAIN, BOOTH, PHONES, REC) a dropdown per channel (the playback
 // port or device channel it goes to; one another channel uses is marked, not refused). REC is empty by default:
 // it is for an analog recorder (the beat-analyzer and the AES67 sender are built-in links). A dropdown names the
 // device's port as the user means it ("Scarlett 18i20 USB out 1", ConfigEdits.h peerLabel) and nothing stands
 // beside it: since 2026-10-30 the engine links exactly the plan and removes any other link on its ports
 // (LinkPlan.h), so there is no list of foreign links and no free-text port field. Each list ends with the two
-// measurement pairs, its side of them: the digital loop (the round trip) and the analog test cable. The digital
-// loop's channels are offered in no route; a notice names them and the routes a load left out because they were
+// measurement pairs, its side of them: the digital loop (the round trip, one channel a side) and the analog test
+// cable (one channel a side). The digital loop's channels are offered in no route; a notice names them and the routes a load left out because they were
 // on them. Every edit is pending until Save.
 class IoPage final : public juce::Component
 {
@@ -33,7 +34,6 @@ public:
     juce::ComboBox* routeBox (const std::string& port);
     void chooseRoute (const std::string& port, int item);
 
-    void setDirectLinks (const juce::String& linesOfFromArrowTo);
     void refresh (bool force = false);   // re-reads the config and the live links (throttled unless forced)
     const juce::Label& messageLabel() const { return message; }
     const juce::Label& noticeLabel() const { return notice; }
@@ -70,17 +70,16 @@ private:
     HostView& view;
     AppConfig shown;
     int ticks = 0;
-    juce::Label title, linksCaption, message, notice;
-    juce::ComboBox analogOutput, analogInput, digitalOutput, digitalInput;
+    juce::Label title, message, notice;
+    Dropdown analogOutput, analogInput, digitalOutput, digitalInput;
     // The MEASURE group at the end of one side's list: its caption and the two rows' captions.
     struct MeasureRows { juce::Label caption, digital, analog; };
     MeasureRows outputMeasure, inputMeasure;
-    juce::TextEditor linksEditor;
-    struct DeckChooser { juce::Label label; juce::ComboBox box; };
+    struct DeckChooser { juce::Label label; Dropdown box; };
     std::vector<std::unique_ptr<DeckChooser>> deckChoosers;
 
     // One dropdown: its port and the caption before it.
-    struct Route { std::string port; bool input = false; juce::Label caption; juce::ComboBox box; };
+    struct Route { std::string port; bool input = false; juce::Label caption; Dropdown box; };
     struct Group { juce::Label caption; std::vector<std::unique_ptr<Route>> routes; };
     std::vector<std::unique_ptr<Group>> inputGroups, outputGroups;
     juce::String routeKey;   // the ports and choices the dropdowns were built for

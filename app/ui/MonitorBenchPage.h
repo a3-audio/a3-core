@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+#include "Dropdown.h"
 #include "CoreClient.h"
 #include "Look.h"
 #include "MonitorTable.h"
@@ -32,7 +33,7 @@ private:
     void show (const juce::Result&);
 
     CoreClient& client;
-    juce::ComboBox to;
+    Dropdown to;
     juce::TextEditor address, value;
     juce::TextButton sendButton { "SEND" }, recallButton;
     juce::Label toCaption, addressCaption, valueCaption, answer;

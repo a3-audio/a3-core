@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+#include "Dropdown.h"
 #include "AudioTiming.h"
 #include "ClockPanel.h"
 #include "HostView.h"
@@ -77,7 +78,7 @@ private:
     juce::TextButton measure { "MEASURE" }, measureAnalog { "MEASURE ANALOG CHAIN" }, apply { "APPLY" }, cancel { "CANCEL" },
         revert { "REVERT" };
     juce::Label typeCaption, inputCaption, outputCaption, rateCaption, blockCaption;
-    juce::ComboBox typeBox, inputBox, outputBox, rateBox, blockBox;
+    Dropdown typeBox, inputBox, outputBox, rateBox, blockBox;
     ClockPanel clock;
     std::optional<AudioTiming> chosenTiming;   // PipeWire: chosen on the page, not applied yet
     bool deviceChoosers = false;

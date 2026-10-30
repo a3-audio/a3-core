@@ -9,17 +9,14 @@
 
 namespace a3app
 {
-// engine.json io.roundTripLoop: {"output": 11, "input": 11, "channels": 2}. Device channels, 1-based as the I/O
-// page shows them. The probe plays on `output` and records `input`; `channels` consecutive channels from each
-// are reserved (the S/PDIF pair is one cable). A file without the key gets this default (the rig's
-// Scarlett 18i20, S/PDIF out 11-12 patched to S/PDIF in 11-12); null is no loop.
+// engine.json io.roundTripLoop: {"output": 11, "input": 11}. Device channels, 1-based as the I/O page shows them.
+// The probe plays on `output` and records `input`, and only those two are reserved: one channel a side
+// (2026-10-30; until then the S/PDIF pair, "channels": 2, which a file may still say and the load ignores). A file
+// without the key gets this default (the rig's Scarlett 18i20, S/PDIF out 11 patched to S/PDIF in 11); null is no loop.
 struct RoundTripLoop
 {
-    int output = 11, input = 11, channels = 2;
-    bool operator== (const RoundTripLoop& other) const
-    {
-        return output == other.output && input == other.input && channels == other.channels;
-    }
+    int output = 11, input = 11;
+    bool operator== (const RoundTripLoop& other) const { return output == other.output && input == other.input; }
 };
 
 // The converters' share of the analog chain (analog in -> AD -> engine -> DA -> analog out): the analog loop's
@@ -66,6 +63,6 @@ std::optional<PeerChannel> deviceChannelOfPeer (const std::string& port);
 bool loopHolds (const std::optional<RoundTripLoop>&, bool input, int channelOneBased);
 // Whether a JACK port name is one of the loop's channels.
 bool isLoopPeer (const std::optional<RoundTripLoop>&, const std::string& port);
-// "output 11-12" / "input 11" (the reserved range of one side).
+// "output 11" / "input 11" (the reserved channel of one side).
 juce::String loopRangeText (const RoundTripLoop&, bool input);
 }

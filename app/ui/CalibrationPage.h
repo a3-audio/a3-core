@@ -41,7 +41,7 @@ private:
 
     HostView& view;
     Confirm confirm;
-    juce::Label title, message;
+    juce::Label title, message, helpText;
     std::vector<std::unique_ptr<Row>> rows;
 };
 }

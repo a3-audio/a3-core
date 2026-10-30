@@ -20,7 +20,6 @@ IoPage::IoPage (HostView& v)
     : view (v), shown (v.config())
 {
     look::caption (title);
-    look::caption (linksCaption);
     look::failure (message);
     look::caption (notice);
     notice.setMinimumHorizontalScale (0.5f);
@@ -40,25 +39,16 @@ IoPage::IoPage (HostView& v)
         rows.analog.setText ("analog test cable", juce::dontSendNotification);
         content.addAndMakeVisible (digital);
         content.addAndMakeVisible (analog);
-        look::help ("The digital loop the engine measures its round trip over (AUDIO: MEASURE): a digital output patched to a "
-                    "digital input (on the rig S/PDIF out 11-12 to S/PDIF in 11-12). Its channels are reserved: no route may "
-                    "use them, so a channel in use is refused. None: no measurement, only the estimate.", { &rows.digital, &digital });
-        look::help ("A one-time measurement of the converters (AUDIO: MEASURE ANALOG CHAIN): plug a temporary cable from a "
-                    "free output to a free input, choose both sides, Save, and run it on the AUDIO page.", { &rows.analog, &analog });
+        look::help ("The digital loop the engine measures its round trip over (AUDIO: MEASURE): one digital output patched to "
+                    "one digital input (on the rig S/PDIF out 11 to S/PDIF in 11). That channel of each side is reserved: no "
+                    "route may use it, so a channel in use is refused. None: no measurement, only the estimate.", { &rows.digital, &digital });
+        look::help ("A one-time measurement of the converters (AUDIO: MEASURE ANALOG CHAIN): plug a temporary cable from one "
+                    "free output to one free input, choose both sides, Save, and run it on the AUDIO page.", { &rows.analog, &analog });
     };
     addMeasureRows (outputMeasure, outputContent, digitalOutput, analogOutput);
     addMeasureRows (inputMeasure, inputContent, digitalInput, analogInput);
     title.setText ("I/O", juce::dontSendNotification);
-    linksCaption.setText ("Direct links the engine makes (one per line: from -> to)", juce::dontSendNotification);
-    linksEditor.setColour (juce::TextEditor::backgroundColourId, palette::face);
-    linksEditor.setColour (juce::TextEditor::textColourId, palette::text);
-    linksEditor.setColour (juce::TextEditor::outlineColourId, palette::lifted);
-    linksEditor.setColour (juce::TextEditor::focusedOutlineColourId, palette::textMuted);
-    linksEditor.setMultiLine (true, false);
-    linksEditor.setReturnKeyStartsNewLine (true);
-    linksEditor.onFocusLost = [this] { setDirectLinks (linksEditor.getText()); };
-    for (auto* child : std::initializer_list<juce::Component*> { &title, &linksCaption, &message, &notice, &linksEditor,
-                                                                 &inputKey, &outputKey, &inputView, &outputView })
+    for (auto* child : std::initializer_list<juce::Component*> { &title, &message, &notice, &inputKey, &outputKey, &inputView, &outputView })
         addAndMakeVisible (child);
     for (auto* key : { &inputKey, &outputKey })
     {
@@ -67,7 +57,7 @@ IoPage::IoPage (HostView& v)
     }
     inputKey.onClick = [this] { showSub (Sub::input); };
     outputKey.onClick = [this] { showSub (Sub::output); };
-    look::help ("INPUT: what feeds each channel's L and R, the decks' sources and the direct links. OUTPUT: where each "
+    look::help ("INPUT: what feeds each channel's L and R, and the decks' sources. OUTPUT: where each "
                 "zone's channels go; REC is free for an analog recorder. A port another channel already uses is marked in "
                 "the list, not refused. The engine links exactly this and removes anything else on its ports. Every edit "
                 "applies after Save.", { &title, &inputKey, &outputKey });
@@ -90,31 +80,6 @@ void IoPage::edit (const AppConfig& config)
 {
     view.edit (config);
     refresh (true);
-}
-
-void IoPage::setDirectLinks (const juce::String& text)
-{
-    std::vector<std::pair<std::string, std::string>> links;
-    for (const auto& line : juce::StringArray::fromLines (text))
-    {
-        if (line.trim().isEmpty())
-            continue;
-        const auto arrow = line.indexOf ("->");
-        const auto from = line.substring (0, juce::jmax (0, arrow)).trim();
-        const auto to = arrow < 0 ? juce::String() : line.substring (arrow + 2).trim();
-        if (from.isEmpty() || to.isEmpty())
-        {
-            look::say (message, "not a link (want  from -> to): " + line.trim());
-            return;
-        }
-        links.emplace_back (from.toStdString(), to.toStdString());
-    }
-    auto config = view.config();
-    look::say (message, {});
-    if (config.io.directLinks == links)
-        return;
-    config.io.directLinks = std::move (links);
-    edit (config);
 }
 
 juce::ComboBox* IoPage::deckSourceBox (int slot)
@@ -189,13 +154,6 @@ void IoPage::reload()
     fillRoutes();
     rebuildDeckChoosers();
     showDeckSources();
-    if (! linksEditor.hasKeyboardFocus (true))
-    {
-        juce::StringArray lines;
-        for (const auto& [from, to] : shown.io.directLinks)
-            lines.add (juce::String (from) + " -> " + to);
-        linksEditor.setText (lines.joinIntoString ("\n"), juce::dontSendNotification);
-    }
 }
 
 void IoPage::showSub (Sub wanted)
@@ -204,8 +162,7 @@ void IoPage::showSub (Sub wanted)
     const bool input = sub == Sub::input;
     inputKey.setToggleState (input, juce::dontSendNotification);
     outputKey.setToggleState (! input, juce::dontSendNotification);
-    for (auto* child : std::initializer_list<juce::Component*> { &inputView, &linksCaption, &linksEditor })
-        child->setVisible (input);
+    inputView.setVisible (input);
     outputView.setVisible (! input);
 }
 
@@ -365,17 +322,16 @@ void IoPage::fillAnalogPair()
     }
 }
 
-// Each item names the range the loop would reserve from it ("output 11-12").
+// Each item names the channel the loop would reserve ("output 11").
 void IoPage::fillDigitalLoop()
 {
     const auto& loop = shown.io.roundTripLoop;
-    const int width = loop ? loop->channels : RoundTripLoop {}.channels;
     for (const bool input : { false, true })
     {
         const auto channels = digitalLoopChannels (shown, input ? offered.capturePorts : offered.playbackPorts,
                                                    input ? offered.deviceInputs : offered.deviceOutputs, input);
         const int chosen = loop ? (input ? loop->input : loop->output) : 0;
-        const auto label = [&] (int c) { return loopRangeText ({ c, c, width }, input); };
+        const auto label = [&] (int c) { return loopRangeText ({ c, c }, input); };
         showItems (input ? digitalInput : digitalOutput, channelItems (channels, chosen, label), chosen + 1);
     }
 }
@@ -470,12 +426,9 @@ int layoutMeasure (Rows& rows, juce::Component& digital, juce::Component& analog
 }
 }
 
-// INPUT: the channels' L/R dropdowns and the deck sources scrolled together; the direct links below.
+// INPUT: the channels' L/R dropdowns, the deck sources and the measurement rows, scrolled together.
 void IoPage::layoutInput (juce::Rectangle<int> area, int row)
 {
-    auto links = area.removeFromBottom (row * 3);
-    linksCaption.setBounds (links.removeFromTop (row));
-    linksEditor.setBounds (links);
     inputView.setBounds (area);
     const int line = row * 3 / 4;
     const int width = area.getWidth() - inputView.getScrollBarThickness();
