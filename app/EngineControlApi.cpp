@@ -172,6 +172,7 @@ juce::var toJson (const EngineStatusReport& report)
                      { "capturePorts", toVar (report.backend.capturePorts) },
                      { "playbackPorts", toVar (report.backend.playbackPorts) },
                      { "deviceInputs", report.backend.deviceInputs },
+                     { "deviceName", report.backend.deviceName },
                      { "deviceOutputs", report.backend.deviceOutputs },
                      { "missingPeers", missing },
                      { "connecting", report.backend.connecting },
@@ -211,6 +212,7 @@ std::optional<EngineStatusReport> statusFromJson (const juce::var& v)
     report.backend.capturePorts = stringsOf (v["capturePorts"]);   // an older engine sends none: no choices
     report.backend.playbackPorts = stringsOf (v["playbackPorts"]);
     report.backend.deviceInputs = (int) number (v["deviceInputs"]).value_or (0.0);
+    report.backend.deviceName = v["deviceName"].toString();
     report.backend.deviceOutputs = (int) number (v["deviceOutputs"]).value_or (0.0);
     for (int i = 0; i < v["missingPeers"].size(); ++i)
         report.backend.missingPeers.push_back (v["missingPeers"][i].toString());

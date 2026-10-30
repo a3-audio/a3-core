@@ -29,6 +29,7 @@ TEST (EngineControlApi, StatusAsTheHostViewSaysIt)
     rig.fake.state.capturePorts = { "system:capture_1", "system:capture_2" };
     rig.fake.state.playbackPorts = { "system:playback_1" };
     rig.fake.state.deviceInputs = 2;
+    rig.fake.state.deviceName = "Scarlett 18i20 USB";
     rig.fake.state.deviceOutputs = 6;
     rig.fake.state.missingPeers = { "system:capture_9" };
     rig.fake.heard = true;
@@ -52,6 +53,7 @@ TEST (EngineControlApi, StatusAsTheHostViewSaysIt)
     EXPECT_EQ (report->backend.capturePorts, (juce::StringArray { "system:capture_1", "system:capture_2" }));   // the I/O page's choices
     EXPECT_EQ (report->backend.playbackPorts, juce::StringArray { "system:playback_1" });
     EXPECT_EQ (report->backend.deviceInputs, 2);
+    EXPECT_EQ (report->backend.deviceName, "Scarlett 18i20 USB");
     EXPECT_EQ (report->backend.deviceOutputs, 6);
     EXPECT_TRUE (report->backend.connecting);
     ASSERT_EQ (report->backend.missingPeers.size(), 1u);

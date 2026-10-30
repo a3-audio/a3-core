@@ -4,7 +4,6 @@
 #include "ConfigEdits.h"
 #include <algorithm>
 #include <functional>
-#include <sstream>
 
 namespace a3app
 {
@@ -15,107 +14,50 @@ constexpr int reloadEveryTicks = 10;   // the window ticks at 20 Hz: the live li
 constexpr int noneItem = 1;            // a route dropdown's first item; the choices follow from 2
 const juce::String noneText = juce::String::fromUTF8 ("\xe2\x80\x94 none \xe2\x80\x94");
 
-juce::String joined (const std::vector<std::string>& names)
-{
-    juce::StringArray list;
-    for (const auto& name : names)
-        list.add (juce::String (name));
-    return list.joinIntoString (", ");
 }
-
-juce::String mappedText (const IoRow& row, bool device)
-{
-    if (device)
-        return row.deviceChannel ? "channel " + juce::String (*row.deviceChannel + 1) : juce::String ("-");
-    return joined (row.mapped);
-}
-
-juce::String foreignText (const IoRow& row, bool device)
-{
-    return device || row.foreign.empty() ? juce::String() : "foreign: " + joined (row.foreign);
-}
-
-std::vector<std::string> splitPeers (const juce::String& text)
-{
-    std::vector<std::string> peers;
-    for (const auto& piece : juce::StringArray::fromTokens (text, ",\n", ""))
-        if (piece.trim().isNotEmpty())
-            peers.push_back (piece.trim().toStdString());
-    return peers;
-}
-}
-
-class IoPage::Model final : public juce::ListBoxModel
-{
-public:
-    explicit Model (IoPage& p) : page (p) {}
-    int getNumRows() override { return (int) page.portRows.size(); }
-
-    void paintListBoxItem (int index, juce::Graphics& g, int width, int height, bool selected) override
-    {
-        if (index < 0 || index >= getNumRows())
-            return;
-        const auto& row = page.portRows[(size_t) index];
-        const bool device = page.deviceMode();
-        if (selected)
-            g.fillAll (palette::lifted);
-        g.setFont ((float) height * 0.5f);
-        g.setColour (palette::text);
-        g.drawText (juce::String (row.port) + (row.input ? "  in" : "  out"), width / 60, 0, width / 4, height, juce::Justification::centredLeft);
-        const auto mapped = mappedText (row, device);
-        g.setColour (mapped == "-" ? palette::textMuted : palette::text);
-        g.drawText (mapped, width / 3, 0, width / 3, height, juce::Justification::centredLeft);
-        g.setColour (palette::textMuted);   // foreign: informative, not ours
-        g.drawText (foreignText (row, device), width * 2 / 3, 0, width / 3, height, juce::Justification::centredLeft);
-    }
-
-    void selectedRowsChanged (int row) override { page.selectPort (row); }
-
-private:
-    IoPage& page;
-};
 
 IoPage::IoPage (HostView& v)
-    : view (v), shown (v.config()), model (std::make_unique<Model> (*this)), list ("io", model.get())
+    : view (v), shown (v.config())
 {
     look::caption (title);
-    look::caption (portCaption);
     look::caption (linksCaption);
     look::failure (message);
     look::caption (notice);
     notice.setMinimumHorizontalScale (0.5f);
-    look::caption (analogCaption);
-    analogCaption.setText ("Analog test cable (AUDIO: MEASURE ANALOG CHAIN)", juce::dontSendNotification);
     analogOutput.onChange = [this] { chooseAnalogPair (false, analogOutput.getSelectedId() - 1); };
     analogInput.onChange = [this] { chooseAnalogPair (true, analogInput.getSelectedId() - 1); };
-    for (auto* child : std::initializer_list<juce::Component*> { &analogCaption, &analogOutput, &analogInput })
-        addAndMakeVisible (child);
-    look::help ("A one-time measurement of the converters: plug a temporary cable from a free output to a free input, "
-                "choose both here, Save, and run MEASURE ANALOG CHAIN on the AUDIO page.", { &analogCaption, &analogOutput, &analogInput });
-    look::caption (digitalCaption);
-    digitalCaption.setText ("Digital loop (AUDIO: MEASURE)", juce::dontSendNotification);
     digitalOutput.onChange = [this] { chooseDigitalLoop (false, digitalOutput.getSelectedId() - 1); };
     digitalInput.onChange = [this] { chooseDigitalLoop (true, digitalInput.getSelectedId() - 1); };
-    for (auto* child : std::initializer_list<juce::Component*> { &digitalCaption, &digitalOutput, &digitalInput })
-        addAndMakeVisible (child);
-    look::help ("The digital loop the engine measures its round trip over: a digital output patched to a digital input "
-                "(on the rig S/PDIF out 11-12 to S/PDIF in 11-12). Its channels are reserved: no route may use them, so a "
-                "channel in use is refused. None: no measurement, only the estimate.", { &digitalCaption, &digitalOutput, &digitalInput });
+    const auto addMeasureRows = [] (MeasureRows& rows, juce::Component& content, juce::ComboBox& digital, juce::ComboBox& analog)
+    {
+        for (auto* label : { &rows.caption, &rows.digital, &rows.analog })
+        {
+            look::caption (*label);
+            content.addAndMakeVisible (*label);
+        }
+        rows.caption.setText ("MEASURE", juce::dontSendNotification);
+        rows.digital.setText ("digital loop", juce::dontSendNotification);
+        rows.analog.setText ("analog test cable", juce::dontSendNotification);
+        content.addAndMakeVisible (digital);
+        content.addAndMakeVisible (analog);
+        look::help ("The digital loop the engine measures its round trip over (AUDIO: MEASURE): a digital output patched to a "
+                    "digital input (on the rig S/PDIF out 11-12 to S/PDIF in 11-12). Its channels are reserved: no route may "
+                    "use them, so a channel in use is refused. None: no measurement, only the estimate.", { &rows.digital, &digital });
+        look::help ("A one-time measurement of the converters (AUDIO: MEASURE ANALOG CHAIN): plug a temporary cable from a "
+                    "free output to a free input, choose both sides, Save, and run it on the AUDIO page.", { &rows.analog, &analog });
+    };
+    addMeasureRows (outputMeasure, outputContent, digitalOutput, analogOutput);
+    addMeasureRows (inputMeasure, inputContent, digitalInput, analogInput);
     title.setText ("I/O", juce::dontSendNotification);
     linksCaption.setText ("Direct links the engine makes (one per line: from -> to)", juce::dontSendNotification);
-    for (auto* editor : { &portEditor, &linksEditor })
-    {
-        editor->setColour (juce::TextEditor::backgroundColourId, palette::face);
-        editor->setColour (juce::TextEditor::textColourId, palette::text);
-        editor->setColour (juce::TextEditor::outlineColourId, palette::lifted);
-        editor->setColour (juce::TextEditor::focusedOutlineColourId, palette::textMuted);
-    }
+    linksEditor.setColour (juce::TextEditor::backgroundColourId, palette::face);
+    linksEditor.setColour (juce::TextEditor::textColourId, palette::text);
+    linksEditor.setColour (juce::TextEditor::outlineColourId, palette::lifted);
+    linksEditor.setColour (juce::TextEditor::focusedOutlineColourId, palette::textMuted);
     linksEditor.setMultiLine (true, false);
     linksEditor.setReturnKeyStartsNewLine (true);
-    portEditor.onReturnKey = [this] { commitEditor(); };
-    portEditor.onFocusLost = [this] { commitEditor(); };
     linksEditor.onFocusLost = [this] { setDirectLinks (linksEditor.getText()); };
-    for (auto* child : std::initializer_list<juce::Component*> { &title, &portCaption, &linksCaption, &message, &notice, &list, &portEditor, &linksEditor,
+    for (auto* child : std::initializer_list<juce::Component*> { &title, &linksCaption, &message, &notice, &linksEditor,
                                                                  &inputKey, &outputKey, &inputView, &outputView })
         addAndMakeVisible (child);
     for (auto* key : { &inputKey, &outputKey })
@@ -126,8 +68,9 @@ IoPage::IoPage (HostView& v)
     inputKey.onClick = [this] { showSub (Sub::input); };
     outputKey.onClick = [this] { showSub (Sub::output); };
     look::help ("INPUT: what feeds each channel's L and R, the decks' sources and the direct links. OUTPUT: where each "
-                "zone's channels go, and every engine port with its live links. A port another channel already uses is "
-                "marked in the list, not refused. Every edit applies after Save.", { &title, &inputKey, &outputKey });
+                "zone's channels go; REC is free for an analog recorder. A port another channel already uses is marked in "
+                "the list, not refused. The engine links exactly this and removes anything else on its ports. Every edit "
+                "applies after Save.", { &title, &inputKey, &outputKey });
     look::caption (decksCaption);
     decksCaption.setText ("DECKS", juce::dontSendNotification);
     inputContent.addAndMakeVisible (decksCaption);
@@ -139,56 +82,14 @@ IoPage::IoPage (HostView& v)
     showSub (Sub::input);
 }
 
-IoPage::~IoPage() { list.setModel (nullptr); }
+IoPage::~IoPage() = default;
 
 bool IoPage::deviceMode() const { return shown.backend.type == BackendSettings::Type::device; }
-
-juce::String IoPage::rowText (int index) const
-{
-    const auto& row = portRows.at ((size_t) index);
-    const auto foreign = foreignText (row, deviceMode());
-    return juce::String (row.port) + "   " + mappedText (row, deviceMode()) + (foreign.isEmpty() ? juce::String() : "   " + foreign);
-}
-
-juce::String IoPage::editableText (const std::string& port) const
-{
-    for (const auto& row : portRows)
-        if (row.port == port)
-            return deviceMode() ? (row.deviceChannel ? juce::String (*row.deviceChannel + 1) : juce::String()) : joined (row.mapped);
-    return {};
-}
 
 void IoPage::edit (const AppConfig& config)
 {
     view.edit (config);
     refresh (true);
-}
-
-void IoPage::setPeers (const std::string& port, const juce::String& text)
-{
-    auto config = view.config();
-    const auto peers = splitPeers (text);
-    if (const auto refusal = loopRefusal (config, peers); refusal.isNotEmpty())
-        return look::say (message, refusal);
-    if (peers.empty())
-        config.io.jack.erase (port);
-    else
-        config.io.jack[port] = peers;
-    look::say (message, {});
-    edit (config);
-}
-
-void IoPage::setDeviceChannel (const std::string& port, int channel)
-{
-    auto config = view.config();
-    if (const auto refusal = loopRefusal (config, isEngineInputPort (port), channel); channel >= 0 && refusal.isNotEmpty())
-        return look::say (message, refusal);
-    if (channel < 0)
-        config.io.deviceChannels.erase (port);
-    else
-        config.io.deviceChannels[port] = channel;
-    look::say (message, {});
-    edit (config);
 }
 
 void IoPage::setDirectLinks (const juce::String& text)
@@ -266,34 +167,6 @@ void IoPage::showDeckSources()
     }
 }
 
-void IoPage::selectPort (int row)
-{
-    if (row < 0 || row >= (int) portRows.size())
-        return;
-    const auto& port = portRows[(size_t) row].port;
-    portCaption.setText (juce::String (port) + (deviceMode() ? "  -  device channel (1-based, empty = unmapped)"
-                                                              : "  -  JACK peers, comma separated"), juce::dontSendNotification);
-    portEditor.setText (editableText (port), juce::dontSendNotification);
-}
-
-void IoPage::commitEditor()
-{
-    const auto row = list.getSelectedRow();
-    if (row < 0 || row >= (int) portRows.size())
-        return;
-    const auto port = portRows[(size_t) row].port;
-    const auto text = portEditor.getText().trim();
-    if (editableText (port) == text)
-        return;
-    if (! deviceMode())
-        return setPeers (port, text);
-    if (text.isEmpty())
-        return setDeviceChannel (port, -1);
-    if (! text.containsOnly ("0123456789") || text.getIntValue() < 1)
-        return look::say (message, "a device channel is a whole number from 1");
-    setDeviceChannel (port, text.getIntValue() - 1);
-}
-
 void IoPage::refresh (bool force)
 {
     if (! force && ++ticks < reloadEveryTicks)
@@ -305,12 +178,9 @@ void IoPage::refresh (bool force)
 void IoPage::reload()
 {
     shown = view.config();
-    lastLinks = view.liveLinks();
     juce::String error;
-    const auto ports = portNamesFor (shown, error);
-    if (! ports)
+    if (! portNamesFor (shown, error))
         return look::say (message, error);
-    portRows = ioRows (shown, *ports, lastLinks);
     offered = view.status();
     look::say (notice, loopNotice (shown, view.loopDropped()));
     fillAnalogPair();
@@ -319,8 +189,6 @@ void IoPage::reload()
     fillRoutes();
     rebuildDeckChoosers();
     showDeckSources();
-    list.updateContent();
-    list.repaint();
     if (! linksEditor.hasKeyboardFocus (true))
     {
         juce::StringArray lines;
@@ -328,8 +196,6 @@ void IoPage::reload()
             lines.add (juce::String (from) + " -> " + to);
         linksEditor.setText (lines.joinIntoString ("\n"), juce::dontSendNotification);
     }
-    if (! portEditor.hasKeyboardFocus (true))
-        selectPort (list.getSelectedRow());
 }
 
 void IoPage::showSub (Sub wanted)
@@ -340,23 +206,14 @@ void IoPage::showSub (Sub wanted)
     outputKey.setToggleState (! input, juce::dontSendNotification);
     for (auto* child : std::initializer_list<juce::Component*> { &inputView, &linksCaption, &linksEditor })
         child->setVisible (input);
-    for (auto* child : std::initializer_list<juce::Component*> { &outputView, &list, &portCaption, &portEditor })
-        child->setVisible (! input);
-}
-
-juce::String IoPage::foreignPeers (const std::string& port) const
-{
-    for (const auto& row : portRows)
-        if (row.port == port)
-            return joined (row.foreign);
-    return {};
+    outputView.setVisible (! input);
 }
 
 // JACK: the hardware's capture (input) or playback ports; a device: its channels, "channel 1" on. Never the loop's.
 std::vector<RouteChoice> IoPage::choicesFor (bool input) const
 {
     return routeChoices (shown, input ? offered.capturePorts : offered.playbackPorts,
-                         input ? offered.deviceInputs : offered.deviceOutputs, input);
+                         input ? offered.deviceInputs : offered.deviceOutputs, input, offered.deviceName);
 }
 
 // The dropdowns for the ports this config has: per channel L and R (INPUT), per zone its outputs (OUTPUT).
@@ -383,9 +240,8 @@ void IoPage::rebuildRoutes()
         route->input = input;
         look::caption (route->caption);
         route->caption.setText (caption, juce::dontSendNotification);
-        look::caption (route->foreign);
         route->box.onChange = [this, port, box = &route->box] { chooseRoute (port, box->getSelectedItemIndex()); };
-        for (auto* child : std::initializer_list<juce::Component*> { &route->caption, &route->foreign, &route->box })
+        for (auto* child : std::initializer_list<juce::Component*> { &route->caption, &route->box })
             content.addAndMakeVisible (child);
         group.routes.push_back (std::move (route));
     };
@@ -447,8 +303,8 @@ void IoPage::fillRoutes()
                 {
                     const auto& mapped = it->second.front();
                     const int found = indexOf ([&] (const RouteChoice& c) { return c.peer == mapped; });
-                    if (found < 0)
-                        items.add (juce::String (it->second.front()) + "   (not hardware)");   // what the map holds, kept
+                    if (found < 0)   // what the map holds, kept: not offered now (another client, or the device is away)
+                        items.add (peerLabel (mapped, offered.deviceName) + "   (not offered)");
                     selectedIndex = found >= 0 ? found + 1 : items.size() - 1;
                 }
                 juce::StringArray current;
@@ -461,7 +317,6 @@ void IoPage::fillRoutes()
                         route->box.addItem (items[i], noneItem + i);
                 }
                 route->box.setSelectedItemIndex (selectedIndex, juce::dontSendNotification);
-                look::say (route->foreign, deviceMode() ? juce::String() : foreignPeers (route->port));
             }
 }
 
@@ -556,7 +411,7 @@ void IoPage::chooseRoute (const std::string& port, int item)
     const bool input = isEngineInputPort (port);
     const auto choices = choicesFor (input);
     if (item < 0 || item > (int) choices.size())
-        return;   // the "not hardware" item: what the map holds stays
+        return;   // the "not offered" item: what the map holds stays
     look::say (message, {});
     const auto* choice = item == 0 ? nullptr : &choices[(size_t) item - 1];
     if (deviceMode())
@@ -576,21 +431,21 @@ void IoPage::resized()
     outputKey.setBounds (top.reduced (row / 16));
     message.setBounds (area.removeFromBottom (row));
     notice.setBounds (area.removeFromBottom (shown.io.roundTripLoop ? row : 0));
-    const auto pairRow = [&] (juce::Label& caption, juce::ComboBox& output, juce::ComboBox& input)
-    {
-        auto line = area.removeFromBottom (row).reduced (0, row / 12);
-        caption.setBounds (line.removeFromLeft (line.getWidth() / 2));
-        output.setBounds (line.removeFromLeft (line.getWidth() / 2).reduced (2, 0));
-        input.setBounds (line.reduced (2, 0));
-    };
-    pairRow (analogCaption, analogOutput, analogInput);
-    pairRow (digitalCaption, digitalOutput, digitalInput);
     layoutInput (area, row);
     layoutOutput (area, row);
 }
 
 namespace
 {
+// One row of a scrolled list: the caption on the first quarter, the dropdown on the rest.
+int layoutRow (juce::Label& caption, juce::Component& box, juce::Rectangle<int>& content, int line)
+{
+    auto slice = content.removeFromTop (line).reduced (0, line / 12);
+    caption.setBounds (slice.removeFromLeft (slice.getWidth() / 4));
+    box.setBounds (slice);
+    return line;
+}
+
 // Groups of dropdown rows in a scrolled content: a caption row per group, then one row per route.
 template <class Group>
 int layoutGroups (std::vector<std::unique_ptr<Group>>& groups, juce::Rectangle<int>& content, int line)
@@ -601,15 +456,17 @@ int layoutGroups (std::vector<std::unique_ptr<Group>>& groups, juce::Rectangle<i
         group->caption.setBounds (content.removeFromTop (line));
         used += line;
         for (auto& route : group->routes)
-        {
-            auto slice = content.removeFromTop (line).reduced (0, line / 12);
-            route->caption.setBounds (slice.removeFromLeft (slice.getWidth() / 4));
-            route->foreign.setBounds (slice.removeFromRight (slice.getWidth() / 4));
-            route->box.setBounds (slice);
-            used += line;
-        }
+            used += layoutRow (route->caption, route->box, content, line);
     }
     return used;
+}
+
+// The MEASURE group that ends a list: its caption, the digital loop's row and the analog test cable's.
+template <class Rows>
+int layoutMeasure (Rows& rows, juce::Component& digital, juce::Component& analog, juce::Rectangle<int>& content, int line)
+{
+    rows.caption.setBounds (content.removeFromTop (line));
+    return line + layoutRow (rows.digital, digital, content, line) + layoutRow (rows.analog, analog, content, line);
 }
 }
 
@@ -627,27 +484,19 @@ void IoPage::layoutInput (juce::Rectangle<int> area, int row)
     decksCaption.setBounds (content.removeFromTop (line));
     used += line;
     for (auto& chooser : deckChoosers)
-    {
-        auto slice = content.removeFromTop (line).reduced (0, line / 12);
-        chooser->label.setBounds (slice.removeFromLeft (slice.getWidth() / 4));
-        chooser->box.setBounds (slice);
-        used += line;
-    }
+        used += layoutRow (chooser->label, chooser->box, content, line);
+    used += layoutMeasure (inputMeasure, digitalInput, analogInput, content, line);
     inputContent.setSize (width, used);
 }
 
-// OUTPUT: the zones' dropdowns scrolled, then every port with its live links and the editor for one.
+// OUTPUT: the zones' dropdowns scrolled, the measurement pairs' outputs last.
 void IoPage::layoutOutput (juce::Rectangle<int> area, int row)
 {
-    list.setRowHeight (juce::jmax (22, row * 2 / 3));
-    auto lower = area.removeFromBottom (area.getHeight() / 3);
-    auto editRow = lower.removeFromBottom (row);
-    portCaption.setBounds (editRow.removeFromLeft (editRow.getWidth() / 2));
-    portEditor.setBounds (editRow);
-    list.setBounds (lower);
     outputView.setBounds (area);
+    const int line = row * 3 / 4;
     const int width = area.getWidth() - outputView.getScrollBarThickness();
     auto content = juce::Rectangle<int> (0, 0, width, 1 << 20);
-    outputContent.setSize (width, layoutGroups (outputGroups, content, row * 3 / 4));
+    const int used = layoutGroups (outputGroups, content, line);
+    outputContent.setSize (width, used + layoutMeasure (outputMeasure, digitalOutput, analogOutput, content, line));
 }
 }

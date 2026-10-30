@@ -393,7 +393,16 @@ AppConfig withDeviceRoute (const AppConfig& config, const std::string& port, std
     return edited;
 }
 
-std::vector<RouteChoice> routeChoices (const AppConfig& config, const juce::StringArray& hardwarePorts, int deviceChannels, bool input)
+juce::String peerLabel (const std::string& port, const juce::String& deviceName)
+{
+    const auto named = deviceChannelOfPeer (port);
+    if (! named)
+        return juce::String (port);
+    return (deviceName.isEmpty() ? juce::String ("Device") : deviceName) + (named->capture ? " in " : " out ") + juce::String (named->channel);
+}
+
+std::vector<RouteChoice> routeChoices (const AppConfig& config, const juce::StringArray& hardwarePorts, int deviceChannels, bool input,
+                                       const juce::String& deviceName)
 {
     std::vector<RouteChoice> choices;
     const auto& loop = config.io.roundTripLoop;
@@ -406,7 +415,7 @@ std::vector<RouteChoice> routeChoices (const AppConfig& config, const juce::Stri
     }
     for (const auto& port : hardwarePorts)
         if (! isLoopPeer (loop, port.toStdString()))
-            choices.push_back ({ port, port.toStdString(), std::nullopt });
+            choices.push_back ({ peerLabel (port.toStdString(), deviceName), port.toStdString(), std::nullopt });
     return choices;
 }
 

@@ -702,35 +702,10 @@ TEST_F (Pages, ZonesPaintsTheHeadphonesChooser)
     EXPECT_EQ (view.cfg.engine.phonesHeadphoneEq, "off");
 }
 
-TEST_F (Pages, ForeignLinksAreShownNotEditable)
+TEST_F (Pages, IoEditsDirectLinks)
 {
     FakeView view;
-    view.cfg.io.jack["analog_1"] = { "system:capture_1" };
-    view.links = { { "system:capture_1", "a3-engine:analog_1" }, { "stranger:out", "a3-engine:analog_1" } };
     a3app::IoPage page (view);
-    ASSERT_GT (page.rows().size(), 10u);
-    const auto& row = page.rows().front();
-    ASSERT_EQ (row.port, "analog_1");
-    EXPECT_EQ (row.foreign, (std::vector<std::string> { "stranger:out" }));
-    EXPECT_EQ (page.editableText ("analog_1"), "system:capture_1");   // the foreign one is not in the editor
-    EXPECT_NE (page.rowText (0).indexOf ("stranger:out"), -1);        // but it is on the row
-
-    page.setPeers ("analog_1", "system:capture_1, system:capture_2");   // edit: add one
-    EXPECT_EQ (view.cfg.io.jack["analog_1"], (std::vector<std::string> { "system:capture_1", "system:capture_2" }));
-    page.setPeers ("analog_1", "");
-    EXPECT_EQ (view.cfg.io.jack.count ("analog_1"), 0u);   // empty means no entry; the foreign link stays the other client's
-    EXPECT_EQ (page.rows().front().foreign, (std::vector<std::string> { "system:capture_1", "stranger:out" }));   // live order
-}
-
-TEST_F (Pages, IoEditsDeviceChannelsAndDirectLinks)
-{
-    FakeView view;
-    view.cfg.backend.type = a3app::BackendSettings::Type::device;
-    a3app::IoPage page (view);
-    page.setDeviceChannel ("analog_2", 5);
-    EXPECT_EQ (view.cfg.io.deviceChannels["analog_2"], 5);
-    page.setDeviceChannel ("analog_2", -1);   // unmapped
-    EXPECT_EQ (view.cfg.io.deviceChannels.count ("analog_2"), 0u);
 
     page.setDirectLinks ("system:capture_9 -> beat-analyzer:in_1\n  \nsystem:capture_10 -> beat-analyzer:in_2");
     EXPECT_EQ (view.cfg.io.directLinks.size(), 2u);
@@ -1644,7 +1619,8 @@ juce::Component* subKey (juce::Component& page, const juce::String& name)
 }
 
 // OUTPUT: every channel of MAIN, BOOTH, PHONES and REC has a dropdown of the playback ports ("none" first); a
-// choice is the port's route; a port another channel already uses is marked, not refused.
+// choice is the port's route; a port another channel already uses is marked, not refused. REC is free by default
+// (for an analog recorder).
 TEST_F (Pages, IoOutputHasADropdownPerZoneChannel)
 {
     FakeView view;
@@ -1655,6 +1631,7 @@ TEST_F (Pages, IoOutputHasADropdownPerZoneChannel)
     ASSERT_NE (subKey (page, "INPUT"), nullptr);
     ASSERT_NE (subKey (page, "OUTPUT"), nullptr);
     page.showSub (a3app::IoPage::Sub::output);
+    EXPECT_EQ (page.routeBox ("rec_L")->getSelectedItemIndex(), 0) << "REC: none until the user chooses";
     juce::String error;
     const auto ports = a3app::portNamesFor (view.cfg, error);
     ASSERT_TRUE (ports) << error;
@@ -1673,7 +1650,6 @@ TEST_F (Pages, IoOutputHasADropdownPerZoneChannel)
     EXPECT_EQ (view.cfg.io.jack.at ("rec_L"), std::vector<std::string> { "system:playback_3" });   // twice: allowed
     page.refresh (true);
     EXPECT_TRUE (page.routeBox ("rec_L")->getItemText (3).contains ("booth_top_2")) << page.routeBox ("rec_L")->getItemText (3);
-    EXPECT_TRUE (page.foreignPeers ("main_top_1").contains ("stranger:in"));   // shown, never touched
     page.chooseRoute ("rec_L", 0);
     EXPECT_EQ (view.cfg.io.jack.count ("rec_L"), 0u);
     EXPECT_EQ (view.links.size(), 1u);
@@ -1767,18 +1743,14 @@ TEST_F (Pages, IoLeavesTheRoundTripLoopOut)
     EXPECT_EQ (box->getNumItems(), 13);   // none + 14 - the loop's 2
     for (int i = 0; i < box->getNumItems(); ++i)
     {
-        EXPECT_FALSE (box->getItemText (i).contains ("playback_11")) << box->getItemText (i);
-        EXPECT_FALSE (box->getItemText (i).contains ("playback_12")) << box->getItemText (i);
+        EXPECT_FALSE (box->getItemText (i).endsWith (" out 11")) << box->getItemText (i);
+        EXPECT_FALSE (box->getItemText (i).endsWith (" out 12")) << box->getItemText (i);
     }
     page.chooseRoute ("booth_sub", 11);   // past the loop: system:playback_13
     EXPECT_EQ (view.cfg.io.jack.at ("booth_sub"), std::vector<std::string> { "system:playback_13" });
     EXPECT_TRUE (page.noticeLabel().getText().contains ("output 11-12")) << page.noticeLabel().getText();
     EXPECT_TRUE (page.noticeLabel().getText().contains ("booth_sub -> system:playback_11")) << page.noticeLabel().getText();
     EXPECT_TRUE (page.noticeLabel().isVisible());
-
-    page.setPeers ("booth_top_1", "system:playback_12");
-    EXPECT_EQ (view.cfg.io.jack.count ("booth_top_1"), 0u);
-    EXPECT_TRUE (page.messageLabel().getText().contains ("round-trip loop")) << page.messageLabel().getText();
 
     view.runDevice();
     view.state.deviceInputs = 14;
@@ -1788,9 +1760,6 @@ TEST_F (Pages, IoLeavesTheRoundTripLoopOut)
     EXPECT_EQ (page.routeBox ("analog_1")->getNumItems(), 13);
     page.chooseRoute ("analog_1", 11);   // past the loop: channel 13
     EXPECT_EQ (view.cfg.io.deviceChannels.at ("analog_1"), 12);
-    page.setDeviceChannel ("analog_2", 10);   // device input 11
-    EXPECT_EQ (view.cfg.io.deviceChannels.count ("analog_2"), 0u);
-    EXPECT_TRUE (page.messageLabel().getText().contains ("round-trip loop")) << page.messageLabel().getText();
     expectPainted (a3apptest::snapshotAt (page, "io-roundtrip-loop", page.getWidth(), page.getHeight()));
 }
 
@@ -1886,7 +1855,8 @@ TEST_F (Pages, IoChoosesTheDigitalLoop)
     auto& output = page.digitalOutputBox();
     auto& input = page.digitalInputBox();
     EXPECT_TRUE (output.isVisible());
-    EXPECT_TRUE (page.getLocalBounds().contains (output.getBounds()));
+    ASSERT_NE (output.getParentComponent(), nullptr);   // a row of the OUTPUT list (IoMeasurementPairsAreTheListsLastRows)
+    EXPECT_TRUE (output.getParentComponent()->getLocalBounds().contains (output.getBounds()));
     EXPECT_EQ (output.getNumItems(), 15);   // none + 14
     EXPECT_TRUE (output.getText().contains ("11-12")) << output.getText();
     EXPECT_TRUE (input.getText().contains ("11-12")) << input.getText();
@@ -1900,4 +1870,106 @@ TEST_F (Pages, IoChoosesTheDigitalLoop)
     page.chooseDigitalLoop (true, 0);
     EXPECT_FALSE (view.cfg.io.roundTripLoop.has_value());
     expectPainted (a3apptest::snapshotAt (page, "io-digital-loop", page.getWidth(), page.getHeight()));
+}
+
+// I/O (2026-10-30): the dropdown is the whole row beside its port. It names the device's port as the user means it
+// ("Scarlett 18i20 USB out 3"), and there is no text beside it, no list of ports and no free-text port field: the
+// engine links exactly what the dropdowns say and removes anything else on its ports.
+TEST_F (Pages, IoDropdownsNameTheDevicesPortsAndNothingStandsBesideThem)
+{
+    FakeView view;
+    giveHardwarePorts (view);
+    view.state.deviceName = "Scarlett 18i20 USB";
+    view.cfg.io.jack["main_sub"] = { "system:playback_1" };
+    view.links = { { "a3-engine:main_sub", "AES67 a3nuc1 out:send_CH1" } };
+    a3app::IoPage page (view);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
+    page.showSub (a3app::IoPage::Sub::output);
+    auto* box = page.routeBox ("main_sub");
+    ASSERT_NE (box, nullptr);
+    EXPECT_EQ (box->getText(), "Scarlett 18i20 USB out 1");
+    EXPECT_EQ (box->getItemText (3), "Scarlett 18i20 USB out 3");
+    const auto* row = box->getParentComponent();
+    for (auto* child : row->getChildren())
+    {
+        if (child == box || ! child->isVisible())
+            continue;
+        if (child->getBounds().getVerticalRange().intersects (box->getBounds().getVerticalRange()))
+            EXPECT_LE (child->getRight(), box->getX()) << "only the port's caption, left of the box";
+        if (auto* label = dynamic_cast<juce::Label*> (child))
+            EXPECT_FALSE (label->getText().contains ("AES67")) << label->getText();
+    }
+    EXPECT_GE (box->getRight(), row->getWidth() - 4) << "the box runs to the row's end";
+    std::function<void (juce::Component&)> noEditors = [&] (juce::Component& parent)
+    {
+        for (auto* child : parent.getChildren())
+        {
+            if (child->isShowing())
+            {
+                EXPECT_EQ (dynamic_cast<juce::TextEditor*> (child), nullptr) << "no free-text field on OUTPUT";
+                EXPECT_EQ (dynamic_cast<juce::ListBox*> (child), nullptr) << "no port list on OUTPUT";
+            }
+            noEditors (*child);
+        }
+    };
+    noEditors (page);
+    expectPainted (a3apptest::snapshotAt (page, "io-output-device-names", page.getWidth(), page.getHeight()));
+
+    view.state.deviceName = {};
+    page.refresh (true);
+    EXPECT_EQ (box->getText(), "Device out 1");
+}
+
+namespace
+{
+// Every showing list of the page scrolled to its end: where the measurement rows are.
+void scrollToTheEnd (juce::Component& page)
+{
+    for (auto* child : page.getChildren())
+        if (auto* scroller = dynamic_cast<juce::Viewport*> (child); scroller != nullptr && scroller->isVisible())
+            scroller->setViewPosition (0, scroller->getViewedComponent()->getHeight());
+}
+}
+
+// I/O (2026-10-30): the two measurement pairs are rows at the end of each sub-page's list, in the rows' style: on
+// OUTPUT their output side, on INPUT their input side; the same dropdowns and reservation rules.
+TEST_F (Pages, IoMeasurementPairsAreTheListsLastRows)
+{
+    FakeView view;
+    for (int i = 1; i <= 14; ++i)
+    {
+        view.state.capturePorts.add ("system:capture_" + juce::String (i));
+        view.state.playbackPorts.add ("system:playback_" + juce::String (i));
+    }
+    view.cfg.io.roundTripLoop = a3app::RoundTripLoop { 11, 11, 2 };
+    a3app::IoPage page (view);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
+
+    page.showSub (a3app::IoPage::Sub::output);
+    const auto* lastOutput = page.routeBox ("rec_R");
+    ASSERT_NE (lastOutput, nullptr);
+    for (auto* box : { &page.digitalOutputBox(), &page.analogOutputBox() })
+    {
+        EXPECT_EQ (box->getParentComponent(), lastOutput->getParentComponent()) << "in the scrolled list";
+        EXPECT_GT (box->getY(), lastOutput->getY());
+        EXPECT_EQ (box->getX(), lastOutput->getX()) << "the rows' style";
+        EXPECT_EQ (box->getWidth(), lastOutput->getWidth());
+    }
+    EXPECT_GT (page.analogOutputBox().getY(), page.digitalOutputBox().getY());
+    EXPECT_TRUE (page.digitalOutputBox().getText().contains ("output 11-12")) << page.digitalOutputBox().getText();
+    scrollToTheEnd (page);
+    expectPainted (a3apptest::snapshotAt (page, "io-output-measure-rows", page.getWidth(), page.getHeight()));
+
+    page.showSub (a3app::IoPage::Sub::input);
+    const auto* firstInput = page.routeBox ("analog_1");
+    ASSERT_NE (firstInput, nullptr);
+    for (auto* box : { &page.digitalInputBox(), &page.analogInputBox() })
+    {
+        EXPECT_EQ (box->getParentComponent(), firstInput->getParentComponent());
+        EXPECT_GT (box->getY(), page.deckSourceBox (1)->getY()) << "after the decks: the list's end";
+        EXPECT_EQ (box->getWidth(), firstInput->getWidth());
+    }
+    EXPECT_TRUE (page.digitalInputBox().getText().contains ("input 11-12")) << page.digitalInputBox().getText();
+    scrollToTheEnd (page);
+    expectPainted (a3apptest::snapshotAt (page, "io-input-measure-rows", page.getWidth(), page.getHeight()));
 }

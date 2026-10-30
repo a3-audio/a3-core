@@ -11,11 +11,14 @@ namespace a3app
 // Two sub-pages, chosen by INPUT and OUTPUT at the top. INPUT: per channel a dropdown for L and R (the capture
 // port or device channel feeding its analog pair), the deck slots' sources, and the direct links the engine makes
 // between two foreign ports. OUTPUT: per zone (MAIN, BOOTH, PHONES, REC) a dropdown per channel (the playback
-// port or device channel it goes to; one another channel uses is marked, not refused), and below it every engine
-// port as the I/O map names its peers (editable, comma separated) beside the live ones it does not (foreign:
-// shown in muted text, never edited). At the bottom the two measurement pairs: the digital loop (the round trip)
-// and the analog test cable. The digital loop's channels are offered in no route; a notice names them and the
-// routes a load left out because they were on them. Every edit is pending until Save.
+// port or device channel it goes to; one another channel uses is marked, not refused). REC is empty by default:
+// it is for an analog recorder (the beat-analyzer and the AES67 sender are built-in links). A dropdown names the
+// device's port as the user means it ("Scarlett 18i20 USB out 1", ConfigEdits.h peerLabel) and nothing stands
+// beside it: since 2026-10-30 the engine links exactly the plan and removes any other link on its ports
+// (LinkPlan.h), so there is no list of foreign links and no free-text port field. Each list ends with the two
+// measurement pairs, its side of them: the digital loop (the round trip) and the analog test cable. The digital
+// loop's channels are offered in no route; a notice names them and the routes a load left out because they were
+// on them. Every edit is pending until Save.
 class IoPage final : public juce::Component
 {
 public:
@@ -29,19 +32,13 @@ public:
     // offered capture/playback ports or device channels in order).
     juce::ComboBox* routeBox (const std::string& port);
     void chooseRoute (const std::string& port, int item);
-    juce::String foreignPeers (const std::string& port) const;   // the live peers the map does not name
 
-    const std::vector<IoRow>& rows() const { return portRows; }
-    juce::String rowText (int row) const;               // mapped and foreign, as the row shows them
-    juce::String editableText (const std::string& port) const;   // what the editor holds: the config's, never the foreign
-
-    void setPeers (const std::string& port, const juce::String& commaSeparated);
-    void setDeviceChannel (const std::string& port, int channel0OrMinusOne);
     void setDirectLinks (const juce::String& linesOfFromArrowTo);
     void refresh (bool force = false);   // re-reads the config and the live links (throttled unless forced)
     const juce::Label& messageLabel() const { return message; }
     const juce::Label& noticeLabel() const { return notice; }
     // The analog test pair (a temporary cable for the AUDIO page's MEASURE ANALOG CHAIN): one side's channel, 0 = none.
+    // Each box is a row at the end of its side's list (OUTPUT: the output, INPUT: the input).
     juce::ComboBox& analogOutputBox() { return analogOutput; }
     juce::ComboBox& analogInputBox() { return analogInput; }
     void chooseAnalogPair (bool input, int channelOneBased);
@@ -56,11 +53,8 @@ public:
     void paint (juce::Graphics&) override;
 
 private:
-    class Model;
     bool deviceMode() const;
     void reload();
-    void selectPort (int row);
-    void commitEditor();
     void edit (const AppConfig&);
     void chooseDeckSource (int slotOneBased);
     void showDeckSources();
@@ -74,20 +68,19 @@ private:
     void layoutOutput (juce::Rectangle<int> area, int row);
 
     HostView& view;
-    std::vector<IoRow> portRows;
-    LiveLinks lastLinks;
     AppConfig shown;
     int ticks = 0;
-    juce::Label title, portCaption, linksCaption, message, notice, analogCaption, digitalCaption;
+    juce::Label title, linksCaption, message, notice;
     juce::ComboBox analogOutput, analogInput, digitalOutput, digitalInput;
-    std::unique_ptr<Model> model;
-    juce::ListBox list;
-    juce::TextEditor portEditor, linksEditor;
+    // The MEASURE group at the end of one side's list: its caption and the two rows' captions.
+    struct MeasureRows { juce::Label caption, digital, analog; };
+    MeasureRows outputMeasure, inputMeasure;
+    juce::TextEditor linksEditor;
     struct DeckChooser { juce::Label label; juce::ComboBox box; };
     std::vector<std::unique_ptr<DeckChooser>> deckChoosers;
 
-    // One dropdown: its port, the caption beside it, and the live foreign peers after it.
-    struct Route { std::string port; bool input = false; juce::Label caption, foreign; juce::ComboBox box; };
+    // One dropdown: its port and the caption before it.
+    struct Route { std::string port; bool input = false; juce::Label caption; juce::ComboBox box; };
     struct Group { juce::Label caption; std::vector<std::unique_ptr<Route>> routes; };
     std::vector<std::unique_ptr<Group>> inputGroups, outputGroups;
     juce::String routeKey;   // the ports and choices the dropdowns were built for
