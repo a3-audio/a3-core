@@ -117,6 +117,24 @@ std::vector<ChannelInputs> channelInputPorts (const a3::EngineConfig&);
 // (empty: none); a device channel (0-based; nullopt: none) likewise. Live foreign links are not the map's.
 AppConfig withJackRoute (const AppConfig&, const std::string& port, const std::string& peer);
 AppConfig withDeviceRoute (const AppConfig&, const std::string& port, std::optional<int> channel);
+// One choice of a route dropdown: what it reads, and the JACK peer or the device channel (0-based) it routes to.
+struct RouteChoice
+{
+    juce::String label;
+    std::string peer;
+    std::optional<int> channel;
+};
+// The I/O page's choices for an input (capture side) or an output: JACK: `hardwarePorts` (the backend's physical
+// capture or playback ports); a device: its channels 1..deviceChannels. The round-trip loop's are left out.
+std::vector<RouteChoice> routeChoices (const AppConfig&, const juce::StringArray& hardwarePorts, int deviceChannels, bool input);
+// Why a route the editor was given cannot be taken ("" when it can): a peer, or a device channel (0-based) of
+// an input or an output, that is the round-trip loop's.
+juce::String loopRefusal (const AppConfig&, const std::vector<std::string>& peers);
+juce::String loopRefusal (const AppConfig&, bool input, int channel0);
+// The I/O page's notice: which channels the loop holds, and the routes a load left out because they were on
+// it (AppConfig::loopDropped). Empty without a loop.
+juce::String loopNotice (const AppConfig&, const std::vector<std::string>& loopDropped);
+
 // The engine ports other than `except` the map routes to `peer` (a JACK peer, or "#<n>" for device channel n, 0-based).
 std::vector<std::string> portsRoutedTo (const AppConfig&, const std::string& peer, const std::string& except);
 }

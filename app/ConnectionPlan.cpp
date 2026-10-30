@@ -27,10 +27,19 @@ void addRecToAes67Sender (a3::links::LinkMap& map, const std::string& hostname)
     }
 }
 
+void addRoundTripLoopLinks (IoMap& map)
+{
+    if (! map.roundTripLoop)
+        return;
+    map.jack[loopOutputPort] = { "system:playback_" + std::to_string (map.roundTripLoop->output) };
+    map.jack[loopInputPort] = { "system:capture_" + std::to_string (map.roundTripLoop->input) };
+}
+
 IoMap linkMapFor (const AppConfig& config, const std::string& hostname)
 {
     auto map = config.io;
     addRecToAes67Sender (map, hostname);
+    addRoundTripLoopLinks (map);
     return map;
 }
 

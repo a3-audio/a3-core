@@ -31,21 +31,55 @@ void parseDeviceChannels (const juce::DynamicObject& object, const PortNames& po
     }
 }
 
-// The library knows jack and directLinks; deviceChannels is ours, so the library sees a copy without it.
-juce::var withoutDeviceChannels (const juce::DynamicObject& object)
+int loopChannel (const juce::DynamicObject& loop, const char* key, bool required, int fallback)
+{
+    if (! loop.hasProperty (key))
+    {
+        if (required)
+            refuse ("io.roundTripLoop needs \"" + juce::String (key) + "\"");
+        return fallback;
+    }
+    const auto& v = loop.getProperty (key);
+    const bool whole = (v.isInt() || v.isInt64() || v.isDouble()) && std::isfinite ((double) v)
+                    && (double) v == std::floor ((double) v) && (double) v >= 1 && (double) v <= 1024;
+    if (! whole)
+        refuse ("io.roundTripLoop." + juce::String (key) + " must be a whole number from 1");
+    return (int) v;
+}
+
+// Absent: the rig's default loop. null: none.
+std::optional<RoundTripLoop> parseLoop (const juce::DynamicObject& object)
+{
+    if (! object.hasProperty ("roundTripLoop"))
+        return RoundTripLoop {};
+    const auto& value = object.getProperty ("roundTripLoop");
+    if (value.isVoid())
+        return std::nullopt;
+    const auto& loop = objectOf (value, "io.roundTripLoop");
+    a3::jsonparse::rejectUnknownKeys (loop, { "output", "input", "channels" }, "io.roundTripLoop");
+    RoundTripLoop parsed;
+    parsed.output = loopChannel (loop, "output", true, 0);
+    parsed.input = loopChannel (loop, "input", true, 0);
+    parsed.channels = loopChannel (loop, "channels", false, 1);
+    return parsed;
+}
+
+// The library knows jack and directLinks; deviceChannels and roundTripLoop are ours, so the library sees a copy without them.
+juce::var withoutOurKeys (const juce::DynamicObject& object)
 {
     auto* copy = object.clone().release();
     copy->removeProperty ("deviceChannels");
+    copy->removeProperty ("roundTripLoop");
     return juce::var (copy);
 }
 
 IoMap parse (const juce::var& section, const PortNames& ports)
 {
     const auto& object = objectOf (section, "io");
-    a3::jsonparse::rejectUnknownKeys (object, { "jack", "directLinks", "deviceChannels" }, "io");
+    a3::jsonparse::rejectUnknownKeys (object, { "jack", "directLinks", "deviceChannels", "roundTripLoop" }, "io");
 
     juce::String error;
-    const auto links = a3::links::parseLinkMap (withoutDeviceChannels (object), ports.inputs, ports.outputs, error);
+    const auto links = a3::links::parseLinkMap (withoutOurKeys (object), ports.inputs, ports.outputs, error);
     if (! links)
         refuse (error);
 
@@ -53,6 +87,7 @@ IoMap parse (const juce::var& section, const PortNames& ports)
     static_cast<a3::links::LinkMap&> (map) = *links;
     if (object.hasProperty ("deviceChannels"))
         parseDeviceChannels (object, ports, map);
+    map.roundTripLoop = parseLoop (object);
     return map;
 }
 }
@@ -78,6 +113,64 @@ juce::var toJson (const IoMap& map)
     for (const auto& [port, channel] : map.deviceChannels)
         channels->setProperty (juce::String (port), channel);
     root.getDynamicObject()->setProperty ("deviceChannels", juce::var (channels));
+    juce::var loop;   // null: no loop
+    if (map.roundTripLoop)
+    {
+        auto* object = new juce::DynamicObject();
+        object->setProperty ("output", map.roundTripLoop->output);
+        object->setProperty ("input", map.roundTripLoop->input);
+        object->setProperty ("channels", map.roundTripLoop->channels);
+        loop = juce::var (object);
+    }
+    root.getDynamicObject()->setProperty ("roundTripLoop", loop);
     return root;
+}
+
+std::vector<std::string> dropLoopRoutes (IoMap& map)
+{
+    std::vector<std::string> dropped;
+    const auto& loop = map.roundTripLoop;
+    if (! loop)
+        return dropped;
+    for (auto entry = map.jack.begin(); entry != map.jack.end();)
+    {
+        auto& peers = entry->second;
+        const auto before = peers.size();
+        for (auto peer = peers.begin(); peer != peers.end();)
+        {
+            if (! isLoopPeer (loop, *peer))
+            {
+                ++peer;
+                continue;
+            }
+            dropped.push_back (entry->first + " -> " + *peer);
+            peer = peers.erase (peer);
+        }
+        const bool emptiedByUs = peers.empty() && before > 0;   // an entry that was empty in the file stays
+        entry = emptiedByUs ? map.jack.erase (entry) : std::next (entry);
+    }
+    for (auto entry = map.deviceChannels.begin(); entry != map.deviceChannels.end();)
+    {
+        const int channel = entry->second + 1;
+        if (! loopHolds (loop, isEngineInputPort (entry->first), channel))
+        {
+            ++entry;
+            continue;
+        }
+        dropped.push_back (entry->first + " -> device channel " + std::to_string (channel));
+        entry = map.deviceChannels.erase (entry);
+    }
+    auto& links = map.directLinks;
+    for (auto link = links.begin(); link != links.end();)
+    {
+        if (! isLoopPeer (loop, link->first) && ! isLoopPeer (loop, link->second))
+        {
+            ++link;
+            continue;
+        }
+        dropped.push_back (link->first + " -> " + link->second);
+        link = links.erase (link);
+    }
+    return dropped;
 }
 }

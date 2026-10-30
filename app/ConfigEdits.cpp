@@ -393,6 +393,58 @@ AppConfig withDeviceRoute (const AppConfig& config, const std::string& port, std
     return edited;
 }
 
+std::vector<RouteChoice> routeChoices (const AppConfig& config, const juce::StringArray& hardwarePorts, int deviceChannels, bool input)
+{
+    std::vector<RouteChoice> choices;
+    const auto& loop = config.io.roundTripLoop;
+    if (config.backend.type == BackendSettings::Type::device)
+    {
+        for (int channel = 1; channel <= deviceChannels; ++channel)
+            if (! loopHolds (loop, input, channel))
+                choices.push_back ({ "channel " + juce::String (channel), {}, channel - 1 });
+        return choices;
+    }
+    for (const auto& port : hardwarePorts)
+        if (! isLoopPeer (loop, port.toStdString()))
+            choices.push_back ({ port, port.toStdString(), std::nullopt });
+    return choices;
+}
+
+namespace
+{
+juce::String reservedText (const juce::String& what) { return what + " is the round-trip loop's (reserved)"; }
+}
+
+juce::String loopRefusal (const AppConfig& config, const std::vector<std::string>& peers)
+{
+    for (const auto& peer : peers)
+        if (isLoopPeer (config.io.roundTripLoop, peer))
+            return reservedText (juce::String (peer));
+    return {};
+}
+
+juce::String loopRefusal (const AppConfig& config, bool input, int channel0)
+{
+    if (! loopHolds (config.io.roundTripLoop, input, channel0 + 1))
+        return {};
+    return reservedText ("device " + juce::String (input ? "input " : "output ") + juce::String (channel0 + 1));
+}
+
+juce::String loopNotice (const AppConfig& config, const std::vector<std::string>& loopDropped)
+{
+    const auto& loop = config.io.roundTripLoop;
+    if (! loop)
+        return {};
+    auto notice = "Round-trip loop: device " + loopRangeText (*loop, false) + " -> " + loopRangeText (*loop, true)
+                + " (reserved for the measurement, not offered here).";
+    if (loopDropped.empty())
+        return notice;
+    juce::StringArray routes;
+    for (const auto& route : loopDropped)
+        routes.add (juce::String (route));
+    return notice + " Unrouted at load, they were on the loop: " + routes.joinIntoString (", ") + ".";
+}
+
 std::vector<std::string> portsRoutedTo (const AppConfig& config, const std::string& peer, const std::string& except)
 {
     std::vector<std::string> ports;

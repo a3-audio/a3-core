@@ -139,7 +139,7 @@ TEST (DefaultConfig, ConnectsWhatThePatchbayConnectedForReaper)
     std::set<std::string> known (ports.inputs.begin(), ports.inputs.end());
     known.insert (ports.outputs.begin(), ports.outputs.end());
 
-    int checked = 0, direct = 0, meters = 0, singleInstanceRecorders = 0;
+    int checked = 0, direct = 0, meters = 0, singleInstanceRecorders = 0, movedForTheLoop = 0;
     for (const auto& link : patchbayLinks())
     {
         const bool reaperIsSource = startsWith (link.from, "REAPER:");
@@ -175,12 +175,18 @@ TEST (DefaultConfig, ConnectsWhatThePatchbayConnectedForReaper)
         const auto port = afterColon (name);
         if (known.count (port) == 0)   // the 6.1 booth's fifth and sixth top: not in the 4.1 default
             continue;
+        if (startsWith (port, "booth_") || port == "analog_11" || port == "analog_12")   // moved for the loop (LeavesTheRoundTripLoopFree)
+        {
+            ++movedForTheLoop;
+            continue;
+        }
         ++checked;
         const auto found = config.io.jack.find (port);
         ASSERT_TRUE (found != config.io.jack.end()) << port << " has no peers";
         EXPECT_TRUE (contains (found->second, peer)) << port << " should link " << peer << " (as " << reaperPort << " did)";
     }
-    EXPECT_GE (checked, 15);
+    EXPECT_GE (checked, 10);
+    EXPECT_EQ (movedForTheLoop, 7);   // the booth's sub and four tops, analog 11 and 12
     EXPECT_EQ (meters, 50);   // every patchbay cable into beat-analyzer's vu_* ports
     EXPECT_EQ (direct, 0);    // REAPER's raw meter outs (out25-26, out31-38) fed only those meters
     EXPECT_EQ (singleInstanceRecorders, 2);   // rec_L/R -> StemDeck:rec_L/R, now made by StemDeck itself
@@ -316,4 +322,20 @@ TEST (DefaultConfig, NothingButTheRecBusFeedsARecorder)
     };
     EXPECT_EQ (recorders ("rec_L"), (std::set<std::string> { "AES67 a3nuc1 out:send_CH1" }));
     EXPECT_EQ (recorders ("rec_R"), (std::set<std::string> { "AES67 a3nuc1 out:send_CH2" }));
+}
+
+// The rig's S/PDIF out 11-12 is patched to S/PDIF in 11-12: the round-trip loop (decided 2026-10-30). The booth
+// is left unwired (the maintainer: "leave booth unwired"; the I/O page assigns it), analog 11/12 come from
+// device inputs 13/14, and nothing else routes onto the loop, so the default loads with nothing dropped.
+TEST (DefaultConfig, LeavesTheRoundTripLoopFree)
+{
+    const auto config = loadDefault();
+    ASSERT_TRUE (config.io.roundTripLoop.has_value());
+    EXPECT_EQ (*config.io.roundTripLoop, (a3app::RoundTripLoop { 11, 11, 2 }));
+    EXPECT_TRUE (juce::JSON::parse (defaultConfigFile)["io"].getDynamicObject()->hasProperty ("roundTripLoop"));   // written, not implied
+    EXPECT_TRUE (config.loopDropped.empty());
+    for (const auto* port : { "booth_sub", "booth_top_1", "booth_top_2", "booth_top_3", "booth_top_4" })
+        EXPECT_EQ (config.io.jack.count (port), 0u) << port;
+    EXPECT_EQ (config.io.jack.at ("analog_11"), std::vector<std::string> { "system:capture_13" });
+    EXPECT_EQ (config.io.jack.at ("analog_12"), std::vector<std::string> { "system:capture_14" });
 }

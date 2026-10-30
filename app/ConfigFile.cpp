@@ -194,6 +194,7 @@ AppConfig parseRoot (const juce::var& root, const juce::File& base, int truthDec
         config.io = *map;
     else
         refuse (error);
+    config.loopDropped = dropLoopRoutes (config.io);
     return config;
 }
 
@@ -254,6 +255,8 @@ juce::StringArray droppedLinkLines (const AppConfig& config)
         lines.add ("dropped retired link " + entry);
     for (const auto& key : config.ignoredKeys)
         lines.add ("ignored retired key " + key);
+    for (const auto& route : config.loopDropped)
+        lines.add ("unrouted " + route + ": the round-trip loop");
     return lines;
 }
 

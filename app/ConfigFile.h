@@ -36,6 +36,9 @@ struct AppConfig
     std::vector<std::string> droppedLinks;
     // Retired keys the loaded file named ("engine.<key>"), ignored; a save never writes them.
     std::vector<std::string> ignoredKeys;
+    // Routes of the loaded io section onto the round-trip loop's channels (IoMap.h dropLoopRoutes), left out of
+    // `io`: those channels are the loop's. The I/O page names them; a save writes the map without them.
+    std::vector<std::string> loopDropped;
 };
 
 constexpr float minTrimDb = -90.0f, maxTrimDb = 6.0f;
@@ -53,7 +56,7 @@ std::optional<a3::SpatialConfig> loadZonesSpatial (const AppConfig&, juce::Strin
 
 std::optional<AppConfig> loadAppConfig (const juce::File&, juce::String& error, int truthDecks);
 // "dropped retired link <entry>" per entry of AppConfig::droppedLinks, then "ignored retired key <key>"
-// per entry of AppConfig::ignoredKeys.
+// per entry of AppConfig::ignoredKeys, then "unrouted <entry>: the round-trip loop" per AppConfig::loopDropped.
 juce::StringArray droppedLinkLines (const AppConfig&);
 // The four sections as saveAppConfig writes them, and back (an absolute "spatial" ignores `base`, a relative
 // one is read from it). The control API carries configs in this form. `error` is the reason alone.
