@@ -5,49 +5,49 @@ Source: https://github.com/a3-audio/a3-core
 Comment: https://a3-audio.com
 
 Files: docs/*
-Copyright: 2023 A3 Audio <contact@a3-audio.com>
+Copyright: 2023 Raphael Eismann
 License: CC-BY-SA-4.0
 
 Files: platform-config/*
-Copyright: 2023 A3 Audio <contact@a3-audio.com>
+Copyright: 2023 Raphael Eismann
 License: CC-BY-SA-4.0
 
 Files: software/*
-Copyright: 2023 A3 Audio <contact@a3-audio.com>
+Copyright: 2023 Raphael Eismann
 License: GPL-3.0-or-later
 
 Files: platform-config/debian-x86_64/presets/*
-Copyright: 2023 A3 Audio <contact@a3-audio.com>
+Copyright: 2023 Raphael Eismann
 License: CC0-1.0
 
 Files: README.md
-Copyright: 2023 A3 Audio <contact@a3-audio.com>
+Copyright: 2023 Raphael Eismann
 License: CC0-1.0
 
 Files: tools/*
-Copyright: 2026 A3 Audio <contact@a3-audio.com>
+Copyright: 2026 Raphael Eismann
 License: GPL-3.0-or-later
 
 Files: tools/*.json
-Copyright: 2026 A3 Audio <contact@a3-audio.com>
+Copyright: 2026 Raphael Eismann
 License: CC0-1.0
 
 Files: tools/*.md
-Copyright: 2026 A3 Audio <contact@a3-audio.com>
+Copyright: 2026 Raphael Eismann
 License: CC-BY-SA-4.0
 
 Files: .github/*
-Copyright: 2026 A3 Audio <contact@a3-audio.com>
+Copyright: 2026 Raphael Eismann
 License: CC0-1.0
 
 Files: src/* tests/* tools/parity/data/* host/* CMakeLists.txt build.sh test.sh .gitignore bench/* app/* cmake/* data/*
  src/iem-adapter/* src/iem-nodes/*
-Copyright: 2023-2026 A³ Audio contributors
+Copyright: 2023-2026 Raphael Eismann
 License: GPL-3.0-or-later
 
 Files: src/a3-engine/PurestGain.* src/a3-engine/SmoothEQ3.* src/a3-engine/Isolator3.*
 Copyright: 2018 Chris Johnson
- 2023-2026 A³ Audio contributors
+ 2023-2026 Raphael Eismann
 License: GPL-3.0-or-later AND MIT
 Comment: Rebuilds of the Airwindows PurestGain, SmoothEQ3 and Isolator3 algorithms.
 
@@ -56,11 +56,11 @@ Copyright: 2018 Chris Johnson
 License: MIT
 
 Files: PROGRAM.md tests/core/scenarios/README.md tools/parity/README.md
-Copyright: 2026 A³ Audio contributors
+Copyright: 2026 Raphael Eismann
 License: CC-BY-SA-4.0
 
 Files: packaging/*
-Copyright: 2023-2026 A³ Audio contributors
+Copyright: 2023-2026 Raphael Eismann
 License: GPL-3.0-or-later
 Comment: packaging/DEBIAN holds a3-core's maintainer scripts, which were CC-BY-SA-4.0 under
  platform-config/ until 2026-10-27; packaging/app's a3-audio.conf, 00-a3-pipewire-jack.conf.in
