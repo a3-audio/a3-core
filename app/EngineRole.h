@@ -47,6 +47,7 @@ private:
     // engine and says so in `problem` (the STATUS page shows it).
     juce::Result restart (const AppConfig&, juce::String& problem);
     void serveControl();
+    void storeConverterShare();
 
     AppArgs args;
     StartupData startup;

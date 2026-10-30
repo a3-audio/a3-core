@@ -15,6 +15,7 @@ struct IoMap : a3::links::LinkMap
 {
     std::map<std::string, int> deviceChannels;                             // engine port -> device channel (0-based)
     std::optional<RoundTripLoop> roundTripLoop;                            // parseIoMap: the default when the section names none
+    std::optional<AnalogLoop> analogLoop;                                  // none unless the section names one
 };
 
 juce::var toJson (const IoMap&);
@@ -24,4 +25,8 @@ std::optional<IoMap> parseIoMap (const juce::var& section, const PortNames& port
 // Removes every route onto the round-trip loop's channels (a JACK peer, a device channel, a direct link with a
 // loop end) and returns them, "<port> -> <peer>" / "<port> -> device channel <n>" (1-based) / "<from> -> <to>".
 std::vector<std::string> dropLoopRoutes (IoMap&);
+
+// Why the analog chain cannot be measured with this map ("" when it can): no pair chosen, a side on the digital
+// loop, or a side some route of the map uses ("output 6 is in use (main_top_1)").
+juce::String analogLoopRefusal (const IoMap&);
 }

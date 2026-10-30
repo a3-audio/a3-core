@@ -40,6 +40,8 @@ public:
     // A device that restarted with another rate or block size rebuilds the host (no re-fade).
     void service (double nowSeconds) override;
     void measureRoundTrip() override;
+    void measureAnalogChain() override;
+    std::optional<ConverterShare> takeNewConverterShare() override;
 
 private:
     void audioDeviceIOCallbackWithContext (const float* const*, int, float* const*, int, int,
@@ -56,6 +58,7 @@ private:
 
     std::vector<int> inputChannels, outputChannels;
     int loopInputChannel = -1, loopOutputChannel = -1;   // 0-based; -1: no loop, or the device lacks it
+    int analogInputChannel = -1, analogOutputChannel = -1;   // the analog test pair, likewise
     std::unique_ptr<RoundTripMeter> roundTrip;
     a3::EngineInputs inputs;
     a3::EngineOutputs outputs;

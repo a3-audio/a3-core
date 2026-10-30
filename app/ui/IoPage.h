@@ -40,6 +40,10 @@ public:
     void refresh (bool force = false);   // re-reads the config and the live links (throttled unless forced)
     const juce::Label& messageLabel() const { return message; }
     const juce::Label& noticeLabel() const { return notice; }
+    // The analog test pair (a temporary cable for the AUDIO page's MEASURE ANALOG CHAIN): one side's channel, 0 = none.
+    juce::ComboBox& analogOutputBox() { return analogOutput; }
+    juce::ComboBox& analogInputBox() { return analogInput; }
+    void chooseAnalogPair (bool input, int channelOneBased);
     // The per-deck source chooser (1 = local StemDeck, 2 = AES67, 3 = the slot holds neither complete set); nullptr past the config's decks.
     juce::ComboBox* deckSourceBox (int slotOneBased);
 
@@ -59,6 +63,7 @@ private:
     void rebuildRoutes();
     void fillRoutes();
     std::vector<RouteChoice> choicesFor (bool input) const;
+    void fillAnalogPair();
     void layoutInput (juce::Rectangle<int> area, int row);
     void layoutOutput (juce::Rectangle<int> area, int row);
 
@@ -67,7 +72,8 @@ private:
     LiveLinks lastLinks;
     AppConfig shown;
     int ticks = 0;
-    juce::Label title, portCaption, linksCaption, message, notice;
+    juce::Label title, portCaption, linksCaption, message, notice, analogCaption;
+    juce::ComboBox analogOutput, analogInput;
     std::unique_ptr<Model> model;
     juce::ListBox list;
     juce::TextEditor portEditor, linksEditor;

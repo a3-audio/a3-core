@@ -163,8 +163,11 @@ void RoundTripProbe::process (const float* loopIn, float* loopOut, int numSample
         state.store (done, std::memory_order_release);
 }
 
-RoundTripMeter::RoundTripMeter (std::optional<RoundTripLoop> l, juce::String why) : loop (l), unavailable (std::move (why))
+RoundTripMeter::RoundTripMeter (std::optional<RoundTripLoop> l, juce::String why, std::optional<AnalogLoop> pair, juce::String analogWhy)
+    : loop (l), unavailable (std::move (why)), analog (std::move (pair)), analogUnavailable (std::move (analogWhy))
 {
+    if (analog)
+        stored = analog->converters;
     if (! loop)
         last = { RoundTripReport::State::noLoop, false, 0, 0, "no loop configured" };
     else if (unavailable.isNotEmpty())
@@ -179,8 +182,57 @@ void RoundTripMeter::request()
         probe.start();
 }
 
-void RoundTripMeter::service (double now, juce::int64 wallMillis)
+void RoundTripMeter::requestAnalog()
 {
+    if (! hasAnalogPair())
+        return;
+    if (! hasLoop())
+    {
+        analogFailure = "the analog chain is measured against the digital loop, and there is none";
+        return;
+    }
+    if (probe.busy() || analogProbe.busy())
+    {
+        analogFailure = "a measurement is running; ask again";
+        return;
+    }
+    probe.start();
+    analogProbe.start();
+    analogRun = true;
+    runDigital.reset();
+    runAnalog.reset();
+    analogFailure = {};
+}
+
+std::optional<ConverterShare> RoundTripMeter::takeNewConverterShare()
+{
+    auto share = fresh;
+    fresh.reset();
+    return share;
+}
+
+void RoundTripMeter::finishAnalogRun (juce::int64 wallMillis, double sampleRate)
+{
+    analogRun = false;
+    if (! runDigital->found)
+    {
+        analogFailure = "no digital loop found in the same run";
+        return;
+    }
+    if (! runAnalog->found)
+    {
+        analogFailure = "no analog loop found on output " + juce::String (analog->output) + " -> input " + juce::String (analog->input)
+                      + ": is the cable plugged in?";
+        return;
+    }
+    stored = fresh = ConverterShare { runAnalog->samples - runDigital->samples, sampleRate,
+                                      juce::Time (wallMillis).formatted ("%Y-%m-%d") };
+}
+
+void RoundTripMeter::service (double now, juce::int64 wallMillis, double sampleRate)
+{
+    if (const auto heard = analogProbe.collect())
+        runAnalog = heard;
     if (firstService < 0.0)
         firstService = now;
     if (! autoDone && now - firstService >= autoAfterSeconds)
@@ -189,6 +241,10 @@ void RoundTripMeter::service (double now, juce::int64 wallMillis)
         request();
     }
     const auto found = probe.collect();
+    if (found && analogRun)
+        runDigital = found;
+    if (analogRun && runDigital && runAnalog)
+        finishAnalogRun (wallMillis, sampleRate);
     if (! found)
         return;
     if (found->found)
@@ -205,6 +261,11 @@ RoundTripReport RoundTripMeter::report() const
 {
     auto report = last;
     report.measuring = probe.busy();
+    report.analog = stored ? RoundTripReport::Analog::measured
+                           : analog ? RoundTripReport::Analog::notMeasured : RoundTripReport::Analog::notConfigured;
+    report.converters = stored.value_or (ConverterShare {});
+    report.analogMeasuring = analogProbe.busy();
+    report.analogReason = analogUnavailable.isNotEmpty() ? analogUnavailable : analogFailure;
     return report;
 }
 }

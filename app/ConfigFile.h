@@ -64,6 +64,10 @@ juce::var toJson (const AppConfig&);
 std::optional<AppConfig> parseAppConfig (const juce::var&, const juce::File& base, juce::String& error, int truthDecks);
 // Atomic replace. Called only from the window's Save, never by a load.
 juce::Result saveAppConfig (const AppConfig&, const juce::File&);
+// Writes `to` as `from` with io.analogLoop's converter share set to `share` and nothing else changed (atomic
+// replace; `from` may be the package's file, `to` the user's). Refused, leaving `to` as it was, when `from`
+// names no io.analogLoop or the result would not load (truthDecks as for loadAppConfig).
+juce::Result storeConverterShare (const juce::File& from, const juce::File& to, const ConverterShare& share, int truthDecks);
 inline const juce::File packageConfigFile { "/usr/share/a3-engine/engine.json" };
 
 // The spatial directories the ZONES page may offer, in order: the user's (<configDir>/engine/spatial), the

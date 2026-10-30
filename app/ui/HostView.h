@@ -60,5 +60,6 @@ public:
     virtual void setFilterKind (a3::FilterKind) = 0;               // live, on the running engine; also the pending edit and what runs
     virtual void playNoise (const NoiseRequest&) = 0;              // live, on the running engine; nothing when none runs
     virtual void measureRoundTrip() {}                             // over the loop, on the running engine; the result comes with status()
+    virtual void measureAnalogChain() {}                           // over the test cable and the loop at once; only ever on request
 };
 }

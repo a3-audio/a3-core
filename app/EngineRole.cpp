@@ -116,6 +116,8 @@ public:
     BackendStatus status() const { return backend != nullptr ? backend->status() : BackendStatus {}; }
     LiveLinks liveLinks() const { return backend != nullptr ? backend->liveLinks() : LiveLinks {}; }
     void measureRoundTrip() { if (ready) backend->measureRoundTrip(); }
+    void measureAnalogChain() { if (ready) backend->measureAnalogChain(); }
+    std::optional<ConverterShare> takeNewConverterShare() { return ready ? backend->takeNewConverterShare() : std::nullopt; }
     EngineHost& engineHost() { return *host; }
     // Seconds on the app clock of Core's last message, or a negative number before the first.
     double lastCoreSeconds() const { return lastCoreMessage.load(); }
@@ -220,6 +222,12 @@ public:
     {
         if (live())
             role.session->measureRoundTrip();
+    }
+
+    void measureAnalogChain() override
+    {
+        if (live())
+            role.session->measureAnalogChain();
     }
 
     void playNoise (const NoiseRequest& request) override
@@ -378,9 +386,26 @@ EngineRole::~EngineRole()
     session.reset();
 }
 
+// A new converter share goes into the config file at once (only io.analogLoop changes) and into what runs and
+// what is pending, so the next session and the next Save keep it.
+void EngineRole::storeConverterShare()
+{
+    const auto share = session->takeNewConverterShare();
+    if (! share)
+        return;
+    const auto from = startup.saveFile.existsAsFile() ? startup.saveFile : startup.configFile;
+    const auto stored = a3app::storeConverterShare (from, startup.saveFile, *share, startup.truth.decks);
+    sayEngine ("analog chain: converters " + juce::String (share->samples) + " samples at " + juce::String (share->sampleRate, 0) + " Hz"
+               + (stored.wasOk() ? ", stored in " + startup.saveFile.getFullPathName() : ", NOT stored: " + stored.getErrorMessage()));
+    for (auto* config : { &startup.config, view != nullptr ? &view->startedWith : nullptr, view != nullptr ? &view->edited : nullptr })
+        if (config != nullptr && config->io.analogLoop)
+            config->io.analogLoop->converters = *share;
+}
+
 std::optional<int> EngineRole::tick (bool stopRequested)
 {
     session->tick();
+    storeConverterShare();
     api->tick (monotonicSeconds());
     if (session->lost())
     {

@@ -35,6 +35,8 @@ public:
     // applies the connection plan.
     void service (double nowSeconds) override;
     void measureRoundTrip() override;
+    void measureAnalogChain() override;
+    std::optional<ConverterShare> takeNewConverterShare() override;
     // The JACK server went away (it shut the client down): the app ends and its unit restarts it.
     bool lost() const;
 
@@ -48,7 +50,7 @@ private:
 
     void process (jack_nframes_t);
     bool registerPorts (const PortNames&);
-    bool registerLoopPorts();
+    bool registerLoopPorts (jack_port_t*& in, jack_port_t*& out, const std::string& inName, const std::string& outName);
     void rebuildOnNewQuantumOrRate();
 
     const bool connecting;
@@ -61,6 +63,8 @@ private:
     std::vector<jack_port_t*> inputPorts, outputPorts;   // enginePortNames' order
     jack_port_t* loopIn = nullptr;                       // roundtrip_in / roundtrip_out, only with a loop
     jack_port_t* loopOut = nullptr;
+    jack_port_t* analogIn = nullptr;                     // analogtest_in / analogtest_out, only with a chosen pair
+    jack_port_t* analogOut = nullptr;
     std::unique_ptr<RoundTripMeter> roundTrip;           // exists while the client is open
     a3::EngineInputs inputs;
     a3::EngineOutputs outputs;

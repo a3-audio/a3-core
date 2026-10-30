@@ -1657,3 +1657,77 @@ TEST_F (Pages, IoLeavesTheRoundTripLoopOut)
     EXPECT_TRUE (page.messageLabel().getText().contains ("round-trip loop")) << page.messageLabel().getText();
     expectPainted (a3apptest::snapshotAt (page, "io-roundtrip-loop", page.getWidth(), page.getHeight()));
 }
+
+// AUDIO: the analog chain's line and its button, which says what to plug first and runs only on a click.
+TEST_F (Pages, AudioMeasuresTheAnalogChainOnlyOnRequest)
+{
+    FakeView view;
+    view.state.sampleRate = 48000;
+    view.cfg.io.analogLoop = view.runningCfg.io.analogLoop = a3app::AnalogLoop { 6, 8, {} };
+    view.state.roundTripMeasured.state = a3app::RoundTripReport::State::measured;
+    view.state.roundTripMeasured.samples = 211;
+    view.state.roundTripMeasured.analog = a3app::RoundTripReport::Analog::notMeasured;
+    a3app::AudioPage page (view, manager);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
+    page.refresh();
+    EXPECT_EQ (page.analogChainLabel().getText(), "Analog chain   converters not measured yet");
+    const auto hint = page.analogHintLabel().getText();
+    EXPECT_TRUE (hint.contains ("output 6") && hint.contains ("input 8") && hint.contains ("cable")) << hint;
+    EXPECT_TRUE (hint.contains ("not in use")) << hint;
+    EXPECT_TRUE (page.analogButton().isEnabled());
+    EXPECT_TRUE (page.getLocalBounds().contains (page.analogButton().getBounds()));
+    EXPECT_EQ (view.analogRequests, 0);
+    page.analogButton().triggerClick();
+    juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
+    EXPECT_EQ (view.analogRequests, 1);
+    EXPECT_EQ (view.roundTripRequests, 0);
+
+    view.state.roundTripMeasured.analog = a3app::RoundTripReport::Analog::measured;
+    view.state.roundTripMeasured.converters = { 48, 48000.0, "2026-10-30" };
+    page.refresh();
+    EXPECT_EQ (page.analogChainLabel().getText(), "Analog chain   5.4 ms (measured: digital loop now + converters measured on 2026-10-30)");
+    expectPainted (a3apptest::snapshotAt (page, "audio-analog-chain", page.getWidth(), page.getHeight()));
+
+    view.state.roundTripMeasured.analogReason = "no analog test pair chosen (I/O page)";
+    view.cfg.io.analogLoop.reset();
+    view.runningCfg.io.analogLoop.reset();
+    page.refresh();
+    EXPECT_FALSE (page.analogButton().isEnabled());
+}
+
+// I/O: the analog test pair is chosen from free channels off the digital loop; the stored share stays with it.
+TEST_F (Pages, IoChoosesTheAnalogTestPair)
+{
+    FakeView view;
+    for (int i = 1; i <= 14; ++i)
+    {
+        view.state.capturePorts.add ("system:capture_" + juce::String (i));
+        view.state.playbackPorts.add ("system:playback_" + juce::String (i));
+    }
+    view.cfg.io.roundTripLoop = a3app::RoundTripLoop { 11, 11, 2 };
+    a3app::IoPage page (view);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
+    auto& output = page.analogOutputBox();
+    auto& input = page.analogInputBox();
+    EXPECT_EQ (output.getNumItems(), 13);   // none + 14 - the digital loop's 2
+    EXPECT_TRUE (output.isVisible());
+    page.chooseAnalogPair (false, 6);
+    ASSERT_TRUE (view.cfg.io.analogLoop.has_value());
+    EXPECT_EQ (view.cfg.io.analogLoop->output, 6);
+    EXPECT_EQ (view.cfg.io.analogLoop->input, 0);
+    view.cfg.io.analogLoop->converters = a3app::ConverterShare { 40, 48000.0, "2026-10-30" };
+    page.chooseAnalogPair (true, 8);
+    EXPECT_EQ (view.cfg.io.analogLoop->input, 8);
+    EXPECT_TRUE (view.cfg.io.analogLoop->converters.has_value());
+    page.refresh (true);
+    EXPECT_TRUE (output.getText().contains ("6")) << output.getText();
+    EXPECT_TRUE (input.getText().contains ("8")) << input.getText();
+    page.chooseAnalogPair (false, 0);
+    page.chooseAnalogPair (true, 0);   // the cable is gone; the converters' share stays (it is the hardware's)
+    ASSERT_TRUE (view.cfg.io.analogLoop.has_value());
+    EXPECT_EQ (view.cfg.io.analogLoop->output, 0);
+    EXPECT_TRUE (view.cfg.io.analogLoop->converters.has_value());
+    view.cfg.io.analogLoop->converters.reset();
+    page.chooseAnalogPair (true, 0);
+    EXPECT_FALSE (view.cfg.io.analogLoop.has_value());   // nothing left to keep
+}

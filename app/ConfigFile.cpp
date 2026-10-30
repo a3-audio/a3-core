@@ -299,6 +299,36 @@ juce::Result saveAppConfig (const AppConfig& config, const juce::File& file)
     return juce::Result::ok();
 }
 
+juce::Result storeConverterShare (const juce::File& from, const juce::File& to, const ConverterShare& share, int truthDecks)
+{
+    juce::var root;
+    if (const auto parsed = juce::JSON::parse (from.loadFileAsString(), root); parsed.failed())
+        return juce::Result::fail (from.getFullPathName() + ": not valid JSON");
+    auto* analog = root["io"]["analogLoop"].getDynamicObject();
+    if (analog == nullptr)
+        return juce::Result::fail (from.getFullPathName() + " names no io.analogLoop");
+    analog->setProperty ("converterSamples", share.samples);
+    analog->setProperty ("sampleRate", share.sampleRate);
+    analog->setProperty ("measuredOn", share.measuredOn);
+
+    juce::String refusal;
+    const auto checked = parseAppConfig (root, from.getParentDirectory(), refusal, truthDecks);
+    if (! checked)
+        return juce::Result::fail ("not stored, " + refusal);
+    // A relative spatial path means the directory beside `from`; written elsewhere it is made absolute.
+    if (from.getParentDirectory() != to.getParentDirectory())
+        root.getDynamicObject()->setProperty ("spatial", toJson (*checked)["spatial"]);
+
+    if (! to.getParentDirectory().createDirectory())
+        return juce::Result::fail ("cannot create " + to.getParentDirectory().getFullPathName());
+    juce::TemporaryFile temporary (to);
+    if (! temporary.getFile().replaceWithText (juce::JSON::toString (root, false)))
+        return juce::Result::fail ("cannot write " + temporary.getFile().getFullPathName());
+    if (! temporary.overwriteTargetFileWithTemporary())
+        return juce::Result::fail ("cannot replace " + to.getFullPathName());
+    return juce::Result::ok();
+}
+
 juce::File chooseConfigFile (const juce::String& argument, const juce::File& home, std::function<bool (const juce::File&)> exists,
                              const juce::File& packageConfig)
 {

@@ -135,6 +135,13 @@ juce::String loopRefusal (const AppConfig&, bool input, int channel0);
 // it (AppConfig::loopDropped). Empty without a loop.
 juce::String loopNotice (const AppConfig&, const std::vector<std::string>& loopDropped);
 
+// The 1-based channels a side offers for the analog test pair: JACK: those of the hardware ports (RoundTripLoop.h
+// deviceChannelOfPeer); a device: 1..deviceChannels. The digital loop's are left out.
+std::vector<int> analogTestChannels (const AppConfig&, const juce::StringArray& hardwarePorts, int deviceChannels, bool input);
+// One side of the analog test pair (0: none). The stored converters' share stays (it is the hardware's, not the
+// cable's); with neither side nor a share there is no analog loop.
+AppConfig withAnalogTestChannel (const AppConfig&, bool input, int channel);
+
 // The engine ports other than `except` the map routes to `peer` (a JACK peer, or "#<n>" for device channel n, 0-based).
 std::vector<std::string> portsRoutedTo (const AppConfig&, const std::string& peer, const std::string& except);
 }

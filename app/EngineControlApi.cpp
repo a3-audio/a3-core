@@ -88,8 +88,14 @@ juce::var toJson (const RoundTripReport& report)
     for (const auto& [value, name] : roundTripStates)
         if (value == report.state)
             state = name;
+    const juce::String analog = report.analog == RoundTripReport::Analog::measured      ? "measured"
+                              : report.analog == RoundTripReport::Analog::notMeasured ? "notMeasured"
+                                                                                      : "notConfigured";
     return object ({ { "state", state }, { "measuring", report.measuring }, { "samples", report.samples },
-                     { "atMillis", report.atMillis }, { "reason", report.reason } });
+                     { "atMillis", report.atMillis }, { "reason", report.reason }, { "analog", analog },
+                     { "converterSamples", report.converters.samples }, { "converterSampleRate", report.converters.sampleRate },
+                     { "convertersMeasuredOn", report.converters.measuredOn }, { "analogMeasuring", report.analogMeasuring },
+                     { "analogReason", report.analogReason } });
 }
 
 // An engine before the measurement sends none: notReported.
@@ -103,6 +109,15 @@ RoundTripReport roundTripFromJson (const juce::var& v)
     report.samples = (int) number (v["samples"]).value_or (0.0);
     report.atMillis = (juce::int64) number (v["atMillis"]).value_or (0.0);
     report.reason = v["reason"].toString();
+    const auto analog = v["analog"].toString();
+    report.analog = analog == "measured"      ? RoundTripReport::Analog::measured
+                  : analog == "notMeasured" ? RoundTripReport::Analog::notMeasured
+                                            : RoundTripReport::Analog::notConfigured;
+    report.converters.samples = (int) number (v["converterSamples"]).value_or (0.0);
+    report.converters.sampleRate = number (v["converterSampleRate"]).value_or (0.0);
+    report.converters.measuredOn = v["convertersMeasuredOn"].toString();
+    report.analogMeasuring = (bool) v["analogMeasuring"];
+    report.analogReason = v["analogReason"].toString();
     return report;
 }
 
@@ -322,6 +337,7 @@ a3core::Routes EngineControlApi::routes()
     routes.post ("/api/engine/filter-kind", [this] (const HttpRequest& r) { return filterKind (r); });
     routes.post ("/api/engine/noise", [this] (const HttpRequest& r) { return noise (r); });
     routes.post ("/api/engine/roundtrip", [this] (const HttpRequest&) { return measureRoundTrip(); });
+    routes.post ("/api/engine/roundtrip/analog", [this] (const HttpRequest&) { return measureAnalogChain(); });
     return routes;
 }
 
@@ -548,6 +564,12 @@ HttpResponse EngineControlApi::noise (const HttpRequest& request)
 HttpResponse EngineControlApi::measureRoundTrip()
 {
     enqueue ([this] { view.measureRoundTrip(); return juce::Result::ok(); });
+    return json (200, object ({}));
+}
+
+HttpResponse EngineControlApi::measureAnalogChain()
+{
+    enqueue ([this] { view.measureAnalogChain(); return juce::Result::ok(); });
     return json (200, object ({}));
 }
 

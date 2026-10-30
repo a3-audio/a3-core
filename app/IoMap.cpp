@@ -64,19 +64,55 @@ std::optional<RoundTripLoop> parseLoop (const juce::DynamicObject& object)
     return parsed;
 }
 
+// A whole number in [low, high], or a refusal naming io.analogLoop.<key>.
+double analogNumber (const juce::DynamicObject& loop, const char* key, double low, double high, bool whole)
+{
+    const auto& v = loop.getProperty (key);
+    const bool number = (v.isInt() || v.isInt64() || v.isDouble()) && std::isfinite ((double) v);
+    if (! number || (double) v < low || (double) v > high || (whole && (double) v != std::floor ((double) v)))
+        refuse ("io.analogLoop." + juce::String (key) + " must be a number in " + juce::String (low) + ".." + juce::String (high));
+    return (double) v;
+}
+
+std::optional<AnalogLoop> parseAnalogLoop (const juce::DynamicObject& object)
+{
+    if (! object.hasProperty ("analogLoop"))
+        return std::nullopt;
+    const auto& loop = objectOf (object.getProperty ("analogLoop"), "io.analogLoop");
+    a3::jsonparse::rejectUnknownKeys (loop, { "output", "input", "converterSamples", "sampleRate", "measuredOn" }, "io.analogLoop");
+    for (const auto* key : { "output", "input" })
+        if (! loop.hasProperty (key))
+            refuse ("io.analogLoop needs \"" + juce::String (key) + "\" (0: not chosen)");
+    AnalogLoop parsed;
+    parsed.output = (int) analogNumber (loop, "output", 0, 1024, true);
+    parsed.input = (int) analogNumber (loop, "input", 0, 1024, true);
+    const int shareKeys = (int) loop.hasProperty ("converterSamples") + (int) loop.hasProperty ("sampleRate") + (int) loop.hasProperty ("measuredOn");
+    if (shareKeys == 0)
+        return parsed;
+    if (shareKeys != 3 || ! loop.getProperty ("measuredOn").isString())
+        refuse ("io.analogLoop: converterSamples, sampleRate and measuredOn (a date) come together");
+    ConverterShare share;
+    share.samples = (int) analogNumber (loop, "converterSamples", -1.0e5, 1.0e5, true);
+    share.sampleRate = analogNumber (loop, "sampleRate", 1, 1.0e6, false);
+    share.measuredOn = loop.getProperty ("measuredOn").toString();
+    parsed.converters = share;
+    return parsed;
+}
+
 // The library knows jack and directLinks; deviceChannels and roundTripLoop are ours, so the library sees a copy without them.
 juce::var withoutOurKeys (const juce::DynamicObject& object)
 {
     auto* copy = object.clone().release();
     copy->removeProperty ("deviceChannels");
     copy->removeProperty ("roundTripLoop");
+    copy->removeProperty ("analogLoop");
     return juce::var (copy);
 }
 
 IoMap parse (const juce::var& section, const PortNames& ports)
 {
     const auto& object = objectOf (section, "io");
-    a3::jsonparse::rejectUnknownKeys (object, { "jack", "directLinks", "deviceChannels", "roundTripLoop" }, "io");
+    a3::jsonparse::rejectUnknownKeys (object, { "jack", "directLinks", "deviceChannels", "roundTripLoop", "analogLoop" }, "io");
 
     juce::String error;
     const auto links = a3::links::parseLinkMap (withoutOurKeys (object), ports.inputs, ports.outputs, error);
@@ -88,6 +124,7 @@ IoMap parse (const juce::var& section, const PortNames& ports)
     if (object.hasProperty ("deviceChannels"))
         parseDeviceChannels (object, ports, map);
     map.roundTripLoop = parseLoop (object);
+    map.analogLoop = parseAnalogLoop (object);
     return map;
 }
 }
@@ -123,7 +160,66 @@ juce::var toJson (const IoMap& map)
         loop = juce::var (object);
     }
     root.getDynamicObject()->setProperty ("roundTripLoop", loop);
+    if (map.analogLoop)
+    {
+        auto* analog = new juce::DynamicObject();
+        analog->setProperty ("output", map.analogLoop->output);
+        analog->setProperty ("input", map.analogLoop->input);
+        if (const auto& share = map.analogLoop->converters)
+        {
+            analog->setProperty ("converterSamples", share->samples);
+            analog->setProperty ("sampleRate", share->sampleRate);
+            analog->setProperty ("measuredOn", share->measuredOn);
+        }
+        root.getDynamicObject()->setProperty ("analogLoop", juce::var (analog));
+    }
     return root;
+}
+
+namespace
+{
+// The engine ports (or direct links) the map routes to device channel `channel` (1-based) on one side.
+juce::StringArray routesOn (const IoMap& map, bool input, int channel)
+{
+    juce::StringArray users;
+    const auto isThat = [&] (const std::string& peer)
+    {
+        const auto named = deviceChannelOfPeer (peer);
+        return named && named->capture == input && named->channel == channel;
+    };
+    for (const auto& [port, peers] : map.jack)
+        for (const auto& peer : peers)
+            if (isThat (peer))
+                users.addIfNotAlreadyThere (juce::String (port));
+    for (const auto& [port, mapped] : map.deviceChannels)
+        if (isEngineInputPort (port) == input && mapped + 1 == channel)
+            users.addIfNotAlreadyThere (juce::String (port));
+    for (const auto& [from, to] : map.directLinks)
+        if (isThat (from) || isThat (to))
+            users.addIfNotAlreadyThere (juce::String (from) + " -> " + juce::String (to));
+    return users;
+}
+}
+
+juce::String analogLoopRefusal (const IoMap& map)
+{
+    const auto& loop = map.analogLoop;
+    if (! loop || (loop->output == 0 && loop->input == 0))
+        return "no analog test pair chosen (I/O page)";
+    if (loop->output == 0)
+        return "no analog test output chosen (I/O page)";
+    if (loop->input == 0)
+        return "no analog test input chosen (I/O page)";
+    for (const bool input : { false, true })
+    {
+        const int channel = input ? loop->input : loop->output;
+        const juce::String side = juce::String (input ? "input " : "output ") + juce::String (channel);
+        if (loopHolds (map.roundTripLoop, input, channel))
+            return side + " is the digital loop's";
+        if (const auto users = routesOn (map, input, channel); ! users.isEmpty())
+            return side + " is in use (" + users.joinIntoString (", ") + ")";
+    }
+    return {};
 }
 
 std::vector<std::string> dropLoopRoutes (IoMap& map)

@@ -22,8 +22,15 @@ AudioPage::AudioPage (HostView& v, juce::AudioDeviceManager& m) : view (v), mana
     title.setColour (juce::Label::textColourId, palette::textMuted);
     backendCaption.setText ("Backend", juce::dontSendNotification);
     backendCaption.setColour (juce::Label::textColourId, palette::textMuted);
-    for (auto* label : { &rate, &quantum, &rateSource, &bitDepth, &roundTrip })
+    for (auto* label : { &rate, &quantum, &rateSource, &bitDepth, &roundTrip, &analogChain })
         styleValue (*label);
+    look::caption (analogHint);
+    analogHint.setMinimumHorizontalScale (0.5f);
+    look::help ("The analog chain (analog in, AD, engine, DA, analog out) is the digital loop as measured now plus the "
+                "converters' share, measured once: MEASURE ANALOG CHAIN plays the same quiet test signal on the chosen "
+                "output and the digital loop at once and stores the difference with its date. It never runs on its own.",
+                { &analogChain, &analogHint, &measureAnalog });
+    measureAnalog.onClick = [this] { view.measureAnalogChain(); };
     roundTrip.setMinimumHorizontalScale (1.0f);
     look::help ("Input-to-output round trip of what runs. Measured: a quiet test signal (-20 dBFS, 0.2 s) on the "
                 "round-trip loop's output, found again on its input (the I/O map's digital loop, S/PDIF out to S/PDIF in), "
@@ -44,7 +51,7 @@ AudioPage::AudioPage (HostView& v, juce::AudioDeviceManager& m) : view (v), mana
     deviceButton.onClick = [this] { chooseBackend (BackendSettings::Type::device); };
 
     for (auto* child : std::initializer_list<juce::Component*> { &title, &backendCaption, &rate, &quantum, &rateSource, &bitDepth,
-                                                                &roundTrip, &measure, &applyMessage, &pending, &jackButton, &deviceButton, &clock })
+                                                                &roundTrip, &measure, &analogChain, &analogHint, &measureAnalog, &applyMessage, &pending, &jackButton, &deviceButton, &clock })
         addAndMakeVisible (child);
     const std::pair<juce::Label*, const char*> captions[] = { { &typeCaption, "Device type" }, { &inputCaption, "Input device" },
         { &outputCaption, "Output device" }, { &rateCaption, "Sample rate" }, { &blockCaption, "Block size" } };
@@ -187,6 +194,16 @@ void AudioPage::refresh()
     using State = RoundTripReport::State;
     const auto& measured = status.roundTripMeasured;
     measure.setEnabled (! measured.measuring && measured.state != State::noLoop && measured.state != State::notReported);
+    analogChain.setText (analogChainText (estimatedRoundTrip (status), measured), juce::dontSendNotification);
+    const auto pair = view.running().io.analogLoop;
+    const bool chosen = pair && pair->output > 0 && pair->input > 0;
+    analogHint.setText (chosen ? "Before MEASURE ANALOG CHAIN: plug a temporary cable from output " + juce::String (pair->output)
+                                     + " to input " + juce::String (pair->input) + "; input " + juce::String (pair->input)
+                                     + " must be free (not in use). The test signal is -20 dBFS, on output " + juce::String (pair->output) + " only."
+                               : juce::String ("Analog chain: choose a free output and input for a test cable on the I/O page, then Save."),
+                        juce::dontSendNotification);
+    measureAnalog.setEnabled (chosen && ! measured.analogMeasuring && ! measured.measuring && measured.state != State::noLoop
+                              && measured.state != State::notReported);
     clock.show (view.clock());
     if (device != deviceChoosers)
         rebuildForBackend();
@@ -201,6 +218,11 @@ void AudioPage::layoutRoundTrip (juce::Rectangle<int>& area, int row)
     measure.setBounds (line.removeFromRight (line.getWidth() / 6).reduced (2));
     roundTrip.setFont (juce::FontOptions (fittedTextHeight (roundTrip.getText(), (float) row * 0.4f, (float) line.getWidth() * 0.95f)));
     roundTrip.setBounds (line);
+    auto analogLine = area.removeFromTop (row);
+    measureAnalog.setBounds (analogLine.removeFromRight (analogLine.getWidth() / 4).reduced (2));
+    analogChain.setFont (juce::FontOptions (fittedTextHeight (analogChain.getText(), (float) row * 0.4f, (float) analogLine.getWidth() * 0.95f)));
+    analogChain.setBounds (analogLine);
+    analogHint.setBounds (area.removeFromTop (row));
 }
 
 // The clock at the bottom, reserved before anything else: whatever the page shows, the clock keeps
@@ -217,7 +239,7 @@ void AudioPage::resized()
     page.removeFromBottom (page.getHeight() / 40);
     layoutClock (clockArea, 0);
     auto area = page;
-    const int row = juce::jmax (12, juce::jmin (getHeight() / 14, page.getHeight() / (deviceChoosers ? 11 : 8)));
+    const int row = juce::jmax (12, juce::jmin (getHeight() / 14, page.getHeight() / (deviceChoosers ? 13 : 10)));
     title.setBounds (area.removeFromTop (row));
     auto choice = area.removeFromTop (row);
     backendCaption.setBounds (choice.removeFromLeft (choice.getWidth() / 4));

@@ -32,6 +32,9 @@ public:
     const juce::Label& pendingLabel() const { return pending; }
     const juce::Label& roundTripLabel() const { return roundTrip; }
     juce::Button& measureButton() { return measure; }
+    const juce::Label& analogChainLabel() const { return analogChain; }
+    const juce::Label& analogHintLabel() const { return analogHint; }
+    juce::Button& analogButton() { return measureAnalog; }
     const ClockPanel& clockPanel() const { return clock; }
 
     void resized() override;
@@ -46,8 +49,8 @@ private:
 
     HostView& view;
     juce::AudioDeviceManager& manager;
-    juce::Label title, backendCaption, rate, quantum, rateSource, bitDepth, roundTrip, applyMessage, pending;
-    juce::TextButton jackButton { "JACK" }, deviceButton { "Device" }, measure { "MEASURE" };
+    juce::Label title, backendCaption, rate, quantum, rateSource, bitDepth, roundTrip, applyMessage, pending, analogChain, analogHint;
+    juce::TextButton jackButton { "JACK" }, deviceButton { "Device" }, measure { "MEASURE" }, measureAnalog { "MEASURE ANALOG CHAIN" };
     juce::Label typeCaption, inputCaption, outputCaption, rateCaption, blockCaption;
     juce::ComboBox typeBox, inputBox, outputBox, rateBox, blockBox;
     ClockPanel clock;

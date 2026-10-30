@@ -229,6 +229,15 @@ void RemoteHostView::measureRoundTrip()
     wake.notify_all();
 }
 
+void RemoteHostView::measureAnalogChain()
+{
+    {
+        const std::lock_guard<std::mutex> posting (postLock);
+        posts.push_back ({ "/api/engine/roundtrip/analog", "{}", false });
+    }
+    wake.notify_all();
+}
+
 juce::Result RemoteHostView::apply (const AppConfig& config)
 {
     const std::lock_guard<std::mutex> round (pollLock);

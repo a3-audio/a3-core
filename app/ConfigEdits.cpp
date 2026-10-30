@@ -410,6 +410,36 @@ std::vector<RouteChoice> routeChoices (const AppConfig& config, const juce::Stri
     return choices;
 }
 
+std::vector<int> analogTestChannels (const AppConfig& config, const juce::StringArray& hardwarePorts, int deviceChannels, bool input)
+{
+    std::vector<int> channels;
+    const auto offer = [&] (int channel)
+    {
+        if (! loopHolds (config.io.roundTripLoop, input, channel)
+            && std::find (channels.begin(), channels.end(), channel) == channels.end())
+            channels.push_back (channel);
+    };
+    if (config.backend.type == BackendSettings::Type::device)
+        for (int channel = 1; channel <= deviceChannels; ++channel)
+            offer (channel);
+    else
+        for (const auto& port : hardwarePorts)
+            if (const auto named = deviceChannelOfPeer (port.toStdString()); named && named->capture == input)
+                offer (named->channel);
+    std::sort (channels.begin(), channels.end());
+    return channels;
+}
+
+AppConfig withAnalogTestChannel (const AppConfig& config, bool input, int channel)
+{
+    auto edited = config;
+    auto loop = edited.io.analogLoop.value_or (AnalogLoop {});
+    (input ? loop.input : loop.output) = std::max (0, channel);
+    const bool empty = loop.output == 0 && loop.input == 0 && ! loop.converters;
+    edited.io.analogLoop = empty ? std::nullopt : std::optional<AnalogLoop> (loop);
+    return edited;
+}
+
 namespace
 {
 juce::String reservedText (const juce::String& what) { return what + " is the round-trip loop's (reserved)"; }

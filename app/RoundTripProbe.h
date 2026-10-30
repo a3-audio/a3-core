@@ -71,30 +71,57 @@ struct RoundTripReport
     int samples = 0;
     juce::int64 atMillis = 0;   // wall clock of the measurement (ms since 1970)
     juce::String reason;
+
+    // The analog chain: the converters' share as stored (measured once, over a temporary cable).
+    enum class Analog { notConfigured, notMeasured, measured };
+    Analog analog = Analog::notConfigured;
+    ConverterShare converters;   // when measured
+    bool analogMeasuring = false;
+    juce::String analogReason;   // why it cannot run, or why the last run gave nothing ("" otherwise)
 };
 
-// The control-thread side of one backend's measurement: once autoAfterSeconds after the first service(), and on
-// request(). process() is the probe's (audio thread).
+// The control-thread side of one backend's measurement: the digital loop once autoAfterSeconds after the first
+// service() and on request(); the analog chain only on requestAnalog(), which runs both loops at once so that
+// analog minus digital is the converters' share of one moment. process() and processAnalog() are the probes'
+// (audio thread).
 class RoundTripMeter
 {
 public:
     static constexpr double autoAfterSeconds = 2.0;   // the links are made and the graph has settled
 
     // nullopt: no loop configured. unavailable: why the loop's channels are not there ("" when they are).
-    explicit RoundTripMeter (std::optional<RoundTripLoop>, juce::String unavailable = {});
+    // analog: the chosen pair with the share stored so far. analogUnavailable: why the pair cannot be measured
+    // ("" when it can; analogLoopRefusal).
+    explicit RoundTripMeter (std::optional<RoundTripLoop>, juce::String unavailable = {}, std::optional<AnalogLoop> analog = {},
+                             juce::String analogUnavailable = {});
 
     void request();
-    void service (double nowSeconds, juce::int64 wallMillis);
+    void requestAnalog();
+    // sampleRate: what runs now, stored with a new converter share.
+    void service (double nowSeconds, juce::int64 wallMillis, double sampleRate = 0.0);
     void process (const float* loopIn, float* loopOut, int numSamples) { probe.process (loopIn, loopOut, numSamples); }
+    void processAnalog (const float* loopIn, float* loopOut, int numSamples) { analogProbe.process (loopIn, loopOut, numSamples); }
     RoundTripReport report() const;
     bool hasLoop() const { return loop.has_value() && unavailable.isEmpty(); }
+    bool hasAnalogPair() const { return analog.has_value() && analogUnavailable.isEmpty(); }
+    // A share measured since the last call (the engine stores it in its config), once.
+    std::optional<ConverterShare> takeNewConverterShare();
 
 private:
+    void finishAnalogRun (juce::int64 wallMillis, double sampleRate);
+
     const std::optional<RoundTripLoop> loop;
     const juce::String unavailable;
-    RoundTripProbe probe;
+    const std::optional<AnalogLoop> analog;
+    const juce::String analogUnavailable;
+    RoundTripProbe probe, analogProbe;
     RoundTripReport last;
     double firstService = -1.0;
     bool autoDone = false;
+    bool analogRun = false;   // the digital run under way belongs to an analog request
+    std::optional<LoopDelay> runDigital, runAnalog;
+    std::optional<ConverterShare> stored, fresh;
+    juce::String analogFailure;
 };
+
 }

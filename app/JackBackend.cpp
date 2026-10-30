@@ -42,6 +42,7 @@ juce::Result JackBackend::open (EngineHost& engineHost, const AppConfig& config)
     const auto names = enginePortNames (engineHost.engineConfig(), engineHost.spatialConfig());
     auto ownInputs = names.inputs;
     ownInputs.push_back (loopInputPort);   // linked from the loop's capture channel when there is a loop
+    ownInputs.push_back (analogInputPort);
     linker = std::make_unique<a3::links::JackLinker> (client, clientName, ownInputs);
     const auto refused = refuseBesideReaper (a3::links::clientNamesOf (linker->graphPorts()), connecting);
     if (refused.failed())
@@ -54,8 +55,9 @@ juce::Result JackBackend::open (EngineHost& engineHost, const AppConfig& config)
         close();
         return juce::Result::fail ("cannot register the JACK ports");
     }
-    roundTrip = std::make_unique<RoundTripMeter> (config.io.roundTripLoop);
-    if (config.io.roundTripLoop && ! registerLoopPorts())
+    roundTrip = std::make_unique<RoundTripMeter> (config.io.roundTripLoop, juce::String(), config.io.analogLoop, analogLoopRefusal (config.io));
+    if ((config.io.roundTripLoop && ! registerLoopPorts (loopIn, loopOut, loopInputPort, loopOutputPort))
+        || (hasAnalogTestPair (config.io) && ! registerLoopPorts (analogIn, analogOut, analogInputPort, analogOutputPort)))
     {
         close();
         return juce::Result::fail ("cannot register the round-trip loop's JACK ports");
@@ -106,7 +108,7 @@ void JackBackend::close()
     host = nullptr;
     inputPorts.clear();
     outputPorts.clear();
-    loopIn = loopOut = nullptr;
+    loopIn = loopOut = analogIn = analogOut = nullptr;
     roundTrip.reset();
     slots = {};
 }
@@ -177,7 +179,7 @@ void JackBackend::service (double nowSeconds)
     if (client == nullptr || serverGone.load())
         return;
     rebuildOnNewQuantumOrRate();
-    roundTrip->service (nowSeconds, juce::Time::currentTimeMillis());
+    roundTrip->service (nowSeconds, juce::Time::currentTimeMillis(), sampleRate);
     const bool portsCameOrWent = portsChanged.exchange (false);
     if (! linkPlanDue (connecting, portsCameOrWent, nowSeconds, lastConnectSeconds))
         return;
@@ -192,6 +194,17 @@ void JackBackend::measureRoundTrip()
 {
     if (roundTrip != nullptr)
         roundTrip->request();
+}
+
+void JackBackend::measureAnalogChain()
+{
+    if (roundTrip != nullptr)
+        roundTrip->requestAnalog();
+}
+
+std::optional<ConverterShare> JackBackend::takeNewConverterShare()
+{
+    return roundTrip != nullptr ? roundTrip->takeNewConverterShare() : std::nullopt;
 }
 
 // A new quantum takes over at once (no re-fade); the engine chunks a longer call meanwhile.
@@ -230,6 +243,9 @@ void JackBackend::process (jack_nframes_t frames)
     if (loopOut != nullptr)
         roundTrip->process (static_cast<const float*> (jack_port_get_buffer (loopIn, frames)),
                             static_cast<float*> (jack_port_get_buffer (loopOut, frames)), (int) frames);
+    if (analogOut != nullptr)
+        roundTrip->processAnalog (static_cast<const float*> (jack_port_get_buffer (analogIn, frames)),
+                                  static_cast<float*> (jack_port_get_buffer (analogOut, frames)), (int) frames);
     engineBlockMs.store ((float) std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - started).count(),
                          std::memory_order_relaxed);
     lastBlockFrames.store (frames, std::memory_order_relaxed);
@@ -263,11 +279,11 @@ void JackBackend::shutdownCallback (void* self)
     static_cast<JackBackend*> (self)->serverGone.store (true);
 }
 
-bool JackBackend::registerLoopPorts()
+bool JackBackend::registerLoopPorts (jack_port_t*& in, jack_port_t*& out, const std::string& inName, const std::string& outName)
 {
-    loopIn = jack_port_register (client, loopInputPort.c_str(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
-    loopOut = jack_port_register (client, loopOutputPort.c_str(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-    return loopIn != nullptr && loopOut != nullptr;
+    in = jack_port_register (client, inName.c_str(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+    out = jack_port_register (client, outName.c_str(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+    return in != nullptr && out != nullptr;
 }
 
 bool JackBackend::registerPorts (const PortNames& names)

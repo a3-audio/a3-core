@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "DeviceBackend.h"
+#include "ConnectionPlan.h"
 #include <algorithm>
 #include <cstdio>
 #include <set>
@@ -91,7 +92,10 @@ juce::Result DeviceBackend::open (EngineHost& engineHost, const AppConfig& confi
         return juce::Result::fail ("io.deviceChannels maps no output: the device would stay silent");
     // The loop's channels are opened too when the device has them; a device without them still runs, unmeasured.
     const auto& loop = config.io.roundTripLoop;
-    const int openIn = loop ? std::max (numIn, loop->input) : numIn, openOut = loop ? std::max (numOut, loop->output) : numOut;
+    const auto& analog = config.io.analogLoop;
+    const bool analogPair = hasAnalogTestPair (config.io);
+    const int openIn = std::max ({ numIn, loop ? loop->input : 0, analogPair ? analog->input : 0 });
+    const int openOut = std::max ({ numOut, loop ? loop->output : 0, analogPair ? analog->output : 0 });
 
     // The device passes only the channels it opened, packed in order: open 0..highest mapped,
     // so a device channel number is also the index into the callback's arrays.
@@ -127,9 +131,14 @@ juce::Result DeviceBackend::open (EngineHost& engineHost, const AppConfig& confi
     const int activeIn = device->getActiveInputChannels().countNumberOfSetBits();
     const int activeOut = device->getActiveOutputChannels().countNumberOfSetBits();
     const auto unavailable = loopUnavailable (loop, activeIn, activeOut);
-    roundTrip = std::make_unique<RoundTripMeter> (loop, unavailable);
+    auto analogRefusal = analogLoopRefusal (config.io);
+    if (analogRefusal.isEmpty() && (analog->output > activeOut || analog->input > activeIn))
+        analogRefusal = "the device has no output " + juce::String (analog->output) + " or no input " + juce::String (analog->input);
+    roundTrip = std::make_unique<RoundTripMeter> (loop, unavailable, analog, analogRefusal);
     loopInputChannel = loop && unavailable.isEmpty() ? loop->input - 1 : -1;
     loopOutputChannel = loop && unavailable.isEmpty() ? loop->output - 1 : -1;
+    analogInputChannel = analogRefusal.isEmpty() ? analog->input - 1 : -1;
+    analogOutputChannel = analogRefusal.isEmpty() ? analog->output - 1 : -1;
 
     settings = config.backend;
     slots = bindPortSlots (engineHost.engineConfig(), engineHost.spatialConfig(), inputs, outputs);
@@ -155,7 +164,7 @@ void DeviceBackend::close()
     host = nullptr;
     slots = {};
     roundTrip.reset();
-    loopInputChannel = loopOutputChannel = -1;
+    loopInputChannel = loopOutputChannel = analogInputChannel = analogOutputChannel = -1;
 }
 
 float combinedLoadPercent (float backendPercent, float engineBlockMs, int frames, double sampleRate)
@@ -206,6 +215,20 @@ juce::String roundTripText (const RoundTrip& estimate, const RoundTripReport& me
     return why.isEmpty() ? text : text.replaceFirstOccurrenceOf ("(estimated)", "(estimated, " + why + ")");
 }
 
+juce::String analogChainText (const RoundTrip& estimate, const RoundTripReport& measured)
+{
+    const juce::String measuring = measured.analogMeasuring ? ", measuring" : "";
+    if (measured.analog != RoundTripReport::Analog::measured)
+        return "Analog chain   converters not measured yet"
+               + (measured.analogReason.isEmpty() ? juce::String() : " (" + measured.analogReason + ")") + measuring;
+    const auto& converters = measured.converters;
+    if (measured.state == RoundTripReport::State::measured && estimate.sampleRate > 0)
+        return "Analog chain   " + juce::String (estimate.ms (measured.samples) + converters.ms(), 1)
+               + " ms (measured: digital loop now + converters measured on " + converters.measuredOn + ")" + measuring;
+    return "Analog chain   digital loop not measured now; converters " + juce::String (converters.ms(), 1) + " ms (measured on "
+           + converters.measuredOn + ")" + measuring;
+}
+
 BackendStatus DeviceBackend::status() const
 {
     BackendStatus s;
@@ -235,11 +258,22 @@ void DeviceBackend::measureRoundTrip()
         roundTrip->request();
 }
 
+void DeviceBackend::measureAnalogChain()
+{
+    if (roundTrip != nullptr)
+        roundTrip->requestAnalog();
+}
+
+std::optional<ConverterShare> DeviceBackend::takeNewConverterShare()
+{
+    return roundTrip != nullptr ? roundTrip->takeNewConverterShare() : std::nullopt;
+}
+
 void DeviceBackend::service (double nowSeconds)
 {
     if (host == nullptr)
         return;
-    roundTrip->service (nowSeconds, juce::Time::currentTimeMillis());
+    roundTrip->service (nowSeconds, juce::Time::currentTimeMillis(), sampleRate);
     const int rate = pendingSampleRate.exchange (0);
     const int block = pendingBlockSize.exchange (0);
     const bool newRate = rate > 0 && (double) rate != sampleRate;
@@ -264,6 +298,9 @@ void DeviceBackend::audioDeviceIOCallbackWithContext (const float* const* device
     host->audioCallback (inputs, outputs, numSamples);
     if (loopOutputChannel >= 0 && loopOutputChannel < numOut)
         roundTrip->process (loopInputChannel < numIn ? deviceIn[loopInputChannel] : nullptr, deviceOut[loopOutputChannel], numSamples);
+    if (analogOutputChannel >= 0 && analogOutputChannel < numOut)
+        roundTrip->processAnalog (analogInputChannel < numIn ? deviceIn[analogInputChannel] : nullptr, deviceOut[analogOutputChannel],
+                                  numSamples);
     engineBlockMs.store ((float) std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - started).count(),
                          std::memory_order_relaxed);
     lastBlockFrames.store (numSamples, std::memory_order_relaxed);

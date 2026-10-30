@@ -49,6 +49,9 @@ juce::String roundTripText (const RoundTrip&);
 // The AUDIO page's line: "Round trip (measured, digital loop)   4.4 ms (211 samples), 14:05" when the loop was
 // measured; else the estimate, "Round trip (estimated, <why not measured>)   ...".
 juce::String roundTripText (const RoundTrip& estimate, const RoundTripReport& measured);
+// The analog-chain line: the live digital loop plus the stored converters' share, or why it cannot say.
+// "Analog chain   5.4 ms (measured: digital loop now + converters measured on 2026-10-30)".
+juce::String analogChainText (const RoundTrip& estimate, const RoundTripReport& measured);
 
 // The load STATUS shows: the larger of the backend's own figure (JACK: the whole graph; a device:
 // JUCE's callback load) and the engine's own time for the last block against its period.
@@ -73,5 +76,9 @@ public:
     // Plays the test signal on the round-trip loop and measures (the result arrives in status()). Nothing while
     // one runs or without a loop.
     virtual void measureRoundTrip() {}
+    // The analog chain: both loops in one run, only ever on this request (a temporary cable must be plugged in).
+    virtual void measureAnalogChain() {}
+    // A converter share measured since the last call, once (the engine stores it in its config).
+    virtual std::optional<ConverterShare> takeNewConverterShare() { return std::nullopt; }
 };
 }

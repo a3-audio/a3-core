@@ -22,8 +22,36 @@ struct RoundTripLoop
     }
 };
 
+// The converters' share of the analog chain (analog in -> AD -> engine -> DA -> analog out): the analog loop's
+// delay minus the digital loop's, both measured in one run, in samples at `sampleRate`, on `measuredOn` (YYYY-MM-DD).
+struct ConverterShare
+{
+    int samples = 0;
+    double sampleRate = 0.0;
+    juce::String measuredOn;
+    double ms() const { return sampleRate > 0.0 ? 1000.0 * samples / sampleRate : 0.0; }
+    bool operator== (const ConverterShare& other) const
+    {
+        return samples == other.samples && sampleRate == other.sampleRate && measuredOn == other.measuredOn;
+    }
+};
+
+// engine.json io.analogLoop: {"output": 6, "input": 8} and, once measured, "converterSamples", "sampleRate",
+// "measuredOn". The pair the user patches a temporary cable between for a one-time measurement, chosen on the
+// I/O page (0: that side not chosen yet). Optional; it is never run on its own, only on request.
+struct AnalogLoop
+{
+    int output = 0, input = 0;
+    std::optional<ConverterShare> converters;
+    bool operator== (const AnalogLoop& other) const
+    {
+        return output == other.output && input == other.input && converters == other.converters;
+    }
+};
+
 // The engine's own JACK ports of the loop. Not engine ports of the I/O map: the backend registers and links them.
 inline const std::string loopOutputPort = "roundtrip_out", loopInputPort = "roundtrip_in";
+inline const std::string analogOutputPort = "analogtest_out", analogInputPort = "analogtest_in";
 
 // The device channel (1-based) a JACK port name stands for: system:playback_N / system:capture_N, and PipeWire's
 // pro-audio names <node>.pro-output-*:playback_AUXn / <node>.pro-input-*:capture_AUXn (AUX0 is channel 1).

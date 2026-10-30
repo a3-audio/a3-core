@@ -58,6 +58,7 @@ public:
     void setFilterKind (a3::FilterKind) override;
     void playNoise (const NoiseRequest&) override;
     void measureRoundTrip() override;
+    void measureAnalogChain() override;
 
 private:
     struct Post

@@ -83,6 +83,14 @@ IoPage::IoPage (HostView& v)
     look::failure (message);
     look::caption (notice);
     notice.setMinimumHorizontalScale (0.5f);
+    look::caption (analogCaption);
+    analogCaption.setText ("Analog test cable (AUDIO: MEASURE ANALOG CHAIN)", juce::dontSendNotification);
+    analogOutput.onChange = [this] { chooseAnalogPair (false, analogOutput.getSelectedId() - 1); };
+    analogInput.onChange = [this] { chooseAnalogPair (true, analogInput.getSelectedId() - 1); };
+    for (auto* child : std::initializer_list<juce::Component*> { &analogCaption, &analogOutput, &analogInput })
+        addAndMakeVisible (child);
+    look::help ("A one-time measurement of the converters: plug a temporary cable from a free output to a free input, "
+                "choose both here, Save, and run MEASURE ANALOG CHAIN on the AUDIO page.", { &analogCaption, &analogOutput, &analogInput });
     title.setText ("I/O", juce::dontSendNotification);
     linksCaption.setText ("Direct links the engine makes (one per line: from -> to)", juce::dontSendNotification);
     for (auto* editor : { &portEditor, &linksEditor })
@@ -295,6 +303,7 @@ void IoPage::reload()
     portRows = ioRows (shown, *ports, lastLinks);
     offered = view.status();
     look::say (notice, loopNotice (shown, view.loopDropped()));
+    fillAnalogPair();
     rebuildRoutes();
     fillRoutes();
     rebuildDeckChoosers();
@@ -445,6 +454,41 @@ void IoPage::fillRoutes()
             }
 }
 
+// Item id = channel + 1: "none" is 1.
+void IoPage::fillAnalogPair()
+{
+    const auto& loop = shown.io.analogLoop;
+    for (const bool input : { false, true })
+    {
+        auto& box = input ? analogInput : analogOutput;
+        const auto channels = analogTestChannels (shown, input ? offered.capturePorts : offered.playbackPorts,
+                                                  input ? offered.deviceInputs : offered.deviceOutputs, input);
+        const juce::String side = input ? "input " : "output ";
+        std::vector<std::pair<juce::String, int>> items { { noneText, 1 } };
+        for (const int channel : channels)
+            items.emplace_back (side + juce::String (channel), channel + 1);
+        const int chosen = loop ? (input ? loop->input : loop->output) : 0;
+        if (chosen > 0 && std::find (channels.begin(), channels.end(), chosen) == channels.end())
+            items.emplace_back (side + juce::String (chosen) + "   (not offered)", chosen + 1);
+        std::vector<std::pair<juce::String, int>> current;
+        for (int i = 0; i < box.getNumItems(); ++i)
+            current.emplace_back (box.getItemText (i), box.getItemId (i));
+        if (current != items)   // rebuilt only when it changed: an open list stays open between reloads
+        {
+            box.clear (juce::dontSendNotification);
+            for (const auto& [text, id] : items)
+                box.addItem (text, id);
+        }
+        box.setSelectedId (chosen + 1, juce::dontSendNotification);
+    }
+}
+
+void IoPage::chooseAnalogPair (bool input, int channel)
+{
+    look::say (message, {});
+    edit (withAnalogTestChannel (view.config(), input, channel));
+}
+
 juce::ComboBox* IoPage::routeBox (const std::string& port)
 {
     for (auto* groups : { &inputGroups, &outputGroups })
@@ -480,6 +524,10 @@ void IoPage::resized()
     outputKey.setBounds (top.reduced (row / 16));
     message.setBounds (area.removeFromBottom (row));
     notice.setBounds (area.removeFromBottom (shown.io.roundTripLoop ? row : 0));
+    auto analogRow = area.removeFromBottom (row).reduced (0, row / 12);
+    analogCaption.setBounds (analogRow.removeFromLeft (analogRow.getWidth() / 2));
+    analogOutput.setBounds (analogRow.removeFromLeft (analogRow.getWidth() / 2).reduced (2, 0));
+    analogInput.setBounds (analogRow.reduced (2, 0));
     layoutInput (area, row);
     layoutOutput (area, row);
 }
