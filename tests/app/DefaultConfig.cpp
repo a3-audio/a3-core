@@ -139,7 +139,7 @@ TEST (DefaultConfig, ConnectsWhatThePatchbayConnectedForReaper)
     std::set<std::string> known (ports.inputs.begin(), ports.inputs.end());
     known.insert (ports.outputs.begin(), ports.outputs.end());
 
-    int checked = 0, direct = 0, meters = 0, singleInstanceRecorders = 0, movedForTheLoop = 0;
+    int checked = 0, direct = 0, meters = 0, singleInstanceRecorders = 0, movedForTheLoop = 0, beatInput = 0;
     for (const auto& link : patchbayLinks())
     {
         const bool reaperIsSource = startsWith (link.from, "REAPER:");
@@ -157,6 +157,11 @@ TEST (DefaultConfig, ConnectsWhatThePatchbayConnectedForReaper)
         if (startsWith (peer, "StemDeck:rec_"))   // P39: StemDeck links its own recorder
         {
             ++singleInstanceRecorders;
+            continue;
+        }
+        if (peer == "beat-analyzer:bpm_1")   // built in since 2026-10-30 (TheBeatAnalyzerIsABuiltInLink)
+        {
+            ++beatInput;
             continue;
         }
         ASSERT_TRUE (map.getDynamicObject()->hasProperty (juce::String (reaperPort))) << reaperPort << " is not in Step 0's table";
@@ -190,6 +195,7 @@ TEST (DefaultConfig, ConnectsWhatThePatchbayConnectedForReaper)
     EXPECT_EQ (meters, 50);   // every patchbay cable into beat-analyzer's vu_* ports
     EXPECT_EQ (direct, 0);    // REAPER's raw meter outs (out25-26, out31-38) fed only those meters
     EXPECT_EQ (singleInstanceRecorders, 2);   // rec_L/R -> StemDeck:rec_L/R, now made by StemDeck itself
+    EXPECT_EQ (beatInput, 1);
     // P46: the sender link is built in (named after the host), never in the file.
     const auto linked = a3app::linkMapFor (config, "a3nuc1");
     for (const auto& [port, sender] : { std::pair<const char*, const char*> { "rec_L", "AES67 a3nuc1 out:send_CH1" },
@@ -254,7 +260,7 @@ TEST (DefaultConfig, CalibratedZonesHaveTrims)
 
 // O13: the engine measures the meters itself, so the default map links nothing to beat-analyzer's
 // vu_* ports, and the direct capture links that only fed those meters are gone. The beat clock's
-// input (bpm_1, from rec_L as the patchbay wired it) stays.
+// input (bpm_1, from rec_L as the patchbay wired it) is a built-in link since 2026-10-30, not in the map.
 TEST (DefaultConfig, NoLinkToTheAnalyzersMeters)
 {
     const auto config = loadDefault();
@@ -267,9 +273,17 @@ TEST (DefaultConfig, NoLinkToTheAnalyzersMeters)
         EXPECT_FALSE (startsWith (from, "beat-analyzer:vu_")) << from << " -> " << to;
     }
     EXPECT_TRUE (config.io.directLinks.empty()) << "every direct link of Plan 4's map only fed the analyzer's meters";
-    const auto rec = config.io.jack.find ("rec_L");
-    ASSERT_TRUE (rec != config.io.jack.end());
-    EXPECT_TRUE (contains (rec->second, "beat-analyzer:bpm_1"));
+}
+
+// The REC row on the OUTPUT page is free for an analog recorder: the default map names no REC peer; the beat
+// analyzer's input and this host's AES67 sender are built-in links.
+TEST (DefaultConfig, TheRecRowIsFreeAndTheBeatAnalyzerIsABuiltInLink)
+{
+    const auto config = loadDefault();
+    EXPECT_EQ (config.io.jack.count ("rec_L"), 0u);
+    EXPECT_EQ (config.io.jack.count ("rec_R"), 0u);
+    EXPECT_EQ (config.io.deviceChannels.count ("rec_L"), 0u);
+    EXPECT_TRUE (contains (a3app::linkMapFor (config, "a3nuc1").jack.at ("rec_L"), "beat-analyzer:bpm_1"));
 }
 
 // M10: every deck host records, and the source is always the REC bus. The default map is a3nuc1's:

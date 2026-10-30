@@ -103,6 +103,20 @@ TEST (BuiltInLinks, LinkMapForIsTheLoadedMapPlusTheBuiltInLinks)
     EXPECT_EQ (config.io.jack, loaded);
 }
 
+// The beat-analyzer listens to the REC bus's left side. Like the AES67 sender link it is built in (2026-10-30), not
+// an I/O map entry: the REC row on the OUTPUT page stays free for an analog recorder.
+TEST (BuiltInLinks, TheBeatAnalyzerIsAlwaysLinked)
+{
+    a3app::AppConfig config;
+    config.io.jack["main_sub"] = { "system:playback_1" };
+    const auto linked = a3app::linkMapFor (config, "a3nuc1");
+    EXPECT_EQ (linked.jack.at ("rec_L"), (std::vector<std::string> { "beat-analyzer:bpm_1", "AES67 a3nuc1 out:send_CH1" }));
+    EXPECT_EQ (config.io.jack.count ("rec_L"), 0u) << "never written to the file";
+
+    config.io.jack["rec_L"] = { "system:playback_7" };   // an analog recorder on the REC row
+    EXPECT_EQ (a3app::linkMapFor (config, "").jack.at ("rec_L"), (std::vector<std::string> { "system:playback_7", "beat-analyzer:bpm_1" }));
+}
+
 // F1 finding 3: a deck host can boot after the Core, and a3-aes67 can restart. The engine applies
 // its map again when a port registers anywhere in the graph, and once a second as a fallback, so
 // "AES67 deck B:receive_*" appearing late is linked without restarting the engine.

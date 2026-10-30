@@ -53,6 +53,7 @@ constexpr float minTrimDb = -90.0f, maxTrimDb = 6.0f;
 // deck ports (EnginePorts.h) are dropped, not refused, and listed in droppedLinks. truthDecks is the
 // deck count of a file that names none (EngineTruth::decks). Every slot whose ports the file links
 // nowhere links to its local StemDeck (A9); parseAppConfig does not fill (A10: a posted body is kept).
+// Both drop a rec_L/rec_R peer naming beat-analyzer (a built-in link since 2026-10-30, ConnectionPlan.h).
 // The directory a zone's decoder, parameters and zone files come from.
 juce::File zoneSpatialDirectory (const AppConfig&, a3::SpeakerZone);
 // The spatial config the engine runs on: MAIN's variant, with the booth's zone from BOOTH's.

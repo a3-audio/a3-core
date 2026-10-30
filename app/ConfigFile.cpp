@@ -171,6 +171,23 @@ void parseSpatial (const juce::var& spatial, const juce::File& base, AppConfig& 
     config.boothSpatialDirectory = booth == config.spatialDirectory ? juce::File() : booth;
 }
 
+// Until 2026-10-30 the REC row named the beat-analyzer; it is a built-in link now (addBeatAnalyzerLink).
+void dropBeatAnalyzerFromRec (IoMap& io)
+{
+    for (const char* port : { "rec_L", "rec_R" })
+    {
+        const auto found = io.jack.find (port);
+        if (found == io.jack.end())
+            continue;
+        auto& peers = found->second;
+        peers.erase (std::remove_if (peers.begin(), peers.end(),
+                                     [] (const std::string& peer) { return peer.rfind ("beat-analyzer:", 0) == 0; }),
+                     peers.end());
+        if (peers.empty())
+            io.jack.erase (found);
+    }
+}
+
 AppConfig parseRoot (const juce::var& root, const juce::File& base, int truthDecks)
 {
     const auto& object = objectOf (root, "the file");
@@ -203,6 +220,7 @@ AppConfig parseRoot (const juce::var& root, const juce::File& base, int truthDec
     else
         refuse (error);
     config.loopDropped = dropLoopRoutes (config.io);
+    dropBeatAnalyzerFromRec (config.io);
     return config;
 }
 

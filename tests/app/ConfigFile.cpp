@@ -410,3 +410,19 @@ TEST (ConfigFile, StoringTheTimingChangesOnlyTheBackendsBlockAndPeriods)
     EXPECT_TRUE (refused.failed());   // 16 is no block the file takes: the stored file stays
     EXPECT_EQ (a3app::loadAppConfig (saved, error, a3apptest::truthDecks())->backend.blockSize, 64);
 }
+
+// Until 2026-10-30 the REC row named the beat-analyzer (rec_L -> beat-analyzer:bpm_1). It is a built-in link now
+// (ConnectionPlan.h): a loaded rec entry naming it loses that peer, and the row is empty unless it names another.
+TEST (ConfigFile, ARecEntryNamingTheBeatAnalyzerIsDropped)
+{
+    Scratch scratch;
+    juce::String error;
+    const auto file = scratch.write ("engine.json", withSpatial ("\"io\":{\"jack\":{\"rec_L\":[\"beat-analyzer:bpm_1\"],"
+                                                                "\"rec_R\":[\"system:playback_8\",\"beat-analyzer:bpm_2\"],"
+                                                                "\"main_sub\":[\"system:playback_1\"]}}"));
+    const auto loaded = a3app::loadAppConfig (file, error, a3apptest::truthDecks());
+    ASSERT_TRUE (loaded.has_value()) << error;
+    EXPECT_EQ (loaded->io.jack.count ("rec_L"), 0u);
+    EXPECT_EQ (loaded->io.jack.at ("rec_R"), (std::vector<std::string> { "system:playback_8" }));
+    EXPECT_EQ (loaded->io.jack.at ("main_sub"), (std::vector<std::string> { "system:playback_1" }));
+}
