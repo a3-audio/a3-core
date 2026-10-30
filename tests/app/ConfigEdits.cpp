@@ -102,6 +102,15 @@ TEST (ConfigEdits, SameConfigSeesEveryField)
     EXPECT_FALSE (a3app::sameConfig (a, b));
     b = sample(); b.spatialDirectory = a3test::reaperBoothSpatialDirectory;
     EXPECT_FALSE (a3app::sameConfig (a, b));
+    // 2026-10-31: a Save that only picked the digital loop was not applied (the engine kept "no loop configured").
+    b = sample(); b.io.roundTripLoop = a.io.roundTripLoop ? std::optional<a3app::RoundTripLoop>() : a3app::RoundTripLoop { 11, 11 };
+    EXPECT_FALSE (a3app::sameConfig (a, b));
+    EXPECT_TRUE (a3app::measurementPairsChanged (a, b));
+    b = sample(); b.io.analogLoop = a3app::AnalogLoop { 6, 8, {} };
+    EXPECT_FALSE (a3app::sameConfig (a, b));
+    auto c = b;
+    c.io.analogLoop->converters = a3app::ConverterShare { 40, 44100.0, "2026-10-30" };
+    EXPECT_TRUE (a3app::sameConfig (b, c)) << "the converters' share is a measurement, not an edit";
 }
 
 TEST (ConfigEdits, IoRowsSeparateMappedFromForeignPeers)

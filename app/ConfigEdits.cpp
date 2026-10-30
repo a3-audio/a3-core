@@ -522,14 +522,13 @@ juce::String loopNotice (const AppConfig& config, const std::vector<std::string>
     const auto& loop = config.io.roundTripLoop;
     if (! loop)
         return {};
-    auto notice = "Round-trip loop: device " + loopRangeText (*loop, false) + " -> " + loopRangeText (*loop, true)
-                + " (reserved for the measurement, not offered here).";
+    auto notice = "Digital loop: " + loopRangeText (*loop, false) + " -> " + loopRangeText (*loop, true);
     if (loopDropped.empty())
         return notice;
     juce::StringArray routes;
     for (const auto& route : loopDropped)
         routes.add (juce::String (route));
-    return notice + " Unrouted at load, they were on the loop: " + routes.joinIntoString (", ") + ".";
+    return notice + "; unrouted: " + routes.joinIntoString (", ");
 }
 
 std::vector<std::string> portsRoutedTo (const AppConfig& config, const std::string& peer, const std::string& except)
@@ -636,7 +635,17 @@ bool sameConfig (const AppConfig& a, const AppConfig& b)
         && zoneSpatialDirectory (a, a3::SpeakerZone::booth) == zoneSpatialDirectory (b, a3::SpeakerZone::booth)
         && x.type == y.type && x.deviceType == y.deviceType && x.inputDevice == y.inputDevice
         && x.outputDevice == y.outputDevice && x.sampleRate == y.sampleRate && x.blockSize == y.blockSize
-        && a.io.jack == b.io.jack && a.io.directLinks == b.io.directLinks && a.io.deviceChannels == b.io.deviceChannels;
+        && a.io.jack == b.io.jack && a.io.directLinks == b.io.directLinks && a.io.deviceChannels == b.io.deviceChannels
+        && ! measurementPairsChanged (a, b);
+}
+
+// The analog pair by its channels: the converters' share is the engine's to write (a measurement), not an edit.
+bool measurementPairsChanged (const AppConfig& a, const AppConfig& b)
+{
+    const auto pair = [] (const AppConfig& c) {
+        return c.io.analogLoop ? std::optional<std::pair<int, int>> ({ c.io.analogLoop->output, c.io.analogLoop->input }) : std::nullopt;
+    };
+    return ! (a.io.roundTripLoop == b.io.roundTripLoop) || pair (a) != pair (b);
 }
 
 std::vector<IoRow> ioRows (const AppConfig& config, const PortNames& ports, const LiveLinks& links)

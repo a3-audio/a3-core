@@ -64,6 +64,9 @@ std::optional<juce::File> renameVariant (const juce::File& directory, const juce
                                          const AppConfig& running, juce::String& error);
 // `config` with every zone that named `from` naming `to`.
 AppConfig withRenamedVariant (const AppConfig&, const juce::File& from, const juce::File& to);
+// The digital loop or the analog test pair differ (2026-10-31: a Save that only picked the loop was not applied, so the
+// running engine kept "no loop configured"). sameConfig sees it; the engine measures after such an apply.
+bool measurementPairsChanged (const AppConfig&, const AppConfig&);
 
 enum class TrimZone { main, booth, phones, rec };
 std::optional<AppConfig> withTrim (const AppConfig&, TrimZone, float db, juce::String& error);   // refuses outside -90..+6 dB

@@ -202,9 +202,12 @@ public:
     // engineProblem() says so). Success makes the edit what runs.
     juce::Result apply (const AppConfig& config) override
     {
+        const bool newLoop = measurementPairsChanged (startedWith, config) && config.io.roundTripLoop.has_value();
         const auto result = role.restart (config, problem);
         if (result.failed())
             return result;
+        if (newLoop && live())
+            role.session->measureRoundTrip();   // a loop just picked is measured at once, as after a block change
         startedWith = edited = config;
         startedWith.droppedLinks.clear();   // the saved file no longer names them
         edited.droppedLinks.clear();
