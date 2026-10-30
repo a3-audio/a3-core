@@ -32,8 +32,10 @@ build() {
     local src=$1 build=$2 juce=$3 jobs=$4 test=${5:-}
     local tests=OFF
     [[ "$test" == --test ]] && tests=ON
+    # A3_PACKAGE_VERSION: the version installer/package.py stamps; Core reports it in /api/status.
     cmake -S "$src" -B "$build" -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_PREFIX_PATH="$juce" -DA3_ENGINE_TESTS="$tests" -DA3_ENGINE_BENCH=ON
+        -DCMAKE_PREFIX_PATH="$juce" -DA3_ENGINE_TESTS="$tests" -DA3_ENGINE_BENCH=ON \
+        -DA3_CORE_VERSION="${A3_PACKAGE_VERSION:-}"
     cmake --build "$build" -j "$jobs"
     build_rt_preload "$src" "$build"
     [[ "$tests" == ON ]] && ctest --test-dir "$build" --output-on-failure

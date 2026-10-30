@@ -86,8 +86,24 @@ void Core::deviceHello (const Endpoint& from, const OscMessage& message)
     helloGate.greet (from.host, matches);   // after Motion's hello: its whole state first, then its values
     noticeStemdeckSilence (now);
     const auto label = device == deskKind || device == prodjKind ? deskName (from.host, device) : device;
-    if (deviceTable.heard (label, theirHash, now))
+    if (deviceTable.heard (label, theirHash, now, from.host))
         say (label + ": its a3-osc.json " + (matches ? "is Core's" : "DIFFERS from Core's") + " (" + firstCharacters (theirHash, 12) + ")");
+}
+
+// device.version (2026-10-30, not in B1): what a device runs, named as its hello names it (a desk as
+// desk@<host>), kept per name and sending host. Name and version are needed; firmware and audio
+// address may be left off, as "" says: none.
+void Core::deviceVersion (const Endpoint& from, const OscMessage& message)
+{
+    seen (message, firstOrNone (message), originOf (from));
+    if (message.args.size() < 2)
+        return;
+    const auto device = pythonStr (message.args[0]);
+    if (device.empty())
+        return;
+    const auto argument = [&message] (size_t index) { return index < message.args.size() ? pythonStr (message.args[index]) : std::string(); };
+    const auto label = device == deskKind || device == prodjKind ? deskName (from.host, device) : device;
+    deviceTable.reported (label, from.host, { argument (1), argument (2), argument (3), env.clock.monotonic() });
 }
 
 // osc_handler_deck_hello: a StemDeck instance names the deck it plays; Core learns where that deck

@@ -8,6 +8,7 @@
 #include <algorithm>
 
 #include "Json.h"
+#include "Version.h"
 
 namespace a3core
 {
@@ -20,7 +21,7 @@ juce::var textOrNull (const std::optional<std::string>& value) { return value ? 
 juce::var Core::statusJson() const
 {
     subscribersOwner.check ("the status");
-    return objectOf ({ { "audio_engine", "engine" }, { "reason", "" } });
+    return objectOf ({ { "audio_engine", "engine" }, { "reason", "" }, { "version", programVersion() } });
 }
 
 // engine.open means "Core sent the engine `open` since its last new hello": heard is about the
@@ -65,7 +66,8 @@ juce::var Core::rigJson() const
                        { "engine", objectOf ({ { "heard", engineHeard() },
                                                { "boot_id", project ? textOrNull (project->lastBootId()) : juce::var() },
                                                { "open", engineOpen } }) },
-                       { "devices", deviceTable.snapshot (now) } });
+                       { "devices", deviceTable.rigRows (now) },
+                       { "versions", deviceTable.reports (now) } });
 }
 
 // The service file's first (read-only in the window), then the stored ones. A stored entry the service

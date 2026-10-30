@@ -10,6 +10,7 @@
 
 #include <chrono>
 #include <fstream>
+#include <map>
 #include <thread>
 
 #include <gtest/gtest.h>
@@ -21,6 +22,7 @@
 #include "HttpServer.h"
 #include "StateRecorded.h"
 #include "TrafficRecorded.h"
+#include "Version.h"
 
 using namespace a3core;
 using namespace recordedtraffic;
@@ -1230,12 +1232,98 @@ TEST (CoreApi, StatusSaysTheEngine)
     EXPECT_EQ (status["audio_engine"].toString(), "engine");
     EXPECT_EQ (status["reason"].toString(), "");
     rig.core->publishView();
-    expectJsonEqual (benchFixture()["responses"]["status"], parsedBody (rig.core->view().texts().status), "published status");
+    // B1's status, word for word, and beside it since 2026-10-30 the program's own version.
+    const auto published = parsedBody (rig.core->view().texts().status);
+    for (const auto& [key, value] : benchFixture()["responses"]["status"].getDynamicObject()->getProperties())
+        expectJsonEqual (value, published[key], "published status: " + key.toString().toStdString());
 
     BenchWindow window;
     window.view.publish (rig.core->view().texts());
     ASSERT_TRUE (window.open());
-    expectJsonEqual (benchFixture()["responses"]["status"], parsedBody (window.get ("/api/status").body), "/api/status");
+    expectJsonEqual (published, parsedBody (window.get ("/api/status").body), "/api/status");
+}
+
+// The Canvas shows Core's version beside the engine row on any machine: Core says it in its status.
+TEST (CoreApi, StatusSaysTheProgramsVersion)
+{
+    CoreRig rig;
+    const auto version = rig.core->statusJson()["version"];
+    ASSERT_TRUE (version.isString());
+    EXPECT_EQ (version.toString().toStdString(), std::string (programVersion()));
+    EXPECT_FALSE (version.toString().isEmpty());
+}
+
+// device.version (2026-10-30): what each device runs, kept per device and sending host.
+TEST (CoreApi, RigCarriesWhatEachDeviceReports)
+{
+    CoreRig rig (CoreRig::WithOptions {}, corerig::onThePackage());
+    const Endpoint motionAt { "192.168.8.20", 40002 }, deckB { "192.168.8.13", 7000 }, mixerAt { "192.168.8.11", 7001 };
+    rig.at (10.0);
+    rig.hello (motionAt, "motion");
+    rig.osc (motionAt, "/device/version", { pyStr ("motion"), pyStr ("03.0+855"), pyStr ("v03.2+4"), pyStr ("192.168.9.20") });
+    rig.hello (deckB, "stemdeck");
+    rig.osc (deckB, "/device/version", { pyStr ("stemdeck"), pyStr ("03.0+281"), pyStr (""), pyStr ("192.168.9.23") });
+    rig.osc (rig.deckA, "/device/version", { pyStr ("stemdeck"), pyStr ("03.0+280"), pyStr (""), pyStr ("192.168.9.10") });
+    rig.osc (rig.analyzer, "/device/version", { pyStr ("beat-analyzer"), pyStr ("03.0+12") });   // the old form: name and version
+    rig.hello (mixerAt, "mixer");   // says hello, not yet its version
+    rig.at (12.0);
+    rig.core->publishView();
+
+    const auto rigJson = parsedRig (rig);
+    std::map<std::string, juce::var> devices;
+    for (const auto& row : rowsOf (property (rigJson, "devices")))
+        devices[row["device"].toString().toStdString()] = row;
+    ASSERT_EQ (devices.count ("motion"), 1u);
+    EXPECT_EQ (devices["motion"]["host"].toString(), "192.168.8.20");
+    EXPECT_EQ (devices["motion"]["version"].toString(), "03.0+855");
+    EXPECT_EQ (devices["motion"]["firmware"].toString(), "v03.2+4");
+    EXPECT_EQ (devices["motion"]["audio"].toString(), "192.168.9.20");
+    EXPECT_EQ (devices["stemdeck"]["host"].toString(), "192.168.8.13") << "the host of its last hello";
+    EXPECT_EQ (devices["stemdeck"]["version"].toString(), "03.0+281");
+    EXPECT_EQ (devices["stemdeck"]["firmware"].toString(), "");
+    ASSERT_EQ (devices.count ("mixer"), 1u);
+    EXPECT_EQ (devices["mixer"]["host"].toString(), "192.168.8.11");
+    EXPECT_TRUE (devices["mixer"]["version"].isVoid()) << "not reported";
+    EXPECT_TRUE (devices["mixer"]["firmware"].isVoid());
+    EXPECT_TRUE (devices["mixer"]["audio"].isVoid());
+
+    std::vector<std::string> versions;
+    for (const auto& row : rowsOf (property (rigJson, "versions")))
+        versions.push_back (row["device"].toString().toStdString() + "@" + row["host"].toString().toStdString() + " "
+                            + row["version"].toString().toStdString() + " fw=" + row["firmware"].toString().toStdString()
+                            + " audio=" + row["audio"].toString().toStdString() + " age=" + juce::String (static_cast<double> (row["age"]), 1).toStdString());
+    EXPECT_EQ (versions, (std::vector<std::string> { "beat-analyzer@127.0.0.1 03.0+12 fw= audio= age=2.0",
+                                                     "motion@192.168.8.20 03.0+855 fw=v03.2+4 audio=192.168.9.20 age=2.0",
+                                                     "stemdeck@127.0.0.2 03.0+280 fw= audio=192.168.9.10 age=2.0",
+                                                     "stemdeck@192.168.8.13 03.0+281 fw= audio=192.168.9.23 age=2.0" }));
+}
+
+// A desk says "desk" and is shown as desk@<host>, as its hello is; a version without a name is nobody's.
+TEST (CoreApi, ADesksVersionIsItsRows)
+{
+    CoreRig rig (CoreRig::WithOptions {}, corerig::onThePackage());
+    const Endpoint deskAt { "192.168.8.40", 7773 };
+    rig.hello (deskAt, "desk");
+    rig.osc (deskAt, "/device/version", { pyStr ("desk"), pyStr ("03.0+90"), pyStr ("v03.0+2"), pyStr ("") });
+    rig.osc (deskAt, "/device/version", { pyStr ("") , pyStr ("1") });
+    rig.osc (deskAt, "/device/version", { pyStr ("lonely") });
+    rig.core->publishView();
+    const auto rigJson = parsedRig (rig);
+    const auto versions = rowsOf (property (rigJson, "versions"));
+    ASSERT_EQ (versions.size(), 1u);
+    EXPECT_EQ (versions[0]["device"].toString(), "desk@192.168.8.40");
+    for (const auto& row : rowsOf (property (rigJson, "devices")))
+        if (row["device"].toString() == "desk@192.168.8.40")
+            EXPECT_EQ (row["firmware"].toString(), "v03.0+2");
+}
+
+// B0's truth has no device.version: Core keeps no versions and says nothing about it.
+TEST (CoreApi, ATruthWithoutTheWordKeepsNoVersions)
+{
+    CoreRig rig;
+    rig.osc (rig.remoteMotion, "/device/version", { pyStr ("motion"), pyStr ("03.0+855"), pyStr (""), pyStr ("") });
+    rig.core->publishView();
+    EXPECT_TRUE (rowsOf (property (parsedRig (rig), "versions")).empty());
 }
 
 TEST (CoreApi, RigShowsWhoIsThere)
@@ -1291,7 +1379,7 @@ TEST (CoreApi, RigShowsWhoIsThere)
 
     const auto devices = rowsOf (property (rigJson, "devices"));
     ASSERT_FALSE (devices.empty());
-    expectJsonEqual (rig.core->devices().snapshot (rig.clock.monotonic()), property (rigJson, "devices"), "the /api/devices rows");
+    expectJsonEqual (rig.core->devices().rigRows (rig.clock.monotonic()), property (rigJson, "devices"), "the devices with their reports");
 }
 
 TEST (CoreApi, RigOfAnEmptyRigSaysNobodyIsThere)

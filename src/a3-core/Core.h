@@ -163,6 +163,7 @@ private:
     void stemdeckHandler (const Endpoint& from, const OscMessage& message);
     void deviceHello (const Endpoint& from, const OscMessage& message);
     void engineHello (const Endpoint& from, const OscMessage& message);
+    void deviceVersion (const Endpoint& from, const OscMessage& message);
     void deckHello (const Endpoint& from, const OscMessage& message);
     void engineDeckAudio (const Endpoint& from, const OscMessage& message);
     void recall (const Endpoint& from, const OscMessage& message);

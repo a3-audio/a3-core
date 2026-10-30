@@ -353,6 +353,9 @@ void Core::mapHandlers()
     dispatcher.map (truth.address ("state.recall"), to (&Core::recall));
     dispatcher.map (truth.address ("beat"), to (&Core::beatHandler));
     dispatcher.map (truth.address ("device.hello"), to (&Core::deviceHello));
+    // Nor did it know device.version (2026-10-30): without the word a device's version is not reported.
+    if (truth.hasAddress ("device.version"))
+        dispatcher.map (truth.address ("device.version"), to (&Core::deviceVersion));
     dispatcher.map (truth.address ("engine.hello"), to (&Core::engineHello));
     const auto [firstDeck, lastDeck] = truth.indexRange ("stemdeck.deck-hello", "deck");
     for (int deck = firstDeck; deck <= lastDeck; ++deck)
