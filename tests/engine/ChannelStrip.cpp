@@ -38,9 +38,17 @@ std::unique_ptr<a3::ChannelStrip> made (float threeD, float freq, float q)
     strip->prepare (44100.0, 512);
     auto& c = strip->controls();
     c.gain = 1.0f; c.volume = 1.0f;                 // both 0 dB (A 0.5)
-    c.eqHigh = c.eqMid = c.eqLow = 1.0f;            // slopeEq(1) = 0.6 — the desk's top, +0.13 dB max
+    c.eqHigh = c.eqMid = c.eqLow = 1.0f;            // the desk's top: +6 dB on every band
     c.threeD = threeD; c.frequency = freq; c.q = q;
     return strip;
+}
+
+// The click tests measure gain and 3D steps against fixed thresholds; with the EQ's +6 dB top the
+// signal would be twice as steep, so they run with the EQ flat (the knob centre).
+void flattenEq (a3::ChannelStrip& strip)
+{
+    auto& c = strip.controls();
+    c.eqHigh = c.eqMid = c.eqLow = 0.5f;
 }
 
 // TRIM and EQ as made() sets them, built from the units directly.
@@ -129,6 +137,7 @@ TEST (ChannelStrip, ClosingTheBandGlidesWithoutAStep)
     const auto in = a3test::sine (44100, 1000.0, 44100.0, level);
     auto runWith = [&] (bool close) {
         auto strip = made (0.9f, 0.5f, 0.05f);
+        flattenEq (*strip);
         StripRun r { in, in };
         for (size_t s = 0; s < in.l.size(); s += 128)
         {
@@ -450,6 +459,7 @@ TEST (ChannelStrip, ReachingZeroDoesNotClick)
     for (Which which : { Volume, Gain, ThreeD })
     {
         auto strip = made (1.0f, 0.5f, 0.05f);
+        flattenEq (*strip);
         a3test::Stereo mv = in, st = in, mpre = in, spre = in;
         for (size_t s = 0; s < in.l.size(); s += 128)
         {

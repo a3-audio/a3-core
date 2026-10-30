@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <gtest/gtest.h>
 #include <algorithm>
+#include <cmath>
 #include <vector>
 #include "TestSignals.h"
 #include "reference/AirwindowsReference.h"
@@ -25,7 +26,7 @@ double compareAt (double sr, float t, float m, float b, size_t frames)
 }
 }
 
-// The desk's range: slope_eq gives 0..0.6. 16 steps per band.
+// The desk's range: slope_eq gives 0..~0.87 (kill .. +6 dB). 16 steps per band.
 TEST (SmoothEQ3, MatchesTheReferenceOnTheDesksGrid)
 {
     const auto v = [] (int i) { return (float) a3::laws::slopeEq (i / 15.0); };
@@ -105,4 +106,24 @@ TEST (SmoothEQ3, SplitCallsMatchWholeBlocks)
         whole.process (io, (int) std::min<size_t> (128, total - s));
     }
     EXPECT_EQ (a3test::maxAbsDiff (splitOut, wholeOut), 0.0);
+}
+
+// What the knob does to the sound: all three bands at one control scale the signal by eqDb (control).
+// With equal band gains SmoothEQ3 is a plain gain, so the output is the input times that gain.
+TEST (SmoothEQ3, KnobGivesTheIsolatorCurveInDb)
+{
+    const auto in = a3test::noise (4096, 0.25f, 5);
+    for (double control : { 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.75, 0.9, 1.0 })
+    {
+        a3::SmoothEQ3 eq;
+        eq.prepare (44100.0);
+        const auto p = (float) a3::laws::slopeEq (control);
+        eq.setParameters (p, p, p);
+        const auto out = a3test::runInBlocks (eq, in, 128);
+        const double gain = std::pow (10.0, a3::laws::eqDb (control) / 20.0);
+        double worst = 0.0;
+        for (size_t i = 0; i < in.l.size(); ++i)
+            worst = std::max (worst, std::abs (out.l[i] - gain * in.l[i]));
+        EXPECT_LE (worst, 1e-5) << "control " << control << " (" << a3::laws::eqDb (control) << " dB)";
+    }
 }
