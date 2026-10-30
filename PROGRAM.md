@@ -96,8 +96,9 @@ libraries JUCE would `dlopen` for a window are not needed.
 - **The /vu meters (O13, since Task 24 of "A³ Core as one program").** The engine measures the 56 meters
   beat-analyzer measured, at the points the patchbay fed it (`tests/engine/data/vu-points.json`):
   `analog1_L`…`analog4_R` = analog inputs 1-8, raw; `aux_L/R` = the FX Return after RETURN, its W on both sides;
-  `main_*`, `booth_*` (tops beyond the layout stay 0), `phones_L/R`, `rec_L/R` = those outputs as they
-  leave; `in{n}_pre/post_L/R` = the channel taps above; `deck_<letters>` = that deck slot's W as it arrives.
+  `main_*`, `booth_*` (tops beyond the layout stay 0) = those outputs after MASTER/BOOTH and before the
+  zone's calibration trim and gate (the desk's master meters; the CALIBRATION page does not move them);
+  `phones_L/R`, `rec_L/R` = those outputs as they leave; `in{n}_pre/post_L/R` = the channel taps above; `deck_<letters>` = that deck slot's W as it arrives.
   The truth names `deck_a`…`deck_d` (/vu 37-40), so slots 1-4 have a meter; a slot beyond has none, and the
   engine says so once at start, in `--check-config` and on STATUS. `VuTaps` (`src/a3-engine/VuTaps.h`) is
   beat-analyzer's `VuMeter` per point (per block: raw peak kept until taken, RMS followed 0.8 / 0.2),

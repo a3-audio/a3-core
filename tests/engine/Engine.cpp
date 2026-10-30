@@ -1359,3 +1359,47 @@ TEST (Engine, MetersAtTheAnalyzersPoints)
     EXPECT_GT (meters.at ("analog1_L").first, 0.29f);
     EXPECT_EQ (meters.at ("analog2_L").first, 0.0f);
 }
+
+// The main and booth meters are the desk's master meters: after MASTER/BOOTH, before the zone's
+// calibration trim and gate (2026-10-30). Lowering trims.main by 20 dB drops the main ports by 20 dB
+// and leaves main_* where they were; a lower MASTER still lowers them, as it lowers the ports.
+TEST (Engine, ZoneMetersReadAfterTheLevelBeforeTheTrim)
+{
+    struct Run { std::map<std::string, float> meters; double mainPort, boothPort; };
+    const auto runWith = [] (float trimDb, float master, float booth)
+    {
+        auto config = engineConfig (4, 2);
+        config.trims.main = config.trims.booth = trimDb;
+        a3::VuTaps taps (truthVuMeters(), a3::VuSettings {});
+        EngineRig rig (config, oneSecond / 4);
+        rig.engine->attachVuTaps (taps);
+        rig.setAnalogPair (1, sine (rig.frames, 997.0, engineRate, 0.3f));
+        rig.controls.global().masterVolume = master;
+        rig.controls.global().booth = booth;
+        rig.run();
+        std::vector<float> peaks, rms;
+        taps.take (peaks, rms);
+        Run result { {}, peak (rig.mainOutputs()), peak (rig.boothOutputs()) };
+        for (size_t slot = 0; slot < taps.names().size(); ++slot)
+            result.meters[taps.names()[slot]] = peaks[slot];
+        return result;
+    };
+    const auto unity = runWith (0.0f, masterAtRest, boothAtRest);
+    const auto trimmed = runWith (-20.0f, masterAtRest, boothAtRest);
+    const auto quieter = runWith (0.0f, 0.5f * masterAtRest, 0.5f * boothAtRest);
+
+    EXPECT_NEAR (trimmed.mainPort / unity.mainPort, 0.1, 1e-3);   // the audio is trimmed
+    EXPECT_NEAR (trimmed.boothPort / unity.boothPort, 0.1, 1e-3);
+    ASSERT_GT (unity.meters.at ("main_top1"), 1e-3f);
+    ASSERT_GT (unity.meters.at ("booth_top1"), 1e-3f);
+    for (const auto& [name, meter] : unity.meters)
+    {
+        if (name.rfind ("main_", 0) != 0 && name.rfind ("booth_", 0) != 0)
+            continue;
+        EXPECT_NEAR (trimmed.meters.at (name), meter, 1e-6f * std::max (1.0f, meter)) << name;
+        if (meter > 0.0f)
+            EXPECT_LT (quieter.meters.at (name), 0.9f * meter) << name;
+    }
+    EXPECT_NEAR (quieter.meters.at ("main_top1") / unity.meters.at ("main_top1"), quieter.mainPort / unity.mainPort, 1e-3);
+    EXPECT_NEAR (quieter.meters.at ("booth_top1") / unity.meters.at ("booth_top1"), quieter.boothPort / unity.boothPort, 1e-3);
+}
