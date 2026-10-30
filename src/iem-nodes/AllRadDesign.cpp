@@ -55,7 +55,10 @@ private:
 };
 
 // IEM's editor as the window hosts it: it draws no ground of its own (IEM fills its LaF's ClBackground, a lighter
-// grey than the window's), so it sits on the page's surface. IEM's own code is untouched: only paint() is ours.
+// grey than the window's), so it sits on the page's surface; the 3D view clears to `ground` (the patch's a3Ground) and
+// the energy map's grey outside its ellipse becomes `ground` (RecolourGround). The title bar (IEM's I/O widgets, nothing
+// the window uses) is hidden and its room given to the table and the 3D view. The energy map is not buffered to an
+// image: scaled by the page's transform, its cached image was cut at its right edge (2026-10-31).
 class HostedAllRadEditor final : public AllRADecoderAudioProcessorEditor
 {
 public:
@@ -63,11 +66,47 @@ public:
         : AllRADecoderAudioProcessorEditor (p, v), recolour (ground)
     {
         recolourGrids (*this);
+        for (auto* child : getChildren())
+            if (auto* view = dynamic_cast<LoudspeakerVisualizer*> (child))
+                view->a3Ground = ground;
+        unbuffer (*this);
     }
     ~HostedAllRadEditor() override { unsetEffects (*this); }
     void paint (juce::Graphics&) override {}
 
+    // IEM's layout, then the title's band (its 60 px and the 10 under it, AllRADecoderAudioProcessorEditor::resized)
+    // given to what hangs from the top: the layout group, the table and the 3D view.
+    void resized() override
+    {
+        AllRADecoderAudioProcessorEditor::resized();
+        constexpr int titleBand = 60 + 10;
+        for (auto* child : getChildren())
+        {
+            const auto bounds = child->getBounds();
+            if (bounds.getY() == 0 && bounds.getHeight() == titleBand - 10 && dynamic_cast<OSCFooter*> (child) == nullptr)
+            {
+                child->setVisible (false);   // the title bar
+                continue;
+            }
+            const bool hangsFromTheTop = bounds.getY() == titleBand || dynamic_cast<LoudspeakerVisualizer*> (child) != nullptr
+                                         || dynamic_cast<LoudspeakerTableComponent*> (child) != nullptr;
+            if (hangsFromTheTop && bounds.getY() >= titleBand)
+                child->setBounds (bounds.withTop (bounds.getY() - titleBand));
+        }
+    }
+
 private:
+    // IEM buffers the energy map and its grid to images; scaled by the page's transform, an image made at the unscaled
+    // size was cut at its right edge. Nothing of the hosted editor is buffered.
+    static void unbuffer (juce::Component& parent)
+    {
+        for (auto* child : parent.getChildren())
+        {
+            child->setBufferedToImage (false);
+            unbuffer (*child);
+        }
+    }
+
     void recolourGrids (juce::Component& parent)
     {
         for (auto* child : parent.getChildren())

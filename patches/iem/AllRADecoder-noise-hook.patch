@@ -9,7 +9,9 @@ its pin. The window hosts IEM's AllRADecoder editor on a processor that never ge
 playNoiseBurst (a row's Noise button) and playAmbisonicNoiseBurst (the same with Alt) call
 a3NoiseHook / a3AmbisonicNoiseHook when set, and the window posts the burst to the engine,
 which plays IEM's NoiseBurst / AmbisonicNoiseBurst in that zone (src/iem-nodes/ZoneNoise.cpp).
-Unset, IEM's own behaviour is unchanged. Configure fails if this no longer applies.
+Unset, IEM's own behaviour is unchanged. And (2026-10-31) the 3D view's OpenGL clear colour is a member,
+a3Ground, IEM's grey by default: the window sets its card's colour (a component effect never reaches an OpenGL
+clear). Configure fails if this no longer applies.
 
 --- a/PluginProcessor.h
 +++ b/PluginProcessor.h
@@ -43,3 +45,25 @@ Unset, IEM's own behaviour is unchanged. Configure fails if this no longer appli
      auto dec = decoder.getCurrentDecoder();
      if (dec != nullptr)
      {
+--- a/LoudspeakerVisualizer.h
++++ b/LoudspeakerVisualizer.h
+@@ -57,6 +57,10 @@
+         openGLContext.detach();
+         openGLContext.setRenderer (nullptr);
+     }
++    // a3 patch (a3-core patches/iem/AllRADecoder-noise-hook.patch): the 3D view's ground, IEM's grey unless the host
++    // sets its own (the window: its card's colour). An OpenGL clear: no component effect reaches it.
++    juce::Colour a3Ground { 0xFF2D2D2D };
++
+     void setActiveSpeakerIndex (int newIdx)
+     {
+         activePoint = newIdx;
+@@ -213,7 +217,7 @@
+ 
+         jassert (juce::OpenGLHelpers::isContextActive());
+ 
+-        juce::OpenGLHelpers::clear (juce::Colour (0xFF2D2D2D));
++        juce::OpenGLHelpers::clear (a3Ground);
+ 
+         const float desktopScale = (float) openGLContext.getRenderingScale();
+         glViewport (0,
