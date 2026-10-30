@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
-// What the SYSTEM page says about the project (the Canvas's greeter, a3-system canvas/Source/model/Greeter and Support,
+// What the ABOUT page says about the project (the Canvas's greeter, a3-system canvas/Source/model/Greeter and Support,
 // moved here on 2026-10-30: "all content from the Canvas goes to the Engine"). Pure: no component, no file but loadSupport's.
 #pragma once
 #include <juce_core/juce_core.h>

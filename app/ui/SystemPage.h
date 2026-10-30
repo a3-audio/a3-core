@@ -1,10 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
-// SYSTEM and ABOUT, STATUS' sub-pages (2026-10-30, the maintainer: "all content from the Canvas goes to the Engine"): what
-// the Canvas showed, in the window's cards. SYSTEM -- every program of the rig with its state, where it runs, its software,
-// firmware and audio address, Start/Stop and Restart for the ones on this machine, Start all and Stop all; ABOUT -- the
-// project, its links, the contact, Support A³, the A³ System card (the umbrella's pins) and the licences last. Not a key of
-// their own: a seventh key in the row made the key text smaller than a quarter of the key.
+// RIG and ABOUT, STATUS' sub-pages beside ENGINE (2026-10-30, the maintainer: "all content from the Canvas goes to the
+// Engine"): what the Canvas showed, in the window's cards. RIG -- a card per program of the rig with its state, where it
+// runs, its software, firmware and audio address, Start/Stop and Restart for the ones on this machine; Start all and Stop
+// all on a card above them. ABOUT -- the project, its links, the contact, Support A³, PUBLISHED (each repository of the
+// umbrella's pins with its link and tag) and the licences last. Not keys of their own: a seventh key in the row made the
+// key text smaller than a quarter of the key.
 #pragma once
 #include "Look.h"
 #include "SystemProbe.h"
@@ -15,9 +16,6 @@ namespace a3app
 {
 // Asks the person; calls onYes if they agree. The default is a card inside the window; tests pass their own.
 using SystemConfirm = std::function<void (const juce::String& question, const juce::String& detail, std::function<void()> onYes)>;
-
-// The row both sub-pages use: the page's, or less so that the rig's lines fit (one text size on SYSTEM and ABOUT).
-int systemRow (const juce::Component& view, int programs);
 
 class SystemRigView final : public juce::Component, public CardPage
 {
@@ -32,11 +30,15 @@ public:
     // The row's key: "Start" or "Stop", and "Restart"; nullptr for a program of another machine.
     juce::TextButton* startStopKey (const juce::String& label) const;
     juce::TextButton* restartKey (const juce::String& label) const;
+    // The programs' cards, scrolled below the RIG card (as I/O's lists are).
+    const CardPage& programCards() const;
+    juce::Component& programList();
     void resized() override;
     void paint (juce::Graphics&) override;
 
 private:
     struct ProgramRow;
+    class List;
     void ask (const juce::String& question, const juce::String& detail, std::function<void()> then);
     const ProgramRow* rowOf (const juce::String& label) const;
     std::vector<rig::Program> programsHere() const;
@@ -48,6 +50,8 @@ private:
     juce::Label heading;
     juce::TextButton startAll { "Start all" }, stopAll { "Stop all" };
     std::vector<std::unique_ptr<ProgramRow>> rows;
+    std::unique_ptr<List> list;
+    juce::Viewport scroller;
     juce::Rectangle<int> planArea;
 };
 
@@ -55,18 +59,23 @@ class SystemAboutView final : public juce::Component, public CardPage
 {
 public:
     explicit SystemAboutView (SystemProbe&);
+    ~SystemAboutView() override;
     void refresh();
     const checkout::Facts& checkoutShown() const { return pins; }
+    int lineHeight() const { return layout::compactLine (layout::tokens (*this)); }
     void resized() override;
     void paint (juce::Graphics&) override;
 
 private:
+    void makePublished();
+
     SystemProbe& probe;
     std::uint64_t seen = 0;
     checkout::Facts pins;
-    juce::Label aboutHeading, supportHeading, systemHeading, licenceHeading;
+    juce::Label aboutHeading, supportHeading, publishedHeading, licenceHeading;
     juce::OwnedArray<juce::HyperlinkButton> links, supportLinks;
+    juce::OwnedArray<juce::Component> repositories;   // a link per repository with a url, its name as text without one
     juce::Rectangle<int> taglineArea, contactArea, bitcoinArea, versionArea, licenceArea;
-    std::vector<juce::Rectangle<int>> systemAreas;
+    std::vector<juce::Rectangle<int>> publishedAreas;
 };
 }

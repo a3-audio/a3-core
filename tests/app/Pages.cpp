@@ -223,6 +223,18 @@ TEST_F (Pages, TheFooterShowsTheClockOnEveryPage)
     EXPECT_TRUE (bar.clockLabel().getText().contains ("HOLDOVER"));
     EXPECT_EQ (bar.clockLabel().findColour (juce::Label::textColourId), a3app::palette::danger);
     EXPECT_GT (bar.clockLabel().getWidth(), 0);
+    // 2026-10-30: right-aligned, directly left of Save.
+    std::vector<juce::Component*> save;
+    for (auto* child : bar.getChildren())
+        if (auto* key = dynamic_cast<juce::TextButton*> (child); key != nullptr && key->getButtonText() == "Save")
+            save.push_back (key);
+    ASSERT_EQ (save.size(), 1u);
+    EXPECT_TRUE (bar.clockLabel().getJustificationType().testFlags (juce::Justification::right));
+    EXPECT_LE (bar.clockLabel().getRight(), save.front()->getX());
+    EXPECT_GE (bar.clockLabel().getRight(), save.front()->getX() - bar.getHeight() / 2) << "beside Save, not across the bar";
+    EXPECT_GT (bar.clockLabel().getX(), bar.getWidth() / 3);
+    for (const auto* line : { &bar.pendingLabel(), &bar.messageLabel() })
+        EXPECT_LE (line->getRight(), bar.clockLabel().getX());
 }
 
 // The PTP role is its own line under the state: neutral while not read yet, a warning only when
@@ -2016,8 +2028,8 @@ TEST_F (Pages, NoTooltipsAnywhere)
     a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, { core.client.get(), {} }, {}, rig.userRoot);
     window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     window.setMonitorShown (true);
-    for (const auto& name : { "AUDIO", "SPEAKERS", "ZONES", "INPUT", "OUTPUT", "DEPARTMENTS", "CALIBRATION", "FILTER", "STATUS", "SYSTEM",
-                              "ABOUT", "BENCH" })
+    for (const auto& name : { "AUDIO", "SPEAKERS", "ZONES", "INPUT", "OUTPUT", "DEPARTMENTS", "CALIBRATION", "FILTER", "STATUS", "ENGINE",
+                              "RIG", "ABOUT", "BENCH" })
     {
         window.showPage (name);
         window.refreshNow();
@@ -2291,6 +2303,22 @@ TEST_F (Pages, StatusHasTheDriverAndTheClocksDetail)
     EXPECT_TRUE (clock.countersLabel().getText().contains ("corrections")) << clock.countersLabel().getText();
     EXPECT_TRUE (clock.stateLabel().getText().contains ("phase error")) << clock.stateLabel().getText();
     EXPECT_FALSE (clock.masterBox().isVisible()) << "the choice is AUDIO's";
+    // 2026-10-30: three cards (what runs, the clock, the meters); MISSING and DROPPED went (RIG says what runs where).
+    EXPECT_EQ (page.cardAreas().size(), 3u);
+    // The clock's lines follow each other as the driver's do: no empty line, nothing spread over the card.
+    std::vector<juce::Rectangle<int>> lines;
+    for (const auto* label : { &clock.stateLabel(), &clock.roleLabel(), &clock.rateLabel(), &clock.countersLabel(), &clock.noteLabel() })
+        if (label->isVisible())
+        {
+            EXPECT_TRUE (label->getText().isNotEmpty()) << "an empty line is not shown";
+            lines.push_back (label->getBounds());
+        }
+    ASSERT_GE (lines.size(), 4u);
+    for (size_t i = 1; i < lines.size(); ++i)
+        EXPECT_EQ (lines[i].getY(), lines[i - 1].getBottom()) << i;
+    EXPECT_EQ (lines.front().getHeight(), lines[1].getHeight()) << "one line height";
+    EXPECT_LE (lines.back().getBottom(), clock.getHeight()) << "inside the panel";
+    EXPECT_GE (lines.back().getBottom(), clock.getHeight() - lines.front().getHeight()) << "the card ends with its last line";
     expectPainted (a3apptest::snapshotAt (page, "window2-status", page.getWidth(), page.getHeight()));
 }
 
@@ -2425,7 +2453,7 @@ TEST_F (Pages, EveryPageIsCardsOnOneGrid)
     a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, { core.client.get(), {} }, {}, rig.userRoot);
     window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     auto& content = *window.getContentComponent();
-    for (const auto& name : { "AUDIO", "SPEAKERS", "ZONES", "INPUT", "OUTPUT", "DEPARTMENTS", "CALIBRATION", "FILTER", "STATUS", "SYSTEM", "ABOUT" })
+    for (const auto& name : { "AUDIO", "SPEAKERS", "ZONES", "INPUT", "OUTPUT", "DEPARTMENTS", "CALIBRATION", "FILTER", "STATUS", "ENGINE", "RIG", "ABOUT" })
     {
         window.showPage (name);
         window.refreshNow();
@@ -2453,30 +2481,33 @@ TEST_F (Pages, EveryPageIsCardsOnOneGrid)
     }
 }
 
-// SYSTEM and ABOUT (2026-10-30, "all content from the Canvas goes to the Engine"): STATUS' sub-pages beside STATUS --
-// the rig (its programs, Start all, Stop all) and the project (Support A³, the A³ System card, the licences).
-TEST_F (Pages, SystemAndAboutAreSubPagesOfStatus)
+// ENGINE, RIG and ABOUT (2026-10-30, "all content from the Canvas goes to the Engine"): STATUS' sub-pages -- what the
+// engine runs, the rig (a card per program, Start all, Stop all) and the project (Support A³, PUBLISHED, the licences).
+TEST_F (Pages, EngineRigAndAboutAreSubPagesOfStatus)
 {
     SpeakerRig rig;
     a3app::SystemProbe probe ({}, false);
     a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, {}, {}, rig.userRoot, { &probe });
     window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
-    EXPECT_FALSE (window.pageList().contains ("SYSTEM")) << "no seventh key";
+    EXPECT_FALSE (window.pageList().contains ("RIG")) << "no seventh key";
     window.showPage ("STATUS");
-    EXPECT_EQ (window.currentSubPage(), "STATUS");
-    EXPECT_FALSE (probe.isWanted()) << "the machine is asked only while SYSTEM or ABOUT is shown";
-    window.showPage ("SYSTEM");
-    EXPECT_TRUE (probe.isWanted());
-    EXPECT_EQ (window.currentPage(), "STATUS");
-    EXPECT_EQ (window.currentSubPage(), "SYSTEM");
+    EXPECT_EQ (window.currentSubPage(), "ENGINE");
     auto& content = *window.getContentComponent();
-    EXPECT_FALSE (buttonsLabelled (content, "Start all").empty());
-    expectPainted (a3apptest::snapshotAt (content, "system-window-rig", content.getWidth(), content.getHeight()));
-    window.showPage ("ABOUT");
-    EXPECT_EQ (window.currentPage(), "STATUS");
-    EXPECT_EQ (window.currentSubPage(), "ABOUT");
-    expectPainted (a3apptest::snapshotAt (content, "system-window-about", content.getWidth(), content.getHeight()));
+    for (const auto* key : { "ENGINE", "RIG", "ABOUT" })
+        EXPECT_FALSE (buttonsLabelled (*shownPage (window), key).empty()) << key;
+    EXPECT_TRUE (buttonsLabelled (*shownPage (window), "STATUS").empty()) << "the page is STATUS, its first sub-page ENGINE";
+    EXPECT_FALSE (probe.isWanted()) << "the machine is asked only while RIG or ABOUT is shown";
+    expectPainted (a3apptest::snapshotAt (content, "system2-engine", content.getWidth(), content.getHeight()));
+    window.showPage ("RIG");
     EXPECT_TRUE (probe.isWanted());
+    EXPECT_EQ (window.currentPage(), "STATUS");
+    EXPECT_EQ (window.currentSubPage(), "RIG");
+    EXPECT_FALSE (buttonsLabelled (content, "Start all").empty());
+    expectPainted (a3apptest::snapshotAt (content, "system2-window-rig", content.getWidth(), content.getHeight()));
+    window.showPage ("ABOUT");
+    EXPECT_EQ (window.currentSubPage(), "ABOUT");
+    EXPECT_TRUE (probe.isWanted());
+    expectPainted (a3apptest::snapshotAt (content, "system2-window-about", content.getWidth(), content.getHeight()));
     window.showPage ("STATUS");
     EXPECT_EQ (window.currentSubPage(), "ABOUT") << "the page keeps the sub-page last shown";
     window.showPage ("AUDIO");

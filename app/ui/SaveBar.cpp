@@ -41,7 +41,7 @@ SaveBar::SaveBar (HostView& v) : view (v)
     look::warning (pending);
     look::failure (message);
     saveButton.onClick = [this] { save(); };
-    clock.setJustificationType (juce::Justification::centredLeft);
+    clock.setJustificationType (juce::Justification::centredRight);
     for (auto* child : std::initializer_list<juce::Component*> { &pending, &message, &saveButton, &clock })
         addAndMakeVisible (child);
 }
@@ -72,7 +72,9 @@ void SaveBar::resized()
 {
     auto area = getLocalBounds().reduced (getWidth() / 80, getHeight() / 10);
     saveButton.setBounds (area.removeFromRight (juce::jmax (area.getHeight() * 2, getWidth() / 5)));
-    clock.setBounds (area.removeFromLeft (area.getWidth() / 3));
+    // The clock's word right-aligned, directly left of Save (2026-10-30); the edit's two lines take what is left of it.
+    area.removeFromRight (area.getHeight() / 4);
+    clock.setBounds (area.removeFromRight (area.getWidth() / 3));
     // Two lines beside Save: in the window's footer the bar shares its row with KEYS and the switches.
     pending.setBounds (area.removeFromTop (area.getHeight() / 2));
     message.setBounds (area);

@@ -193,36 +193,38 @@ void StatusPage::refresh()
     gates = view.gateLevels();
     meters->set (view.meters(), view.outputNames());
     clock.show (view.clock());
+    if (clock.detailLines() != clockLinesLaid)
+        resized();   // a line came or went: the card follows its lines
     repaint (getLocalBounds().removeFromTop (getHeight() / 2));
 }
 
 namespace
 {
-constexpr int statusLines = 9, linkLines = 4, clockLines = 7;   // MODE..ROUND TRIP; MISSING and DROPPED (3); the clock's
-constexpr float lineShare = 0.55f;                              // a status line as a share of the row
+constexpr int statusLines = 9;   // MODE..ROUND TRIP
 }
 
-// The page's row, or less so that the three cards of lines leave the meters two rows (STATUS is a sub-page beside SYSTEM
-// and ABOUT since 2026-10-30, under their keys).
+// The page's row, or less so that the two cards of lines leave the meters two rows (ENGINE is a sub-page beside RIG and
+// ABOUT since 2026-10-30, under their keys).
 int StatusPage::row() const
 {
     const auto t = layout::tokens (*this);
-    constexpr int cardsOfLines = 3, meterRows = 2;
+    constexpr int cardsOfLines = 2, meterRows = 2;
     const int fixed = 2 * t.margin + (cardsOfLines + 1) * 2 * t.padding + cardsOfLines * t.gap;
-    const float lines = (float) (statusLines + linkLines + clockLines) * lineShare + 0.6f + (float) meterRows;   // and the clock's heading
+    const float lines = (float) (statusLines + ClockPanel::mostDetailLines) * layout::compactLineShare + 0.6f + (float) meterRows;   // and the clock's heading
     return juce::jmax (1, juce::jmin (t.row, (int) ((float) (getHeight() - fixed) / lines)));
 }
 
-// Cards (layout::Stack): what runs, what is missing, the clock, the meters (the rest).
+// Cards (layout::Stack): what runs, the clock (its lines, none empty), the meters (the rest). MISSING and DROPPED went
+// on 2026-10-30: RIG says what runs where.
 void StatusPage::resized()
 {
     const auto t = layout::tokens (*this, row());
-    const int line = juce::roundToInt ((float) t.row * lineShare);
+    const int line = layout::compactLine (t);
     layout::Stack stack (getLocalBounds().reduced (t.margin), t, cards);
     stack.card (2 * t.padding + statusLines * line);
-    stack.card (2 * t.padding + linkLines * line);
     clock.setTokens (t);
-    clock.setBounds (stack.card (2 * t.padding + t.heading + clockLines * line).reduced (t.padding));
+    clockLinesLaid = clock.detailLines();
+    clock.setBounds (stack.card (2 * t.padding + t.heading + clockLinesLaid * line).reduced (t.padding));
     meters->setBounds (stack.rest().reduced (t.padding));
 }
 
@@ -236,10 +238,10 @@ void StatusPage::paint (juce::Graphics& g)
     if (! clock.frameColour().isTransparent())   // the clock's card framed in its warning's colour
     {
         g.setColour (clock.frameColour());
-        g.drawRoundedRectangle (cards[2].toFloat().reduced (1.0f), t.radius, 2.0f);
+        g.drawRoundedRectangle (cards[1].toFloat().reduced (1.0f), t.radius, 2.0f);
     }
     auto area = cards[0].reduced (t.padding);
-    const int row = juce::roundToInt ((float) t.row * lineShare);
+    const int row = layout::compactLine (t);
     g.setFont (juce::FontOptions (t.text));
 
     auto line = [&] (const juce::String& caption, const juce::String& value, juce::Colour colour)
@@ -276,19 +278,5 @@ void StatusPage::paint (juce::Graphics& g)
           status.dspLoadPercent >= loadDanger ? palette::danger : status.dspLoadPercent >= loadWarn ? palette::caution : palette::text);
     line ("XRUNS", driver.xruns, status.xruns > 0 ? palette::caution : palette::text);
     line ("ROUND TRIP", driver.roundTrip, palette::textMuted);
-    area = cards[1].reduced (t.padding);
-    std::vector<std::string> missing;
-    for (const auto& peer : status.missingPeers)
-        missing.push_back (peer.toStdString());
-    line ("MISSING", missingText (missing), missing.empty() ? palette::textMuted : palette::caution);
-
-    // The dropped links take the rest of the block: a count, then one link a line.
-    auto rest = area;
-    const bool none = dropped.empty() && ignored.empty();
-    g.setColour (palette::textMuted);
-    g.drawText ("DROPPED", rest.removeFromLeft (rest.getWidth() / 4), juce::Justification::topLeft, true);
-    g.setColour (none ? palette::textMuted : palette::caution);
-    const int maxLines = juce::jmax (2, rest.getHeight() / juce::jmax (1, row));
-    g.drawFittedText (droppedText (dropped, ignored, maxLines), rest, juce::Justification::topLeft, maxLines, 0.8f);
 }
 }

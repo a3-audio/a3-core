@@ -50,6 +50,7 @@ private:
     class Meters;
     int row() const;
     HostView& view;
+    int clockLinesLaid = 0;
     std::unique_ptr<Meters> meters;
     ClockPanel clock { ClockPanel::Mode::detail };
     AppConfig config;

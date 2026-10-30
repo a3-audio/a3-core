@@ -6,16 +6,18 @@
 #pragma once
 #include "CommandRunner.h"
 #include <juce_core/juce_core.h>
+#include <map>
 #include <vector>
 
 namespace a3app::checkout
 {
 // One part of the system version: a submodule of the umbrella (a3-motion's ui as "a3-motion/ui"), or a firmware in
-// one ("a3-motion firmware"), with the release tag of its pinned commit; empty when that commit is not here.
+// one ("a3-motion firmware"), with the release tag of its pinned commit (empty when that commit is not here) and where it
+// is published (its .gitmodules url; a firmware's folder in it; empty when no url is known).
 struct Row
 {
-    juce::String name, tag;
-    bool operator== (const Row& other) const { return name == other.name && tag == other.tag; }
+    juce::String name, tag, url;
+    bool operator== (const Row& other) const { return name == other.name && tag == other.tag && url == other.url; }
 };
 
 struct Facts
@@ -30,6 +32,10 @@ struct Gitlink
 {
     juce::String path, commit;
 };
+
+// `git config --get-regexp ^submodule\..*\.url$` output: submodule name -> url, a relative one ("../x.git") resolved against
+// `base` (the repository's own url), ".git" dropped.
+std::map<juce::String, juce::String> parseUrls (const juce::String& output, const juce::String& base);
 
 // `git ls-tree` output: the entries of mode 160000 (submodules), in git's order.
 std::vector<Gitlink> parseGitlinks (const juce::String& lsTree);

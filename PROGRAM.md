@@ -168,11 +168,11 @@ The window has one page per job and a Save bar under them; no tooltips (2026-10-
 | I/O | Sub-pages INPUT, OUTPUT and, with Core, DEPARTMENTS (a page of its own until 2026-10-30). INPUT: per channel L/R a dropdown and the decks' sources; no direct links (2026-10-30: a file's `io.directLinks` still loads and the engine still makes them, but the page neither shows nor edits them). OUTPUT: per zone channel a dropdown; REC is empty by default (for an analog recorder). A dropdown runs the row's width and names the device's port as the user means it (`Scarlett 18i20 USB out 1`, from the configured ALSA node; `Device out 1` without one), never a raw `system:*` and nothing beside it. Each list ends with MEASURE: the digital loop and the analog test cable, its side of each, one channel a side. The digital loop's channels are offered in no route, and a one-line notice names them and what a load unrouted. No list of foreign links and no free-text port field: the engine removes every link on its ports it does not plan (see "Who owns a link") |
 | CALIBRATION | trim per zone, -90..+6 dB; a slider only proposes, a dialog names the old and the new value, a zone without a trim stays closed |
 | FILTER | SVF or Ladder, live: acts at once, needs no Save |
-| STATUS | Three sub-pages (2026-10-30). STATUS: what runs: mode, Core's last word, gate, rate and block x periods, where the rate comes from, bit depth, DSP load, xruns, missing peers, dropped links, the clock's detail (state with phase error, PTP role, rates, counters), meters. SYSTEM and ABOUT: the Canvas's content (see "SYSTEM and ABOUT") |
+| STATUS | Three sub-pages (2026-10-30). ENGINE: what runs: mode, Core's last word, gate, rate and block x periods, where the rate comes from, bit depth, DSP load, xruns, the clock's detail (state with phase error, PTP role, rates, counters, the note; compact lines, a line with nothing to say left out), meters. The MISSING/DROPPED card went (RIG says what runs where). RIG and ABOUT: the Canvas's content (see "RIG and ABOUT") |
 
-**SYSTEM and ABOUT** (2026-10-30, the maintainer: "all content from the Canvas goes to the Engine"; `app/ui/SystemPage.cpp`,
-the model in `SystemAbout`, `SystemCheckout`, `RigModel`, `RigPlan`, read by `SystemProbe`). SYSTEM is the rig: a row per
-program (A³ Engine = `a3-engine.service` and `a3-core.service`, never the window's own unit; a deck per slot of the truth's
+**RIG and ABOUT** (2026-10-30, the maintainer: "all content from the Canvas goes to the Engine"; `app/ui/SystemPage.cpp`,
+the model in `SystemAbout`, `SystemCheckout`, `RigModel`, `RigPlan`, read by `SystemProbe`). RIG is the rig: a card per
+program, scrolled below the RIG card that carries Start all and Stop all (A³ Engine = `a3-engine.service` and `a3-core.service`, never the window's own unit; a deck per slot of the truth's
 `stemdeck.deck-hello` range as `stemdeck@<letter>.service`; A³ Mixer = the desk, a transient `a3-desk` unit run by
 `systemd-run`; A³ Motion; Beat analyzer) with its light and state, where it runs (Core's `/api/rig` first, then the truth's
 `hosts`; `local · <address>` on this machine), its audio address (the device's report, else the truth's `<host>-audio`), its
@@ -183,10 +183,12 @@ Core first and waited for, then the analyzer, the decks -- skipped when the engi
 all the other way round and asks first). A program of another machine shows what Core hears of it and has no key. ABOUT: the
 project (Spatial DJ setup, Documentation / Website / Source, the copyright and the contact), Support A³ (PayPal, Ko-fi, Bitcoin
 as the Canvas reads them from `~/.config/a3/canvas.json`, else `/usr/share/a3/canvas.json`; the card is left out when none is
-set; no QR code -- that would be a new dependency), the A³ System card (`~/a3-system`: its own tag, each submodule's pinned
-commit described, the firmware of a3-mixer and a3-motion as the tag of the last commit that changed it, a3-motion's ui; "not
-checked out" muted) and the licences last. Not a key of its own: as a seventh key SYSTEM made the key row's text 11.95 px, under
-the quarter of the key (12.25 px) the row keeps. **Who asks what:** only while SYSTEM or ABOUT is shown, a thread of the window
+set; no QR code -- that would be a new dependency), PUBLISHED (`~/a3-system`: its own tag, then each repository in two
+columns, its name a link to where it is published -- the url in `.gitmodules` at the pin, a relative one beside its parent's,
+a firmware its folder there -- and the tag of its pinned commit; the firmware of a3-mixer and a3-motion as the tag of the last
+commit that changed it; a3-motion's ui; "not checked out" muted) and the licences last; every line compact, none empty. Not
+keys of their own: as a seventh key the rig made the key row's text 11.95 px, under the quarter of the key (12.25 px) the row
+keeps. **Who asks what:** only while RIG or ABOUT is shown, a thread of the window
 asks `systemctl --user show` and Core's `/api/rig` and `/api/status` (the truth's `core.web`) once a second and the checkout by
 git every 30 s; a plan runs on a thread of its own; every command is a `posix_spawn` (never a fork), never on the message thread.
 
@@ -492,7 +494,7 @@ ends or when it brings no Scarlett record for 10 s; a start that fails is said a
 
 **Where it shows**: the role writes `$XDG_RUNTIME_DIR/a3/clock.json` once a second; the engine reads it
 (at most once a second) and serves it as `clock` and `clockIndicator` (`word`, `tone`, `detail`: what
-Canvas shows) in `/api/engine/status`. The window shows the word in its footer on every page
+Canvas shows) in `/api/engine/status`. The window shows the word in its footer on every page, right-aligned directly left of Save (2026-10-30)
 (`CLOCK LOCKED` in green, caution or danger otherwise) and a CLOCK section on the AUDIO page, which
 keeps at least a quarter of the page in every layout: master, state and phase error, device and port,
 the frequency, PTP against the Scarlett now, the counters, framed in caution (acquiring, observing) or danger (holdover, fault, not running). The journal gets one line every 10 s

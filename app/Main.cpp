@@ -219,7 +219,7 @@ private:
     std::unique_ptr<a3app::CoreClient> core;
     std::unique_ptr<a3app::RemoteHostView> engine;
     a3app::WindowProcess process;
-    a3app::SystemProbe system;   // before the window: its SYSTEM page reads it
+    a3app::SystemProbe system;   // before the window: its RIG and ABOUT read it
     a3app::QuitFlow quitFlow { process, askOnTheWindow() };
     juce::AudioDeviceManager pageDevices;   // only a catalogue of device types for the AUDIO page; never initialised
     std::unique_ptr<a3app::MainWindow> window;

@@ -87,6 +87,11 @@ inline int cardHeight (const Tokens& t, int lines, bool heading = true)
     return 2 * t.padding + (heading ? t.heading : 0) + lines * t.row;
 }
 
+// A line of text with no control in it (STATUS' driver lines, ABOUT's, a program's second line): 0.55 of a row, so lines
+// follow each other as text does, with no empty line between them.
+constexpr float compactLineShare = 0.55f;
+inline int compactLine (const Tokens& t) { return juce::roundToInt ((float) t.row * compactLineShare); }
+
 // A line's control: the line less the inset above and below.
 inline juce::Rectangle<int> control (juce::Rectangle<int> line, const Tokens& t) { return line.reduced (0, t.inset); }
 

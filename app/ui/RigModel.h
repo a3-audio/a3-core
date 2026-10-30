@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
-// The SYSTEM page's rig (the Canvas's tiles, a3-system canvas/Source/model, moved into the Engine window on
+// The RIG page's rig (the Canvas's tiles, a3-system canvas/Source/model, moved into the Engine window on
 // 2026-10-30): each program of the rig, what systemd says of its units here, what Core hears and what each device
 // reports of itself (/api/rig's devices and versions, /api/status' version), and the row the page writes from them.
 // Pure: what is read is handed in, nothing here asks the machine.

@@ -199,11 +199,21 @@ TEST (SystemCheckout, ReadsTheUmbrellasPinsAndFirmware)
     runner.answers[git ("a3-motion", "describe --tags --match v* --always fff")] = { 0, "v03.0-80-gfffffff\n" };
     runner.answers[git ("a3-motion", "ls-tree ccc")] = { 0, "160000 commit eee\tui\n" };
     runner.answers[git ("a3-motion/ui", "describe --tags --match v* --always eee")] = { 0, "v03.0-900-geeeeee\n" };
+    // Where each is published: the umbrella's .gitmodules at its HEAD, a3-motion's at its pin (a relative url is its sibling).
+    runner.answers[git ("", "config --blob HEAD:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
+        = { 0, "submodule.a3-core.url https://github.com/a3-audio/a3-core\nsubmodule.a3-motion.url https://github.com/a3-audio/a3-motion\n"
+               "submodule.stemdeck.url https://github.com/rafjagger/stemdeck\n" };
+    runner.answers[git ("a3-motion", "config --blob ccc:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
+        = { 0, "submodule.ui.url ../a3-motion-ui.git\n" };
     const auto facts = checkout::read (runner, repo);
     EXPECT_TRUE (facts.found);
     EXPECT_EQ (facts.version, "v03.0+12");
-    const std::vector<checkout::Row> expected { { "a3-core", "v03.0+857" }, { "a3-motion", "v03.0+855" },
-                                                { "a3-motion firmware", "v03.0+80" }, { "a3-motion/ui", "v03.0+900" }, { "stemdeck", "" } };
+    const std::vector<checkout::Row> expected {
+        { "a3-core", "v03.0+857", "https://github.com/a3-audio/a3-core" },
+        { "a3-motion", "v03.0+855", "https://github.com/a3-audio/a3-motion" },
+        { "a3-motion firmware", "v03.0+80", "https://github.com/a3-audio/a3-motion/tree/HEAD/firmware" },
+        { "a3-motion/ui", "v03.0+900", "https://github.com/a3-audio/a3-motion-ui" },
+        { "stemdeck", "", "https://github.com/rafjagger/stemdeck" } };
     EXPECT_EQ (facts.rows, expected);
     for (const auto& line : runner.ran)
         EXPECT_TRUE (line.startsWith ("git -C ")) << "only reads: " << line;
@@ -372,6 +382,8 @@ std::shared_ptr<ScriptedRunner> rigRunner()
     runner->answers["git -C " + repo.getFullPathName() + " ls-tree HEAD"] = { 0, "160000 commit aaa\ta3-core\n160000 commit ddd\tstemdeck\n" };
     runner->answers["git -C " + repo.getFullPathName() + " describe --tags --match v* --always HEAD"] = { 0, "v03.0-12-g1234567\n" };
     runner->answers["git -C " + repo.getChildFile ("a3-core").getFullPathName() + " describe --tags --match v* --always aaa"] = { 0, "v03.0-857-gaaaaaaa\n" };
+    runner->answers["git -C " + repo.getFullPathName() + " config --blob HEAD:.gitmodules --get-regexp ^submodule\\..*\\.url$"]
+        = { 0, "submodule.a3-core.url https://github.com/a3-audio/a3-core\nsubmodule.stemdeck.url https://github.com/rafjagger/stemdeck\n" };
     return runner;
 }
 
@@ -421,7 +433,17 @@ TEST_F (SystemPageTest, RigRowsKeysAndPlans)
     EXPECT_EQ (rigView.startStopKey (engine)->getButtonText(), "Stop");
     ASSERT_NE (rigView.startStopKey ("Deck D"), nullptr);
     EXPECT_EQ (rigView.startStopKey ("Deck D")->getButtonText(), "Start");
-    a3apptest::expectPainted (a3apptest::snapshotAt (rigView, "system-rig", rigView.getWidth(), rigView.getHeight()));
+    // 2026-10-30: every program its own card, its name on it.
+    EXPECT_EQ (rigView.programCards().cardAreas().size(), probe.programs().size());
+    for (const auto& program : probe.programs())
+    {
+        bool named = false;
+        for (auto* child : rigView.programList().getChildren())
+            if (auto* label = dynamic_cast<juce::Label*> (child))
+                named = named || label->getText() == program.label;
+        EXPECT_TRUE (named) << program.label;
+    }
+    a3apptest::expectPainted (a3apptest::snapshotAt (rigView, "system2-rig", rigView.getWidth(), rigView.getHeight()));
 
     // Stop asks first; only a yes runs it.
     rigView.startStopKey ("Deck A")->triggerClick();
@@ -460,6 +482,22 @@ TEST_F (SystemPageTest, AboutShowsTheProjectSupportAndThePins)
     for (auto* child : view.getChildren())
         if (auto* link = dynamic_cast<juce::HyperlinkButton*> (child))
             linkTexts.add (link->getButtonText());
-    EXPECT_EQ (linkTexts, (juce::StringArray { "Documentation", "Website", "Source", "PayPal" }));
-    a3apptest::expectPainted (a3apptest::snapshotAt (view, "system-about", view.getWidth(), view.getHeight()));
+    EXPECT_EQ (linkTexts, (juce::StringArray { "Documentation", "Website", "Source", "PayPal", "a3-core", "stemdeck" }))
+        << "PUBLISHED: each repository a link";
+    juce::StringArray headings;
+    for (auto* child : view.getChildren())
+        if (auto* label = dynamic_cast<juce::Label*> (child))
+            headings.add (label->getText());
+    EXPECT_TRUE (headings.contains ("PUBLISHED")) << headings.joinIntoString (", ");
+    EXPECT_FALSE (headings.contains (juce::String::fromUTF8 ("A³ SYSTEM")));
+    // No empty lines: each card is its heading and its lines, one line height each.
+    const auto t = a3app::layout::tokens (view);
+    const int line = view.lineHeight();
+    EXPECT_LT (line, t.row) << "compact, as STATUS' driver lines";
+    const auto& cards = view.cardAreas();
+    ASSERT_EQ (cards.size(), 4u);
+    EXPECT_EQ (cards[0].getHeight(), 2 * t.padding + t.heading + 3 * line) << "the project";
+    EXPECT_EQ (cards[1].getHeight(), 2 * t.padding + t.heading + 1 * line) << "Support";
+    EXPECT_EQ (cards[2].getHeight(), 2 * t.padding + t.heading + 1 * line) << "PUBLISHED: two repositories, one line of two columns";
+    a3apptest::expectPainted (a3apptest::snapshotAt (view, "system2-about", view.getWidth(), view.getHeight()));
 }

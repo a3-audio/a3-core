@@ -163,12 +163,24 @@ void ClockPanel::resized()
         master.setBounds (tokens.row > 0 ? layout::control (choice, tokens) : choice);
         return;
     }
-    const int line = juce::jmax (1, area.getHeight() / 6);
-    place (state, area.removeFromTop (line));
-    place (role, area.removeFromTop (line));
-    place (rate, area.removeFromTop (line));
-    place (counters, area.removeFromTop (line));
-    place (note, area);   // the rest: two lines
+    // Compact lines, one after the other as STATUS' driver lines; a line with nothing to say is not shown.
+    const int line = tokens.row > 0 ? layout::compactLine (tokens) : juce::jmax (1, area.getHeight() / mostDetailLines);
+    for (auto* label : { &state, &role, &rate, &counters, &note })
+    {
+        label->setVisible (label->getText().isNotEmpty());
+        if (label->isVisible())
+            place (*label, area.removeFromTop (label == &note ? 2 * line : line));
+    }
     note.setMinimumHorizontalScale (1.0f);
+}
+
+int ClockPanel::detailLines() const
+{
+    if (mode == Mode::choice)
+        return 0;
+    int lines = 0;
+    for (const auto* label : { &state, &role, &rate, &counters })
+        lines += label->getText().isNotEmpty() ? 1 : 0;
+    return lines + (note.getText().isNotEmpty() ? 2 : 0);
 }
 }

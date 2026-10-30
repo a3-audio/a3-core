@@ -27,6 +27,10 @@ public:
     explicit ClockPanel (Mode = Mode::detail);
 
     void show (const a3clock::ClockReport&);
+    // The detail's lines as laid out: one each for the state, the PTP role, the rates and the counters that say something,
+    // two for the note; none for an empty one (2026-10-30: no empty line on ENGINE's clock card).
+    int detailLines() const;
+    static constexpr int mostDetailLines = 6;
     // The page's tokens: its heading, its row and its one text size.
     void setTokens (const layout::Tokens&);
     juce::Colour frameColour() const { return frame; }   // the page frames the card in it (transparent: locked)

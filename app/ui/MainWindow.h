@@ -32,7 +32,7 @@ struct KeyboardSetup
     KeyboardTimings timings;
 };
 
-// STATUS' SYSTEM and ABOUT read the machine through it (SystemProbe.h). No probe: the window makes one that asks nothing (tests).
+// STATUS' RIG and ABOUT read the machine through it (SystemProbe.h). No probe: the window makes one that asks nothing (tests).
 struct SystemSetup
 {
     SystemProbe* probe = nullptr;
@@ -51,8 +51,8 @@ struct WindowBands
 };
 
 // The window: the setup pages' keys (AUDIO, SPEAKERS with its sub-page ZONES, I/O with INPUT, OUTPUT and, with a Core
-// client, DEPARTMENTS, which only asks Core while it is shown; CALIBRATION, FILTER, STATUS with SYSTEM and ABOUT, which
-// ask the machine only while one of them is shown) in a row across the top,
+// client, DEPARTMENTS, which only asks Core while it is shown; CALIBRATION, FILTER, STATUS with ENGINE, RIG and ABOUT --
+// RIG and ABOUT ask the machine only while one of them is shown) in a row across the top,
 // the workspace switch at its right end; with a Core client and the OSC MONITOR switch on, the monitor's (TRAFFIC,
 // TRUTH & DEVICES, NOT UNDERSTOOD, REGISTER, BENCH) in a second row. The shown page below them at the full width, and a
 // footer: KEYS, the OSC MONITOR switch, and the Save bar. No tooltips anywhere (2026-10-30). With service = true the

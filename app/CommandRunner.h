@@ -32,7 +32,7 @@ class SpawnRunner final : public CommandRunner
 {
 public:
     static constexpr int runTimeoutMillis = 3000;
-    // `timeoutMillis` for run(): the SYSTEM page's systemctl start of a unit may take longer than a pw-metadata.
+    // `timeoutMillis` for run(): RIG's systemctl start of a unit may take longer than a pw-metadata.
     explicit SpawnRunner (int timeoutMillis = runTimeoutMillis) : timeout (timeoutMillis) {}
     ~SpawnRunner() override;
     Result run (const Command&) override;

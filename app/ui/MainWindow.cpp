@@ -84,8 +84,8 @@ public:
         addPage ("I/O", std::move (io));
         addPage ("CALIBRATION", std::make_unique<CalibrationPage> (view));
         addPage ("FILTER", std::make_unique<FilterPage> (view));
-        // 2026-10-30: the Canvas's content (the rig, the project, the A³ System card) is STATUS' SYSTEM and ABOUT; a
-        // seventh key in the row made the key text smaller than a quarter of the key.
+        // 2026-10-30: STATUS is ENGINE (what the engine runs) and the Canvas's content, RIG and ABOUT; a seventh key in the
+        // row made the key text smaller than a quarter of the key.
         if (systemSetup.probe == nullptr)
             idleProbe = std::make_unique<SystemProbe> (SystemSources {}, false);
         systemProbe = systemSetup.probe != nullptr ? systemSetup.probe : idleProbe.get();
@@ -97,8 +97,8 @@ public:
         auto* statusRaw = statusPage.get();
         auto* rigRaw = rigView.get();
         auto* aboutRaw = aboutView.get();
-        status->add ("STATUS", std::move (statusPage), [statusRaw] { statusRaw->refresh(); });
-        status->add ("SYSTEM", std::move (rigView), [rigRaw] { rigRaw->refresh(); });
+        status->add ("ENGINE", std::move (statusPage), [statusRaw] { statusRaw->refresh(); });
+        status->add ("RIG", std::move (rigView), [rigRaw] { rigRaw->refresh(); });
         status->add ("ABOUT", std::move (aboutView), [aboutRaw] { aboutRaw->refresh(); });
         addPage ("STATUS", std::move (statusAndSystem));
         if (monitor.core != nullptr)
@@ -142,7 +142,7 @@ public:
             speakers->show (name);
             return show ("SPEAKERS");
         }
-        if (status != nullptr && status->has (name) && name != "STATUS")
+        if (status != nullptr && status->has (name))
         {
             status->show (name);
             return show ("STATUS");
@@ -361,10 +361,10 @@ private:
         resized();
     }
 
-    // systemd, git and Core's rig are asked only while SYSTEM or ABOUT is shown.
+    // systemd, git and Core's rig are asked only while RIG or ABOUT is shown.
     void askTheMachineWhileShown()
     {
-        const bool shownNow = ! pages.empty() && pages[(size_t) shown].component.get() == status && status->shown() != "STATUS";
+        const bool shownNow = ! pages.empty() && pages[(size_t) shown].component.get() == status && status->shown() != "ENGINE";
         systemProbe->setWanted (shownNow);
     }
 

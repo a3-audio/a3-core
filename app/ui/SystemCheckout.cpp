@@ -27,6 +27,17 @@ juce::String gitOutput (CommandRunner& runner, const juce::File& dir, std::initi
     return result.exitCode == 0 ? juce::String (result.output).trim() : juce::String();
 }
 
+std::map<juce::String, juce::String> urlsAt (CommandRunner& runner, const juce::File& dir, const juce::String& commit, const juce::String& base)
+{
+    return parseUrls (gitOutput (runner, dir, { "config", "--blob", commit + ":.gitmodules", "--get-regexp", "^submodule\\..*\\.url$" }), base);
+}
+
+juce::String urlOf (const std::map<juce::String, juce::String>& urls, const juce::String& name)
+{
+    const auto found = urls.find (name);
+    return found != urls.end() ? found->second : juce::String();
+}
+
 juce::String tagOf (CommandRunner& runner, const juce::File& dir, const juce::String& commit)
 {
     return releaseText (gitOutput (runner, dir, { "describe", "--tags", "--match", "v*", "--always", commit }));
@@ -41,20 +52,39 @@ const FirmwareDir* firmwareOf (const juce::String& submodule)
 }
 
 // A submodule's row, then its firmware's, then its own submodules' (one level: a3-motion's ui).
-void addSubmodule (CommandRunner& runner, const juce::File& repo, const Gitlink& link, Facts& facts)
+void addSubmodule (CommandRunner& runner, const juce::File& repo, const Gitlink& link, const juce::String& url, Facts& facts)
 {
     const auto dir = repo.getChildFile (link.path);
-    facts.rows.push_back ({ link.path, tagOf (runner, dir, link.commit) });
+    facts.rows.push_back ({ link.path, tagOf (runner, dir, link.commit), url });
     if (facts.rows.back().tag.isEmpty())
         return;   // not checked out: nothing more to ask it
     if (const auto* firmware = firmwareOf (link.path))
     {
         const auto changed = gitOutput (runner, dir, { "log", "-1", "--format=%H", link.commit, "--", firmware->path });
-        facts.rows.push_back ({ link.path + " firmware", changed.isNotEmpty() ? tagOf (runner, dir, changed) : juce::String() });
+        facts.rows.push_back ({ link.path + " firmware", changed.isNotEmpty() ? tagOf (runner, dir, changed) : juce::String(),
+                                url.isNotEmpty() ? url + "/tree/HEAD/" + firmware->path : juce::String() });
     }
+    const auto innerUrls = urlsAt (runner, dir, link.commit, url);
     for (const auto& inner : parseGitlinks (gitOutput (runner, dir, { "ls-tree", link.commit })))
-        facts.rows.push_back ({ link.path + "/" + inner.path, tagOf (runner, dir.getChildFile (inner.path), inner.commit) });
+        facts.rows.push_back ({ link.path + "/" + inner.path, tagOf (runner, dir.getChildFile (inner.path), inner.commit), urlOf (innerUrls, inner.path) });
 }
+}
+
+std::map<juce::String, juce::String> parseUrls (const juce::String& output, const juce::String& base)
+{
+    std::map<juce::String, juce::String> urls;
+    for (const auto& line : juce::StringArray::fromLines (output))
+    {
+        const auto key = line.upToFirstOccurrenceOf (" ", false, false).trim();
+        auto url = line.fromFirstOccurrenceOf (" ", false, false).trim();
+        if (! key.startsWith ("submodule.") || ! key.endsWith (".url") || url.isEmpty())
+            continue;
+        const auto name = key.fromFirstOccurrenceOf ("submodule.", false, false).upToLastOccurrenceOf (".url", false, false);
+        while (url.startsWith ("../") && base.isNotEmpty())
+            url = base.upToLastOccurrenceOf ("/", false, false) + "/" + url.substring (3);
+        urls[name] = url.endsWith (".git") ? url.dropLastCharacters (4) : url;
+    }
+    return urls;
 }
 
 std::vector<Gitlink> parseGitlinks (const juce::String& lsTree)
@@ -91,8 +121,9 @@ Facts read (CommandRunner& runner, const juce::File& repo)
         return facts;
     facts.found = true;
     facts.version = releaseText (gitOutput (runner, repo, { "describe", "--tags", "--match", "v*", "--always", "HEAD" }));
+    const auto urls = urlsAt (runner, repo, "HEAD", {});
     for (const auto& link : links)
-        addSubmodule (runner, repo, link, facts);
+        addSubmodule (runner, repo, link, urlOf (urls, link.path), facts);
     return facts;
 }
 }

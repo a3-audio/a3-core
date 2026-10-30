@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
-// What the SYSTEM page shows, read off the message thread (the Canvas's StatusPoller): systemd's word on the rig's
+// What RIG and ABOUT show, read off the message thread (the Canvas's StatusPoller): systemd's word on the rig's
 // units and Core's /api/rig and /api/status once a second while the page is shown, the umbrella checkout's pins every
 // 30 s, this machine's addresses. A plan (Start all, Stop Deck A, ...) runs on a thread of its own. Commands go
 // through a CommandRunner (posix_spawn, never fork: the window must not copy its page tables on a timer). The page

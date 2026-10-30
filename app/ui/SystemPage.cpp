@@ -7,8 +7,7 @@ namespace a3app
 namespace
 {
 const juce::String dot = juce::String::fromUTF8 (" · ");
-constexpr int minimumRow = 16;
-constexpr int systemColumns = 2;   // the A³ System card's rows run in two columns
+constexpr int publishedColumns = 2;   // PUBLISHED's repositories run in two columns
 
 juce::Colour lightColour (rig::Light light)
 {
@@ -63,7 +62,7 @@ void placeLinks (juce::OwnedArray<juce::HyperlinkButton>& row, juce::Rectangle<i
         link->setColour (juce::HyperlinkButton::textColourId, palette::text);
         link->setFont (linkFont (t.text), false, juce::Justification::centredLeft);
         const auto width = juce::roundToInt (juce::GlyphArrangement::getStringWidth (linkFont (t.text), link->getButtonText())) + 2 * t.unit;
-        link->setBounds (layout::control (line.removeFromLeft (width), t));
+        link->setBounds (line.removeFromLeft (width));
         line.removeFromLeft (t.unit);
     }
 }
@@ -76,21 +75,12 @@ std::unique_ptr<juce::HyperlinkButton> makeLink (const juce::String& label, cons
     return link;
 }
 
-int systemLines (const checkout::Facts& pins)
+int publishedLines (const checkout::Facts& pins)
 {
-    return pins.found ? ((int) pins.rows.size() + systemColumns - 1) / systemColumns : 1;
+    return pins.found ? ((int) pins.rows.size() + publishedColumns - 1) / publishedColumns : 1;
 }
 
 int supportLines (const about::Support& support) { return (support.paypal.isNotEmpty() ? 1 : 0) + (support.kofi.isNotEmpty() ? 1 : 0) + (support.bitcoin.isNotEmpty() ? 1 : 0); }
-}
-
-int systemRow (const juce::Component& view, int programs)
-{
-    const auto t = layout::tokens (view);
-    const int lines = 1 + 2 * programs;   // Start all / Stop all, then two lines a program
-    const float room = (float) (view.getHeight() - 2 * t.margin - 2 * t.padding);
-    const int fitted = (int) (room / ((float) lines + 0.6f));   // and the card's heading (3/5 of a row)
-    return juce::jmax (minimumRow, juce::jmin (look::rowHeight (view), fitted));
 }
 
 // -- RIG ------------------------------------------------------------------------------------------------------------
@@ -99,8 +89,65 @@ struct SystemRigView::ProgramRow
 {
     rig::Program program;
     rig::Row row;
+    juce::Label name;
     juce::TextButton startStop { "Start" }, restart { "Restart" };
-    juce::Rectangle<int> first, second;
+    juce::Rectangle<int> first, second, light;
+};
+
+// The scrolled list of program cards: each its light, name and state with its keys on the first line, where it runs
+// and what it runs on a compact second line, muted.
+class SystemRigView::List final : public juce::Component, public CardPage
+{
+public:
+    explicit List (const std::vector<std::unique_ptr<ProgramRow>>& r) : rows (r) {}
+
+    int layOut (int width, const layout::Tokens& t)
+    {
+        textHeight = t.text;
+        layout::Stack stack ({ 0, 0, width, 1 << 20 }, t, cards);
+        for (auto& r : rows)
+        {
+            auto area = stack.card (2 * t.padding + t.row + layout::compactLine (t)).reduced (t.padding);
+            auto first = area.removeFromTop (t.row);
+            r->second = area;
+            const int keyWidth = width / 6;
+            r->restart.setBounds (layout::control (first.removeFromRight (keyWidth), t));
+            first.removeFromRight (t.unit);
+            r->startStop.setBounds (layout::control (first.removeFromRight (keyWidth), t));
+            first.removeFromRight (t.unit);
+            const int lightSide = juce::roundToInt (t.text * 0.6f);
+            r->light = first.withWidth (lightSide);
+            const auto font = juce::Font (juce::FontOptions (t.text));
+            const int nameWidth = lightSide + t.unit + juce::roundToInt (juce::GlyphArrangement::getStringWidth (font, r->program.label)) + t.unit;
+            r->name.setFont (font);
+            r->name.setBorderSize ({ 0, lightSide + t.unit, 0, 0 });   // the light sits in the name's room, left of the word
+            r->name.setBounds (first.removeFromLeft (nameWidth));
+            r->first = first.withTrimmedLeft (t.unit);
+            r->second = r->second.withTrimmedLeft (lightSide + t.unit);
+        }
+        return cards.empty() ? 0 : cards.back().getBottom();
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        const auto t = layout::tokens (*this);
+        paintCards (g, *this, t);
+        g.setFont (juce::FontOptions (textHeight));
+        for (const auto& r : rows)
+        {
+            g.setColour (lightColour (r->row.light));
+            g.fillEllipse (r->light.toFloat().withSizeKeepingCentre ((float) r->light.getWidth(), (float) r->light.getWidth()));
+            const bool news = r->row.light == rig::Light::degraded || r->row.light == rig::Light::failed;
+            g.setColour (news ? lightColour (r->row.light) : palette::text);
+            g.drawFittedText (r->row.state, r->first, juce::Justification::centredLeft, 1, 0.8f);
+            g.setColour (palette::textMuted);
+            g.drawFittedText (details (r->row), r->second, juce::Justification::centredLeft, 1, 0.7f);
+        }
+    }
+
+private:
+    const std::vector<std::unique_ptr<ProgramRow>>& rows;
+    float textHeight = 12.0f;
 };
 
 SystemRigView::SystemRigView (SystemProbe& p, SystemConfirm c)
@@ -108,11 +155,14 @@ SystemRigView::SystemRigView (SystemProbe& p, SystemConfirm c)
                                                                { askInTheWindow (*this, q, d, std::move (yes)); }))
 {
     setHeading (heading, "RIG" + dot + juce::SystemStats::getComputerName());
-    addAndMakeVisible (this->heading);
+    addAndMakeVisible (heading);
+    list = std::make_unique<List> (rows);
     for (const auto& program : probe.programs())
     {
         auto made = std::make_unique<ProgramRow>();
         made->program = program;
+        look::value (made->name);
+        look::say (made->name, program.label);
         auto* raw = made.get();
         made->startStop.onClick = [this, raw] {
             const auto& program = raw->program;
@@ -126,8 +176,9 @@ SystemRigView::SystemRigView (SystemProbe& p, SystemConfirm c)
             ask ("Restart " + program.label + "?", "It stops and starts again; what it plays stops with it.",
                  [this, program] { probe.run ("Restart " + program.label, rig::restart (program)); });
         };
-        addChildComponent (made->startStop);
-        addChildComponent (made->restart);
+        list->addAndMakeVisible (made->name);
+        list->addChildComponent (made->startStop);
+        list->addChildComponent (made->restart);
         rows.push_back (std::move (made));
     }
     startAll.onClick = [this] { probe.run ("Start all", rig::startAll (programsHere())); };
@@ -138,10 +189,19 @@ SystemRigView::SystemRigView (SystemProbe& p, SystemConfirm c)
     };
     addAndMakeVisible (startAll);
     addAndMakeVisible (stopAll);
+    scroller.setViewedComponent (list.get(), false);
+    scroller.setScrollBarsShown (false, false);   // a finger scrolls it; the cards run its whole width
+    addAndMakeVisible (scroller);
     refresh();
 }
 
-SystemRigView::~SystemRigView() = default;
+SystemRigView::~SystemRigView()
+{
+    scroller.setViewedComponent (nullptr, false);
+}
+
+const CardPage& SystemRigView::programCards() const { return *list; }
+juce::Component& SystemRigView::programList() { return *list; }
 
 void SystemRigView::ask (const juce::String& question, const juce::String& detail, std::function<void()> then)
 {
@@ -173,11 +233,13 @@ void SystemRigView::refresh()
         r->startStop.setButtonText (r->row.up ? "Stop" : "Start");
         r->startStop.setEnabled (! shown.busy);
         r->restart.setEnabled (! shown.busy && r->row.light != rig::Light::stopped);
+        r->name.setColour (juce::Label::textColourId, r->row.light == rig::Light::missing ? palette::textMuted : palette::text);
     }
     const bool any = ! programsHere().empty();
     startAll.setEnabled (any && ! shown.busy);
     stopAll.setEnabled (any && ! shown.busy);
     repaint();
+    list->repaint();
 }
 
 const SystemRigView::ProgramRow* SystemRigView::rowOf (const juce::String& label) const
@@ -212,59 +274,35 @@ juce::TextButton* SystemRigView::restartKey (const juce::String& label) const
     return r != nullptr && r->restart.isVisible() ? const_cast<juce::TextButton*> (&r->restart) : nullptr;
 }
 
-// One card (layout::Stack): the heading, Start all and Stop all with the plan's word beside them, then two lines a
-// program: its light, name and state with its keys on the right; where it runs and what it runs below, muted.
+// The RIG card (layout::Stack): its heading, Start all and Stop all with the plan's word beside them; below it a gap,
+// then the programs' cards, scrolled.
 void SystemRigView::resized()
 {
-    const auto t = layout::tokens (*this, systemRow (*this, (int) rows.size()));
-    layout::Stack stack (getLocalBounds().reduced (t.margin), t, cards);
-    auto area = stack.card (layout::cardHeight (t, 1 + 2 * (int) rows.size())).reduced (t.padding);
+    const auto t = layout::tokens (*this);
+    auto page = getLocalBounds().reduced (t.margin);
+    layout::Stack stack (page, t, cards);
+    const auto card = stack.card (layout::cardHeight (t, 1));
+    auto area = card.reduced (t.padding);
     heading.setFont (juce::FontOptions (t.text));
     heading.setBounds (area.removeFromTop (t.heading));
-    auto keys = area.removeFromTop (t.row);
-    const int keyWidth = keys.getWidth() / 6;
-    startAll.setBounds (layout::control (keys.removeFromLeft (keyWidth), t));
-    keys.removeFromLeft (t.unit);
-    stopAll.setBounds (layout::control (keys.removeFromLeft (keyWidth), t));
-    keys.removeFromLeft (2 * t.unit);
-    planArea = keys;
-    for (auto& r : rows)
-    {
-        r->first = area.removeFromTop (t.row);
-        r->second = area.removeFromTop (t.row);
-        auto line = r->first;
-        r->restart.setBounds (layout::control (line.removeFromRight (keyWidth), t));
-        line.removeFromRight (t.unit);
-        r->startStop.setBounds (layout::control (line.removeFromRight (keyWidth), t));
-        r->first = line.withTrimmedRight (t.unit);
-    }
+    const int keyWidth = area.getWidth() / 6;
+    startAll.setBounds (layout::control (area.removeFromLeft (keyWidth), t));
+    area.removeFromLeft (t.unit);
+    stopAll.setBounds (layout::control (area.removeFromLeft (keyWidth), t));
+    area.removeFromLeft (2 * t.unit);
+    planArea = area;
+    scroller.setBounds (page.withTop (card.getBottom() + t.gap));
+    list->setSize (scroller.getWidth(), list->layOut (scroller.getWidth(), t));
 }
 
 void SystemRigView::paint (juce::Graphics& g)
 {
     g.fillAll (palette::surface);
-    const auto t = layout::tokens (*this, systemRow (*this, (int) rows.size()));
+    const auto t = layout::tokens (*this);
     paintCards (g, *this, t);
     g.setFont (juce::FontOptions (t.text));
     g.setColour (shown.planLine.contains ("failed") || shown.planLine.contains ("skipped") ? palette::caution : palette::textMuted);
     g.drawFittedText (shown.planLine, planArea, juce::Justification::centredLeft, 1, 0.8f);
-    const juce::Font font { juce::FontOptions (t.text) };
-    for (const auto& r : rows)
-    {
-        auto line = r->first;
-        const auto lightSide = t.text * 0.6f;
-        g.setColour (lightColour (r->row.light));
-        g.fillEllipse (line.removeFromLeft (juce::roundToInt (lightSide)).toFloat().withSizeKeepingCentre (lightSide, lightSide));
-        line.removeFromLeft (t.unit);
-        g.setColour (r->row.light == rig::Light::missing ? palette::textMuted : palette::text);
-        g.drawText (r->program.label, line, juce::Justification::centredLeft, true);
-        line.removeFromLeft (juce::roundToInt (juce::GlyphArrangement::getStringWidth (font, r->program.label)) + 2 * t.unit);
-        const bool news = r->row.light == rig::Light::degraded || r->row.light == rig::Light::failed;
-        g.setColour (news ? lightColour (r->row.light) : palette::text);
-        g.drawFittedText (r->row.state, line, juce::Justification::centredLeft, 1, 0.8f);
-        g.setColour (palette::textMuted);
-        g.drawFittedText (details (r->row), r->second.withTrimmedLeft (juce::roundToInt (lightSide) + t.unit), juce::Justification::centredLeft, 1, 0.7f);
-    }
 }
 
 // -- ABOUT ----------------------------------------------------------------------------------------------------------
@@ -273,9 +311,9 @@ SystemAboutView::SystemAboutView (SystemProbe& p) : probe (p)
 {
     setHeading (aboutHeading, juce::String::fromUTF8 ("A³"));
     setHeading (supportHeading, juce::String::fromUTF8 ("SUPPORT A³"));
-    setHeading (systemHeading, juce::String::fromUTF8 ("A³ SYSTEM"));
+    setHeading (publishedHeading, "PUBLISHED");
     setHeading (licenceHeading, "LICENCES");
-    for (auto* label : { &aboutHeading, &systemHeading, &licenceHeading })
+    for (auto* label : { &aboutHeading, &publishedHeading, &licenceHeading })
         addAndMakeVisible (label);
     for (const auto& link : about::links())
         addAndMakeVisible (links.add (makeLink (link.label, link.url)));
@@ -289,6 +327,26 @@ SystemAboutView::SystemAboutView (SystemProbe& p) : probe (p)
     refresh();
 }
 
+SystemAboutView::~SystemAboutView() = default;
+
+// A link per repository that names where it is published; its name as text where none is known.
+void SystemAboutView::makePublished()
+{
+    repositories.clear();
+    for (const auto& row : pins.rows)
+    {
+        if (row.url.startsWith ("https://"))
+            addAndMakeVisible (repositories.add (makeLink (row.name, row.url).release()));
+        else
+        {
+            auto* name = new juce::Label();
+            look::caption (*name);
+            look::say (*name, row.name);
+            addAndMakeVisible (repositories.add (name));
+        }
+    }
+}
+
 void SystemAboutView::refresh()
 {
     const auto snapshot = probe.snapshot();
@@ -297,67 +355,89 @@ void SystemAboutView::refresh()
     seen = snapshot.generation;
     if (snapshot.checkout == pins)
         return;
-    const bool resize = systemLines (snapshot.checkout) != systemLines (pins);
     pins = snapshot.checkout;
-    if (resize)
-        resized();
+    makePublished();
+    resized();
     repaint();
 }
 
-// Cards (layout::Stack): the project (its line, its links, the copyright and the contact), Support A³ when it leads
-// somewhere, the A³ System card (the umbrella's version, then each pin in two columns), the licences last.
+// Cards (layout::Stack), every line compact and none empty: the project (its line, its links, the copyright and the
+// contact), Support A³ when it leads somewhere, PUBLISHED (the umbrella's version, then each repository in two columns,
+// its name a link, its tag beside it), the licences last.
 void SystemAboutView::resized()
 {
-    const auto t = layout::tokens (*this, systemRow (*this, (int) probe.programs().size()));
+    const auto t = layout::tokens (*this);
+    const int line = layout::compactLine (t);
+    const auto height = [&t, line] (int lines) { return 2 * t.padding + t.heading + lines * line; };
     layout::Stack stack (getLocalBounds().reduced (t.margin), t, cards);
-    for (auto* label : { &aboutHeading, &supportHeading, &systemHeading, &licenceHeading })
+    for (auto* label : { &aboutHeading, &supportHeading, &publishedHeading, &licenceHeading })
         label->setFont (juce::FontOptions (t.text));
 
-    auto area = stack.card (layout::cardHeight (t, 3)).reduced (t.padding);
+    auto area = stack.card (height (3)).reduced (t.padding);
     aboutHeading.setBounds (area.removeFromTop (t.heading));
-    taglineArea = area.removeFromTop (t.row);
-    placeLinks (links, area.removeFromTop (t.row), t);
-    contactArea = area.removeFromTop (t.row);
+    taglineArea = area.removeFromTop (line);
+    placeLinks (links, area.removeFromTop (line), t);
+    contactArea = area.removeFromTop (line);
 
     const auto& support = probe.support();
     bitcoinArea = {};
     if (! support.isEmpty())
     {
-        area = stack.card (layout::cardHeight (t, supportLines (support))).reduced (t.padding);
+        area = stack.card (height (supportLines (support))).reduced (t.padding);
         supportHeading.setBounds (area.removeFromTop (t.heading));
         for (auto* link : supportLinks)
         {
             juce::OwnedArray<juce::HyperlinkButton> one;
             one.add (link);
-            placeLinks (one, area.removeFromTop (t.row), t);
+            placeLinks (one, area.removeFromTop (line), t);
             one.clearQuick (false);
         }
         if (support.bitcoin.isNotEmpty())
-            bitcoinArea = area.removeFromTop (t.row);
+            bitcoinArea = area.removeFromTop (line);
     }
 
-    area = stack.card (layout::cardHeight (t, systemLines (pins))).reduced (t.padding);
+    area = stack.card (height (publishedLines (pins))).reduced (t.padding);
     auto headingLine = area.removeFromTop (t.heading);
     versionArea = headingLine.removeFromRight (headingLine.getWidth() / 2);
-    systemHeading.setBounds (headingLine);
-    systemAreas.clear();
-    const int lines = systemLines (pins);
-    const int columnWidth = (area.getWidth() - (systemColumns - 1) * 2 * t.unit) / systemColumns;
+    publishedHeading.setBounds (headingLine);
+    publishedAreas.clear();
+    const int lines = publishedLines (pins);
+    const int columnGap = 2 * t.unit;
+    const int columnWidth = (area.getWidth() - (publishedColumns - 1) * columnGap) / publishedColumns;
     for (int i = 0; i < (pins.found ? (int) pins.rows.size() : 1); ++i)
     {
-        const int column = i / lines, line = i % lines;
-        systemAreas.push_back ({ area.getX() + column * (columnWidth + 2 * t.unit), area.getY() + line * t.row, columnWidth, t.row });
+        const int column = i / lines, row = i % lines;
+        publishedAreas.push_back ({ area.getX() + column * (columnWidth + columnGap), area.getY() + row * line, columnWidth, line });
+    }
+    const auto font = linkFont (t.text);
+    for (int i = 0; i < repositories.size() && i < (int) publishedAreas.size(); ++i)
+    {
+        auto* name = repositories[i];
+        const auto text = pins.rows[(size_t) i].name;
+        if (auto* link = dynamic_cast<juce::HyperlinkButton*> (name))
+        {
+            link->setColour (juce::HyperlinkButton::textColourId, palette::text);
+            link->setFont (font, false, juce::Justification::centredLeft);
+        }
+        else if (auto* label = dynamic_cast<juce::Label*> (name))
+        {
+            label->setFont (juce::FontOptions (t.text));
+            label->setBorderSize ({});
+        }
+        const int width = juce::jmin (publishedAreas[(size_t) i].getWidth() / 2,
+                                      juce::roundToInt (juce::GlyphArrangement::getStringWidth (font, text)) + t.unit);
+        name->setBounds (publishedAreas[(size_t) i].withWidth (width));
     }
 
-    area = stack.card (layout::cardHeight (t, 1)).reduced (t.padding);
+    area = stack.card (height (1)).reduced (t.padding);
     licenceHeading.setBounds (area.removeFromTop (t.heading));
-    licenceArea = area.removeFromTop (t.row);
+    licenceArea = area.removeFromTop (line);
 }
 
 void SystemAboutView::paint (juce::Graphics& g)
 {
     g.fillAll (palette::surface);
-    const auto t = layout::tokens (*this, systemRow (*this, (int) probe.programs().size()));
+    const auto t = layout::tokens (*this);
     paintCards (g, *this, t);
     g.setFont (juce::FontOptions (t.text));
     g.setColour (palette::text);
@@ -373,18 +453,16 @@ void SystemAboutView::paint (juce::Graphics& g)
     if (! pins.found)
     {
         g.setColour (palette::textMuted);
-        if (! systemAreas.empty())
-            g.drawText (probe.snapshot().polled ? "no a3-system checkout on this machine" : "not read yet", systemAreas.front(),
+        if (! publishedAreas.empty())
+            g.drawText (probe.snapshot().polled ? "no a3-system checkout on this machine" : "not read yet", publishedAreas.front(),
                         juce::Justification::centredLeft, true);
         return;
     }
-    for (size_t i = 0; i < pins.rows.size() && i < systemAreas.size(); ++i)
+    for (size_t i = 0; i < pins.rows.size() && i < publishedAreas.size(); ++i)
     {
         const auto& row = pins.rows[i];
-        g.setColour (palette::textMuted);
-        g.drawText (row.name, systemAreas[i], juce::Justification::centredLeft, true);
         g.setColour (row.tag.isNotEmpty() ? palette::text : palette::textMuted);
-        g.drawText (checkout::tagText (row), systemAreas[i], juce::Justification::centredRight, true);
+        g.drawText (checkout::tagText (row), publishedAreas[i], juce::Justification::centredRight, true);
     }
 }
 }
