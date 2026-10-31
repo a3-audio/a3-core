@@ -82,6 +82,8 @@
    "carries": "/tap, /clockmode, and /beat from Motion in clock mode 0"},
   {"name": "engine.control", "program": "engine", "role": "control", "host": "local", "port": 9005,
    "carries": "the a3-core window's view of the engine (HTTP JSON, loopback only; not OSC)"},
+  {"name": "update.control", "program": "update", "role": "control", "host": "any", "port": 9081,
+   "protocol": "tcp", "carries": "a3-update on every machine: Core asks for its packages and for an update to a release (HTTP JSON, only from the core host; not OSC)"},
   {"name": "engine.osc", "program": "engine", "role": "osc", "host": "local", "port": 9004,
    "carries": "a3-engine: Core's words in engine mode -- channel.gain/eq.*/volume/3d/filter.frequency/filter.q/aux-send/cue/filter/azimuth/elevation/source, filter.frequency/resonance/mode, master.*, aux-return.cue, delay.bpm, aux-return.delay.*, engine.open"},
   {"name": "x11vnc.vnc", "program": "x11vnc", "role": "vnc", "host": "any", "port": 5901,
@@ -126,6 +128,7 @@
   {"from": "core", "to": "mixer.osc", "carries": "vu"},
   {"from": "core", "to": "radla.vu"},
   {"from": "core", "to": "engine.osc"},
+  {"from": "core", "to": "update.control"},
   {"from": "engine", "to": "core.osc"},
   {"from": "engine", "to": "core.vu-relay", "carries": "vu"},
   {"from": "beat-analyzer", "to": "core.osc"},
@@ -232,5 +235,6 @@
    "/EnergyVisualizer/RMS", "/DualDelay/delayBPML", "/DualDelay/delayBPMR"]}
  },
  "programs": ["core", "motion", "mixer", "desk", "prodj", "beat-analyzer", "stemdeck", "devices",
-              "iem", "engine", "x11vnc", "screencast", "radla", "prolink", "aes67", "ptp4l"]
+              "iem", "engine", "x11vnc", "screencast", "radla", "prolink", "aes67", "ptp4l",
+              "update"]
 }
