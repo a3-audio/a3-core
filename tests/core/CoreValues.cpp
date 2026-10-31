@@ -615,14 +615,14 @@ TEST (CoreValues, ADeckOnAChannel)
     rig.osc (rig.desk, "/channel/3/stem/turn", { pyInt (1) });
     rig.osc (rig.desk, "/channel/3/stem/push", { pyInt (1) });
     EXPECT_EQ (rig.to ("engine"), (std::vector<std::string> { "/channel/3/source i:1" }));
-    EXPECT_EQ (rig.to ("stemdeck-A"), (std::vector<std::string> { "/stemdeck/1/3d f:0.4" }));
+    EXPECT_EQ (rig.to ("stemdeck-A"), (std::vector<std::string> { "/stemdeck/1/3d f:1" }));
     EXPECT_TRUE (has (rig.to ("motion"), "/channel/3/source i:1"));
 
     rig.clear();
     rig.osc (rig.desk, "/channel/3/3d", { pyFloat (0.9) });
     rig.osc (rig.desk, "/channel/3/azimuth", { pyFloat (10.0) });
     EXPECT_TRUE (rig.to ("engine").empty());
-    EXPECT_EQ (rig.to ("stemdeck-A"), (std::vector<std::string> { "/stemdeck/1/3d f:0.9" }));
+    EXPECT_EQ (rig.to ("stemdeck-A"), (std::vector<std::string> { "/stemdeck/1/3d f:1" }));
 }
 
 namespace
@@ -855,7 +855,7 @@ TEST (CoreValues, DeckHelloIsMappedAndResendsThreeD)
     rig.osc (rig.desk, "/channel/3/stem/push", { pyInt (1) });
     rig.clear();
     rig.deckHello (1, rig.deckA);
-    EXPECT_EQ (rig.to ("stemdeck-A"), (std::vector<std::string> { "/stemdeck/1/3d f:0.4" }));
+    EXPECT_EQ (rig.to ("stemdeck-A"), (std::vector<std::string> { "/stemdeck/1/3d f:1" }));
     EXPECT_EQ (rig.unknownRows(), 0u);
 }
 
@@ -917,7 +917,7 @@ TEST (CoreValues, ThreeDOnADeckChannelGoesToTheDeck)
     rig.osc (rig.desk, "/channel/3/stem/push", { pyInt (1) });
     rig.clear();
     rig.osc (rig.desk, "/channel/3/3d", { pyStr ("0.6") });
-    EXPECT_EQ (rig.to ("stemdeck-A"), (std::vector<std::string> { "/stemdeck/1/3d f:0.6" }));
+    EXPECT_EQ (rig.to ("stemdeck-A"), (std::vector<std::string> { "/stemdeck/1/3d f:1" }));
     EXPECT_TRUE (rig.to ("engine").empty());
     rig.stop();
     EXPECT_EQ (static_cast<double> (rig.json ("state.json")["channels"][2]["three_d"]), 0.6);

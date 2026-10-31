@@ -1024,11 +1024,25 @@ TEST (CorePeers, DeckB3dGoesTo7781)
     rig.deckHello (2, deckB);
     rig.osc (rig.desk, "/channel/3/3d", { pyStr ("0.4") });
     putDeckOnChannel (rig, 2, 3);
-    EXPECT_TRUE (has (rig.to ("stemdeck-B"), "/stemdeck/2/3d f:0.4"));
+    EXPECT_TRUE (has (rig.to ("stemdeck-B"), "/stemdeck/2/3d f:1"));   // decks ignore the channel's 3D (2026-11-01)
     rig.osc (rig.desk, "/channel/3/3d", { pyStr ("0.9") });
-    EXPECT_EQ (rig.to ("stemdeck-B").back(), "/stemdeck/2/3d f:0.9");
+    EXPECT_EQ (rig.to ("stemdeck-B").back(), "/stemdeck/2/3d f:1");
     for (const auto& target : rig.targetsOf ("stemdeck-B"))
         EXPECT_EQ (target, "127.0.0.3:7781");
+}
+
+// The channel's pot is AUX-Send on StemDeck and 3D on A³ Motion: a deck's movement is StemDeck's own and must
+// not follow it (maintainer, 2026-11-01). Turning the channel's 3D to 0 leaves the deck at full movement.
+TEST (CorePeers, ADeckIgnoresItsChannels3d)
+{
+    CoreRig rig;
+    rig.engineHello ("boot-1");
+    rig.deckHello (1, rig.deckA);
+    putDeckOnChannel (rig, 1, 1);
+    rig.osc (rig.desk, "/channel/1/3d", { pyStr ("0") });
+    for (const auto& message : rig.to ("stemdeck-A"))
+        EXPECT_NE (message, "/stemdeck/1/3d f:0") << "the deck was told the channel's 3D";
+    EXPECT_EQ (rig.to ("stemdeck-A").back(), "/stemdeck/1/3d f:1");
 }
 
 TEST (CorePeers, DeckDHelloIsHeardAndIts3dGoesTo7783)
@@ -1039,7 +1053,7 @@ TEST (CorePeers, DeckDHelloIsHeardAndIts3dGoesTo7783)
     EXPECT_TRUE (has (rig.to ("mixer"), "/stemdeck/4/present i:1"));
     rig.osc (rig.desk, "/channel/2/3d", { pyStr ("0.6") });
     putDeckOnChannel (rig, 4, 2);
-    EXPECT_TRUE (has (rig.to ("stemdeck-D"), "/stemdeck/4/3d f:0.6"));
+    EXPECT_TRUE (has (rig.to ("stemdeck-D"), "/stemdeck/4/3d f:1"));
     EXPECT_EQ (rig.targetsOf ("stemdeck-D").back(), "127.0.0.5:7783");
 }
 
@@ -1096,7 +1110,7 @@ TEST (CorePeers, TheSelectorArrivalGoesToTheDecksPort)
     rig.osc (rig.desk, "/channel/1/3d", { pyStr ("0.5") });
     rig.clear();
     putDeckOnChannel (rig, 2, 1);   // the deck arrives on a channel with a 3D: it is told it
-    EXPECT_EQ (rig.to ("stemdeck-B"), (std::vector<std::string> { "/stemdeck/2/3d f:0.5" }));
+    EXPECT_EQ (rig.to ("stemdeck-B"), (std::vector<std::string> { "/stemdeck/2/3d f:1" }));
     for (const auto& target : rig.targetsOf ("stemdeck-B"))
         EXPECT_EQ (target, "127.0.0.3:7781");
 }
@@ -1125,8 +1139,8 @@ TEST (CorePeers, BothDecksOnOneHost3dGoesToTheirOwnPorts)
     rig.clear();
     putDeckOnChannel (rig, 1, 1);
     putDeckOnChannel (rig, 2, 2);
-    EXPECT_EQ (rig.to ("stemdeck-A"), (std::vector<std::string> { "/stemdeck/1/3d f:0.2" }));
-    EXPECT_EQ (rig.to ("stemdeck-B"), (std::vector<std::string> { "/stemdeck/2/3d f:0.3" }));
+    EXPECT_EQ (rig.to ("stemdeck-A"), (std::vector<std::string> { "/stemdeck/1/3d f:1" }));
+    EXPECT_EQ (rig.to ("stemdeck-B"), (std::vector<std::string> { "/stemdeck/2/3d f:1" }));
     EXPECT_EQ (rig.targetsOf ("stemdeck-A"), (std::vector<std::string> { "127.0.0.2:7780" }));
     EXPECT_EQ (rig.targetsOf ("stemdeck-B"), (std::vector<std::string> { "127.0.0.2:7781" }));
 }

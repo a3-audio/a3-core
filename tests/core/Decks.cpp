@@ -140,7 +140,7 @@ TEST (Decks, ThreeDGoesToTheDeckOnThatChannelOnly)
 {
     DeckSelector s (4, 2);
     pick (s, 2, 1);
-    EXPECT_EQ (s.threeDMessages (truth(), 2, 0.4), (Said { { "/stemdeck/1/3d", pyFloat (0.4) } }));
+    EXPECT_EQ (s.threeDMessages (truth(), 2, 0.4), (Said { { "/stemdeck/1/3d", pyFloat (1.0) } }));   // a deck ignores its channel's 3D
     EXPECT_TRUE (s.threeDMessages (truth(), 1, 0.4).empty());
 }
 
@@ -179,7 +179,7 @@ TEST (Decks, HelloResendsTheThreeD)
 {
     DeckSelector s (4, 2);
     pick (s, 3, 2);
-    EXPECT_EQ (s.helloMessages (truth(), 2, 0.7), (Said { { "/stemdeck/2/3d", pyFloat (0.7) } }));
+    EXPECT_EQ (s.helloMessages (truth(), 2, 0.7), (Said { { "/stemdeck/2/3d", pyFloat (1.0) } }));
 }
 
 TEST (Decks, HelloOfADeckOnNoChannelSendsNeutral)

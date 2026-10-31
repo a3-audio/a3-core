@@ -105,12 +105,14 @@ bool DeckSelector::present (int deck, double now) const
     return report->second.first;
 }
 
-std::vector<std::pair<std::string, OscArg>> DeckSelector::threeDMessages (const Truth& truth, int channel, double value) const
+// A deck's movement is StemDeck's own: the channel's pot is its AUX-Send there and 3D only on A³ Motion, so a deck
+// on a channel always moves fully (maintainer, 2026-11-01). The channel's 3D still acts on the analog input.
+std::vector<std::pair<std::string, OscArg>> DeckSelector::threeDMessages (const Truth& truth, int channel, double /*value*/) const
 {
     const auto deck = source (channel);
     if (deck == analog)
         return {};
-    return { threeD (truth, deck, value) };
+    return { threeD (truth, deck, neutralThreeD) };
 }
 
 std::vector<std::pair<std::string, OscArg>> DeckSelector::leaveMessages (const Truth& truth, const std::vector<std::pair<int, int>>& changes) const
@@ -136,7 +138,8 @@ std::set<int> DeckSelector::held() const
 
 std::vector<std::pair<std::string, OscArg>> DeckSelector::helloMessages (const Truth& truth, int deck, double channelThreeD) const
 {
-    return { threeD (truth, deck, channelOf (deck) ? channelThreeD : neutralThreeD) };
+    (void) channelThreeD;   // decks ignore their channel's 3D, see threeDMessages
+    return { threeD (truth, deck, neutralThreeD) };
 }
 
 juce::var DeckSelector::toEvening() const
