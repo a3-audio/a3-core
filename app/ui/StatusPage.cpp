@@ -224,10 +224,41 @@ juce::String aes67LatencyText (std::optional<double> receiverMs)
     return msText (deckSenderLatencyMs + deckPacketMs + *receiverMs);
 }
 
-juce::StringArray roundTripLines (const RoundTrip& estimate, const RoundTripReport& measured, const juce::String& aes67)
+std::vector<StatusRow> roundTripRows (const RoundTrip& estimate, const RoundTripReport& measured, const juce::String& aes67)
 {
-    return { "Estimated: " + estimatedText (estimate), "Measured digital: " + measuredDigitalText (estimate, measured),
-             "Measured analog: " + measuredAnalogText (estimate, measured), "AES67 latency: " + aes67 };
+    const auto toneOf = [] (const juce::String& value) {
+        return value == "not measured" || value.startsWith ("no ") || value.endsWith ("not running") ? StatusRow::Tone::dim : StatusRow::Tone::plain;
+    };
+    std::vector<StatusRow> rows;
+    for (const auto& [caption, value] : { std::pair<juce::String, juce::String> { "Estimated", estimatedText (estimate) },
+                                          { "Measured digital", measuredDigitalText (estimate, measured) },
+                                          { "Measured analog", measuredAnalogText (estimate, measured) },
+                                          { "AES67 latency", aes67 } })
+        rows.push_back ({ caption, value, toneOf (value) });
+    return rows;
+}
+
+// Values in the plain text colour (2026-10-31, the maintainer): dim only where something that should be there is not,
+// red for a fault. The clock's state word keeps its tone (the footer's, the clock card's frame).
+std::vector<StatusRow> statusRows (const juce::String& modeLine, bool modeFault, const juce::String& coreLine, bool coreHeard,
+                                   bool coreSilent, const juce::String& gateLine, const DriverInfo& driver, const juce::String& truthWarning,
+                                   const BackendStatus& status, const juce::String& aes67)
+{
+    using Tone = StatusRow::Tone;
+    constexpr float loadFault = 90.0f;
+    const auto audioText = driver.rate + ",  " + driver.timing;
+    std::vector<StatusRow> rows {
+        { "Mode", modeLine, modeFault ? Tone::fault : Tone::plain },
+        { "Core", coreLine, ! coreHeard ? Tone::dim : coreSilent ? Tone::fault : Tone::plain },
+        { "Gate", gateLine, Tone::plain },
+        { "Audio", truthWarning.isEmpty() ? audioText : audioText + "   (" + truthWarning + ")", truthWarning.isEmpty() ? Tone::plain : Tone::fault },
+        { "Rate from", driver.rateSource, driver.rateSource.isEmpty() ? Tone::dim : Tone::plain },
+        { "Bit depth", driver.bitDepth, Tone::plain },
+        { "DSP load", driver.load, status.dspLoadPercent >= loadFault ? Tone::fault : Tone::plain },
+        { "Xruns", driver.xruns, status.xruns > 0 ? Tone::fault : Tone::plain } };
+    for (auto& row : roundTripRows (estimatedRoundTrip (status), status.roundTripMeasured, aes67))
+        rows.push_back (std::move (row));
+    return rows;
 }
 
 juce::File StatusPage::defaultAes67Config()
@@ -310,45 +341,28 @@ void StatusPage::paint (juce::Graphics& g)
     const int row = layout::compactLine (t);
     g.setFont (juce::FontOptions (t.text));
 
-    auto line = [&] (const juce::String& caption, const juce::String& value, juce::Colour colour)
-    {
-        auto r = area.removeFromTop (row);
-        g.setColour (palette::textMuted);
-        g.drawText (caption, r.removeFromLeft (r.getWidth() / 4), juce::Justification::centredLeft, true);
-        g.setColour (colour);
-        g.drawFittedText (value, r, juce::Justification::centredLeft, 1, 0.7f);
-    };
-
-    line ("MODE", modeLine(), ! problem.isEmpty() ? palette::danger : status.connecting ? palette::text : palette::caution);
-    const bool silent = heard && sinceCore > coreSilentAfterSeconds;
-    line ("CORE", coreText (heard, sinceCore), ! heard || silent ? palette::caution : palette::running);
-
     static const char* const zones[a3::numGatedZones] = { "main", "booth", "phones" };
     juce::String gateText;
-    bool anyOpen = false;
     for (int z = 0; z < a3::numGatedZones; ++z)
     {
         const bool open = std::isfinite (gates.gain[z]) && gates.gain[z] > 0.0f;
-        anyOpen = anyOpen || open;
         gateText << zones[z] << (open ? " open" : " closed") << (z + 1 < a3::numGatedZones ? "   " : "");
     }
-    line ("GATE", gateText + (gate ? "   (Core: open)" : "   (Core: closed)"), anyOpen ? palette::running : palette::textMuted);
-
-    const auto driver = driverInfo (config, status);
-    const auto audioText = driver.rate + ",  " + driver.timing;
-    line ("AUDIO", truthWarning.isEmpty() ? audioText : audioText + "   (" + truthWarning + ")", palette::text);
-    line ("RATE FROM", driver.rateSource, palette::textMuted);
-    line ("BIT DEPTH", driver.bitDepth, palette::textMuted);
-    constexpr float loadWarn = 70.0f, loadDanger = 90.0f;
-    line ("DSP LOAD", driver.load,
-          status.dspLoadPercent >= loadDanger ? palette::danger : status.dspLoadPercent >= loadWarn ? palette::caution : palette::text);
-    line ("XRUNS", driver.xruns, status.xruns > 0 ? palette::caution : palette::text);
-    // The round trip and the network, "Label: value" each (2026-10-31), values only.
-    const auto estimate = estimatedRoundTrip (status);
-    for (const auto& text : roundTripLines (estimate, status.roundTripMeasured, aes67))
+    const auto rows = statusRows (modeLine(), problem.isNotEmpty(), coreText (heard, sinceCore), heard, heard && sinceCore > coreSilentAfterSeconds,
+                                  gateText + (gate ? "   (Core: open)" : "   (Core: closed)"), driverInfo (config, status), truthWarning,
+                                  status, aes67);
+    // "Label: value" (2026-10-31), one label column for every row: as wide as the longest label, and two units beside it.
+    const juce::Font font { juce::FontOptions (t.text) };
+    float captionWidth = 0.0f;
+    for (const auto& r : rows)
+        captionWidth = juce::jmax (captionWidth, juce::GlyphArrangement::getStringWidth (font, r.caption + ":"));
+    for (const auto& r : rows)
     {
-        g.setColour (palette::text);
-        g.drawFittedText (text, area.removeFromTop (row), juce::Justification::centredLeft, 1, 0.7f);
+        auto line = area.removeFromTop (row);
+        g.setColour (palette::textMuted);
+        g.drawText (r.caption + ":", line.removeFromLeft (juce::roundToInt (captionWidth) + 2 * t.unit), juce::Justification::centredLeft, true);
+        g.setColour (r.tone == StatusRow::Tone::fault ? palette::danger : r.tone == StatusRow::Tone::dim ? palette::textMuted : palette::text);
+        g.drawFittedText (r.value, line, juce::Justification::centredLeft, 1, 0.7f);
     }
 }
 }

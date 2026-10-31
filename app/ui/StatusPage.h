@@ -44,8 +44,21 @@ juce::String measuredAnalogText (const RoundTrip&, const RoundTripReport&);
 // rendered pipewire-aes67.conf. nullopt: no deck rule there.
 std::optional<double> deckReceiveLatencyMs (const juce::String& aes67Conf);
 juce::String aes67LatencyText (std::optional<double> receiverMs);   // "9.3 ms", or "no AES67 receiver config"
-// ENGINE's four lines as they read: "Estimated: …", "Measured digital: …", "Measured analog: …", "AES67 latency: …".
-juce::StringArray roundTripLines (const RoundTrip&, const RoundTripReport&, const juce::String& aes67);
+// A³ CORE's rows (2026-10-31: the round trip and the network in the same rows as the driver's lines): a caption, its
+// value, and how the value is drawn -- plain text, dim (something that should be there and is not), or a fault (red).
+struct StatusRow
+{
+    enum class Tone { plain, dim, fault };
+    juce::String caption, value;
+    Tone tone = Tone::plain;
+};
+// Estimated, Measured digital, Measured analog, AES67 latency: "not measured" and a missing AES67 config dim.
+std::vector<StatusRow> roundTripRows (const RoundTrip&, const RoundTripReport&, const juce::String& aes67);
+// Every row of the first card, drawn "Label: value": Mode, Core, Gate, Audio, Rate from, Bit depth, DSP load, Xruns, then
+// roundTripRows.
+std::vector<StatusRow> statusRows (const juce::String& modeLine, bool modeFault, const juce::String& coreLine, bool coreHeard,
+                                   bool coreSilent, const juce::String& gateLine, const DriverInfo&, const juce::String& truthWarning,
+                                   const BackendStatus&, const juce::String& aes67);
 inline DriverInfo driverInfo (const HostView& view) { return driverInfo (view.running(), view.status()); }
 
 // Read-only: engine mode, Core's last word, the gate per zone, load and xruns, missing peers

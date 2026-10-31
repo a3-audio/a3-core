@@ -247,7 +247,7 @@ TEST_F (Pages, ThePtpRoleIsASecondLine)
     page.refresh();
     const auto& clock = page.clockPanel();
     EXPECT_EQ (clock.roleLabel().getText(), "PTP grandmaster: confirmed");
-    EXPECT_EQ (clock.roleLabel().findColour (juce::Label::textColourId), a3app::palette::textMuted);
+    EXPECT_EQ (clock.roleLabel().findColour (juce::Label::textColourId), a3app::palette::text) << "a value in the plain text colour (2026-10-31)";
     EXPECT_GT (clock.roleLabel().getHeight(), 0);
     view.clockReport.status.portState.clear();
     view.clockReport.status.portProblem = "no PTP state from a3-ptp-state: /run/a3/ptp-state.json missing";
@@ -2417,19 +2417,66 @@ TEST_F (Pages, EngineSaysTheRoundTripAndTheAes67Latency)
     estimate.processingSamples = 128;
     estimate.playbackSamples = 384;
     a3app::RoundTripReport measured;
-    auto lines = a3app::roundTripLines (estimate, measured, a3app::aes67LatencyText (receiver));
-    EXPECT_EQ (lines, (juce::StringArray { "Estimated: 17.4 ms (768 samples)", "Measured digital: not measured",
-                                           "Measured analog: not measured", "AES67 latency: 9.3 ms" }));
+    using Tone = a3app::StatusRow::Tone;
+    const auto text = [] (const std::vector<a3app::StatusRow>& rows) {
+        juce::StringArray out;
+        for (const auto& r : rows)
+            out.add (r.caption + "|" + r.value);
+        return out;
+    };
+    auto rows = a3app::roundTripRows (estimate, measured, a3app::aes67LatencyText (receiver));
+    EXPECT_EQ (text (rows), (juce::StringArray { "Estimated|17.4 ms (768 samples)", "Measured digital|not measured",
+                                                 "Measured analog|not measured", "AES67 latency|9.3 ms" }));
+    EXPECT_EQ (rows[0].tone, Tone::plain);
+    EXPECT_EQ (rows[1].tone, Tone::dim) << "should be there and is not";
+    EXPECT_EQ (rows[3].tone, Tone::plain);
     measured.state = a3app::RoundTripReport::State::measured;
     measured.samples = 441;
     measured.atMillis = juce::Time (2026, 9, 31, 0, 12).toMilliseconds();
     measured.analog = a3app::RoundTripReport::Analog::measured;
     measured.converters = { 44, 44100.0, "2026-10-30" };
-    lines = a3app::roundTripLines (estimate, measured, "9.3 ms");
-    EXPECT_EQ (lines[1], "Measured digital: 10.0 ms  00:12");
-    EXPECT_EQ (lines[2], "Measured analog: 11.0 ms  2026-10-30");
-    for (const auto& line : lines)
-        EXPECT_FALSE (line.containsAnyOf ("=+")) << "no parts: " << line;
+    rows = a3app::roundTripRows (estimate, measured, "9.3 ms");
+    EXPECT_EQ (rows[1].value, "10.0 ms  00:12");
+    EXPECT_EQ (rows[2].value, "11.0 ms  2026-10-30");
+    for (const auto& r : rows)
+        EXPECT_EQ (r.tone, Tone::plain) << r.caption;
+}
+
+// A³ CORE's rows (2026-10-31, the maintainer on 873): every value in the plain text colour -- MODE, DSP LOAD, AUDIO, RATE
+// FROM, BIT DEPTH included --, dim only where something that should be there is not, red for a fault; the round trip in
+// the same rows, one caption column.
+TEST_F (Pages, EngineValuesArePlainUnlessMissingOrAFault)
+{
+    using Tone = a3app::StatusRow::Tone;
+    a3app::BackendStatus status;
+    status.sampleRate = 44100;
+    status.blockSize = 128;
+    status.connecting = true;
+    status.dspLoadPercent = 23.0f;
+    status.rateSource = "PipeWire";
+    a3app::AppConfig config;
+    const auto driver = a3app::driverInfo (config, status);
+    auto rows = a3app::statusRows ("JACK, connecting", false, "Core heard", true, false, "main open", driver, {}, status, "9.3 ms");
+    ASSERT_EQ (rows.size(), 12u) << "eight lines, then the four of the round trip in the same rows";
+    for (const auto& r : rows)
+        if (! r.caption.startsWith ("Measured"))
+            EXPECT_EQ (r.tone, Tone::plain) << r.caption << ": " << r.value;
+    status.xruns = 2;
+    status.dspLoadPercent = 95.0f;
+    rows = a3app::statusRows ("A3-CORE NOT RUNNING - gone", true, "Core not heard yet", false, false, "main closed", a3app::driverInfo (config, status), {},
+                              status, "no AES67 receiver config");
+    const auto toneOf = [&rows] (const char* caption) {
+        for (const auto& r : rows)
+            if (r.caption == caption)
+                return r.tone;
+        return Tone::plain;
+    };
+    EXPECT_EQ (toneOf ("Mode"), Tone::fault);
+    EXPECT_EQ (toneOf ("Core"), Tone::dim);
+    EXPECT_EQ (toneOf ("Xruns"), Tone::fault);
+    EXPECT_EQ (toneOf ("DSP load"), Tone::fault);
+    EXPECT_EQ (toneOf ("Gate"), Tone::plain) << "a closed gate is a state";
+    EXPECT_EQ (toneOf ("AES67 latency"), Tone::dim);
 }
 
 // The window's keys (2026-10-30): CHANNELS, ZONES and DEPARTMENTS have none (AUDIO's card, SPEAKERS' and I/O's

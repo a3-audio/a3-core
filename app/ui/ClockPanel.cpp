@@ -97,8 +97,9 @@ ClockPanel::ClockPanel (Mode m) : mode (m)
         label->setJustificationType (juce::Justification::centredLeft);
         label->setMinimumHorizontalScale (1.0f);
     }
-    rate.setColour (juce::Label::textColourId, palette::textMuted);
-    counters.setColour (juce::Label::textColourId, palette::textMuted);
+    // Values in the plain text colour (2026-10-31); dim only for what should be there and is not, red for a fault.
+    rate.setColour (juce::Label::textColourId, palette::text);
+    counters.setColour (juce::Label::textColourId, palette::text);
     addAndMakeVisible (title);
     addChildComponent (state);
     for (auto* child : std::initializer_list<juce::Component*> { &masterCaption, &master })
@@ -120,7 +121,8 @@ void ClockPanel::show (const a3clock::ClockReport& report)
                    juce::dontSendNotification);
     const auto roleLine = a3clock::ptpRoleLine (report);
     role.setText (juce::String::fromUTF8 (roleLine.text.c_str()), juce::dontSendNotification);
-    role.setColour (juce::Label::textColourId, roleLine.warns ? palette::danger : palette::textMuted);
+    const bool roleUnread = juce::String::fromUTF8 (roleLine.text.c_str()).contains ("not read");
+    role.setColour (juce::Label::textColourId, roleLine.warns ? palette::danger : roleUnread ? palette::textMuted : palette::text);
     rate.setText (rateText (report), juce::dontSendNotification);
     counters.setText (countersText (report), juce::dontSendNotification);
     const auto warning = warningOf (report);
