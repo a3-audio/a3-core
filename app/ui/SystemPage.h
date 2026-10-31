@@ -83,6 +83,7 @@ private:
     SystemProbe& probe;
     std::uint64_t seen = 0;
     checkout::Facts pins;
+    std::unique_ptr<juce::Drawable> logoImage;   // the SVG logo; null: the label's letters
     juce::Label logo, supportHeading, publishedHeading, licenceHeading;
     juce::OwnedArray<juce::HyperlinkButton> links, supportLinks;
     juce::OwnedArray<juce::Component> repositories;   // a link per repository with a url, its name as text without one

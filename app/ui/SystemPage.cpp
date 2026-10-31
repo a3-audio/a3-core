@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "SystemPage.h"
 
+#include "A3Assets.h"
+
 namespace a3app
 {
 namespace
@@ -442,6 +444,13 @@ SystemAboutView::SystemAboutView (SystemProbe& p) : probe (p)
     look::value (logo);
     logo.setJustificationType (juce::Justification::centredLeft);
     look::say (logo, juce::String::fromUTF8 ("A³"));
+    // The real logo, its colour the page's text colour; the letters stand in when JUCE cannot read the SVG.
+    logoImage = juce::Drawable::createFromImageData (a3assets::a3logo_svg, (size_t) a3assets::a3logo_svgSize);
+    if (logoImage != nullptr)
+    {
+        logoImage->replaceColour (juce::Colour (0xfffffff3), palette::text);
+        look::say (logo, {});   // the label holds the logo's place in the card; the SVG is painted over it
+    }
     addAndMakeVisible (logo);
     setHeading (supportHeading, juce::String::fromUTF8 ("SUPPORT A³"));
     setHeading (publishedHeading, "PUBLISHED");
@@ -512,6 +521,7 @@ void SystemAboutView::resized()
     logo.setFont (juce::FontOptions ((float) logoArea.getHeight() * 0.9f, juce::Font::bold));
     logo.setBorderSize ({});
     logo.setBounds (logoArea);
+
     taglineArea = area.removeFromTop (line);
     placeLinks (links, area.removeFromTop (line), t);
     contactArea = area.removeFromTop (line);
@@ -577,6 +587,8 @@ void SystemAboutView::paint (juce::Graphics& g)
     const auto t = layout::tokens (*this);
     paintCards (g, *this, t);
     g.setFont (juce::FontOptions (t.text));
+    if (logoImage != nullptr)
+        logoImage->drawWithin (g, logoArea.toFloat(), juce::RectanglePlacement::xLeft | juce::RectanglePlacement::yMid, 1.0f);
     g.setColour (palette::text);
     g.drawFittedText (about::tagline(), taglineArea, juce::Justification::centredLeft, 1, 0.8f);
     g.setColour (palette::textMuted);

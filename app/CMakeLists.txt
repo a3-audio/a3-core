@@ -13,6 +13,9 @@ add_library(a3-engine-app-lib STATIC EngineHost.cpp OscVocabulary.cpp HelloSende
     ui/SystemAbout.cpp ui/SystemCheckout.cpp ui/RigModel.cpp ui/RigPlan.cpp ui/SystemProbe.cpp ui/SystemPage.cpp ui/NativeWindow.cpp XrunCount.cpp RoundTripProbe.cpp RoundTripLoop.cpp
     AudioTiming.cpp TimingControl.cpp CommandRunner.cpp SystemDevice.cpp)
 target_include_directories(a3-engine-app-lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/ui ${CMAKE_CURRENT_SOURCE_DIR}/ui/look)
+# The A3 logo (ui/assets/a3-logo.svg, the website's), drawn by the ABOUT page from its SVG.
+juce_add_binary_data(a3-core-assets NAMESPACE a3assets HEADER_NAME A3Assets.h SOURCES ui/assets/a3-logo.svg)
+target_link_libraries(a3-engine-app-lib PRIVATE a3-core-assets)
 target_link_libraries(a3-engine-app-lib PUBLIC a3-engine a3-links a3-engine-bench-lib a3-core-lib a3-clock)
 target_compile_options(a3-engine-app-lib PRIVATE -Wall -Wextra -Werror=switch)
 

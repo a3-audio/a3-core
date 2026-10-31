@@ -24,6 +24,11 @@ Files: README.md
 Copyright: 2023 Raphael Eismann and contributors
 License: CC0-1.0
 
+Files: app/ui/assets/a3-logo.svg
+Copyright: 2024-2026 Raphael Eismann
+License: CC-BY-SA-4.0
+Comment: The website's logo (a3-audio.github.io src/img/a3_logo-wed_dark.svg), unchanged.
+
 Files: tools/*
 Copyright: 2026 Raphael Eismann and contributors
 License: GPL-3.0-or-later
