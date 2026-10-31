@@ -11,7 +11,7 @@
 
 namespace a3app::checkout
 {
-// One part of the system version: a submodule of the umbrella (a3-motion's ui as "a3-motion/ui"), or a firmware in
+// One part of the system version: a submodule of the umbrella (a3-motion's as "a3-motion/a3-motion-ui"), or a firmware in
 // one ("a3-motion firmware"), with the release tag of its pinned commit (empty when that commit is not here) and where it
 // is published (its .gitmodules url; a firmware's folder in it; empty when no url is known).
 struct Row
@@ -48,10 +48,6 @@ std::vector<Gitlink> parseGitlinks (const juce::String& lsTree);
 // `git describe --tags --always` as a version: "v03.0" on the tag, "v03.0+413" 413 commits after it, the short commit
 // when no tag precedes it.
 juce::String releaseText (const juce::String& describe);
-// Whether a submodule of the umbrella is a part of the system release. Mirrors release.py: stemseparator is pinned but
-// runs off the rig and is never tagged. A fixed list, not "has a v* tag": a repo that is merely not checked out has no tag
-// either and must still show as "not checked out".
-bool isInRelease (const juce::String& submodulePath);
 // What the card writes for a row: its tag, or "not checked out".
 juce::String tagText (const Row&);
 

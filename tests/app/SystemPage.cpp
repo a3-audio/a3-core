@@ -187,12 +187,31 @@ TEST (SystemCheckout, ThePcbIsTheShallowestKicadProjectNotASubProject)
     repo.deleteRecursively();
 }
 
-// stemseparator is pinned but runs off the rig and is never tagged (release.py leaves it out): not a part of the system.
-TEST (SystemCheckout, ARepoOutsideTheReleaseIsNotInTheTree)
+// A ui that is a folder of its repository is a part like the firmware, with the version of its last change; one that is a
+// submodule (a3-motion's, a3-mixer's since 2026-10-31) is a row of its own and adds no folder row.
+TEST (SystemCheckout, AUiFolderIsAPartAndAUiSubmoduleIsARow)
 {
-    EXPECT_TRUE (checkout::isInRelease ("a3-core"));
-    EXPECT_TRUE (checkout::isInRelease ("stemdeck"));
-    EXPECT_FALSE (checkout::isInRelease ("stemseparator"));
+    const auto repo = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("a3-ui-folder-test");
+    repo.deleteRecursively();
+    repo.getChildFile ("folder/ui").createDirectory();
+    repo.getChildFile ("linked/ui").createDirectory();
+    const auto git = [&repo] (const juce::String& dir, const juce::String& rest) {
+        return "git -C " + (dir.isEmpty() ? repo : repo.getChildFile (dir)).getFullPathName() + " " + rest;
+    };
+    ScriptedRunner runner;
+    runner.answers[git ("", "ls-tree HEAD")] = { 0, "160000 commit aaa\tfolder\n160000 commit bbb\tlinked\n" };
+    runner.answers[git ("folder", "describe --tags --match v* --always aaa")] = { 0, "v03.1\n" };
+    runner.answers[git ("folder", "log -1 --format=%H aaa -- ui")] = { 0, "u1\n" };
+    runner.answers[git ("folder", "describe --tags --match v* --abbrev=0 aaa")] = { 0, "v03.1\n" };
+    runner.answers[git ("folder", "rev-list --count v03.1..aaa -- ui")] = { 0, "0\n" };
+    runner.answers[git ("linked", "describe --tags --match v* --always bbb")] = { 0, "v03.1\n" };
+    runner.answers[git ("linked", "ls-tree bbb")] = { 0, "160000 commit ccc\tui\n" };
+    runner.answers[git ("linked/ui", "describe --tags --match v* --always ccc")] = { 0, "v03.1-2-gccccccc\n" };
+    juce::StringArray names;
+    for (const auto& row : checkout::read (runner, repo).rows)
+        names.add (row.name + "|" + row.tag);
+    EXPECT_EQ (names.joinIntoString ("\n"), juce::String ("folder|v03.1\nfolder ui|v03.1\nlinked|v03.1\nlinked/ui|v03.1+2"));
+    repo.deleteRecursively();
 }
 
 TEST (SystemCheckout, ReadsTheUmbrellasPinsAndFirmware)
@@ -208,30 +227,43 @@ TEST (SystemCheckout, ReadsTheUmbrellasPinsAndFirmware)
     };
     ScriptedRunner runner;
     runner.answers[git ("", "ls-tree HEAD")] = { 0, "160000 commit aaa\ta3-core\n100644 blob bbb\tREADME.md\n160000 commit ccc\ta3-motion\n"
-                                                    "160000 commit ddd\tstemdeck\n" };
+                                                    "160000 commit ddd\ta3-stemdeck\n" };
     runner.answers[git ("", "describe --tags --match v* --always HEAD")] = { 0, "v03.0-12-g1234567\n" };
     runner.answers[git ("a3-core", "describe --tags --match v* --always aaa")] = { 0, "v03.0-857-gaaaaaaa\n" };
     runner.answers[git ("a3-motion", "describe --tags --match v* --always ccc")] = { 0, "v03.0-855-gccccccc\n" };
     runner.answers[git ("a3-motion", "log -1 --format=%H ccc -- firmware")] = { 0, "fff\n" };
     runner.answers[git ("a3-motion", "describe --tags --match v* --abbrev=0 ccc")] = { 0, "v03.0\n" };
     runner.answers[git ("a3-motion", "rev-list --count v03.0..ccc -- firmware")] = { 0, "2\n" };
-    runner.answers[git ("a3-motion", "ls-tree ccc")] = { 0, "160000 commit eee\tui\n" };
-    runner.answers[git ("a3-motion/ui", "describe --tags --match v* --always eee")] = { 0, "v03.0-900-geeeeee\n" };
-    // Where each is published: the umbrella's .gitmodules at its HEAD, a3-motion's at its pin (a relative url is its sibling).
+    runner.answers[git ("a3-motion", "ls-tree ccc")] = { 0, "160000 commit eee\ta3-motion-ui\n" };
+    runner.answers[git ("a3-motion/a3-motion-ui", "describe --tags --match v* --always eee")] = { 0, "v03.0-900-geeeeee\n" };
+    // Submodules of submodules since 2026-10-31: a3-core's a3-beat-analyzer, a3-stemdeck's a3-stem-separator -- one level, as a3-motion's a3-motion-ui.
+    runner.answers[git ("a3-core", "ls-tree aaa")] = { 0, "040000 tree t1\tthird_party\n160000 commit bea\ta3-beat-analyzer\n" };
+    runner.answers[git ("a3-core/a3-beat-analyzer", "describe --tags --match v* --always bea")] = { 0, "v03.1-1-gbeabeab\n" };
+    runner.answers[git ("a3-stemdeck", "describe --tags --match v* --always ddd")] = { 0, "v03.1\n" };
+    runner.answers[git ("a3-stemdeck", "ls-tree ddd")] = { 0, "160000 commit sep\ta3-stem-separator\n" };
+    runner.answers[git ("a3-stemdeck/a3-stem-separator", "describe --tags --match v* --always sep")] = { 0, "v03.1\n" };
+    // Where each is published: the umbrella's .gitmodules at its HEAD, a submodule's at its pin (a relative url is its sibling).
     runner.answers[git ("", "config --blob HEAD:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
         = { 0, "submodule.a3-core.url https://github.com/a3-audio/a3-core\nsubmodule.a3-motion.url https://github.com/a3-audio/a3-motion\n"
-               "submodule.stemdeck.url https://github.com/rafjagger/stemdeck\n" };
+               "submodule.a3-stemdeck.url https://github.com/a3-audio/a3-stemdeck\n" };
     runner.answers[git ("a3-motion", "config --blob ccc:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
-        = { 0, "submodule.ui.url ../a3-motion-ui.git\n" };
+        = { 0, "submodule.a3-motion-ui.url ../a3-motion-ui.git\n" };
+    runner.answers[git ("a3-core", "config --blob aaa:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
+        = { 0, "submodule.third_party/IEMPluginSuite.url https://git.iem.at/audioplugins/IEMPluginSuite.git\n"
+               "submodule.a3-beat-analyzer.url ../a3-beat-analyzer.git\n" };
+    runner.answers[git ("a3-stemdeck", "config --blob ddd:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
+        = { 0, "submodule.a3-stem-separator.url ../a3-stem-separator.git\n" };
     const auto facts = checkout::read (runner, repo);
     EXPECT_TRUE (facts.found);
     EXPECT_EQ (facts.version, "v03.0+12");
     const std::vector<checkout::Row> expected {
         { "a3-core", "v03.0+857", "https://github.com/a3-audio/a3-core" },
+        { "a3-core/a3-beat-analyzer", "v03.1+1", "https://github.com/a3-audio/a3-beat-analyzer" },
         { "a3-motion", "v03.0+855", "https://github.com/a3-audio/a3-motion" },
         { "a3-motion firmware", "rev v03.0+2", "https://github.com/a3-audio/a3-motion/tree/HEAD/firmware" },
-        { "a3-motion/ui", "v03.0+900", "https://github.com/a3-audio/a3-motion-ui" },
-        { "stemdeck", "", "https://github.com/rafjagger/stemdeck" } };
+        { "a3-motion/a3-motion-ui", "v03.0+900", "https://github.com/a3-audio/a3-motion-ui" },
+        { "a3-stemdeck", "v03.1", "https://github.com/a3-audio/a3-stemdeck" },
+        { "a3-stemdeck/a3-stem-separator", "v03.1", "https://github.com/a3-audio/a3-stem-separator" } };
     EXPECT_EQ (facts.rows, expected);
     for (const auto& line : runner.ran)
         EXPECT_TRUE (line.startsWith ("git -C ")) << "only reads: " << line;
@@ -508,11 +540,11 @@ std::shared_ptr<ScriptedRunner> rigRunner()
     runner->answers[joined (rig::showCommand (services, false))] = { 0, userUnits.toStdString() };
     runner->answers[joined (rig::showCommand (services, true))] = { 0, systemUnits.toStdString() };
     const juce::File repo ("/home/someone/a3-system");
-    runner->answers["git -C " + repo.getFullPathName() + " ls-tree HEAD"] = { 0, "160000 commit aaa\ta3-core\n160000 commit ddd\tstemdeck\n" };
+    runner->answers["git -C " + repo.getFullPathName() + " ls-tree HEAD"] = { 0, "160000 commit aaa\ta3-core\n160000 commit ddd\ta3-stemdeck\n" };
     runner->answers["git -C " + repo.getFullPathName() + " describe --tags --match v* --always HEAD"] = { 0, "v03.0-12-g1234567\n" };
     runner->answers["git -C " + repo.getChildFile ("a3-core").getFullPathName() + " describe --tags --match v* --always aaa"] = { 0, "v03.0-857-gaaaaaaa\n" };
     runner->answers["git -C " + repo.getFullPathName() + " config --blob HEAD:.gitmodules --get-regexp ^submodule\\..*\\.url$"]
-        = { 0, "submodule.a3-core.url https://github.com/a3-audio/a3-core\nsubmodule.stemdeck.url https://github.com/rafjagger/stemdeck\n" };
+        = { 0, "submodule.a3-core.url https://github.com/a3-audio/a3-core\nsubmodule.a3-stemdeck.url https://github.com/a3-audio/a3-stemdeck\n" };
     return runner;
 }
 
@@ -635,18 +667,23 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
         touch ("a3-mixer/LICENSES/" + juce::String (id) + ".txt");
         touch ("a3-motion/LICENSES/" + juce::String (id) + ".txt");
     }
-    touch ("a3-motion/ui/LICENSES/GPL-3.0-or-later.txt");
+    touch ("a3-motion/a3-motion-ui/LICENSES/GPL-3.0-or-later.txt");
     // The Mixer laid out like Motion (2026-10-31): board and housing under hardware/ (CERN), each with its REVISION;
     // the firmware top level, by its stanza.
     touch ("a3-mixer/.reuse/dep5", "Format: x\n\nFiles: hardware/*\nCopyright: a\nLicense: CERN-OHL-S-2.0\n\n"
-                                   "Files: firmware/*\nCopyright: a\nLicense: GPL-3.0-or-later\n\n"
-                                   "Files: ui/*\nCopyright: a\nLicense: GPL-3.0-or-later\n");
+                                   "Files: firmware/*\nCopyright: a\nLicense: GPL-3.0-or-later\n");
     touch ("a3-mixer/hardware/pcb/board.kicad_pro");
     touch ("a3-mixer/hardware/pcb/REVISION", "V02\n");   // upper case in the file, lower case on the card
     touch ("a3-mixer/hardware/housing/box.blend");
     touch ("a3-mixer/hardware/housing/REVISION", "V02\n");
     touch ("a3-mixer/firmware/src/main.cpp", "// SPDX-License-Identifier: GPL-3.0-or-later\n");
-    touch ("a3-mixer/ui/CMakeLists.txt");   // the desk: a folder of the repo, not a submodule as a3-motion's ui
+    // Every submodule path is its repository's name since 2026-10-31: a3-mixer-ui, a3-motion-ui, a3-core's
+    // a3-beat-analyzer, a3-stemdeck's a3-stem-separator, each a row with its own licence.
+    touch ("a3-mixer/a3-mixer-ui/LICENSES/GPL-3.0-or-later.txt");
+    for (const auto* id : { "GPL-3.0-or-later", "BSD-3-Clause", "CC0-1.0" })
+        touch ("a3-core/a3-beat-analyzer/LICENSES/" + juce::String (id) + ".txt");
+    touch ("a3-stemdeck/LICENSES/GPL-3.0-or-later.txt");
+    touch ("a3-stemdeck/a3-stem-separator/LICENSES/GPL-3.0-or-later.txt");
     // Motion: a board with a revision, a housing without one, the firmware by its stanza.
     touch ("a3-motion/.reuse/dep5", "Format: x\n\nFiles: hardware/*\nCopyright: a\nLicense: CERN-OHL-S-2.0\n\nFiles: firmware/*\nCopyright: a\nLicense: GPL-3.0-or-later\n");
     touch ("a3-motion/hardware/pcbs/motion_pcb/motion.kicad_pro");
@@ -657,21 +694,26 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     const auto git = [&repo] (const juce::String& dir, const juce::String& rest) {
         return "git -C " + (dir.isEmpty() ? repo : repo.getChildFile (dir)).getFullPathName() + " " + rest;
     };
-    runner->answers[git ("", "ls-tree HEAD")] = { 0, "160000 commit aaa\ta3-core\n160000 commit bbb\ta3-mixer\n160000 commit ccc\ta3-motion\n160000 commit ddd\tstemdeck\n160000 commit sss\tstemseparator\n" };
+    runner->answers[git ("", "ls-tree HEAD")] = { 0, "160000 commit aaa\ta3-core\n160000 commit bbb\ta3-mixer\n160000 commit ccc\ta3-motion\n160000 commit ddd\ta3-stemdeck\n" };
+    runner->answers[git ("a3-core", "ls-tree aaa")] = { 0, "160000 commit bea\ta3-beat-analyzer\n" };
+    runner->answers[git ("a3-core/a3-beat-analyzer", "describe --tags --match v* --always bea")] = { 0, "v03.1-1-gbeabeab\n" };
+    runner->answers[git ("a3-mixer", "ls-tree bbb")] = { 0, "160000 commit uuu\ta3-mixer-ui\n" };
+    runner->answers[git ("a3-mixer/a3-mixer-ui", "describe --tags --match v* --always uuu")] = { 0, "v03.1-2-gabcdef1\n" };
+    runner->answers[git ("a3-stemdeck", "describe --tags --match v* --always ddd")] = { 0, "v03.1-1-gddddddd\n" };
+    runner->answers[git ("a3-stemdeck", "ls-tree ddd")] = { 0, "160000 commit sep\ta3-stem-separator\n" };
+    runner->answers[git ("a3-stemdeck/a3-stem-separator", "describe --tags --match v* --always sep")] = { 0, "v03.1\n" };
     runner->answers[git ("", "describe --tags --match v* --always HEAD")] = { 0, "v03.0-12-g1234567\n" };
     runner->answers[git ("a3-core", "describe --tags --match v* --always aaa")] = { 0, "v03.0-857-gaaaaaaa\n" };
     runner->answers[git ("a3-mixer", "describe --tags --match v* --always bbb")] = { 0, "v03.0-90-gbbbbbbb\n" };
     runner->answers[git ("a3-mixer", "log -1 --format=%H bbb -- firmware")] = { 0, "f1\n" };
     runner->answers[git ("a3-mixer", "describe --tags --match v* --abbrev=0 bbb")] = { 0, "v03.0\n" };
     runner->answers[git ("a3-mixer", "rev-list --count v03.0..bbb -- firmware")] = { 0, "0\n" };   // unchanged since the release
-    runner->answers[git ("a3-mixer", "log -1 --format=%H bbb -- ui")] = { 0, "u1\n" };
-    runner->answers[git ("a3-mixer", "rev-list --count v03.0..bbb -- ui")] = { 0, "3\n" };   // the desk changed three times since
     runner->answers[git ("a3-motion", "describe --tags --match v* --always ccc")] = { 0, "v03.0-855-gccccccc\n" };
     runner->answers[git ("a3-motion", "log -1 --format=%H ccc -- firmware")] = { 0, "f2\n" };
     runner->answers[git ("a3-motion", "describe --tags --match v* --abbrev=0 ccc")] = { 0, "v03.0\n" };
     runner->answers[git ("a3-motion", "rev-list --count v03.0..ccc -- firmware")] = { 0, "2\n" };   // changed twice since
-    runner->answers[git ("a3-motion", "ls-tree ccc")] = { 0, "160000 commit eee\tui\n" };
-    runner->answers[git ("a3-motion/ui", "describe --tags --match v* --always eee")] = { 0, "v03.0-900-geeeeee\n" };
+    runner->answers[git ("a3-motion", "ls-tree ccc")] = { 0, "160000 commit eee\ta3-motion-ui\n" };
+    runner->answers[git ("a3-motion/a3-motion-ui", "describe --tags --match v* --always eee")] = { 0, "v03.0-900-geeeeee\n" };
     auto sources = fakeSources (runner);
     sources.checkout = repo;
     a3app::SystemProbe probe (sources, false);
@@ -684,11 +726,12 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     for (const auto& row : view.checkoutShown().rows)
         lines.add (row.name + "|" + row.tag + "|" + row.licences + (row.noVersion ? "|no version" : ""));
     EXPECT_EQ (lines.joinIntoString ("\n"),
-               juce::String ("a3-core|v03.0+857|GPL-3.0\n"
+               juce::String ("a3-core|v03.0+857|GPL-3.0\na3-core/a3-beat-analyzer|v03.1+1|GPL-3.0\n"
                              "a3-mixer|v03.0+90|GPL-3.0\na3-mixer pcb|rev v02|CERN-OHL-S\na3-mixer housing|rev v02|CERN-OHL-S\n"
-                             "a3-mixer firmware|rev v03.0|GPL-3.0\na3-mixer ui|v03.0+3|GPL-3.0\n"
+                             "a3-mixer firmware|rev v03.0|GPL-3.0\na3-mixer/a3-mixer-ui|v03.1+2|GPL-3.0\n"
                              "a3-motion|v03.0+855|GPL-3.0\na3-motion pcb|rev v03|CERN-OHL-S\na3-motion housing||CERN-OHL-S|no version\n"
-                             "a3-motion firmware|rev v03.0+2|GPL-3.0\na3-motion/ui|v03.0+900|GPL-3.0\nstemdeck||"));
+                             "a3-motion firmware|rev v03.0+2|GPL-3.0\na3-motion/a3-motion-ui|v03.0+900|GPL-3.0\n"
+                             "a3-stemdeck|v03.1+1|GPL-3.0\na3-stemdeck/a3-stem-separator|v03.1|GPL-3.0"));
     // Every row fits on the card at the rig size (768x1024): the tree ends above the link line.
     view.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     int linksTop = view.getHeight();
@@ -715,7 +758,7 @@ TEST_F (SystemPageTest, AboutShowsTheProjectSupportAndThePins)
     for (auto* child : view.getChildren())
         if (auto* link = dynamic_cast<juce::HyperlinkButton*> (child))
             linkTexts.add (link->getButtonText());
-    EXPECT_EQ (linkTexts, (juce::StringArray { "Documentation", "Website", "Source", juce::String::fromUTF8 ("Support A³"), "a3-core", "stemdeck" }))
+    EXPECT_EQ (linkTexts, (juce::StringArray { "Documentation", "Website", "Source", juce::String::fromUTF8 ("Support A³"), "a3-core", "a3-stemdeck" }))
         << "the bottom links on one line, then PUBLISHED: each repository a link";
     juce::StringArray headings;
     for (auto* child : view.getChildren())

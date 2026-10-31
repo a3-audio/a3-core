@@ -448,8 +448,8 @@ SystemAboutView::SystemAboutView (SystemProbe& p) : probe (p)
 
 SystemAboutView::~SystemAboutView() = default;
 
-// The tree of PUBLISHED: a repository per line, a3-motion's ui and the firmwares as the children of the repository they
-// belong to ("a3-motion/ui", "a3-mixer firmware"), the connectors ahead of each name.
+// The tree of PUBLISHED: a repository per line, the submodules of submodules and the firmwares as the children of the
+// repository they belong to ("a3-motion/a3-motion-ui", "a3-mixer firmware"), the connectors ahead of each name.
 void SystemAboutView::makePublished()
 {
     repositories.clear();

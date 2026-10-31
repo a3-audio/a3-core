@@ -153,7 +153,8 @@ bool hasFirmware (const juce::String& submodule)
 // Hardware and firmware rows read "rev <version>", lowercase whatever the file says; nothing when there is no version.
 juce::String revisionText (const juce::String& version) { return version.isNotEmpty() ? "rev " + version.toLowerCase() : juce::String(); }
 
-// A submodule's row, then its parts (pcb, housing), its firmware's, its ui folder's, then its own submodules' (one level: a3-motion's ui).
+// A submodule's row, then its parts (pcb, housing), its firmware's, its ui folder's, then its own submodules' (one level:
+// a3-motion-ui, a3-mixer-ui, a3-core's a3-beat-analyzer, a3-stemdeck's a3-stem-separator).
 void addSubmodule (CommandRunner& runner, const juce::File& repo, const Gitlink& link, const juce::String& url, Facts& facts)
 {
     const auto dir = repo.getChildFile (link.path);
@@ -299,8 +300,6 @@ juce::String licenceOfFolder (const juce::File& repoDir, const juce::String& fol
     return firstLicence (fromDep5.isNotEmpty() ? fromDep5 : licenceFromHeaders (repoDir.getChildFile (folder)));
 }
 
-bool isInRelease (const juce::String& submodulePath) { return submodulePath != "stemseparator"; }
-
 juce::String tagText (const Row& row) { return row.tag.isNotEmpty() ? row.tag : row.noVersion ? juce::String() : juce::String ("not checked out"); }
 
 Facts read (CommandRunner& runner, const juce::File& repo)
@@ -313,9 +312,9 @@ Facts read (CommandRunner& runner, const juce::File& repo)
     facts.licence = codeLicence (repo);
     facts.version = releaseText (gitOutput (runner, repo, { "describe", "--tags", "--match", "v*", "--always", "HEAD" }));
     const auto urls = urlsAt (runner, repo, "HEAD", {});
+    // Every submodule is a part of the release since 2026-10-31 (stemseparator too, as stemdeck's).
     for (const auto& link : links)
-        if (isInRelease (link.path))
-            addSubmodule (runner, repo, link, urlOf (urls, link.path), facts);
+        addSubmodule (runner, repo, link, urlOf (urls, link.path), facts);
     return facts;
 }
 }
