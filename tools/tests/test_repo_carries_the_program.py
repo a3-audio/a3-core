@@ -57,7 +57,9 @@ class RepoCarriesTheProgramTest(unittest.TestCase):
 
     def test_versions_count_from_a3_cores_tag(self):
         described = git("describe", "--tags", "--long", "--match", "v*", "HEAD")
-        self.assertTrue(described.stdout.startswith("v03.0-"), described.stdout)
+        # The nearest tag is a system release (v03.0, v03.1, ...), never the
+        # merged repository's own a3-engine-v03.0: versions count from releases.
+        self.assertRegex(described.stdout, r"^v\d{2}\.\d+-\d+-g", described.stdout)
         tagged = git("rev-list", "-n1", "v03.0").stdout.strip()
         self.assertEqual(tagged, CORE_TAG_COMMIT)
 

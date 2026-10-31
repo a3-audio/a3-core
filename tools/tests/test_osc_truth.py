@@ -855,6 +855,18 @@ class TheMetersComeFromTheEngine(unittest.TestCase):
         self.assertIn("not OSC", listener["carries"])
         self.assertNotEqual(listener["port"], self.truth.port("engine", "osc"))
 
+    def test_the_updater_listens_on_every_machine_and_hears_only_core(self):
+        """a3-update (2026-10-31): each machine's updater, asked by Core over
+        HTTP JSON to install a signed release. Any interface, its own port."""
+        listener = self.truth.listener("update", "control")
+        self.assertEqual(listener["name"], "update.control")
+        self.assertEqual(listener["host"], "any")
+        self.assertEqual(listener["protocol"], "tcp")
+        self.assertIn("not OSC", listener["carries"])
+        self.assertIn("update", self.truth.programs())
+        self.assertEqual([r["from"] for r in self.routes if r["to"] == "update.control"],
+                         ["core"])
+
     def test_the_b1_set_is_what_b1_says(self):
         if not B1_TRUTH.exists():
             self.skipTest("no B1 export")
