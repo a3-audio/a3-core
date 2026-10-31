@@ -182,11 +182,9 @@ TEST (VuRelay, AFailedBindSaysSoAndStartsNothing)
     EXPECT_FALSE (relay.isRunning());
 }
 
-TEST (VuRelay, TheAnalyzersEnvGetsTheLine)
+TEST (VuRelay, TheAnalyzersEnvGetsNoRelayLine)
 {
-    // Core renders the analyzer's conf.d file at its start, so the line reaches the analyzer
-    // without a hand edit.
-    const auto endpoint = b0::truth().endpoint ("core", "vu-relay");
-    EXPECT_NE (analyzerBlock (b0::truth()).find ("OSC_VU_core=" + endpoint.host + ":" + std::to_string (endpoint.port) + "\n"),
-               std::string::npos);
+    // O13: the engine measures the meters and sends them to the relay; the analyzer sends none,
+    // even where B0's truth still routes them from it.
+    EXPECT_EQ (analyzerBlock (b0::truth()).find ("OSC_VU_core="), std::string::npos);
 }

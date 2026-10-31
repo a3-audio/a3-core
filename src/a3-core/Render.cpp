@@ -98,11 +98,9 @@ std::string readText (const juce::File& file)
 }
 }
 
-std::string analyzerPrefix (const juce::var& route)
+bool carriesVu (const juce::var& route)
 {
-    const auto to = route["to"].toString();
-    const auto carriesVu = to.endsWith (".vu") || (route["carries"].isString() && route["carries"].toString() == "vu");
-    return carriesVu ? "OSC_VU_" : "OSC_HOST_";
+    return route["to"].toString().endsWith (".vu") || (route["carries"].isString() && route["carries"].toString() == "vu");
 }
 
 std::string oscEnv (const Truth& truth)
@@ -128,21 +126,20 @@ std::string analyzerBlock (const Truth& truth)
     Pairs targets;
     for (const auto& route : truth.routes())
     {
-        if (! route["from"].isString() || route["from"].toString() != "beat-analyzer")
+        if (! route["from"].isString() || route["from"].toString() != "beat-analyzer" || carriesVu (route))
             continue;
         const auto to = route["to"].toString().toStdString();
         const auto dot = to.find ('.');
         if (dot == std::string::npos || to.find ('.', dot + 1) != std::string::npos)
             throw TruthError { "route target '" + to + "' is not program.role" };
         const auto program = to.substr (0, dot), role = to.substr (dot + 1);
-        targets.push_back ({ analyzerPrefix (route) + program, endpointText (truth, program, role) });
+        targets.push_back ({ "OSC_HOST_" + program, endpointText (truth, program, role) });
     }
     targets.push_back ({ "OSC_PORT_A3MOTION", portOf (truth, "beat-analyzer", "clock") });
     // Its words and the Pro DJ Link ports: beat-analyzer's Config::OscWords.
     targets.push_back ({ "OSC_ADDRESS_BEAT", truth.pattern ("beat") });
     targets.push_back ({ "OSC_ADDRESS_TAP", truth.pattern ("tap") });
     targets.push_back ({ "OSC_ADDRESS_CLOCKMODE", truth.pattern ("clockmode") });
-    targets.push_back ({ "OSC_ADDRESS_VU", truth.pattern ("vu") });
     targets.push_back ({ "PIONEER_PORT_ANNOUNCE", portOf (truth, "prolink", "announce") });
     targets.push_back ({ "PIONEER_PORT_BEAT", portOf (truth, "prolink", "beat") });
     targets.push_back ({ "PIONEER_PORT_STATUS", portOf (truth, "prolink", "status") });

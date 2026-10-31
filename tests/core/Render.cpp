@@ -216,21 +216,24 @@ TEST (Render, EveryRouteFromTheAnalyzerIsATarget)
         const auto to = route["to"].toString().toStdString();
         const auto dot = to.find ('.');
         const auto program = to.substr (0, dot), role = to.substr (dot + 1);
-        const auto vu = role == "vu" || route["carries"].toString() == "vu";
+        if (carriesVu (route))
+            continue;
         const auto endpoint = truth.endpoint (program, role);
         SCOPED_TRACE (to);
-        EXPECT_EQ (targets.at ((vu ? "OSC_VU_" : "OSC_HOST_") + program), endpoint.host + ":" + std::to_string (endpoint.port));
+        EXPECT_EQ (targets.at ("OSC_HOST_" + program), endpoint.host + ":" + std::to_string (endpoint.port));
     }
 }
 
-TEST (Render, TheMixerGetsItsMeters)
+TEST (Render, AMeterRouteOfTheAnalyzersRendersNoLine)
 {
-    // Once one OSC_VU_ target exists the analyzer sends /vu to those only -- a program on one port
-    // for both needs its OSC_VU_ line too, or its meters stop (the mixer, whose meters sit on its
-    // OSC port).
-    const auto targets = pairs (analyzerBlock (shipped()));
-    const auto endpoint = shipped().endpoint ("mixer", "osc");
-    EXPECT_EQ (targets.at ("OSC_VU_mixer"), endpoint.host + ":" + std::to_string (endpoint.port));
+    // The analyzer has no meter code left since O13 (the engine measures /vu). B0's truth still
+    // routes /vu from it, to the mixer among others: no OSC_VU_ line for any of them.
+    EXPECT_EQ (analyzerBlock (shipped()).find ("OSC_VU_"), std::string::npos);
+}
+
+TEST (Render, TheAnalyzerGetsNoMeterAddress)
+{
+    EXPECT_EQ (analyzerBlock (shipped()).find ("OSC_ADDRESS_VU"), std::string::npos);
 }
 
 TEST (Render, NothingElseIsATarget)
@@ -238,9 +241,9 @@ TEST (Render, NothingElseIsATarget)
     const auto targets = pairs (analyzerBlock (shipped()));
     size_t routed = 0, sentTo = 0;
     for (const auto& route : shipped().routes())
-        routed += route["from"].toString() == "beat-analyzer" ? 1 : 0;
+        routed += route["from"].toString() == "beat-analyzer" && ! carriesVu (route) ? 1 : 0;
     for (const auto& target : targets)
-        sentTo += target.first.rfind ("OSC_HOST_", 0) == 0 || target.first.rfind ("OSC_VU_", 0) == 0 ? 1 : 0;
+        sentTo += target.first.rfind ("OSC_HOST_", 0) == 0 ? 1 : 0;
     EXPECT_EQ (sentTo, routed);
 }
 
@@ -252,7 +255,6 @@ TEST (Render, TheAnalyzerSpeaksTheTruthsWords)
     EXPECT_EQ (targets.at ("OSC_ADDRESS_BEAT"), truth.pattern ("beat"));
     EXPECT_EQ (targets.at ("OSC_ADDRESS_TAP"), truth.pattern ("tap"));
     EXPECT_EQ (targets.at ("OSC_ADDRESS_CLOCKMODE"), truth.pattern ("clockmode"));
-    EXPECT_EQ (targets.at ("OSC_ADDRESS_VU"), truth.pattern ("vu"));
     EXPECT_EQ (std::stoi (targets.at ("PIONEER_PORT_ANNOUNCE")), truth.port ("prolink", "announce"));
     EXPECT_EQ (std::stoi (targets.at ("PIONEER_PORT_BEAT")), truth.port ("prolink", "beat"));
     EXPECT_EQ (std::stoi (targets.at ("PIONEER_PORT_STATUS")), truth.port ("prolink", "status"));

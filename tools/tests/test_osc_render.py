@@ -123,11 +123,9 @@ class TheAnalyzerTargetsAreRendered(unittest.TestCase):
             if route.get("from") != "beat-analyzer":
                 continue
             program, role = route["to"].split(".")
-            vu = role == "vu" or route.get("carries") == "vu"
-            prefix = "OSC_VU_" if vu else "OSC_HOST_"
             host, port = TRUTH.endpoint(program, role)
-            with self.subTest(route=route["to"], vu=vu):
-                self.assertEqual(targets[prefix + program], f"{host}:{port}")
+            with self.subTest(route=route["to"]):
+                self.assertEqual(targets["OSC_HOST_" + program], f"{host}:{port}")
 
     def test_the_analyzer_gets_no_meter_target(self):
         """O13: the engine measures the meters and Core sends them on, so the
@@ -135,11 +133,27 @@ class TheAnalyzerTargetsAreRendered(unittest.TestCase):
         targets = pairs(a3_osc_render.analyzer_block(TRUTH))
         self.assertEqual([k for k in targets if k.startswith("OSC_VU_")], [])
 
+    def test_a_meter_route_of_the_analyzers_renders_no_line(self):
+        """The analyzer has no meter code left: a truth that still routes /vu
+        from it (an older one, a hand edit) gets no OSC_VU_ line and no
+        second target for that program."""
+        data = TRUTH.data()
+        data["routes"] += [{"from": "beat-analyzer", "to": "motion.vu"},
+                           {"from": "beat-analyzer", "to": "core.vu-relay",
+                            "carries": "vu"}]
+        block = a3_osc_render.analyzer_block(a3_osc.Truth(data))
+        self.assertNotIn("OSC_VU_", block)
+        self.assertEqual(block, a3_osc_render.analyzer_block(TRUTH))
+
+    def test_the_analyzer_gets_no_meter_address(self):
+        """OSC_ADDRESS_VU went with the analyzer's meters."""
+        self.assertNotIn("OSC_ADDRESS_VU", a3_osc_render.analyzer_block(TRUTH))
+
     def test_nothing_else_is_a_target(self):
         targets = pairs(a3_osc_render.analyzer_block(TRUTH))
         routed = [route for route in TRUTH.routes()
                   if route.get("from") == "beat-analyzer"]
-        sent_to = [k for k in targets if k.startswith(("OSC_HOST_", "OSC_VU_"))]
+        sent_to = [k for k in targets if k.startswith("OSC_HOST_")]
         self.assertEqual(len(sent_to), len(routed))
 
     def test_the_analyzer_speaks_the_truths_words(self):
@@ -149,7 +163,6 @@ class TheAnalyzerTargetsAreRendered(unittest.TestCase):
         self.assertEqual(targets["OSC_ADDRESS_BEAT"], TRUTH.pattern("beat"))
         self.assertEqual(targets["OSC_ADDRESS_TAP"], TRUTH.pattern("tap"))
         self.assertEqual(targets["OSC_ADDRESS_CLOCKMODE"], TRUTH.pattern("clockmode"))
-        self.assertEqual(targets["OSC_ADDRESS_VU"], TRUTH.pattern("vu"))
         self.assertEqual(int(targets["PIONEER_PORT_ANNOUNCE"]), TRUTH.port("prolink", "announce"))
         self.assertEqual(int(targets["PIONEER_PORT_BEAT"]), TRUTH.port("prolink", "beat"))
         self.assertEqual(int(targets["PIONEER_PORT_STATUS"]), TRUTH.port("prolink", "status"))

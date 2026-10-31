@@ -31,8 +31,9 @@ inline constexpr const char* aes67ConfPath = ".config/pipewire/pipewire-aes67.co
 // First line of every file we render; it is how a file of ours is told from one written by hand.
 inline constexpr const char* renderedHeader = "# rendered from a3-osc.json by a3-osc-render -- edit the truth, not this file";
 
-// OSC_VU_ for the meters, OSC_HOST_ for the clock.
-std::string analyzerPrefix (const juce::var& route);
+// A route of the meters. The analyzer has none of its own since O13 (the engine measures /vu), so
+// one from it in an older truth renders no line.
+bool carriesVu (const juce::var& route);
 
 std::string oscEnv (const Truth&);           // the ports of x11vnc and the screencast
 std::string networkDefaults (const Truth&);  // the INTERFACE=... lines the postinst feeds networkd
