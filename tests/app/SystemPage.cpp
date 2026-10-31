@@ -304,6 +304,54 @@ TEST (SystemCheckout, ThirdPartyIsOneNodeAtTheEndEachEntryOnce)
     repo.deleteRecursively();
 }
 
+// A submodule inside a part's folder is shown under that part (maintainer, 2026-10-31): a3-kicad-lib mounted in the
+// board's folder is "a3-mixer › pcb › a3-kicad-lib", ours by its relative url; its 3D models make no housing of the board.
+TEST (SystemCheckout, ASubmoduleInsideAPartsFolderIsThatPartsChild)
+{
+    const auto repo = juce::File::createTempFile ("a3-part-child");
+    const auto touch = [&repo] (const juce::String& path, const juce::String& content = {}) {
+        const auto file = repo.getChildFile (path);
+        file.getParentDirectory().createDirectory();
+        file.replaceWithText (content);
+    };
+    touch ("a3-mixer/hardware/pcb/board.kicad_pro");
+    touch ("a3-mixer/hardware/pcb/REVISION", "v02\n");
+    touch ("a3-mixer/hardware/pcb/a3-kicad-lib/3d/part.stl");
+    touch ("a3-mixer/hardware/housing/box.blend");
+    touch ("a3-mixer/firmware/src/main.cpp");
+    const auto git = [&repo] (const juce::String& dir, const juce::String& rest) {
+        return "git -C " + (dir.isEmpty() ? repo : repo.getChildFile (dir)).getFullPathName() + " " + rest;
+    };
+    ScriptedRunner runner;
+    runner.answers[git ("", "ls-tree -r HEAD")] = { 0, "160000 commit bbb\ta3-mixer\n" };
+    runner.answers[git ("", "config --blob HEAD:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
+        = { 0, "submodule.a3-mixer.url https://github.com/a3-audio/a3-mixer\n" };
+    runner.answers[git ("a3-mixer", "describe --tags --match v* --always bbb")] = { 0, "v03.1\n" };
+    runner.answers[git ("a3-mixer", "ls-tree -r bbb")] = { 0, "160000 commit kkk\thardware/pcb/a3-kicad-lib\n" };
+    runner.answers[git ("a3-mixer", "config --blob bbb:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
+        = { 0, "submodule.hardware/pcb/a3-kicad-lib.url ../a3-kicad-lib.git\n" };
+    runner.answers[git ("a3-mixer/hardware/pcb/a3-kicad-lib", "describe --tags --match v* --always kkk")] = { 0, "v03.1\n" };
+    const auto facts = checkout::read (runner, repo);
+    juce::StringArray rows;
+    for (const auto& row : facts.rows)
+        rows.add (row.name + "|" + row.url);
+    EXPECT_EQ (rows.joinIntoString ("\n"),
+               juce::String ("a3-mixer|https://github.com/a3-audio/a3-mixer\n"
+                             "a3-mixer pcb|https://github.com/a3-audio/a3-mixer/tree/HEAD/hardware/pcb\n"
+                             "a3-mixer housing|https://github.com/a3-audio/a3-mixer/tree/HEAD/hardware/housing\n"
+                             "a3-mixer firmware|https://github.com/a3-audio/a3-mixer/tree/HEAD/firmware\n"
+                             "a3-mixer pcb/a3-kicad-lib|https://github.com/a3-audio/a3-kicad-lib"));
+    juce::StringArray tree;
+    for (const auto& entry : checkout::treeOf (facts.rows))
+        tree.add (entry.prefix + entry.name);
+    EXPECT_EQ (tree.joinIntoString ("\n"), juce::String::fromUTF8 ("└─ a3-mixer\n"
+                                                                   "   ├─ pcb\n"
+                                                                   "   │  └─ a3-kicad-lib\n"
+                                                                   "   ├─ housing\n"
+                                                                   "   └─ firmware"));
+    repo.deleteRecursively();
+}
+
 // a3-motion's board folder holds sub-projects (enc_pot, led_but) deeper down: the board is the shallowest project's folder.
 TEST (SystemCheckout, ThePcbIsTheShallowestKicadProjectNotASubProject)
 {

@@ -226,8 +226,23 @@ void addForeignLink (CommandRunner& runner, const juce::File& dir, const Gitlink
 
 // The submodules of a checked-out repository, anywhere in its tree, each a row "<parent>/<last path component>", and
 // theirs below them -- any depth (a3-stemdeck's a3-stem-separator, a3-mixer's hardware/a3-kicad-lib).
+// A part of a repository (pcb, housing, firmware, ui folder) by its folder: a submodule inside it is that part's child.
+struct PartFolder
+{
+    juce::String folder, rowName;
+};
+
+juce::String parentRowOf (const juce::String& path, const juce::String& repoRow, const std::vector<PartFolder>& partFolders)
+{
+    for (const auto& part : partFolders)
+        if (path.startsWith (part.folder + "/"))
+            return part.rowName;
+    return repoRow;
+}
+
 void addNested (CommandRunner& runner, const juce::File& dir, const juce::String& commit, const std::vector<Gitlink>& inners,
-                const juce::String& url, const juce::String& parentName, Facts& facts, std::vector<ThirdParty>& others)
+                const juce::String& url, const juce::String& parentName, Facts& facts, std::vector<ThirdParty>& others,
+                const std::vector<PartFolder>& partFolders = {})
 {
     if (inners.empty())
         return;
@@ -235,7 +250,7 @@ void addNested (CommandRunner& runner, const juce::File& dir, const juce::String
     for (const auto& inner : inners)
     {
         const auto innerDir = dir.getChildFile (inner.path);
-        const auto name = parentName + "/" + lastComponent (inner.path);
+        const auto name = parentRowOf (inner.path, parentName, partFolders) + "/" + lastComponent (inner.path);
         const auto innerUrl = urlOf (innerUrls, inner.path);
         if (! isOurs (innerUrl))
         {
@@ -266,15 +281,18 @@ void addSubmodule (CommandRunner& runner, const juce::File& repo, const Gitlink&
     if (facts.rows.back().tag.isEmpty())
         return;   // not checked out: nothing more to ask it
     addThirdParties (others, dir);
+    std::vector<PartFolder> partFolders;
     // A hardware part has the revision its REVISION file says.
     for (const auto& part : partsOf (dir))
     {
+        partFolders.push_back ({ part.folder, rowName + " " + part.name });
         const auto version = revisionText (part.revision);
         facts.rows.push_back ({ rowName + " " + part.name, version, url.isNotEmpty() ? url + "/tree/HEAD/" + part.folder : juce::String(),
                                 licenceOfFolder (dir, part.folder), version.isEmpty() });
     }
     if (hasFirmware (link.path))
     {
+        partFolders.push_back ({ firmwareFolder, rowName + " firmware" });
         facts.rows.push_back ({ rowName + " firmware", revisionText (lastChangeTag (runner, dir, link.commit, firmwareFolder)),
                                 url.isNotEmpty() ? url + "/tree/HEAD/" + firmwareFolder : juce::String(),
                                 licenceOfFolder (dir, firmwareFolder) });
@@ -284,10 +302,13 @@ void addSubmodule (CommandRunner& runner, const juce::File& repo, const Gitlink&
     // a ui that is a repository of its own (a3-motion's) is listed below as a submodule.
     const bool uiIsSubmodule = std::any_of (inners.begin(), inners.end(), [] (const Gitlink& g) { return g.path == uiFolder; });
     if (! uiIsSubmodule && dir.getChildFile (uiFolder).isDirectory())
+    {
+        partFolders.push_back ({ uiFolder, rowName + " ui" });
         facts.rows.push_back ({ rowName + " ui", lastChangeTag (runner, dir, link.commit, uiFolder),
                                 url.isNotEmpty() ? url + "/tree/HEAD/" + uiFolder : juce::String(),
                                 licenceOfFolder (dir, uiFolder) });
-    addNested (runner, dir, link.commit, inners, url, rowName, facts, others);
+    }
+    addNested (runner, dir, link.commit, inners, url, rowName, facts, others, partFolders);
 }
 
 // The tree's last node: the third parties sorted by name, JUCE with the version the program is built with.
@@ -393,7 +414,8 @@ std::vector<Part> partsOf (const juce::File& repoDir)
     }
     for (const auto& top : hardware.findChildFiles (juce::File::findDirectories, false))
     {
-        const bool isPcbsFolder = pcbFolder != juce::File() && pcbFolder.isAChildOf (top);
+        // The board's own folder or the one holding it: a library mounted in it (a3-kicad-lib's 3D models) makes no housing.
+        const bool isPcbsFolder = pcbFolder != juce::File() && (pcbFolder == top || pcbFolder.isAChildOf (top));
         if (isPcbsFolder || ! holdsFile (top, { "*.FCStd", "*.stl", "*.3mf", "*.blend" }))
             continue;
         parts.push_back ({ "housing", relative (top), revisionIn (top) });
