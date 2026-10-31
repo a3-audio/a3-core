@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "SystemCheckout.h"
 #include <algorithm>
+#include <cstring>
 
 namespace a3app::checkout
 {
@@ -88,34 +89,59 @@ juce::String joinedLicences (const juce::StringArray& ids)
 
 juce::String firstLicence (const juce::String& joined) { return joined.upToFirstOccurrenceOf (juce::String::fromUTF8 (" · "), false, false); }
 
-// "Files: a b" stanzas of a dep5: (patterns, license).
-std::vector<std::pair<juce::StringArray, juce::String>> dep5Stanzas (const juce::File& file)
+// The paragraphs of a dep5 (Debian copyright format): each field's lines, its first line's value and then its continuation
+// lines (indented; " ." an empty line), trimmed.
+using Paragraph = std::map<juce::String, juce::StringArray>;
+
+std::vector<Paragraph> dep5Paragraphs (const juce::File& file)
 {
-    std::vector<std::pair<juce::StringArray, juce::String>> stanzas;
-    juce::StringArray patterns;
-    bool inFiles = false;
+    std::vector<Paragraph> paragraphs (1);
+    juce::String field;
     for (const auto& raw : juce::StringArray::fromLines (file.loadFileAsString()))
     {
         if (raw.trim().isEmpty())
         {
-            inFiles = false;
+            if (! paragraphs.back().empty())
+                paragraphs.emplace_back();
+            field.clear();
             continue;
         }
-        if (raw.startsWith ("Files:"))
+        if ((raw.startsWithChar (' ') || raw.startsWithChar ('\t')) && field.isNotEmpty())
+            paragraphs.back()[field].add (raw.trim() == "." ? juce::String() : raw.trim());
+        else if (raw.containsChar (':') && ! raw.startsWithChar ('#'))
         {
-            patterns = juce::StringArray::fromTokens (raw.fromFirstOccurrenceOf (":", false, false), " \t", {});
-            inFiles = true;
+            field = raw.upToFirstOccurrenceOf (":", false, false).trim();
+            paragraphs.back()[field].add (raw.fromFirstOccurrenceOf (":", false, false).trim());
         }
-        else if (inFiles && raw.startsWithChar (' '))
-            patterns.addTokens (raw, " \t", {});
-        else if (raw.startsWith ("License:"))
-        {
-            inFiles = false;
-            stanzas.push_back ({ patterns, raw.fromFirstOccurrenceOf (":", false, false).trim() });
-        }
-        else
-            inFiles = false;
     }
+    if (paragraphs.back().empty())
+        paragraphs.pop_back();
+    return paragraphs;
+}
+
+juce::String firstLineOf (const Paragraph& paragraph, const char* field)
+{
+    const auto found = paragraph.find (field);
+    return found != paragraph.end() && ! found->second.isEmpty() ? found->second[0] : juce::String();
+}
+
+juce::StringArray patternsOf (const Paragraph& paragraph)
+{
+    juce::StringArray patterns;
+    if (const auto found = paragraph.find ("Files"); found != paragraph.end())
+        for (const auto& line : found->second)
+            patterns.addTokens (line, " \t", {});
+    patterns.removeEmptyStrings();
+    return patterns;
+}
+
+// "Files: a b" stanzas of a dep5: (patterns, license).
+std::vector<std::pair<juce::StringArray, juce::String>> dep5Stanzas (const juce::File& file)
+{
+    std::vector<std::pair<juce::StringArray, juce::String>> stanzas;
+    for (const auto& paragraph : dep5Paragraphs (file))
+        if (paragraph.count ("Files") != 0 && paragraph.count ("License") != 0)
+            stanzas.push_back ({ patternsOf (paragraph), firstLineOf (paragraph, "License") });
     return stanzas;
 }
 
@@ -168,10 +194,40 @@ bool hasFirmware (const juce::String& submodule)
 // Hardware and firmware rows read "rev <version>", lowercase whatever the file says; nothing when there is no version.
 juce::String revisionText (const juce::String& version) { return version.isNotEmpty() ? "rev " + version.toLowerCase() : juce::String(); }
 
+// An entry once by name: a second sighting only fills what the first did not know.
+void addThirdParty (std::vector<ThirdParty>& others, const ThirdParty& entry)
+{
+    const auto found = std::find_if (others.begin(), others.end(), [&entry] (const ThirdParty& e) { return e.name == entry.name; });
+    if (found == others.end())
+    {
+        others.push_back (entry);
+        return;
+    }
+    const auto fill = [] (juce::String& mine, const juce::String& theirs) { if (mine.isEmpty()) mine = theirs; };
+    fill (found->version, entry.version);
+    fill (found->licence, entry.licence);
+    fill (found->url, entry.url);
+}
+
+void addThirdParties (std::vector<ThirdParty>& others, const juce::File& repoDir)
+{
+    for (const auto& entry : thirdPartyOf (repoDir))
+        addThirdParty (others, entry);
+}
+
+// A submodule published outside a3-audio: its describe (any tag, it is not ours), the short commit when not checked out.
+void addForeignLink (CommandRunner& runner, const juce::File& dir, const Gitlink& link, const juce::String& url, std::vector<ThirdParty>& others)
+{
+    auto version = releaseText (gitOutput (runner, dir.getChildFile (link.path), { "describe", "--tags", "--always", link.commit }));
+    if (version.isEmpty())
+        version = link.commit.substring (0, 7);
+    addThirdParty (others, { lastComponent (link.path), version, {}, url });
+}
+
 // The submodules of a checked-out repository, anywhere in its tree, each a row "<parent>/<last path component>", and
 // theirs below them -- any depth (a3-stemdeck's a3-stem-separator, a3-mixer's hardware/a3-kicad-lib).
 void addNested (CommandRunner& runner, const juce::File& dir, const juce::String& commit, const std::vector<Gitlink>& inners,
-                const juce::String& url, const juce::String& parentName, Facts& facts)
+                const juce::String& url, const juce::String& parentName, Facts& facts, std::vector<ThirdParty>& others)
 {
     if (inners.empty())
         return;
@@ -181,21 +237,35 @@ void addNested (CommandRunner& runner, const juce::File& dir, const juce::String
         const auto innerDir = dir.getChildFile (inner.path);
         const auto name = parentName + "/" + lastComponent (inner.path);
         const auto innerUrl = urlOf (innerUrls, inner.path);
+        if (! isOurs (innerUrl))
+        {
+            addForeignLink (runner, dir, inner, innerUrl, others);
+            continue;
+        }
         facts.rows.push_back ({ name, tagOf (runner, innerDir, inner.commit), innerUrl, codeLicence (innerDir) });
-        if (facts.rows.back().tag.isNotEmpty())
-            addNested (runner, innerDir, inner.commit, parseGitlinks (gitOutput (runner, innerDir, { "ls-tree", "-r", inner.commit })),
-                       innerUrl, name, facts);
+        if (facts.rows.back().tag.isEmpty())
+            continue;
+        addThirdParties (others, innerDir);
+        addNested (runner, innerDir, inner.commit, parseGitlinks (gitOutput (runner, innerDir, { "ls-tree", "-r", inner.commit })),
+                   innerUrl, name, facts, others);
     }
 }
 
 // A submodule's row, then its parts (pcb, housing), its firmware's, its ui folder's, then its own submodules at any depth.
-void addSubmodule (CommandRunner& runner, const juce::File& repo, const Gitlink& link, const juce::String& url, Facts& facts)
+void addSubmodule (CommandRunner& runner, const juce::File& repo, const Gitlink& link, const juce::String& url, Facts& facts,
+                   std::vector<ThirdParty>& others)
 {
+    if (! isOurs (url))
+    {
+        addForeignLink (runner, repo, link, url, others);
+        return;
+    }
     const auto dir = repo.getChildFile (link.path);
     const auto rowName = lastComponent (link.path);
     facts.rows.push_back ({ rowName, tagOf (runner, dir, link.commit), url, codeLicence (dir) });
     if (facts.rows.back().tag.isEmpty())
         return;   // not checked out: nothing more to ask it
+    addThirdParties (others, dir);
     // A hardware part has the revision its REVISION file says.
     for (const auto& part : partsOf (dir))
     {
@@ -217,7 +287,22 @@ void addSubmodule (CommandRunner& runner, const juce::File& repo, const Gitlink&
         facts.rows.push_back ({ rowName + " ui", lastChangeTag (runner, dir, link.commit, uiFolder),
                                 url.isNotEmpty() ? url + "/tree/HEAD/" + uiFolder : juce::String(),
                                 licenceOfFolder (dir, uiFolder) });
-    addNested (runner, dir, link.commit, inners, url, rowName, facts);
+    addNested (runner, dir, link.commit, inners, url, rowName, facts, others);
+}
+
+// The tree's last node: the third parties sorted by name, JUCE with the version the program is built with.
+void addThirdPartyNode (std::vector<ThirdParty> others, Facts& facts)
+{
+    if (others.empty())
+        return;
+    std::sort (others.begin(), others.end(), [] (const ThirdParty& a, const ThirdParty& b) { return a.name.compareIgnoreCase (b.name) < 0; });
+    facts.rows.push_back ({ thirdPartyNode, {}, {}, {}, true });
+    for (auto& entry : others)
+    {
+        if (entry.name == "JUCE" && entry.version.isEmpty())
+            entry.version = juce::SystemStats::getJUCEVersion().fromFirstOccurrenceOf ("JUCE v", false, false);
+        facts.rows.push_back ({ juce::String (thirdPartyNode) + "/" + entry.name, entry.version, entry.url, entry.licence, entry.version.isEmpty() });
+    }
 }
 }
 
@@ -332,6 +417,116 @@ juce::String licenceOfFolder (const juce::File& repoDir, const juce::String& fol
     return firstLicence (fromDep5.isNotEmpty() ? fromDep5 : licenceFromHeaders (repoDir.getChildFile (folder)));
 }
 
+bool isOurs (const juce::String& url)
+{
+    if (url.isEmpty() || url.startsWith ("../") || url.startsWith ("./"))
+        return true;
+    for (const auto* home : { "https://github.com/a3-audio/", "http://github.com/a3-audio/", "git@github.com:a3-audio/", "ssh://git@github.com/a3-audio/" })
+        if (url.startsWith (home))
+            return true;
+    return false;
+}
+
+juce::String thirdPartyLicence (const juce::String& expression)
+{
+    juce::StringArray words;
+    for (auto word : juce::StringArray::fromTokens (expression, " ", {}))
+    {
+        word = word.replace ("LicenseRef-", "");
+        for (const auto* suffix : { "-or-later", "-only" })
+            if (word.endsWith (suffix))
+                word = word.dropLastCharacters ((int) std::strlen (suffix));
+        words.add (word);
+    }
+    return words.joinIntoString (" ");
+}
+
+namespace
+{
+// A holder of ours: the copyright holder of 2026-10-30, the project, and Patric Schmitz, a member co-holding the mixer firmware.
+bool isOurHolder (const juce::String& holder)
+{
+    for (const auto* ours : { "Raphael Eismann", "Raphael Eismann and contributors", "Patric Schmitz", "A3 Audio", "A3 Audio contributors",
+                              "a3-audio contributors" })
+        if (holder.equalsIgnoreCase (ours))
+            return true;
+    return false;
+}
+
+// The holders of a Copyright field: each line without its years and e-mail address, split at commas.
+juce::StringArray holdersOf (const juce::StringArray& lines)
+{
+    juce::StringArray holders;
+    for (auto line : lines)
+    {
+        line = (line.upToFirstOccurrenceOf ("<", false, false) + line.fromFirstOccurrenceOf (">", false, false)).trim();
+        while (line.isNotEmpty() && (juce::String ("0123456789-, ").containsChar (line[0]) || line.startsWith ("present")))
+            line = line.startsWith ("present") ? line.substring (7) : line.substring (1);
+        holders.addTokens (line, ",", {});
+    }
+    holders.trim();
+    holders.removeEmptyStrings();
+    return holders;
+}
+
+bool isForeign (const Paragraph& stanza)
+{
+    const auto found = stanza.find ("Copyright");
+    if (found == stanza.end())
+        return false;
+    const auto holders = holdersOf (found->second);
+    return std::any_of (holders.begin(), holders.end(), [] (const juce::String& h) { return ! isOurHolder (h); });
+}
+
+bool coversTrivialFiles (const Paragraph& stanza)
+{
+    const auto ids = idsOf (firstLineOf (stanza, "License"));
+    return std::all_of (ids.begin(), ids.end(), [] (const juce::String& id) { return id == "CC0-1.0"; });
+}
+
+juce::String nameOf (const Paragraph& stanza)
+{
+    if (const auto name = firstLineOf (stanza, "X-A3-Name"); name.isNotEmpty())
+        return name;
+    if (const auto found = stanza.find ("Comment"); found != stanza.end())
+    {
+        const auto comment = found->second.joinIntoString (" ").trim();
+        const auto sentence = comment.upToFirstOccurrenceOf (". ", false, false).trim();
+        if (sentence.isNotEmpty())
+            return sentence.endsWithChar ('.') ? sentence.dropLastCharacters (1) : sentence;
+    }
+    return patternsOf (stanza)[0];
+}
+
+// "JUCE; AGPL-3.0-only OR LicenseRef-JUCE-9; https://juce.com" -> its entry.
+ThirdParty usedFrom (const juce::String& line)
+{
+    auto fields = juce::StringArray::fromTokens (line, ";", {});
+    fields.trim();
+    return { fields[0], {}, thirdPartyLicence (fields[1]), fields[2] };
+}
+}
+
+std::vector<ThirdParty> thirdPartyOf (const juce::File& repoDir)
+{
+    std::vector<ThirdParty> entries;
+    const auto paragraphs = dep5Paragraphs (repoDir.getChildFile (".reuse/dep5"));
+    for (const auto& stanza : paragraphs)
+    {
+        if (stanza.count ("Files") == 0 || ! isForeign (stanza) || coversTrivialFiles (stanza))
+            continue;
+        const auto own = firstLineOf (stanza, "X-A3-License");
+        entries.push_back ({ nameOf (stanza), {}, thirdPartyLicence (own.isNotEmpty() ? own : firstLineOf (stanza, "License")),
+                             firstLineOf (stanza, "X-A3-Url") });
+    }
+    if (! paragraphs.empty() && paragraphs.front().count ("Files") == 0)
+        if (const auto uses = paragraphs.front().find ("X-A3-Uses"); uses != paragraphs.front().end())
+            for (const auto& line : uses->second)
+                if (line.isNotEmpty())
+                    entries.push_back (usedFrom (line));
+    return entries;
+}
+
 juce::String tagText (const Row& row) { return row.tag.isNotEmpty() ? row.tag : row.noVersion ? juce::String() : juce::String ("not checked out"); }
 
 Facts read (CommandRunner& runner, const juce::File& repo)
@@ -344,9 +539,12 @@ Facts read (CommandRunner& runner, const juce::File& repo)
     facts.licence = codeLicence (repo);
     facts.version = releaseText (gitOutput (runner, repo, { "describe", "--tags", "--match", "v*", "--always", "HEAD" }));
     const auto urls = urlsAt (runner, repo, "HEAD", {});
-    // Every submodule is a part of the release since 2026-10-31 (stemseparator too, as stemdeck's).
+    std::vector<ThirdParty> others;
+    addThirdParties (others, repo);
+    // Every submodule of ours is a part of the release since 2026-10-31 (stemseparator too, as stemdeck's).
     for (const auto& link : links)
-        addSubmodule (runner, repo, link, urlOf (urls, link.path), facts);
+        addSubmodule (runner, repo, link, urlOf (urls, link.path), facts, others);
+    addThirdPartyNode (std::move (others), facts);
     return facts;
 }
 

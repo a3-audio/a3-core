@@ -166,6 +166,144 @@ TEST (SystemAbout, SupportIsOneFixedLinkTheSameForEveryone)
     EXPECT_EQ (links[3].url, about::supportUrl());
 }
 
+// What is third-party is decided by origin (maintainer, 2026-10-31): a submodule published under a3-audio is ours, in
+// whatever folder it sits (a3-stemdeck's third_party/a3-core); one published elsewhere is not.
+TEST (CheckoutThirdParty, OriginDecidesNotTheFolder)
+{
+    EXPECT_TRUE (checkout::isOurs ("https://github.com/a3-audio/a3-core"));
+    EXPECT_TRUE (checkout::isOurs ("git@github.com:a3-audio/a3-core.git"));
+    EXPECT_TRUE (checkout::isOurs ("../a3-beat-analyzer.git")) << "a relative url not resolved is a sibling of ours";
+    EXPECT_TRUE (checkout::isOurs ("")) << "no url known: not called foreign";
+    EXPECT_FALSE (checkout::isOurs ("https://git.iem.at/audioplugins/IEMPluginSuite"));
+    EXPECT_FALSE (checkout::isOurs ("https://github.com/adamstark/BTrack"));
+    EXPECT_FALSE (checkout::isOurs ("https://github.com/a3-audio-fork/a3-core")) << "the organisation, not a prefix of it";
+    const auto links = checkout::parseGitlinks ("160000 commit aaa\tthird_party/a3-core\n160000 commit bbb\tthird_party/IEMPluginSuite\n");
+    ASSERT_EQ (links.size(), 2u) << "no folder is dropped: the url decides";
+}
+
+// A third party's licence as its author sets it, shortened as our licence column: "-or-later"/"-only" and the
+// "LicenseRef-" namespace dropped, everything else as recorded, an expression kept whole.
+TEST (CheckoutThirdParty, TheLicenceIsTheAuthorsShort)
+{
+    EXPECT_EQ (checkout::thirdPartyLicence ("GPL-3.0-or-later"), "GPL-3.0");
+    EXPECT_EQ (checkout::thirdPartyLicence ("MIT"), "MIT");
+    EXPECT_EQ (checkout::thirdPartyLicence ("BSD-3-Clause"), "BSD-3-Clause");
+    EXPECT_EQ (checkout::thirdPartyLicence ("Apache-2.0"), "Apache-2.0");
+    EXPECT_EQ (checkout::thirdPartyLicence ("LicenseRef-SnapMagic"), "SnapMagic");
+    EXPECT_EQ (checkout::thirdPartyLicence ("AGPL-3.0-only OR LicenseRef-JUCE-9"), "AGPL-3.0 OR JUCE-9");
+    EXPECT_EQ (checkout::thirdPartyLicence ("GPL-3.0-or-later AND CC-BY-3.0"), "GPL-3.0 AND CC-BY-3.0");
+}
+
+// The REUSE data of a repository names what it holds from others: every stanza with a copyright holder who is not ours
+// ("Raphael Eismann and contributors", Patric Schmitz as co-holder), named by X-A3-Name, its licence the X-A3-License
+// part where the stanza mixes ours and theirs; a stanza of trivial files (CC0-1.0) is no entry. The header's X-A3-Uses
+// names what is built on without a file in the repository (JUCE).
+TEST (CheckoutThirdParty, ForeignReuseStanzasAreEntriesAndOursAreNot)
+{
+    const auto repo = juce::File::createTempFile ("a3-third-party");
+    repo.getChildFile (".reuse").createDirectory();
+    repo.getChildFile (".reuse/dep5").replaceWithText (
+        "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/\n"
+        "Upstream-Name: A3 Audio\n"
+        "X-A3-Uses: JUCE; AGPL-3.0-only OR LicenseRef-JUCE-9; https://juce.com\n"
+        "\n"
+        "Files: src/*\nCopyright: 2023-2026 Raphael Eismann and contributors\nLicense: GPL-3.0-or-later\n\n"
+        "Files: firmware/*\nCopyright: 2024 Patric Schmitz, Raphael Eismann\nLicense: GPL-3.0-or-later\n\n"
+        "Files: src/a3-engine/PurestGain.*\nCopyright: 2018 Chris Johnson\n 2023-2026 Raphael Eismann\n"
+        "License: GPL-3.0-or-later AND MIT\nX-A3-Name: Airwindows\nX-A3-License: MIT\nX-A3-Url: https://github.com/airwindows/airwindows\n\n"
+        "Files: tests/reference/airwindows/*\nCopyright: 2018 Chris Johnson\nLicense: MIT\nX-A3-Name: Airwindows\n\n"
+        "Files: firmware/boards/*\nCopyright: 2014-present PlatformIO <contact@platformio.org>\n           2026 Raphael Eismann\n"
+        "License: Apache-2.0\nComment: Board definition adapted from PlatformIO's platform-espressif32.\n\n"
+        "Files: build/*.cmake\nCopyright: 2000-2020 Kitware, Inc. and Contributors\nLicense: CC0-1.0\nX-A3-Name: trivial\n");
+    juce::StringArray entries;
+    for (const auto& entry : checkout::thirdPartyOf (repo))
+        entries.add (entry.name + "|" + entry.version + "|" + entry.licence + "|" + entry.url);
+    EXPECT_EQ (entries.joinIntoString ("\n"),
+               juce::String ("Airwindows||MIT|https://github.com/airwindows/airwindows\n"
+                             "Airwindows||MIT|\n"
+                             "Board definition adapted from PlatformIO's platform-espressif32||Apache-2.0|\n"   // no name: its Comment
+                             "JUCE||AGPL-3.0 OR JUCE-9|https://juce.com"));
+    EXPECT_TRUE (checkout::thirdPartyOf (repo.getChildFile ("not-here")).empty());
+    repo.deleteRecursively();
+}
+
+// The tree's last node, "third-party": everything we use from others, each once -- the foreign stanzas of every
+// checked-out repository's REUSE data and every submodule published outside a3-audio (its describe, or its short
+// commit when not checked out). Our own a3-core under a3-stemdeck's third_party/ is a row like any other submodule.
+TEST (SystemCheckout, ThirdPartyIsOneNodeAtTheEndEachEntryOnce)
+{
+    const auto repo = juce::File::createTempFile ("a3-third-party-tree");
+    const auto touch = [&repo] (const juce::String& path, const juce::String& content = {}) {
+        const auto file = repo.getChildFile (path);
+        file.getParentDirectory().createDirectory();
+        file.replaceWithText (content);
+    };
+    touch ("a3-core/.reuse/dep5",
+           "Format: x\nX-A3-Uses: JUCE; AGPL-3.0-only OR LicenseRef-JUCE-9; https://juce.com\n\n"
+           "Files: src/*\nCopyright: 2023 Raphael Eismann and contributors\nLicense: GPL-3.0-or-later\n\n"
+           "Files: tests/reference/airwindows/*\nCopyright: 2018 Chris Johnson\nLicense: MIT\nX-A3-Name: Airwindows\n\n"
+           "Files: third_party/IEMPluginSuite/*\nCopyright: 2017-2026 Institute of Electronic Music and Acoustics (IEM), Graz\n"
+           "License: GPL-3.0-or-later\nX-A3-Name: IEMPluginSuite\n");
+    touch ("a3-core/a3-beat-analyzer/.reuse/dep5",
+           "Format: x\n\nFiles: *\nCopyright: 2026 Raphael Eismann\nLicense: GPL-3.0-or-later\n\n"
+           "Files: external/BTrack/*\nCopyright: 2008-2014 Queen Mary University of London\nLicense: GPL-3.0-or-later\nX-A3-Name: BTrack\n\n"
+           "Files: external/BTrack/libs/kiss_fft130/*\nCopyright: 2003-2010 Mark Borgerding\nLicense: BSD-3-Clause\nX-A3-Name: kiss_fft\n");
+    // a3-stemdeck's own copy of a3-core carries the same REUSE data: its entries are not listed twice.
+    touch ("a3-stemdeck/third_party/a3-core/.reuse/dep5",
+           "Format: x\nX-A3-Uses: JUCE; AGPL-3.0-only OR LicenseRef-JUCE-9; https://juce.com\n\n"
+           "Files: tests/reference/airwindows/*\nCopyright: 2018 Chris Johnson\nLicense: MIT\nX-A3-Name: Airwindows\n");
+    const auto git = [&repo] (const juce::String& dir, const juce::String& rest) {
+        return "git -C " + (dir.isEmpty() ? repo : repo.getChildFile (dir)).getFullPathName() + " " + rest;
+    };
+    ScriptedRunner runner;
+    runner.answers[git ("", "ls-tree -r HEAD")] = { 0, "160000 commit aaa\ta3-core\n160000 commit ddd\ta3-stemdeck\n" };
+    runner.answers[git ("", "config --blob HEAD:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
+        = { 0, "submodule.a3-core.url https://github.com/a3-audio/a3-core\nsubmodule.a3-stemdeck.url https://github.com/a3-audio/a3-stemdeck\n" };
+    runner.answers[git ("a3-core", "describe --tags --match v* --always aaa")] = { 0, "v03.1\n" };
+    runner.answers[git ("a3-core", "ls-tree -r aaa")] = { 0, "160000 commit iem\tthird_party/IEMPluginSuite\n160000 commit bea\ta3-beat-analyzer\n" };
+    runner.answers[git ("a3-core", "config --blob aaa:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
+        = { 0, "submodule.third_party/IEMPluginSuite.url https://git.iem.at/audioplugins/IEMPluginSuite.git\n"
+               "submodule.a3-beat-analyzer.url ../a3-beat-analyzer.git\n" };
+    runner.answers[git ("a3-core/third_party/IEMPluginSuite", "describe --tags --always iem")] = { 0, "v1.16.0\n" };
+    runner.answers[git ("a3-core/a3-beat-analyzer", "describe --tags --match v* --always bea")] = { 0, "v03.1\n" };
+    runner.answers[git ("a3-core/a3-beat-analyzer", "ls-tree -r bea")] = { 0, "160000 commit 9d6127618a5679e9\texternal/BTrack\n" };
+    runner.answers[git ("a3-core/a3-beat-analyzer", "config --blob bea:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
+        = { 0, "submodule.external/BTrack.url https://github.com/adamstark/BTrack.git\n" };
+    runner.answers[git ("a3-core/a3-beat-analyzer/external/BTrack", "describe --tags --always 9d6127618a5679e9")] = { 0, "1.0.7-1-g9d61276\n" };
+    runner.answers[git ("a3-stemdeck", "describe --tags --match v* --always ddd")] = { 0, "v03.1\n" };
+    runner.answers[git ("a3-stemdeck", "ls-tree -r ddd")] = { 0, "160000 commit cor\tthird_party/a3-core\n" };
+    runner.answers[git ("a3-stemdeck", "config --blob ddd:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
+        = { 0, "submodule.third_party/a3-core.url https://github.com/a3-audio/a3-core\n" };
+    runner.answers[git ("a3-stemdeck/third_party/a3-core", "describe --tags --match v* --always cor")] = { 0, "v03.0-5-gc0ffee1\n" };
+    // Its IEMPluginSuite is not checked out: the short commit, but the entry is already there with its describe.
+    runner.answers[git ("a3-stemdeck/third_party/a3-core", "ls-tree -r cor")] = { 0, "160000 commit d9e0a9aac011ab1a\tthird_party/IEMPluginSuite\n" };
+    runner.answers[git ("a3-stemdeck/third_party/a3-core", "config --blob cor:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
+        = { 0, "submodule.third_party/IEMPluginSuite.url https://git.iem.at/audioplugins/IEMPluginSuite.git\n" };
+    juce::StringArray rows;
+    for (const auto& row : checkout::read (runner, repo).rows)
+        rows.add (row.name + "|" + checkout::tagText (row) + "|" + row.licences + "|" + row.url);
+    const auto juceVersion = juce::SystemStats::getJUCEVersion().fromFirstOccurrenceOf ("JUCE v", false, false);
+    EXPECT_EQ (rows.joinIntoString ("\n"),
+               "a3-core|v03.1||https://github.com/a3-audio/a3-core\n"
+               "a3-core/a3-beat-analyzer|v03.1||https://github.com/a3-audio/a3-beat-analyzer\n"
+               "a3-stemdeck|v03.1||https://github.com/a3-audio/a3-stemdeck\n"
+               "a3-stemdeck/a3-core|v03.0+5||https://github.com/a3-audio/a3-core\n"
+               "third-party|||\n"
+               "third-party/Airwindows||MIT|\n"
+               "third-party/BTrack|1.0.7+1|GPL-3.0|https://github.com/adamstark/BTrack\n"
+               "third-party/IEMPluginSuite|v1.16.0|GPL-3.0|https://git.iem.at/audioplugins/IEMPluginSuite\n"
+               "third-party/JUCE|" + juceVersion + "|AGPL-3.0 OR JUCE-9|https://juce.com\n"
+               "third-party/kiss_fft||BSD-3-Clause|");
+    EXPECT_FALSE (juceVersion.isEmpty()) << "JUCE's version is the one the program is built with";
+    juce::StringArray tree;
+    const auto facts = checkout::read (runner, repo);
+    for (const auto& entry : checkout::treeOf (facts.rows))
+        tree.add (entry.prefix + entry.name);
+    EXPECT_EQ (tree[4], juce::String::fromUTF8 ("└─ third-party")) << "the last node";
+    EXPECT_EQ (tree[tree.size() - 1], juce::String::fromUTF8 ("   └─ kiss_fft"));
+    repo.deleteRecursively();
+}
+
 // a3-motion's board folder holds sub-projects (enc_pot, led_but) deeper down: the board is the shallowest project's folder.
 TEST (SystemCheckout, ThePcbIsTheShallowestKicadProjectNotASubProject)
 {
@@ -242,7 +380,8 @@ TEST (SystemCheckout, ReadsSubmodulesAtAnyDepthAndInsideFolders)
     runner.answers[git ("a3-stemdeck/a3-stem-separator", "ls-tree -r sep")] = { 0, "160000 commit msst\tvendor/msst\n" };
     runner.answers[git ("a3-stemdeck/a3-stem-separator", "config --blob sep:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
         = { 0, "submodule.vendor/msst.url https://github.com/ZFTurbo/Music-Source-Separation-Training\n" };
-    runner.answers[git ("a3-stemdeck/a3-stem-separator/vendor/msst", "describe --tags --match v* --always msst")] = { 0, "abc1234\n" };
+    // Published outside a3-audio: not a row, an entry of the third-party node (its describe, any tag).
+    runner.answers[git ("a3-stemdeck/a3-stem-separator/vendor/msst", "describe --tags --always msst")] = { 0, "abc1234\n" };
     juce::StringArray rows;
     for (const auto& row : checkout::read (runner, repo).rows)
         rows.add (row.name + "|" + row.tag + "|" + row.url);
@@ -252,7 +391,8 @@ TEST (SystemCheckout, ReadsSubmodulesAtAnyDepthAndInsideFolders)
                              "a3-mixer/a3-kicad-lib|v03.1+4|https://github.com/a3-audio/a3-kicad-lib\n"
                              "a3-stemdeck|v03.1|https://github.com/a3-audio/a3-stemdeck\n"
                              "a3-stemdeck/a3-stem-separator|v03.1|https://github.com/a3-audio/a3-stem-separator\n"
-                             "a3-stemdeck/a3-stem-separator/msst|abc1234|https://github.com/ZFTurbo/Music-Source-Separation-Training"));
+                             "third-party||\n"
+                             "third-party/msst|abc1234|https://github.com/ZFTurbo/Music-Source-Separation-Training"));
 }
 
 // The tree draws every depth: a child under its repository, a grandchild under the child, the connectors carrying on.
@@ -722,6 +862,9 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     };
     for (const auto* id : { "GPL-3.0-or-later", "CC-BY-SA-4.0", "CC0-1.0", "MIT" })
         touch ("a3-core/LICENSES/" + juce::String (id) + ".txt");
+    // What a3-core uses from others, by its REUSE data: the last node of the tree.
+    touch ("a3-core/.reuse/dep5", "Format: x\nX-A3-Uses: JUCE; AGPL-3.0-only OR LicenseRef-JUCE-9; https://juce.com\n\n"
+                                  "Files: tests/reference/airwindows/*\nCopyright: 2018 Chris Johnson\nLicense: MIT\nX-A3-Name: Airwindows\n");
     touch ("LICENSES/GPL-3.0-or-later.txt");   // the umbrella's own
     touch ("LICENSES/CC0-1.0.txt");
     for (const auto* id : { "GPL-3.0-or-later", "CC-BY-SA-4.0", "CERN-OHL-S-2.0", "CC0-1.0" })
@@ -732,8 +875,8 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     touch ("a3-motion/a3-motion-ui/LICENSES/GPL-3.0-or-later.txt");
     // The Mixer laid out like Motion (2026-10-31): board and housing under hardware/ (CERN), each with its REVISION;
     // the firmware top level, by its stanza.
-    touch ("a3-mixer/.reuse/dep5", "Format: x\n\nFiles: hardware/*\nCopyright: a\nLicense: CERN-OHL-S-2.0\n\n"
-                                   "Files: firmware/*\nCopyright: a\nLicense: GPL-3.0-or-later\n");
+    touch ("a3-mixer/.reuse/dep5", "Format: x\n\nFiles: hardware/*\nCopyright: 2026 Raphael Eismann\nLicense: CERN-OHL-S-2.0\n\n"
+                                   "Files: firmware/*\nCopyright: 2026 Raphael Eismann\nLicense: GPL-3.0-or-later\n");
     touch ("a3-mixer/hardware/pcb/board.kicad_pro");
     touch ("a3-mixer/hardware/pcb/REVISION", "V02\n");   // upper case in the file, lower case on the card
     touch ("a3-mixer/hardware/housing/box.blend");
@@ -747,7 +890,7 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     touch ("a3-stemdeck/LICENSES/GPL-3.0-or-later.txt");
     touch ("a3-stemdeck/a3-stem-separator/LICENSES/GPL-3.0-or-later.txt");
     // Motion: a board with a revision, a housing without one, the firmware by its stanza.
-    touch ("a3-motion/.reuse/dep5", "Format: x\n\nFiles: hardware/*\nCopyright: a\nLicense: CERN-OHL-S-2.0\n\nFiles: firmware/*\nCopyright: a\nLicense: GPL-3.0-or-later\n");
+    touch ("a3-motion/.reuse/dep5", "Format: x\n\nFiles: hardware/*\nCopyright: 2026 Raphael Eismann\nLicense: CERN-OHL-S-2.0\n\nFiles: firmware/*\nCopyright: 2026 Raphael Eismann\nLicense: GPL-3.0-or-later\n");
     touch ("a3-motion/hardware/pcbs/motion_pcb/motion.kicad_pro");
     touch ("a3-motion/hardware/pcbs/motion_pcb/REVISION", "v03\n");
     touch ("a3-motion/hardware/housing/freecad/box.FCStd");
@@ -793,7 +936,10 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
                              "a3-mixer firmware|rev v03.0|GPL-3.0\na3-mixer/a3-mixer-ui|v03.1+2|GPL-3.0\n"
                              "a3-motion|v03.0+855|GPL-3.0\na3-motion pcb|rev v03|CERN-OHL-S\na3-motion housing||CERN-OHL-S|no version\n"
                              "a3-motion firmware|rev v03.0+2|GPL-3.0\na3-motion/a3-motion-ui|v03.0+900|GPL-3.0\n"
-                             "a3-stemdeck|v03.1+1|GPL-3.0\na3-stemdeck/a3-stem-separator|v03.1|GPL-3.0"));
+                             "a3-stemdeck|v03.1+1|GPL-3.0\na3-stemdeck/a3-stem-separator|v03.1|GPL-3.0\n"
+                             "third-party|||no version\nthird-party/Airwindows||MIT|no version\n"
+                             "third-party/JUCE|" + juce::SystemStats::getJUCEVersion().fromFirstOccurrenceOf ("JUCE v", false, false)
+                                 + "|AGPL-3.0 OR JUCE-9"));
     // Every row fits on the card at the rig size (768x1024): the tree ends above the link line.
     view.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     int linksTop = view.getHeight();

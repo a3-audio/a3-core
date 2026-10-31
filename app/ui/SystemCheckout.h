@@ -73,10 +73,33 @@ juce::String shortLicence (const juce::String& spdxId);
 // files under it; the first licence of an expression. Empty when neither says.
 juce::String licenceOfFolder (const juce::File& repoDir, const juce::String& folder);
 
+// One thing the system uses from others: its name, its version where known (a submodule's describe or short commit; JUCE's
+// the one the program is built with), its licence as its author sets it (shown short, thirdPartyLicence), where it lives.
+struct ThirdParty
+{
+    juce::String name, version, licence, url;
+};
+// Whether a submodule url is ours: published under github.com/a3-audio, a relative url (a sibling of ours), or none known.
+// What is third-party is decided by this origin, not by the folder a submodule sits in (maintainer, 2026-10-31).
+bool isOurs (const juce::String& url);
+// A third party's SPDX expression as recorded, shortened as our licence column: "-or-later"/"-only" and the "LicenseRef-"
+// namespace dropped ("AGPL-3.0-only OR LicenseRef-JUCE-9" -> "AGPL-3.0 OR JUCE-9").
+juce::String thirdPartyLicence (const juce::String& expression);
+// The third parties a repository's REUSE data names, in its order: every .reuse/dep5 Files stanza with a copyright holder
+// who is not ours (ours: Raphael Eismann [and contributors], Patric Schmitz, A3 Audio), except stanzas of trivial files
+// (CC0-1.0 only); named by its X-A3-Name (else its Comment's first sentence, else its first path), its licence its
+// X-A3-License where the stanza mixes ours and theirs (else License), its url X-A3-Url. Then the header's X-A3-Uses
+// lines, "<name>; <licence>; <url>": what is built on without a file in the repository (JUCE). Empty without a dep5.
+std::vector<ThirdParty> thirdPartyOf (const juce::File& repoDir);
+
+// The node that closes the tree, and its entries' prefix: "third-party", "third-party/<name>".
+inline constexpr const char* thirdPartyNode = "third-party";
+
 // The checkout at `repo`: its HEAD's tag, each gitlink's pinned commit described in its submodule, the submodules of
 // those at any depth and in any folder (`ls-tree -r`; a3-mixer's hardware/a3-kicad-lib, a3-stemdeck's a3-stem-separator),
 // each named "<its repository's row>/<last path component>", and the firmware of a3-motion and a3-mixer as the tag of the
-// last commit that changed it.
+// last commit that changed it. A submodule published outside a3-audio is no row: it and the third parties of every
+// checked-out repository's REUSE data close the rows as the node "third-party", each entry once, by name.
 Facts read (CommandRunner&, const juce::File& repo);
 
 // A line of the PUBLISHED tree: which row, the name shown (a child's own part of its row name) and the connectors ahead.
