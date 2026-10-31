@@ -3,6 +3,7 @@ Upstream-Name: A3 Audio
 Upstream-Contact: A3 Audio <contact@a3-audio.com>
 Source: https://github.com/a3-audio/a3-core
 Comment: https://a3-audio.com
+X-A3-Uses: JUCE; AGPL-3.0-only OR LicenseRef-JUCE-9; https://juce.com
 
 Files: platform-config/*
 Copyright: 2023 Raphael Eismann and contributors
@@ -51,10 +52,15 @@ Copyright: 2018 Chris Johnson
  2023-2026 Raphael Eismann
 License: GPL-3.0-or-later AND MIT
 Comment: Rebuilds of the Airwindows PurestGain, SmoothEQ3 and Isolator3 algorithms.
+X-A3-Name: Airwindows
+X-A3-License: MIT
+X-A3-Url: https://github.com/airwindows/airwindows
 
 Files: tests/engine/reference/airwindows/*
 Copyright: 2018 Chris Johnson
 License: MIT
+X-A3-Name: Airwindows
+X-A3-Url: https://github.com/airwindows/airwindows
 
 Files: PROGRAM.md tests/core/scenarios/README.md tools/parity/README.md
 Copyright: 2026 Raphael Eismann and contributors
@@ -71,6 +77,8 @@ Comment: packaging/DEBIAN holds a3-core's maintainer scripts, which were CC-BY-S
 Files: third_party/IEMPluginSuite/*
 Copyright: 2017-2026 Institute of Electronic Music and Acoustics (IEM), Graz
 License: GPL-3.0-or-later
+X-A3-Name: IEMPluginSuite
+X-A3-Url: https://git.iem.at/audioplugins/IEMPluginSuite
 
 Files: third_party/IEMPluginSuite/BinauralDecoder/Source/IRs/*.wav
  third_party/IEMPluginSuite/BinauralDecoder/Source/EQ/*.wav
@@ -78,7 +86,12 @@ Copyright: 2013 Benjamin Bernschütz, TH Köln
  2017-2026 Institute of Electronic Music and Acoustics (IEM), Graz
 License: GPL-3.0-or-later AND CC-BY-3.0
 Comment: HRIR data: Benjamin Bernschütz, TH Köln, "A Spherical Far Field HRIR/HRTF Compilation of the Neumann KU 100", Proceedings of the 40th Italian (AIA) Annual Conference on Acoustics and the 39th German Annual Conference on Acoustics (DAGA), Merano 2013; dataset https://zenodo.org/records/3928297, licensed CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/). Binaural IRs rendered from it by IEM (MagLS); headphone EQs by Benjamin Bernschütz.
+X-A3-Name: Neumann KU 100 HRIR
+X-A3-License: CC-BY-3.0
+X-A3-Url: https://zenodo.org/records/3928297
 
 Files: third_party/IEMPluginSuite/resources/lookAndFeel/Roboto-*.ttf
 Copyright: 2012 Google
 License: Apache-2.0
+X-A3-Name: Roboto
+X-A3-Url: https://fonts.google.com/specimen/Roboto
