@@ -1027,8 +1027,19 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
         if (auto* link = dynamic_cast<juce::HyperlinkButton*> (child); link != nullptr && link->getButtonText() == "Documentation")
             linksTop = link->getY();
     EXPECT_LE (card.getBottom(), linksTop) << "card bottom " << card.getBottom() << " links " << linksTop;
-    // The tree's text is smaller than the page's and no smaller than the readable minimum.
     const auto t = a3app::layout::tokens (view);
+    // The connectors stand in fixed columns, one step a level: every name starts at its depth's column, whether its
+    // ancestors were last children (a blank indent) or not (a bar) -- third-party's entries line up with a3-core's children.
+    const auto entries = a3app::checkout::treeOf (view.checkoutShown().rows);
+    const auto nameLefts = view.treeNameLefts();
+    ASSERT_EQ (nameLefts.size(), entries.size());
+    EXPECT_GT (view.treeStep(), 0);
+    for (size_t i = 0; i < entries.size(); ++i)
+    {
+        const int depth = entries[i].prefix.length() / 3;   // "├─ ", "│  ", "   ", "└─ ": one level each
+        EXPECT_EQ (nameLefts[i], card.getX() + t.padding + depth * view.treeStep()) << entries[i].name;
+    }
+    // The tree's text is smaller than the page's and no smaller than the readable minimum.
     EXPECT_LT (view.treeTextHeight(), t.text);
     EXPECT_GE (view.treeTextHeight(), a3app::SystemAboutView::minimumTreeText (t));
     a3apptest::expectPainted (a3apptest::snapshotAt (view, "system3-about-tree", view.getWidth(), view.getHeight()));
@@ -1063,13 +1074,17 @@ TEST_F (SystemPageTest, AboutShowsTheProjectSupportAndThePins)
     const auto& cards = view.cardAreas();
     ASSERT_EQ (cards.size(), 1u);
     EXPECT_EQ (cards[0].getHeight(), 2 * t.padding + t.heading + (1 + 2) * line) << "PUBLISHED: the system line and two repositories";
-    // One compact header band (maintainer, 2026-10-31): the logo smaller at the page's left margin, the tagline centred
-    // in the space between the logo and the right margin, both vertically centred; the card below the band.
+    // One compact header band (maintainer, 2026-10-31): the logo smaller at the page's left margin, the tagline centred on
+    // the page, vertically centred with the logo and clear of it by a gap; the card below the band.
     const auto logo = view.logoBounds(), tagline = view.taglineBounds();
     EXPECT_EQ (logo.getX(), t.margin) << "the logo at the left margin";
-    EXPECT_GE (tagline.getX(), logo.getRight()) << "the tagline's space starts right of the logo";
-    EXPECT_EQ (tagline.getRight(), view.getWidth() - t.margin) << "and ends at the right margin";
-    EXPECT_NEAR (tagline.getCentreY(), logo.getCentreY(), 1) << "vertically centred on the logo";
+    EXPECT_NEAR (tagline.getCentreX(), view.getWidth() / 2, 1) << "the tagline on the page's centre";
+    EXPECT_GE (tagline.getX(), logo.getRight() + t.gap) << "clear of the logo";
+    EXPECT_NEAR (tagline.getCentreY(), logo.getCentreY(), 1) << "vertically centred with the logo";
+    // Narrow enough that the centred tagline would reach the logo: it moves right just enough to clear it.
+    view.setSize (view.getHeight() * 2 / 5, view.getHeight());
+    EXPECT_EQ (view.taglineBounds().getX(), view.logoBounds().getRight() + t.gap) << "pushed right, no more than needed";
+    view.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
     EXPECT_LT (logo.getHeight(), view.getHeight() / 6) << "a band, not the top third";
     EXPECT_GT (view.taglineTextHeight(), view.treeTextHeight()) << "the tagline larger than the tree's text";
     EXPECT_GE (cards[0].getY() - juce::jmax (logo.getBottom(), tagline.getBottom()), t.gap) << "the card below the band";

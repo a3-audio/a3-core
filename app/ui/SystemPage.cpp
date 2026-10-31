@@ -480,7 +480,7 @@ void SystemAboutView::refresh()
 }
 
 // The page (maintainer, 2026-10-31): one compact header band at the top, the logo at the left margin a row high and
-// "Spatial DJ setup", the page's headline, centred in the space right of it; below it ONE card, PUBLISHED (the system
+// "Spatial DJ setup", the page's headline, centred on the page (clear of the logo); below it ONE card, PUBLISHED (the system
 // version, the repositories as a tree, the licences last) in a text smaller than the page's, sized so the whole tree
 // fits; at the bottom the links on one line and the copyright under them. The card keeps the grid's margin, padding and
 // gap. The headline is larger than the text.
@@ -491,6 +491,22 @@ constexpr float treeTextShare = 0.8f;
 float SystemAboutView::minimumTreeText (const layout::Tokens& t) { return t.text * 0.55f; }
 
 float SystemAboutView::taglineTextHeight() const { return layout::tokens (*this).text * taglineScale; }
+
+std::vector<int> SystemAboutView::treeNameLefts() const
+{
+    std::vector<int> lefts;
+    for (const auto& entry : tree)
+        lefts.push_back (entry.nameArea.getX());
+    return lefts;
+}
+
+namespace
+{
+// A tree prefix's levels, three characters each ("│  ", "├─ ", "└─ ", "   "), and the connector each draws.
+constexpr int prefixLevel = 3;
+int depthOf (const juce::String& prefix) { return prefix.length() / prefixLevel; }
+juce::String connectorAt (const juce::String& prefix, int level) { return prefix.substring (level * prefixLevel, (level + 1) * prefixLevel).trim(); }
+}
 
 std::vector<juce::Rectangle<int>> SystemAboutView::treeLineAreas() const
 {
@@ -525,8 +541,10 @@ void SystemAboutView::resized()
     const auto logoShape = logoImage != nullptr ? logoImage->getDrawableBounds() : juce::Rectangle<float> (1.0f, 1.0f);
     const int logoWidth = juce::roundToInt ((float) band.getHeight() * logoShape.getWidth() / juce::jmax (1.0f, logoShape.getHeight()));
     logoArea = band.removeFromLeft (logoWidth);
-    band.removeFromLeft (t.unit);
-    taglineArea = band;
+    // The tagline centred on the page, as wide as its text; pushed right only as far as clearing the logo by a gap needs.
+    const int taglineWidth = juce::roundToInt (juce::GlyphArrangement::getStringWidth (juce::FontOptions (taglineTextHeight()), about::tagline())) + t.unit;
+    const int centredLeft = getLocalBounds().getCentreX() - taglineWidth / 2;
+    taglineArea = band.withX (juce::jmax (centredLeft, logoArea.getRight() + t.gap)).withWidth (taglineWidth);
 
     auto bottom = page;
     contactArea = bottom.removeFromBottom (line);
@@ -569,6 +587,10 @@ void SystemAboutView::resized()
     // their longest text, the licences from the card's right edge.
     const juce::FontOptions text (treeText);
     const auto treeLinkFont = linkFont (treeText);
+    // One level of indent is as wide as its widest connector, so a blank level is as wide as a bar's and columns line up.
+    step = 0;
+    for (const auto* connector : { "│  ", "├─ ", "└─ " })
+        step = juce::jmax (step, juce::roundToInt (juce::GlyphArrangement::getStringWidth (text, juce::String::fromUTF8 (connector))));
     int versionWidth = juce::roundToInt (juce::GlyphArrangement::getStringWidth (text, pins.version)),
         licenceWidth = juce::roundToInt (juce::GlyphArrangement::getStringWidth (text, pins.licence));
     for (const auto& entry : tree)
@@ -593,8 +615,7 @@ void SystemAboutView::resized()
     for (size_t i = 0; i < tree.size() && i < (size_t) repositories.size(); ++i)
     {
         auto& entry = tree[i];
-        const int prefixWidth = juce::roundToInt (juce::GlyphArrangement::getStringWidth (text, entry.prefix));
-        auto nameBox = entry.area.withTrimmedLeft (prefixWidth).withRight (versionColumn.getX() - columnGap);
+        auto nameBox = entry.area.withTrimmedLeft (depthOf (entry.prefix) * step).withRight (versionColumn.getX() - columnGap);
         const int width = juce::roundToInt (juce::GlyphArrangement::getStringWidth (treeLinkFont, entry.name)) + t.unit;
         entry.nameArea = nameBox.withWidth (juce::jmin (width, nameBox.getWidth() / 2));
         if (auto* link = dynamic_cast<juce::HyperlinkButton*> (repositories[(int) i]))
@@ -646,7 +667,9 @@ void SystemAboutView::paint (juce::Graphics& g)
     {
         const auto& entry = tree[i];
         g.setColour (palette::textMuted);
-        g.drawText (entry.prefix, entry.area, juce::Justification::centredLeft, false);
+        for (int level = 0; level < depthOf (entry.prefix); ++level)
+            g.drawText (connectorAt (entry.prefix, level), entry.area.withX (entry.area.getX() + level * step).withWidth (step),
+                        juce::Justification::centredLeft, false);
         if (i < (size_t) repositories.size() && repositories[(int) i] == nullptr)
         {
             g.setColour (palette::textMuted);

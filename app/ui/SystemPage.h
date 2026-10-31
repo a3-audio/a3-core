@@ -80,6 +80,8 @@ public:
     float taglineTextHeight() const;
     float treeTextHeight() const { return treeText; }
     std::vector<juce::Rectangle<int>> treeLineAreas() const;
+    int treeStep() const { return step; }   // one level of the tree's indent: the connectors' fixed column width
+    std::vector<int> treeNameLefts() const;  // where each tree line's name starts
     // The smallest the tree's text gets when the tree is long: below it a line is no longer read at a glance.
     static float minimumTreeText (const layout::Tokens&);
     void resized() override;
@@ -95,7 +97,7 @@ private:
     struct TreeLine
     {
         checkout::Row row;
-        juce::String name, prefix;   // shown name, the connectors ahead of it
+        juce::String name, prefix;   // shown name, the connectors ahead of it (three characters a level)
         juce::Rectangle<int> area, nameArea, versionArea, licenceArea;
     };
     std::unique_ptr<juce::Drawable> logoImage;   // the SVG logo; null: big letters
@@ -105,6 +107,7 @@ private:
     std::vector<TreeLine> tree;
     int treeLine = 0;       // the tree's line height and text height, smaller than the page's (sized to fit, resized())
     float treeText = 0;
+    int step = 0;
     juce::Rectangle<int> logoArea, taglineArea, contactArea, versionArea, versionColumn, licenceColumn, treeMessageArea;
 };
 }
