@@ -18,11 +18,13 @@ struct BackendStatus
     int blockSize = 0;
     juce::String rateSource;                 // where rate and block size are set
     float dspLoadPercent = 0;
-    int xruns = 0;
+    int xruns = 0;                           // since the engine was up (XrunCount.h); the backend's own count until then
+    int xrunsTotal = 0;                      // the backend's raw count since it opened
     int bitDepth = 0;                        // JACK: 32 (float samples); a device: what it reports
     std::vector<juce::String> missingPeers;  // ports the I/O map names that the graph lacks now
     bool connecting = false;                 // false with --no-connect: the engine makes no link
     bool linksPlanned = false;               // the first link plan has run since the open; missingPeers means something only then
+    bool devicePresent = true;               // JACK: the configured device on both sides at the last link plan (SystemDevice.h)
     // Samples between the converters and the engine's ports. JACK: the largest of the engine's ports' latency
     // ranges (capture on its inputs, playback on its outputs); a device: what the driver reports.
     int captureLatency = 0, playbackLatency = 0;

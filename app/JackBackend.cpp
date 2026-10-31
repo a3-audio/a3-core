@@ -144,6 +144,7 @@ BackendStatus JackBackend::status() const
     for (const auto& peer : absentDevicePeers)
         s.missingPeers.push_back (juce::String (peer));
     s.deviceName = deviceNameOf (deviceWatch.nodes());
+    s.devicePresent = deviceWatch.presence().playback && deviceWatch.presence().capture;
     if (client == nullptr || serverGone.load())
         return s;
 

@@ -169,6 +169,7 @@ juce::var toJson (const EngineStatusReport& report)
                      { "rateSource", report.backend.rateSource },
                      { "dspLoadPercent", (double) report.backend.dspLoadPercent },
                      { "xruns", report.backend.xruns },
+                     { "xrunsTotal", report.backend.xrunsTotal },
                      { "bitDepth", report.backend.bitDepth },
                      { "captureLatency", report.backend.captureLatency },
                      { "playbackLatency", report.backend.playbackLatency },
@@ -207,6 +208,7 @@ std::optional<EngineStatusReport> statusFromJson (const juce::var& v)
     report.backend.rateSource = v["rateSource"].toString();
     report.backend.dspLoadPercent = (float) *load;
     report.backend.xruns = (int) *xruns;
+    report.backend.xrunsTotal = number (v["xrunsTotal"]) ? (int) *number (v["xrunsTotal"]) : (int) *xruns;   // an older engine: its one count
     report.backend.bitDepth = (int) *depth;
     report.backend.connecting = (bool) v["connecting"];
     // An engine before the round trip sends neither: 0, the round trip is then the period alone.

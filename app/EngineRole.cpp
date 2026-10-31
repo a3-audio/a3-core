@@ -9,6 +9,7 @@
 #include <cstdlib>
 
 #include "ConfigEdits.h"
+#include "XrunCount.h"
 #include "DeckAudioReport.h"
 #include "DelayModulation.h"
 #include "DeviceBackend.h"
@@ -170,6 +171,8 @@ public:
         auto status = live() ? role.session->status() : BackendStatus {};
         if (role.runsOnPipeWire())
             status.timing = role.timing.report();
+        status.xrunsTotal = status.xruns;
+        status.xruns = xrunCount.since (status, monotonicSeconds());   // the start's xruns do not count
         return status;
     }
     std::vector<a3::Engine::OutputMeter> meters() override { return live() ? role.session->engineHost().meters() : std::vector<a3::Engine::OutputMeter> {}; }
@@ -206,6 +209,7 @@ public:
         const auto result = role.restart (config, problem);
         if (result.failed())
             return result;
+        xrunCount.restart();   // a new session counts from its own start
         if (newLoop && live())
             role.session->measureRoundTrip();   // a loop just picked is measured at once, as after a block change
         startedWith = edited = config;
@@ -267,6 +271,7 @@ private:
     EngineTruth truth;
     std::vector<std::string> names;
     juce::String problem;
+    mutable XrunCount xrunCount;   // XRUNS since the engine was up
     // The clock role (another process) writes its status into the runtime directory; read on the control thread.
     mutable a3clock::ClockReportReader clockReader { a3clock::clockStatusFile (runtimeDirectory(), (unsigned) getuid()) };
 

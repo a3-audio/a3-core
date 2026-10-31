@@ -49,6 +49,7 @@ public:
     explicit SystemDeviceWatch (CommandRunner&);
     DevicePresence read();
     const DefaultNodes& nodes() const { return lastNodes; }   // the last answer (empty before one)
+    DevicePresence presence() const { return last; }           // the last read's
 
 private:
     CommandRunner& runner;
