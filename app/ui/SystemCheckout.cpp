@@ -10,6 +10,7 @@ namespace
 // The devices that carry a firmware, and where: top level firmware/ in both (a3-mixer laid out like a3-motion, 2026-10-31).
 constexpr const char* firmwareSubmodules[] { "a3-mixer", "a3-motion" };
 constexpr const char* firmwareFolder = "firmware";
+constexpr const char* uiFolder = "ui";
 
 bool isHex (const juce::String& text) { return text.isNotEmpty() && text.containsOnly ("0123456789abcdef"); }
 bool isNumber (const juce::String& text) { return text.isNotEmpty() && text.containsOnly ("0123456789"); }
@@ -152,7 +153,7 @@ bool hasFirmware (const juce::String& submodule)
 // Hardware and firmware rows read "rev <version>", lowercase whatever the file says; nothing when there is no version.
 juce::String revisionText (const juce::String& version) { return version.isNotEmpty() ? "rev " + version.toLowerCase() : juce::String(); }
 
-// A submodule's row, then its parts (docs, pcb, housing), its firmware's, then its own submodules' (one level: a3-motion's ui).
+// A submodule's row, then its parts (pcb, housing), its firmware's, its ui folder's, then its own submodules' (one level: a3-motion's ui).
 void addSubmodule (CommandRunner& runner, const juce::File& repo, const Gitlink& link, const juce::String& url, Facts& facts)
 {
     const auto dir = repo.getChildFile (link.path);
@@ -173,7 +174,15 @@ void addSubmodule (CommandRunner& runner, const juce::File& repo, const Gitlink&
                                 licenceOfFolder (dir, firmwareFolder) });
     }
     const auto innerUrls = urlsAt (runner, dir, link.commit, url);
-    for (const auto& inner : parseGitlinks (gitOutput (runner, dir, { "ls-tree", link.commit })))
+    const auto inners = parseGitlinks (gitOutput (runner, dir, { "ls-tree", link.commit }));
+    // A ui that is a folder of the repo (a3-mixer's desk) is a part like the firmware, with its software version;
+    // a ui that is a repository of its own (a3-motion's) is listed below as a submodule.
+    const bool uiIsSubmodule = std::any_of (inners.begin(), inners.end(), [] (const Gitlink& g) { return g.path == uiFolder; });
+    if (! uiIsSubmodule && dir.getChildFile (uiFolder).isDirectory())
+        facts.rows.push_back ({ link.path + " ui", lastChangeTag (runner, dir, link.commit, uiFolder),
+                                url.isNotEmpty() ? url + "/tree/HEAD/" + uiFolder : juce::String(),
+                                licenceOfFolder (dir, uiFolder) });
+    for (const auto& inner : inners)
         facts.rows.push_back ({ link.path + "/" + inner.path, tagOf (runner, dir.getChildFile (inner.path), inner.commit), urlOf (innerUrls, inner.path),
                                 codeLicence (dir.getChildFile (inner.path)) });
 }

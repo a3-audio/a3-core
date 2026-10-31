@@ -639,12 +639,14 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     // The Mixer laid out like Motion (2026-10-31): board and housing under hardware/ (CERN), each with its REVISION;
     // the firmware top level, by its stanza.
     touch ("a3-mixer/.reuse/dep5", "Format: x\n\nFiles: hardware/*\nCopyright: a\nLicense: CERN-OHL-S-2.0\n\n"
-                                   "Files: firmware/*\nCopyright: a\nLicense: GPL-3.0-or-later\n");
+                                   "Files: firmware/*\nCopyright: a\nLicense: GPL-3.0-or-later\n\n"
+                                   "Files: ui/*\nCopyright: a\nLicense: GPL-3.0-or-later\n");
     touch ("a3-mixer/hardware/pcb/board.kicad_pro");
     touch ("a3-mixer/hardware/pcb/REVISION", "V02\n");   // upper case in the file, lower case on the card
     touch ("a3-mixer/hardware/housing/box.blend");
     touch ("a3-mixer/hardware/housing/REVISION", "V02\n");
     touch ("a3-mixer/firmware/src/main.cpp", "// SPDX-License-Identifier: GPL-3.0-or-later\n");
+    touch ("a3-mixer/ui/CMakeLists.txt");   // the desk: a folder of the repo, not a submodule as a3-motion's ui
     // Motion: a board with a revision, a housing without one, the firmware by its stanza.
     touch ("a3-motion/.reuse/dep5", "Format: x\n\nFiles: hardware/*\nCopyright: a\nLicense: CERN-OHL-S-2.0\n\nFiles: firmware/*\nCopyright: a\nLicense: GPL-3.0-or-later\n");
     touch ("a3-motion/hardware/pcbs/motion_pcb/motion.kicad_pro");
@@ -662,6 +664,8 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     runner->answers[git ("a3-mixer", "log -1 --format=%H bbb -- firmware")] = { 0, "f1\n" };
     runner->answers[git ("a3-mixer", "describe --tags --match v* --abbrev=0 bbb")] = { 0, "v03.0\n" };
     runner->answers[git ("a3-mixer", "rev-list --count v03.0..bbb -- firmware")] = { 0, "0\n" };   // unchanged since the release
+    runner->answers[git ("a3-mixer", "log -1 --format=%H bbb -- ui")] = { 0, "u1\n" };
+    runner->answers[git ("a3-mixer", "rev-list --count v03.0..bbb -- ui")] = { 0, "3\n" };   // the desk changed three times since
     runner->answers[git ("a3-motion", "describe --tags --match v* --always ccc")] = { 0, "v03.0-855-gccccccc\n" };
     runner->answers[git ("a3-motion", "log -1 --format=%H ccc -- firmware")] = { 0, "f2\n" };
     runner->answers[git ("a3-motion", "describe --tags --match v* --abbrev=0 ccc")] = { 0, "v03.0\n" };
@@ -682,7 +686,7 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     EXPECT_EQ (lines.joinIntoString ("\n"),
                juce::String ("a3-core|v03.0+857|GPL-3.0\n"
                              "a3-mixer|v03.0+90|GPL-3.0\na3-mixer pcb|rev v02|CERN-OHL-S\na3-mixer housing|rev v02|CERN-OHL-S\n"
-                             "a3-mixer firmware|rev v03.0|GPL-3.0\n"
+                             "a3-mixer firmware|rev v03.0|GPL-3.0\na3-mixer ui|v03.0+3|GPL-3.0\n"
                              "a3-motion|v03.0+855|GPL-3.0\na3-motion pcb|rev v03|CERN-OHL-S\na3-motion housing||CERN-OHL-S|no version\n"
                              "a3-motion firmware|rev v03.0+2|GPL-3.0\na3-motion/ui|v03.0+900|GPL-3.0\nstemdeck||"));
     // Every row fits on the card at the rig size (768x1024): the tree ends above the link line.
