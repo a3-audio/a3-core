@@ -75,12 +75,19 @@ public:
     const checkout::Facts& checkoutShown() const { return pins; }
     juce::Rectangle<int> taglineBounds() const { return taglineArea; }   // where "Spatial DJ setup" is drawn
     int treeBottom() const { return tree.empty() ? 0 : tree.back().area.getBottom(); }   // the last tree row's lower edge
-    int lineHeight() const { return layout::compactLine (layout::tokens (*this)); }
+    int lineHeight() const { return treeLine; }   // a line of the PUBLISHED tree
+    juce::Rectangle<int> logoBounds() const { return logoArea; }
+    float taglineTextHeight() const;
+    float treeTextHeight() const { return treeText; }
+    std::vector<juce::Rectangle<int>> treeLineAreas() const;
+    // The smallest the tree's text gets when the tree is long: below it a line is no longer read at a glance.
+    static float minimumTreeText (const layout::Tokens&);
     void resized() override;
     void paint (juce::Graphics&) override;
 
 private:
     void makePublished();
+    void sizeTree (const layout::Tokens&, int room, int lines);
 
     SystemProbe& probe;
     std::uint64_t seen = 0;
@@ -96,6 +103,8 @@ private:
     juce::OwnedArray<juce::HyperlinkButton> links;   // Documentation, Website, Source, Support A³
     juce::OwnedArray<juce::Component> repositories;   // per tree line: its link, or nullptr when it has no url
     std::vector<TreeLine> tree;
+    int treeLine = 0;       // the tree's line height and text height, smaller than the page's (sized to fit, resized())
+    float treeText = 0;
     juce::Rectangle<int> logoArea, taglineArea, contactArea, versionArea, versionColumn, licenceColumn, treeMessageArea;
 };
 }

@@ -479,24 +479,54 @@ void SystemAboutView::refresh()
     repaint();
 }
 
-// The page as the website has it (2026-10-31): the logo large and centred in the top third with its line under it; in
-// the space between ONE card, PUBLISHED (the system version, the repositories as a tree, the licences last); at the
-// bottom the links on one line and the copyright under them. The card keeps the grid's margin, padding and gap.
-// "Spatial DJ setup" is the page's headline: larger than the text, smaller than the logo.
+// The page (maintainer, 2026-10-31): one compact header band at the top, the logo at the left margin a row high and
+// "Spatial DJ setup", the page's headline, centred in the space right of it; below it ONE card, PUBLISHED (the system
+// version, the repositories as a tree, the licences last) in a text smaller than the page's, sized so the whole tree
+// fits; at the bottom the links on one line and the copyright under them. The card keeps the grid's margin, padding and
+// gap. The headline is larger than the text.
 constexpr float taglineScale = 1.4f;
+// The tree's text at most this share of the page's (smaller, so a long tree fits), at least minimumTreeText's.
+constexpr float treeTextShare = 0.8f;
+
+float SystemAboutView::minimumTreeText (const layout::Tokens& t) { return t.text * 0.55f; }
+
+float SystemAboutView::taglineTextHeight() const { return layout::tokens (*this).text * taglineScale; }
+
+std::vector<juce::Rectangle<int>> SystemAboutView::treeLineAreas() const
+{
+    std::vector<juce::Rectangle<int>> areas { versionArea };
+    for (const auto& entry : tree)
+        areas.push_back (entry.area);
+    return areas;
+}
+
+// The tree's text from the room the card has: as large as treeTextShare of the page's text when the tree is short, smaller
+// when it is long, never below the minimum; the line follows the text as a compact line follows the page's.
+void SystemAboutView::sizeTree (const layout::Tokens& t, int room, int lines)
+{
+    const int compact = layout::compactLine (t);
+    const int fittingLine = room / juce::jmax (1, lines);
+    const float fittingText = (float) fittingLine * t.text / (float) compact;
+    treeText = juce::jlimit (minimumTreeText (t), t.text * treeTextShare, fittingText);
+    treeLine = juce::roundToInt (treeText * (float) compact / t.text);
+    if (treeText > minimumTreeText (t))
+        treeLine = juce::jmin (treeLine, fittingLine);
+}
 
 void SystemAboutView::resized()
 {
     const auto t = layout::tokens (*this);
     const int line = layout::compactLine (t);
     const auto page = getLocalBounds().reduced (t.margin);
-    const int third = getHeight() / 3;
     publishedHeading.setFont (juce::FontOptions (t.text));
 
-    auto top = juce::Rectangle<int> (page.getX(), page.getY(), page.getWidth(), third - page.getY());
-    top.removeFromBottom (2 * t.unit);                                   // room between the tagline and PUBLISHED
-    taglineArea = top.removeFromBottom (juce::roundToInt (line * taglineScale));
-    logoArea = top.reduced (0, t.unit);
+    // The header band: the logo a row high at its own proportions, the tagline's space the rest of the band.
+    auto band = page.withHeight (t.row);
+    const auto logoShape = logoImage != nullptr ? logoImage->getDrawableBounds() : juce::Rectangle<float> (1.0f, 1.0f);
+    const int logoWidth = juce::roundToInt ((float) band.getHeight() * logoShape.getWidth() / juce::jmax (1.0f, logoShape.getHeight()));
+    logoArea = band.removeFromLeft (logoWidth);
+    band.removeFromLeft (t.unit);
+    taglineArea = band;
 
     auto bottom = page;
     contactArea = bottom.removeFromBottom (line);
@@ -520,22 +550,25 @@ void SystemAboutView::resized()
         linkLine.removeFromLeft (t.unit);
     }
 
-    const auto middle = juce::Rectangle<int> (page.getX(), third, page.getWidth(), linksTop - third - t.gap);
-    layout::Stack stack (middle, t, cards);
+    const int middleTop = logoArea.getBottom() + t.gap;
+    const auto middle = juce::Rectangle<int> (page.getX(), middleTop, page.getWidth(), linksTop - t.gap - middleTop);
     const int rowsInCard = 1 + juce::jmax (1, (int) tree.size());   // the system, the tree (or its one message)
-    auto area = stack.card (2 * t.padding + t.heading + rowsInCard * line).reduced (t.padding);
+    sizeTree (t, middle.getHeight() - 2 * t.padding - t.heading, rowsInCard);
+    layout::Stack stack (middle, t, cards);
+    auto area = stack.card (2 * t.padding + t.heading + rowsInCard * treeLine).reduced (t.padding);
     publishedHeading.setBounds (area.removeFromTop (t.heading));
-    versionArea = area.removeFromTop (line);
+    versionArea = area.removeFromTop (treeLine);
     for (auto& entry : tree)
     {
-        entry.area = area.removeFromTop (line);
+        entry.area = area.removeFromTop (treeLine);
         entry.nameArea = {};
     }
-    treeMessageArea = area.getHeight() >= line && tree.empty() ? area.removeFromTop (line) : juce::Rectangle<int>();
+    treeMessageArea = area.getHeight() >= treeLine && tree.empty() ? area.removeFromTop (treeLine) : juce::Rectangle<int>();
 
     // Three columns: the name with its connector, the version, the licences; the version and licence columns as wide as
     // their longest text, the licences from the card's right edge.
-    const juce::FontOptions text (t.text);
+    const juce::FontOptions text (treeText);
+    const auto treeLinkFont = linkFont (treeText);
     int versionWidth = juce::roundToInt (juce::GlyphArrangement::getStringWidth (text, pins.version)),
         licenceWidth = juce::roundToInt (juce::GlyphArrangement::getStringWidth (text, pins.licence));
     for (const auto& entry : tree)
@@ -560,14 +593,14 @@ void SystemAboutView::resized()
     for (size_t i = 0; i < tree.size() && i < (size_t) repositories.size(); ++i)
     {
         auto& entry = tree[i];
-        const int prefixWidth = juce::roundToInt (juce::GlyphArrangement::getStringWidth (juce::FontOptions (t.text), entry.prefix));
+        const int prefixWidth = juce::roundToInt (juce::GlyphArrangement::getStringWidth (text, entry.prefix));
         auto nameBox = entry.area.withTrimmedLeft (prefixWidth).withRight (versionColumn.getX() - columnGap);
-        const int width = juce::roundToInt (juce::GlyphArrangement::getStringWidth (font, entry.name)) + t.unit;
+        const int width = juce::roundToInt (juce::GlyphArrangement::getStringWidth (treeLinkFont, entry.name)) + t.unit;
         entry.nameArea = nameBox.withWidth (juce::jmin (width, nameBox.getWidth() / 2));
         if (auto* link = dynamic_cast<juce::HyperlinkButton*> (repositories[(int) i]))
         {
             link->setColour (juce::HyperlinkButton::textColourId, palette::text);
-            link->setFont (font, false, juce::Justification::centredLeft);
+            link->setFont (treeLinkFont, false, juce::Justification::centredLeft);
             link->setBounds (entry.nameArea);
         }
     }
@@ -596,6 +629,7 @@ void SystemAboutView::paint (juce::Graphics& g)
     g.setColour (palette::textMuted);
     g.drawFittedText (about::copyrightLine() + dot + about::contactAddress(), contactArea, juce::Justification::centred, 1, 0.7f);
 
+    g.setFont (juce::FontOptions (treeText));
     g.setColour (palette::text);
     g.drawText (juce::String::fromUTF8 ("A³ System"), versionArea, juce::Justification::centredLeft, true);
     g.drawText (pins.version, versionColumn.withY (versionArea.getY()).withHeight (versionArea.getHeight()), juce::Justification::centredRight, true);

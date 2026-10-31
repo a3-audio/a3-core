@@ -899,7 +899,8 @@ TEST_F (SystemPageTest, RigRowsKeysAndPlans)
     EXPECT_TRUE (rigView.planLine().startsWith ("Start Deck D")) << rigView.planLine();
 }
 
-// The tree with its three columns: connectors and names, versions, licences (from fixture folders, as on the rig).
+// The tree with its three columns: connectors and names, versions, licences (from fixture folders, as on the rig). The
+// fixture is the real tree's size of 2026-10-31 with the two a3-kicad-lib rows that come next: 29 lines.
 TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
 {
     const auto repo = juce::File::createTempFile ("a3-about-tree");
@@ -912,7 +913,16 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
         touch ("a3-core/LICENSES/" + juce::String (id) + ".txt");
     // What a3-core uses from others, by its REUSE data: the last node of the tree.
     touch ("a3-core/.reuse/dep5", "Format: x\nX-A3-Uses: JUCE; AGPL-3.0-only OR LicenseRef-JUCE-9; https://juce.com\n\n"
-                                  "Files: tests/reference/airwindows/*\nCopyright: 2018 Chris Johnson\nLicense: MIT\nX-A3-Name: Airwindows\n");
+                                  "Files: tests/reference/airwindows/*\nCopyright: 2018 Chris Johnson\nLicense: MIT\nX-A3-Name: Airwindows\n\n"
+                                  "Files: a/*\nCopyright: Queen Mary University of London\nLicense: GPL-3.0-or-later\nX-A3-Name: BTrack\n\n"
+                                  "Files: b/*\nCopyright: IEM\nLicense: GPL-3.0-or-later\nX-A3-Name: IEMPluginSuite\n\n"
+                                  "Files: c/*\nCopyright: Mark Borgerding\nLicense: BSD-3-Clause\nX-A3-Name: kiss_fft\nX-A3-Version: 1.3.0\n\n"
+                                  "Files: d/*\nCopyright: Benjamin Bernschütz\nLicense: CC-BY-3.0\nX-A3-Name: Neumann KU 100 HRIR\n\n"
+                                  "Files: e/*\nCopyright: PlatformIO\nLicense: Apache-2.0\nX-A3-Name: platform-espressif32\n\n"
+                                  "Files: f/*\nCopyright: Google\nLicense: Apache-2.0\nX-A3-Name: Roboto\n\n"
+                                  "Files: g/*\nCopyright: SnapMagic Search, Inc.\nLicense: LicenseRef-SnapMagic\nX-A3-Name: SnapMagic MCP3208\nX-A3-Version: 2025-11\n");
+    touch ("a3-doc/LICENSES/CC-BY-SA-4.0.txt");
+    touch ("a3-pro-dj/LICENSES/GPL-3.0-or-later.txt");
     touch ("LICENSES/GPL-3.0-or-later.txt");   // the umbrella's own
     touch ("LICENSES/CC0-1.0.txt");
     for (const auto* id : { "GPL-3.0-or-later", "CC-BY-SA-4.0", "CERN-OHL-S-2.0", "CC0-1.0" })
@@ -947,13 +957,18 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     const auto git = [&repo] (const juce::String& dir, const juce::String& rest) {
         return "git -C " + (dir.isEmpty() ? repo : repo.getChildFile (dir)).getFullPathName() + " " + rest;
     };
-    runner->answers[git ("", "ls-tree -r HEAD")] = { 0, "160000 commit aaa\ta3-core\n160000 commit bbb\ta3-mixer\n160000 commit ccc\ta3-motion\n160000 commit ddd\ta3-stemdeck\n" };
+    runner->answers[git ("", "ls-tree -r HEAD")] = { 0, "160000 commit aaa\ta3-core\n160000 commit doc\ta3-doc\n160000 commit bbb\ta3-mixer\n"
+                                                     "160000 commit ccc\ta3-motion\n160000 commit pdj\ta3-pro-dj\n160000 commit ddd\ta3-stemdeck\n" };
+    runner->answers[git ("a3-doc", "describe --tags --match v* --always doc")] = { 0, "v03.1-6-gd0cd0c1\n" };
+    runner->answers[git ("a3-pro-dj", "describe --tags --match v* --always pdj")] = { 0, "v03.0-2-gabcdef2\n" };
     runner->answers[git ("a3-core", "ls-tree -r aaa")] = { 0, "160000 commit bea\ta3-beat-analyzer\n" };
     runner->answers[git ("a3-core/a3-beat-analyzer", "describe --tags --match v* --always bea")] = { 0, "v03.1-1-gbeabeab\n" };
-    runner->answers[git ("a3-mixer", "ls-tree -r bbb")] = { 0, "160000 commit uuu\ta3-mixer-ui\n" };
+    runner->answers[git ("a3-mixer", "ls-tree -r bbb")] = { 0, "160000 commit uuu\ta3-mixer-ui\n160000 commit kk1\thardware/pcb/a3-kicad-lib\n" };
+    runner->answers[git ("a3-mixer/hardware/pcb/a3-kicad-lib", "describe --tags --match v* --always kk1")] = { 0, "v03.1\n" };
     runner->answers[git ("a3-mixer/a3-mixer-ui", "describe --tags --match v* --always uuu")] = { 0, "v03.1-2-gabcdef1\n" };
     runner->answers[git ("a3-stemdeck", "describe --tags --match v* --always ddd")] = { 0, "v03.1-1-gddddddd\n" };
-    runner->answers[git ("a3-stemdeck", "ls-tree -r ddd")] = { 0, "160000 commit sep\ta3-stem-separator\n" };
+    runner->answers[git ("a3-stemdeck", "ls-tree -r ddd")] = { 0, "160000 commit sep\ta3-stem-separator\n160000 commit cor\tthird_party/a3-core\n" };
+    runner->answers[git ("a3-stemdeck/third_party/a3-core", "describe --tags --match v* --always cor")] = { 0, "v03.0-758-gc0ffee1\n" };
     runner->answers[git ("a3-stemdeck/a3-stem-separator", "describe --tags --match v* --always sep")] = { 0, "v03.1\n" };
     runner->answers[git ("", "describe --tags --match v* --always HEAD")] = { 0, "v03.0-12-g1234567\n" };
     runner->answers[git ("a3-core", "describe --tags --match v* --always aaa")] = { 0, "v03.0-857-gaaaaaaa\n" };
@@ -965,7 +980,8 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     runner->answers[git ("a3-motion", "log -1 --format=%H ccc -- firmware")] = { 0, "f2\n" };
     runner->answers[git ("a3-motion", "describe --tags --match v* --abbrev=0 ccc")] = { 0, "v03.0\n" };
     runner->answers[git ("a3-motion", "rev-list --count v03.0..ccc -- firmware")] = { 0, "2\n" };   // changed twice since
-    runner->answers[git ("a3-motion", "ls-tree -r ccc")] = { 0, "160000 commit eee\ta3-motion-ui\n" };
+    runner->answers[git ("a3-motion", "ls-tree -r ccc")] = { 0, "160000 commit eee\ta3-motion-ui\n160000 commit kk2\thardware/pcbs/motion_pcb/a3-kicad-lib\n" };
+    runner->answers[git ("a3-motion/hardware/pcbs/motion_pcb/a3-kicad-lib", "describe --tags --match v* --always kk2")] = { 0, "v03.1\n" };
     runner->answers[git ("a3-motion/a3-motion-ui", "describe --tags --match v* --always eee")] = { 0, "v03.0-900-geeeeee\n" };
     auto sources = fakeSources (runner);
     sources.checkout = repo;
@@ -980,22 +996,41 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
         lines.add (row.name + "|" + row.tag + "|" + row.licences + (row.noVersion ? "|no version" : ""));
     EXPECT_EQ (lines.joinIntoString ("\n"),
                juce::String ("a3-core|v03.0+857|GPL-3.0\na3-core/a3-beat-analyzer|v03.1+1|GPL-3.0\n"
+                             "a3-doc|v03.1+6|CC-BY-SA-4.0\n"
                              "a3-mixer|v03.0+90|GPL-3.0\na3-mixer pcb|rev v02|CERN-OHL-S\na3-mixer housing|rev v02|CERN-OHL-S\n"
-                             "a3-mixer firmware|rev v03.0|GPL-3.0\na3-mixer/a3-mixer-ui|v03.1+2|GPL-3.0\n"
+                             "a3-mixer firmware|rev v03.0|GPL-3.0\na3-mixer/a3-mixer-ui|v03.1+2|GPL-3.0\na3-mixer pcb/a3-kicad-lib|v03.1|\n"
                              "a3-motion|v03.0+855|GPL-3.0\na3-motion pcb|rev v03|CERN-OHL-S\na3-motion housing||CERN-OHL-S|no version\n"
-                             "a3-motion firmware|rev v03.0+2|GPL-3.0\na3-motion/a3-motion-ui|v03.0+900|GPL-3.0\n"
-                             "a3-stemdeck|v03.1+1|GPL-3.0\na3-stemdeck/a3-stem-separator|v03.1|GPL-3.0\n"
-                             "third-party|||no version\nthird-party/Airwindows||MIT|no version\n"
+                             "a3-motion firmware|rev v03.0+2|GPL-3.0\na3-motion/a3-motion-ui|v03.0+900|GPL-3.0\na3-motion pcb/a3-kicad-lib|v03.1|\n"
+                             "a3-pro-dj|v03.0+2|GPL-3.0\n"
+                             "a3-stemdeck|v03.1+1|GPL-3.0\na3-stemdeck/a3-stem-separator|v03.1|GPL-3.0\na3-stemdeck/a3-core|v03.0+758|\n"
+                             "third-party|||no version\nthird-party/Airwindows||MIT|no version\nthird-party/BTrack||GPL-3.0|no version\n"
+                             "third-party/IEMPluginSuite||GPL-3.0|no version\n"
                              "third-party/JUCE|" + (juce::String (JUCE_MAJOR_VERSION) + "." + juce::String (JUCE_MINOR_VERSION) + "." + juce::String (JUCE_BUILDNUMBER))
-                                 + "|AGPL-3.0 OR JUCE-9"));
-    // Every row fits on the card at the rig size (768x1024): the tree ends above the link line.
+                                 + "|AGPL-3.0 OR JUCE-9\nthird-party/kiss_fft|1.3.0|BSD-3-Clause\n"
+                             "third-party/Neumann KU 100 HRIR||CC-BY-3.0|no version\nthird-party/platform-espressif32||Apache-2.0|no version\n"
+                             "third-party/Roboto||Apache-2.0|no version\nthird-party/SnapMagic MCP3208|2025-11|SnapMagic"));
+    ASSERT_EQ (view.checkoutShown().rows.size(), 29u) << "the real tree's size with the two a3-kicad-lib rows";
+    // Every line fits on the card at the rig size (768x1024): each gets an area of its own, inside the card, and the card
+    // ends above the link line. A card cut to the space left would give the last lines empty areas and still end there.
     view.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
-    int linksTop = view.getHeight();
+    ASSERT_EQ (view.cardAreas().size(), 1u);
+    const auto card = view.cardAreas()[0];
+    const auto areas = view.treeLineAreas();
+    ASSERT_EQ (areas.size(), 30u) << "the A³ System line and the 29 of the tree";
+    for (size_t i = 0; i < areas.size(); ++i)
+    {
+        EXPECT_FALSE (areas[i].isEmpty()) << "line " << i << " has no room";
+        EXPECT_TRUE (card.contains (areas[i])) << "line " << i << " lies outside the card";
+    }
+    int linksTop = -1;   // the bottom link line's top, by its first link (the tree's names are links too)
     for (auto* child : view.getChildren())
-        if (dynamic_cast<juce::HyperlinkButton*> (child) != nullptr && child->getY() > view.getHeight() / 2)
-            linksTop = juce::jmin (linksTop, child->getY());
-    EXPECT_LE (view.treeBottom(), linksTop) << "tree bottom " << view.treeBottom() << " links " << linksTop;
-    view.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
+        if (auto* link = dynamic_cast<juce::HyperlinkButton*> (child); link != nullptr && link->getButtonText() == "Documentation")
+            linksTop = link->getY();
+    EXPECT_LE (card.getBottom(), linksTop) << "card bottom " << card.getBottom() << " links " << linksTop;
+    // The tree's text is smaller than the page's and no smaller than the readable minimum.
+    const auto t = a3app::layout::tokens (view);
+    EXPECT_LT (view.treeTextHeight(), t.text);
+    EXPECT_GE (view.treeTextHeight(), a3app::SystemAboutView::minimumTreeText (t));
     a3apptest::expectPainted (a3apptest::snapshotAt (view, "system3-about-tree", view.getWidth(), view.getHeight()));
     repo.deleteRecursively();
 }
@@ -1028,11 +1063,17 @@ TEST_F (SystemPageTest, AboutShowsTheProjectSupportAndThePins)
     const auto& cards = view.cardAreas();
     ASSERT_EQ (cards.size(), 1u);
     EXPECT_EQ (cards[0].getHeight(), 2 * t.padding + t.heading + (1 + 2) * line) << "PUBLISHED: the system line and two repositories";
-    EXPECT_GE (cards[0].getY(), view.getHeight() / 3) << "below the top third, which is the logo's";
-    // The tagline under the logo is larger than a text line and stands clear of the card (maintainer, 2026-10-31).
-    EXPECT_GT (view.taglineBounds().getHeight(), line) << "the tagline is larger than a text line";
-    EXPECT_GE (cards[0].getY() - view.taglineBounds().getBottom(), 2 * t.unit) << "room between the tagline and PUBLISHED";
-    // The links sit at the bottom, one line, centred; the logo's room is the top third.
+    // One compact header band (maintainer, 2026-10-31): the logo smaller at the page's left margin, the tagline centred
+    // in the space between the logo and the right margin, both vertically centred; the card below the band.
+    const auto logo = view.logoBounds(), tagline = view.taglineBounds();
+    EXPECT_EQ (logo.getX(), t.margin) << "the logo at the left margin";
+    EXPECT_GE (tagline.getX(), logo.getRight()) << "the tagline's space starts right of the logo";
+    EXPECT_EQ (tagline.getRight(), view.getWidth() - t.margin) << "and ends at the right margin";
+    EXPECT_NEAR (tagline.getCentreY(), logo.getCentreY(), 1) << "vertically centred on the logo";
+    EXPECT_LT (logo.getHeight(), view.getHeight() / 6) << "a band, not the top third";
+    EXPECT_GT (view.taglineTextHeight(), view.treeTextHeight()) << "the tagline larger than the tree's text";
+    EXPECT_GE (cards[0].getY() - juce::jmax (logo.getBottom(), tagline.getBottom()), t.gap) << "the card below the band";
+    // The links sit at the bottom, one line, centred.
     int linkY = -1;
     for (auto* child : view.getChildren())
         if (auto* link = dynamic_cast<juce::HyperlinkButton*> (child); link != nullptr && link->getButtonText() == "Documentation")
