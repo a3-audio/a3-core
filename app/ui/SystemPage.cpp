@@ -17,6 +17,7 @@ juce::Colour lightColour (rig::Light light)
         case rig::Light::starting:
         case rig::Light::degraded: return palette::caution;
         case rig::Light::failed: return palette::danger;
+        case rig::Light::idle: return palette::text;   // not meant to run, and it does not: fine, no hue
         case rig::Light::missing:
         case rig::Light::stopped:
         case rig::Light::elsewhere:

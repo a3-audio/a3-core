@@ -334,8 +334,15 @@ std::vector<ServiceUnit> coreServices (const std::vector<ServiceUnit>& packaged,
         if (! anotherRows (unit.name) && std::find (into.begin(), into.end(), unit) == into.end())
             into.push_back (unit);
     };
+    const auto hasTimer = [&packaged] (const ServiceUnit& unit) {
+        if (! unit.name.endsWith (".service"))
+            return false;
+        const ServiceUnit timer { unit.name.upToLastOccurrenceOf (".service", false, false) + ".timer", unit.system };
+        return std::find (packaged.begin(), packaged.end(), timer) != packaged.end();
+    };
     for (const auto& unit : packaged)
-        add (unit);
+        if (! hasTimer (unit))
+            add (unit);
     for (const auto& unit : mainWants)
         add ({ unit, false });
     const auto byName = [] (const ServiceUnit& a, const ServiceUnit& b) { return a.name < b.name; };
@@ -497,7 +504,8 @@ std::vector<InterfaceAddress> listInterfaces()
 
 namespace
 {
-Light serviceLight (const UnitFacts& unit)
+// Grey only for a unit that should run and does not: enabled (or static, linked, ...) or wanted by a3-main.
+Light serviceLight (const ServiceUnit& service, const UnitFacts& unit, const std::vector<juce::String>& mainWants)
 {
     if (unit.active == "active")
         return Light::running;
@@ -505,7 +513,12 @@ Light serviceLight (const UnitFacts& unit)
         return Light::failed;
     if (isStarting (unit.active) || unit.active == "deactivating")
         return Light::starting;
-    return unit.load == "not-found" ? Light::missing : Light::stopped;
+    if (unit.load == "not-found")
+        return Light::missing;
+    const bool wanted = ! service.system && std::find (mainWants.begin(), mainWants.end(), service.name) != mainWants.end();
+    const bool shouldRun = wanted || unit.fileState.startsWith ("enabled") || unit.fileState == "static" || unit.fileState == "indirect"
+                           || unit.fileState.startsWith ("linked") || unit.fileState == "alias";
+    return shouldRun ? Light::stopped : Light::idle;
 }
 
 std::vector<ServiceLine> serviceLines (const Facts& facts)
@@ -526,7 +539,7 @@ std::vector<ServiceLine> serviceLines (const Facts& facts)
             state << dot << unit.fileState;
         if (service.system)
             state << dot << "system";
-        lines.push_back ({ service.name, state, serviceLight (unit) });
+        lines.push_back ({ service.name, state, serviceLight (service, unit, facts.mainWants) });
     }
     return lines;
 }

@@ -184,7 +184,7 @@ its light and state; the a3-core card adds a compact line per unit of the Core h
 (`dpkg-query -L`, the `.wants` links left out) and what `a3-main.service` Wants (`systemctl --user show -p Wants`), less the
 units that are another row's (the decks, the desk, Motion), read every 30 s; on a3nuc1 that is a3-aes67,
 a3-bar-per-workspace, a3-clock, a3-core, a3-core-window, a3-engine, a3-main, a3-screencast, beat-analyzer and the system's
-a3-ptp-state (service and timer), set_irq_prio, vnc-display, x11vnc. Start and Stop stay on the card (a3-engine and
+a3-ptp-state (by its timer), set_irq_prio, x11vnc; grey only for a unit that should run (enabled, static or wanted by a3-main) and does not, a disabled one that does not run without a hue. Start and Stop stay on the card (a3-engine and
 a3-core); the units have no keys. Each row has where it runs (Core's `/api/rig` first, then the truth's
 `hosts`; `local · <address>` on this machine), its audio address (the device's report, else the truth's `<host>-audio`), its
 software (the device's `device.version` in `/api/rig`'s `versions`; a3-core's is Core's `/api/status` version) and, for the

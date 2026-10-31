@@ -4,6 +4,9 @@ After=multi-user.target
 
 [Service]
 Type=oneshot
+# Active after its run (2026-10-31): the window's RIG shows a unit that should run and does not in grey; a oneshot
+# without this read "inactive" although it had done its job.
+RemainAfterExit=yes
 ExecStart=/bin/sh -c 'for pid in $(pgrep -f "irq/.*-xhci_hcd"); do /usr/bin/chrt -f -p 95 "$pid"; done'
 
 [Install]

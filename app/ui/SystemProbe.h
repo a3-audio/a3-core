@@ -83,6 +83,7 @@ private:
     std::mutex pollLock;   // one poll at a time: the thread's or pollNow's
     SystemSnapshot latest;
     std::vector<rig::ServiceUnit> services;   // the Core's units here, read with the checkout
+    std::vector<juce::String> mainWants;
     std::uint32_t checkoutReadAt = 0;
     bool checkoutRead = false;
     std::mutex wakeLock;

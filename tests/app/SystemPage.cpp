@@ -343,9 +343,33 @@ TEST (RigModel, TheCoresServicesComeFromThePackagesAndA3Main)
         names.add (service.name + (service.system ? " (system)" : ""));
     EXPECT_EQ (names, (juce::StringArray { "a3-aes67.service", "a3-clock.service", "a3-core-window.service", "a3-core.service",
                                            "a3-engine.service", "a3-main.service", "beat-analyzer.service",
-                                           "a3-ptp-state.service (system)", "a3-ptp-state.timer (system)" }));
+                                           "a3-ptp-state.timer (system)" })) << "a service with a timer is read by its timer";
     const auto system = rig::showCommand (services, true);
     EXPECT_EQ (system[1], "show") << "the system's units without --user";
+}
+
+// Grey only for a unit that should run and does not (2026-10-31): enabled, static or wanted by a3-main and inactive; a
+// disabled one that does not run is fine (no hue), active is green, failed red.
+TEST (RigModel, OnlyAUnitThatShouldRunAndDoesNotIsGrey)
+{
+    rig::Facts facts;
+    facts.network = coreMachine();
+    facts.coreServices = { { "beat-analyzer.service", false }, { "set_irq_prio.service", true }, { "spare.service", true },
+                           { "x11vnc.service", true }, { "broken.service", true } };
+    facts.mainWants = { "beat-analyzer.service" };
+    facts.units = rig::parseSystemctlShow (unitBlock ("beat-analyzer.service", "inactive").replace ("Result=success", "Result=success\nUnitFileState=static"));
+    facts.systemUnits = rig::parseSystemctlShow (
+        unitBlock ("set_irq_prio.service", "inactive").replace ("Result=success", "Result=success\nUnitFileState=enabled")
+        + unitBlock ("spare.service", "inactive").replace ("Result=success", "Result=success\nUnitFileState=disabled")
+        + unitBlock ("x11vnc.service", "active").replace ("Result=success", "Result=success\nUnitFileState=enabled")
+        + unitBlock ("broken.service", "failed").replace ("Result=success", "Result=success\nUnitFileState=enabled"));
+    const auto row = rig::describe (rig::programs (1)[0], facts);
+    ASSERT_EQ (row.services.size(), 5u);
+    EXPECT_EQ (row.services[0].light, rig::Light::stopped) << "wanted by a3-main, not running: grey";
+    EXPECT_EQ (row.services[1].light, rig::Light::stopped) << "enabled, not running: grey";
+    EXPECT_EQ (row.services[2].light, rig::Light::idle) << "disabled and not running: fine";
+    EXPECT_EQ (row.services[3].light, rig::Light::running);
+    EXPECT_EQ (row.services[4].light, rig::Light::failed);
 }
 
 TEST (RigPlan, StartAllInTheRigsOrderAndOnlyWhatRunsHere)

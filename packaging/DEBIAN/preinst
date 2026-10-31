@@ -21,10 +21,22 @@ keep_authorized_keys() {
   cp -p "$ssh_dir/authorized_keys" "$kept"
 }
 
+# vnc-display.service left the package on 2026-10-31 (unused: VNC runs through
+# x11vnc). dpkg removes its file on the upgrade (remove-on-upgrade in
+# conffiles); one that is enabled is disabled first, while its file is still
+# there, so no dangling link is left behind.
+retire_vnc_display() {
+  [ -e /etc/systemd/system/vnc-display.service ] || return 0
+  if systemctl is-enabled --quiet vnc-display.service 2>/dev/null; then
+    systemctl disable vnc-display.service || true
+  fi
+}
+
 case "$1" in
   install|upgrade)
     USER_HOME=$(getent passwd aaa | cut -d: -f6 || echo /home/aaa)
     keep_authorized_keys "${USER_HOME:-/home/aaa}/.ssh" "$KEPT_KEYS"
+    retire_vnc_display
   ;;
 esac
 

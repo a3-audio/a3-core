@@ -74,9 +74,12 @@ void SystemProbe::poll (bool withCheckout)
     if (sources.interfaces)
         facts.network.own = rig::ownAddresses (sources.interfaces(), sources.truth);
     if (withCheckout && sources.runner != nullptr)   // what belongs to the Core changes with an install, not by the second
-        services = rig::coreServices (rig::packageUnits (sources.runner->run (rig::packageUnitsCommand()).output),
-                                      rig::parseWants (sources.runner->run (rig::mainWantsCommand()).output), rigPrograms);
+    {
+        mainWants = rig::parseWants (sources.runner->run (rig::mainWantsCommand()).output);
+        services = rig::coreServices (rig::packageUnits (sources.runner->run (rig::packageUnitsCommand()).output), mainWants, rigPrograms);
+    }
     facts.coreServices = services;
+    facts.mainWants = mainWants;
     if (sources.runner != nullptr)
     {
         facts.units = rig::parseSystemctlShow (sources.runner->run (rig::showCommand (rigPrograms)).output);

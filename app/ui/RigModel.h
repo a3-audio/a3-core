@@ -28,7 +28,8 @@ struct Program
 // Engine, a deck per slot (A … Z, AA, …), Mixer, Motion, Beat analyzer.
 std::vector<Program> programs (int decks);
 
-enum class Light { missing, stopped, starting, running, degraded, failed, elsewhere, unknown };
+// idle: a unit that is not meant to run (disabled) and does not; stopped (grey) is one that should run and does not.
+enum class Light { missing, stopped, starting, running, degraded, failed, elsewhere, unknown, idle };
 
 // What `systemctl [--user] show` says about one unit (fileState: UnitFileState, "enabled", "disabled", "static", ...).
 struct UnitFacts
@@ -51,7 +52,8 @@ std::vector<ServiceUnit> packageUnits (const juce::String& dpkgList);
 std::vector<std::string> mainWantsCommand();                  // systemctl --user show -p Wants --value a3-main.service
 std::vector<juce::String> parseWants (const juce::String& output);
 // The Core's services (2026-10-31, the maintainer: the a3-core card lists every unit that belongs to the Core here): the
-// packages' units and what a3-main.service Wants, less the units that are another row's (the decks, the desk, Motion).
+// packages' units and what a3-main.service Wants, less the units that are another row's (the decks, the desk, Motion); a
+// service with a timer of its name is read by the timer (a3-ptp-state: a oneshot every 10 s, its timer is what runs).
 std::vector<ServiceUnit> coreServices (const std::vector<ServiceUnit>& packaged, const std::vector<juce::String>& mainWants,
                                        const std::vector<Program>&);
 std::vector<std::string> showCommand (const std::vector<ServiceUnit>&, bool system);
@@ -131,6 +133,7 @@ struct Facts
     bool deskInstalled = false;   // /usr/bin/a3-desk: the desk has no unit file, it runs as a transient one
     std::vector<ServiceUnit> coreServices;          // what the a3-core card lists
     std::map<juce::String, UnitFacts> systemUnits;  // `systemctl show` of the Core's system units
+    std::vector<juce::String> mainWants;            // what a3-main.service Wants: those should run
 };
 
 Row describe (const Program&, const Facts&);
