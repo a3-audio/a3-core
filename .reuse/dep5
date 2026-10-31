@@ -4,10 +4,6 @@ Upstream-Contact: A3 Audio <contact@a3-audio.com>
 Source: https://github.com/a3-audio/a3-core
 Comment: https://a3-audio.com
 
-Files: docs/*
-Copyright: 2023 Raphael Eismann and contributors
-License: CC-BY-SA-4.0
-
 Files: platform-config/*
 Copyright: 2023 Raphael Eismann and contributors
 License: CC-BY-SA-4.0
