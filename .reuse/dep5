@@ -80,6 +80,7 @@ Files: third_party/IEMPluginSuite/*
 Copyright: 2017-2026 Institute of Electronic Music and Acoustics (IEM), Graz
 License: GPL-3.0-or-later
 X-A3-Name: IEMPluginSuite
+X-A3-Version: v1.16.0
 X-A3-Url: https://git.iem.at/audioplugins/IEMPluginSuite
 
 Files: third_party/IEMPluginSuite/BinauralDecoder/Source/IRs/*.wav

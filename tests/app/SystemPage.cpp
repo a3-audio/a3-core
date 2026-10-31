@@ -49,6 +49,13 @@ struct ScriptedRunner final : a3app::CommandRunner
     std::optional<int> finished() override { return std::nullopt; }
 };
 
+// The folders a commit tracks (what `git ls-tree <commit> <folder>` answers for a directory): parts count only from these.
+void tracked (ScriptedRunner& runner, const juce::File& dir, const juce::String& commit, std::initializer_list<const char*> folders)
+{
+    for (const auto* folder : folders)
+        runner.answers["git -C " + dir.getFullPathName() + " ls-tree " + commit + " " + folder] = { 0, std::string ("040000 tree t1\t") + folder + "\n" };
+}
+
 // The package's truth: it names every machine of the rig (the test copy names only Core's).
 const a3core::Truth& packageTruth()
 {
@@ -214,6 +221,7 @@ TEST (CheckoutThirdParty, ForeignReuseStanzasAreEntriesAndOursAreNot)
         "Files: tests/reference/airwindows/*\nCopyright: 2018 Chris Johnson\nLicense: MIT\nX-A3-Name: Airwindows\nX-A3-Version: 2026-10\n\n"
         "Files: firmware/boards/*\nCopyright: 2014-present PlatformIO <contact@platformio.org>\n           2026 Raphael Eismann\n"
         "License: Apache-2.0\nComment: Board definition adapted from PlatformIO's platform-espressif32.\n\n"
+        "Files: hardware/*.kicad_sym\nCopyright: SnapMagic Search, Inc.\nLicense: LicenseRef-SnapMagic\nComment: Third-party symbol, footprint and 3D model.\n\n"
         "Files: build/*.cmake\nCopyright: 2000-2020 Kitware, Inc. and Contributors\nLicense: CC0-1.0\nX-A3-Name: trivial\n");
     juce::StringArray entries;
     for (const auto& entry : checkout::thirdPartyOf (repo))
@@ -221,7 +229,6 @@ TEST (CheckoutThirdParty, ForeignReuseStanzasAreEntriesAndOursAreNot)
     EXPECT_EQ (entries.joinIntoString ("\n"),
                juce::String ("Airwindows||MIT|https://github.com/airwindows/airwindows\n"
                              "Airwindows|2026-10|MIT|\n"   // no version git can read: the stanza's own
-                             "Board definition adapted from PlatformIO's platform-espressif32||Apache-2.0|\n"   // no name: its Comment
                              "JUCE||AGPL-3.0 OR JUCE-9|https://juce.com"));
     EXPECT_TRUE (checkout::thirdPartyOf (repo.getChildFile ("not-here")).empty());
     repo.deleteRecursively();
@@ -304,8 +311,8 @@ TEST (SystemCheckout, ThirdPartyIsOneNodeAtTheEndEachEntryOnce)
     repo.deleteRecursively();
 }
 
-// A submodule inside a part's folder is shown under that part (maintainer, 2026-10-31): a3-kicad-lib mounted in the
-// board's folder is "a3-mixer › pcb › a3-kicad-lib", ours by its relative url; its 3D models make no housing of the board.
+// A repository mounted inside a part's folder (a3-kicad-lib in the board's pcb/) is listed once, at the top level
+// (maintainer, 2026-10-31), not under the board; ours by its relative url. Its 3D models make no housing of the board.
 TEST (SystemCheckout, ASubmoduleInsideAPartsFolderIsThatPartsChild)
 {
     const auto repo = juce::File::createTempFile ("a3-part-child");
@@ -327,6 +334,7 @@ TEST (SystemCheckout, ASubmoduleInsideAPartsFolderIsThatPartsChild)
     runner.answers[git ("", "config --blob HEAD:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
         = { 0, "submodule.a3-mixer.url https://github.com/a3-audio/a3-mixer\n" };
     runner.answers[git ("a3-mixer", "describe --tags --match v* --always bbb")] = { 0, "v03.1\n" };
+    tracked (runner, repo.getChildFile ("a3-mixer"), "bbb", { "hardware/pcb", "hardware/housing", "firmware" });
     runner.answers[git ("a3-mixer", "ls-tree -r bbb")] = { 0, "160000 commit kkk\thardware/pcb/a3-kicad-lib\n" };
     runner.answers[git ("a3-mixer", "config --blob bbb:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
         = { 0, "submodule.hardware/pcb/a3-kicad-lib.url ../a3-kicad-lib.git\n" };
@@ -340,15 +348,15 @@ TEST (SystemCheckout, ASubmoduleInsideAPartsFolderIsThatPartsChild)
                              "a3-mixer pcb|https://github.com/a3-audio/a3-mixer/tree/HEAD/hardware/pcb\n"
                              "a3-mixer housing|https://github.com/a3-audio/a3-mixer/tree/HEAD/hardware/housing\n"
                              "a3-mixer firmware|https://github.com/a3-audio/a3-mixer/tree/HEAD/firmware\n"
-                             "a3-mixer pcb/a3-kicad-lib|https://github.com/a3-audio/a3-kicad-lib"));
+                             "a3-kicad-lib|https://github.com/a3-audio/a3-kicad-lib"));
     juce::StringArray tree;
     for (const auto& entry : checkout::treeOf (facts.rows))
         tree.add (entry.prefix + entry.name);
-    EXPECT_EQ (tree.joinIntoString ("\n"), juce::String::fromUTF8 ("└─ a3-mixer\n"
-                                                                   "   ├─ pcb\n"
-                                                                   "   │  └─ a3-kicad-lib\n"
-                                                                   "   ├─ housing\n"
-                                                                   "   └─ firmware"));
+    EXPECT_EQ (tree.joinIntoString ("\n"), juce::String::fromUTF8 ("├─ a3-mixer\n"
+                                                                   "│  ├─ pcb\n"
+                                                                   "│  ├─ housing\n"
+                                                                   "│  └─ firmware\n"
+                                                                   "└─ a3-kicad-lib"));
     repo.deleteRecursively();
 }
 
@@ -458,6 +466,7 @@ TEST (SystemCheckout, TheMixerShowsPcbWithOneChildPerRevisionAndTheLibraryBeside
     runner.answers[git ("", "config --blob HEAD:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
         = { 0, "submodule.a3-mixer.url https://github.com/a3-audio/a3-mixer\n" };
     runner.answers[git ("a3-mixer", "describe --tags --match v* --always bbb")] = { 0, "v03.1\n" };
+    tracked (runner, repo.getChildFile ("a3-mixer"), "bbb", { "hardware/pcb", "hardware/pcb/v0_2", "hardware/pcb/v3_1", "hardware/housing", "firmware" });
     runner.answers[git ("a3-mixer", "ls-tree -r bbb")] = { 0, "160000 commit kkk\thardware/pcb/a3-kicad-lib\n" };
     runner.answers[git ("a3-mixer", "config --blob bbb:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
         = { 0, "submodule.hardware/pcb/a3-kicad-lib.url ../a3-kicad-lib.git\n" };
@@ -473,17 +482,17 @@ TEST (SystemCheckout, TheMixerShowsPcbWithOneChildPerRevisionAndTheLibraryBeside
                              "a3-mixer pcb/v3_1|rev v3.1|CERN-OHL-S\n"
                              "a3-mixer housing||CERN-OHL-S|no version\n"
                              "a3-mixer firmware||\n"
-                             "a3-mixer pcb/a3-kicad-lib|v03.1|"));
+                             "a3-kicad-lib|v03.1|"));
     juce::StringArray tree;
     for (const auto& entry : checkout::treeOf (facts.rows))
         tree.add (entry.prefix + entry.name);
-    EXPECT_EQ (tree.joinIntoString ("\n"), juce::String::fromUTF8 ("└─ a3-mixer\n"
-                                                                   "   ├─ pcb\n"
-                                                                   "   │  ├─ v0_2\n"
-                                                                   "   │  ├─ v3_1\n"
-                                                                   "   │  └─ a3-kicad-lib\n"
-                                                                   "   ├─ housing\n"
-                                                                   "   └─ firmware"));
+    EXPECT_EQ (tree.joinIntoString ("\n"), juce::String::fromUTF8 ("├─ a3-mixer\n"
+                                                                   "│  ├─ pcb\n"
+                                                                   "│  │  ├─ v0_2\n"
+                                                                   "│  │  └─ v3_1\n"
+                                                                   "│  ├─ housing\n"
+                                                                   "│  └─ firmware\n"
+                                                                   "└─ a3-kicad-lib"));
     repo.deleteRecursively();
 }
 
@@ -495,11 +504,14 @@ TEST (SystemCheckout, AUiFolderIsAPartAndAUiSubmoduleIsARow)
     repo.deleteRecursively();
     repo.getChildFile ("folder/ui").createDirectory();
     repo.getChildFile ("linked/ui").createDirectory();
+    repo.getChildFile ("leftover/ui").createDirectory();   // on disk only, not in the commit: no part
     const auto git = [&repo] (const juce::String& dir, const juce::String& rest) {
         return "git -C " + (dir.isEmpty() ? repo : repo.getChildFile (dir)).getFullPathName() + " " + rest;
     };
     ScriptedRunner runner;
-    runner.answers[git ("", "ls-tree -r HEAD")] = { 0, "160000 commit aaa\tfolder\n160000 commit bbb\tlinked\n" };
+    runner.answers[git ("", "ls-tree -r HEAD")] = { 0, "160000 commit aaa\tfolder\n160000 commit bbb\tlinked\n160000 commit lll\tleftover\n" };
+    runner.answers[git ("folder", "ls-tree aaa ui")] = { 0, "040000 tree t1\tui\n" };
+    runner.answers[git ("leftover", "describe --tags --match v* --always lll")] = { 0, "v03.1\n" };
     runner.answers[git ("folder", "describe --tags --match v* --always aaa")] = { 0, "v03.1\n" };
     runner.answers[git ("folder", "log -1 --format=%H aaa -- ui")] = { 0, "u1\n" };
     runner.answers[git ("folder", "describe --tags --match v* --abbrev=0 aaa")] = { 0, "v03.1\n" };
@@ -510,7 +522,7 @@ TEST (SystemCheckout, AUiFolderIsAPartAndAUiSubmoduleIsARow)
     juce::StringArray names;
     for (const auto& row : checkout::read (runner, repo).rows)
         names.add (row.name + "|" + row.tag);
-    EXPECT_EQ (names.joinIntoString ("\n"), juce::String ("folder|v03.1\nfolder ui|v03.1\nlinked|v03.1\nlinked/ui|v03.1+2"));
+    EXPECT_EQ (names.joinIntoString ("\n"), juce::String ("folder|v03.1\nfolder ui|v03.1\nlinked|v03.1\nlinked/ui|v03.1+2\nleftover|v03.1"));
     repo.deleteRecursively();
 }
 
@@ -549,7 +561,6 @@ TEST (SystemCheckout, ReadsSubmodulesAtAnyDepthAndInsideFolders)
         rows.add (row.name + "|" + row.tag + "|" + row.url);
     EXPECT_EQ (rows.joinIntoString ("\n"),
                juce::String ("a3-mixer|v03.1|https://github.com/a3-audio/a3-mixer\n"
-                             "a3-mixer firmware||https://github.com/a3-audio/a3-mixer/tree/HEAD/firmware\n"   // not asked here
                              "a3-mixer/a3-kicad-lib|v03.1+4|https://github.com/a3-audio/a3-kicad-lib\n"
                              "a3-stemdeck|v03.1|https://github.com/a3-audio/a3-stemdeck\n"
                              "a3-stemdeck/a3-stem-separator|v03.1|https://github.com/a3-audio/a3-stem-separator\n"
@@ -598,6 +609,7 @@ TEST (SystemCheckout, ReadsTheUmbrellasPinsAndFirmware)
     runner.answers[git ("a3-motion", "log -1 --format=%H ccc -- firmware")] = { 0, "fff\n" };
     runner.answers[git ("a3-motion", "describe --tags --match v* --abbrev=0 ccc")] = { 0, "v03.0\n" };
     runner.answers[git ("a3-motion", "rev-list --count v03.0..ccc -- firmware")] = { 0, "2\n" };
+    tracked (runner, repo.getChildFile ("a3-motion"), "ccc", { "firmware" });
     runner.answers[git ("a3-motion", "ls-tree -r ccc")] = { 0, "160000 commit eee\ta3-motion-ui\n" };
     runner.answers[git ("a3-motion/a3-motion-ui", "describe --tags --match v* --always eee")] = { 0, "v03.0-900-geeeeee\n" };
     // Submodules of submodules since 2026-10-31: a3-core's a3-beat-analyzer, a3-stemdeck's a3-stem-separator -- one level, as a3-motion's a3-motion-ui.
@@ -1081,7 +1093,14 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     runner->answers[git ("a3-pro-dj", "describe --tags --match v* --always pdj")] = { 0, "v03.0-2-gabcdef2\n" };
     runner->answers[git ("a3-core", "ls-tree -r aaa")] = { 0, "160000 commit bea\ta3-beat-analyzer\n" };
     runner->answers[git ("a3-core/a3-beat-analyzer", "describe --tags --match v* --always bea")] = { 0, "v03.1-1-gbeabeab\n" };
+    tracked (*runner, repo.getChildFile ("a3-mixer"), "bbb", { "hardware/pcb", "hardware/pcb/v0_2", "hardware/pcb/v3_1", "hardware/housing", "firmware" });
+    tracked (*runner, repo.getChildFile ("a3-motion"), "ccc", { "hardware/pcb", "hardware/pcb/v1", "hardware/pcb/v3_1", "hardware/housing", "firmware" });
     runner->answers[git ("a3-mixer", "ls-tree -r bbb")] = { 0, "160000 commit uuu\ta3-mixer-ui\n160000 commit kk1\thardware/pcb/a3-kicad-lib\n" };
+    // The same library in two boards: one row, by its url.
+    runner->answers[git ("a3-mixer", "config --blob bbb:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
+        = { 0, "submodule.a3-mixer-ui.url ../a3-mixer-ui.git\nsubmodule.hardware/pcb/a3-kicad-lib.url ../a3-kicad-lib.git\n" };
+    runner->answers[git ("a3-motion", "config --blob ccc:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
+        = { 0, "submodule.a3-motion-ui.url ../a3-motion-ui.git\nsubmodule.hardware/pcb/a3-kicad-lib.url ../a3-kicad-lib.git\n" };
     runner->answers[git ("a3-mixer/hardware/pcb/a3-kicad-lib", "describe --tags --match v* --always kk1")] = { 0, "v03.1\n" };
     runner->answers[git ("a3-mixer/a3-mixer-ui", "describe --tags --match v* --always uuu")] = { 0, "v03.1-2-gabcdef1\n" };
     runner->answers[git ("a3-stemdeck", "describe --tags --match v* --always ddd")] = { 0, "v03.1-1-gddddddd\n" };
@@ -1089,7 +1108,8 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     runner->answers[git ("a3-stemdeck/third_party/a3-core", "describe --tags --match v* --always cor")] = { 0, "v03.0-758-gc0ffee1\n" };
     // a3-stemdeck's own copy of a3-core is the system's a3-core: not listed again.
     runner->answers[git ("", "config --blob HEAD:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
-        = { 0, "submodule.a3-core.url https://github.com/a3-audio/a3-core\nsubmodule.a3-stemdeck.url https://github.com/a3-audio/a3-stemdeck\n" };
+        = { 0, "submodule.a3-core.url https://github.com/a3-audio/a3-core\nsubmodule.a3-stemdeck.url https://github.com/a3-audio/a3-stemdeck\n"
+               "submodule.a3-mixer.url https://github.com/a3-audio/a3-mixer\nsubmodule.a3-motion.url https://github.com/a3-audio/a3-motion\n" };
     runner->answers[git ("a3-stemdeck", "config --blob ddd:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
         = { 0, "submodule.a3-stem-separator.url ../a3-stem-separator.git\nsubmodule.third_party/a3-core.url https://github.com/a3-audio/a3-core.git\n" };
     runner->answers[git ("a3-stemdeck/a3-stem-separator", "describe --tags --match v* --always sep")] = { 0, "v03.1\n" };
@@ -1121,25 +1141,25 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
                juce::String ("a3-core|v03.0+857|GPL-3.0\na3-core/a3-beat-analyzer|v03.1+1|GPL-3.0\n"
                              "a3-doc|v03.1+6|CC-BY-SA-4.0\n"
                              "a3-mixer|v03.0+90|GPL-3.0\na3-mixer pcb||CERN-OHL-S|no version\na3-mixer pcb/v0_2|rev v0.2|CERN-OHL-S\na3-mixer pcb/v3_1|rev v3.1|CERN-OHL-S\na3-mixer housing|rev v02|CERN-OHL-S\n"
-                             "a3-mixer firmware|rev v03.0|GPL-3.0\na3-mixer/a3-mixer-ui|v03.1+2|GPL-3.0\na3-mixer pcb/a3-kicad-lib|v03.1|\n"
+                             "a3-mixer firmware|rev v03.0|GPL-3.0\na3-mixer/a3-mixer-ui|v03.1+2|GPL-3.0\n"
                              "a3-motion|v03.0+855|GPL-3.0\na3-motion pcb||CERN-OHL-S|no version\na3-motion pcb/v1|rev v1|CERN-OHL-S\na3-motion pcb/v3_1|rev v3.1|CERN-OHL-S\na3-motion housing||CERN-OHL-S|no version\n"
-                             "a3-motion firmware|rev v03.0+2|GPL-3.0\na3-motion/a3-motion-ui|v03.0+900|GPL-3.0\na3-motion pcb/a3-kicad-lib|v03.1|\n"
+                             "a3-motion firmware|rev v03.0+2|GPL-3.0\na3-motion/a3-motion-ui|v03.0+900|GPL-3.0\n"
                              "a3-pro-dj|v03.0+2|GPL-3.0\n"
-                             "a3-stemdeck|v03.1+1|GPL-3.0\na3-stemdeck/a3-stem-separator|v03.1|GPL-3.0\n"
+                             "a3-stemdeck|v03.1+1|GPL-3.0\na3-stemdeck/a3-stem-separator|v03.1|GPL-3.0\na3-kicad-lib|v03.1|\n"
                              "third-party|||no version\nthird-party/Airwindows||MIT|no version\nthird-party/BTrack||GPL-3.0|no version\n"
                              "third-party/IEMPluginSuite||GPL-3.0|no version\n"
                              "third-party/JUCE|" + (juce::String (JUCE_MAJOR_VERSION) + "." + juce::String (JUCE_MINOR_VERSION) + "." + juce::String (JUCE_BUILDNUMBER))
                                  + "|AGPL-3.0 OR JUCE-9\nthird-party/kiss_fft|1.3.0|BSD-3-Clause\n"
                              "third-party/Neumann KU 100 HRIR||CC-BY-3.0|no version\nthird-party/platform-espressif32||Apache-2.0|no version\n"
                              "third-party/Roboto||Apache-2.0|no version\nthird-party/SnapMagic MCP3208|2025-11|SnapMagic"));
-    ASSERT_EQ (view.checkoutShown().rows.size(), 32u) << "the real tree's size with the two a3-kicad-lib rows and a row per board revision";
+    ASSERT_EQ (view.checkoutShown().rows.size(), 31u) << "the real tree's size with the two a3-kicad-lib rows and a row per board revision";
     // Every line fits on the card at the rig size (768x1024): each gets an area of its own, inside the card, and the card
     // ends above the link line. A card cut to the space left would give the last lines empty areas and still end there.
     view.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     ASSERT_EQ (view.cardAreas().size(), 1u);
     const auto card = view.cardAreas()[0];
     const auto areas = view.treeLineAreas();
-    ASSERT_EQ (areas.size(), 33u) << "the A³ System line and the 32 of the tree";
+    ASSERT_EQ (areas.size(), 32u) << "the A³ System line and the 31 of the tree";
     for (size_t i = 0; i < areas.size(); ++i)
     {
         EXPECT_FALSE (areas[i].isEmpty()) << "line " << i << " has no room";
@@ -1219,4 +1239,38 @@ TEST_F (SystemPageTest, AboutShowsTheProjectSupportAndThePins)
     EXPECT_GT (linkY, cards[0].getBottom()) << "the links are under the card";
     EXPECT_GT (linkY, view.getHeight() * 2 / 3);
     a3apptest::expectPainted (a3apptest::snapshotAt (view, "system3-about", view.getWidth(), view.getHeight()));
+}
+
+// The rig's checkouts of third parties carry no tags, so git describes them as a bare hash; the version then comes from
+// the REUSE stanza (X-A3-Version), and only without one the short commit.
+TEST (SystemCheckout, ATaglessThirdPartyCheckoutTakesTheStanzasVersion)
+{
+    const auto repo = juce::File::createTempFile ("a3-tagless");
+    const auto touch = [&repo] (const juce::String& path, const juce::String& content) {
+        const auto file = repo.getChildFile (path);
+        file.getParentDirectory().createDirectory();
+        file.replaceWithText (content);
+    };
+    touch ("a3-core/.reuse/dep5",
+           "Format: x\n\nFiles: third_party/IEMPluginSuite/*\nCopyright: 2017 IEM\nLicense: GPL-3.0-or-later\nX-A3-Name: IEMPluginSuite\nX-A3-Version: v1.16.0\n");
+    const auto git = [&repo] (const juce::String& dir, const juce::String& rest) {
+        return "git -C " + (dir.isEmpty() ? repo : repo.getChildFile (dir)).getFullPathName() + " " + rest;
+    };
+    ScriptedRunner runner;
+    runner.answers[git ("", "ls-tree -r HEAD")] = { 0, "160000 commit aaa\ta3-core\n" };
+    runner.answers[git ("", "config --blob HEAD:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
+        = { 0, "submodule.a3-core.url https://github.com/a3-audio/a3-core\n" };
+    runner.answers[git ("a3-core", "describe --tags --match v* --always aaa")] = { 0, "v03.1\n" };
+    runner.answers[git ("a3-core", "ls-tree -r aaa")] = { 0, "160000 commit d9e0a9aac011ab1a\tthird_party/IEMPluginSuite\n160000 commit 1234567890abcdef\tthird_party/Other\n" };
+    runner.answers[git ("a3-core", "config --blob aaa:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
+        = { 0, "submodule.third_party/IEMPluginSuite.url https://git.iem.at/audioplugins/IEMPluginSuite.git\n"
+               "submodule.third_party/Other.url https://example.org/other.git\n" };
+    runner.answers[git ("a3-core/third_party/IEMPluginSuite", "describe --tags --always d9e0a9aac011ab1a")] = { 0, "d9e0a9a\n" };
+    runner.answers[git ("a3-core/third_party/Other", "describe --tags --always 1234567890abcdef")] = { 0, "1234567\n" };
+    juce::StringArray rows;
+    for (const auto& row : checkout::read (runner, repo).rows)
+        if (row.name.startsWith ("third-party/"))
+            rows.add (row.name + "|" + row.tag);
+    EXPECT_EQ (rows.joinIntoString ("\n"), juce::String ("third-party/IEMPluginSuite|v1.16.0\nthird-party/Other|1234567"));
+    repo.deleteRecursively();
 }

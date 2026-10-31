@@ -186,6 +186,12 @@ juce::String lastChangeTag (CommandRunner& runner, const juce::File& dir, const 
     return since.isEmpty() || since == "0" ? release : release + "+" + since;
 }
 
+// Whether `folder` is a directory of the tree at `commit`: a leftover directory on disk (an old checkout's) is no part.
+bool isTrackedFolder (CommandRunner& runner, const juce::File& dir, const juce::String& commit, const juce::String& folder)
+{
+    return gitOutput (runner, dir, { "ls-tree", commit, folder }).contains (" tree ");
+}
+
 bool hasFirmware (const juce::String& submodule)
 {
     return std::any_of (std::begin (firmwareSubmodules), std::end (firmwareSubmodules),
@@ -216,10 +222,22 @@ void addThirdParties (std::vector<ThirdParty>& others, const juce::File& repoDir
         addThirdParty (others, entry);
 }
 
+// The version a repository's REUSE data states for a third party by name.
+juce::String statedVersion (const juce::File& repoDir, const juce::String& name)
+{
+    for (const auto& entry : thirdPartyOf (repoDir))
+        if (entry.name == name && entry.version.isNotEmpty())
+            return entry.version;
+    return {};
+}
+
 // A submodule published outside a3-audio: its describe (any tag, it is not ours), the short commit when not checked out.
 void addForeignLink (CommandRunner& runner, const juce::File& dir, const Gitlink& link, const juce::String& url, std::vector<ThirdParty>& others)
 {
     auto version = releaseText (gitOutput (runner, dir.getChildFile (link.path), { "describe", "--tags", "--always", link.commit }));
+    // A checkout without tags describes as a bare hash: the stanza's own version (X-A3-Version) is the better answer.
+    if (version.isEmpty() || (isHex (version) && link.commit.startsWith (version)))
+        version = statedVersion (dir, lastComponent (link.path));
     if (version.isEmpty())
         version = link.commit.substring (0, 7);
     addThirdParty (others, { lastComponent (link.path), version, {}, url });
@@ -252,7 +270,7 @@ bool isListed (const juce::String& url, const std::set<juce::String>& systemUrls
 }
 
 void addNested (CommandRunner& runner, const juce::File& dir, const juce::String& commit, const std::vector<Gitlink>& inners,
-                const juce::String& url, const juce::String& parentName, Facts& facts, std::vector<ThirdParty>& others,
+                const juce::String& url, const juce::String& parentName, Facts& facts, Facts& hoisted, std::vector<ThirdParty>& others,
                 const std::set<juce::String>& systemUrls, const std::vector<PartFolder>& partFolders = {})
 {
     if (inners.empty())
@@ -261,26 +279,29 @@ void addNested (CommandRunner& runner, const juce::File& dir, const juce::String
     for (const auto& inner : inners)
     {
         const auto innerDir = dir.getChildFile (inner.path);
-        const auto name = parentRowOf (inner.path, parentName, partFolders) + "/" + lastComponent (inner.path);
+        // A repository mounted inside a hardware part (a3-kicad-lib under pcb/) belongs to no board: it is listed once, at the top.
+        const bool isHoisted = parentRowOf (inner.path, parentName, partFolders) != parentName;
+        auto& target = isHoisted ? hoisted : facts;
+        const auto name = isHoisted ? lastComponent (inner.path) : parentName + "/" + lastComponent (inner.path);
         const auto innerUrl = urlOf (innerUrls, inner.path);
         if (! isOurs (innerUrl))
         {
             addForeignLink (runner, dir, inner, innerUrl, others);
             continue;
         }
-        if (isListed (innerUrl, systemUrls, facts))
+        if (isListed (innerUrl, systemUrls, facts) || isListed (innerUrl, systemUrls, hoisted))
             continue;
-        facts.rows.push_back ({ name, tagOf (runner, innerDir, inner.commit), innerUrl, codeLicence (innerDir) });
-        if (facts.rows.back().tag.isEmpty())
+        target.rows.push_back ({ name, tagOf (runner, innerDir, inner.commit), innerUrl, codeLicence (innerDir) });
+        if (target.rows.back().tag.isEmpty())
             continue;
         addThirdParties (others, innerDir);
         addNested (runner, innerDir, inner.commit, parseGitlinks (gitOutput (runner, innerDir, { "ls-tree", "-r", inner.commit })),
-                   innerUrl, name, facts, others, systemUrls);
+                   innerUrl, name, facts, hoisted, others, systemUrls);
     }
 }
 
 // A submodule's row, then its parts (pcb, housing), its firmware's, its ui folder's, then its own submodules at any depth.
-void addSubmodule (CommandRunner& runner, const juce::File& repo, const Gitlink& link, const juce::String& url, Facts& facts,
+void addSubmodule (CommandRunner& runner, const juce::File& repo, const Gitlink& link, const juce::String& url, Facts& facts, Facts& hoisted,
                    std::vector<ThirdParty>& others, const std::set<juce::String>& systemUrls)
 {
     if (! isOurs (url))
@@ -298,12 +319,14 @@ void addSubmodule (CommandRunner& runner, const juce::File& repo, const Gitlink&
     // A hardware part has the revision its REVISION file says.
     for (const auto& part : partsOf (dir))
     {
+        if (! isTrackedFolder (runner, dir, link.commit, part.folder))
+            continue;
         partFolders.push_back ({ part.folder, rowName + " " + part.name });
         const auto version = revisionText (part.revision);
         facts.rows.push_back ({ rowName + " " + part.name, version, url.isNotEmpty() ? url + "/tree/HEAD/" + part.folder : juce::String(),
                                 licenceOfFolder (dir, part.folder), version.isEmpty() });
     }
-    if (hasFirmware (link.path))
+    if (hasFirmware (link.path) && isTrackedFolder (runner, dir, link.commit, firmwareFolder))
     {
         partFolders.push_back ({ firmwareFolder, rowName + " firmware" });
         facts.rows.push_back ({ rowName + " firmware", revisionText (lastChangeTag (runner, dir, link.commit, firmwareFolder)),
@@ -314,14 +337,14 @@ void addSubmodule (CommandRunner& runner, const juce::File& repo, const Gitlink&
     // A ui that is a folder of the repo (a3-mixer's desk) is a part like the firmware, with its software version;
     // a ui that is a repository of its own (a3-motion's) is listed below as a submodule.
     const bool uiIsSubmodule = std::any_of (inners.begin(), inners.end(), [] (const Gitlink& g) { return g.path == uiFolder; });
-    if (! uiIsSubmodule && dir.getChildFile (uiFolder).isDirectory())
+    if (! uiIsSubmodule && isTrackedFolder (runner, dir, link.commit, uiFolder))
     {
         partFolders.push_back ({ uiFolder, rowName + " ui" });
         facts.rows.push_back ({ rowName + " ui", lastChangeTag (runner, dir, link.commit, uiFolder),
                                 url.isNotEmpty() ? url + "/tree/HEAD/" + uiFolder : juce::String(),
                                 licenceOfFolder (dir, uiFolder) });
     }
-    addNested (runner, dir, link.commit, inners, url, rowName, facts, others, systemUrls, partFolders);
+    addNested (runner, dir, link.commit, inners, url, rowName, facts, hoisted, others, systemUrls, partFolders);
 }
 
 // The JUCE this program is compiled against, from JUCE's own header at build time.
@@ -562,20 +585,6 @@ bool coversTrivialFiles (const Paragraph& stanza)
     return std::all_of (ids.begin(), ids.end(), [] (const juce::String& id) { return id == "CC0-1.0"; });
 }
 
-juce::String nameOf (const Paragraph& stanza)
-{
-    if (const auto name = firstLineOf (stanza, "X-A3-Name"); name.isNotEmpty())
-        return name;
-    if (const auto found = stanza.find ("Comment"); found != stanza.end())
-    {
-        const auto comment = found->second.joinIntoString (" ").trim();
-        const auto sentence = comment.upToFirstOccurrenceOf (". ", false, false).trim();
-        if (sentence.isNotEmpty())
-            return sentence.endsWithChar ('.') ? sentence.dropLastCharacters (1) : sentence;
-    }
-    return patternsOf (stanza)[0];
-}
-
 // "JUCE; AGPL-3.0-only OR LicenseRef-JUCE-9; https://juce.com" -> its entry.
 ThirdParty usedFrom (const juce::String& line)
 {
@@ -591,10 +600,12 @@ std::vector<ThirdParty> thirdPartyOf (const juce::File& repoDir)
     const auto paragraphs = dep5Paragraphs (repoDir.getChildFile (".reuse/dep5"));
     for (const auto& stanza : paragraphs)
     {
-        if (stanza.count ("Files") == 0 || ! isForeign (stanza) || coversTrivialFiles (stanza))
+        // Only a named stanza is listed: an unnamed foreign one (a parts vendor's design) is deliberately not.
+        const auto name = firstLineOf (stanza, "X-A3-Name");
+        if (name.isEmpty() || stanza.count ("Files") == 0 || ! isForeign (stanza) || coversTrivialFiles (stanza))
             continue;
         const auto own = firstLineOf (stanza, "X-A3-License");
-        entries.push_back ({ nameOf (stanza), firstLineOf (stanza, "X-A3-Version"), thirdPartyLicence (own.isNotEmpty() ? own : firstLineOf (stanza, "License")),
+        entries.push_back ({ name, firstLineOf (stanza, "X-A3-Version"), thirdPartyLicence (own.isNotEmpty() ? own : firstLineOf (stanza, "License")),
                              firstLineOf (stanza, "X-A3-Url") });
     }
     if (! paragraphs.empty() && paragraphs.front().count ("Files") == 0)
@@ -623,8 +634,10 @@ Facts read (CommandRunner& runner, const juce::File& repo)
     for (const auto& [path, url] : urls)
         systemUrls.insert (url);
     // Every submodule of ours is a part of the release since 2026-10-31 (stemseparator too, as stemdeck's).
+    Facts hoisted;
     for (const auto& link : links)
-        addSubmodule (runner, repo, link, urlOf (urls, link.path), facts, others, systemUrls);
+        addSubmodule (runner, repo, link, urlOf (urls, link.path), facts, hoisted, others, systemUrls);
+    facts.rows.insert (facts.rows.end(), hoisted.rows.begin(), hoisted.rows.end());
     addThirdPartyNode (std::move (others), facts);
     return facts;
 }
