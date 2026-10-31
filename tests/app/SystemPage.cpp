@@ -166,6 +166,35 @@ TEST (SystemAbout, SupportIsOneFixedLinkTheSameForEveryone)
     EXPECT_EQ (links[3].url, about::supportUrl());
 }
 
+// a3-motion's board folder holds sub-projects (enc_pot, led_but) deeper down: the board is the shallowest project's folder.
+TEST (SystemCheckout, ThePcbIsTheShallowestKicadProjectNotASubProject)
+{
+    const auto repo = juce::File::createTempFile ("a3-nested-pcb");
+    const auto touch = [&repo] (const juce::String& path, const juce::String& content = {}) {
+        const auto file = repo.getChildFile (path);
+        file.getParentDirectory().createDirectory();
+        file.replaceWithText (content);
+    };
+    touch ("hardware/pcbs/motion_pcb/enc_pot/enc_pot.kicad_pro");
+    touch ("hardware/pcbs/motion_pcb/led_but/led_but.kicad_pro");
+    touch ("hardware/pcbs/motion_pcb/motion_pcb.kicad_pro");
+    touch ("hardware/pcbs/motion_pcb/REVISION", "v03\n");
+    const auto parts = checkout::partsOf (repo);
+    ASSERT_EQ (parts.size(), 1u);
+    EXPECT_EQ (parts[0].name, "pcb");
+    EXPECT_EQ (parts[0].folder, "hardware/pcbs/motion_pcb");
+    EXPECT_EQ (parts[0].revision, "v03");
+    repo.deleteRecursively();
+}
+
+// stemseparator is pinned but runs off the rig and is never tagged (release.py leaves it out): not a part of the system.
+TEST (SystemCheckout, ARepoOutsideTheReleaseIsNotInTheTree)
+{
+    EXPECT_TRUE (checkout::isInRelease ("a3-core"));
+    EXPECT_TRUE (checkout::isInRelease ("stemdeck"));
+    EXPECT_FALSE (checkout::isInRelease ("stemseparator"));
+}
+
 TEST (SystemCheckout, ReadsTheUmbrellasPinsAndFirmware)
 {
     EXPECT_EQ (checkout::releaseText ("v03.0-413-gabc1234"), "v03.0+413");
@@ -200,7 +229,7 @@ TEST (SystemCheckout, ReadsTheUmbrellasPinsAndFirmware)
     const std::vector<checkout::Row> expected {
         { "a3-core", "v03.0+857", "https://github.com/a3-audio/a3-core" },
         { "a3-motion", "v03.0+855", "https://github.com/a3-audio/a3-motion" },
-        { "a3-motion firmware", "v03.0+2", "https://github.com/a3-audio/a3-motion/tree/HEAD/firmware" },
+        { "a3-motion firmware", "rev v03.0+2", "https://github.com/a3-audio/a3-motion/tree/HEAD/firmware" },
         { "a3-motion/ui", "v03.0+900", "https://github.com/a3-audio/a3-motion-ui" },
         { "stemdeck", "", "https://github.com/rafjagger/stemdeck" } };
     EXPECT_EQ (facts.rows, expected);
@@ -611,7 +640,7 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     touch ("a3-mixer/.reuse/dep5", "Format: x\n\nFiles: hardware/*\nCopyright: a\nLicense: CERN-OHL-S-2.0\n\n"
                                    "Files: hardware/mainboard/firmware/*\nCopyright: a\nLicense: GPL-3.0-or-later\n");
     touch ("a3-mixer/hardware/mainboard/pcb/board.kicad_pro");
-    touch ("a3-mixer/hardware/mainboard/pcb/REVISION", "V02\n");
+    touch ("a3-mixer/hardware/mainboard/pcb/REVISION", "V02\n");   // upper case in the file, lower case on the card
     touch ("a3-mixer/hardware/housing/box.blend");
     touch ("a3-mixer/hardware/housing/REVISION", "V02\n");
     touch ("a3-mixer/hardware/mainboard/firmware/src/main.cpp", "// SPDX-License-Identifier: GPL-3.0-or-later\n");
@@ -625,7 +654,7 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     const auto git = [&repo] (const juce::String& dir, const juce::String& rest) {
         return "git -C " + (dir.isEmpty() ? repo : repo.getChildFile (dir)).getFullPathName() + " " + rest;
     };
-    runner->answers[git ("", "ls-tree HEAD")] = { 0, "160000 commit aaa\ta3-core\n160000 commit bbb\ta3-mixer\n160000 commit ccc\ta3-motion\n160000 commit ddd\tstemdeck\n" };
+    runner->answers[git ("", "ls-tree HEAD")] = { 0, "160000 commit aaa\ta3-core\n160000 commit bbb\ta3-mixer\n160000 commit ccc\ta3-motion\n160000 commit ddd\tstemdeck\n160000 commit sss\tstemseparator\n" };
     runner->answers[git ("", "describe --tags --match v* --always HEAD")] = { 0, "v03.0-12-g1234567\n" };
     runner->answers[git ("a3-core", "describe --tags --match v* --always aaa")] = { 0, "v03.0-857-gaaaaaaa\n" };
     runner->answers[git ("a3-mixer", "describe --tags --match v* --always bbb")] = { 0, "v03.0-90-gbbbbbbb\n" };
@@ -651,10 +680,18 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
         lines.add (row.name + "|" + row.tag + "|" + row.licences + (row.noVersion ? "|no version" : ""));
     EXPECT_EQ (lines.joinIntoString ("\n"),
                juce::String ("a3-core|v03.0+857|GPL-3.0\n"
-                             "a3-mixer|v03.0+90|GPL-3.0\na3-mixer pcb|rev V02|CERN-OHL-S\na3-mixer housing|rev V02|CERN-OHL-S\n"
-                             "a3-mixer firmware|v03.0|GPL-3.0\n"
+                             "a3-mixer|v03.0+90|GPL-3.0\na3-mixer pcb|rev v02|CERN-OHL-S\na3-mixer housing|rev v02|CERN-OHL-S\n"
+                             "a3-mixer firmware|rev v03.0|GPL-3.0\n"
                              "a3-motion|v03.0+855|GPL-3.0\na3-motion pcb|rev v03|CERN-OHL-S\na3-motion housing||CERN-OHL-S|no version\n"
-                             "a3-motion firmware|v03.0+2|GPL-3.0\na3-motion/ui|v03.0+900|GPL-3.0\nstemdeck||"));
+                             "a3-motion firmware|rev v03.0+2|GPL-3.0\na3-motion/ui|v03.0+900|GPL-3.0\nstemdeck||"));
+    // Every row fits on the card at the rig size (768x1024): the tree ends above the link line.
+    view.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    int linksTop = view.getHeight();
+    for (auto* child : view.getChildren())
+        if (dynamic_cast<juce::HyperlinkButton*> (child) != nullptr && child->getY() > view.getHeight() / 2)
+            linksTop = juce::jmin (linksTop, child->getY());
+    EXPECT_LE (view.treeBottom(), linksTop) << "tree bottom " << view.treeBottom() << " links " << linksTop;
+    view.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
     a3apptest::expectPainted (a3apptest::snapshotAt (view, "system3-about-tree", view.getWidth(), view.getHeight()));
     repo.deleteRecursively();
 }

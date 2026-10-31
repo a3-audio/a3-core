@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "SystemCheckout.h"
+#include <algorithm>
 
 namespace a3app::checkout
 {
@@ -154,6 +155,9 @@ const FirmwareDir* firmwareOf (const juce::String& submodule)
     return nullptr;
 }
 
+// Hardware and firmware rows read "rev <version>", lowercase whatever the file says; nothing when there is no version.
+juce::String revisionText (const juce::String& version) { return version.isNotEmpty() ? "rev " + version.toLowerCase() : juce::String(); }
+
 // A submodule's row, then its parts (docs, pcb, housing), its firmware's, then its own submodules' (one level: a3-motion's ui).
 void addSubmodule (CommandRunner& runner, const juce::File& repo, const Gitlink& link, const juce::String& url, Facts& facts)
 {
@@ -164,13 +168,13 @@ void addSubmodule (CommandRunner& runner, const juce::File& repo, const Gitlink&
     // A hardware part has the revision its REVISION file says.
     for (const auto& part : partsOf (dir))
     {
-        const auto version = part.revision.isNotEmpty() ? "rev " + part.revision : juce::String();
+        const auto version = revisionText (part.revision);
         facts.rows.push_back ({ link.path + " " + part.name, version, url.isNotEmpty() ? url + "/tree/HEAD/" + part.folder : juce::String(),
                                 licenceOfFolder (dir, part.folder), version.isEmpty() });
     }
     if (const auto* firmware = firmwareOf (link.path))
     {
-        facts.rows.push_back ({ link.path + " firmware", lastChangeTag (runner, dir, link.commit, firmware->path),
+        facts.rows.push_back ({ link.path + " firmware", revisionText (lastChangeTag (runner, dir, link.commit, firmware->path)),
                                 url.isNotEmpty() ? url + "/tree/HEAD/" + firmware->path : juce::String(),
                                 licenceOfFolder (dir, firmware->path) });
     }
@@ -253,7 +257,14 @@ std::vector<Part> partsOf (const juce::File& repoDir)
     const auto relative = [&repoDir] (const juce::File& f) { return f.getRelativePathFrom (repoDir); };
     const auto hardware = repoDir.getChildFile ("hardware");
     juce::File pcbFolder;
-    const auto projects = hardware.findChildFiles (juce::File::findFiles, true, "*.kicad_pro");
+    auto projects = hardware.findChildFiles (juce::File::findFiles, true, "*.kicad_pro");
+    // The board is the shallowest project (a sub-project such as enc_pot sits below it); ties go to the first path,
+    // whatever order the directory is read in.
+    const auto depthOf = [&hardware] (const juce::File& f) { return f.getRelativePathFrom (hardware).replaceCharacter ('\\', '/').retainCharacters ("/").length(); };
+    std::sort (projects.begin(), projects.end(), [&] (const juce::File& a, const juce::File& b) {
+        const auto depthA = depthOf (a), depthB = depthOf (b);
+        return depthA != depthB ? depthA < depthB : a.getFullPathName() < b.getFullPathName();
+    });
     if (! projects.isEmpty())
     {
         pcbFolder = projects.getFirst().getParentDirectory();
@@ -285,6 +296,8 @@ juce::String licenceOfFolder (const juce::File& repoDir, const juce::String& fol
     return firstLicence (fromDep5.isNotEmpty() ? fromDep5 : licenceFromHeaders (repoDir.getChildFile (folder)));
 }
 
+bool isInRelease (const juce::String& submodulePath) { return submodulePath != "stemseparator"; }
+
 juce::String tagText (const Row& row) { return row.tag.isNotEmpty() ? row.tag : row.noVersion ? juce::String() : juce::String ("not checked out"); }
 
 Facts read (CommandRunner& runner, const juce::File& repo)
@@ -298,7 +311,8 @@ Facts read (CommandRunner& runner, const juce::File& repo)
     facts.version = releaseText (gitOutput (runner, repo, { "describe", "--tags", "--match", "v*", "--always", "HEAD" }));
     const auto urls = urlsAt (runner, repo, "HEAD", {});
     for (const auto& link : links)
-        addSubmodule (runner, repo, link, urlOf (urls, link.path), facts);
+        if (isInRelease (link.path))
+            addSubmodule (runner, repo, link, urlOf (urls, link.path), facts);
     return facts;
 }
 }

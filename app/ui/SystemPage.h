@@ -73,6 +73,7 @@ public:
     ~SystemAboutView() override;
     void refresh();
     const checkout::Facts& checkoutShown() const { return pins; }
+    int treeBottom() const { return tree.empty() ? 0 : tree.back().area.getBottom(); }   // the last tree row's lower edge
     int lineHeight() const { return layout::compactLine (layout::tokens (*this)); }
     void resized() override;
     void paint (juce::Graphics&) override;

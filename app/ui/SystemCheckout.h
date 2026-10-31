@@ -48,6 +48,10 @@ std::vector<Gitlink> parseGitlinks (const juce::String& lsTree);
 // `git describe --tags --always` as a version: "v03.0" on the tag, "v03.0+413" 413 commits after it, the short commit
 // when no tag precedes it.
 juce::String releaseText (const juce::String& describe);
+// Whether a submodule of the umbrella is a part of the system release. Mirrors release.py: stemseparator is pinned but
+// runs off the rig and is never tagged. A fixed list, not "has a v* tag": a repo that is merely not checked out has no tag
+// either and must still show as "not checked out".
+bool isInRelease (const juce::String& submodulePath);
 // What the card writes for a row: its tag, or "not checked out".
 juce::String tagText (const Row&);
 
