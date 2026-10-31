@@ -311,6 +311,12 @@ void addSubmodule (CommandRunner& runner, const juce::File& repo, const Gitlink&
     addNested (runner, dir, link.commit, inners, url, rowName, facts, others, partFolders);
 }
 
+// The JUCE this program is compiled against, from JUCE's own header at build time.
+juce::String builtJuceVersion()
+{
+    return juce::String (JUCE_MAJOR_VERSION) + "." + juce::String (JUCE_MINOR_VERSION) + "." + juce::String (JUCE_BUILDNUMBER);
+}
+
 // The tree's last node: the third parties sorted by name, JUCE with the version the program is built with.
 void addThirdPartyNode (std::vector<ThirdParty> others, Facts& facts)
 {
@@ -321,7 +327,7 @@ void addThirdPartyNode (std::vector<ThirdParty> others, Facts& facts)
     for (auto& entry : others)
     {
         if (entry.name == "JUCE" && entry.version.isEmpty())
-            entry.version = juce::SystemStats::getJUCEVersion().fromFirstOccurrenceOf ("JUCE v", false, false);
+            entry.version = builtJuceVersion();
         facts.rows.push_back ({ juce::String (thirdPartyNode) + "/" + entry.name, entry.version, entry.url, entry.licence, entry.version.isEmpty() });
     }
 }
@@ -538,7 +544,7 @@ std::vector<ThirdParty> thirdPartyOf (const juce::File& repoDir)
         if (stanza.count ("Files") == 0 || ! isForeign (stanza) || coversTrivialFiles (stanza))
             continue;
         const auto own = firstLineOf (stanza, "X-A3-License");
-        entries.push_back ({ nameOf (stanza), {}, thirdPartyLicence (own.isNotEmpty() ? own : firstLineOf (stanza, "License")),
+        entries.push_back ({ nameOf (stanza), firstLineOf (stanza, "X-A3-Version"), thirdPartyLicence (own.isNotEmpty() ? own : firstLineOf (stanza, "License")),
                              firstLineOf (stanza, "X-A3-Url") });
     }
     if (! paragraphs.empty() && paragraphs.front().count ("Files") == 0)

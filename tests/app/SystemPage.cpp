@@ -211,7 +211,7 @@ TEST (CheckoutThirdParty, ForeignReuseStanzasAreEntriesAndOursAreNot)
         "Files: firmware/*\nCopyright: 2024 Patric Schmitz, Raphael Eismann\nLicense: GPL-3.0-or-later\n\n"
         "Files: src/a3-engine/PurestGain.*\nCopyright: 2018 Chris Johnson\n 2023-2026 Raphael Eismann\n"
         "License: GPL-3.0-or-later AND MIT\nX-A3-Name: Airwindows\nX-A3-License: MIT\nX-A3-Url: https://github.com/airwindows/airwindows\n\n"
-        "Files: tests/reference/airwindows/*\nCopyright: 2018 Chris Johnson\nLicense: MIT\nX-A3-Name: Airwindows\n\n"
+        "Files: tests/reference/airwindows/*\nCopyright: 2018 Chris Johnson\nLicense: MIT\nX-A3-Name: Airwindows\nX-A3-Version: 2026-10\n\n"
         "Files: firmware/boards/*\nCopyright: 2014-present PlatformIO <contact@platformio.org>\n           2026 Raphael Eismann\n"
         "License: Apache-2.0\nComment: Board definition adapted from PlatformIO's platform-espressif32.\n\n"
         "Files: build/*.cmake\nCopyright: 2000-2020 Kitware, Inc. and Contributors\nLicense: CC0-1.0\nX-A3-Name: trivial\n");
@@ -220,7 +220,7 @@ TEST (CheckoutThirdParty, ForeignReuseStanzasAreEntriesAndOursAreNot)
         entries.add (entry.name + "|" + entry.version + "|" + entry.licence + "|" + entry.url);
     EXPECT_EQ (entries.joinIntoString ("\n"),
                juce::String ("Airwindows||MIT|https://github.com/airwindows/airwindows\n"
-                             "Airwindows||MIT|\n"
+                             "Airwindows|2026-10|MIT|\n"   // no version git can read: the stanza's own
                              "Board definition adapted from PlatformIO's platform-espressif32||Apache-2.0|\n"   // no name: its Comment
                              "JUCE||AGPL-3.0 OR JUCE-9|https://juce.com"));
     EXPECT_TRUE (checkout::thirdPartyOf (repo.getChildFile ("not-here")).empty());
@@ -247,7 +247,7 @@ TEST (SystemCheckout, ThirdPartyIsOneNodeAtTheEndEachEntryOnce)
     touch ("a3-core/a3-beat-analyzer/.reuse/dep5",
            "Format: x\n\nFiles: *\nCopyright: 2026 Raphael Eismann\nLicense: GPL-3.0-or-later\n\n"
            "Files: external/BTrack/*\nCopyright: 2008-2014 Queen Mary University of London\nLicense: GPL-3.0-or-later\nX-A3-Name: BTrack\n\n"
-           "Files: external/BTrack/libs/kiss_fft130/*\nCopyright: 2003-2010 Mark Borgerding\nLicense: BSD-3-Clause\nX-A3-Name: kiss_fft\n");
+           "Files: external/BTrack/libs/kiss_fft130/*\nCopyright: 2003-2010 Mark Borgerding\nLicense: BSD-3-Clause\nX-A3-Name: kiss_fft\nX-A3-Version: 1.3.0\n");
     // a3-stemdeck's own copy of a3-core carries the same REUSE data: its entries are not listed twice.
     touch ("a3-stemdeck/third_party/a3-core/.reuse/dep5",
            "Format: x\nX-A3-Uses: JUCE; AGPL-3.0-only OR LicenseRef-JUCE-9; https://juce.com\n\n"
@@ -282,7 +282,7 @@ TEST (SystemCheckout, ThirdPartyIsOneNodeAtTheEndEachEntryOnce)
     juce::StringArray rows;
     for (const auto& row : checkout::read (runner, repo).rows)
         rows.add (row.name + "|" + checkout::tagText (row) + "|" + row.licences + "|" + row.url);
-    const auto juceVersion = juce::SystemStats::getJUCEVersion().fromFirstOccurrenceOf ("JUCE v", false, false);
+    const auto juceVersion = (juce::String (JUCE_MAJOR_VERSION) + "." + juce::String (JUCE_MINOR_VERSION) + "." + juce::String (JUCE_BUILDNUMBER));
     EXPECT_EQ (rows.joinIntoString ("\n"),
                "a3-core|v03.1||https://github.com/a3-audio/a3-core\n"
                "a3-core/a3-beat-analyzer|v03.1||https://github.com/a3-audio/a3-beat-analyzer\n"
@@ -293,7 +293,7 @@ TEST (SystemCheckout, ThirdPartyIsOneNodeAtTheEndEachEntryOnce)
                "third-party/BTrack|1.0.7+1|GPL-3.0|https://github.com/adamstark/BTrack\n"
                "third-party/IEMPluginSuite|v1.16.0|GPL-3.0|https://git.iem.at/audioplugins/IEMPluginSuite\n"
                "third-party/JUCE|" + juceVersion + "|AGPL-3.0 OR JUCE-9|https://juce.com\n"
-               "third-party/kiss_fft||BSD-3-Clause|");
+               "third-party/kiss_fft|1.3.0|BSD-3-Clause|");
     EXPECT_FALSE (juceVersion.isEmpty()) << "JUCE's version is the one the program is built with";
     juce::StringArray tree;
     const auto facts = checkout::read (runner, repo);
@@ -986,7 +986,7 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
                              "a3-motion firmware|rev v03.0+2|GPL-3.0\na3-motion/a3-motion-ui|v03.0+900|GPL-3.0\n"
                              "a3-stemdeck|v03.1+1|GPL-3.0\na3-stemdeck/a3-stem-separator|v03.1|GPL-3.0\n"
                              "third-party|||no version\nthird-party/Airwindows||MIT|no version\n"
-                             "third-party/JUCE|" + juce::SystemStats::getJUCEVersion().fromFirstOccurrenceOf ("JUCE v", false, false)
+                             "third-party/JUCE|" + (juce::String (JUCE_MAJOR_VERSION) + "." + juce::String (JUCE_MINOR_VERSION) + "." + juce::String (JUCE_BUILDNUMBER))
                                  + "|AGPL-3.0 OR JUCE-9"));
     // Every row fits on the card at the rig size (768x1024): the tree ends above the link line.
     view.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);

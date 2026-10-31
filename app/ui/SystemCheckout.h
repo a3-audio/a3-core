@@ -88,7 +88,8 @@ juce::String thirdPartyLicence (const juce::String& expression);
 // The third parties a repository's REUSE data names, in its order: every .reuse/dep5 Files stanza with a copyright holder
 // who is not ours (ours: Raphael Eismann [and contributors], Patric Schmitz, A3 Audio), except stanzas of trivial files
 // (CC0-1.0 only); named by its X-A3-Name (else its Comment's first sentence, else its first path), its licence its
-// X-A3-License where the stanza mixes ours and theirs (else License), its url X-A3-Url. Then the header's X-A3-Uses
+// X-A3-License where the stanza mixes ours and theirs (else License), its url X-A3-Url, its version X-A3-Version (for
+// what has no version git can read: kiss_fft "1.3.0", a copy or download by year and month, "2026-10"). Then the header's X-A3-Uses
 // lines, "<name>; <licence>; <url>": what is built on without a file in the repository (JUCE). Empty without a dep5.
 std::vector<ThirdParty> thirdPartyOf (const juce::File& repoDir);
 
