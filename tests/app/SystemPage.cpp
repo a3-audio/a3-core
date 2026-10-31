@@ -196,7 +196,8 @@ TEST (SystemCheckout, ReadsTheUmbrellasPinsAndFirmware)
     runner.answers[git ("a3-core", "describe --tags --match v* --always aaa")] = { 0, "v03.0-857-gaaaaaaa\n" };
     runner.answers[git ("a3-motion", "describe --tags --match v* --always ccc")] = { 0, "v03.0-855-gccccccc\n" };
     runner.answers[git ("a3-motion", "log -1 --format=%H ccc -- firmware")] = { 0, "fff\n" };
-    runner.answers[git ("a3-motion", "describe --tags --match v* --always fff")] = { 0, "v03.0-80-gfffffff\n" };
+    runner.answers[git ("a3-motion", "describe --tags --match v* --abbrev=0 ccc")] = { 0, "v03.0\n" };
+    runner.answers[git ("a3-motion", "rev-list --count v03.0..ccc -- firmware")] = { 0, "2\n" };
     runner.answers[git ("a3-motion", "ls-tree ccc")] = { 0, "160000 commit eee\tui\n" };
     runner.answers[git ("a3-motion/ui", "describe --tags --match v* --always eee")] = { 0, "v03.0-900-geeeeee\n" };
     // Where each is published: the umbrella's .gitmodules at its HEAD, a3-motion's at its pin (a relative url is its sibling).
@@ -211,7 +212,7 @@ TEST (SystemCheckout, ReadsTheUmbrellasPinsAndFirmware)
     const std::vector<checkout::Row> expected {
         { "a3-core", "v03.0+857", "https://github.com/a3-audio/a3-core" },
         { "a3-motion", "v03.0+855", "https://github.com/a3-audio/a3-motion" },
-        { "a3-motion firmware", "v03.0+80", "https://github.com/a3-audio/a3-motion/tree/HEAD/firmware" },
+        { "a3-motion firmware", "v03.0+2", "https://github.com/a3-audio/a3-motion/tree/HEAD/firmware" },
         { "a3-motion/ui", "v03.0+900", "https://github.com/a3-audio/a3-motion-ui" },
         { "stemdeck", "", "https://github.com/rafjagger/stemdeck" } };
     EXPECT_EQ (facts.rows, expected);
@@ -611,8 +612,8 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     };
     for (const auto* id : { "GPL-3.0-or-later", "CC-BY-SA-4.0", "CC0-1.0", "MIT" })
         touch ("a3-core/LICENSES/" + juce::String (id) + ".txt");
-    touch ("a3-core/.reuse/dep5", "Format: x\n\nFiles: docs/*\nCopyright: a\nLicense: CC-BY-SA-4.0\n");
-    touch ("a3-core/docs/index.md");
+    touch ("LICENSES/GPL-3.0-or-later.txt");   // the umbrella's own
+    touch ("LICENSES/CC0-1.0.txt");
     for (const auto* id : { "GPL-3.0-or-later", "CC-BY-SA-4.0", "CERN-OHL-S-2.0", "CC0-1.0" })
     {
         touch ("a3-mixer/LICENSES/" + juce::String (id) + ".txt");
@@ -640,14 +641,14 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     runner->answers[git ("", "ls-tree HEAD")] = { 0, "160000 commit aaa\ta3-core\n160000 commit bbb\ta3-mixer\n160000 commit ccc\ta3-motion\n160000 commit ddd\tstemdeck\n" };
     runner->answers[git ("", "describe --tags --match v* --always HEAD")] = { 0, "v03.0-12-g1234567\n" };
     runner->answers[git ("a3-core", "describe --tags --match v* --always aaa")] = { 0, "v03.0-857-gaaaaaaa\n" };
-    runner->answers[git ("a3-core", "log -1 --format=%H aaa -- docs")] = { 0, "d1\n" };
-    runner->answers[git ("a3-core", "describe --tags --match v* --always d1")] = { 0, "v03.0-801-gd1\n" };
     runner->answers[git ("a3-mixer", "describe --tags --match v* --always bbb")] = { 0, "v03.0-90-gbbbbbbb\n" };
     runner->answers[git ("a3-mixer", "log -1 --format=%H bbb -- hardware/mainboard/firmware")] = { 0, "f1\n" };
-    runner->answers[git ("a3-mixer", "describe --tags --match v* --always f1")] = { 0, "v03.0-12-gf1\n" };
+    runner->answers[git ("a3-mixer", "describe --tags --match v* --abbrev=0 bbb")] = { 0, "v03.0\n" };
+    runner->answers[git ("a3-mixer", "rev-list --count v03.0..bbb -- hardware/mainboard/firmware")] = { 0, "0\n" };   // unchanged since the release
     runner->answers[git ("a3-motion", "describe --tags --match v* --always ccc")] = { 0, "v03.0-855-gccccccc\n" };
     runner->answers[git ("a3-motion", "log -1 --format=%H ccc -- firmware")] = { 0, "f2\n" };
-    runner->answers[git ("a3-motion", "describe --tags --match v* --always f2")] = { 0, "v03.0-80-gf2\n" };
+    runner->answers[git ("a3-motion", "describe --tags --match v* --abbrev=0 ccc")] = { 0, "v03.0\n" };
+    runner->answers[git ("a3-motion", "rev-list --count v03.0..ccc -- firmware")] = { 0, "2\n" };   // changed twice since
     runner->answers[git ("a3-motion", "ls-tree ccc")] = { 0, "160000 commit eee\tui\n" };
     runner->answers[git ("a3-motion/ui", "describe --tags --match v* --always eee")] = { 0, "v03.0-900-geeeeee\n" };
     auto sources = fakeSources (runner);
@@ -657,15 +658,16 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     a3app::SystemAboutView view (probe);
     view.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
     view.refresh();
+    EXPECT_EQ (view.checkoutShown().licence, "GPL-3.0") << "the umbrella's own";
     juce::StringArray lines;
     for (const auto& row : view.checkoutShown().rows)
         lines.add (row.name + "|" + row.tag + "|" + row.licences + (row.noVersion ? "|no version" : ""));
     EXPECT_EQ (lines.joinIntoString ("\n"),
-               juce::String ("a3-core|v03.0+857|GPL-3.0\na3-core docs|v03.0+801|CC-BY-SA-4.0\n"
+               juce::String ("a3-core|v03.0+857|GPL-3.0\n"
                              "a3-mixer|v03.0+90|GPL-3.0\na3-mixer pcb|rev V02|CERN-OHL-S\na3-mixer housing|rev V02|CERN-OHL-S\n"
-                             "a3-mixer firmware|v03.0+12|GPL-3.0\n"
+                             "a3-mixer firmware|v03.0|GPL-3.0\n"
                              "a3-motion|v03.0+855|GPL-3.0\na3-motion pcb|rev v03|CERN-OHL-S\na3-motion housing||CERN-OHL-S|no version\n"
-                             "a3-motion firmware|v03.0+80|GPL-3.0\na3-motion/ui|v03.0+900|GPL-3.0\nstemdeck||"));
+                             "a3-motion firmware|v03.0+2|GPL-3.0\na3-motion/ui|v03.0+900|GPL-3.0\nstemdeck||"));
     a3apptest::expectPainted (a3apptest::snapshotAt (view, "system3-about-tree", view.getWidth(), view.getHeight()));
     repo.deleteRecursively();
 }

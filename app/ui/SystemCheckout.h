@@ -29,8 +29,9 @@ struct Facts
 {
     bool found = false;     // a checkout with gitlinks at all
     juce::String version;   // the umbrella's own HEAD, as releaseText writes it
+    juce::String licence;   // the umbrella's own code licence ("GPL-3.0")
     std::vector<Row> rows;
-    bool operator== (const Facts& other) const { return found == other.found && version == other.version && rows == other.rows; }
+    bool operator== (const Facts& other) const { return found == other.found && version == other.version && licence == other.licence && rows == other.rows; }
 };
 
 struct Gitlink
@@ -55,8 +56,7 @@ juce::String tagText (const Row&);
 // last, says that. Left out: CC0-1.0 (configuration and trivial files), MIT, Apache, BSD, CC-BY-3.0, GPL-2.0, LicenseRef-*,
 // the licences of vendored or third-party files. Empty when the folder is not there (the repository is not checked out).
 juce::String codeLicence (const juce::File& repoDir);
-// The parts of a repository read from its tree, not listed anywhere: "docs" (a docs/ folder under a licence other than the
-// code's), "pcb" (the folder of a KiCad project under hardware/), "housing" (the folder under hardware/ holding FreeCAD,
+// The parts of a repository read from its tree, not listed anywhere: "pcb" (the folder of a KiCad project under hardware/), "housing" (the folder under hardware/ holding FreeCAD,
 // STL, 3MF or Blender files), each with the folder it is and, for the hardware, its REVISION (the file of that name in the
 // folder, its first line; empty without one).
 struct Part

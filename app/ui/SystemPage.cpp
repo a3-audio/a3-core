@@ -562,7 +562,8 @@ void SystemAboutView::resized()
     // Three columns: the name with its connector, the version, the licences; the version and licence columns as wide as
     // their longest text, the licences from the card's right edge.
     const juce::FontOptions text (t.text);
-    int versionWidth = juce::roundToInt (juce::GlyphArrangement::getStringWidth (text, pins.version)), licenceWidth = 0;
+    int versionWidth = juce::roundToInt (juce::GlyphArrangement::getStringWidth (text, pins.version)),
+        licenceWidth = juce::roundToInt (juce::GlyphArrangement::getStringWidth (text, pins.licence));
     for (const auto& entry : tree)
     {
         versionWidth = juce::jmax (versionWidth, juce::roundToInt (juce::GlyphArrangement::getStringWidth (text, checkout::tagText (entry.row))));
@@ -622,6 +623,8 @@ void SystemAboutView::paint (juce::Graphics& g)
     g.setColour (palette::text);
     g.drawText (juce::String::fromUTF8 ("A³ System"), versionArea, juce::Justification::centredLeft, true);
     g.drawText (pins.version, versionColumn.withY (versionArea.getY()).withHeight (versionArea.getHeight()), juce::Justification::centredRight, true);
+    g.setColour (palette::textMuted);
+    g.drawText (pins.licence, licenceColumn.withY (versionArea.getY()).withHeight (versionArea.getHeight()), juce::Justification::centredLeft, true);
     if (! pins.found)
     {
         g.setColour (palette::textMuted);

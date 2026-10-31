@@ -135,11 +135,15 @@ juce::String licenceFromHeaders (const juce::File& folder)
     return joinedLicences (idsOf (best));
 }
 
-// The version of a folder's last change: the tag of the last commit up to `commit` that touched it, empty when git says none.
+// The version of a folder: the newest release up to `commit` when nothing in the folder changed since it, else that release
+// and the number of commits since that touched the folder ("v03.1+2"). Empty when git knows no release or no such folder.
 juce::String lastChangeTag (CommandRunner& runner, const juce::File& dir, const juce::String& commit, const juce::String& folder)
 {
-    const auto changed = gitOutput (runner, dir, { "log", "-1", "--format=%H", commit, "--", folder });
-    return changed.isNotEmpty() ? tagOf (runner, dir, changed) : juce::String();
+    const auto release = gitOutput (runner, dir, { "describe", "--tags", "--match", "v*", "--abbrev=0", commit });
+    if (release.isEmpty() || gitOutput (runner, dir, { "log", "-1", "--format=%H", commit, "--", folder }).isEmpty())
+        return {};
+    const auto since = gitOutput (runner, dir, { "rev-list", "--count", release + ".." + commit, "--", folder });
+    return since.isEmpty() || since == "0" ? release : release + "+" + since;
 }
 
 const FirmwareDir* firmwareOf (const juce::String& submodule)
@@ -157,11 +161,10 @@ void addSubmodule (CommandRunner& runner, const juce::File& repo, const Gitlink&
     facts.rows.push_back ({ link.path, tagOf (runner, dir, link.commit), url, codeLicence (dir) });
     if (facts.rows.back().tag.isEmpty())
         return;   // not checked out: nothing more to ask it
-    // A software part has the version of its last change, a hardware part the revision its REVISION file says.
+    // A hardware part has the revision its REVISION file says.
     for (const auto& part : partsOf (dir))
     {
-        const bool hardware = part.name != "docs";
-        const auto version = hardware ? (part.revision.isNotEmpty() ? "rev " + part.revision : juce::String()) : lastChangeTag (runner, dir, link.commit, part.folder);
+        const auto version = part.revision.isNotEmpty() ? "rev " + part.revision : juce::String();
         facts.rows.push_back ({ link.path + " " + part.name, version, url.isNotEmpty() ? url + "/tree/HEAD/" + part.folder : juce::String(),
                                 licenceOfFolder (dir, part.folder), version.isEmpty() });
     }
@@ -248,12 +251,6 @@ std::vector<Part> partsOf (const juce::File& repoDir)
 {
     std::vector<Part> parts;
     const auto relative = [&repoDir] (const juce::File& f) { return f.getRelativePathFrom (repoDir); };
-    if (repoDir.getChildFile ("docs").isDirectory())
-    {
-        const auto licence = licenceOfFolder (repoDir, "docs");
-        if (licence.isNotEmpty() && licence != codeLicence (repoDir))
-            parts.push_back ({ "docs", "docs", {} });
-    }
     const auto hardware = repoDir.getChildFile ("hardware");
     juce::File pcbFolder;
     const auto projects = hardware.findChildFiles (juce::File::findFiles, true, "*.kicad_pro");
@@ -297,6 +294,7 @@ Facts read (CommandRunner& runner, const juce::File& repo)
     if (links.empty())
         return facts;
     facts.found = true;
+    facts.licence = codeLicence (repo);
     facts.version = releaseText (gitOutput (runner, repo, { "describe", "--tags", "--match", "v*", "--always", "HEAD" }));
     const auto urls = urlsAt (runner, repo, "HEAD", {});
     for (const auto& link : links)
