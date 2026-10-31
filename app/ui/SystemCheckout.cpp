@@ -412,23 +412,60 @@ bool holdsFile (const juce::File& folder, std::initializer_list<const char*> pat
 }
 }
 
-std::vector<Part> partsOf (const juce::File& repoDir)
+namespace
 {
-    std::vector<Part> parts;
-    const auto relative = [&repoDir] (const juce::File& f) { return f.getRelativePathFrom (repoDir); };
-    const auto hardware = repoDir.getChildFile ("hardware");
-    juce::File pcbFolder;
+// A revision folder of hardware/pcb: a folder with a KiCad project of its own or a REVISION file. The shared library and
+// a mounted a3-kicad-lib hold neither, so they are no revision.
+bool isRevisionFolder (const juce::File& folder)
+{
+    return folder.getChildFile ("REVISION").existsAsFile() || ! folder.findChildFiles (juce::File::findFiles, false, "*.kicad_pro").isEmpty();
+}
+
+std::vector<juce::File> revisionFoldersOf (const juce::File& pcbRoot)
+{
+    std::vector<juce::File> folders;
+    for (const auto& folder : pcbRoot.findChildFiles (juce::File::findDirectories, false))
+        if (isRevisionFolder (folder))
+            folders.push_back (folder);
+    std::sort (folders.begin(), folders.end(), [] (const juce::File& a, const juce::File& b) { return a.getFileName() < b.getFileName(); });
+    return folders;
+}
+
+// The board is the shallowest project (a sub-project such as enc_pot sits below it); ties go to the first path,
+// whatever order the directory is read in.
+juce::File shallowestProjectFolder (const juce::File& hardware)
+{
     auto projects = hardware.findChildFiles (juce::File::findFiles, true, "*.kicad_pro");
-    // The board is the shallowest project (a sub-project such as enc_pot sits below it); ties go to the first path,
-    // whatever order the directory is read in.
+    if (projects.isEmpty())
+        return {};
     const auto depthOf = [&hardware] (const juce::File& f) { return f.getRelativePathFrom (hardware).replaceCharacter ('\\', '/').retainCharacters ("/").length(); };
     std::sort (projects.begin(), projects.end(), [&] (const juce::File& a, const juce::File& b) {
         const auto depthA = depthOf (a), depthB = depthOf (b);
         return depthA != depthB ? depthA < depthB : a.getFullPathName() < b.getFullPathName();
     });
-    if (! projects.isEmpty())
+    return projects.getFirst().getParentDirectory();
+}
+}
+
+std::vector<Part> partsOf (const juce::File& repoDir)
+{
+    std::vector<Part> parts;
+    const auto relative = [&repoDir] (const juce::File& f) { return f.getRelativePathFrom (repoDir); };
+    const auto hardware = repoDir.getChildFile ("hardware");
+    // Revision folders under hardware/pcb: pcb is a node and each folder a child row. Without them, one row for the board.
+    const auto pcbRoot = hardware.getChildFile ("pcb");
+    const auto revisions = revisionFoldersOf (pcbRoot);
+    juce::File pcbFolder;
+    if (! revisions.empty())
     {
-        pcbFolder = projects.getFirst().getParentDirectory();
+        pcbFolder = pcbRoot;
+        parts.push_back ({ "pcb", relative (pcbRoot), {} });
+        for (const auto& folder : revisions)
+            parts.push_back ({ "pcb/" + folder.getFileName(), relative (folder), revisionIn (folder) });
+    }
+    else if (const auto boardFolder = shallowestProjectFolder (hardware); boardFolder != juce::File())
+    {
+        pcbFolder = boardFolder;
         parts.push_back ({ "pcb", relative (pcbFolder), revisionIn (pcbFolder) });
     }
     for (const auto& top : hardware.findChildFiles (juce::File::findDirectories, false))

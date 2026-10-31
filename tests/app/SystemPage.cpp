@@ -373,6 +373,120 @@ TEST (SystemCheckout, ThePcbIsTheShallowestKicadProjectNotASubProject)
     repo.deleteRecursively();
 }
 
+// One folder per board revision under hardware/pcb (maintainer, 2026-10-31): pcb is a node, each revision folder a child
+// row with its own REVISION; sub-projects inside a revision (enc_pot, led_but) and the shared library are no rows.
+TEST (SystemCheckout, RevisionFoldersUnderPcbAreChildRowsOfThePcbNode)
+{
+    const auto repo = juce::File::createTempFile ("a3-pcb-revisions");
+    const auto touch = [&repo] (const juce::String& path, const juce::String& content = {}) {
+        const auto file = repo.getChildFile (path);
+        file.getParentDirectory().createDirectory();
+        file.replaceWithText (content);
+    };
+    touch ("hardware/pcb/v3_1/motion_pcb.kicad_pro");
+    touch ("hardware/pcb/v3_1/enc_pot/enc_pot.kicad_pro");
+    touch ("hardware/pcb/v3_1/led_but/led_but.kicad_pro");
+    touch ("hardware/pcb/v3_1/REVISION", "v3.1\n");
+    touch ("hardware/pcb/v1/a3motion_mainboard_v01.kicad_pro");
+    touch ("hardware/pcb/v1/a3motion_buttonmatrix_v01.kicad_pro");
+    touch ("hardware/pcb/v1/REVISION", "v1\n");
+    touch ("hardware/pcb/library/part/part.kicad_sym");   // the shared library: no revision
+    touch ("hardware/housing/box.FCStd");
+    const auto parts = checkout::partsOf (repo);
+    juce::StringArray lines;
+    for (const auto& part : parts)
+        lines.add (part.name + "|" + part.folder + "|" + part.revision);
+    EXPECT_EQ (lines.joinIntoString ("\n"),
+               juce::String ("pcb|hardware/pcb|\n"
+                             "pcb/v1|hardware/pcb/v1|v1\n"
+                             "pcb/v3_1|hardware/pcb/v3_1|v3.1\n"
+                             "housing|hardware/housing|"));
+    repo.deleteRecursively();
+}
+
+// A revision folder holding only a REVISION file (no project yet) counts; a repository whose pcb folder holds the project
+// itself keeps the single pcb row.
+TEST (SystemCheckout, ARevisionFolderNeedsAProjectOrARevisionFileAndAPlainPcbFolderStaysOneRow)
+{
+    const auto repo = juce::File::createTempFile ("a3-pcb-plain");
+    const auto touch = [&repo] (const juce::String& path, const juce::String& content = {}) {
+        const auto file = repo.getChildFile (path);
+        file.getParentDirectory().createDirectory();
+        file.replaceWithText (content);
+    };
+    touch ("a/hardware/pcb/v1_0/REVISION", "v1.0\n");
+    touch ("a/hardware/pcb/notes/readme.md");
+    touch ("b/hardware/pcb/board.kicad_pro");
+    touch ("b/hardware/pcb/library/x/x.kicad_pro");
+    touch ("b/hardware/pcb/REVISION", "v02\n");
+    const auto a = checkout::partsOf (repo.getChildFile ("a"));
+    ASSERT_EQ (a.size(), 2u);
+    EXPECT_EQ (a[0].name, "pcb");
+    EXPECT_EQ (a[1].name, "pcb/v1_0");
+    const auto b = checkout::partsOf (repo.getChildFile ("b"));
+    ASSERT_EQ (b.size(), 1u);
+    EXPECT_EQ (b[0].name, "pcb");
+    EXPECT_EQ (b[0].folder, "hardware/pcb");
+    EXPECT_EQ (b[0].revision, "v02");
+    repo.deleteRecursively();
+}
+
+// The rows and the tree for the Mixer's layout: pcb with v0_2 and v3_1 under it, a3-kicad-lib mounted in hardware/pcb stays
+// a child of pcb, each revision with its REVISION and its licence.
+TEST (SystemCheckout, TheMixerShowsPcbWithOneChildPerRevisionAndTheLibraryBesideThem)
+{
+    const auto repo = juce::File::createTempFile ("a3-mixer-revisions");
+    const auto touch = [&repo] (const juce::String& path, const juce::String& content = {}) {
+        const auto file = repo.getChildFile (path);
+        file.getParentDirectory().createDirectory();
+        file.replaceWithText (content);
+    };
+    touch ("a3-mixer/.reuse/dep5", "Format: x\n\nFiles: hardware/*\nCopyright: 2026 Raphael Eismann\nLicense: CERN-OHL-S-2.0\n");
+    touch ("a3-mixer/LICENSES/GPL-3.0-or-later.txt");
+    touch ("a3-mixer/LICENSES/CERN-OHL-S-2.0.txt");
+    touch ("a3-mixer/hardware/pcb/v0_2/a3mix.kicad_pro");
+    touch ("a3-mixer/hardware/pcb/v0_2/REVISION", "v0.2\n");
+    touch ("a3-mixer/hardware/pcb/v3_1/a3mix_v03.kicad_pro");
+    touch ("a3-mixer/hardware/pcb/v3_1/REVISION", "v3.1\n");
+    touch ("a3-mixer/hardware/pcb/a3-kicad-lib/3d/part.stl");
+    touch ("a3-mixer/hardware/housing/box.blend");
+    const auto git = [&repo] (const juce::String& dir, const juce::String& rest) {
+        return "git -C " + (dir.isEmpty() ? repo : repo.getChildFile (dir)).getFullPathName() + " " + rest;
+    };
+    ScriptedRunner runner;
+    runner.answers[git ("", "ls-tree -r HEAD")] = { 0, "160000 commit bbb\ta3-mixer\n" };
+    runner.answers[git ("", "config --blob HEAD:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
+        = { 0, "submodule.a3-mixer.url https://github.com/a3-audio/a3-mixer\n" };
+    runner.answers[git ("a3-mixer", "describe --tags --match v* --always bbb")] = { 0, "v03.1\n" };
+    runner.answers[git ("a3-mixer", "ls-tree -r bbb")] = { 0, "160000 commit kkk\thardware/pcb/a3-kicad-lib\n" };
+    runner.answers[git ("a3-mixer", "config --blob bbb:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
+        = { 0, "submodule.hardware/pcb/a3-kicad-lib.url ../a3-kicad-lib.git\n" };
+    runner.answers[git ("a3-mixer/hardware/pcb/a3-kicad-lib", "describe --tags --match v* --always kkk")] = { 0, "v03.1\n" };
+    const auto facts = checkout::read (runner, repo);
+    juce::StringArray rows;
+    for (const auto& row : facts.rows)
+        rows.add (row.name + "|" + row.tag + "|" + row.licences + (row.noVersion ? "|no version" : ""));
+    EXPECT_EQ (rows.joinIntoString ("\n"),
+               juce::String ("a3-mixer|v03.1|GPL-3.0\n"
+                             "a3-mixer pcb||CERN-OHL-S|no version\n"
+                             "a3-mixer pcb/v0_2|rev v0.2|CERN-OHL-S\n"
+                             "a3-mixer pcb/v3_1|rev v3.1|CERN-OHL-S\n"
+                             "a3-mixer housing||CERN-OHL-S|no version\n"
+                             "a3-mixer firmware||\n"
+                             "a3-mixer pcb/a3-kicad-lib|v03.1|"));
+    juce::StringArray tree;
+    for (const auto& entry : checkout::treeOf (facts.rows))
+        tree.add (entry.prefix + entry.name);
+    EXPECT_EQ (tree.joinIntoString ("\n"), juce::String::fromUTF8 ("└─ a3-mixer\n"
+                                                                   "   ├─ pcb\n"
+                                                                   "   │  ├─ v0_2\n"
+                                                                   "   │  ├─ v3_1\n"
+                                                                   "   │  └─ a3-kicad-lib\n"
+                                                                   "   ├─ housing\n"
+                                                                   "   └─ firmware"));
+    repo.deleteRecursively();
+}
+
 // A ui that is a folder of its repository is a part like the firmware, with the version of its last change; one that is a
 // submodule (a3-motion's, a3-mixer's since 2026-10-31) is a row of its own and adds no folder row.
 TEST (SystemCheckout, AUiFolderIsAPartAndAUiSubmoduleIsARow)
@@ -935,8 +1049,10 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     // the firmware top level, by its stanza.
     touch ("a3-mixer/.reuse/dep5", "Format: x\n\nFiles: hardware/*\nCopyright: 2026 Raphael Eismann\nLicense: CERN-OHL-S-2.0\n\n"
                                    "Files: firmware/*\nCopyright: 2026 Raphael Eismann\nLicense: GPL-3.0-or-later\n");
-    touch ("a3-mixer/hardware/pcb/board.kicad_pro");
-    touch ("a3-mixer/hardware/pcb/REVISION", "V02\n");   // upper case in the file, lower case on the card
+    touch ("a3-mixer/hardware/pcb/v0_2/board.kicad_pro");
+    touch ("a3-mixer/hardware/pcb/v0_2/REVISION", "V0.2\n");   // upper case in the file, lower case on the card
+    touch ("a3-mixer/hardware/pcb/v3_1/board.kicad_pro");
+    touch ("a3-mixer/hardware/pcb/v3_1/REVISION", "v3.1\n");
     touch ("a3-mixer/hardware/housing/box.blend");
     touch ("a3-mixer/hardware/housing/REVISION", "V02\n");
     touch ("a3-mixer/firmware/src/main.cpp", "// SPDX-License-Identifier: GPL-3.0-or-later\n");
@@ -949,8 +1065,10 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     touch ("a3-stemdeck/a3-stem-separator/LICENSES/GPL-3.0-or-later.txt");
     // Motion: a board with a revision, a housing without one, the firmware by its stanza.
     touch ("a3-motion/.reuse/dep5", "Format: x\n\nFiles: hardware/*\nCopyright: 2026 Raphael Eismann\nLicense: CERN-OHL-S-2.0\n\nFiles: firmware/*\nCopyright: 2026 Raphael Eismann\nLicense: GPL-3.0-or-later\n");
-    touch ("a3-motion/hardware/pcbs/motion_pcb/motion.kicad_pro");
-    touch ("a3-motion/hardware/pcbs/motion_pcb/REVISION", "v03\n");
+    touch ("a3-motion/hardware/pcb/v1/mainboard.kicad_pro");
+    touch ("a3-motion/hardware/pcb/v1/REVISION", "v1\n");
+    touch ("a3-motion/hardware/pcb/v3_1/motion.kicad_pro");
+    touch ("a3-motion/hardware/pcb/v3_1/REVISION", "v3.1\n");
     touch ("a3-motion/hardware/housing/freecad/box.FCStd");
     touch ("a3-motion/firmware/src/main.cpp");
     auto runner = rigRunner();
@@ -985,8 +1103,8 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     runner->answers[git ("a3-motion", "log -1 --format=%H ccc -- firmware")] = { 0, "f2\n" };
     runner->answers[git ("a3-motion", "describe --tags --match v* --abbrev=0 ccc")] = { 0, "v03.0\n" };
     runner->answers[git ("a3-motion", "rev-list --count v03.0..ccc -- firmware")] = { 0, "2\n" };   // changed twice since
-    runner->answers[git ("a3-motion", "ls-tree -r ccc")] = { 0, "160000 commit eee\ta3-motion-ui\n160000 commit kk2\thardware/pcbs/motion_pcb/a3-kicad-lib\n" };
-    runner->answers[git ("a3-motion/hardware/pcbs/motion_pcb/a3-kicad-lib", "describe --tags --match v* --always kk2")] = { 0, "v03.1\n" };
+    runner->answers[git ("a3-motion", "ls-tree -r ccc")] = { 0, "160000 commit eee\ta3-motion-ui\n160000 commit kk2\thardware/pcb/a3-kicad-lib\n" };
+    runner->answers[git ("a3-motion/hardware/pcb/a3-kicad-lib", "describe --tags --match v* --always kk2")] = { 0, "v03.1\n" };
     runner->answers[git ("a3-motion/a3-motion-ui", "describe --tags --match v* --always eee")] = { 0, "v03.0-900-geeeeee\n" };
     auto sources = fakeSources (runner);
     sources.checkout = repo;
@@ -1002,9 +1120,9 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     EXPECT_EQ (lines.joinIntoString ("\n"),
                juce::String ("a3-core|v03.0+857|GPL-3.0\na3-core/a3-beat-analyzer|v03.1+1|GPL-3.0\n"
                              "a3-doc|v03.1+6|CC-BY-SA-4.0\n"
-                             "a3-mixer|v03.0+90|GPL-3.0\na3-mixer pcb|rev v02|CERN-OHL-S\na3-mixer housing|rev v02|CERN-OHL-S\n"
+                             "a3-mixer|v03.0+90|GPL-3.0\na3-mixer pcb||CERN-OHL-S|no version\na3-mixer pcb/v0_2|rev v0.2|CERN-OHL-S\na3-mixer pcb/v3_1|rev v3.1|CERN-OHL-S\na3-mixer housing|rev v02|CERN-OHL-S\n"
                              "a3-mixer firmware|rev v03.0|GPL-3.0\na3-mixer/a3-mixer-ui|v03.1+2|GPL-3.0\na3-mixer pcb/a3-kicad-lib|v03.1|\n"
-                             "a3-motion|v03.0+855|GPL-3.0\na3-motion pcb|rev v03|CERN-OHL-S\na3-motion housing||CERN-OHL-S|no version\n"
+                             "a3-motion|v03.0+855|GPL-3.0\na3-motion pcb||CERN-OHL-S|no version\na3-motion pcb/v1|rev v1|CERN-OHL-S\na3-motion pcb/v3_1|rev v3.1|CERN-OHL-S\na3-motion housing||CERN-OHL-S|no version\n"
                              "a3-motion firmware|rev v03.0+2|GPL-3.0\na3-motion/a3-motion-ui|v03.0+900|GPL-3.0\na3-motion pcb/a3-kicad-lib|v03.1|\n"
                              "a3-pro-dj|v03.0+2|GPL-3.0\n"
                              "a3-stemdeck|v03.1+1|GPL-3.0\na3-stemdeck/a3-stem-separator|v03.1|GPL-3.0\n"
@@ -1014,14 +1132,14 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
                                  + "|AGPL-3.0 OR JUCE-9\nthird-party/kiss_fft|1.3.0|BSD-3-Clause\n"
                              "third-party/Neumann KU 100 HRIR||CC-BY-3.0|no version\nthird-party/platform-espressif32||Apache-2.0|no version\n"
                              "third-party/Roboto||Apache-2.0|no version\nthird-party/SnapMagic MCP3208|2025-11|SnapMagic"));
-    ASSERT_EQ (view.checkoutShown().rows.size(), 28u) << "the real tree's size with the two a3-kicad-lib rows";
+    ASSERT_EQ (view.checkoutShown().rows.size(), 32u) << "the real tree's size with the two a3-kicad-lib rows and a row per board revision";
     // Every line fits on the card at the rig size (768x1024): each gets an area of its own, inside the card, and the card
     // ends above the link line. A card cut to the space left would give the last lines empty areas and still end there.
     view.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     ASSERT_EQ (view.cardAreas().size(), 1u);
     const auto card = view.cardAreas()[0];
     const auto areas = view.treeLineAreas();
-    ASSERT_EQ (areas.size(), 29u) << "the A³ System line and the 28 of the tree";
+    ASSERT_EQ (areas.size(), 33u) << "the A³ System line and the 32 of the tree";
     for (size_t i = 0; i < areas.size(); ++i)
     {
         EXPECT_FALSE (areas[i].isEmpty()) << "line " << i << " has no room";
