@@ -73,6 +73,8 @@ juce::String joinedLicences (const juce::StringArray& ids)
     return shown.joinIntoString (juce::String::fromUTF8 (" · "));
 }
 
+juce::String firstLicence (const juce::String& joined) { return joined.upToFirstOccurrenceOf (juce::String::fromUTF8 (" · "), false, false); }
+
 // "Files: a b" stanzas of a dep5: (patterns, license).
 std::vector<std::pair<juce::StringArray, juce::String>> dep5Stanzas (const juce::File& file)
 {
@@ -133,6 +135,13 @@ juce::String licenceFromHeaders (const juce::File& folder)
     return joinedLicences (idsOf (best));
 }
 
+// The version of a folder's last change: the tag of the last commit up to `commit` that touched it, empty when git says none.
+juce::String lastChangeTag (CommandRunner& runner, const juce::File& dir, const juce::String& commit, const juce::String& folder)
+{
+    const auto changed = gitOutput (runner, dir, { "log", "-1", "--format=%H", commit, "--", folder });
+    return changed.isNotEmpty() ? tagOf (runner, dir, changed) : juce::String();
+}
+
 const FirmwareDir* firmwareOf (const juce::String& submodule)
 {
     for (const auto& dir : firmwareDirs)
@@ -141,24 +150,31 @@ const FirmwareDir* firmwareOf (const juce::String& submodule)
     return nullptr;
 }
 
-// A submodule's row, then its firmware's, then its own submodules' (one level: a3-motion's ui).
+// A submodule's row, then its parts (docs, pcb, housing), its firmware's, then its own submodules' (one level: a3-motion's ui).
 void addSubmodule (CommandRunner& runner, const juce::File& repo, const Gitlink& link, const juce::String& url, Facts& facts)
 {
     const auto dir = repo.getChildFile (link.path);
-    facts.rows.push_back ({ link.path, tagOf (runner, dir, link.commit), url, mainLicences (dir) });
+    facts.rows.push_back ({ link.path, tagOf (runner, dir, link.commit), url, codeLicence (dir) });
     if (facts.rows.back().tag.isEmpty())
         return;   // not checked out: nothing more to ask it
+    // A software part has the version of its last change, a hardware part the revision its REVISION file says.
+    for (const auto& part : partsOf (dir))
+    {
+        const bool hardware = part.name != "docs";
+        const auto version = hardware ? (part.revision.isNotEmpty() ? "rev " + part.revision : juce::String()) : lastChangeTag (runner, dir, link.commit, part.folder);
+        facts.rows.push_back ({ link.path + " " + part.name, version, url.isNotEmpty() ? url + "/tree/HEAD/" + part.folder : juce::String(),
+                                licenceOfFolder (dir, part.folder), version.isEmpty() });
+    }
     if (const auto* firmware = firmwareOf (link.path))
     {
-        const auto changed = gitOutput (runner, dir, { "log", "-1", "--format=%H", link.commit, "--", firmware->path });
-        facts.rows.push_back ({ link.path + " firmware", changed.isNotEmpty() ? tagOf (runner, dir, changed) : juce::String(),
+        facts.rows.push_back ({ link.path + " firmware", lastChangeTag (runner, dir, link.commit, firmware->path),
                                 url.isNotEmpty() ? url + "/tree/HEAD/" + firmware->path : juce::String(),
                                 licenceOfFolder (dir, firmware->path) });
     }
     const auto innerUrls = urlsAt (runner, dir, link.commit, url);
     for (const auto& inner : parseGitlinks (gitOutput (runner, dir, { "ls-tree", link.commit })))
         facts.rows.push_back ({ link.path + "/" + inner.path, tagOf (runner, dir.getChildFile (inner.path), inner.commit), urlOf (innerUrls, inner.path),
-                                mainLicences (dir.getChildFile (inner.path)) });
+                                codeLicence (dir.getChildFile (inner.path)) });
 }
 }
 
@@ -203,13 +219,58 @@ juce::String releaseText (const juce::String& describe)
     return text;
 }
 
-juce::String mainLicences (const juce::File& repoDir)
+juce::String codeLicence (const juce::File& repoDir)
 {
     juce::StringArray ids;
     for (const auto& file : repoDir.getChildFile ("LICENSES").findChildFiles (juce::File::findFiles, false, "*.txt"))
         ids.add (file.getFileNameWithoutExtension());
     ids.sort (false);
-    return joinedLicences (ids);
+    return firstLicence (joinedLicences (ids));
+}
+
+namespace
+{
+juce::String revisionIn (const juce::File& folder)
+{
+    return folder.getChildFile ("REVISION").loadFileAsString().upToFirstOccurrenceOf ("\n", false, false).trim();
+}
+
+bool holdsFile (const juce::File& folder, std::initializer_list<const char*> patterns)
+{
+    for (const auto* pattern : patterns)
+        if (! folder.findChildFiles (juce::File::findFiles, true, pattern).isEmpty())
+            return true;
+    return false;
+}
+}
+
+std::vector<Part> partsOf (const juce::File& repoDir)
+{
+    std::vector<Part> parts;
+    const auto relative = [&repoDir] (const juce::File& f) { return f.getRelativePathFrom (repoDir); };
+    if (repoDir.getChildFile ("docs").isDirectory())
+    {
+        const auto licence = licenceOfFolder (repoDir, "docs");
+        if (licence.isNotEmpty() && licence != codeLicence (repoDir))
+            parts.push_back ({ "docs", "docs", {} });
+    }
+    const auto hardware = repoDir.getChildFile ("hardware");
+    juce::File pcbFolder;
+    const auto projects = hardware.findChildFiles (juce::File::findFiles, true, "*.kicad_pro");
+    if (! projects.isEmpty())
+    {
+        pcbFolder = projects.getFirst().getParentDirectory();
+        parts.push_back ({ "pcb", relative (pcbFolder), revisionIn (pcbFolder) });
+    }
+    for (const auto& top : hardware.findChildFiles (juce::File::findDirectories, false))
+    {
+        const bool isPcbsFolder = pcbFolder != juce::File() && pcbFolder.isAChildOf (top);
+        if (isPcbsFolder || ! holdsFile (top, { "*.FCStd", "*.stl", "*.3mf", "*.blend" }))
+            continue;
+        parts.push_back ({ "housing", relative (top), revisionIn (top) });
+        break;
+    }
+    return parts;
 }
 
 juce::String licenceOfFolder (const juce::File& repoDir, const juce::String& folder)
@@ -224,10 +285,10 @@ juce::String licenceOfFolder (const juce::File& repoDir, const juce::String& fol
             covered = license;
         }
     const auto fromDep5 = joinedLicences (idsOf (covered));
-    return fromDep5.isNotEmpty() ? fromDep5 : licenceFromHeaders (repoDir.getChildFile (folder));
+    return firstLicence (fromDep5.isNotEmpty() ? fromDep5 : licenceFromHeaders (repoDir.getChildFile (folder)));
 }
 
-juce::String tagText (const Row& row) { return row.tag.isNotEmpty() ? row.tag : juce::String ("not checked out"); }
+juce::String tagText (const Row& row) { return row.tag.isNotEmpty() ? row.tag : row.noVersion ? juce::String() : juce::String ("not checked out"); }
 
 Facts read (CommandRunner& runner, const juce::File& repo)
 {

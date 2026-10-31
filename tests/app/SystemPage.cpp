@@ -234,9 +234,10 @@ TEST (CheckoutLicences, AreReadFromTheLicensesFolderAndForTheFirmwareFromReuseDa
     };
     for (const auto* id : { "GPL-3.0-or-later", "CC0-1.0", "MIT", "CERN-OHL-S-2.0", "CC-BY-SA-4.0", "Apache-2.0", "LicenseRef-SnapMagic" })
         touch ("a3-mixer/LICENSES/" + juce::String (id) + ".txt");
-    EXPECT_EQ (checkout::mainLicences (root.getChildFile ("a3-mixer")), juce::String::fromUTF8 ("GPL-3.0 · CERN-OHL-S · CC-BY-SA-4.0"))
-        << "code, hardware, documentation; CC0, MIT, Apache and LicenseRef are left out";
-    EXPECT_TRUE (checkout::mainLicences (root.getChildFile ("not-here")).isEmpty()) << "not checked out";
+    EXPECT_EQ (checkout::codeLicence (root.getChildFile ("a3-mixer")), "GPL-3.0") << "the code's; CC0, MIT, Apache and LicenseRef are left out";
+    touch ("a3-doc/LICENSES/CC-BY-SA-4.0.txt");
+    EXPECT_EQ (checkout::codeLicence (root.getChildFile ("a3-doc")), "CC-BY-SA-4.0") << "a repository of documentation says so";
+    EXPECT_TRUE (checkout::codeLicence (root.getChildFile ("not-here")).isEmpty()) << "not checked out";
     EXPECT_EQ (checkout::shortLicence ("GPL-3.0-or-later"), "GPL-3.0");
     EXPECT_EQ (checkout::shortLicence ("CERN-OHL-S-2.0"), "CERN-OHL-S");
     EXPECT_TRUE (checkout::shortLicence ("CC0-1.0").isEmpty());
@@ -610,14 +611,28 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     };
     for (const auto* id : { "GPL-3.0-or-later", "CC-BY-SA-4.0", "CC0-1.0", "MIT" })
         touch ("a3-core/LICENSES/" + juce::String (id) + ".txt");
+    touch ("a3-core/.reuse/dep5", "Format: x\n\nFiles: docs/*\nCopyright: a\nLicense: CC-BY-SA-4.0\n");
+    touch ("a3-core/docs/index.md");
     for (const auto* id : { "GPL-3.0-or-later", "CC-BY-SA-4.0", "CERN-OHL-S-2.0", "CC0-1.0" })
     {
         touch ("a3-mixer/LICENSES/" + juce::String (id) + ".txt");
         touch ("a3-motion/LICENSES/" + juce::String (id) + ".txt");
     }
     touch ("a3-motion/ui/LICENSES/GPL-3.0-or-later.txt");
-    touch ("a3-motion/.reuse/dep5", "Format: x\n\nFiles: firmware/*\nCopyright: a\nLicense: GPL-3.0-or-later\n");
-    touch ("a3-mixer/hardware/mainboard/firmware/src/main.cpp", "// SPDX-License-Identifier: CERN-OHL-S-2.0\n");
+    // The Mixer: board and housing under hardware/ (CERN), each with its REVISION; the firmware without a stanza of its own.
+    touch ("a3-mixer/.reuse/dep5", "Format: x\n\nFiles: hardware/*\nCopyright: a\nLicense: CERN-OHL-S-2.0\n\n"
+                                   "Files: hardware/mainboard/firmware/*\nCopyright: a\nLicense: GPL-3.0-or-later\n");
+    touch ("a3-mixer/hardware/mainboard/pcb/board.kicad_pro");
+    touch ("a3-mixer/hardware/mainboard/pcb/REVISION", "V02\n");
+    touch ("a3-mixer/hardware/housing/box.blend");
+    touch ("a3-mixer/hardware/housing/REVISION", "V02\n");
+    touch ("a3-mixer/hardware/mainboard/firmware/src/main.cpp", "// SPDX-License-Identifier: GPL-3.0-or-later\n");
+    // Motion: a board with a revision, a housing without one, the firmware by its stanza.
+    touch ("a3-motion/.reuse/dep5", "Format: x\n\nFiles: hardware/*\nCopyright: a\nLicense: CERN-OHL-S-2.0\n\nFiles: firmware/*\nCopyright: a\nLicense: GPL-3.0-or-later\n");
+    touch ("a3-motion/hardware/pcbs/motion_pcb/motion.kicad_pro");
+    touch ("a3-motion/hardware/pcbs/motion_pcb/REVISION", "v03\n");
+    touch ("a3-motion/hardware/housing/freecad/box.FCStd");
+    touch ("a3-motion/firmware/src/main.cpp");
     auto runner = rigRunner();
     const auto git = [&repo] (const juce::String& dir, const juce::String& rest) {
         return "git -C " + (dir.isEmpty() ? repo : repo.getChildFile (dir)).getFullPathName() + " " + rest;
@@ -625,6 +640,8 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     runner->answers[git ("", "ls-tree HEAD")] = { 0, "160000 commit aaa\ta3-core\n160000 commit bbb\ta3-mixer\n160000 commit ccc\ta3-motion\n160000 commit ddd\tstemdeck\n" };
     runner->answers[git ("", "describe --tags --match v* --always HEAD")] = { 0, "v03.0-12-g1234567\n" };
     runner->answers[git ("a3-core", "describe --tags --match v* --always aaa")] = { 0, "v03.0-857-gaaaaaaa\n" };
+    runner->answers[git ("a3-core", "log -1 --format=%H aaa -- docs")] = { 0, "d1\n" };
+    runner->answers[git ("a3-core", "describe --tags --match v* --always d1")] = { 0, "v03.0-801-gd1\n" };
     runner->answers[git ("a3-mixer", "describe --tags --match v* --always bbb")] = { 0, "v03.0-90-gbbbbbbb\n" };
     runner->answers[git ("a3-mixer", "log -1 --format=%H bbb -- hardware/mainboard/firmware")] = { 0, "f1\n" };
     runner->answers[git ("a3-mixer", "describe --tags --match v* --always f1")] = { 0, "v03.0-12-gf1\n" };
@@ -640,13 +657,15 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     a3app::SystemAboutView view (probe);
     view.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
     view.refresh();
-    juce::StringArray licences;
+    juce::StringArray lines;
     for (const auto& row : view.checkoutShown().rows)
-        licences.add (row.name + "=" + row.licences);
-    const auto dot = juce::String::fromUTF8 (" · ");
-    EXPECT_EQ (licences.joinIntoString (";"), juce::String ("a3-core=GPL-3.0") + dot + "CC-BY-SA-4.0;a3-mixer=GPL-3.0" + dot + "CERN-OHL-S" + dot
-                                                  + "CC-BY-SA-4.0;a3-mixer firmware=CERN-OHL-S;a3-motion=GPL-3.0" + dot + "CERN-OHL-S" + dot
-                                                  + "CC-BY-SA-4.0;a3-motion firmware=GPL-3.0;a3-motion/ui=GPL-3.0;stemdeck=");
+        lines.add (row.name + "|" + row.tag + "|" + row.licences + (row.noVersion ? "|no version" : ""));
+    EXPECT_EQ (lines.joinIntoString ("\n"),
+               juce::String ("a3-core|v03.0+857|GPL-3.0\na3-core docs|v03.0+801|CC-BY-SA-4.0\n"
+                             "a3-mixer|v03.0+90|GPL-3.0\na3-mixer pcb|rev V02|CERN-OHL-S\na3-mixer housing|rev V02|CERN-OHL-S\n"
+                             "a3-mixer firmware|v03.0+12|GPL-3.0\n"
+                             "a3-motion|v03.0+855|GPL-3.0\na3-motion pcb|rev v03|CERN-OHL-S\na3-motion housing||CERN-OHL-S|no version\n"
+                             "a3-motion firmware|v03.0+80|GPL-3.0\na3-motion/ui|v03.0+900|GPL-3.0\nstemdeck||"));
     a3apptest::expectPainted (a3apptest::snapshotAt (view, "system3-about-tree", view.getWidth(), view.getHeight()));
     repo.deleteRecursively();
 }
