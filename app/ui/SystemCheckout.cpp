@@ -245,7 +245,9 @@ std::vector<Gitlink> parseGitlinks (const juce::String& lsTree)
     {
         const auto fields = juce::StringArray::fromTokens (line.upToFirstOccurrenceOf ("\t", false, false), " ", {});
         const auto path = line.fromFirstOccurrenceOf ("\t", false, false).trim();
-        if (fields.size() == 3 && fields[0] == "160000" && fields[1] == "commit" && path.isNotEmpty())
+        // Code embedded from elsewhere sits under third_party/ and is not a part of the A³ system.
+        const bool thirdParty = path.startsWith ("third_party/") || path.contains ("/third_party/");
+        if (fields.size() == 3 && fields[0] == "160000" && fields[1] == "commit" && path.isNotEmpty() && ! thirdParty)
             links.push_back ({ path, fields[2] });
     }
     return links;

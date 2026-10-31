@@ -167,6 +167,20 @@ TEST (SystemAbout, SupportIsOneFixedLinkTheSameForEveryone)
 }
 
 // a3-motion's board folder holds sub-projects (enc_pot, led_but) deeper down: the board is the shallowest project's folder.
+// Code we embed from elsewhere (IEM, BTrack, stemdeck's copy of a3-core) is not a part of the A³ system: the tree lists
+// our repositories only (maintainer, 2026-10-31).
+TEST (SystemCheckout, ThirdPartyGitlinksAreNotPartOfTheSystem)
+{
+    const auto links = a3app::checkout::parseGitlinks (
+        "160000 commit aaa\ta3-beat-analyzer\n"
+        "160000 commit bbb\tthird_party/IEMPluginSuite\n"
+        "160000 commit ccc\tlib/third_party/BTrack\n"
+        "160000 commit ddd\thardware/a3-kicad-lib\n");
+    ASSERT_EQ (links.size(), 2u);
+    EXPECT_EQ (links[0].path, "a3-beat-analyzer");
+    EXPECT_EQ (links[1].path, "hardware/a3-kicad-lib");
+}
+
 TEST (SystemCheckout, ThePcbIsTheShallowestKicadProjectNotASubProject)
 {
     const auto repo = juce::File::createTempFile ("a3-nested-pcb");
