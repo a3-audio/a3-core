@@ -28,12 +28,10 @@ AES67_TEMPLATE = (Path(__file__).resolve().parents[2]
                   / "share/a3-core/pipewire/pipewire-aes67.conf.in")
 
 
-def analyzer_prefix(route):
-    """OSC_VU_ for the meters, OSC_HOST_ for the clock. The analyzer sends
-    /vu only to its OSC_VU_ targets once it has one, so a program taking both
-    on one port is named twice."""
-    carries_vu = route["to"].endswith(".vu") or route.get("carries") == "vu"
-    return "OSC_VU_" if carries_vu else "OSC_HOST_"
+def carries_vu(route):
+    """A route of the meters. The analyzer has none of its own since O13 (the
+    engine measures /vu), so one from it in an older truth renders no line."""
+    return route["to"].endswith(".vu") or route.get("carries") == "vu"
 
 
 def lines(pairs):
@@ -68,17 +66,16 @@ def network_defaults(truth):
 def analyzer_block(truth):
     targets = []
     for route in truth.routes():
-        if route.get("from") != "beat-analyzer":
+        if route.get("from") != "beat-analyzer" or carries_vu(route):
             continue
         program, role = route["to"].split(".")
         host, port = truth.endpoint(program, role)
-        targets.append((analyzer_prefix(route) + program, f"{host}:{port}"))
+        targets.append(("OSC_HOST_" + program, f"{host}:{port}"))
     targets.append(("OSC_PORT_A3MOTION", truth.port("beat-analyzer", "clock")))
     # Its words and the Pro DJ Link ports: beat-analyzer's Config::OscWords.
     targets += [("OSC_ADDRESS_BEAT", truth.pattern("beat")),
                 ("OSC_ADDRESS_TAP", truth.pattern("tap")),
                 ("OSC_ADDRESS_CLOCKMODE", truth.pattern("clockmode")),
-                ("OSC_ADDRESS_VU", truth.pattern("vu")),
                 ("PIONEER_PORT_ANNOUNCE", truth.port("prolink", "announce")),
                 ("PIONEER_PORT_BEAT", truth.port("prolink", "beat")),
                 ("PIONEER_PORT_STATUS", truth.port("prolink", "status"))]
