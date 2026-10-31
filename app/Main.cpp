@@ -141,7 +141,7 @@ public:
         : core (a3app::coreClientFor (truth)),
           engine (makeEngineView (truth)),
           process (platform, *core, *engine),
-          system (a3app::machineSystemSources (truth, platform.home(), platform.configDir(), truthDecks (truth)))
+          system (a3app::machineSystemSources (truth, platform.home(), truthDecks (truth)))
     {
         for (const auto role : process.attach())
             std::printf ("a3-core: started --role %s, it was not running\n", a3app::roleWord (role).c_str());

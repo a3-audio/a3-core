@@ -149,7 +149,7 @@ TEST (SystemAbout, TheProjectAsTheCanvasSaidIt)
     EXPECT_EQ (about::copyrightLine(), juce::String::fromUTF8 ("© 2020–2026 Raphael Eismann and contributors"));
     EXPECT_EQ (about::contactAddress(), "p5hcu1@systemli.org");
     const auto links = about::links();
-    ASSERT_EQ (links.size(), 3u);
+    ASSERT_GE (links.size(), 3u);
     EXPECT_EQ (links[0].label, "Documentation");
     EXPECT_EQ (links[1].label, "Website");
     EXPECT_EQ (links[2].label, "Source");
@@ -157,25 +157,13 @@ TEST (SystemAbout, TheProjectAsTheCanvasSaidIt)
     EXPECT_TRUE (about::licenceLine().contains ("GPL-3.0-or-later"));
 }
 
-TEST (SystemAbout, SupportKeepsOnlyWhatEachKeySays)
+TEST (SystemAbout, SupportIsOneFixedLinkTheSameForEveryone)
 {
-    const auto support = about::parseSupport (R"({"paypal": "https://www.paypal.com/paypalme/RaphaelEismann",
-        "kofi": "https://evil.example/kofi", "bitcoin": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh"})");
-    EXPECT_EQ (support.paypal, "https://www.paypal.com/paypalme/RaphaelEismann");
-    EXPECT_TRUE (support.kofi.isEmpty()) << "not ko-fi.com";
-    EXPECT_EQ (support.bitcoin, "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh");
-    EXPECT_TRUE (about::parseSupport ("not json").isEmpty());
-
-    const auto dir = juce::File::createTempFile ("a3-support");
-    dir.createDirectory();
-    const auto user = dir.getChildFile ("canvas.json"), shipped = dir.getChildFile ("shipped.json");
-    shipped.replaceWithText (R"({"paypal": "https://paypal.me/shipped"})");
-    EXPECT_EQ (about::loadSupport (user, shipped).paypal, "https://paypal.me/shipped");
-    user.replaceWithText (R"({"kofi": "https://ko-fi.com/mine"})");
-    const auto mine = about::loadSupport (user, shipped);
-    EXPECT_EQ (mine.kofi, "https://ko-fi.com/mine");
-    EXPECT_TRUE (mine.paypal.isEmpty()) << "the user's file whole, not merged";
-    dir.deleteRecursively();
+    EXPECT_EQ (about::supportUrl(), "https://www.paypal.com/paypalme/RaphaelEismann");
+    const auto links = about::links();
+    ASSERT_EQ (links.size(), 4u);
+    EXPECT_EQ (links[3].label, juce::String::fromUTF8 ("Support A³"));
+    EXPECT_EQ (links[3].url, about::supportUrl());
 }
 
 TEST (SystemCheckout, ReadsTheUmbrellasPinsAndFirmware)
@@ -468,7 +456,6 @@ a3app::SystemSources fakeSources (std::shared_ptr<ScriptedRunner> runner)
     sources.interfaces = [] { return std::vector<rig::InterfaceAddress> { { "eno1", host ("core") }, { "enp5s0", host ("core-audio") } }; };
     sources.truth = network();
     sources.checkout = juce::File ("/home/someone/a3-system");
-    sources.support = about::parseSupport (R"({"paypal": "https://www.paypal.com/paypalme/RaphaelEismann"})");
     sources.decks = 4;
     sources.deskInstalled = [] { return false; };
     return sources;

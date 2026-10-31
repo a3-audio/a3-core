@@ -146,7 +146,7 @@ void SystemProbe::waitForPlan()
         planner.join();
 }
 
-SystemSources machineSystemSources (const a3core::Truth& truth, const juce::File& home, const juce::File& configDir, int decks)
+SystemSources machineSystemSources (const a3core::Truth& truth, const juce::File& home, int decks)
 {
     SystemSources sources;
     sources.runner = std::make_shared<SpawnRunner>();
@@ -162,7 +162,6 @@ SystemSources machineSystemSources (const a3core::Truth& truth, const juce::File
     sources.interfaces = rig::listInterfaces;
     sources.truth = rig::truthNetwork (truth.data());
     sources.checkout = home.getChildFile ("a3-system");
-    sources.support = about::machineSupport (configDir);
     sources.decks = decks;
     sources.deskInstalled = [] { return juce::File ("/usr/bin/a3-desk").existsAsFile(); };
     return sources;

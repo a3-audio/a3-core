@@ -443,10 +443,6 @@ SystemAboutView::SystemAboutView (SystemProbe& p) : probe (p)
     addAndMakeVisible (publishedHeading);
     for (const auto& link : about::links())
         addAndMakeVisible (links.add (makeLink (link.label, link.url)));
-    const auto& support = probe.support();
-    const auto supportUrl = support.paypal.isNotEmpty() ? support.paypal : support.kofi;
-    if (supportUrl.isNotEmpty())
-        addAndMakeVisible (links.add (makeLink (juce::String::fromUTF8 ("Support A³"), supportUrl)));
     refresh();
 }
 

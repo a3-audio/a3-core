@@ -30,7 +30,6 @@ struct SystemSources
     std::function<std::vector<rig::InterfaceAddress>()> interfaces;
     rig::Network truth;                          // the truth's hosts and networks (own: filled by each poll)
     juce::File checkout;                         // the umbrella checkout (~/a3-system)
-    about::Support support;
     int decks = 0;
     std::function<bool()> deskInstalled;
 };
@@ -64,7 +63,6 @@ public:
     void pollNow();
     SystemSnapshot snapshot() const;
     const std::vector<rig::Program>& programs() const { return rigPrograms; }
-    const about::Support& support() const { return sources.support; }
 
     // Runs `steps` on a thread of its own, its log line by line into planLine; false while one runs (or no runner).
     bool run (const juce::String& title, std::vector<rig::Step> steps);
@@ -91,7 +89,6 @@ private:
     std::thread poller, planner;
 };
 
-// This machine: systemctl and git through posix_spawn, Core at the truth's core.web, the truth's hosts, ~/a3-system,
-// the Canvas's support file under `configDir`.
-SystemSources machineSystemSources (const a3core::Truth&, const juce::File& home, const juce::File& configDir, int decks);
+// This machine: systemctl and git through posix_spawn, Core at the truth's core.web, the truth's hosts, ~/a3-system.
+SystemSources machineSystemSources (const a3core::Truth&, const juce::File& home, int decks);
 }

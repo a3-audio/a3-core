@@ -192,9 +192,7 @@ Mixer and Motion, its firmware -- "not reported" only where the device said noth
 Restart (Stop and Restart ask first); Start all and Stop all act on this machine's programs in the Canvas's order (engine and
 Core first and waited for, then the analyzer, the decks -- skipped when the engine did not come up --, the desk, Motion; Stop
 all the other way round and asks first; the questions say nothing but the question). A program of another machine shows what Core hears of it and has no key. ABOUT: the
-project (Spatial DJ setup, Documentation / Website / Source, the copyright and the contact), Support A³ (PayPal, Ko-fi, Bitcoin
-as the Canvas reads them from `~/.config/a3/canvas.json`, else `/usr/share/a3/canvas.json`; the card is left out when none is
-set; no QR code -- that would be a new dependency), PUBLISHED (`~/a3-system`: its own tag, then each repository in two
+project (Spatial DJ setup, Documentation / Website / Source, the copyright and the contact), Support A³ (one fixed link, the website footer's PayPal.Me, the same for everyone; no config file, no QR code -- that would be a new dependency), PUBLISHED (`~/a3-system`: its own tag, then each repository in two
 columns, its name a link to where it is published -- the url in `.gitmodules` at the pin, a relative one beside its parent's,
 a firmware its folder there -- and the tag of its pinned commit; the firmware of a3-mixer and a3-motion as the tag of the last
 commit that changed it; a3-motion's ui; "not checked out" muted) and the licences last; every line compact, none empty. Not
