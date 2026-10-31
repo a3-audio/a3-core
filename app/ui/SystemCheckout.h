@@ -73,7 +73,19 @@ juce::String shortLicence (const juce::String& spdxId);
 // files under it; the first licence of an expression. Empty when neither says.
 juce::String licenceOfFolder (const juce::File& repoDir, const juce::String& folder);
 
-// The checkout at `repo`: its HEAD's tag, each gitlink's pinned commit described in its submodule, a3-motion's own
-// submodules, and the firmware of a3-motion and a3-mixer as the tag of the last commit that changed it.
+// The checkout at `repo`: its HEAD's tag, each gitlink's pinned commit described in its submodule, the submodules of
+// those at any depth and in any folder (`ls-tree -r`; a3-mixer's hardware/a3-kicad-lib, a3-stemdeck's a3-stem-separator),
+// each named "<its repository's row>/<last path component>", and the firmware of a3-motion and a3-mixer as the tag of the
+// last commit that changed it.
 Facts read (CommandRunner&, const juce::File& repo);
+
+// A line of the PUBLISHED tree: which row, the name shown (a child's own part of its row name) and the connectors ahead.
+struct TreeEntry
+{
+    size_t row = 0;
+    juce::String name, prefix;
+};
+// The rows as a tree at any depth: "a/b" is b under a, "a/b/c" c under a/b, "a firmware" a part of a; a row whose parent
+// is not there is a top.
+std::vector<TreeEntry> treeOf (const std::vector<Row>& rows);
 }

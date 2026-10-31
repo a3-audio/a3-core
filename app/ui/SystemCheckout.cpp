@@ -25,10 +25,25 @@ juce::String gitOutput (CommandRunner& runner, const juce::File& dir, std::initi
     return result.exitCode == 0 ? juce::String (result.output).trim() : juce::String();
 }
 
+// Each submodule's url by its path: a section's name need not be its path (a submodule inside a folder); without a path
+// entry the name is taken as the path.
 std::map<juce::String, juce::String> urlsAt (CommandRunner& runner, const juce::File& dir, const juce::String& commit, const juce::String& base)
 {
-    return parseUrls (gitOutput (runner, dir, { "config", "--blob", commit + ":.gitmodules", "--get-regexp", "^submodule\\..*\\.url$" }), base);
+    const auto blob = commit + ":.gitmodules";
+    auto byName = parseUrls (gitOutput (runner, dir, { "config", "--blob", blob, "--get-regexp", "^submodule\\..*\\.url$" }), base);
+    for (const auto& line : juce::StringArray::fromLines (gitOutput (runner, dir, { "config", "--blob", blob, "--get-regexp", "^submodule\\..*\\.path$" })))
+    {
+        const auto name = line.upToFirstOccurrenceOf (" ", false, false).fromFirstOccurrenceOf ("submodule.", false, false)
+                              .upToLastOccurrenceOf (".path", false, false);
+        const auto path = line.fromFirstOccurrenceOf (" ", false, false).trim();
+        const auto found = byName.find (name);
+        if (path.isNotEmpty() && name != path && found != byName.end())
+            byName[path] = found->second;
+    }
+    return byName;
 }
+
+juce::String lastComponent (const juce::String& path) { return path.fromLastOccurrenceOf ("/", false, false); }
 
 juce::String urlOf (const std::map<juce::String, juce::String>& urls, const juce::String& name)
 {
@@ -153,39 +168,56 @@ bool hasFirmware (const juce::String& submodule)
 // Hardware and firmware rows read "rev <version>", lowercase whatever the file says; nothing when there is no version.
 juce::String revisionText (const juce::String& version) { return version.isNotEmpty() ? "rev " + version.toLowerCase() : juce::String(); }
 
-// A submodule's row, then its parts (pcb, housing), its firmware's, its ui folder's, then its own submodules' (one level:
-// a3-motion-ui, a3-mixer-ui, a3-core's a3-beat-analyzer, a3-stemdeck's a3-stem-separator).
+// The submodules of a checked-out repository, anywhere in its tree, each a row "<parent>/<last path component>", and
+// theirs below them -- any depth (a3-stemdeck's a3-stem-separator, a3-mixer's hardware/a3-kicad-lib).
+void addNested (CommandRunner& runner, const juce::File& dir, const juce::String& commit, const std::vector<Gitlink>& inners,
+                const juce::String& url, const juce::String& parentName, Facts& facts)
+{
+    if (inners.empty())
+        return;
+    const auto innerUrls = urlsAt (runner, dir, commit, url);
+    for (const auto& inner : inners)
+    {
+        const auto innerDir = dir.getChildFile (inner.path);
+        const auto name = parentName + "/" + lastComponent (inner.path);
+        const auto innerUrl = urlOf (innerUrls, inner.path);
+        facts.rows.push_back ({ name, tagOf (runner, innerDir, inner.commit), innerUrl, codeLicence (innerDir) });
+        if (facts.rows.back().tag.isNotEmpty())
+            addNested (runner, innerDir, inner.commit, parseGitlinks (gitOutput (runner, innerDir, { "ls-tree", "-r", inner.commit })),
+                       innerUrl, name, facts);
+    }
+}
+
+// A submodule's row, then its parts (pcb, housing), its firmware's, its ui folder's, then its own submodules at any depth.
 void addSubmodule (CommandRunner& runner, const juce::File& repo, const Gitlink& link, const juce::String& url, Facts& facts)
 {
     const auto dir = repo.getChildFile (link.path);
-    facts.rows.push_back ({ link.path, tagOf (runner, dir, link.commit), url, codeLicence (dir) });
+    const auto rowName = lastComponent (link.path);
+    facts.rows.push_back ({ rowName, tagOf (runner, dir, link.commit), url, codeLicence (dir) });
     if (facts.rows.back().tag.isEmpty())
         return;   // not checked out: nothing more to ask it
     // A hardware part has the revision its REVISION file says.
     for (const auto& part : partsOf (dir))
     {
         const auto version = revisionText (part.revision);
-        facts.rows.push_back ({ link.path + " " + part.name, version, url.isNotEmpty() ? url + "/tree/HEAD/" + part.folder : juce::String(),
+        facts.rows.push_back ({ rowName + " " + part.name, version, url.isNotEmpty() ? url + "/tree/HEAD/" + part.folder : juce::String(),
                                 licenceOfFolder (dir, part.folder), version.isEmpty() });
     }
     if (hasFirmware (link.path))
     {
-        facts.rows.push_back ({ link.path + " firmware", revisionText (lastChangeTag (runner, dir, link.commit, firmwareFolder)),
+        facts.rows.push_back ({ rowName + " firmware", revisionText (lastChangeTag (runner, dir, link.commit, firmwareFolder)),
                                 url.isNotEmpty() ? url + "/tree/HEAD/" + firmwareFolder : juce::String(),
                                 licenceOfFolder (dir, firmwareFolder) });
     }
-    const auto innerUrls = urlsAt (runner, dir, link.commit, url);
-    const auto inners = parseGitlinks (gitOutput (runner, dir, { "ls-tree", link.commit }));
+    const auto inners = parseGitlinks (gitOutput (runner, dir, { "ls-tree", "-r", link.commit }));
     // A ui that is a folder of the repo (a3-mixer's desk) is a part like the firmware, with its software version;
     // a ui that is a repository of its own (a3-motion's) is listed below as a submodule.
     const bool uiIsSubmodule = std::any_of (inners.begin(), inners.end(), [] (const Gitlink& g) { return g.path == uiFolder; });
     if (! uiIsSubmodule && dir.getChildFile (uiFolder).isDirectory())
-        facts.rows.push_back ({ link.path + " ui", lastChangeTag (runner, dir, link.commit, uiFolder),
+        facts.rows.push_back ({ rowName + " ui", lastChangeTag (runner, dir, link.commit, uiFolder),
                                 url.isNotEmpty() ? url + "/tree/HEAD/" + uiFolder : juce::String(),
                                 licenceOfFolder (dir, uiFolder) });
-    for (const auto& inner : inners)
-        facts.rows.push_back ({ link.path + "/" + inner.path, tagOf (runner, dir.getChildFile (inner.path), inner.commit), urlOf (innerUrls, inner.path),
-                                codeLicence (dir.getChildFile (inner.path)) });
+    addNested (runner, dir, link.commit, inners, url, rowName, facts);
 }
 }
 
@@ -305,7 +337,7 @@ juce::String tagText (const Row& row) { return row.tag.isNotEmpty() ? row.tag : 
 Facts read (CommandRunner& runner, const juce::File& repo)
 {
     Facts facts;
-    const auto links = parseGitlinks (gitOutput (runner, repo, { "ls-tree", "HEAD" }));
+    const auto links = parseGitlinks (gitOutput (runner, repo, { "ls-tree", "-r", "HEAD" }));
     if (links.empty())
         return facts;
     facts.found = true;
@@ -316,5 +348,50 @@ Facts read (CommandRunner& runner, const juce::File& repo)
     for (const auto& link : links)
         addSubmodule (runner, repo, link, urlOf (urls, link.path), facts);
     return facts;
+}
+
+namespace
+{
+juce::String parentOf (const juce::String& name)
+{
+    if (name.contains ("/"))
+        return name.upToLastOccurrenceOf ("/", false, false);
+    return name.contains (" ") ? name.upToFirstOccurrenceOf (" ", false, false) : juce::String();
+}
+
+void addChildren (const std::vector<Row>& rows, size_t parent, const juce::String& indent, std::vector<TreeEntry>& tree)
+{
+    const juce::String branch = juce::String::fromUTF8 ("├─ "), corner = juce::String::fromUTF8 ("└─ "),
+                       bar = juce::String::fromUTF8 ("│  "), blank = "   ";
+    std::vector<size_t> children;
+    for (size_t i = 0; i < rows.size(); ++i)
+        if (i != parent && parentOf (rows[i].name) == rows[parent].name)
+            children.push_back (i);
+    for (size_t c = 0; c < children.size(); ++c)
+    {
+        const bool last = c + 1 == children.size();
+        tree.push_back ({ children[c], rows[children[c]].name.substring (rows[parent].name.length() + 1), indent + (last ? corner : branch) });
+        addChildren (rows, children[c], indent + (last ? blank : bar), tree);
+    }
+}
+}
+
+std::vector<TreeEntry> treeOf (const std::vector<Row>& rows)
+{
+    std::vector<size_t> tops;
+    for (size_t i = 0; i < rows.size(); ++i)
+    {
+        const auto parent = parentOf (rows[i].name);
+        if (parent.isEmpty() || std::none_of (rows.begin(), rows.end(), [&] (const Row& r) { return r.name == parent; }))
+            tops.push_back (i);
+    }
+    std::vector<TreeEntry> tree;
+    for (size_t k = 0; k < tops.size(); ++k)
+    {
+        const bool last = k + 1 == tops.size();
+        tree.push_back ({ tops[k], rows[tops[k]].name, juce::String::fromUTF8 (last ? "└─ " : "├─ ") });
+        addChildren (rows, tops[k], last ? "   " : juce::String::fromUTF8 ("│  "), tree);
+    }
+    return tree;
 }
 }

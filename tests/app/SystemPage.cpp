@@ -199,19 +199,81 @@ TEST (SystemCheckout, AUiFolderIsAPartAndAUiSubmoduleIsARow)
         return "git -C " + (dir.isEmpty() ? repo : repo.getChildFile (dir)).getFullPathName() + " " + rest;
     };
     ScriptedRunner runner;
-    runner.answers[git ("", "ls-tree HEAD")] = { 0, "160000 commit aaa\tfolder\n160000 commit bbb\tlinked\n" };
+    runner.answers[git ("", "ls-tree -r HEAD")] = { 0, "160000 commit aaa\tfolder\n160000 commit bbb\tlinked\n" };
     runner.answers[git ("folder", "describe --tags --match v* --always aaa")] = { 0, "v03.1\n" };
     runner.answers[git ("folder", "log -1 --format=%H aaa -- ui")] = { 0, "u1\n" };
     runner.answers[git ("folder", "describe --tags --match v* --abbrev=0 aaa")] = { 0, "v03.1\n" };
     runner.answers[git ("folder", "rev-list --count v03.1..aaa -- ui")] = { 0, "0\n" };
     runner.answers[git ("linked", "describe --tags --match v* --always bbb")] = { 0, "v03.1\n" };
-    runner.answers[git ("linked", "ls-tree bbb")] = { 0, "160000 commit ccc\tui\n" };
+    runner.answers[git ("linked", "ls-tree -r bbb")] = { 0, "160000 commit ccc\tui\n" };
     runner.answers[git ("linked/ui", "describe --tags --match v* --always ccc")] = { 0, "v03.1-2-gccccccc\n" };
     juce::StringArray names;
     for (const auto& row : checkout::read (runner, repo).rows)
         names.add (row.name + "|" + row.tag);
     EXPECT_EQ (names.joinIntoString ("\n"), juce::String ("folder|v03.1\nfolder ui|v03.1\nlinked|v03.1\nlinked/ui|v03.1+2"));
     repo.deleteRecursively();
+}
+
+// Every repository at any depth and in any folder (maintainer, 2026-10-31): a3-kicad-lib sits in a3-mixer's hardware/,
+// a3-stem-separator's own submodule two levels down. Each is named by its last path component, under its repository.
+TEST (SystemCheckout, ReadsSubmodulesAtAnyDepthAndInsideFolders)
+{
+    const juce::File repo ("/home/someone/a3-system");
+    const auto git = [&repo] (const juce::String& dir, const juce::String& rest) {
+        return "git -C " + (dir.isEmpty() ? repo : repo.getChildFile (dir)).getFullPathName() + " " + rest;
+    };
+    ScriptedRunner runner;
+    runner.answers[git ("", "ls-tree -r HEAD")] = { 0, "160000 commit bbb\ta3-mixer\n160000 commit ddd\ta3-stemdeck\n" };
+    runner.answers[git ("", "config --blob HEAD:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
+        = { 0, "submodule.a3-mixer.url https://github.com/a3-audio/a3-mixer\nsubmodule.a3-stemdeck.url https://github.com/a3-audio/a3-stemdeck\n" };
+    runner.answers[git ("a3-mixer", "describe --tags --match v* --always bbb")] = { 0, "v03.1\n" };
+    runner.answers[git ("a3-mixer", "ls-tree -r bbb")] = { 0, "100644 blob x1\tREADME.md\n160000 commit kkk\thardware/a3-kicad-lib\n" };
+    // A section named otherwise than its path: the url is found through the path.
+    runner.answers[git ("a3-mixer", "config --blob bbb:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
+        = { 0, "submodule.kicad.url ../a3-kicad-lib.git\n" };
+    runner.answers[git ("a3-mixer", "config --blob bbb:.gitmodules --get-regexp ^submodule\\..*\\.path$")]
+        = { 0, "submodule.kicad.path hardware/a3-kicad-lib\n" };
+    runner.answers[git ("a3-mixer/hardware/a3-kicad-lib", "describe --tags --match v* --always kkk")] = { 0, "v03.1-4-gabcdef1\n" };
+    runner.answers[git ("a3-stemdeck", "describe --tags --match v* --always ddd")] = { 0, "v03.1\n" };
+    runner.answers[git ("a3-stemdeck", "ls-tree -r ddd")] = { 0, "160000 commit sep\ta3-stem-separator\n" };
+    runner.answers[git ("a3-stemdeck", "config --blob ddd:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
+        = { 0, "submodule.a3-stem-separator.url ../a3-stem-separator.git\n" };
+    runner.answers[git ("a3-stemdeck/a3-stem-separator", "describe --tags --match v* --always sep")] = { 0, "v03.1\n" };
+    runner.answers[git ("a3-stemdeck/a3-stem-separator", "ls-tree -r sep")] = { 0, "160000 commit msst\tvendor/msst\n" };
+    runner.answers[git ("a3-stemdeck/a3-stem-separator", "config --blob sep:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
+        = { 0, "submodule.vendor/msst.url https://github.com/ZFTurbo/Music-Source-Separation-Training\n" };
+    runner.answers[git ("a3-stemdeck/a3-stem-separator/vendor/msst", "describe --tags --match v* --always msst")] = { 0, "abc1234\n" };
+    juce::StringArray rows;
+    for (const auto& row : checkout::read (runner, repo).rows)
+        rows.add (row.name + "|" + row.tag + "|" + row.url);
+    EXPECT_EQ (rows.joinIntoString ("\n"),
+               juce::String ("a3-mixer|v03.1|https://github.com/a3-audio/a3-mixer\n"
+                             "a3-mixer firmware||https://github.com/a3-audio/a3-mixer/tree/HEAD/firmware\n"   // not asked here
+                             "a3-mixer/a3-kicad-lib|v03.1+4|https://github.com/a3-audio/a3-kicad-lib\n"
+                             "a3-stemdeck|v03.1|https://github.com/a3-audio/a3-stemdeck\n"
+                             "a3-stemdeck/a3-stem-separator|v03.1|https://github.com/a3-audio/a3-stem-separator\n"
+                             "a3-stemdeck/a3-stem-separator/msst|abc1234|https://github.com/ZFTurbo/Music-Source-Separation-Training"));
+}
+
+// The tree draws every depth: a child under its repository, a grandchild under the child, the connectors carrying on.
+TEST (SystemCheckout, TheTreeDrawsEveryDepth)
+{
+    const std::vector<checkout::Row> rows { { "a3-core", "v1" }, { "a3-core/a3-beat-analyzer", "v1" }, { "a3-mixer", "v1" },
+                                            { "a3-mixer firmware", "rev v1" }, { "a3-mixer/a3-kicad-lib", "v1" },
+                                            { "a3-stemdeck", "v1" }, { "a3-stemdeck/a3-stem-separator", "v1" },
+                                            { "a3-stemdeck/a3-stem-separator/msst", "v1" } };
+    juce::StringArray lines;
+    for (const auto& entry : checkout::treeOf (rows))
+        lines.add (entry.prefix + entry.name + "=" + rows[entry.row].name);
+    EXPECT_EQ (lines.joinIntoString ("\n"), juce::String::fromUTF8 (
+        "├─ a3-core=a3-core\n"
+        "│  └─ a3-beat-analyzer=a3-core/a3-beat-analyzer\n"
+        "├─ a3-mixer=a3-mixer\n"
+        "│  ├─ firmware=a3-mixer firmware\n"
+        "│  └─ a3-kicad-lib=a3-mixer/a3-kicad-lib\n"
+        "└─ a3-stemdeck=a3-stemdeck\n"
+        "   └─ a3-stem-separator=a3-stemdeck/a3-stem-separator\n"
+        "      └─ msst=a3-stemdeck/a3-stem-separator/msst"));
 }
 
 TEST (SystemCheckout, ReadsTheUmbrellasPinsAndFirmware)
@@ -226,7 +288,7 @@ TEST (SystemCheckout, ReadsTheUmbrellasPinsAndFirmware)
         return "git -C " + (dir.isEmpty() ? repo : repo.getChildFile (dir)).getFullPathName() + " " + rest;
     };
     ScriptedRunner runner;
-    runner.answers[git ("", "ls-tree HEAD")] = { 0, "160000 commit aaa\ta3-core\n100644 blob bbb\tREADME.md\n160000 commit ccc\ta3-motion\n"
+    runner.answers[git ("", "ls-tree -r HEAD")] = { 0, "160000 commit aaa\ta3-core\n100644 blob bbb\tREADME.md\n160000 commit ccc\ta3-motion\n"
                                                     "160000 commit ddd\ta3-stemdeck\n" };
     runner.answers[git ("", "describe --tags --match v* --always HEAD")] = { 0, "v03.0-12-g1234567\n" };
     runner.answers[git ("a3-core", "describe --tags --match v* --always aaa")] = { 0, "v03.0-857-gaaaaaaa\n" };
@@ -234,13 +296,13 @@ TEST (SystemCheckout, ReadsTheUmbrellasPinsAndFirmware)
     runner.answers[git ("a3-motion", "log -1 --format=%H ccc -- firmware")] = { 0, "fff\n" };
     runner.answers[git ("a3-motion", "describe --tags --match v* --abbrev=0 ccc")] = { 0, "v03.0\n" };
     runner.answers[git ("a3-motion", "rev-list --count v03.0..ccc -- firmware")] = { 0, "2\n" };
-    runner.answers[git ("a3-motion", "ls-tree ccc")] = { 0, "160000 commit eee\ta3-motion-ui\n" };
+    runner.answers[git ("a3-motion", "ls-tree -r ccc")] = { 0, "160000 commit eee\ta3-motion-ui\n" };
     runner.answers[git ("a3-motion/a3-motion-ui", "describe --tags --match v* --always eee")] = { 0, "v03.0-900-geeeeee\n" };
     // Submodules of submodules since 2026-10-31: a3-core's a3-beat-analyzer, a3-stemdeck's a3-stem-separator -- one level, as a3-motion's a3-motion-ui.
-    runner.answers[git ("a3-core", "ls-tree aaa")] = { 0, "040000 tree t1\tthird_party\n160000 commit bea\ta3-beat-analyzer\n" };
+    runner.answers[git ("a3-core", "ls-tree -r aaa")] = { 0, "040000 tree t1\tthird_party\n160000 commit bea\ta3-beat-analyzer\n" };
     runner.answers[git ("a3-core/a3-beat-analyzer", "describe --tags --match v* --always bea")] = { 0, "v03.1-1-gbeabeab\n" };
     runner.answers[git ("a3-stemdeck", "describe --tags --match v* --always ddd")] = { 0, "v03.1\n" };
-    runner.answers[git ("a3-stemdeck", "ls-tree ddd")] = { 0, "160000 commit sep\ta3-stem-separator\n" };
+    runner.answers[git ("a3-stemdeck", "ls-tree -r ddd")] = { 0, "160000 commit sep\ta3-stem-separator\n" };
     runner.answers[git ("a3-stemdeck/a3-stem-separator", "describe --tags --match v* --always sep")] = { 0, "v03.1\n" };
     // Where each is published: the umbrella's .gitmodules at its HEAD, a submodule's at its pin (a relative url is its sibling).
     runner.answers[git ("", "config --blob HEAD:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
@@ -540,7 +602,7 @@ std::shared_ptr<ScriptedRunner> rigRunner()
     runner->answers[joined (rig::showCommand (services, false))] = { 0, userUnits.toStdString() };
     runner->answers[joined (rig::showCommand (services, true))] = { 0, systemUnits.toStdString() };
     const juce::File repo ("/home/someone/a3-system");
-    runner->answers["git -C " + repo.getFullPathName() + " ls-tree HEAD"] = { 0, "160000 commit aaa\ta3-core\n160000 commit ddd\ta3-stemdeck\n" };
+    runner->answers["git -C " + repo.getFullPathName() + " ls-tree -r HEAD"] = { 0, "160000 commit aaa\ta3-core\n160000 commit ddd\ta3-stemdeck\n" };
     runner->answers["git -C " + repo.getFullPathName() + " describe --tags --match v* --always HEAD"] = { 0, "v03.0-12-g1234567\n" };
     runner->answers["git -C " + repo.getChildFile ("a3-core").getFullPathName() + " describe --tags --match v* --always aaa"] = { 0, "v03.0-857-gaaaaaaa\n" };
     runner->answers["git -C " + repo.getFullPathName() + " config --blob HEAD:.gitmodules --get-regexp ^submodule\\..*\\.url$"]
@@ -694,13 +756,13 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     const auto git = [&repo] (const juce::String& dir, const juce::String& rest) {
         return "git -C " + (dir.isEmpty() ? repo : repo.getChildFile (dir)).getFullPathName() + " " + rest;
     };
-    runner->answers[git ("", "ls-tree HEAD")] = { 0, "160000 commit aaa\ta3-core\n160000 commit bbb\ta3-mixer\n160000 commit ccc\ta3-motion\n160000 commit ddd\ta3-stemdeck\n" };
-    runner->answers[git ("a3-core", "ls-tree aaa")] = { 0, "160000 commit bea\ta3-beat-analyzer\n" };
+    runner->answers[git ("", "ls-tree -r HEAD")] = { 0, "160000 commit aaa\ta3-core\n160000 commit bbb\ta3-mixer\n160000 commit ccc\ta3-motion\n160000 commit ddd\ta3-stemdeck\n" };
+    runner->answers[git ("a3-core", "ls-tree -r aaa")] = { 0, "160000 commit bea\ta3-beat-analyzer\n" };
     runner->answers[git ("a3-core/a3-beat-analyzer", "describe --tags --match v* --always bea")] = { 0, "v03.1-1-gbeabeab\n" };
-    runner->answers[git ("a3-mixer", "ls-tree bbb")] = { 0, "160000 commit uuu\ta3-mixer-ui\n" };
+    runner->answers[git ("a3-mixer", "ls-tree -r bbb")] = { 0, "160000 commit uuu\ta3-mixer-ui\n" };
     runner->answers[git ("a3-mixer/a3-mixer-ui", "describe --tags --match v* --always uuu")] = { 0, "v03.1-2-gabcdef1\n" };
     runner->answers[git ("a3-stemdeck", "describe --tags --match v* --always ddd")] = { 0, "v03.1-1-gddddddd\n" };
-    runner->answers[git ("a3-stemdeck", "ls-tree ddd")] = { 0, "160000 commit sep\ta3-stem-separator\n" };
+    runner->answers[git ("a3-stemdeck", "ls-tree -r ddd")] = { 0, "160000 commit sep\ta3-stem-separator\n" };
     runner->answers[git ("a3-stemdeck/a3-stem-separator", "describe --tags --match v* --always sep")] = { 0, "v03.1\n" };
     runner->answers[git ("", "describe --tags --match v* --always HEAD")] = { 0, "v03.0-12-g1234567\n" };
     runner->answers[git ("a3-core", "describe --tags --match v* --always aaa")] = { 0, "v03.0-857-gaaaaaaa\n" };
@@ -712,7 +774,7 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     runner->answers[git ("a3-motion", "log -1 --format=%H ccc -- firmware")] = { 0, "f2\n" };
     runner->answers[git ("a3-motion", "describe --tags --match v* --abbrev=0 ccc")] = { 0, "v03.0\n" };
     runner->answers[git ("a3-motion", "rev-list --count v03.0..ccc -- firmware")] = { 0, "2\n" };   // changed twice since
-    runner->answers[git ("a3-motion", "ls-tree ccc")] = { 0, "160000 commit eee\ta3-motion-ui\n" };
+    runner->answers[git ("a3-motion", "ls-tree -r ccc")] = { 0, "160000 commit eee\ta3-motion-ui\n" };
     runner->answers[git ("a3-motion/a3-motion-ui", "describe --tags --match v* --always eee")] = { 0, "v03.0-900-geeeeee\n" };
     auto sources = fakeSources (runner);
     sources.checkout = repo;

@@ -454,34 +454,8 @@ void SystemAboutView::makePublished()
 {
     repositories.clear();
     tree.clear();
-    const auto parentOf = [] (const juce::String& name)
-    {
-        return name.contains ("/") ? name.upToFirstOccurrenceOf ("/", false, false) : name.contains (" ") ? name.upToFirstOccurrenceOf (" ", false, false) : juce::String();
-    };
-    const auto childName = [] (const juce::String& name, const juce::String& parent) { return name.substring (parent.length() + 1); };
-    std::vector<size_t> tops;
-    for (size_t i = 0; i < pins.rows.size(); ++i)
-    {
-        const auto parent = parentOf (pins.rows[i].name);
-        const bool orphan = parent.isNotEmpty() && std::none_of (pins.rows.begin(), pins.rows.end(), [&] (const auto& r) { return r.name == parent; });
-        if (parent.isEmpty() || orphan)
-            tops.push_back (i);
-    }
-    const juce::String branch = juce::String::fromUTF8 ("├─ "), corner = juce::String::fromUTF8 ("└─ "),
-                       bar = juce::String::fromUTF8 ("│  "), blank = "   ";
-    for (size_t k = 0; k < tops.size(); ++k)
-    {
-        const bool lastTop = k + 1 == tops.size();
-        const auto& top = pins.rows[tops[k]];
-        tree.push_back ({ top, top.name, (lastTop ? corner : branch) });
-        std::vector<size_t> children;
-        for (size_t i = 0; i < pins.rows.size(); ++i)
-            if (i != tops[k] && parentOf (pins.rows[i].name) == top.name)
-                children.push_back (i);
-        for (size_t c = 0; c < children.size(); ++c)
-            tree.push_back ({ pins.rows[children[c]], childName (pins.rows[children[c]].name, top.name),
-                              (lastTop ? blank : bar) + (c + 1 == children.size() ? corner : branch) });
-    }
+    for (const auto& entry : checkout::treeOf (pins.rows))
+        tree.push_back ({ pins.rows[entry.row], entry.name, entry.prefix });
     for (const auto& line : tree)
     {
         if (line.row.url.startsWith ("https://"))
