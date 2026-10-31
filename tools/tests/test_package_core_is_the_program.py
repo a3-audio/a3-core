@@ -145,7 +145,8 @@ class TheScreencastRunsTheProgram(unittest.TestCase):
         text = code(self.SCRIPT)
         self.assertIn('exec nice -n 19 taskset -c "$CPUS" /usr/bin/a3-core --role screencast-fanout'
                       ' --port "$A3_SCREENCAST_PORT" -- \\', text)
-        self.assertLess(text.index("--role screencast-fanout"), text.index("ffmpeg -hide_banner"))
+        fanout = text[text.index("--role screencast-fanout"):]
+        self.assertIn('"${ENCODE[@]}" pipe:1', fanout, "the fanout wraps the one encoder")
         for gone in ("python", "FANOUT"):
             self.assertNotIn(gone, self.SCRIPT.read_text())
 

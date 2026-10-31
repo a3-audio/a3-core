@@ -55,15 +55,16 @@ class ThePortComesFromTheTruth(unittest.TestCase):
 
 class OneEncoderSeveralViewers(unittest.TestCase):
     def test_ffmpeg_writes_to_stdout(self):
-        line = next(l for l in code(SCRIPT).splitlines() if "-f mpegts" in l)
-        self.assertTrue(line.split("\\")[0].rstrip().endswith("-f mpegts pipe:1"), line)
+        text = code(SCRIPT)
+        self.assertIn("-f mpegts)", text, "the encoder ends with the muxer, its target comes last")
+        self.assertIn('"${ENCODE[@]}" pipe:1', text[text.index("--role screencast-fanout"):])
         self.assertNotIn("listen=1", code(SCRIPT))
 
     def test_the_fanout_runs_niced_on_the_free_core(self):
         text = code(SCRIPT)
         self.assertRegex(
             text, r'nice -n 19 taskset -c "\$CPUS" /usr/bin/a3-core --role screencast-fanout')
-        self.assertLess(text.index("--role screencast-fanout"), text.index("ffmpeg -hide_banner"))
+        self.assertIn('"${ENCODE[@]}" pipe:1', text[text.index("--role screencast-fanout"):])
 
     def test_the_unit_says_several_viewers(self):
         description = re.search(r"^Description=(.*)$", UNIT.read_text(), re.M).group(1)
@@ -155,3 +156,23 @@ class TheDependencies(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class APushTargetSendsInsteadOfListening(unittest.TestCase):
+    """2026-10-31: OBS listens on its own machine (udp://@:<port>), each rig machine sends there, so a
+    restarted OBS or machine simply picks the picture up again. The target is per machine, from
+    ~/.config/a3/screencast.env (A3_SCREENCAST_PUSH), never written into the script."""
+
+    def test_the_script_reads_the_push_target(self):
+        self.assertIn("A3_SCREENCAST_PUSH", code(SCRIPT))
+
+    def test_with_a_push_target_ffmpeg_sends_there_without_the_fanout(self):
+        text = code(SCRIPT)
+        push = text.split('if [ -n "${A3_SCREENCAST_PUSH:-}" ]', 1)
+        self.assertEqual(2, len(push), "a branch for the push target")
+        branch = push[1].split("fi", 1)[0]
+        self.assertIn('"$A3_SCREENCAST_PUSH"', branch)
+        self.assertNotIn("screencast-fanout", branch)
+
+    def test_no_address_is_written_into_the_script(self):
+        self.assertIsNone(re.search(r"\d+\.\d+\.\d+\.\d+", code(SCRIPT)))
