@@ -229,7 +229,8 @@ TEST (CheckoutThirdParty, ForeignReuseStanzasAreEntriesAndOursAreNot)
 
 // The tree's last node, "third-party": everything we use from others, each once -- the foreign stanzas of every
 // checked-out repository's REUSE data and every submodule published outside a3-audio (its describe, or its short
-// commit when not checked out). Our own a3-core under a3-stemdeck's third_party/ is a row like any other submodule.
+// commit when not checked out). Our own a3-core under a3-stemdeck's third_party/ is ours, so not third-party -- and as
+// the system already lists a3-core, it is not shown a second time (maintainer, 2026-10-31).
 TEST (SystemCheckout, ThirdPartyIsOneNodeAtTheEndEachEntryOnce)
 {
     const auto repo = juce::File::createTempFile ("a3-third-party-tree");
@@ -287,7 +288,6 @@ TEST (SystemCheckout, ThirdPartyIsOneNodeAtTheEndEachEntryOnce)
                "a3-core|v03.1||https://github.com/a3-audio/a3-core\n"
                "a3-core/a3-beat-analyzer|v03.1||https://github.com/a3-audio/a3-beat-analyzer\n"
                "a3-stemdeck|v03.1||https://github.com/a3-audio/a3-stemdeck\n"
-               "a3-stemdeck/a3-core|v03.0+5||https://github.com/a3-audio/a3-core\n"
                "third-party|||\n"
                "third-party/Airwindows||MIT|\n"
                "third-party/BTrack|1.0.7+1|GPL-3.0|https://github.com/adamstark/BTrack\n"
@@ -299,7 +299,7 @@ TEST (SystemCheckout, ThirdPartyIsOneNodeAtTheEndEachEntryOnce)
     const auto facts = checkout::read (runner, repo);
     for (const auto& entry : checkout::treeOf (facts.rows))
         tree.add (entry.prefix + entry.name);
-    EXPECT_EQ (tree[4], juce::String::fromUTF8 ("└─ third-party")) << "the last node";
+    EXPECT_EQ (tree[3], juce::String::fromUTF8 ("└─ third-party")) << "the last node";
     EXPECT_EQ (tree[tree.size() - 1], juce::String::fromUTF8 ("   └─ kiss_fft"));
     repo.deleteRecursively();
 }
@@ -900,7 +900,7 @@ TEST_F (SystemPageTest, RigRowsKeysAndPlans)
 }
 
 // The tree with its three columns: connectors and names, versions, licences (from fixture folders, as on the rig). The
-// fixture is the real tree's size of 2026-10-31 with the two a3-kicad-lib rows that come next: 29 lines.
+// fixture is the real tree's size of 2026-10-31 with the two a3-kicad-lib rows that come next: 28 lines.
 TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
 {
     const auto repo = juce::File::createTempFile ("a3-about-tree");
@@ -969,6 +969,11 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     runner->answers[git ("a3-stemdeck", "describe --tags --match v* --always ddd")] = { 0, "v03.1-1-gddddddd\n" };
     runner->answers[git ("a3-stemdeck", "ls-tree -r ddd")] = { 0, "160000 commit sep\ta3-stem-separator\n160000 commit cor\tthird_party/a3-core\n" };
     runner->answers[git ("a3-stemdeck/third_party/a3-core", "describe --tags --match v* --always cor")] = { 0, "v03.0-758-gc0ffee1\n" };
+    // a3-stemdeck's own copy of a3-core is the system's a3-core: not listed again.
+    runner->answers[git ("", "config --blob HEAD:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
+        = { 0, "submodule.a3-core.url https://github.com/a3-audio/a3-core\nsubmodule.a3-stemdeck.url https://github.com/a3-audio/a3-stemdeck\n" };
+    runner->answers[git ("a3-stemdeck", "config --blob ddd:.gitmodules --get-regexp ^submodule\\..*\\.url$")]
+        = { 0, "submodule.a3-stem-separator.url ../a3-stem-separator.git\nsubmodule.third_party/a3-core.url https://github.com/a3-audio/a3-core.git\n" };
     runner->answers[git ("a3-stemdeck/a3-stem-separator", "describe --tags --match v* --always sep")] = { 0, "v03.1\n" };
     runner->answers[git ("", "describe --tags --match v* --always HEAD")] = { 0, "v03.0-12-g1234567\n" };
     runner->answers[git ("a3-core", "describe --tags --match v* --always aaa")] = { 0, "v03.0-857-gaaaaaaa\n" };
@@ -1002,21 +1007,21 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
                              "a3-motion|v03.0+855|GPL-3.0\na3-motion pcb|rev v03|CERN-OHL-S\na3-motion housing||CERN-OHL-S|no version\n"
                              "a3-motion firmware|rev v03.0+2|GPL-3.0\na3-motion/a3-motion-ui|v03.0+900|GPL-3.0\na3-motion pcb/a3-kicad-lib|v03.1|\n"
                              "a3-pro-dj|v03.0+2|GPL-3.0\n"
-                             "a3-stemdeck|v03.1+1|GPL-3.0\na3-stemdeck/a3-stem-separator|v03.1|GPL-3.0\na3-stemdeck/a3-core|v03.0+758|\n"
+                             "a3-stemdeck|v03.1+1|GPL-3.0\na3-stemdeck/a3-stem-separator|v03.1|GPL-3.0\n"
                              "third-party|||no version\nthird-party/Airwindows||MIT|no version\nthird-party/BTrack||GPL-3.0|no version\n"
                              "third-party/IEMPluginSuite||GPL-3.0|no version\n"
                              "third-party/JUCE|" + (juce::String (JUCE_MAJOR_VERSION) + "." + juce::String (JUCE_MINOR_VERSION) + "." + juce::String (JUCE_BUILDNUMBER))
                                  + "|AGPL-3.0 OR JUCE-9\nthird-party/kiss_fft|1.3.0|BSD-3-Clause\n"
                              "third-party/Neumann KU 100 HRIR||CC-BY-3.0|no version\nthird-party/platform-espressif32||Apache-2.0|no version\n"
                              "third-party/Roboto||Apache-2.0|no version\nthird-party/SnapMagic MCP3208|2025-11|SnapMagic"));
-    ASSERT_EQ (view.checkoutShown().rows.size(), 29u) << "the real tree's size with the two a3-kicad-lib rows";
+    ASSERT_EQ (view.checkoutShown().rows.size(), 28u) << "the real tree's size with the two a3-kicad-lib rows";
     // Every line fits on the card at the rig size (768x1024): each gets an area of its own, inside the card, and the card
     // ends above the link line. A card cut to the space left would give the last lines empty areas and still end there.
     view.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     ASSERT_EQ (view.cardAreas().size(), 1u);
     const auto card = view.cardAreas()[0];
     const auto areas = view.treeLineAreas();
-    ASSERT_EQ (areas.size(), 30u) << "the A³ System line and the 29 of the tree";
+    ASSERT_EQ (areas.size(), 29u) << "the A³ System line and the 28 of the tree";
     for (size_t i = 0; i < areas.size(); ++i)
     {
         EXPECT_FALSE (areas[i].isEmpty()) << "line " << i << " has no room";

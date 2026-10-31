@@ -3,6 +3,7 @@
 #include "SystemCheckout.h"
 #include <algorithm>
 #include <cstring>
+#include <set>
 
 namespace a3app::checkout
 {
@@ -240,9 +241,19 @@ juce::String parentRowOf (const juce::String& path, const juce::String& repoRow,
     return repoRow;
 }
 
+// A repository the system already lists (one of the umbrella's, or a row above): an embedded copy of it is not a second
+// part (a3-stemdeck's third_party/a3-core is the system's a3-core).
+bool isListed (const juce::String& url, const std::set<juce::String>& systemUrls, const Facts& facts)
+{
+    if (url.isEmpty() || url.startsWith ("../"))
+        return false;
+    return systemUrls.count (url) != 0
+        || std::any_of (facts.rows.begin(), facts.rows.end(), [&url] (const Row& row) { return row.url == url; });
+}
+
 void addNested (CommandRunner& runner, const juce::File& dir, const juce::String& commit, const std::vector<Gitlink>& inners,
                 const juce::String& url, const juce::String& parentName, Facts& facts, std::vector<ThirdParty>& others,
-                const std::vector<PartFolder>& partFolders = {})
+                const std::set<juce::String>& systemUrls, const std::vector<PartFolder>& partFolders = {})
 {
     if (inners.empty())
         return;
@@ -257,18 +268,20 @@ void addNested (CommandRunner& runner, const juce::File& dir, const juce::String
             addForeignLink (runner, dir, inner, innerUrl, others);
             continue;
         }
+        if (isListed (innerUrl, systemUrls, facts))
+            continue;
         facts.rows.push_back ({ name, tagOf (runner, innerDir, inner.commit), innerUrl, codeLicence (innerDir) });
         if (facts.rows.back().tag.isEmpty())
             continue;
         addThirdParties (others, innerDir);
         addNested (runner, innerDir, inner.commit, parseGitlinks (gitOutput (runner, innerDir, { "ls-tree", "-r", inner.commit })),
-                   innerUrl, name, facts, others);
+                   innerUrl, name, facts, others, systemUrls);
     }
 }
 
 // A submodule's row, then its parts (pcb, housing), its firmware's, its ui folder's, then its own submodules at any depth.
 void addSubmodule (CommandRunner& runner, const juce::File& repo, const Gitlink& link, const juce::String& url, Facts& facts,
-                   std::vector<ThirdParty>& others)
+                   std::vector<ThirdParty>& others, const std::set<juce::String>& systemUrls)
 {
     if (! isOurs (url))
     {
@@ -308,7 +321,7 @@ void addSubmodule (CommandRunner& runner, const juce::File& repo, const Gitlink&
                                 url.isNotEmpty() ? url + "/tree/HEAD/" + uiFolder : juce::String(),
                                 licenceOfFolder (dir, uiFolder) });
     }
-    addNested (runner, dir, link.commit, inners, url, rowName, facts, others, partFolders);
+    addNested (runner, dir, link.commit, inners, url, rowName, facts, others, systemUrls, partFolders);
 }
 
 // The JUCE this program is compiled against, from JUCE's own header at build time.
@@ -569,9 +582,12 @@ Facts read (CommandRunner& runner, const juce::File& repo)
     const auto urls = urlsAt (runner, repo, "HEAD", {});
     std::vector<ThirdParty> others;
     addThirdParties (others, repo);
+    std::set<juce::String> systemUrls;
+    for (const auto& [path, url] : urls)
+        systemUrls.insert (url);
     // Every submodule of ours is a part of the release since 2026-10-31 (stemseparator too, as stemdeck's).
     for (const auto& link : links)
-        addSubmodule (runner, repo, link, urlOf (urls, link.path), facts, others);
+        addSubmodule (runner, repo, link, urlOf (urls, link.path), facts, others, systemUrls);
     addThirdPartyNode (std::move (others), facts);
     return facts;
 }

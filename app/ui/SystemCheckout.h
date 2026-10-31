@@ -100,7 +100,8 @@ inline constexpr const char* thirdPartyNode = "third-party";
 // those at any depth and in any folder (`ls-tree -r`; a3-mixer's hardware/a3-kicad-lib, a3-stemdeck's a3-stem-separator),
 // each named "<its repository's row>/<last path component>", and the firmware of a3-motion and a3-mixer as the tag of the
 // last commit that changed it. A submodule inside a part's folder (pcb, housing, firmware, ui folder) is named under that
-// part: "a3-mixer pcb/a3-kicad-lib". A submodule published outside a3-audio is no row: it and the third parties of every
+// part: "a3-mixer pcb/a3-kicad-lib". A submodule of a repository the system already lists (same url: a3-stemdeck's
+// third_party/a3-core) is not shown again. A submodule published outside a3-audio is no row: it and the third parties of every
 // checked-out repository's REUSE data close the rows as the node "third-party", each entry once, by name.
 Facts read (CommandRunner&, const juce::File& repo);
 
