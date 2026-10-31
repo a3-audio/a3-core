@@ -56,6 +56,18 @@ class TheGuardSees(unittest.TestCase):
             labels = {label for label, _, _ in second_truth.findings({"stemdeck": stemdeck}, PORTS)}
         self.assertEqual(labels, {"stemdeck/Source/net.cpp"})
 
+    def test_a3_cores_beat_analyzer_submodule_is_guarded_as_its_own_repo(self):
+        # The beat-analyzer became a3-core's submodule on 2026-10-31: under the
+        # a3-core label its allowed words would read as second truths.
+        with tempfile.TemporaryDirectory() as tmp:
+            core = Path(tmp) / "a3-core"
+            for relative in ("a3-beat-analyzer/src/main.cpp", "platform-config/net.sh"):
+                path = core / relative
+                path.parent.mkdir(parents=True)
+                path.write_text('core="192.168.8.10"\n')
+            labels = {label for label, _, _ in second_truth.findings({"a3-core": core}, PORTS)}
+        self.assertEqual(labels, {"a3-core/platform-config/net.sh"})
+
     def test_an_address_in_python(self):
         self.assertTrue(self.found_in("desk.py", 'send("/channel/1/volume", 0.5)\n'))
 
@@ -165,10 +177,14 @@ class TheSystemSaysNone(unittest.TestCase):
 
     def test_the_checkouts_are_the_umbrellas_submodules(self):
         """Since 2026-10-04 ~/a3-system is the umbrella's checkout: the repos
-        sit beside a3-core, and a3-motion-ui is a3-motion's ui."""
+        sit beside a3-core. Since 2026-10-31 every submodule path is its
+        repository's name: a3-motion/a3-motion-ui, a3-stemdeck, a3-core's own
+        a3-beat-analyzer; the desk, a3-mixer/a3-mixer-ui, is scanned as part
+        of a3-mixer."""
         repos = second_truth.checkouts(ROOT)
-        self.assertEqual(repos["a3-motion-ui"], ROOT.parent / "a3-motion" / "ui")
-        self.assertEqual(repos["stemdeck"], ROOT.parent / "stemdeck")
+        self.assertEqual(repos["a3-motion-ui"], ROOT.parent / "a3-motion" / "a3-motion-ui")
+        self.assertEqual(repos["stemdeck"], ROOT.parent / "a3-stemdeck")
+        self.assertEqual(repos["beat-analyzer"], ROOT / "a3-beat-analyzer")
 
     def test_no_second_truth_anywhere(self):
         repos = second_truth.checkouts(ROOT)

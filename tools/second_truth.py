@@ -19,14 +19,21 @@ import sys
 from pathlib import Path
 
 #: The repos, by name, and where each sits in the a3-system umbrella's
-#: checkout (~/a3-system since 2026-10-04), relative to it.
+#: checkout (~/a3-system since 2026-10-04), relative to it. a3-mixer's ui
+#: (a3-mixer-ui, its submodule a3-mixer-ui since 2026-10-31) is read as part
+#: of a3-mixer. Every submodule path is its repository's name since then.
 REPOS = ("a3-core", "a3-motion-ui", "a3-mixer", "beat-analyzer", "stemdeck", "a3-prodj")
-CHECKOUT_PATHS = {"a3-motion-ui": "a3-motion/ui"}
+#: StemDeck's checkout is a3-stemdeck since 2026-10-31 (the repository's name);
+#: its labels below stay "stemdeck/...".
+CHECKOUT_PATHS = {"a3-motion-ui": "a3-motion/a3-motion-ui", "stemdeck": "a3-stemdeck"}
+#: Repos that are a3-core's own submodules (since 2026-10-31), inside it.
+IN_CORE = {"beat-analyzer": "a3-beat-analyzer"}
 
 
 def checkouts(root):
-    """Each repo's checkout, beside the a3-core checkout `root`."""
-    return {name: root.parent / CHECKOUT_PATHS.get(name, name) for name in REPOS}
+    """Each repo's checkout: beside the a3-core checkout `root`, or in it."""
+    return {name: root / IN_CORE[name] if name in IN_CORE else root.parent / CHECKOUT_PATHS.get(name, name)
+            for name in REPOS}
 
 CODE = {".py", ".cpp", ".cc", ".h", ".hh", ".service", ".sh"}
 
@@ -41,8 +48,10 @@ SKIPPED_DIRS = {"tests", "test", "a3-motion-tests", "build", "build-make",
 #: program joined a3-core on 2026-10-27; a3-engine was never in REPOS, so its
 #: tree was never guarded. Bringing it under the guard is separate work.
 #: Not a SKIPPED_DIRS entry: other repos have a src/ that stays guarded.
-#: StemDeck's third_party holds a3-core itself (and IEM) as a submodule.
-SKIPPED_REPO_DIRS = {"a3-core": ("src", "app", "bench", "host", "third_party", "tools/parity"),
+#: StemDeck's third_party holds a3-core itself (and IEM) as a submodule;
+#: a3-core's beat-analyzer is guarded under its own name.
+SKIPPED_REPO_DIRS = {"a3-core": ("src", "app", "bench", "host", "third_party", "tools/parity",
+                                 *IN_CORE.values()),
                      "stemdeck": ("third_party",)}
 
 #: The families of our words. Not `fx`: that family became `filter` on
@@ -94,9 +103,9 @@ ALLOWED_LITERALS = {
         "the port Motion knows before it has a truth (spec truth-from-core)",
     ("a3-motion-ui/src/a3-motion-engine/TruthKeeper.hh", "/core/here"):
         "the word Motion hears before it has a truth (spec truth-from-core)",
-    ("a3-mixer/ui/Source/shared/TruthKeeper.h", 7790):
+    ("a3-mixer/a3-mixer-ui/Source/shared/TruthKeeper.h", 7790):
         "the port the virtual desk knows before it has a truth (spec truth-from-core)",
-    ("a3-mixer/ui/Source/shared/TruthKeeper.h", "/core/here"):
+    ("a3-mixer/a3-mixer-ui/Source/shared/TruthKeeper.h", "/core/here"):
         "the word the virtual desk hears before it has a truth (spec truth-from-core)",
     ("stemdeck/Source/DataPaths.cpp", "/stemdeck"):
         "the last part of StemDeck's data folder, ~/.local/share/stemdeck, not an address",
