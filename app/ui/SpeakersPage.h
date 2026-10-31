@@ -14,7 +14,12 @@ namespace a3app
 // SAVE TO ZONE: IEM's calculateDecoder and saveConfigurationToFile make the file, withZoneDecoder writes the
 // user variant and makes it the pending edit for the shown zone only; Save restarts the engine. A noise button plays a 1 s pink-noise
 // burst in the shown zone of the running engine (its running decoder), before its level stage and gate.
-class SpeakersPage final : public juce::Component, public CardPage
+//
+// IEM's 3D view is an OpenGL context: on X it is a native child window that paints over every JUCE component, the
+// window's own overlays included (the Sub dropdown's list, rig 2026-10-31). While an overlay is open in the window -- a
+// Dropdown's list on the window, a question (AlertWindow) on its content -- the 3D view is hidden; it is back when the
+// last one closes.
+class SpeakersPage final : public juce::Component, public CardPage, private juce::ComponentListener, private juce::AsyncUpdater
 {
 public:
     // `userRoot`: where user variants are written (<configDir>/engine/spatial); empty: SAVE TO ZONE refuses.
@@ -31,10 +36,19 @@ public:
     juce::AudioProcessorEditor* editor() { return iemEditor.get(); }
     bool listensForOsc() const { return designer.listensForOsc(); }
     const juce::Label& messageLabel() const { return message; }
+    // The 3D view (IEM's OpenGL view), nullptr without an editor; hidden while an overlay is open.
+    juce::Component* openGlView() const;
+    bool overlayOpen() const;
+    void parentHierarchyChanged() override;
     void resized() override;
     void paint (juce::Graphics&) override;
 
 private:
+    void componentChildrenChanged (juce::Component&) override;
+    void componentBeingDeleted (juce::Component&) override;
+    void handleAsyncUpdate() override { showOrHideTheGlView(); }
+    void watchTheWindow();
+    void showOrHideTheGlView();
     void load();
     void placeEditor (juce::Rectangle<int> area);
     void showParameters();
@@ -55,5 +69,6 @@ private:
     juce::Label title, subCaption, crossoverCaption, message;
     Dropdown sub;
     juce::Slider crossover { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
+    std::vector<juce::Component::SafePointer<juce::Component>> watched;   // the window and its content
 };
 }

@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "SpeakersPage.h"
 #include "ConfigEdits.h"
+#include <functional>
+#include <juce_opengl/juce_opengl.h>
 
 namespace a3app
 {
@@ -97,7 +99,77 @@ SpeakersPage::SpeakersPage (HostView& v, juce::File root) : view (v), userRoot (
 
 SpeakersPage::~SpeakersPage()
 {
+    cancelPendingUpdate();
+    for (auto& w : watched)
+        if (w != nullptr)
+            w->removeComponentListener (this);
     iemEditor.reset();   // before the designer it edits
+}
+
+juce::Component* SpeakersPage::openGlView() const
+{
+    if (iemEditor == nullptr)
+        return nullptr;
+    std::function<juce::Component* (juce::Component&)> find = [&find] (juce::Component& parent) -> juce::Component* {
+        for (auto* child : parent.getChildren())
+        {
+            if (dynamic_cast<juce::OpenGLRenderer*> (child) != nullptr)
+                return child;
+            if (auto* inner = find (*child))
+                return inner;
+        }
+        return nullptr;
+    };
+    return find (*iemEditor);
+}
+
+// An overlay of the window: a Dropdown's list (on the window) or a question (an AlertWindow, on the window's content).
+bool SpeakersPage::overlayOpen() const
+{
+    for (const auto& w : watched)
+        if (w != nullptr)
+            for (auto* child : w->getChildren())
+                if (child->isVisible() && (dynamic_cast<DropdownList*> (child) != nullptr || dynamic_cast<juce::AlertWindow*> (child) != nullptr))
+                    return true;
+    return false;
+}
+
+void SpeakersPage::parentHierarchyChanged() { watchTheWindow(); }
+
+void SpeakersPage::watchTheWindow()
+{
+    for (auto& w : watched)
+        if (w != nullptr)
+            w->removeComponentListener (this);
+    watched.clear();
+    auto* window = getTopLevelComponent();
+    if (window == nullptr || window == this)
+        return;
+    watched.emplace_back (window);
+    if (auto* resizable = dynamic_cast<juce::ResizableWindow*> (window))
+        if (auto* content = resizable->getContentComponent())
+            watched.emplace_back (content);
+    for (auto& w : watched)
+        w->addComponentListener (this);
+    showOrHideTheGlView();
+}
+
+// At once (an overlay opening must not be painted over for a frame), and once more when the change has settled; the
+// window's tick (refresh) checks again, so a removal JUCE did not report brings the view back within a tick.
+void SpeakersPage::componentChildrenChanged (juce::Component&)
+{
+    showOrHideTheGlView();
+    triggerAsyncUpdate();
+}
+void SpeakersPage::componentBeingDeleted (juce::Component& gone)
+{
+    gone.removeComponentListener (this);
+}
+
+void SpeakersPage::showOrHideTheGlView()
+{
+    if (auto* view = openGlView(); view != nullptr && view->isVisible() == overlayOpen())
+        view->setVisible (! overlayOpen());
 }
 
 void SpeakersPage::showZone (a3::SpeakerZone zone)
@@ -126,6 +198,7 @@ void SpeakersPage::load()
     iemEditor = designer.createEditor (palette::raised);   // the energy map's ground is the card's
     look::stripTooltips (*iemEditor);   // IEM's own TooltipWindow then has nothing to show
     editorCard.addAndMakeVisible (*iemEditor);
+    showOrHideTheGlView();
     mainKey.setToggleState (shown == a3::SpeakerZone::main, juce::dontSendNotification);
     boothKey.setToggleState (shown == a3::SpeakerZone::booth, juce::dontSendNotification);
     showParameters();
@@ -186,6 +259,7 @@ void SpeakersPage::saveToZone()
 
 void SpeakersPage::refresh()
 {
+    showOrHideTheGlView();   // the window's tick as well: JUCE does not tell the window's listeners about every removal
     if (zoneSpatialDirectory (view.config(), shown) != loadedFrom)
         load();
     else if (iemEditor != nullptr)

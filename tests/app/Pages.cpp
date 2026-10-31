@@ -1464,6 +1464,46 @@ TEST_F (Pages, SpeakersEditorIsScaledIntoThePage)
                                           window.getContentComponent()->getHeight()));
 }
 
+// IEM's 3D view is an OpenGL window that paints over everything (rig, 2026-10-31: over the Sub dropdown's list): while a
+// dropdown's list or a question is open in the window, the 3D view is hidden; closed, it is back.
+TEST_F (Pages, SpeakersHideTheGlViewUnderAnOverlay)
+{
+    SpeakerRig rig;
+    a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, {}, {}, rig.userRoot);
+    window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    window.showPage ("SPEAKERS");
+    auto* page = firstDescendant<a3app::SpeakersPage> (*shownPage (window));
+    ASSERT_NE (page, nullptr);
+    auto* view = page->openGlView();
+    ASSERT_NE (view, nullptr);
+    EXPECT_TRUE (view->isVisible());
+    auto* sub = firstDescendant<a3app::Dropdown> (*page);
+    ASSERT_NE (sub, nullptr);
+    sub->showPopup();
+    ASSERT_NE (sub->openList(), nullptr);
+    EXPECT_FALSE (view->isVisible()) << "the list is not painted over";
+    expectPainted (a3apptest::snapshotAt (*window.getContentComponent(), "system3-speakers-dropdown", window.getContentComponent()->getWidth(),
+                                          window.getContentComponent()->getHeight()));
+    sub->openList()->dismiss();
+    juce::MessageManager::getInstance()->runDispatchLoopUntil (50);
+    window.refreshNow();   // the window's tick
+    EXPECT_EQ (sub->openList(), nullptr);
+    EXPECT_FALSE (page->overlayOpen());
+    EXPECT_TRUE (view->isVisible()) << "back once the list is closed";
+
+    // A question in the window (an AlertWindow on its content) the same; an AlertWindow needs an X display to be built.
+    const char* display = std::getenv ("DISPLAY");
+    if (display == nullptr || *display == '\0')
+        return;
+    auto* question = new juce::AlertWindow ("q", {}, juce::MessageBoxIconType::NoIcon);
+    window.getContentComponent()->addAndMakeVisible (question);
+    EXPECT_FALSE (view->isVisible());
+    delete question;
+    juce::MessageManager::getInstance()->runDispatchLoopUntil (50);
+    window.refreshNow();
+    EXPECT_TRUE (view->isVisible());
+}
+
 // No tooltips (2026-10-30): no Tooltips switch, and the window.settings key "tooltips" from before is ignored and kept.
 TEST_F (Pages, TheTooltipsKeyIsIgnored)
 {
