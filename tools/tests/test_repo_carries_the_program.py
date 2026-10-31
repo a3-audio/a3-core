@@ -47,13 +47,17 @@ class RepoCarriesTheProgramTest(unittest.TestCase):
             self.assertTrue(path.is_file(), script)
             self.assertTrue(os.access(path, os.X_OK), script + " not executable")
 
-    def test_iem_is_the_only_submodule(self):
+    def test_iem_and_the_beat_analyzer_are_the_only_submodules(self):
+        # The beat-analyzer joined on 2026-10-31, a sibling in the a3-audio
+        # organisation; the build reads only IEM.
         modules = (ROOT / ".gitmodules").read_text()
-        self.assertEqual(modules.count("path = "), 1)
+        self.assertEqual(modules.count("path = "), 2)
         self.assertIn("path = " + IEM_PATH, modules)
         self.assertIn("url = " + IEM_URL, modules)
+        self.assertIn("path = a3-beat-analyzer\n\turl = ../a3-beat-analyzer.git", modules)
         entry = git("ls-tree", "HEAD", IEM_PATH).stdout.split()
         self.assertEqual(entry[:3], ["160000", "commit", IEM_COMMIT])
+        self.assertEqual(git("ls-tree", "HEAD", "a3-beat-analyzer").stdout.split()[:2], ["160000", "commit"])
 
     def test_versions_count_from_a3_cores_tag(self):
         described = git("describe", "--tags", "--long", "--match", "v*", "HEAD")

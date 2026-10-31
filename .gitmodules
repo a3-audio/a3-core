@@ -1,3 +1,7 @@
 [submodule "third_party/IEMPluginSuite"]
 	path = third_party/IEMPluginSuite
 	url = https://git.iem.at/audioplugins/IEMPluginSuite.git
+
+[submodule "a3-beat-analyzer"]
+	path = a3-beat-analyzer
+	url = ../a3-beat-analyzer.git

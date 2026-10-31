@@ -8,6 +8,12 @@ A³ Motion control it over OSC. This repository *is* the deployment: the `.deb`
 package tree under `platform-config/debian-x86_64/a3-core/`, not application
 source.
 
+The beat-analyzer, [a3-beat-analyzer](https://github.com/a3-audio/a3-beat-analyzer),
+is this repository's submodule `a3-beat-analyzer` (since 2026-10-31) and ships
+as the package `beat-analyzer`; `git submodule update --init a3-beat-analyzer`
+checks it out.
+The C++ build needs only `third_party/IEMPluginSuite`, not the beat-analyzer.
+
 ![Four StemDecks around the A³ desk and A³ Motion, each deck playing its own track](https://a3-audio.github.io/img/a3-setup.jpg)
 
 **Documentation: https://a3-audio.github.io/a3-doc/**
