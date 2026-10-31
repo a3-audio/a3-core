@@ -94,9 +94,9 @@ ALLOWED_LITERALS = {
         "the port Motion knows before it has a truth (spec truth-from-core)",
     ("a3-motion-ui/src/a3-motion-engine/TruthKeeper.hh", "/core/here"):
         "the word Motion hears before it has a truth (spec truth-from-core)",
-    ("a3-mixer/app/Source/shared/TruthKeeper.h", 7790):
+    ("a3-mixer/ui/Source/shared/TruthKeeper.h", 7790):
         "the port the virtual desk knows before it has a truth (spec truth-from-core)",
-    ("a3-mixer/app/Source/shared/TruthKeeper.h", "/core/here"):
+    ("a3-mixer/ui/Source/shared/TruthKeeper.h", "/core/here"):
         "the word the virtual desk hears before it has a truth (spec truth-from-core)",
     ("stemdeck/Source/DataPaths.cpp", "/stemdeck"):
         "the last part of StemDeck's data folder, ~/.local/share/stemdeck, not an address",
