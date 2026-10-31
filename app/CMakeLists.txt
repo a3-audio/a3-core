@@ -10,7 +10,7 @@ add_library(a3-engine-app-lib STATIC EngineHost.cpp OscVocabulary.cpp HelloSende
     ui/AudioPage.cpp ui/ClockPanel.cpp ui/StatusPage.cpp ui/MainWindow.cpp
     ui/ChannelsPage.cpp ui/ZonesPage.cpp ui/SpeakersPage.cpp ui/IoPage.cpp ui/CalibrationPage.cpp ui/FilterCard.cpp ui/SaveBar.cpp
     ui/KeyboardPolicy.cpp ui/OnboardLink.cpp ui/OnScreenKeyboard.cpp ui/look/Dropdown.cpp ui/look/A3LookAndFeel.cpp ui/SubPages.cpp ui/WorkspaceSwitch.cpp
-    ui/SystemAbout.cpp ui/SystemCheckout.cpp ui/RigModel.cpp ui/RigPlan.cpp ui/SystemProbe.cpp ui/SystemPage.cpp XrunCount.cpp RoundTripProbe.cpp RoundTripLoop.cpp
+    ui/SystemAbout.cpp ui/SystemCheckout.cpp ui/RigModel.cpp ui/RigPlan.cpp ui/SystemProbe.cpp ui/SystemPage.cpp ui/NativeWindow.cpp XrunCount.cpp RoundTripProbe.cpp RoundTripLoop.cpp
     AudioTiming.cpp TimingControl.cpp CommandRunner.cpp SystemDevice.cpp)
 target_include_directories(a3-engine-app-lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/ui ${CMAKE_CURRENT_SOURCE_DIR}/ui/look)
 target_link_libraries(a3-engine-app-lib PUBLIC a3-engine a3-links a3-engine-bench-lib a3-core-lib a3-clock)

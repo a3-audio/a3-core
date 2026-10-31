@@ -36,7 +36,8 @@ public:
     juce::AudioProcessorEditor* editor() { return iemEditor.get(); }
     bool listensForOsc() const { return designer.listensForOsc(); }
     const juce::Label& messageLabel() const { return message; }
-    // The 3D view (IEM's OpenGL view), nullptr without an editor; hidden while an overlay is open.
+    // The 3D view (IEM's OpenGL view), nullptr without an editor; hidden while an overlay is open. The editor exists only
+    // while the page is shown in its window (refresh).
     juce::Component* openGlView() const;
     bool overlayOpen() const;
     void parentHierarchyChanged() override;
@@ -48,6 +49,8 @@ private:
     void componentBeingDeleted (juce::Component&) override;
     void handleAsyncUpdate() override { showOrHideTheGlView(); }
     void watchTheWindow();
+    void makeEditor();   // a fresh IEM editor on the designer, placed in the card
+    bool shownInTheWindow() const;
     void showOrHideTheGlView();
     void load();
     void placeEditor (juce::Rectangle<int> area);

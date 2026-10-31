@@ -35,7 +35,7 @@ class RecolourGround final : public juce::ImageEffectFilter
 {
 public:
     explicit RecolourGround (juce::Colour toUse) : ground (toUse) {}
-    void applyEffect (juce::Image& image, juce::Graphics& g, float scaleFactor, float alpha) override
+    void applyEffect (juce::Image& image, juce::Graphics& g, float /* scaleFactor: g is scaled already */, float alpha) override
     {
         static const juce::Colour iemGround { 0xff2d2d2d };
         juce::Image::BitmapData pixels (image, juce::Image::BitmapData::readWrite);
@@ -46,8 +46,11 @@ public:
                 if (c.getAlpha() > 0 && c.withAlpha ((juce::uint8) 255) == iemGround)
                     pixels.setPixelColour (x, y, ground.withAlpha (c.getAlpha()));
             }
+        // `g` is already scaled by 1 / scaleFactor (JUCE's effect contract, as its GlowEffect draws): the image goes in at
+        // its own size. Drawn into its size / scaleFactor it shrank wherever the scale was not 1 -- on the rig (1.25 and the
+        // page's transform) the energy map's grid was cut short at its right (2026-10-31).
         g.setOpacity (alpha);
-        g.drawImage (image, juce::Rectangle<float> ((float) image.getWidth(), (float) image.getHeight()) / scaleFactor);
+        g.drawImageAt (image, 0, 0);
     }
 
 private:

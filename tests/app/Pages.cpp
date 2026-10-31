@@ -1464,6 +1464,153 @@ TEST_F (Pages, SpeakersEditorIsScaledIntoThePage)
                                           window.getContentComponent()->getHeight()));
 }
 
+namespace
+{
+// The screen's top left 768 x 1024 (the window's place) as a PNG under A3_SNAPSHOT_DIR, by ffmpeg's x11grab (xwd cannot
+// read the OpenGL view's colormap); nothing without the directory.
+void screenshot (const juce::String& name)
+{
+    const char* dir = std::getenv ("A3_SNAPSHOT_DIR");
+    const char* display = std::getenv ("DISPLAY");
+    if (dir == nullptr || display == nullptr)
+        return;
+    const auto png = juce::File (dir).getChildFile (name + ".png");
+    const auto command = juce::String ("ffmpeg -loglevel error -y -f x11grab -video_size 768x1024 -i '") + display + "+0,0' -frames:v 1 '"
+                         + png.getFullPathName() + "'";
+    [[maybe_unused]] const auto result = std::system (command.toRawUTF8());
+}
+
+void settle (a3app::MainWindow& window, int millis)
+{
+    for (int waited = 0; waited < millis; waited += 50)
+    {
+        window.refreshNow();
+        juce::MessageManager::getInstance()->runDispatchLoopUntil (50);
+    }
+}
+}
+
+// On a real X display (2026-10-31, rig: the 3D view stayed gone after a dropdown closed): the 3D view is hidden while
+// the Sub list is open and shown -- its OpenGL context attached again -- after either way of closing it: a tap beside
+// the list and a chosen row.
+TEST_F (Pages, SpeakersGlViewComesBackOnARealDisplay)
+{
+    const char* display = std::getenv ("DISPLAY");
+    if (display == nullptr || *display == '\0')
+        GTEST_SKIP() << "needs an X display (e.g. DISPLAY=:2)";
+    SpeakerRig rig;
+    a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, true, [] {}, {}, {}, rig.userRoot);
+    // The screen's user area in JUCE's units: on a 768 x 1024 display at 120 dpi (the rig's, Xvfb -dpi 120) that is
+    // 614 x 819 at JUCE's scale 1.25, as on the rig.
+    const auto screen = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay()->userArea;
+    window.open();
+    window.setBounds (screen);
+    window.showPage ("SPEAKERS");
+    settle (window, 1500);
+    auto* editorPage = firstDescendant<a3app::SpeakersPage> (*shownPage (window));
+    ASSERT_NE (editorPage, nullptr);
+    ASSERT_NE (editorPage->editor(), nullptr);
+    const auto editorArea = areaIn (*editorPage, *editorPage->editor());
+    EXPECT_TRUE (editorPage->getLocalBounds().contains (editorArea)) << "the whole editor in the page at " << screen.toString();
+    for (auto* part : descendants (*editorPage->editor()))
+        if (part->isVisible())
+            EXPECT_TRUE (editorArea.expanded (1).contains (areaIn (*editorPage, *part))) << areaIn (*editorPage, *part).toString();
+    auto* page = firstDescendant<a3app::SpeakersPage> (*shownPage (window));
+    ASSERT_NE (page, nullptr);
+    auto* sub = firstDescendant<a3app::Dropdown> (*page);
+    ASSERT_NE (sub, nullptr);
+    const auto attached = [&page] {
+        auto* view = page->openGlView();
+        auto* context = view != nullptr ? juce::OpenGLContext::getContextAttachedTo (*view) : nullptr;
+        return view != nullptr && view->isShowing() && context != nullptr && context->isAttached();
+    };
+    EXPECT_TRUE (attached());
+    screenshot ("system3-real-speakers");
+    for (const auto* way : { "tap beside", "row chosen" })
+    {
+        sub->showPopup();
+        settle (window, 500);
+        ASSERT_NE (sub->openList(), nullptr) << way;
+        EXPECT_FALSE (page->openGlView()->isVisible()) << way;
+        screenshot (juce::String ("system3-real-speakers-open-") + (way[0] == 't' ? "tap" : "row"));
+        if (way[0] == 't')
+            sub->openList()->dismiss();
+        else
+            sub->openList()->choose (2);
+        settle (window, 1000);
+        EXPECT_EQ (sub->openList(), nullptr) << way;
+        EXPECT_TRUE (attached()) << way << ": shown, its context attached";
+        screenshot (juce::String ("system3-real-speakers-closed-") + (way[0] == 't' ? "tap" : "row"));
+    }
+
+    // Another workspace shown: i3 unmaps this one's frame, which JUCE does not report (isShowing() stays true). With
+    // A3_TEST_I3 set (an Xvfb running i3: the test switches its workspaces 1 and 2) by i3's own switch, else by unmapping
+    // the window; the editor -- and its OpenGL context -- goes, and comes back with the window.
+    auto* peer = window.getPeer();
+    ASSERT_NE (peer, nullptr);
+    const bool underI3 = std::getenv ("A3_TEST_I3") != nullptr;
+    if (underI3)
+        EXPECT_EQ (std::system ("i3-msg -q workspace 2"), 0);
+    else
+        peer->setVisible (false);
+    settle (window, 300);
+    EXPECT_EQ (page->editor(), nullptr) << "no editor while the window is not on the screen" << (underI3 ? " (i3)" : "");
+    if (underI3)
+        EXPECT_EQ (std::system ("i3-msg -q workspace 1"), 0);
+    else
+        peer->setVisible (true);
+    settle (window, 1000);
+    EXPECT_TRUE (attached()) << "back with the window";
+    screenshot ("system3-real-speakers-workspace-back");
+}
+
+// IEM's editor, and with it the 3D view's OpenGL context, exists only while SPEAKERS is shown (2026-10-31): another page
+// shown, nothing of it draws or holds the GPU; back, a fresh one is there.
+TEST_F (Pages, SpeakersHoldNoOpenGlWhileAnotherPageIsShown)
+{
+    SpeakerRig rig;
+    a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, {}, {}, rig.userRoot);
+    window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    window.showPage ("SPEAKERS");
+    window.refreshNow();
+    auto* page = firstDescendant<a3app::SpeakersPage> (*shownPage (window));
+    ASSERT_NE (page, nullptr);
+    EXPECT_NE (page->openGlView(), nullptr);
+    window.showPage ("AUDIO");
+    window.refreshNow();
+    EXPECT_EQ (page->editor(), nullptr) << "no editor, no OpenGL context, while AUDIO is shown";
+    window.showPage ("ZONES");
+    window.refreshNow();
+    EXPECT_EQ (page->editor(), nullptr) << "nor while SPEAKERS shows its ZONES";
+    window.showPage ("SPEAKERS");
+    buttonsLabelled (*shownPage (window), "SPEAKERS").front()->triggerClick();   // the sub-page, not ZONES
+    juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
+    window.refreshNow();
+    EXPECT_NE (page->openGlView(), nullptr) << "back with SPEAKERS";
+}
+
+// The energy map's grid, recoloured to the card by a component effect, is drawn whole at any scale (rig, 2026-10-31: at
+// the display's 1.25 and the page's transform it was cut short at its right): at twice the size, the corner outside
+// its ellipse is the card's colour, not left empty.
+TEST_F (Pages, SpeakersEnergyMapIsWholeAtAnyScale)
+{
+    SpeakerRig rig;
+    a3app::SpeakersPage page (rig.view, rig.userRoot);
+    page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
+    juce::Component* grid = nullptr;
+    for (auto* part : descendants (*page.editor()))
+        if (part->getComponentEffect() != nullptr)
+            grid = part;
+    ASSERT_NE (grid, nullptr) << "the recoloured grid";
+    for (const float scale : { 0.8f, 1.0f, 1.25f, 2.0f })   // 0.8: the page's transform on the rig
+    {
+        const auto image = grid->createComponentSnapshot (grid->getLocalBounds(), true, scale);
+        const auto corner = image.getPixelAt (image.getWidth() - 2, image.getHeight() - 2);
+        EXPECT_EQ (corner.withAlpha ((juce::uint8) 255), a3app::palette::raised) << "scale " << scale << ": " << corner.toString();
+        EXPECT_GT (corner.getAlpha(), 200) << "scale " << scale;
+    }
+}
+
 // IEM's 3D view is an OpenGL window that paints over everything (rig, 2026-10-31: over the Sub dropdown's list): while a
 // dropdown's list or a question is open in the window, the 3D view is hidden; closed, it is back.
 TEST_F (Pages, SpeakersHideTheGlViewUnderAnOverlay)
@@ -1489,7 +1636,8 @@ TEST_F (Pages, SpeakersHideTheGlViewUnderAnOverlay)
     window.refreshNow();   // the window's tick
     EXPECT_EQ (sub->openList(), nullptr);
     EXPECT_FALSE (page->overlayOpen());
-    EXPECT_TRUE (view->isVisible()) << "back once the list is closed";
+    ASSERT_NE (page->openGlView(), nullptr);
+    EXPECT_TRUE (page->openGlView()->isVisible()) << "back once the list is closed (a fresh editor)";
 
     // A question in the window (an AlertWindow on its content) the same; an AlertWindow needs an X display to be built.
     const char* display = std::getenv ("DISPLAY");
@@ -1497,11 +1645,11 @@ TEST_F (Pages, SpeakersHideTheGlViewUnderAnOverlay)
         return;
     auto* question = new juce::AlertWindow ("q", {}, juce::MessageBoxIconType::NoIcon);
     window.getContentComponent()->addAndMakeVisible (question);
-    EXPECT_FALSE (view->isVisible());
+    EXPECT_FALSE (page->openGlView()->isVisible());
     delete question;
     juce::MessageManager::getInstance()->runDispatchLoopUntil (50);
     window.refreshNow();
-    EXPECT_TRUE (view->isVisible());
+    EXPECT_TRUE (page->openGlView()->isVisible());
 }
 
 // No tooltips (2026-10-30): no Tooltips switch, and the window.settings key "tooltips" from before is ignored and kept.

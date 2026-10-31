@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "SpeakersPage.h"
 #include "ConfigEdits.h"
+#include "NativeWindow.h"
 #include <functional>
 #include <juce_opengl/juce_opengl.h>
 
@@ -158,8 +159,9 @@ void SpeakersPage::watchTheWindow()
 // window's tick (refresh) checks again, so a removal JUCE did not report brings the view back within a tick.
 void SpeakersPage::componentChildrenChanged (juce::Component&)
 {
-    showOrHideTheGlView();
-    triggerAsyncUpdate();
+    if (overlayOpen())
+        showOrHideTheGlView();   // hidden before the overlay paints
+    triggerAsyncUpdate();        // shown again outside JUCE's removal: that makes a new editor
 }
 void SpeakersPage::componentBeingDeleted (juce::Component& gone)
 {
@@ -168,8 +170,17 @@ void SpeakersPage::componentBeingDeleted (juce::Component& gone)
 
 void SpeakersPage::showOrHideTheGlView()
 {
-    if (auto* view = openGlView(); view != nullptr && view->isVisible() == overlayOpen())
-        view->setVisible (! overlayOpen());
+    auto* view = openGlView();
+    if (view == nullptr || view->isVisible() != overlayOpen())
+        return;
+    if (overlayOpen())
+        return view->setVisible (false);
+    // Shown again, a hidden view's OpenGL context is attached anew: IEM's LoudspeakerVisualizer builds new shaders in
+    // newOpenGLContextCreated but sets their projection and view matrices only when its viewHasChanged flag is up, which
+    // only resized() and a drag raise -- so every vertex lands on one point (the rig and a real display, 2026-10-31: the
+    // 3D view "did not come back", a dot was left). A fresh editor draws as at the start; the layout lives in the
+    // processor, so nothing is lost.
+    makeEditor();
 }
 
 void SpeakersPage::showZone (a3::SpeakerZone zone)
@@ -195,14 +206,22 @@ void SpeakersPage::load()
         designer.setLoudspeakers ({});
     sayOutcome (message, loaded.failed() ? decoderFile.getFullPathName() + ": " + loaded.getErrorMessage() : juce::String(), loaded.wasOk());
 
-    iemEditor = designer.createEditor (palette::raised);   // the energy map's ground is the card's
-    look::stripTooltips (*iemEditor);   // IEM's own TooltipWindow then has nothing to show
-    editorCard.addAndMakeVisible (*iemEditor);
-    showOrHideTheGlView();
+    makeEditor();
     mainKey.setToggleState (shown == a3::SpeakerZone::main, juce::dontSendNotification);
     boothKey.setToggleState (shown == a3::SpeakerZone::booth, juce::dontSendNotification);
     showParameters();
     resized();
+}
+
+void SpeakersPage::makeEditor()
+{
+    iemEditor.reset();   // the old one leaves the card first: its OpenGL context is detached before the new one attaches
+    iemEditor = designer.createEditor (palette::raised);   // the energy map's ground is the card's
+    look::stripTooltips (*iemEditor);   // IEM's own TooltipWindow then has nothing to show
+    editorCard.addAndMakeVisible (*iemEditor);
+    placeEditor (editorCard.getLocalBounds());
+    if (auto* view = openGlView(); view != nullptr && overlayOpen())
+        view->setVisible (false);
 }
 
 void SpeakersPage::showParameters()
@@ -257,8 +276,25 @@ void SpeakersPage::saveToZone()
     sayOutcome (message, juce::String (a3::zoneName (shown)).toUpperCase() + " saved: " + loadedFrom.getFileName(), true);
 }
 
+// Shown: the page and every parent below the window visible, and the window on the screen -- not on a workspace i3 is
+// not showing (NativeWindow.h). A window that is not on a desktop, as in the tests, counts as on the screen.
+bool SpeakersPage::shownInTheWindow() const
+{
+    for (const juce::Component* c = this; c != nullptr && c->getParentComponent() != nullptr; c = c->getParentComponent())
+        if (! c->isVisible())
+            return false;
+    return native::viewable (*this);
+}
+
 void SpeakersPage::refresh()
 {
+    // IEM's editor -- and with it the 3D view's OpenGL context -- only while SPEAKERS is shown (2026-10-31): another page
+    // shown, it is gone, so nothing of it draws or holds the GPU in the background; back, a fresh one draws at once.
+    const bool shownNow = shownInTheWindow();
+    if (! shownNow && iemEditor != nullptr)
+        iemEditor.reset();
+    else if (shownNow && iemEditor == nullptr)
+        makeEditor();
     showOrHideTheGlView();   // the window's tick as well: JUCE does not tell the window's listeners about every removal
     if (zoneSpatialDirectory (view.config(), shown) != loadedFrom)
         load();
