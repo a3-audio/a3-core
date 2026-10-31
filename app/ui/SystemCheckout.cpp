@@ -7,13 +7,9 @@ namespace a3app::checkout
 {
 namespace
 {
-// Where each device's firmware lives in its repository (a3-motion README, a3-mixer README).
-struct FirmwareDir
-{
-    const char* submodule;
-    const char* path;
-};
-constexpr FirmwareDir firmwareDirs[] { { "a3-mixer", "hardware/mainboard/firmware" }, { "a3-motion", "firmware" } };
+// The devices that carry a firmware, and where: top level firmware/ in both (a3-mixer laid out like a3-motion, 2026-10-31).
+constexpr const char* firmwareSubmodules[] { "a3-mixer", "a3-motion" };
+constexpr const char* firmwareFolder = "firmware";
 
 bool isHex (const juce::String& text) { return text.isNotEmpty() && text.containsOnly ("0123456789abcdef"); }
 bool isNumber (const juce::String& text) { return text.isNotEmpty() && text.containsOnly ("0123456789"); }
@@ -147,12 +143,10 @@ juce::String lastChangeTag (CommandRunner& runner, const juce::File& dir, const 
     return since.isEmpty() || since == "0" ? release : release + "+" + since;
 }
 
-const FirmwareDir* firmwareOf (const juce::String& submodule)
+bool hasFirmware (const juce::String& submodule)
 {
-    for (const auto& dir : firmwareDirs)
-        if (submodule == dir.submodule)
-            return &dir;
-    return nullptr;
+    return std::any_of (std::begin (firmwareSubmodules), std::end (firmwareSubmodules),
+                        [&submodule] (const char* name) { return submodule == name; });
 }
 
 // Hardware and firmware rows read "rev <version>", lowercase whatever the file says; nothing when there is no version.
@@ -172,11 +166,11 @@ void addSubmodule (CommandRunner& runner, const juce::File& repo, const Gitlink&
         facts.rows.push_back ({ link.path + " " + part.name, version, url.isNotEmpty() ? url + "/tree/HEAD/" + part.folder : juce::String(),
                                 licenceOfFolder (dir, part.folder), version.isEmpty() });
     }
-    if (const auto* firmware = firmwareOf (link.path))
+    if (hasFirmware (link.path))
     {
-        facts.rows.push_back ({ link.path + " firmware", revisionText (lastChangeTag (runner, dir, link.commit, firmware->path)),
-                                url.isNotEmpty() ? url + "/tree/HEAD/" + firmware->path : juce::String(),
-                                licenceOfFolder (dir, firmware->path) });
+        facts.rows.push_back ({ link.path + " firmware", revisionText (lastChangeTag (runner, dir, link.commit, firmwareFolder)),
+                                url.isNotEmpty() ? url + "/tree/HEAD/" + firmwareFolder : juce::String(),
+                                licenceOfFolder (dir, firmwareFolder) });
     }
     const auto innerUrls = urlsAt (runner, dir, link.commit, url);
     for (const auto& inner : parseGitlinks (gitOutput (runner, dir, { "ls-tree", link.commit })))

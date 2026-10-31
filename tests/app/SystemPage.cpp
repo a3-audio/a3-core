@@ -267,10 +267,10 @@ TEST (CheckoutLicences, AreReadFromTheLicensesFolderAndForTheFirmwareFromReuseDa
     EXPECT_EQ (checkout::licenceOfFolder (root.getChildFile ("a3-motion"), "firmware"), "GPL-3.0");
 
     // Without a stanza: the SPDX headers of the source files.
-    touch ("a3-mixer/hardware/mainboard/firmware/src/main.cpp", "// SPDX-FileCopyrightText: 2024 x\n// SPDX-License-Identifier: CERN-OHL-S-2.0\n");
-    touch ("a3-mixer/hardware/mainboard/firmware/src/more.h", "// SPDX-License-Identifier: CERN-OHL-S-2.0\n");
+    touch ("a3-mixer/firmware/src/main.cpp", "// SPDX-FileCopyrightText: 2024 x\n// SPDX-License-Identifier: CERN-OHL-S-2.0\n");
+    touch ("a3-mixer/firmware/src/more.h", "// SPDX-License-Identifier: CERN-OHL-S-2.0\n");
     touch ("a3-mixer/.reuse/dep5", "Format: x\n\nFiles: docs/*\nCopyright: a\nLicense: CC-BY-SA-4.0\n");
-    EXPECT_EQ (checkout::licenceOfFolder (root.getChildFile ("a3-mixer"), "hardware/mainboard/firmware"), "CERN-OHL-S");
+    EXPECT_EQ (checkout::licenceOfFolder (root.getChildFile ("a3-mixer"), "firmware"), "CERN-OHL-S");
     root.deleteRecursively();
 }
 
@@ -636,14 +636,15 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
         touch ("a3-motion/LICENSES/" + juce::String (id) + ".txt");
     }
     touch ("a3-motion/ui/LICENSES/GPL-3.0-or-later.txt");
-    // The Mixer: board and housing under hardware/ (CERN), each with its REVISION; the firmware without a stanza of its own.
+    // The Mixer laid out like Motion (2026-10-31): board and housing under hardware/ (CERN), each with its REVISION;
+    // the firmware top level, by its stanza.
     touch ("a3-mixer/.reuse/dep5", "Format: x\n\nFiles: hardware/*\nCopyright: a\nLicense: CERN-OHL-S-2.0\n\n"
-                                   "Files: hardware/mainboard/firmware/*\nCopyright: a\nLicense: GPL-3.0-or-later\n");
-    touch ("a3-mixer/hardware/mainboard/pcb/board.kicad_pro");
-    touch ("a3-mixer/hardware/mainboard/pcb/REVISION", "V02\n");   // upper case in the file, lower case on the card
+                                   "Files: firmware/*\nCopyright: a\nLicense: GPL-3.0-or-later\n");
+    touch ("a3-mixer/hardware/pcb/board.kicad_pro");
+    touch ("a3-mixer/hardware/pcb/REVISION", "V02\n");   // upper case in the file, lower case on the card
     touch ("a3-mixer/hardware/housing/box.blend");
     touch ("a3-mixer/hardware/housing/REVISION", "V02\n");
-    touch ("a3-mixer/hardware/mainboard/firmware/src/main.cpp", "// SPDX-License-Identifier: GPL-3.0-or-later\n");
+    touch ("a3-mixer/firmware/src/main.cpp", "// SPDX-License-Identifier: GPL-3.0-or-later\n");
     // Motion: a board with a revision, a housing without one, the firmware by its stanza.
     touch ("a3-motion/.reuse/dep5", "Format: x\n\nFiles: hardware/*\nCopyright: a\nLicense: CERN-OHL-S-2.0\n\nFiles: firmware/*\nCopyright: a\nLicense: GPL-3.0-or-later\n");
     touch ("a3-motion/hardware/pcbs/motion_pcb/motion.kicad_pro");
@@ -658,9 +659,9 @@ TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
     runner->answers[git ("", "describe --tags --match v* --always HEAD")] = { 0, "v03.0-12-g1234567\n" };
     runner->answers[git ("a3-core", "describe --tags --match v* --always aaa")] = { 0, "v03.0-857-gaaaaaaa\n" };
     runner->answers[git ("a3-mixer", "describe --tags --match v* --always bbb")] = { 0, "v03.0-90-gbbbbbbb\n" };
-    runner->answers[git ("a3-mixer", "log -1 --format=%H bbb -- hardware/mainboard/firmware")] = { 0, "f1\n" };
+    runner->answers[git ("a3-mixer", "log -1 --format=%H bbb -- firmware")] = { 0, "f1\n" };
     runner->answers[git ("a3-mixer", "describe --tags --match v* --abbrev=0 bbb")] = { 0, "v03.0\n" };
-    runner->answers[git ("a3-mixer", "rev-list --count v03.0..bbb -- hardware/mainboard/firmware")] = { 0, "0\n" };   // unchanged since the release
+    runner->answers[git ("a3-mixer", "rev-list --count v03.0..bbb -- firmware")] = { 0, "0\n" };   // unchanged since the release
     runner->answers[git ("a3-motion", "describe --tags --match v* --always ccc")] = { 0, "v03.0-855-gccccccc\n" };
     runner->answers[git ("a3-motion", "log -1 --format=%H ccc -- firmware")] = { 0, "f2\n" };
     runner->answers[git ("a3-motion", "describe --tags --match v* --abbrev=0 ccc")] = { 0, "v03.0\n" };
