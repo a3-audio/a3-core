@@ -508,6 +508,9 @@ void SystemAboutView::refresh()
 // The page as the website has it (2026-10-31): the logo large and centred in the top third with its line under it; in
 // the space between ONE card, PUBLISHED (the system version, the repositories as a tree, the licences last); at the
 // bottom the links on one line and the copyright under them. The card keeps the grid's margin, padding and gap.
+// "Spatial DJ setup" is the page's headline: larger than the text, smaller than the logo.
+constexpr float taglineScale = 1.4f;
+
 void SystemAboutView::resized()
 {
     const auto t = layout::tokens (*this);
@@ -517,7 +520,8 @@ void SystemAboutView::resized()
     publishedHeading.setFont (juce::FontOptions (t.text));
 
     auto top = juce::Rectangle<int> (page.getX(), page.getY(), page.getWidth(), third - page.getY());
-    taglineArea = top.removeFromBottom (line);
+    top.removeFromBottom (2 * t.unit);                                   // room between the tagline and PUBLISHED
+    taglineArea = top.removeFromBottom (juce::roundToInt (line * taglineScale));
     logoArea = top.reduced (0, t.unit);
 
     auto bottom = page;
@@ -612,7 +616,9 @@ void SystemAboutView::paint (juce::Graphics& g)
         g.setFont (juce::FontOptions (t.text));
     }
     g.setColour (palette::text);
+    g.setFont (juce::FontOptions (t.text * taglineScale));
     g.drawFittedText (about::tagline(), taglineArea, juce::Justification::centred, 1, 0.8f);
+    g.setFont (juce::FontOptions (t.text));
     g.setColour (palette::textMuted);
     g.drawFittedText (about::copyrightLine() + dot + about::contactAddress(), contactArea, juce::Justification::centred, 1, 0.7f);
 

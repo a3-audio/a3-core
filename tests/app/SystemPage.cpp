@@ -726,6 +726,9 @@ TEST_F (SystemPageTest, AboutShowsTheProjectSupportAndThePins)
     ASSERT_EQ (cards.size(), 1u);
     EXPECT_EQ (cards[0].getHeight(), 2 * t.padding + t.heading + (1 + 2) * line) << "PUBLISHED: the system line and two repositories";
     EXPECT_GE (cards[0].getY(), view.getHeight() / 3) << "below the top third, which is the logo's";
+    // The tagline under the logo is larger than a text line and stands clear of the card (maintainer, 2026-10-31).
+    EXPECT_GT (view.taglineBounds().getHeight(), line) << "the tagline is larger than a text line";
+    EXPECT_GE (cards[0].getY() - view.taglineBounds().getBottom(), 2 * t.unit) << "room between the tagline and PUBLISHED";
     // The links sit at the bottom, one line, centred; the logo's room is the top third.
     int linkY = -1;
     for (auto* child : view.getChildren())

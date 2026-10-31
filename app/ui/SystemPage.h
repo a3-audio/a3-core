@@ -73,6 +73,7 @@ public:
     ~SystemAboutView() override;
     void refresh();
     const checkout::Facts& checkoutShown() const { return pins; }
+    juce::Rectangle<int> taglineBounds() const { return taglineArea; }   // where "Spatial DJ setup" is drawn
     int treeBottom() const { return tree.empty() ? 0 : tree.back().area.getBottom(); }   // the last tree row's lower edge
     int lineHeight() const { return layout::compactLine (layout::tokens (*this)); }
     void resized() override;
