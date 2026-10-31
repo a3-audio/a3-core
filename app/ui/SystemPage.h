@@ -83,11 +83,17 @@ private:
     SystemProbe& probe;
     std::uint64_t seen = 0;
     checkout::Facts pins;
-    std::unique_ptr<juce::Drawable> logoImage;   // the SVG logo; null: the label's letters
-    juce::Label logo, supportHeading, publishedHeading, licenceHeading;
-    juce::OwnedArray<juce::HyperlinkButton> links, supportLinks;
-    juce::OwnedArray<juce::Component> repositories;   // a link per repository with a url, its name as text without one
-    juce::Rectangle<int> logoArea, taglineArea, contactArea, bitcoinArea, versionArea, licenceArea;
-    std::vector<juce::Rectangle<int>> publishedAreas;
+    struct TreeLine
+    {
+        checkout::Row row;
+        juce::String name, prefix;   // shown name, the connectors ahead of it
+        juce::Rectangle<int> area, nameArea, versionArea, licenceArea;
+    };
+    std::unique_ptr<juce::Drawable> logoImage;   // the SVG logo; null: big letters
+    juce::Label publishedHeading;
+    juce::OwnedArray<juce::HyperlinkButton> links;   // Documentation, Website, Source, Support A³
+    juce::OwnedArray<juce::Component> repositories;   // per tree line: its link, or nullptr when it has no url
+    std::vector<TreeLine> tree;
+    juce::Rectangle<int> logoArea, taglineArea, contactArea, versionArea, versionColumn, licenceColumn, treeMessageArea;
 };
 }

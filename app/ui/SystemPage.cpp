@@ -3,13 +3,13 @@
 #include "SystemPage.h"
 
 #include "A3Assets.h"
+#include <algorithm>
 
 namespace a3app
 {
 namespace
 {
 const juce::String dot = juce::String::fromUTF8 (" · ");
-constexpr int publishedColumns = 1;   // PUBLISHED: one repository per line, its name left and its tag right
 
 juce::Colour lightColour (rig::Light light)
 {
@@ -78,12 +78,6 @@ std::unique_ptr<juce::HyperlinkButton> makeLink (const juce::String& label, cons
     return link;
 }
 
-int publishedLines (const checkout::Facts& pins)
-{
-    return pins.found ? ((int) pins.rows.size() + publishedColumns - 1) / publishedColumns : 1;
-}
-
-int supportLines (const about::Support& support) { return (support.paypal.isNotEmpty() ? 1 : 0) + (support.kofi.isNotEmpty() ? 1 : 0) + (support.bitcoin.isNotEmpty() ? 1 : 0); }
 }
 
 // -- RIG ------------------------------------------------------------------------------------------------------------
@@ -441,51 +435,63 @@ void SystemRigView::paint (juce::Graphics& g)
 
 SystemAboutView::SystemAboutView (SystemProbe& p) : probe (p)
 {
-    look::value (logo);
-    logo.setJustificationType (juce::Justification::centredLeft);
-    look::say (logo, juce::String::fromUTF8 ("A³"));
-    // The real logo, its colour the page's text colour; the letters stand in when JUCE cannot read the SVG.
+    // The real logo, its colour the page's text colour; the big letters stand in when JUCE cannot read the SVG.
     logoImage = juce::Drawable::createFromImageData (a3assets::a3logo_svg, (size_t) a3assets::a3logo_svgSize);
     if (logoImage != nullptr)
-    {
         logoImage->replaceColour (juce::Colour (0xfffffff3), palette::text);
-        look::say (logo, {});   // the label holds the logo's place in the card; the SVG is painted over it
-    }
-    addAndMakeVisible (logo);
-    setHeading (supportHeading, juce::String::fromUTF8 ("SUPPORT A³"));
     setHeading (publishedHeading, "PUBLISHED");
-    setHeading (licenceHeading, "LICENCES");
-    for (auto* label : { &publishedHeading, &licenceHeading })
-        addAndMakeVisible (label);
+    addAndMakeVisible (publishedHeading);
     for (const auto& link : about::links())
         addAndMakeVisible (links.add (makeLink (link.label, link.url)));
     const auto& support = probe.support();
-    if (support.paypal.isNotEmpty())
-        addAndMakeVisible (supportLinks.add (makeLink ("Support A³ via PayPal", support.paypal)));
-    if (support.kofi.isNotEmpty())
-        addAndMakeVisible (supportLinks.add (makeLink ("Support A³ via Ko-fi", support.kofi)));
-    if (! support.isEmpty())
-        addAndMakeVisible (supportHeading);
+    const auto supportUrl = support.paypal.isNotEmpty() ? support.paypal : support.kofi;
+    if (supportUrl.isNotEmpty())
+        addAndMakeVisible (links.add (makeLink (juce::String::fromUTF8 ("Support A³"), supportUrl)));
     refresh();
 }
 
 SystemAboutView::~SystemAboutView() = default;
 
-// A link per repository that names where it is published; its name as text where none is known.
+// The tree of PUBLISHED: a repository per line, a3-motion's ui and the firmwares as the children of the repository they
+// belong to ("a3-motion/ui", "a3-mixer firmware"), the connectors ahead of each name.
 void SystemAboutView::makePublished()
 {
     repositories.clear();
-    for (const auto& row : pins.rows)
+    tree.clear();
+    const auto parentOf = [] (const juce::String& name)
     {
-        if (row.url.startsWith ("https://"))
-            addAndMakeVisible (repositories.add (makeLink (row.name, row.url).release()));
+        return name.contains ("/") ? name.upToFirstOccurrenceOf ("/", false, false) : name.contains (" ") ? name.upToFirstOccurrenceOf (" ", false, false) : juce::String();
+    };
+    const auto childName = [] (const juce::String& name, const juce::String& parent) { return name.substring (parent.length() + 1); };
+    std::vector<size_t> tops;
+    for (size_t i = 0; i < pins.rows.size(); ++i)
+    {
+        const auto parent = parentOf (pins.rows[i].name);
+        const bool orphan = parent.isNotEmpty() && std::none_of (pins.rows.begin(), pins.rows.end(), [&] (const auto& r) { return r.name == parent; });
+        if (parent.isEmpty() || orphan)
+            tops.push_back (i);
+    }
+    const juce::String branch = juce::String::fromUTF8 ("├─ "), corner = juce::String::fromUTF8 ("└─ "),
+                       bar = juce::String::fromUTF8 ("│  "), blank = "   ";
+    for (size_t k = 0; k < tops.size(); ++k)
+    {
+        const bool lastTop = k + 1 == tops.size();
+        const auto& top = pins.rows[tops[k]];
+        tree.push_back ({ top, top.name, (lastTop ? corner : branch) });
+        std::vector<size_t> children;
+        for (size_t i = 0; i < pins.rows.size(); ++i)
+            if (i != tops[k] && parentOf (pins.rows[i].name) == top.name)
+                children.push_back (i);
+        for (size_t c = 0; c < children.size(); ++c)
+            tree.push_back ({ pins.rows[children[c]], childName (pins.rows[children[c]].name, top.name),
+                              (lastTop ? blank : bar) + (c + 1 == children.size() ? corner : branch) });
+    }
+    for (const auto& line : tree)
+    {
+        if (line.row.url.startsWith ("https://"))
+            addAndMakeVisible (repositories.add (makeLink (line.name, line.row.url).release()));
         else
-        {
-            auto* name = new juce::Label();
-            look::caption (*name);
-            look::say (*name, row.name);
-            addAndMakeVisible (repositories.add (name));
-        }
+            repositories.add (nullptr);   // no url: its name is painted
     }
 }
 
@@ -503,82 +509,93 @@ void SystemAboutView::refresh()
     repaint();
 }
 
-// Cards (layout::Stack), every line compact and none empty: the project (its line, its links, the copyright and the
-// contact), Support A³ when it leads somewhere, PUBLISHED (the umbrella's version, then each repository in two columns,
-// its name a link, its tag beside it), the licences last.
+// The page as the website has it (2026-10-31): the logo large and centred in the top third with its line under it; in
+// the space between ONE card, PUBLISHED (the system version, the repositories as a tree, the licences last); at the
+// bottom the links on one line and the copyright under them. The card keeps the grid's margin, padding and gap.
 void SystemAboutView::resized()
 {
     const auto t = layout::tokens (*this);
     const int line = layout::compactLine (t);
-    const auto height = [&t, line] (int lines) { return 2 * t.padding + t.heading + lines * line; };
-    layout::Stack stack (getLocalBounds().reduced (t.margin), t, cards);
-    for (auto* label : { &supportHeading, &publishedHeading, &licenceHeading })
-        label->setFont (juce::FontOptions (t.text));
+    const auto page = getLocalBounds().reduced (t.margin);
+    const int third = getHeight() / 3;
+    publishedHeading.setFont (juce::FontOptions (t.text));
 
-    // The page's logo: the name in big letters, its line under it.
-    auto area = stack.card (2 * t.padding + t.row * 2 + 3 * line).reduced (t.padding);
-    logoArea = area.removeFromTop (t.row * 2);
-    logo.setFont (juce::FontOptions ((float) logoArea.getHeight() * 0.9f, juce::Font::bold));
-    logo.setBorderSize ({});
-    logo.setBounds (logoArea);
+    auto top = juce::Rectangle<int> (page.getX(), page.getY(), page.getWidth(), third - page.getY());
+    taglineArea = top.removeFromBottom (line);
+    logoArea = top.reduced (0, t.unit);
 
-    taglineArea = area.removeFromTop (line);
-    placeLinks (links, area.removeFromTop (line), t);
-    contactArea = area.removeFromTop (line);
-
-    const auto& support = probe.support();
-    bitcoinArea = {};
-    if (! support.isEmpty())
-    {
-        area = stack.card (height (supportLines (support))).reduced (t.padding);
-        supportHeading.setBounds (area.removeFromTop (t.heading));
-        for (auto* link : supportLinks)
-        {
-            juce::OwnedArray<juce::HyperlinkButton> one;
-            one.add (link);
-            placeLinks (one, area.removeFromTop (line), t);
-            one.clearQuick (false);
-        }
-        if (support.bitcoin.isNotEmpty())
-            bitcoinArea = area.removeFromTop (line);
-    }
-
-    area = stack.card (height (publishedLines (pins))).reduced (t.padding);
-    auto headingLine = area.removeFromTop (t.heading);
-    versionArea = headingLine.removeFromRight (headingLine.getWidth() / 2);
-    publishedHeading.setBounds (headingLine);
-    publishedAreas.clear();
-    const int lines = publishedLines (pins);
-    const int columnGap = 2 * t.unit;
-    const int columnWidth = (area.getWidth() - (publishedColumns - 1) * columnGap) / publishedColumns;
-    for (int i = 0; i < (pins.found ? (int) pins.rows.size() : 1); ++i)
-    {
-        const int column = i / lines, row = i % lines;
-        publishedAreas.push_back ({ area.getX() + column * (columnWidth + columnGap), area.getY() + row * line, columnWidth, line });
-    }
+    auto bottom = page;
+    contactArea = bottom.removeFromBottom (line);
+    bottom.removeFromBottom (t.unit);
+    auto linkLine = bottom.removeFromBottom (line);
+    const int linksTop = linkLine.getY();
     const auto font = linkFont (t.text);
-    for (int i = 0; i < repositories.size() && i < (int) publishedAreas.size(); ++i)
+    std::vector<int> widths;
+    int total = 0;
+    for (auto* link : links)
     {
-        auto* name = repositories[i];
-        const auto text = pins.rows[(size_t) i].name;
-        if (auto* link = dynamic_cast<juce::HyperlinkButton*> (name))
+        widths.push_back (juce::roundToInt (juce::GlyphArrangement::getStringWidth (font, link->getButtonText())) + t.unit);
+        total += widths.back() + t.unit;
+    }
+    linkLine.removeFromLeft (juce::jmax (0, (linkLine.getWidth() - (total - t.unit)) / 2));
+    for (int i = 0; i < links.size(); ++i)
+    {
+        links[i]->setColour (juce::HyperlinkButton::textColourId, palette::text);
+        links[i]->setFont (font, false, juce::Justification::centred);
+        links[i]->setBounds (linkLine.removeFromLeft (widths[(size_t) i]));
+        linkLine.removeFromLeft (t.unit);
+    }
+
+    const auto middle = juce::Rectangle<int> (page.getX(), third, page.getWidth(), linksTop - third - t.gap);
+    layout::Stack stack (middle, t, cards);
+    const int rowsInCard = 1 + juce::jmax (1, (int) tree.size());   // the system, the tree (or its one message)
+    auto area = stack.card (2 * t.padding + t.heading + rowsInCard * line).reduced (t.padding);
+    publishedHeading.setBounds (area.removeFromTop (t.heading));
+    versionArea = area.removeFromTop (line);
+    for (auto& entry : tree)
+    {
+        entry.area = area.removeFromTop (line);
+        entry.nameArea = {};
+    }
+    treeMessageArea = area.getHeight() >= line && tree.empty() ? area.removeFromTop (line) : juce::Rectangle<int>();
+
+    // Three columns: the name with its connector, the version, the licences; the version and licence columns as wide as
+    // their longest text, the licences from the card's right edge.
+    const juce::FontOptions text (t.text);
+    int versionWidth = juce::roundToInt (juce::GlyphArrangement::getStringWidth (text, pins.version)), licenceWidth = 0;
+    for (const auto& entry : tree)
+    {
+        versionWidth = juce::jmax (versionWidth, juce::roundToInt (juce::GlyphArrangement::getStringWidth (text, checkout::tagText (entry.row))));
+        licenceWidth = juce::jmax (licenceWidth, juce::roundToInt (juce::GlyphArrangement::getStringWidth (text, entry.row.licences)));
+    }
+    licenceWidth += licenceWidth > 0 ? t.unit : 0;   // a little room, or drawText cuts the last glyph to an ellipsis
+    versionWidth += t.unit;
+    const int columnGap = 2 * t.unit;
+    auto columns = versionArea;
+    licenceColumn = columns.removeFromRight (licenceWidth);
+    if (licenceWidth > 0)
+        columns.removeFromRight (columnGap);
+    versionColumn = columns.removeFromRight (versionWidth);
+    for (auto& entry : tree)
+    {
+        entry.licenceArea = entry.area.withLeft (licenceColumn.getX()).withRight (licenceColumn.getRight());
+        entry.versionArea = entry.area.withLeft (versionColumn.getX()).withRight (versionColumn.getRight());
+    }
+
+    for (size_t i = 0; i < tree.size() && i < (size_t) repositories.size(); ++i)
+    {
+        auto& entry = tree[i];
+        const int prefixWidth = juce::roundToInt (juce::GlyphArrangement::getStringWidth (juce::FontOptions (t.text), entry.prefix));
+        auto nameBox = entry.area.withTrimmedLeft (prefixWidth).withRight (versionColumn.getX() - columnGap);
+        const int width = juce::roundToInt (juce::GlyphArrangement::getStringWidth (font, entry.name)) + t.unit;
+        entry.nameArea = nameBox.withWidth (juce::jmin (width, nameBox.getWidth() / 2));
+        if (auto* link = dynamic_cast<juce::HyperlinkButton*> (repositories[(int) i]))
         {
             link->setColour (juce::HyperlinkButton::textColourId, palette::text);
             link->setFont (font, false, juce::Justification::centredLeft);
+            link->setBounds (entry.nameArea);
         }
-        else if (auto* label = dynamic_cast<juce::Label*> (name))
-        {
-            label->setFont (juce::FontOptions (t.text));
-            label->setBorderSize ({});
-        }
-        const int width = juce::jmin (publishedAreas[(size_t) i].getWidth() / 2,
-                                      juce::roundToInt (juce::GlyphArrangement::getStringWidth (font, text)) + t.unit);
-        name->setBounds (publishedAreas[(size_t) i].withWidth (width));
     }
-
-    area = stack.card (height (1)).reduced (t.padding);
-    licenceHeading.setBounds (area.removeFromTop (t.heading));
-    licenceArea = area.removeFromTop (line);
 }
 
 void SystemAboutView::paint (juce::Graphics& g)
@@ -587,31 +604,45 @@ void SystemAboutView::paint (juce::Graphics& g)
     const auto t = layout::tokens (*this);
     paintCards (g, *this, t);
     g.setFont (juce::FontOptions (t.text));
+
     if (logoImage != nullptr)
-        logoImage->drawWithin (g, logoArea.toFloat(), juce::RectanglePlacement::xLeft | juce::RectanglePlacement::yMid, 1.0f);
+        logoImage->drawWithin (g, logoArea.toFloat(), juce::RectanglePlacement::centred, 1.0f);
+    else
+    {
+        g.setColour (palette::text);
+        g.setFont (juce::FontOptions ((float) logoArea.getHeight() * 0.8f, juce::Font::bold));
+        g.drawText (juce::String::fromUTF8 ("A³"), logoArea, juce::Justification::centred, false);
+        g.setFont (juce::FontOptions (t.text));
+    }
     g.setColour (palette::text);
-    g.drawFittedText (about::tagline(), taglineArea, juce::Justification::centredLeft, 1, 0.8f);
+    g.drawFittedText (about::tagline(), taglineArea, juce::Justification::centred, 1, 0.8f);
     g.setColour (palette::textMuted);
-    g.drawFittedText (about::copyrightLine() + dot + about::contactAddress(), contactArea, juce::Justification::centredLeft, 1, 0.7f);
-    g.drawFittedText (about::licenceLine(), licenceArea, juce::Justification::centredLeft, 1, 0.6f);
-    if (! bitcoinArea.isEmpty())
-        g.drawFittedText ("Bitcoin " + probe.support().bitcoin, bitcoinArea, juce::Justification::centredLeft, 1, 0.6f);
+    g.drawFittedText (about::copyrightLine() + dot + about::contactAddress(), contactArea, juce::Justification::centred, 1, 0.7f);
 
     g.setColour (palette::text);
-    g.drawText (pins.version, versionArea, juce::Justification::centredRight, true);
+    g.drawText (juce::String::fromUTF8 ("A³ System"), versionArea, juce::Justification::centredLeft, true);
+    g.drawText (pins.version, versionColumn.withY (versionArea.getY()).withHeight (versionArea.getHeight()), juce::Justification::centredRight, true);
     if (! pins.found)
     {
         g.setColour (palette::textMuted);
-        if (! publishedAreas.empty())
-            g.drawText (probe.snapshot().polled ? "no a3-system checkout on this machine" : "not read yet", publishedAreas.front(),
-                        juce::Justification::centredLeft, true);
+        g.drawText (probe.snapshot().polled ? "no a3-system checkout on this machine" : "not read yet", treeMessageArea,
+                    juce::Justification::centredLeft, true);
         return;
     }
-    for (size_t i = 0; i < pins.rows.size() && i < publishedAreas.size(); ++i)
+    for (size_t i = 0; i < tree.size(); ++i)
     {
-        const auto& row = pins.rows[i];
-        g.setColour (row.tag.isNotEmpty() ? palette::text : palette::textMuted);
-        g.drawText (checkout::tagText (row), publishedAreas[i], juce::Justification::centredRight, true);
+        const auto& entry = tree[i];
+        g.setColour (palette::textMuted);
+        g.drawText (entry.prefix, entry.area, juce::Justification::centredLeft, false);
+        if (i < (size_t) repositories.size() && repositories[(int) i] == nullptr)
+        {
+            g.setColour (palette::textMuted);
+            g.drawText (entry.name, entry.nameArea, juce::Justification::centredLeft, true);
+        }
+        g.setColour (entry.row.tag.isNotEmpty() ? palette::text : palette::textMuted);
+        g.drawText (checkout::tagText (entry.row), entry.versionArea, juce::Justification::centredRight, true);
+        g.setColour (palette::textMuted);
+        g.drawText (entry.row.licences, entry.licenceArea, juce::Justification::centredLeft, true);
     }
 }
 }

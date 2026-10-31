@@ -17,7 +17,11 @@ namespace a3app::checkout
 struct Row
 {
     juce::String name, tag, url;
-    bool operator== (const Row& other) const { return name == other.name && tag == other.tag && url == other.url; }
+    juce::String licences;   // its main licences, "GPL-3.0 · CERN-OHL-S"; empty when not checked out or none is known
+    bool operator== (const Row& other) const
+    {
+        return name == other.name && tag == other.tag && url == other.url && licences == other.licences;
+    }
 };
 
 struct Facts
@@ -44,6 +48,19 @@ std::vector<Gitlink> parseGitlinks (const juce::String& lsTree);
 juce::String releaseText (const juce::String& describe);
 // What the card writes for a row: its tag, or "not checked out".
 juce::String tagText (const Row&);
+
+// The licences a repository carries as its own, from the SPDX ids of its LICENSES/ folder (REUSE), shown short: the code's
+// GPL-3.0, the hardware's CERN-OHL-S, the documentation's CC-BY-SA-4.0, in that order. Left out: CC0-1.0 (configuration and
+// trivial files), MIT, Apache, BSD, CC-BY-3.0, GPL-2.0, LicenseRef-* -- licences of vendored or third-party files, not of
+// the project's work. Empty when the folder is not there (the repository is not checked out).
+juce::String mainLicences (const juce::File& repoDir);
+// One SPDX expression shown short ("GPL-3.0-or-later" -> "GPL-3.0", "CERN-OHL-S-2.0" -> "CERN-OHL-S"); "" for a licence
+// that is not one of the project's own (see mainLicences).
+juce::String shortLicence (const juce::String& spdxId);
+// The licence of a folder of a repository (its firmware): the stanza of repoDir/.reuse/dep5 that covers it, the last one
+// as REUSE says, a stanza for Markdown or ini files not counting; else the SPDX-License-Identifier of most of the source
+// files under it. Empty when neither says.
+juce::String licenceOfFolder (const juce::File& repoDir, const juce::String& folder);
 
 // The checkout at `repo`: its HEAD's tag, each gitlink's pinned commit described in its submodule, a3-motion's own
 // submodules, and the firmware of a3-motion and a3-mixer as the tag of the last commit that changed it.

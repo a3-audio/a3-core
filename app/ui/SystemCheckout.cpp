@@ -43,6 +43,96 @@ juce::String tagOf (CommandRunner& runner, const juce::File& dir, const juce::St
     return releaseText (gitOutput (runner, dir, { "describe", "--tags", "--match", "v*", "--always", commit }));
 }
 
+}
+
+juce::String shortLicence (const juce::String& id)
+{
+    for (const auto* prefix : { "GPL-3.0", "AGPL-3.0" })
+        if (id.startsWith (prefix))
+            return prefix;
+    if (id.startsWith ("CERN-OHL-"))
+        return id.upToLastOccurrenceOf ("-", false, false);
+    if (id.startsWith ("CC-BY-SA-"))
+        return id;
+    return {};
+}
+
+namespace
+{
+// The own licences in the order code, hardware, documentation.
+juce::String joinedLicences (const juce::StringArray& ids)
+{
+    juce::StringArray shown;
+    for (const auto* family : { "GPL-3.0", "AGPL-3.0", "CERN-OHL", "CC-BY-SA" })
+        for (const auto& id : ids)
+        {
+            const auto text = shortLicence (id);
+            if (text.startsWith (family) && ! shown.contains (text))
+                shown.add (text);
+        }
+    return shown.joinIntoString (juce::String::fromUTF8 (" · "));
+}
+
+// "Files: a b" stanzas of a dep5: (patterns, license).
+std::vector<std::pair<juce::StringArray, juce::String>> dep5Stanzas (const juce::File& file)
+{
+    std::vector<std::pair<juce::StringArray, juce::String>> stanzas;
+    juce::StringArray patterns;
+    bool inFiles = false;
+    for (const auto& raw : juce::StringArray::fromLines (file.loadFileAsString()))
+    {
+        if (raw.trim().isEmpty())
+        {
+            inFiles = false;
+            continue;
+        }
+        if (raw.startsWith ("Files:"))
+        {
+            patterns = juce::StringArray::fromTokens (raw.fromFirstOccurrenceOf (":", false, false), " \t", {});
+            inFiles = true;
+        }
+        else if (inFiles && raw.startsWithChar (' '))
+            patterns.addTokens (raw, " \t", {});
+        else if (raw.startsWith ("License:"))
+        {
+            inFiles = false;
+            stanzas.push_back ({ patterns, raw.fromFirstOccurrenceOf (":", false, false).trim() });
+        }
+        else
+            inFiles = false;
+    }
+    return stanzas;
+}
+
+juce::StringArray idsOf (const juce::String& expression)
+{
+    return juce::StringArray::fromTokens (expression.replace (" AND ", " ").replace (" OR ", " ").replace ("(", " ").replace (")", " "), " ", {});
+}
+
+juce::String licenceFromHeaders (const juce::File& folder)
+{
+    std::map<juce::String, int> counts;
+    int looked = 0;
+    for (const auto& file : folder.findChildFiles (juce::File::findFiles, true, "*.cpp;*.c;*.h;*.hpp;*.ino;*.py"))
+    {
+        if (++looked > 40)
+            break;
+        const auto head = file.loadFileAsString().substring (0, 2048);
+        const auto id = head.fromFirstOccurrenceOf ("SPDX-License-Identifier:", false, false).upToFirstOccurrenceOf ("\n", false, false).trim();
+        if (head.contains ("SPDX-License-Identifier:") && id.isNotEmpty())
+            ++counts[id];
+    }
+    juce::String best;
+    int most = 0;
+    for (const auto& [id, count] : counts)
+        if (count > most)
+        {
+            best = id;
+            most = count;
+        }
+    return joinedLicences (idsOf (best));
+}
+
 const FirmwareDir* firmwareOf (const juce::String& submodule)
 {
     for (const auto& dir : firmwareDirs)
@@ -55,18 +145,20 @@ const FirmwareDir* firmwareOf (const juce::String& submodule)
 void addSubmodule (CommandRunner& runner, const juce::File& repo, const Gitlink& link, const juce::String& url, Facts& facts)
 {
     const auto dir = repo.getChildFile (link.path);
-    facts.rows.push_back ({ link.path, tagOf (runner, dir, link.commit), url });
+    facts.rows.push_back ({ link.path, tagOf (runner, dir, link.commit), url, mainLicences (dir) });
     if (facts.rows.back().tag.isEmpty())
         return;   // not checked out: nothing more to ask it
     if (const auto* firmware = firmwareOf (link.path))
     {
         const auto changed = gitOutput (runner, dir, { "log", "-1", "--format=%H", link.commit, "--", firmware->path });
         facts.rows.push_back ({ link.path + " firmware", changed.isNotEmpty() ? tagOf (runner, dir, changed) : juce::String(),
-                                url.isNotEmpty() ? url + "/tree/HEAD/" + firmware->path : juce::String() });
+                                url.isNotEmpty() ? url + "/tree/HEAD/" + firmware->path : juce::String(),
+                                licenceOfFolder (dir, firmware->path) });
     }
     const auto innerUrls = urlsAt (runner, dir, link.commit, url);
     for (const auto& inner : parseGitlinks (gitOutput (runner, dir, { "ls-tree", link.commit })))
-        facts.rows.push_back ({ link.path + "/" + inner.path, tagOf (runner, dir.getChildFile (inner.path), inner.commit), urlOf (innerUrls, inner.path) });
+        facts.rows.push_back ({ link.path + "/" + inner.path, tagOf (runner, dir.getChildFile (inner.path), inner.commit), urlOf (innerUrls, inner.path),
+                                mainLicences (dir.getChildFile (inner.path)) });
 }
 }
 
@@ -109,6 +201,30 @@ juce::String releaseText (const juce::String& describe)
     if (n >= 3 && parts[n - 1].startsWithChar ('g') && isHex (parts[n - 1].substring (1)) && isNumber (parts[n - 2]))
         return juce::StringArray (parts.begin(), n - 2).joinIntoString ("-") + "+" + parts[n - 2];
     return text;
+}
+
+juce::String mainLicences (const juce::File& repoDir)
+{
+    juce::StringArray ids;
+    for (const auto& file : repoDir.getChildFile ("LICENSES").findChildFiles (juce::File::findFiles, false, "*.txt"))
+        ids.add (file.getFileNameWithoutExtension());
+    ids.sort (false);
+    return joinedLicences (ids);
+}
+
+juce::String licenceOfFolder (const juce::File& repoDir, const juce::String& folder)
+{
+    const auto probe = folder + "/src/main.cpp";
+    juce::String covered;
+    for (const auto& [patterns, license] : dep5Stanzas (repoDir.getChildFile (".reuse/dep5")))
+        for (const auto& pattern : patterns)
+        {
+            if (pattern.endsWith (".md") || pattern.endsWith (".ini") || ! probe.matchesWildcard (pattern, false))
+                continue;
+            covered = license;
+        }
+    const auto fromDep5 = joinedLicences (idsOf (covered));
+    return fromDep5.isNotEmpty() ? fromDep5 : licenceFromHeaders (repoDir.getChildFile (folder));
 }
 
 juce::String tagText (const Row& row) { return row.tag.isNotEmpty() ? row.tag : juce::String ("not checked out"); }

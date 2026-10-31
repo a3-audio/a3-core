@@ -222,6 +222,39 @@ TEST (SystemCheckout, ReadsTheUmbrellasPinsAndFirmware)
     EXPECT_FALSE (checkout::read (nothing, repo).found);
 }
 
+// The licences column (2026-10-31): the SPDX ids of a repository's LICENSES/ folder, the project's own ones, short; a
+// firmware's from the REUSE stanza that covers it, else from the source files' SPDX headers.
+TEST (CheckoutLicences, AreReadFromTheLicensesFolderAndForTheFirmwareFromReuseData)
+{
+    const auto root = juce::File::createTempFile ("a3-licences");
+    const auto touch = [&root] (const juce::String& path, const juce::String& content = {}) {
+        const auto file = root.getChildFile (path);
+        file.getParentDirectory().createDirectory();
+        file.replaceWithText (content);
+    };
+    for (const auto* id : { "GPL-3.0-or-later", "CC0-1.0", "MIT", "CERN-OHL-S-2.0", "CC-BY-SA-4.0", "Apache-2.0", "LicenseRef-SnapMagic" })
+        touch ("a3-mixer/LICENSES/" + juce::String (id) + ".txt");
+    EXPECT_EQ (checkout::mainLicences (root.getChildFile ("a3-mixer")), juce::String::fromUTF8 ("GPL-3.0 · CERN-OHL-S · CC-BY-SA-4.0"))
+        << "code, hardware, documentation; CC0, MIT, Apache and LicenseRef are left out";
+    EXPECT_TRUE (checkout::mainLicences (root.getChildFile ("not-here")).isEmpty()) << "not checked out";
+    EXPECT_EQ (checkout::shortLicence ("GPL-3.0-or-later"), "GPL-3.0");
+    EXPECT_EQ (checkout::shortLicence ("CERN-OHL-S-2.0"), "CERN-OHL-S");
+    EXPECT_TRUE (checkout::shortLicence ("CC0-1.0").isEmpty());
+
+    // From a dep5 stanza: the one that covers the folder, a Markdown and an ini stanza not counting.
+    touch ("a3-motion/.reuse/dep5",
+           "Format: x\n\nFiles: *\nCopyright: a\nLicense: CC-BY-SA-4.0\n\nFiles: firmware/*\nCopyright: a\nLicense: GPL-3.0-or-later\n\n"
+           "Files: firmware/*.md\nCopyright: a\nLicense: CC-BY-SA-4.0\n\nFiles: firmware/platformio.ini\nCopyright: a\nLicense: CC0-1.0\n");
+    EXPECT_EQ (checkout::licenceOfFolder (root.getChildFile ("a3-motion"), "firmware"), "GPL-3.0");
+
+    // Without a stanza: the SPDX headers of the source files.
+    touch ("a3-mixer/hardware/mainboard/firmware/src/main.cpp", "// SPDX-FileCopyrightText: 2024 x\n// SPDX-License-Identifier: CERN-OHL-S-2.0\n");
+    touch ("a3-mixer/hardware/mainboard/firmware/src/more.h", "// SPDX-License-Identifier: CERN-OHL-S-2.0\n");
+    touch ("a3-mixer/.reuse/dep5", "Format: x\n\nFiles: docs/*\nCopyright: a\nLicense: CC-BY-SA-4.0\n");
+    EXPECT_EQ (checkout::licenceOfFolder (root.getChildFile ("a3-mixer"), "hardware/mainboard/firmware"), "CERN-OHL-S");
+    root.deleteRecursively();
+}
+
 TEST (RigModel, TheProgramsAreTheCanvassRows)
 {
     const auto list = rig::programs (4);
@@ -566,6 +599,58 @@ TEST_F (SystemPageTest, RigRowsKeysAndPlans)
     EXPECT_TRUE (rigView.planLine().startsWith ("Start Deck D")) << rigView.planLine();
 }
 
+// The tree with its three columns: connectors and names, versions, licences (from fixture folders, as on the rig).
+TEST_F (SystemPageTest, AboutShowsTheTreeWithVersionsAndLicences)
+{
+    const auto repo = juce::File::createTempFile ("a3-about-tree");
+    const auto touch = [&repo] (const juce::String& path, const juce::String& content = {}) {
+        const auto file = repo.getChildFile (path);
+        file.getParentDirectory().createDirectory();
+        file.replaceWithText (content);
+    };
+    for (const auto* id : { "GPL-3.0-or-later", "CC-BY-SA-4.0", "CC0-1.0", "MIT" })
+        touch ("a3-core/LICENSES/" + juce::String (id) + ".txt");
+    for (const auto* id : { "GPL-3.0-or-later", "CC-BY-SA-4.0", "CERN-OHL-S-2.0", "CC0-1.0" })
+    {
+        touch ("a3-mixer/LICENSES/" + juce::String (id) + ".txt");
+        touch ("a3-motion/LICENSES/" + juce::String (id) + ".txt");
+    }
+    touch ("a3-motion/ui/LICENSES/GPL-3.0-or-later.txt");
+    touch ("a3-motion/.reuse/dep5", "Format: x\n\nFiles: firmware/*\nCopyright: a\nLicense: GPL-3.0-or-later\n");
+    touch ("a3-mixer/hardware/mainboard/firmware/src/main.cpp", "// SPDX-License-Identifier: CERN-OHL-S-2.0\n");
+    auto runner = rigRunner();
+    const auto git = [&repo] (const juce::String& dir, const juce::String& rest) {
+        return "git -C " + (dir.isEmpty() ? repo : repo.getChildFile (dir)).getFullPathName() + " " + rest;
+    };
+    runner->answers[git ("", "ls-tree HEAD")] = { 0, "160000 commit aaa\ta3-core\n160000 commit bbb\ta3-mixer\n160000 commit ccc\ta3-motion\n160000 commit ddd\tstemdeck\n" };
+    runner->answers[git ("", "describe --tags --match v* --always HEAD")] = { 0, "v03.0-12-g1234567\n" };
+    runner->answers[git ("a3-core", "describe --tags --match v* --always aaa")] = { 0, "v03.0-857-gaaaaaaa\n" };
+    runner->answers[git ("a3-mixer", "describe --tags --match v* --always bbb")] = { 0, "v03.0-90-gbbbbbbb\n" };
+    runner->answers[git ("a3-mixer", "log -1 --format=%H bbb -- hardware/mainboard/firmware")] = { 0, "f1\n" };
+    runner->answers[git ("a3-mixer", "describe --tags --match v* --always f1")] = { 0, "v03.0-12-gf1\n" };
+    runner->answers[git ("a3-motion", "describe --tags --match v* --always ccc")] = { 0, "v03.0-855-gccccccc\n" };
+    runner->answers[git ("a3-motion", "log -1 --format=%H ccc -- firmware")] = { 0, "f2\n" };
+    runner->answers[git ("a3-motion", "describe --tags --match v* --always f2")] = { 0, "v03.0-80-gf2\n" };
+    runner->answers[git ("a3-motion", "ls-tree ccc")] = { 0, "160000 commit eee\tui\n" };
+    runner->answers[git ("a3-motion/ui", "describe --tags --match v* --always eee")] = { 0, "v03.0-900-geeeeee\n" };
+    auto sources = fakeSources (runner);
+    sources.checkout = repo;
+    a3app::SystemProbe probe (sources, false);
+    probe.pollNow();
+    a3app::SystemAboutView view (probe);
+    view.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
+    view.refresh();
+    juce::StringArray licences;
+    for (const auto& row : view.checkoutShown().rows)
+        licences.add (row.name + "=" + row.licences);
+    const auto dot = juce::String::fromUTF8 (" · ");
+    EXPECT_EQ (licences.joinIntoString (";"), juce::String ("a3-core=GPL-3.0") + dot + "CC-BY-SA-4.0;a3-mixer=GPL-3.0" + dot + "CERN-OHL-S" + dot
+                                                  + "CC-BY-SA-4.0;a3-mixer firmware=CERN-OHL-S;a3-motion=GPL-3.0" + dot + "CERN-OHL-S" + dot
+                                                  + "CC-BY-SA-4.0;a3-motion firmware=GPL-3.0;a3-motion/ui=GPL-3.0;stemdeck=");
+    a3apptest::expectPainted (a3apptest::snapshotAt (view, "system3-about-tree", view.getWidth(), view.getHeight()));
+    repo.deleteRecursively();
+}
+
 TEST_F (SystemPageTest, AboutShowsTheProjectSupportAndThePins)
 {
     auto runner = rigRunner();
@@ -580,22 +665,27 @@ TEST_F (SystemPageTest, AboutShowsTheProjectSupportAndThePins)
     for (auto* child : view.getChildren())
         if (auto* link = dynamic_cast<juce::HyperlinkButton*> (child))
             linkTexts.add (link->getButtonText());
-    EXPECT_EQ (linkTexts, (juce::StringArray { "Documentation", "Website", "Source", "Support A³ via PayPal", "a3-core", "stemdeck" }))
-        << "PUBLISHED: each repository a link";
+    EXPECT_EQ (linkTexts, (juce::StringArray { "Documentation", "Website", "Source", juce::String::fromUTF8 ("Support A³"), "a3-core", "stemdeck" }))
+        << "the bottom links on one line, then PUBLISHED: each repository a link";
     juce::StringArray headings;
     for (auto* child : view.getChildren())
         if (auto* label = dynamic_cast<juce::Label*> (child))
             headings.add (label->getText());
     EXPECT_TRUE (headings.contains ("PUBLISHED")) << headings.joinIntoString (", ");
-    EXPECT_FALSE (headings.contains (juce::String::fromUTF8 ("A³ SYSTEM")));
-    // No empty lines: each card is its heading and its lines, one line height each.
+    // One card, PUBLISHED: its heading, the system line, a line per repository, the licences; no empty line.
     const auto t = a3app::layout::tokens (view);
     const int line = view.lineHeight();
     EXPECT_LT (line, t.row) << "compact, as STATUS' driver lines";
     const auto& cards = view.cardAreas();
-    ASSERT_EQ (cards.size(), 4u);
-    EXPECT_EQ (cards[0].getHeight(), 2 * t.padding + 2 * t.row + 3 * line) << "the project: the logo, its line, the links, the contact";
-    EXPECT_EQ (cards[1].getHeight(), 2 * t.padding + t.heading + 1 * line) << "Support";
-    EXPECT_EQ (cards[2].getHeight(), 2 * t.padding + t.heading + 2 * line) << "PUBLISHED: two repositories, one column, a line each";
+    ASSERT_EQ (cards.size(), 1u);
+    EXPECT_EQ (cards[0].getHeight(), 2 * t.padding + t.heading + (1 + 2) * line) << "PUBLISHED: the system line and two repositories";
+    EXPECT_GE (cards[0].getY(), view.getHeight() / 3) << "below the top third, which is the logo's";
+    // The links sit at the bottom, one line, centred; the logo's room is the top third.
+    int linkY = -1;
+    for (auto* child : view.getChildren())
+        if (auto* link = dynamic_cast<juce::HyperlinkButton*> (child); link != nullptr && link->getButtonText() == "Documentation")
+            linkY = link->getY();
+    EXPECT_GT (linkY, cards[0].getBottom()) << "the links are under the card";
+    EXPECT_GT (linkY, view.getHeight() * 2 / 3);
     a3apptest::expectPainted (a3apptest::snapshotAt (view, "system3-about", view.getWidth(), view.getHeight()));
 }
