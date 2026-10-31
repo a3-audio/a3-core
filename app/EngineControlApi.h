@@ -35,6 +35,7 @@ struct EngineStatusReport
     std::vector<std::string> ignoredKeys;    // HostView::ignoredKeys
     std::vector<std::string> loopDropped;    // HostView::loopDropped
     juce::String truthNote;                  // HostView::truthNote
+    juce::String configNote;                 // HostView::configNote
     a3clock::ClockReport clock;              // HostView::clock
 };
 juce::var toJson (const EngineStatusReport&);

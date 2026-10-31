@@ -49,6 +49,7 @@ public:
     std::vector<std::string> ignoredKeys() const override;
     std::vector<std::string> loopDropped() const override;
     juce::String truthNote() const override;
+    juce::String configNote() const override;
     a3clock::ClockReport clock() const override;
     int truthDecks() const override;
     juce::File configFile() const override;

@@ -109,6 +109,15 @@ struct ServiceLine
     Light light = Light::unknown;
 };
 
+// The a3-core card's collapsed line (2026-10-31): "9 services · all running", or what is wrong, so nobody has to expand
+// the list to see a fault: "1 not running: a3-aes67". `worst` is the light of the worst unit (running when none is wrong).
+struct ServiceSummary
+{
+    juce::String text;
+    Light worst = Light::running;
+};
+ServiceSummary summarize (const std::vector<ServiceLine>&);
+
 struct Row
 {
     Light light = Light::unknown;

@@ -7,7 +7,7 @@ namespace a3app
 namespace
 {
 const juce::String dot = juce::String::fromUTF8 (" · ");
-constexpr int publishedColumns = 2;   // PUBLISHED's repositories run in two columns
+constexpr int publishedColumns = 1;   // PUBLISHED: one repository per line, its name left and its tag right
 
 juce::Colour lightColour (rig::Light light)
 {
@@ -93,7 +93,9 @@ struct SystemRigView::ProgramRow
     juce::Label name;
     juce::TextButton startStop { "Start" }, restart { "Restart" };
     juce::Rectangle<int> first, second, light;
-    std::vector<juce::Rectangle<int>> serviceAreas;   // the a3-core row's: a compact line per service
+    std::vector<juce::Rectangle<int>> serviceAreas;   // the a3-core row's: a compact line per service (open only)
+    juce::Rectangle<int> summaryArea;                 // its collapsed line, the disclosure key's tap area
+    bool servicesOpen = false;                        // kept for the window's session: rows live as long as the page
     bool shown = true;                                 // false: inside the a3-core card (the beat analyzer)
 };
 
@@ -103,6 +105,20 @@ class SystemRigView::List final : public juce::Component
 {
 public:
     explicit List (const std::vector<std::unique_ptr<ProgramRow>>& r) : rows (r) {}
+    std::function<void()> onToggle;
+
+    // The disclosure key: a tap on a card's summary line opens or closes its services.
+    void mouseUp (const juce::MouseEvent& e) override
+    {
+        for (auto& r : rows)
+            if (r->shown && ! r->row.services.empty() && r->summaryArea.contains (e.getPosition()) && e.getDistanceFromDragStart() < 8)
+            {
+                r->servicesOpen = ! r->servicesOpen;
+                if (onToggle)
+                    onToggle();
+                return;
+            }
+    }
 
     int layOut (int width, const layout::Tokens& t)
     {
@@ -122,13 +138,15 @@ public:
                 continue;
             }
             const int line = layout::compactLine (t);
-            const int services = (int) r->row.services.size();
-            auto area = juce::Rectangle<int> (0, y, width, t.row + line * (1 + services));
+            const bool hasServices = ! r->row.services.empty();
+            const int services = hasServices && r->servicesOpen ? (int) r->row.services.size() : 0;
+            auto area = juce::Rectangle<int> (0, y, width, t.row + line * (1 + (hasServices ? 1 : 0) + services));
             y = area.getBottom() + t.unit;
             bottoms.push_back (area.getBottom() + t.unit / 2);
             auto first = area.removeFromTop (t.row);
             r->second = area.removeFromTop (line);
             r->serviceAreas.clear();
+            r->summaryArea = hasServices ? area.removeFromTop (line) : juce::Rectangle<int>();
             for (int i = 0; i < services; ++i)
                 r->serviceAreas.push_back (area.removeFromTop (line));
             const int keyWidth = width / 6;
@@ -147,6 +165,7 @@ public:
             r->second = r->second.withTrimmedLeft (lightSide + t.unit);
             for (auto& serviceArea : r->serviceAreas)
                 serviceArea = serviceArea.withTrimmedLeft (lightSide + t.unit);
+            r->summaryArea = r->summaryArea.withTrimmedLeft (lightSide + t.unit);
         }
         return juce::jmax (0, y - t.unit);
     }
@@ -170,7 +189,19 @@ public:
             g.drawFittedText (r->row.state, r->first, juce::Justification::centredLeft, 1, 0.8f);
             g.setColour (palette::textMuted);
             g.drawFittedText (details (r->row), r->second, juce::Justification::centredLeft, 1, 0.7f);
-            // The a3-core card's services: a small light, the unit's name, its state.
+            // The a3-core card's summary line with its disclosure key; red or grey by the worst unit, plain when all is well.
+            if (! r->row.services.empty())
+            {
+                const auto summary = rig::summarize (r->row.services);
+                const bool wrong = summary.worst != rig::Light::running;
+                auto area = r->summaryArea;
+                g.setColour (palette::textMuted);
+                g.drawFittedText (r->servicesOpen ? juce::String::fromUTF8 ("▾") : juce::String::fromUTF8 ("▸"),
+                                  area.removeFromLeft (area.getHeight()), juce::Justification::centred, 1, 0.7f);
+                g.setColour (wrong ? lightColour (summary.worst) : palette::text);
+                g.drawFittedText (summary.text, area, juce::Justification::centredLeft, 1, 0.7f);
+            }
+            // The a3-core card's services (open): a small light, the unit's name, its state.
             for (size_t s = 0; s < r->row.services.size() && s < r->serviceAreas.size(); ++s)
             {
                 const auto& service = r->row.services[s];
@@ -206,6 +237,7 @@ SystemRigView::SystemRigView (SystemProbe& p, SystemConfirm c)
     addAndMakeVisible (heading);
     addAndMakeVisible (entitiesHeading);
     list = std::make_unique<List> (rows);
+    list->onToggle = [this] { resized(); list->repaint(); };
     for (const auto& program : probe.programs())
     {
         auto made = std::make_unique<ProgramRow>();
@@ -275,7 +307,7 @@ void SystemRigView::refresh()
     for (auto& r : rows)
     {
         r->row = rig::describe (r->program, shown.facts);
-        laidOut << (int) r->row.services.size() << (r->row.insideCore ? "i" : "-");
+        laidOut << (int) r->row.services.size() << (r->row.insideCore ? "i" : "-") << (r->servicesOpen ? "o" : "c");
         const bool acts = r->row.here && r->row.installed && ! r->row.insideCore;
         r->startStop.setVisible (acts);
         r->restart.setVisible (acts);
@@ -323,6 +355,34 @@ juce::StringArray SystemRigView::serviceLines() const
         for (const auto& service : r->row.services)
             lines.add (service.name + "  " + service.state);
     return lines;
+}
+
+juce::String SystemRigView::serviceSummary() const
+{
+    for (const auto& r : rows)
+        if (! r->row.services.empty())
+            return rig::summarize (r->row.services).text;
+    return {};
+}
+
+bool SystemRigView::servicesOpen() const
+{
+    for (const auto& r : rows)
+        if (! r->row.services.empty())
+            return r->servicesOpen;
+    return false;
+}
+
+void SystemRigView::toggleServices()
+{
+    for (auto& r : rows)
+        if (! r->row.services.empty())
+        {
+            r->servicesOpen = ! r->servicesOpen;
+            resized();
+            list->repaint();
+            return;
+        }
 }
 
 bool SystemRigView::hasOwnRow (const juce::String& label) const
@@ -379,19 +439,22 @@ void SystemRigView::paint (juce::Graphics& g)
 
 SystemAboutView::SystemAboutView (SystemProbe& p) : probe (p)
 {
-    setHeading (aboutHeading, juce::String::fromUTF8 ("A³"));
+    look::value (logo);
+    logo.setJustificationType (juce::Justification::centredLeft);
+    look::say (logo, juce::String::fromUTF8 ("A³"));
+    addAndMakeVisible (logo);
     setHeading (supportHeading, juce::String::fromUTF8 ("SUPPORT A³"));
     setHeading (publishedHeading, "PUBLISHED");
     setHeading (licenceHeading, "LICENCES");
-    for (auto* label : { &aboutHeading, &publishedHeading, &licenceHeading })
+    for (auto* label : { &publishedHeading, &licenceHeading })
         addAndMakeVisible (label);
     for (const auto& link : about::links())
         addAndMakeVisible (links.add (makeLink (link.label, link.url)));
     const auto& support = probe.support();
     if (support.paypal.isNotEmpty())
-        addAndMakeVisible (supportLinks.add (makeLink ("PayPal", support.paypal)));
+        addAndMakeVisible (supportLinks.add (makeLink ("Support A³ via PayPal", support.paypal)));
     if (support.kofi.isNotEmpty())
-        addAndMakeVisible (supportLinks.add (makeLink ("Ko-fi", support.kofi)));
+        addAndMakeVisible (supportLinks.add (makeLink ("Support A³ via Ko-fi", support.kofi)));
     if (! support.isEmpty())
         addAndMakeVisible (supportHeading);
     refresh();
@@ -440,11 +503,15 @@ void SystemAboutView::resized()
     const int line = layout::compactLine (t);
     const auto height = [&t, line] (int lines) { return 2 * t.padding + t.heading + lines * line; };
     layout::Stack stack (getLocalBounds().reduced (t.margin), t, cards);
-    for (auto* label : { &aboutHeading, &supportHeading, &publishedHeading, &licenceHeading })
+    for (auto* label : { &supportHeading, &publishedHeading, &licenceHeading })
         label->setFont (juce::FontOptions (t.text));
 
-    auto area = stack.card (height (3)).reduced (t.padding);
-    aboutHeading.setBounds (area.removeFromTop (t.heading));
+    // The page's logo: the name in big letters, its line under it.
+    auto area = stack.card (2 * t.padding + t.row * 2 + 3 * line).reduced (t.padding);
+    logoArea = area.removeFromTop (t.row * 2);
+    logo.setFont (juce::FontOptions ((float) logoArea.getHeight() * 0.9f, juce::Font::bold));
+    logo.setBorderSize ({});
+    logo.setBounds (logoArea);
     taglineArea = area.removeFromTop (line);
     placeLinks (links, area.removeFromTop (line), t);
     contactArea = area.removeFromTop (line);

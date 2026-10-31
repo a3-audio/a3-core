@@ -48,6 +48,8 @@ public:
     virtual std::vector<std::string> loopDropped() const { return {}; }
     // Non-empty when the truth in use lacks a key the engine would send with (an older a3-osc.json).
     virtual juce::String truthNote() const { return {}; }
+    // A note on the loaded config that is not a fault (the delay page replaces engine.json's delay settings): the MONITOR says it.
+    virtual juce::String configNote() const { return {}; }
     // The clock role's report (ClockStatus.h): the one clock's lock, or why nobody reports it.
     virtual a3clock::ClockReport clock() const { return {}; }
     virtual juce::File configFile() const = 0;                     // where Save writes

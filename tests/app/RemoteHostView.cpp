@@ -191,20 +191,24 @@ TEST (RemoteHostView, SaysTheDroppedLinksAndTheTruthNote)
     rig.fake.dropped = { "deckA_cue_L -> x:y", "deckB_aux_R -> p:q" };
     rig.fake.ignored = { "engine.returnAnalogPair" };
     rig.fake.note = "the truth has no engine.deck-audio: deck audio reports are off";
+    rig.fake.configNoteText = "the delay plays the delay page (R15)";
     rig.tick();
     rig.remote->refreshNow();
     EXPECT_EQ (rig.remote->droppedLinks(), rig.fake.dropped);
     EXPECT_EQ (rig.remote->ignoredKeys(), rig.fake.ignored);
     EXPECT_EQ (rig.remote->truthNote(), rig.fake.note);
+    EXPECT_EQ (rig.remote->configNote(), rig.fake.configNoteText);
 
     rig.fake.dropped.clear();   // a Save wrote the file without them
     rig.fake.ignored.clear();
     rig.fake.note = {};
+    rig.fake.configNoteText = {};
     rig.tick();
     rig.remote->refreshNow();
     EXPECT_TRUE (rig.remote->droppedLinks().empty());
     EXPECT_TRUE (rig.remote->ignoredKeys().empty());
     EXPECT_TRUE (rig.remote->truthNote().isEmpty());
+    EXPECT_TRUE (rig.remote->configNote().isEmpty());
 }
 
 // A8: a config that names no deck count crosses to the window without one, and the window reads it with

@@ -172,6 +172,7 @@ std::vector<std::string> RemoteHostView::droppedLinks() const { const std::lock_
 std::vector<std::string> RemoteHostView::ignoredKeys() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.report.ignoredKeys; }
 std::vector<std::string> RemoteHostView::loopDropped() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.report.loopDropped; }
 juce::String RemoteHostView::truthNote() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.report.truthNote; }
+juce::String RemoteHostView::configNote() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.report.configNote; }
 a3clock::ClockReport RemoteHostView::clock() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.report.clock; }
 int RemoteHostView::truthDecks() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.truthDecks; }
 juce::File RemoteHostView::configFile() const { const std::lock_guard<std::mutex> g (cacheLock); return cache.file; }

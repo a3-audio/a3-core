@@ -3,15 +3,43 @@
 #pragma once
 #include "HostView.h"
 #include "ClockPanel.h"
+#include "CoreClient.h"
 #include "Look.h"
+#include <atomic>
+#include <functional>
+#include <optional>
 
 namespace a3app
 {
-// Core repeats its state more often than this; silence past it means it is gone.
-constexpr double coreSilentAfterSeconds = 5.0;
+// Until 2026-10-31 the Core row went red ("Core silent for N s") when Core had sent nothing for more than 5 s. Silence is not
+// a fault when there is nothing to send; now the row asks Core's API (GET /api/status) and is red only when it does not answer.
+// nullopt: not asked (no monitor client), the row then only reports the last message and is never red.
+using CoreAnswers = std::optional<bool>;
+
+// Asks Core's API every two seconds on its own thread (the window's tick must not wait on the network) and keeps the answer.
+class CoreProbe : private juce::Thread
+{
+public:
+    explicit CoreProbe (CoreClient& c) : juce::Thread ("core probe"), client (c) { startThread(); }
+    ~CoreProbe() override { stopThread (2000); }
+    CoreAnswers answered() const { return known.load() ? CoreAnswers (up.load()) : CoreAnswers(); }
+
+private:
+    void run() override
+    {
+        while (! threadShouldExit())
+        {
+            up = client.answers();
+            known = true;
+            wait (2000);
+        }
+    }
+    CoreClient& client;
+    std::atomic<bool> up { false }, known { false };
+};
 
 juce::String modeText (const AppConfig&, const BackendStatus&);   // "JACK, connecting", "Device, no links (--no-connect)"
-juce::String coreText (bool heard, double secondsSince);          // "Core silent for 12.5 s"
+juce::String coreText (bool heard, double secondsSince, CoreAnswers answers);   // "Core running, last message 3.6 s ago"
 
 // "client:port" names as (client, count), in the order the clients first appear.
 std::vector<std::pair<std::string, int>> groupMissingByClient (const std::vector<std::string>& missingPorts);
@@ -68,6 +96,8 @@ class StatusPage final : public juce::Component, public CardPage
 public:
     // `aes67Config`: the rendered PipeWire AES67 config (~/.config/pipewire/pipewire-aes67.conf by default).
     explicit StatusPage (HostView&, juce::File aes67Config = defaultAes67Config());
+    // Whether Core's API answered (cached, never blocks); unset: unknown.
+    std::function<CoreAnswers()> coreAnswers;
     static juce::File defaultAes67Config();
     ~StatusPage() override;
 
@@ -100,6 +130,7 @@ private:
     juce::String truthWarning;
     bool heard = false, gate = false;
     double sinceCore = 0;
+    CoreAnswers answers;
     a3::GateLevels gates;
 };
 }

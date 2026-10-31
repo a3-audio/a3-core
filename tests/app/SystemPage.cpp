@@ -372,6 +372,20 @@ TEST (RigModel, OnlyAUnitThatShouldRunAndDoesNotIsGrey)
     EXPECT_EQ (row.services[4].light, rig::Light::failed);
 }
 
+TEST (RigModel, TheServiceSummaryNamesWhatIsWrong)
+{
+    using L = rig::Light;
+    EXPECT_EQ (rig::summarize ({ { "a3-engine.service", "active", L::running }, { "a3-ptp.timer", "active", L::running }, { "off.service", "inactive", L::idle } }).text,
+               juce::String::fromUTF8 ("3 services · all running"));
+    const auto one = rig::summarize ({ { "a3-engine.service", "active", L::running }, { "a3-aes67.service", "inactive", L::stopped } });
+    EXPECT_EQ (one.text, juce::String::fromUTF8 ("1 not running: a3-aes67"));
+    EXPECT_EQ (one.worst, L::stopped);
+    const auto many = rig::summarize ({ { "a.service", "failed", L::failed }, { "b.service", "x", L::stopped }, { "c.service", "x", L::stopped }, { "d.service", "x", L::running } });
+    EXPECT_EQ (many.text, "3 not running: a, b +1");
+    EXPECT_EQ (many.worst, L::failed);
+    EXPECT_EQ (rig::summarize ({ { "a.service", "not read yet", L::unknown } }).text, juce::String::fromUTF8 ("1 service · not read yet"));
+}
+
 TEST (RigPlan, StartAllInTheRigsOrderAndOnlyWhatRunsHere)
 {
     const auto list = rig::programs (2);
@@ -517,7 +531,17 @@ TEST_F (SystemPageTest, RigRowsKeysAndPlans)
                 named = named || label->getText() == program.label;
         EXPECT_TRUE (named) << program.label;
     }
+    // The services are one summary line, closed at first; a tap on the key opens the list and another closes it.
+    EXPECT_FALSE (rigView.servicesOpen());
+    EXPECT_TRUE (rigView.serviceSummary().contains ("not running: a3-clock")) << rigView.serviceSummary() << ": the fault is said while closed";
+    a3apptest::expectPainted (a3apptest::snapshotAt (rigView, "system3-rig-services-closed", rigView.getWidth(), rigView.getHeight()));
+    rigView.toggleServices();
+    EXPECT_TRUE (rigView.servicesOpen());
     a3apptest::expectPainted (a3apptest::snapshotAt (rigView, "system3-rig", rigView.getWidth(), rigView.getHeight()));
+    rigView.refresh();
+    EXPECT_TRUE (rigView.servicesOpen()) << "kept across refreshes";
+    rigView.toggleServices();
+    EXPECT_FALSE (rigView.servicesOpen());
 
     // Stop asks first; only a yes runs it.
     rigView.startStopKey ("Deck A")->triggerClick();
@@ -556,7 +580,7 @@ TEST_F (SystemPageTest, AboutShowsTheProjectSupportAndThePins)
     for (auto* child : view.getChildren())
         if (auto* link = dynamic_cast<juce::HyperlinkButton*> (child))
             linkTexts.add (link->getButtonText());
-    EXPECT_EQ (linkTexts, (juce::StringArray { "Documentation", "Website", "Source", "PayPal", "a3-core", "stemdeck" }))
+    EXPECT_EQ (linkTexts, (juce::StringArray { "Documentation", "Website", "Source", "Support A³ via PayPal", "a3-core", "stemdeck" }))
         << "PUBLISHED: each repository a link";
     juce::StringArray headings;
     for (auto* child : view.getChildren())
@@ -570,8 +594,8 @@ TEST_F (SystemPageTest, AboutShowsTheProjectSupportAndThePins)
     EXPECT_LT (line, t.row) << "compact, as STATUS' driver lines";
     const auto& cards = view.cardAreas();
     ASSERT_EQ (cards.size(), 4u);
-    EXPECT_EQ (cards[0].getHeight(), 2 * t.padding + t.heading + 3 * line) << "the project";
+    EXPECT_EQ (cards[0].getHeight(), 2 * t.padding + 2 * t.row + 3 * line) << "the project: the logo, its line, the links, the contact";
     EXPECT_EQ (cards[1].getHeight(), 2 * t.padding + t.heading + 1 * line) << "Support";
-    EXPECT_EQ (cards[2].getHeight(), 2 * t.padding + t.heading + 1 * line) << "PUBLISHED: two repositories, one line of two columns";
+    EXPECT_EQ (cards[2].getHeight(), 2 * t.padding + t.heading + 2 * line) << "PUBLISHED: two repositories, one column, a line each";
     a3apptest::expectPainted (a3apptest::snapshotAt (view, "system3-about", view.getWidth(), view.getHeight()));
 }

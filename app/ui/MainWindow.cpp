@@ -62,6 +62,13 @@ public:
         if (keyboardSetup.link != nullptr)
             addKeyboard (std::move (keyboardSetup));
         // 2026-10-30: CHANNELS is a card on AUDIO, ZONES a sub-page of SPEAKERS, DEPARTMENTS one of I/O.
+        // 2026-10-31: ABOUT is the greeter, a page of its own with a small square key, the logo, before the six.
+        if (systemSetup.probe == nullptr)
+            idleProbe = std::make_unique<SystemProbe> (SystemSources {}, false);
+        systemProbe = systemSetup.probe != nullptr ? systemSetup.probe : idleProbe.get();
+        addPage ("ABOUT", std::make_unique<SystemAboutView> (*systemProbe), false, true);
+        about = pages.back().component.get();
+        pages.back().key->setButtonText (juce::String::fromUTF8 ("A³"));
         addPage ("AUDIO", std::make_unique<AudioPage> (view, manager));
         auto speakersAndZones = std::make_unique<SubPages> ("SPEAKERS");
         speakers = speakersAndZones.get();
@@ -84,24 +91,17 @@ public:
         ioPage = io.get();
         addPage ("I/O", std::move (io));
         addPage ("CALIBRATION", std::make_unique<CalibrationPage> (view));
-        // 2026-10-30: STATUS is ENGINE (what the engine runs) and the Canvas's content, RIG and ABOUT; a seventh key in the
-        // row made the key text smaller than a quarter of the key.
-        if (systemSetup.probe == nullptr)
-            idleProbe = std::make_unique<SystemProbe> (SystemSources {}, false);
-        systemProbe = systemSetup.probe != nullptr ? systemSetup.probe : idleProbe.get();
         // 2026-10-31: RIG is a page again (FILTER went to CALIBRATION's card); STATUS is ENGINE and ABOUT.
         auto rigPage = std::make_unique<SystemRigView> (*systemProbe, SystemConfirm {});
         rig = rigPage.get();
         addPage ("RIG", std::move (rigPage), false, true);
-        auto statusAndAbout = std::make_unique<SubPages> ("STATUS");
-        status = statusAndAbout.get();
         auto statusPage = std::make_unique<StatusPage> (view);
-        auto aboutView = std::make_unique<SystemAboutView> (*systemProbe);
-        auto* statusRaw = statusPage.get();
-        auto* aboutRaw = aboutView.get();
-        status->add (juce::String::fromUTF8 ("A³ CORE"), std::move (statusPage), [statusRaw] { statusRaw->refresh(); });
-        status->add ("ABOUT", std::move (aboutView), [aboutRaw] { aboutRaw->refresh(); });
-        addPage ("STATUS", std::move (statusAndAbout));
+        if (monitor.core != nullptr)
+        {
+            coreProbe = std::make_unique<CoreProbe> (*monitor.core);
+            statusPage->coreAnswers = [probe = coreProbe.get()] { return probe->answered(); };
+        }
+        addPage ("STATUS", std::move (statusPage));
         if (monitor.core != nullptr)
         {
             auto& core = *monitor.core;
@@ -119,7 +119,7 @@ public:
         }
         addAndMakeVisible (saveBar);
         applySwitch();
-        show ("STATUS");
+        show ("ABOUT");   // the greeter: the window opens on ABOUT, whatever it showed last
     }
 
     juce::StringArray pageList() const
@@ -142,11 +142,6 @@ public:
         {
             speakers->show (name);
             return show ("SPEAKERS");
-        }
-        if (status != nullptr && status->has (name))
-        {
-            status->show (name);
-            return show ("STATUS");
         }
         if (ioPage != nullptr && (name == "INPUT" || name == "OUTPUT" || (name == "DEPARTMENTS" && departments != nullptr)))
         {
@@ -177,8 +172,6 @@ public:
         const auto* page = pages[(size_t) shown].component.get();
         if (page == speakers)
             return speakers->shown();
-        if (page == status)
-            return status->shown();
         if (page == ioPage)
             return ioPage->shownSub() == IoPage::Sub::input ? "INPUT" : ioPage->shownSub() == IoPage::Sub::output ? "OUTPUT" : "DEPARTMENTS";
         return {};
@@ -317,7 +310,13 @@ private:
         if (keysInRow.empty())
             return;
         const int gap = juce::jmax (1, row.getHeight() / 16);
-        const int width = row.getWidth() / (int) keysInRow.size();
+        // The logo key is a square at the row's left end; the others share the rest.
+        if (! monitorKeys && keysInRow.front() == pages.front().key.get())
+        {
+            keysInRow.front()->setBounds (row.removeFromLeft (row.getHeight()).reduced (gap));
+            keysInRow.erase (keysInRow.begin());
+        }
+        const int width = row.getWidth() / juce::jmax (1, (int) keysInRow.size());
         for (auto* key : keysInRow)
             key->setBounds (row.removeFromLeft (width).reduced (gap));
     }
@@ -327,11 +326,14 @@ private:
     {
         auto shared = std::numeric_limits<float>::max();
         for (auto& page : pages)
-            if (page.key->isVisible())
+            if (page.key->isVisible() && page.component.get() != about)   // the logo key is not one of the named six
                 shared = juce::jmin (shared, fittedTextHeight (page.name, (float) page.key->getHeight() * keyTextShare,
                                                                (float) page.key->getWidth() * keyTextWidthShare));
         for (auto& page : pages)
-            page.key->getProperties().set (sharedKeyTextHeight, (double) shared);
+            page.key->getProperties().set (sharedKeyTextHeight, page.component.get() == about
+                                                                    ? (double) fittedTextHeight (page.key->getButtonText(), (float) page.key->getHeight() * 0.55f,
+                                                                                                 (float) page.key->getWidth() * keyTextWidthShare)
+                                                                    : (double) shared);
     }
 
     // KEYS and the monitor switch on the left; the Save bar (its Save on the right) takes the rest.
@@ -364,7 +366,7 @@ private:
     void askTheMachineWhileShown()
     {
         const auto* page = pages.empty() ? nullptr : pages[(size_t) shown].component.get();
-        const bool shownNow = page == rig || (page == status && status->shown() == "ABOUT");
+        const bool shownNow = page == rig || page == about;
         systemProbe->setWanted (shownNow);
     }
 
@@ -399,8 +401,9 @@ private:
     IoPage* ioPage = nullptr;
     std::unique_ptr<DepartmentsPage> departments;
     std::unique_ptr<SystemProbe> idleProbe;
+    std::unique_ptr<CoreProbe> coreProbe;
     SystemProbe* systemProbe = nullptr;
-    SubPages* status = nullptr;
+    juce::Component* about = nullptr;
     SystemRigView* rig = nullptr;
     WindowBands bands;
     juce::TextButton keys { "KEYS" };

@@ -38,6 +38,7 @@ struct FakeView final : a3app::HostView
     std::vector<std::string> ignoredKeys() const override { return ignored; }
     std::vector<std::string> loopDropped() const override { return unroutedByLoop; }
     juce::String truthNote() const override { return note; }
+    juce::String configNote() const override { return configNoteText; }
     a3clock::ClockReport clock() const override { return clockReport; }
     juce::File configFile() const override { return file; }
     int truthDecks() const override { return truthDeckCount; }
@@ -71,7 +72,7 @@ struct FakeView final : a3app::HostView
     juce::String problem;
     std::vector<std::string> dropped, ignored, unroutedByLoop;
     int roundTripRequests = 0, analogRequests = 0;
-    juce::String note;
+    juce::String note, configNoteText;
     a3clock::ClockReport clockReport;
     int truthDeckCount = 4;   // the truth copy's stemdeck.deck-hello range
     bool fileExistedAtApply = false;

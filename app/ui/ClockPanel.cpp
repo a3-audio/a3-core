@@ -30,10 +30,11 @@ juce::String stateText (const a3clock::ClockReport& report)
     const auto word = juce::String (indicator.word);
     const auto& s = report.status;
     if (report.running && s.health == Health::locked)
-        return word + dot + errorText (s) + dot + "for " + duration (s.lockedSeconds);
+        return word + dot + errorText (s) + dot + duration (s.lockedSeconds);
     if (report.running && s.health == Health::acquiring)
         return word + dot + errorText (s) + dot + juce::String::fromUTF8 (indicator.detail.c_str());
-    return word + dot + juce::String::fromUTF8 (indicator.detail.c_str());
+    const auto detail = juce::String::fromUTF8 (indicator.detail.c_str());
+    return detail.isEmpty() ? word : word + dot + detail;
 }
 
 juce::String rateText (const a3clock::ClockReport& report)
@@ -58,6 +59,36 @@ juce::String countersText (const a3clock::ClockReport& report)
            + "Scarlett breaks " + juce::String (s.scarlettBreaks);
 }
 
+// The PTP role without its "PTP " lead: the row's caption says it.
+juce::String roleValue (const juce::String& line)
+{
+    return line.startsWith ("PTP role: ") ? line.fromFirstOccurrenceOf ("PTP role: ", false, false) : line.fromFirstOccurrenceOf ("PTP ", false, false).replace (": ", " ");
+}
+
+std::vector<ClockRow> detailRowsOf (const a3clock::ClockReport& report, juce::Colour wordColour)
+{
+    const auto indicator = a3clock::clockIndicator (report);
+    std::vector<ClockRow> rows;
+    rows.push_back ({ "CLOCK", stateText (report), juce::String (indicator.word).length(), wordColour, palette::text });
+    if (! report.running)
+        return rows;
+    const auto& s = report.status;
+    const auto roleLine = a3clock::ptpRoleLine (report);
+    const auto role = juce::String::fromUTF8 (roleLine.text.c_str());
+    rows.push_back ({ "PTP", roleValue (role), 0, {}, roleLine.warns ? palette::danger : role.contains ("not read") ? palette::textMuted : palette::text });
+    const bool observing = s.health == Health::observing;
+    rows.push_back ({ "PTP clock", observing ? juce::String ("not steered")
+                                             : juce::String (s.device) + " (" + juce::String (s.interface) + ") steered " + signedFixed (s.frequencyPpm, 2) + " ppm",
+                      0, {}, palette::text });
+    rows.push_back ({ "Against the Scarlett", s.ratePpm ? signedFixed (*s.ratePpm, 3) + " ppm" : juce::String ("not measured yet"), 0, {},
+                      s.ratePpm ? palette::text : palette::textMuted });
+    for (const auto& [caption, count] : std::initializer_list<std::pair<const char*, juce::String>> {
+             { "Corrections", juce::String (s.counters.corrections) }, { "Re-anchors", juce::String (s.counters.reanchors) },
+             { "PTP steps", juce::String (s.counters.phcSteps) }, { "Holdovers", juce::String (s.counters.holdovers) },
+             { "Scarlett breaks", juce::String (s.scarlettBreaks) } })
+        rows.push_back ({ caption, count, 0, {}, palette::text });
+    return rows;
+}
 }
 
 juce::Colour toneColour (a3clock::ClockIndicator::Tone tone)
@@ -110,8 +141,6 @@ ClockPanel::ClockPanel (Mode m) : mode (m)
     state.setVisible (! choice);   // AUDIO's card: the master only, the state word is in the footer
     masterCaption.setVisible (choice);
     master.setVisible (choice);
-    for (auto* child : std::initializer_list<juce::Component*> { &role, &rate, &counters, &note })
-        child->setVisible (! choice);
     show ({});
 }
 
@@ -127,6 +156,7 @@ void ClockPanel::show (const a3clock::ClockReport& report)
     counters.setText (countersText (report), juce::dontSendNotification);
     const auto warning = warningOf (report);
     state.setColour (juce::Label::textColourId, warning.isTransparent() ? palette::running : warning);
+    detailRows = mode == Mode::choice ? std::vector<ClockRow>() : detailRowsOf (report, warning.isTransparent() ? palette::running : warning);
     if (warning != frame)
     {
         frame = warning;
@@ -155,32 +185,22 @@ void ClockPanel::resized()
         label.setBounds (line);
     };
     const int heading = tokens.heading > 0 ? tokens.heading : area.getHeight() / 4;
-    place (title, area.removeFromTop (heading));
+    title.setVisible (mode == Mode::choice);   // STATUS' card starts with its first row, no heading
     if (mode == Mode::choice)
     {
+        place (title, area.removeFromTop (heading));
         auto choice = area;
         place (masterCaption, choice.removeFromLeft (choice.getWidth() / 4));
         master.setBounds (tokens.row > 0 ? layout::control (choice, tokens) : choice);
         return;
     }
-    // Compact lines, one after the other as STATUS' driver lines; a line with nothing to say is not shown.
-    const int line = tokens.row > 0 ? layout::compactLine (tokens) : juce::jmax (1, area.getHeight() / mostDetailLines);
+    // The detail is painted by the page, as rows of its info card (ClockRow); the labels only keep the texts.
     for (auto* label : { &state, &role, &rate, &counters, &note })
-    {
-        label->setVisible (label->getText().isNotEmpty());
-        if (label->isVisible())
-            place (*label, area.removeFromTop (label == &note ? 2 * line : line));
-    }
-    note.setMinimumHorizontalScale (1.0f);
+        label->setVisible (false);
 }
 
 int ClockPanel::detailLines() const
 {
-    if (mode == Mode::choice)
-        return 0;
-    int lines = 0;
-    for (const auto* label : { &state, &role, &rate, &counters })
-        lines += label->getText().isNotEmpty() ? 1 : 0;
-    return lines + (note.getText().isNotEmpty() ? 2 : 0);
+    return (int) detailRows.size();
 }
 }

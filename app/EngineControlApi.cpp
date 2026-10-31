@@ -188,6 +188,7 @@ juce::var toJson (const EngineStatusReport& report)
                      { "droppedLinks", dropped },
                      { "ignoredKeys", ignored },
                      { "truthNote", report.truthNote },
+                     { "configNote", report.configNote },
                      { "roundTripMeasured", toJson (report.backend.roundTripMeasured) },
                      { "timing", toJson (report.backend.timing) },
                      { "loopDropped", stringList (report.loopDropped) },
@@ -234,6 +235,8 @@ std::optional<EngineStatusReport> statusFromJson (const juce::var& v)
         report.ignoredKeys.push_back (v["ignoredKeys"][i].toString().toStdString());
     if (v["truthNote"].isString())
         report.truthNote = v["truthNote"].toString();
+    if (v["configNote"].isString())   // an engine before this sends none
+        report.configNote = v["configNote"].toString();
     report.backend.roundTripMeasured = roundTripFromJson (v["roundTripMeasured"]);
     report.backend.timing = timingReportFromJson (v["timing"]);
     for (int i = 0; i < v["loopDropped"].size(); ++i)
@@ -440,6 +443,7 @@ void EngineControlApi::publishStatus()
     report.ignoredKeys = view.ignoredKeys();
     report.loopDropped = view.loopDropped();
     report.truthNote = view.truthNote();
+    report.configNote = view.configNote();
     report.clock = view.clock();
     auto text = juce::JSON::toString (toJson (report), true).toStdString();
     auto outputs = view.outputNames();

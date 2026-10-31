@@ -246,21 +246,23 @@ TEST_F (Pages, ThePtpRoleIsASecondLine)
     page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     page.refresh();
     const auto& clock = page.clockPanel();
-    EXPECT_EQ (clock.roleLabel().getText(), "PTP grandmaster: confirmed");
-    EXPECT_EQ (clock.roleLabel().findColour (juce::Label::textColourId), a3app::palette::text) << "a value in the plain text colour (2026-10-31)";
-    EXPECT_GT (clock.roleLabel().getHeight(), 0);
+    EXPECT_EQ (clock.rows()[1].caption, "PTP");
+    EXPECT_EQ (clock.rows()[1].value, "grandmaster confirmed");
+    EXPECT_EQ (clock.rows()[1].colour, a3app::palette::text) << "a value in the plain text colour (2026-10-31)";
+    EXPECT_EQ (clock.rows()[0].wordColour, a3app::palette::running) << "the state word of a lock is green";
+    EXPECT_EQ (clock.rows()[0].colour, a3app::palette::text);
     view.clockReport.status.portState.clear();
     view.clockReport.status.portProblem = "no PTP state from a3-ptp-state: /run/a3/ptp-state.json missing";
     page.refresh();
-    EXPECT_TRUE (clock.roleLabel().getText().startsWith ("PTP role: not read yet")) << clock.roleLabel().getText();
-    EXPECT_EQ (clock.roleLabel().findColour (juce::Label::textColourId), a3app::palette::textMuted);
-    EXPECT_TRUE (clock.stateLabel().getText().startsWith ("LOCKED")) << clock.stateLabel().getText();
-    EXPECT_FALSE (clock.stateLabel().getText().containsIgnoreCase ("unverified"));
+    EXPECT_TRUE (clock.rows()[1].value.startsWith ("not read yet")) << clock.rows()[1].value;
+    EXPECT_EQ (clock.rows()[1].colour, a3app::palette::textMuted);
+    EXPECT_TRUE (clock.rows()[0].value.startsWith ("LOCKED")) << clock.rows()[0].value;
+    EXPECT_FALSE (clock.rows()[0].value.containsIgnoreCase ("unverified"));
     view.clockReport.status.health = a3clock::Health::holdover;
     view.clockReport.status.portState = "SLAVE";
     page.refresh();
-    EXPECT_EQ (clock.roleLabel().getText(), "PTP role: SLAVE, not the grandmaster");
-    EXPECT_EQ (clock.roleLabel().findColour (juce::Label::textColourId), a3app::palette::danger);
+    EXPECT_EQ (clock.rows()[1].value, "SLAVE, not the grandmaster");
+    EXPECT_EQ (clock.rows()[1].colour, a3app::palette::danger);
 }
 
 TEST_F (Pages, TheClockMasterHasOneChoiceAndSaysWhy)
@@ -283,15 +285,18 @@ TEST_F (Pages, TheClockSaysItsNumbers)
     page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     page.refresh();
     const auto& clock = page.clockPanel();
-    EXPECT_TRUE (clock.stateLabel().getText().contains ("+2.3")) << clock.stateLabel().getText();       // the phase error, us
-    EXPECT_TRUE (clock.stateLabel().getText().contains ("1 h 2 min")) << clock.stateLabel().getText();  // locked for
-    EXPECT_TRUE (clock.rateLabel().getText().contains ("+14.10 ppm")) << clock.rateLabel().getText();
-    EXPECT_TRUE (clock.rateLabel().getText().contains ("+0.012 ppm")) << clock.rateLabel().getText();
-    EXPECT_TRUE (clock.countersLabel().getText().contains ("corrections 3990")) << clock.countersLabel().getText();
-    EXPECT_TRUE (clock.countersLabel().getText().contains ("Scarlett breaks 1")) << clock.countersLabel().getText();
+    ASSERT_EQ (clock.rows().size(), 9u);
+    EXPECT_TRUE (clock.rows()[0].value.contains ("+2.3")) << clock.rows()[0].value;       // the phase error, us
+    EXPECT_TRUE (clock.rows()[0].value.contains ("1 h 2 min")) << clock.rows()[0].value;  // locked for
+    EXPECT_EQ (clock.rows()[2].caption, "PTP clock");
+    EXPECT_TRUE (clock.rows()[2].value.contains ("steered +14.10 ppm")) << clock.rows()[2].value;
+    EXPECT_EQ (clock.rows()[3].caption, "Against the Scarlett");
+    EXPECT_EQ (clock.rows()[3].value, "+0.012 ppm");
+    EXPECT_EQ (clock.rows()[4].value, "3990");
+    EXPECT_EQ (clock.rows()[8].value, "1");
     view.clockReport.status.health = a3clock::Health::holdover;   // the window's timer: refresh follows
     page.refresh();
-    EXPECT_TRUE (clock.stateLabel().getText().startsWith ("HOLDOVER"));
+    EXPECT_TRUE (clock.rows()[0].value.startsWith ("HOLDOVER"));
 }
 
 // "The dropdown is the truth" (2026-10-30): PipeWire's rate is a dropdown showing the graph's rate, its one choice
@@ -516,9 +521,13 @@ TEST_F (Pages, StatusTextSaysWhatIsGoingOn)
     EXPECT_EQ (a3app::modeText (view.runningCfg, view.state), "JACK, no links (--no-connect)");
     view.runDevice();
     EXPECT_EQ (a3app::modeText (view.runningCfg, view.state), "Device, no links (--no-connect)");
-    EXPECT_EQ (a3app::coreText (false, 0), "Core not heard yet");
-    EXPECT_EQ (a3app::coreText (true, 0.4), "Core heard, last message 0.4 s ago");
-    EXPECT_EQ (a3app::coreText (true, 12.5), "Core silent for 12.5 s");
+    EXPECT_EQ (a3app::coreText (false, 0, std::nullopt), "Core not heard yet");
+    EXPECT_EQ (a3app::coreText (true, 0.4, std::nullopt), "Core heard, last message 0.4 s ago");
+    EXPECT_EQ (a3app::coreText (true, 12.5, std::nullopt), "Core heard, last message 12.5 s ago") << "silence is not a fault";
+    EXPECT_EQ (a3app::coreText (true, 3.6, true), "Core running, last message 3.6 s ago");
+    EXPECT_EQ (a3app::coreText (false, 0, true), "Core running");
+    EXPECT_EQ (a3app::coreText (true, 3.6, false), "Core not answering");
+    EXPECT_EQ (a3app::coreText (false, 0, false), "Core not answering");
 }
 
 TEST_F (Pages, ServiceWindowHidesOnCloseOtherwiseQuits)
@@ -1381,7 +1390,8 @@ TEST_F (Pages, PortraitWindowHasKeysOnTopPageBelowAndAFooter)
         if (name == "MONITOR")
             continue;
         juce::TextButton* key = nullptr;
-        for (auto* candidate : buttonsLabelled (content, name))
+        const bool logo = name == "ABOUT";   // its key reads "A³", the logo letters, and is no one of the six named keys
+        for (auto* candidate : buttonsLabelled (content, logo ? juce::String::fromUTF8 ("A³") : name))
             if (candidate->getParentComponent() == &content)
                 key = candidate;   // the window's own key, not a page's button of the same name
         ASSERT_NE (key, nullptr) << name;
@@ -1392,10 +1402,15 @@ TEST_F (Pages, PortraitWindowHasKeysOnTopPageBelowAndAFooter)
         for (const auto& other : keyAreas)
             EXPECT_FALSE (other.intersects (area)) << name;
         keyAreas.push_back (area);
+        if (logo)
+        {
+            EXPECT_EQ (key->getWidth(), key->getHeight()) << "the logo key is a square";
+            continue;
+        }
         const auto text = look.getTextButtonFont (*key, key->getHeight()).getHeight();
         if (keyText < 0)
             keyText = text;
-        EXPECT_FLOAT_EQ (text, keyText) << name << ": one text size across the keys";
+        EXPECT_FLOAT_EQ (text, keyText) << name << ": one text size across the six keys";
         EXPECT_LE (juce::GlyphArrangement::getStringWidth (juce::FontOptions (text), name), (float) key->getWidth()) << name;
     }
 
@@ -2255,8 +2270,7 @@ TEST_F (Pages, NoTooltipsAnywhere)
     a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, { core.client.get(), {} }, {}, rig.userRoot);
     window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     window.setMonitorShown (true);
-    for (const auto& name : juce::StringArray { "AUDIO", "SPEAKERS", "ZONES", "INPUT", "OUTPUT", "DEPARTMENTS", "CALIBRATION", "RIG", "STATUS",
-                                                juce::String::fromUTF8 ("A³ CORE"), "ABOUT", "BENCH" })
+    for (const auto& name : juce::StringArray { "AUDIO", "SPEAKERS", "ZONES", "INPUT", "OUTPUT", "DEPARTMENTS", "CALIBRATION", "RIG", "STATUS", "ABOUT", "BENCH" })
     {
         window.showPage (name);
         window.refreshNow();
@@ -2525,26 +2539,22 @@ TEST_F (Pages, StatusHasTheDriverAndTheClocksDetail)
     const auto& clock = page.clockPanel();
     EXPECT_TRUE (clock.isVisible());
     EXPECT_TRUE (page.getLocalBounds().contains (clock.getBounds()));
-    EXPECT_TRUE (clock.countersLabel().isVisible());
-    EXPECT_TRUE (clock.countersLabel().getText().contains ("corrections")) << clock.countersLabel().getText();
-    EXPECT_TRUE (clock.stateLabel().getText().contains ("phase error")) << clock.stateLabel().getText();
+    ASSERT_EQ (clock.rows().size(), 9u);
+    EXPECT_EQ (clock.rows()[0].caption, "CLOCK") << "the card starts with this row: no heading";
+    EXPECT_TRUE (clock.rows()[0].value.contains ("phase error")) << clock.rows()[0].value;
+    EXPECT_EQ (clock.rows()[4].caption, "Corrections");
+    EXPECT_EQ (clock.rows()[8].caption, "Scarlett breaks");
+    for (const auto& r : clock.rows())
+        EXPECT_FALSE (r.value.contains ("corrections")) << "values only, the caption names it: " << r.value;
     EXPECT_FALSE (clock.masterBox().isVisible()) << "the choice is AUDIO's";
     // 2026-10-30: three cards (what runs, the clock, the meters); MISSING and DROPPED went (RIG says what runs where).
     EXPECT_EQ (page.cardAreas().size(), 3u);
     // The clock's lines follow each other as the driver's do: no empty line, nothing spread over the card.
-    std::vector<juce::Rectangle<int>> lines;
-    for (const auto* label : { &clock.stateLabel(), &clock.roleLabel(), &clock.rateLabel(), &clock.countersLabel(), &clock.noteLabel() })
-        if (label->isVisible())
-        {
-            EXPECT_TRUE (label->getText().isNotEmpty()) << "an empty line is not shown";
-            lines.push_back (label->getBounds());
-        }
-    ASSERT_GE (lines.size(), 4u);
-    for (size_t i = 1; i < lines.size(); ++i)
-        EXPECT_EQ (lines[i].getY(), lines[i - 1].getBottom()) << i;
-    EXPECT_EQ (lines.front().getHeight(), lines[1].getHeight()) << "one line height";
-    EXPECT_LE (lines.back().getBottom(), clock.getHeight()) << "inside the panel";
-    EXPECT_GE (lines.back().getBottom(), clock.getHeight() - lines.front().getHeight()) << "the card ends with its last line";
+    const auto line = a3app::layout::compactLine (a3app::layout::tokens (page));
+    EXPECT_LE ((int) clock.rows().size() * line, clock.getHeight() + line) << "the card is its rows, a compact line each";
+    EXPECT_GE ((int) clock.rows().size() * line, clock.getHeight() - line);
+    for (const auto& r : clock.rows())
+        EXPECT_TRUE (r.value.isNotEmpty()) << "an empty row is not shown: " << r.caption;
     expectPainted (a3apptest::snapshotAt (page, "window2-status", page.getWidth(), page.getHeight()));
 }
 
@@ -2609,6 +2619,11 @@ TEST_F (Pages, EngineValuesArePlainUnlessMissingOrAFault)
     for (const auto& r : rows)
         if (! r.caption.startsWith ("Measured"))
             EXPECT_EQ (r.tone, Tone::plain) << r.caption << ": " << r.value;
+    // Quiet but answering: plain. Not answering: the one red.
+    rows = a3app::statusRows ("JACK", false, "Core running", true, false, "main open", driver, {}, status, "9.3 ms");
+    EXPECT_EQ (rows[1].tone, Tone::plain);
+    rows = a3app::statusRows ("JACK", false, "Core not answering", true, true, "main open", driver, {}, status, "9.3 ms");
+    EXPECT_EQ (rows[1].tone, Tone::fault);
     status.xruns = 2;
     status.dspLoadPercent = 95.0f;
     rows = a3app::statusRows ("A3-CORE NOT RUNNING - gone", true, "Core not heard yet", false, false, "main closed", a3app::driverInfo (config, status), {},
@@ -2637,7 +2652,7 @@ TEST_F (Pages, SixPageKeysAndTheSubPages)
     a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, { core.client.get(), {} }, {}, rig.userRoot);
     window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     window.setWorkspaceRunner ([] (const std::vector<std::string>&) { return std::string(); });
-    EXPECT_EQ (window.pageList(), (juce::StringArray { "AUDIO", "SPEAKERS", "I/O", "CALIBRATION", "RIG", "STATUS", "MONITOR" }));
+    EXPECT_EQ (window.pageList(), (juce::StringArray { "ABOUT", "AUDIO", "SPEAKERS", "I/O", "CALIBRATION", "RIG", "STATUS", "MONITOR" }));
     auto& content = *window.getContentComponent();
     juce::TextButton* calibration = nullptr;
     for (auto* key : buttonsLabelled (content, "CALIBRATION"))
@@ -2758,8 +2773,7 @@ TEST_F (Pages, EveryPageIsCardsOnOneGrid)
     a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, { core.client.get(), {} }, {}, rig.userRoot);
     window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
     auto& content = *window.getContentComponent();
-    for (const auto& name : juce::StringArray { "AUDIO", "SPEAKERS", "ZONES", "INPUT", "OUTPUT", "DEPARTMENTS", "CALIBRATION", "RIG", "STATUS",
-                                                juce::String::fromUTF8 ("A³ CORE"), "ABOUT" })
+    for (const auto& name : juce::StringArray { "AUDIO", "SPEAKERS", "ZONES", "INPUT", "OUTPUT", "DEPARTMENTS", "CALIBRATION", "RIG", "STATUS", "ABOUT" })
     {
         window.showPage (name);
         window.refreshNow();
@@ -2787,6 +2801,43 @@ TEST_F (Pages, EveryPageIsCardsOnOneGrid)
     }
 }
 
+// The window is the greeter: a fresh one opens on ABOUT, whose key is a square "A³" before the six named keys, which share
+// the rest of the row.
+TEST_F (Pages, AFreshWindowOpensOnAbout)
+{
+    SpeakerRig rig;
+    a3app::SystemProbe probe ({}, false);
+    a3app::MainWindow window (rig.view, manager, { rig.installed.root() }, false, [] {}, {}, {}, rig.userRoot, { &probe });
+    window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    EXPECT_EQ (window.currentPage(), "ABOUT");
+    EXPECT_TRUE (probe.isWanted());
+    window.refreshNow();
+    auto& content = *window.getContentComponent();
+    const auto logoKeys = buttonsLabelled (content, juce::String::fromUTF8 ("A³"));
+    ASSERT_EQ (logoKeys.size(), 1u);
+    const auto* logoKey = logoKeys.front();
+    EXPECT_EQ (logoKey->getWidth(), logoKey->getHeight()) << "a square key";
+    juce::Component* before = nullptr;
+    int named = 0, width = 0;
+    for (const auto& name : { "AUDIO", "SPEAKERS", "I/O", "CALIBRATION", "RIG", "STATUS" })
+    {
+        std::vector<juce::TextButton*> keys;
+        for (auto* candidate : buttonsLabelled (content, name))
+            if (candidate->getParentComponent() == &content)
+                keys.push_back (candidate);
+        ASSERT_EQ (keys.size(), 1u) << name;
+        EXPECT_GT (keys.front()->getX(), logoKey->getRight() - 1) << name << " comes after the logo key";
+        EXPECT_GT (keys.front()->getWidth(), 2 * logoKey->getWidth()) << name << ": the six keep their share";
+        width = width == 0 ? keys.front()->getWidth() : width;
+        EXPECT_EQ (keys.front()->getWidth(), width) << "equal shares";
+        ++named;
+        before = keys.front();
+    }
+    EXPECT_EQ (named, 6);
+    EXPECT_NE (before, nullptr);
+    expectPainted (a3apptest::snapshotAt (content, "greeter-about-with-key-row", content.getWidth(), content.getHeight()));
+}
+
 // RIG is a page of the key row again (2026-10-31; FILTER went to CALIBRATION), STATUS is ENGINE and ABOUT.
 TEST_F (Pages, RigIsAPageAndStatusIsEngineAndAbout)
 {
@@ -2798,9 +2849,8 @@ TEST_F (Pages, RigIsAPageAndStatusIsEngineAndAbout)
     EXPECT_FALSE (window.pageList().contains ("FILTER"));
     auto& content = *window.getContentComponent();
     window.showPage ("STATUS");
-    EXPECT_EQ (window.currentSubPage(), juce::String::fromUTF8 ("A³ CORE")) << "a3-core, not Engine (2026-10-31)";
-    for (const auto& key : { juce::String::fromUTF8 ("A³ CORE"), juce::String ("ABOUT") })
-        EXPECT_FALSE (buttonsLabelled (*shownPage (window), key).empty()) << key;
+    EXPECT_EQ (window.currentPage(), "STATUS");
+    EXPECT_EQ (window.currentSubPage(), "") << "A³ CORE is STATUS itself: no sub-page row";
     EXPECT_TRUE (buttonsLabelled (*shownPage (window), "RIG").empty()) << "RIG is no sub-page";
     EXPECT_FALSE (probe.isWanted()) << "the machine is asked only while RIG or ABOUT is shown";
     window.refreshNow();
@@ -2814,8 +2864,7 @@ TEST_F (Pages, RigIsAPageAndStatusIsEngineAndAbout)
     window.refreshNow();
     expectPainted (a3apptest::snapshotAt (content, "system3-window-rig", content.getWidth(), content.getHeight()));
     window.showPage ("ABOUT");
-    EXPECT_EQ (window.currentPage(), "STATUS");
-    EXPECT_EQ (window.currentSubPage(), "ABOUT");
+    EXPECT_EQ (window.currentPage(), "ABOUT");
     EXPECT_TRUE (probe.isWanted());
     window.refreshNow();
     expectPainted (a3apptest::snapshotAt (content, "system3-window-about", content.getWidth(), content.getHeight()));

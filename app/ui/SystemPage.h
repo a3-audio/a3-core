@@ -34,6 +34,11 @@ public:
     // row of its own (the beat analyzer sits inside the a3-core card when it is one of the Core's units).
     juce::StringArray serviceLines() const;
     bool hasOwnRow (const juce::String& label) const;
+    // The a3-core card's collapsed line as painted ("9 services · all running"), whether the list is open, and the tap on the
+    // disclosure key (closed at the start; kept while the window lives).
+    juce::String serviceSummary() const;
+    bool servicesOpen() const;
+    void toggleServices();
     // The programs' rows inside ENTITIES, scrolled (the list's children are their names and keys).
     int programRows() const { return (int) rows.size(); }
     juce::Component& programList();
@@ -78,10 +83,10 @@ private:
     SystemProbe& probe;
     std::uint64_t seen = 0;
     checkout::Facts pins;
-    juce::Label aboutHeading, supportHeading, publishedHeading, licenceHeading;
+    juce::Label logo, supportHeading, publishedHeading, licenceHeading;
     juce::OwnedArray<juce::HyperlinkButton> links, supportLinks;
     juce::OwnedArray<juce::Component> repositories;   // a link per repository with a url, its name as text without one
-    juce::Rectangle<int> taglineArea, contactArea, bitcoinArea, versionArea, licenceArea;
+    juce::Rectangle<int> logoArea, taglineArea, contactArea, bitcoinArea, versionArea, licenceArea;
     std::vector<juce::Rectangle<int>> publishedAreas;
 };
 }

@@ -192,10 +192,13 @@ public:
     juce::String truthNote() const override
     {
         juce::StringArray notes { a3app::truthNote (truth), unmeteredDecksNote (startedWith.engine.decks, truth.vuMeters),
-                                  hiddenDecksNote (startedWith.engine.decks, startedWith.engine.decksNamed, truth.decks),
-                                  a3::delayOverrideNote (role.startup.spatial.fxParameters, role.startup.config.engine.delayModulation) };
+                                  hiddenDecksNote (startedWith.engine.decks, startedWith.engine.decksNamed, truth.decks) };
         notes.removeEmptyStrings();
         return notes.joinIntoString ("; ");
+    }
+    juce::String configNote() const override
+    {
+        return a3::delayOverrideNote (role.startup.spatial.fxParameters, role.startup.config.engine.delayModulation);
     }
     int truthDecks() const override { return truth.decks; }
     a3clock::ClockReport clock() const override { return clockReader.get (monotonicSeconds(), (double) juce::Time::currentTimeMillis() / 1000.0); }

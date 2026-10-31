@@ -544,6 +544,20 @@ std::vector<ServiceLine> serviceLines (const Facts& facts)
     return lines;
 }
 
+bool isProblem (Light light) { return light == Light::stopped || light == Light::failed || light == Light::missing || light == Light::degraded; }
+
+int severity (Light light)
+{
+    switch (light)
+    {
+        case Light::failed: return 4;
+        case Light::missing: return 3;
+        case Light::degraded: return 2;
+        case Light::stopped: return 1;
+        default: return 0;
+    }
+}
+
 bool coreHas (const Facts& facts, const std::vector<juce::String>& units)
 {
     for (const auto& unit : units)
@@ -552,6 +566,35 @@ bool coreHas (const Facts& facts, const std::vector<juce::String>& units)
                 return true;
     return false;
 }
+}
+
+ServiceSummary summarize (const std::vector<ServiceLine>& lines)
+{
+    constexpr int named = 2;   // names in the line before "+N"
+    ServiceSummary summary;
+    const auto count = juce::String ((int) lines.size()) + (lines.size() == 1 ? " service" : " services");
+    juce::StringArray down;
+    bool unread = ! lines.empty();
+    for (const auto& line : lines)
+    {
+        unread = unread && line.light == Light::unknown;
+        if (! isProblem (line.light))
+            continue;
+        down.add (shortName (line.name));
+        if (severity (line.light) > severity (summary.worst))
+            summary.worst = line.light;
+    }
+    if (down.isEmpty())
+    {
+        summary.text = count + dot + (unread ? "not read yet" : "all running");
+        return summary;
+    }
+    const int extra = down.size() - named;
+    if (extra > 0)
+        down.removeRange (named, extra);
+    summary.text = juce::String (extra > 0 ? down.size() + extra : down.size()) + " not running: " + down.joinIntoString (", ")
+                   + (extra > 0 ? " +" + juce::String (extra) : juce::String());
+    return summary;
 }
 
 Row describe (const Program& program, const Facts& facts)

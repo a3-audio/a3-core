@@ -12,12 +12,14 @@ juce::String modeText (const AppConfig& config, const BackendStatus& status)
     return backend + (status.connecting ? ", connecting" : ", no links (--no-connect)");
 }
 
-juce::String coreText (bool heard, double secondsSince)
+juce::String coreText (bool heard, double secondsSince, CoreAnswers answers)
 {
-    if (! heard)
-        return "Core not heard yet";
-    const auto seconds = juce::String (secondsSince, 1) + " s";
-    return secondsSince > coreSilentAfterSeconds ? "Core silent for " + seconds : "Core heard, last message " + seconds + " ago";
+    if (answers == false)
+        return "Core not answering";
+    const auto last = heard ? ", last message " + juce::String (secondsSince, 1) + " s ago" : juce::String();
+    if (answers == true)
+        return "Core running" + last;
+    return heard ? "Core heard" + last : "Core not heard yet";
 }
 
 std::vector<std::pair<std::string, int>> groupMissingByClient (const std::vector<std::string>& missingPorts)
@@ -181,7 +183,9 @@ juce::String retiredText (const HostView& view)
 {
     const auto links = view.droppedLinks();
     const auto keys = view.ignoredKeys();
-    return links.empty() && keys.empty() ? juce::String() : droppedText (links, keys);
+    const auto retired = links.empty() && keys.empty() ? juce::String() : droppedText (links, keys);
+    const auto note = view.configNote();
+    return retired.isEmpty() ? note : note.isEmpty() ? retired : retired + "\n" + note;
 }
 
 juce::String estimatedText (const RoundTrip& estimate)
@@ -249,7 +253,7 @@ std::vector<StatusRow> statusRows (const juce::String& modeLine, bool modeFault,
     const auto audioText = driver.rate + ",  " + driver.timing;
     std::vector<StatusRow> rows {
         { "Mode", modeLine, modeFault ? Tone::fault : Tone::plain },
-        { "Core", coreLine, ! coreHeard ? Tone::dim : coreSilent ? Tone::fault : Tone::plain },
+        { "Core", coreLine, coreSilent ? Tone::fault : ! coreHeard ? Tone::dim : Tone::plain },
         { "Gate", gateLine, Tone::plain },
         { "Audio", truthWarning.isEmpty() ? audioText : audioText + "   (" + truthWarning + ")", truthWarning.isEmpty() ? Tone::plain : Tone::fault },
         { "Rate from", driver.rateSource, driver.rateSource.isEmpty() ? Tone::dim : Tone::plain },
@@ -284,6 +288,7 @@ void StatusPage::refresh()
     dropped = view.droppedLinks();
     ignored = view.ignoredKeys();
     truthWarning = view.truthNote();
+    answers = coreAnswers ? coreAnswers() : CoreAnswers();
     heard = view.coreHeard();
     sinceCore = view.secondsSinceCore();
     gate = view.gateOpen();
@@ -307,7 +312,7 @@ int StatusPage::row() const
     const auto t = layout::tokens (*this);
     constexpr int cardsOfLines = 2, meterRows = 2;
     const int fixed = 2 * t.margin + (cardsOfLines + 1) * 2 * t.padding + cardsOfLines * t.gap;
-    const float lines = (float) (statusLines + ClockPanel::mostDetailLines) * layout::compactLineShare + 0.6f + (float) meterRows;   // and the clock's heading
+    const float lines = (float) (statusLines + ClockPanel::mostDetailLines) * layout::compactLineShare + (float) meterRows;
     return juce::jmax (1, juce::jmin (t.row, (int) ((float) (getHeight() - fixed) / lines)));
 }
 
@@ -321,7 +326,7 @@ void StatusPage::resized()
     stack.card (2 * t.padding + statusLines * line);
     clock.setTokens (t);
     clockLinesLaid = clock.detailLines();
-    clock.setBounds (stack.card (2 * t.padding + t.heading + clockLinesLaid * line).reduced (t.padding));
+    clock.setBounds (stack.card (2 * t.padding + clockLinesLaid * line).reduced (t.padding));
     meters->setBounds (stack.rest().reduced (t.padding));
 }
 
@@ -348,7 +353,7 @@ void StatusPage::paint (juce::Graphics& g)
         const bool open = std::isfinite (gates.gain[z]) && gates.gain[z] > 0.0f;
         gateText << zones[z] << (open ? " open" : " closed") << (z + 1 < a3::numGatedZones ? "   " : "");
     }
-    const auto rows = statusRows (modeLine(), problem.isNotEmpty(), coreText (heard, sinceCore), heard, heard && sinceCore > coreSilentAfterSeconds,
+    const auto rows = statusRows (modeLine(), problem.isNotEmpty(), coreText (heard, sinceCore, answers), heard || answers == true, answers == false,
                                   gateText + (gate ? "   (Core: open)" : "   (Core: closed)"), driverInfo (config, status), truthWarning,
                                   status, aes67);
     // "Label: value" (2026-10-31), one label column for every row: as wide as the longest label, and two units beside it.
@@ -356,11 +361,29 @@ void StatusPage::paint (juce::Graphics& g)
     float captionWidth = 0.0f;
     for (const auto& r : rows)
         captionWidth = juce::jmax (captionWidth, juce::GlyphArrangement::getStringWidth (font, r.caption + ":"));
+    for (const auto& r : clock.rows())   // the clock card's rows share the column
+        captionWidth = juce::jmax (captionWidth, juce::GlyphArrangement::getStringWidth (font, r.caption + ":"));
+    const int columnWidth = juce::roundToInt (captionWidth) + 2 * t.unit;
+    auto clockArea = cards[1].reduced (t.padding);
+    for (const auto& r : clock.rows())
+    {
+        auto line = clockArea.removeFromTop (row);
+        g.setColour (palette::textMuted);
+        g.drawText (r.caption + ":", line.removeFromLeft (columnWidth), juce::Justification::centredLeft, true);
+        const int wordWidth = r.wordLength > 0 ? juce::roundToInt (juce::GlyphArrangement::getStringWidth (font, r.value.substring (0, r.wordLength))) + 3 : 0;   // +3: drawText ellipsises a width that is exactly the text's
+        if (wordWidth > 0)
+        {
+            g.setColour (r.wordColour);
+            g.drawText (r.value.substring (0, r.wordLength), line.removeFromLeft (wordWidth), juce::Justification::centredLeft, false);
+        }
+        g.setColour (r.colour);
+        g.drawFittedText (r.value.substring (r.wordLength), line, juce::Justification::centredLeft, 1, 0.7f);
+    }
     for (const auto& r : rows)
     {
         auto line = area.removeFromTop (row);
         g.setColour (palette::textMuted);
-        g.drawText (r.caption + ":", line.removeFromLeft (juce::roundToInt (captionWidth) + 2 * t.unit), juce::Justification::centredLeft, true);
+        g.drawText (r.caption + ":", line.removeFromLeft (columnWidth), juce::Justification::centredLeft, true);
         g.setColour (r.tone == StatusRow::Tone::fault ? palette::danger : r.tone == StatusRow::Tone::dim ? palette::textMuted : palette::text);
         g.drawFittedText (r.value, line, juce::Justification::centredLeft, 1, 0.7f);
     }

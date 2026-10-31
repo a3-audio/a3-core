@@ -3,7 +3,7 @@
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
 
-#include "Look.h"
+#include <vector>
 #include "ClockStatus.h"
 #include "Look.h"
 
@@ -20,6 +20,16 @@ juce::Colour toneColour (a3clock::ClockIndicator::Tone);
 // The deck hosts' own PTP offsets are not shown: Core does not know them yet.
 // Two forms (2026-10-30): AUDIO's card shows the choice, the master only (the one-word state is in the footer); STATUS shows the detail, the state with its phase error, the PTP role, the rates, the counters and
 // the note, without the master.
+// One row of STATUS' clock card, "Label: value" as the info card above it (2026-10-31): the state row's first word is the
+// state word, coloured by its tone (green when locked); every other value is in the plain text colour, dim where it is not
+// known yet, red where it is a fault.
+struct ClockRow
+{
+    juce::String caption, value;
+    int wordLength = 0;                 // state row: the characters of the state word
+    juce::Colour wordColour, colour;    // the word's, the value's
+};
+
 class ClockPanel final : public juce::Component
 {
 public:
@@ -30,7 +40,9 @@ public:
     // The detail's lines as laid out: one each for the state, the PTP role, the rates and the counters that say something,
     // two for the note; none for an empty one (2026-10-30: no empty line on ENGINE's clock card).
     int detailLines() const;
-    static constexpr int mostDetailLines = 6;
+    static constexpr int mostDetailLines = 9;
+    // The detail's rows, in the order of the card: CLOCK, PTP, PTP clock, Against the Scarlett, then the five counters.
+    const std::vector<ClockRow>& rows() const { return detailRows; }
     // The page's tokens: its heading, its row and its one text size.
     void setTokens (const layout::Tokens&);
     juce::Colour frameColour() const { return frame; }   // the page frames the card in it (transparent: locked)
@@ -49,6 +61,7 @@ public:
 private:
     juce::Label title, masterCaption, state, role, rate, counters, note;
     Dropdown master;
+    std::vector<ClockRow> detailRows;
     juce::Colour frame = juce::Colours::transparentBlack;
     const Mode mode;
     layout::Tokens tokens;

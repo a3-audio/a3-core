@@ -507,3 +507,31 @@ TEST_F (Monitor, RetiredLinksAndKeysAreOnTheMonitor)
     expectPainted (a3apptest::snapshotAt (content, "system3-monitor-retired", content.getWidth(), content.getHeight()));
     home.deleteRecursively();
 }
+
+// The engine's config notes (the delay notice) are a line on the MONITOR, not a red tail on STATUS' Audio row.
+TEST_F (Monitor, TheConfigNoteIsOnTheMonitor)
+{
+    CoreWindowRig rig;
+    a3apptest::FakeView view;
+    view.configNoteText = "the delay plays the delay page (R15)";
+    juce::AudioDeviceManager manager;
+    manager.addAudioDeviceType (std::make_unique<a3apptest::NoDevices>());
+    const auto home = juce::File::createTempFile ("a3-window-home");
+    a3app::MainWindow window (view, manager, {}, false, [] {}, { rig.client.get(), a3app::windowSettingsFile (home) });
+    window.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight);
+    window.setMonitorShown (true);
+    EXPECT_TRUE (window.pageList().contains ("MONITOR"));
+    window.showPage ("TRUTH & DEVICES");
+    window.refreshNow();
+    auto& content = *window.getContentComponent();
+    a3app::MonitorTruthPage* truth = nullptr;
+    for (auto* child : content.getChildren())
+        if (auto* page = dynamic_cast<a3app::MonitorTruthPage*> (child))
+            truth = page;
+    ASSERT_NE (truth, nullptr);
+    const auto text = truth->retiredLabel().getText();
+    EXPECT_TRUE (text.contains ("the delay plays the delay page (R15)")) << text;
+    EXPECT_TRUE (truth->retiredLabel().isVisible());
+    EXPECT_GT (truth->retiredLabel().getHeight(), 0);
+    home.deleteRecursively();
+}
