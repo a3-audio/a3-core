@@ -55,6 +55,14 @@ class WhereThingsLive(unittest.TestCase):
                     if line.startswith('for_window [class="A3 Desk"]'))
         self.assertIn("fullscreen enable", rule)
 
+    def test_every_a3_app_opens_full_screen(self):
+        # The maintainer, 2026-11-01: every A3 app full screen, StemDeck's decks too.
+        for criteria in ('[class="A3 Motion UI"]', '[class="A3 Desk"]', '[class="a3-core"]',
+                         '[class="StemDeck" title="^StemDeck( [A-D])?$"]'):
+            lines = [line for line in self.config.splitlines()
+                     if line.startswith("for_window " + criteria) and "fullscreen enable" in line]
+            self.assertTrue(lines, criteria)
+
     def test_workspace_4_keeps_its_number_and_names_nothing(self):
         self.assertEqual("4", workspace_variables(self.config)["ws4"])
 

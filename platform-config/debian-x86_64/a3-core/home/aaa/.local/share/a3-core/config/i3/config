@@ -248,3 +248,9 @@ bar {
     font pango:DejaVu Sans Bold 13
     status_command i3status
 }
+
+# Every A3 app full screen, StemDeck too (the maintainer, 2026-11-01; on the rig by hand first).
+for_window [class="A3 Motion UI"] fullscreen enable
+for_window [class="A3 Desk"] fullscreen enable
+for_window [class="a3-core"] fullscreen enable
+for_window [class="StemDeck" title="^StemDeck( [A-D])?$"] fullscreen enable
