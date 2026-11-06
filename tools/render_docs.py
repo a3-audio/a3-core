@@ -12,6 +12,7 @@ stays the writers'.
   <!-- a3-osc:ports -->        who listens where
   <!-- a3-osc:routes -->       who sends to which listener
   <!-- a3-osc:meters -->       how every display moves a meter bar
+  <!-- a3-osc:aes67 -->        every AES67 stream the rig sends
 
 Usage: render_docs.py [A3_DOC_CHECKOUT]   (default: a3-doc beside a3-core)
 """
@@ -21,7 +22,8 @@ import sys
 from pathlib import Path
 
 #: The pages that carry tables, relative to an a3-doc checkout.
-PAGES = ("src/ressources/osc.md", "src/ressources/ports.md")
+PAGES = ("src/ressources/osc.md", "src/ressources/ports.md",
+         "src/ressources/aes67.md")
 
 
 def _row(cells):
@@ -100,8 +102,36 @@ def meters_table(truth):
     return "\n".join(rows)
 
 
+def _stream_group(truth, stream):
+    if "group_base" in stream:
+        return f"{stream['group_base']} + slot:{stream['port']}"
+    group = stream["group"]
+    address = group if group[0].isdigit() else truth.host(group)
+    return f"{address}:{stream['port']}"
+
+
+def _stream_channels(stream):
+    source = stream["source"]
+    if source == "fixed":
+        return str(stream["channels"])
+    if source.startswith("zone:"):
+        return "n + 1"
+    return "2"
+
+
+def aes67_table(truth):
+    """One row a stream. A zone stream's width follows the speaker layout
+    (the zone's n loudspeakers plus the sub), so it is a rule, not a number."""
+    rows = [_row(["Stream", "Group:port", "Packet time (ms)", "Channels"]),
+            _row(["---"] * 4)]
+    for stream in truth.data()["aes67_streams"]:
+        rows.append(_row([f"`{stream['session']}`", _stream_group(truth, stream),
+                          stream["ptime"], _stream_channels(stream)]))
+    return "\n".join(rows)
+
+
 TABLES = {"addresses": addresses_table, "vu": vu_table, "ports": ports_table,
-          "routes": routes_table, "meters": meters_table}
+          "routes": routes_table, "meters": meters_table, "aes67": aes67_table}
 
 
 def put_tables(text, truth):

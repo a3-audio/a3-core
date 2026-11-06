@@ -93,6 +93,32 @@ class TheTables(unittest.TestCase):
                 seen.append(sender)
 
 
+class TheAes67Table(unittest.TestCase):
+    def test_the_aes67_table_lists_every_stream(self):
+        rows = render_docs.aes67_table(TRUTH).splitlines()[2:]
+        self.assertEqual(len(rows), 6)
+        text = "\n".join(rows)
+        for session in ("AES67 {host} out", "AES67 deck {deck}", "A3 Core MAIN",
+                        "A3 Core BOOTH", "A3 Core REC", "A3 Core PHONES"):
+            self.assertIn(session, text)
+        for endpoint in ("239.69.150.243:5004", "239.69.200.1:5004",
+                         "239.69.200.4:5004"):
+            self.assertIn(endpoint, text)
+
+    def test_a_deck_stream_moves_one_group_a_slot(self):
+        row = [r for r in render_docs.aes67_table(TRUTH).splitlines()
+               if "deck {deck}" in r][0]
+        self.assertIn("239.69.150.244", row)
+        self.assertIn("slot", row)
+        self.assertIn("0.25", row)
+        self.assertIn("41", row)
+
+    def test_a_zone_stream_counts_its_speakers_plus_the_sub(self):
+        row = [r for r in render_docs.aes67_table(TRUTH).splitlines()
+               if "Core MAIN" in r][0]
+        self.assertIn("n + 1", row)
+
+
 class TheMarkers(unittest.TestCase):
     def test_only_between_the_markers_is_replaced(self):
         page = ("# OSC\n\nHand text.\n\n<!-- a3-osc:vu -->\nold\n"
@@ -128,6 +154,12 @@ class A3DocFollows(unittest.TestCase):
         text = page.read_text()
         self.assertIn("<!-- a3-osc:routes -->", text)
         self.assertIn("<!-- /a3-osc:routes -->", text)
+
+    def test_the_stream_page_carries_the_table(self):
+        page = render_docs.default_doc(ROOT) / "src/ressources/aes67.md"
+        if not page.exists():
+            self.skipTest(f"no {page} -- run this in the a3-system checkout")
+        self.assertIn("<!-- a3-osc:aes67 -->", page.read_text())
 
     def test_the_committed_pages_are_the_render(self):
         doc = render_docs.default_doc(ROOT)
