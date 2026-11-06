@@ -18,7 +18,7 @@ struct BackendSettings
     juce::String deviceType, inputDevice, outputDevice;
     double sampleRate = 44100;
     // JACK (PipeWire): the forced graph quantum, applied live (AudioTiming.h); a device: its buffer size.
-    int blockSize = 128;
+    int blockSize = 64;   // the shipped quantum (pipewire.conf.d), 128 before 2026-11-06
     // JACK (PipeWire) only: the sound card's ALSA periods, through the engine's WirePlumber drop-in. 3 is
     // PipeWire's own choice on the rig, and no drop-in.
     int periods = 3;

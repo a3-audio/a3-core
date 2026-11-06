@@ -360,19 +360,19 @@ TEST_F (Pages, PipeWireBlockAndPeriodsApplyOnlyOnApply)
     ASSERT_EQ (periods.getNumItems(), 2);
     EXPECT_EQ (periods.getItemText (0), "2 periods");
     EXPECT_EQ (periods.getItemText (1), "3 periods");
-    EXPECT_EQ (block.getText(), "128 frames");
+    EXPECT_EQ (block.getText(), "64 frames") << "the shipped block";
     EXPECT_EQ (periods.getText(), "3 periods");
     EXPECT_TRUE (page.showsPeriods());
     EXPECT_FALSE (page.applyButton().isVisible());
 
-    page.chooseBlock (64);
+    page.chooseBlock (128);
     EXPECT_TRUE (view.timings.empty()) << "a choice is not applied on its own";
     EXPECT_TRUE (page.applyButton().isVisible());
-    EXPECT_EQ (page.confirmLabel().getText(), "Block 64 frames. APPLY?") << "no explanation (2026-10-31)";
+    EXPECT_EQ (page.confirmLabel().getText(), "Block 128 frames. APPLY?") << "no explanation (2026-10-31)";
     page.cancelButton().triggerClick();
     juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
     EXPECT_TRUE (view.timings.empty());
-    EXPECT_EQ (block.getText(), "128 frames");
+    EXPECT_EQ (block.getText(), "64 frames");
     EXPECT_FALSE (page.applyButton().isVisible());
 
     page.choosePeriods (2);
@@ -382,7 +382,7 @@ TEST_F (Pages, PipeWireBlockAndPeriodsApplyOnlyOnApply)
     page.applyButton().triggerClick();
     juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
     ASSERT_EQ (view.timings.size(), 1u);
-    EXPECT_EQ (view.timings[0], (a3app::AudioTiming { 128, 2 }));
+    EXPECT_EQ (view.timings[0], (a3app::AudioTiming { 64, 2 }));
     EXPECT_FALSE (page.applyButton().isVisible());
 }
 

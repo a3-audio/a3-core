@@ -33,7 +33,7 @@ TEST (AudioTiming, TheChoicesAndTheDefaults)
     EXPECT_EQ (a3app::pipewireBlocks(), (std::vector<int> { 32, 64, 128, 256, 512, 1024 }));
     EXPECT_EQ (a3app::pipewirePeriods(), (std::vector<int> { 2, 3 }));
     const a3app::AudioTiming timing;
-    EXPECT_EQ (timing.block, 128);
+    EXPECT_EQ (timing.block, 64);
     EXPECT_EQ (timing.periods, 3);
     a3app::BackendSettings backend;
     backend.blockSize = 64;
@@ -41,14 +41,14 @@ TEST (AudioTiming, TheChoicesAndTheDefaults)
     EXPECT_EQ (a3app::timingOf (backend), (a3app::AudioTiming { 64, 2 }));
 }
 
-// The block goes to PipeWire's settings metadata; the shipped 128 releases the force, so PipeWire's own
-// configuration (quantum 128, min-quantum 128) runs exactly as before. A forced quantum is not clamped by
+// The block goes to PipeWire's settings metadata; the shipped 64 releases the force, so PipeWire's own
+// configuration (quantum 64, min-quantum 64) runs exactly as shipped. A forced quantum is not clamped by
 // clock.min-quantum in PipeWire 1.6 (settings.check-quantum is off by default), so min-quantum is never touched.
 TEST (AudioTiming, TheBlockIsTheForcedQuantum)
 {
-    EXPECT_EQ (a3app::forceQuantumCommand (64), (Command { "pw-metadata", "-n", "settings", "0", "clock.force-quantum", "64" }));
+    EXPECT_EQ (a3app::forceQuantumCommand (128), (Command { "pw-metadata", "-n", "settings", "0", "clock.force-quantum", "128" }));
     EXPECT_EQ (a3app::forceQuantumCommand (1024), (Command { "pw-metadata", "-n", "settings", "0", "clock.force-quantum", "1024" }));
-    EXPECT_EQ (a3app::forceQuantumCommand (128), (Command { "pw-metadata", "-n", "settings", "0", "clock.force-quantum", "0" }));
+    EXPECT_EQ (a3app::forceQuantumCommand (64), (Command { "pw-metadata", "-n", "settings", "0", "clock.force-quantum", "0" }));
     EXPECT_EQ (a3app::defaultNodesCommand(), (Command { "pw-metadata", "-n", "default", "0" }));
     EXPECT_EQ (a3app::restartWirePlumberCommand(), (Command { "systemctl", "--user", "restart", "wireplumber" }));
 }

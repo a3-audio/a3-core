@@ -65,15 +65,15 @@ struct Rig
 };
 }
 
-// At the start the engine sets the block it remembers; the shipped 128 releases any force (nothing changes).
+// At the start the engine sets the block it remembers; the shipped 64 releases any force (nothing changes).
 TEST (TimingControl, TheStartSetsTheStoredBlock)
 {
     Rig rig;
     auto control = rig.control();
-    control.start ({ 64, 3 });
+    control.start ({ 128, 3 });
     ASSERT_EQ (rig.runner.ran.size(), 1u);
-    EXPECT_EQ (rig.runner.ran[0], a3app::forceQuantumCommand (64));
-    EXPECT_EQ (control.report().applied, (AudioTiming { 64, 3 }));
+    EXPECT_EQ (rig.runner.ran[0], a3app::forceQuantumCommand (128));
+    EXPECT_EQ (control.report().applied, (AudioTiming { 128, 3 }));
     EXPECT_FALSE (control.report().previous.has_value());
     EXPECT_TRUE (rig.runner.started.empty()) << "the periods are never applied at a start: WirePlumber read the file at its own";
     EXPECT_FALSE (rig.dropIn().exists());

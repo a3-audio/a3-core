@@ -630,15 +630,15 @@ linked there (see "Who owns a link"; tested as a restart window in `tests/app/Sy
 2 periods 348 samples, 3 periods 344 (PipeWire drives the Scarlett by timer).
 
 **Stored** in `engine.json`'s backend section: `blockSize` (32..2048; the page offers 32, 64, 128, 256, 512,
-1024) and `periods` (2 or 3, default 3). Default 128: today's behaviour, nothing changes on install. A change on the page is written at once (only
+1024) and `periods` (2 or 3, default 3). Default 64 since 2026-11-06 (128 before; the digital loop went from 343 samples, 7.8 ms, to 212 samples, 4.8 ms). A change on the page is written at once (only
 that key, like the converters' share), no Save.
 
 **Block**: `pw-metadata -n settings 0 clock.force-quantum N`, live; the engine follows through its buffer-size
-callback and measures the round trip again. 128 writes 0 (no force), so PipeWire's own quantum from a3-core's
-`pipewire.conf.d` runs as before. PipeWire 1.6 does not clamp a forced quantum to `clock.min-quantum`
-(`settings.check-quantum` is off by default; the graph takes min = max = force), so min-quantum 128 stays untouched
+callback and measures the round trip again. 64 writes 0 (no force), so PipeWire's own quantum from a3-core's
+`pipewire.conf.d` runs as shipped. PipeWire 1.6 does not clamp a forced quantum to `clock.min-quantum`
+(`settings.check-quantum` is off by default; the graph takes min = max = force), so min-quantum 64 stays untouched
 and nothing needs restoring. The engine forces its stored block at every start: it remembers it, nothing else sets
-it. The engine requests no `node.latency` of its own (jack.conf's 128 applies to every JACK client); a forced
+it. The engine requests no `node.latency` of its own (jack.conf's 64 applies to every JACK client); a forced
 quantum overrides every client's, so the REAPER/CLAP trap of 2026-10-25 (force above node.latency) is gone with
 REAPER, but another JACK client that cannot follow a buffer-size change would show it first.
 

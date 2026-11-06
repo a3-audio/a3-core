@@ -103,7 +103,7 @@ TEST (ConfigFile, MissingSectionsTakeTheDefaults)
     defaults.decks = a3apptest::truthDecks();
     EXPECT_EQ (loaded->engine, defaults);
     EXPECT_EQ (loaded->backend.type, a3app::BackendSettings::Type::jack);
-    EXPECT_EQ (loaded->backend.blockSize, 128);   // today's quantum: nothing changes on install
+    EXPECT_EQ (loaded->backend.blockSize, 64);    // the shipped quantum (2026-11-06; 128 before)
     EXPECT_EQ (loaded->backend.periods, 3);       // today's ALSA periods: no WirePlumber drop-in
     EXPECT_EQ (loaded->backend.sampleRate, 44100);
     EXPECT_EQ (loaded->io.jack.size(), (size_t) defaults.decks * 41);   // only the slots' local StemDeck links

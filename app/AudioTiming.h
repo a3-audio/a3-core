@@ -5,8 +5,8 @@
 //
 // Block: PipeWire's settings metadata, clock.force-quantum, live. In PipeWire 1.6 a forced quantum is not clamped
 // by clock.min-quantum (settings.check-quantum is off by default; context.c takes min = max = force), so the
-// shipped min-quantum 128 stays and a block of 32 or 64 still applies. The shipped block, 128, releases the force:
-// PipeWire's own configuration (a3-core's pipewire.conf.d, quantum 128) runs exactly as before.
+// shipped min-quantum 64 stays and a block of 32 still applies. The shipped block, 64 since 2026-11-06 (128 before),
+// releases the force: PipeWire's own configuration (a3-core's pipewire.conf.d, quantum 64) runs exactly as shipped.
 //
 // Periods: api.alsa.period-num on the engine's own ALSA nodes, through a WirePlumber 0.5 drop-in; WirePlumber
 // reads it when it starts, so a change restarts it (the device's nodes go and come back, about two seconds of
@@ -21,7 +21,7 @@
 
 namespace a3app
 {
-constexpr int defaultBlock = 128, defaultPeriods = 3;
+constexpr int defaultBlock = 64, defaultPeriods = 3;
 const std::vector<int>& pipewireBlocks();    // 32, 64, ... 1024 frames
 const std::vector<int>& pipewirePeriods();   // 2, 3
 
