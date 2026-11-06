@@ -137,57 +137,5 @@ context.modules = [
             ]
         }
     },
-    { name = libpipewire-module-rtp-sink
-        args = {
-            local.ifname = "@AUDIO_PORT@"
-            # Group and port are the truth's aes67.stream (a3-osc.json); a second
-            # sender needs a listener of its own there, in the 239.69.x.x range.
-            destination.ip = @STREAM_IP@
-            destination.port = @STREAM_PORT@
-            net.mtu = 1500
-            net.ttl = 32
-            net.loop = false
-            # These should typically be equal
-            # You can customize packet length, but 1 ms should work for every device
-            # Consult receiver documentation to ensure it supports the value you set
-            sess.min-ptime = 0.5
-            sess.max-ptime = 0.5
-            ### Please change this, especially if you create multiple sinks
-            sess.name = "@SENDER_NAME@"
-            sess.media = "audio"
-            # This property is used if you aren't using ptp4l 4
-            sess.ts-refclk = "ptp=traceable"
-            sess.ts-offset = 0
-            # Directly synchronize output against the PTP-synced driver using the RTP timestamps
-            # This can be set to true if the reference clocks are the same; it then makes the
-            # synchronization more robust against transport delay variations and can help lower
-            # latency
-            sess.ts-direct = false
-            # You can adjust the latency buffering here. Use integer values only
-            sess.latency.msec = 3
-            audio.format = "S24BE"
-            audio.rate = 44100
-            audio.channels = 12
-            # These channel names will be visible both to applications and AES67 receivers
-            node.channel-names = ["CH1", "CH2", "CH3", "CH4", "CH5", "CH6", "CH7", "CH8", "CH9", "CH10", "CH11", "CH12"]
-            # Uncomment this and comment node.group in send/recv stream.props to allow
-            # separate drivers for the RTP sink and PTP sending (i.e. force rate matching on
-            # the AES67 node rather than other nodes)
-            #aes67.driver-group = "pipewire.ptp0"
-
-            stream.props = {
-                ### Please change the sink name, this is necessary when you create multiple sinks
-                node.name = "rtp-sink"
-                media.class = "Audio/Sink"
-                node.virtual = false
-                device.api = aes67
-                sess.sap.announce = true
-                node.always-process = true
-                # Not in pipewire.ptp0: the Scarlett drives this sender like the engine, so
-                # the samples go out unconverted and the engine is never pulled under PTP.
-                rtp.ntp = 0
-                rtp.fetch-ts-refclk = true
-            }
-        }
-    },
+@RTP_SINKS@
 ]

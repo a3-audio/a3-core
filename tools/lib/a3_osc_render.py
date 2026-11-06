@@ -26,6 +26,10 @@ AES67_CONF = Path(".config/pipewire/pipewire-aes67.conf")
 AES67_TEMPLATE = (Path(__file__).resolve().parents[2]
                   / "platform-config/debian-x86_64/a3-core/home/aaa/.local"
                   / "share/a3-core/pipewire/pipewire-aes67.conf.in")
+#: The rtp-sink block, one per stream (the Core's C++ renderer). This tool
+#: renders the legacy stream only, as it always did.
+AES67_SINK_TEMPLATE = AES67_TEMPLATE.with_name("pipewire-aes67-sink.conf.in")
+LEGACY_CHANNELS = 12
 
 
 def carries_vu(route):
@@ -90,11 +94,18 @@ def aes67_conf(truth, hostname, template=AES67_TEMPLATE):
         return None
     stream_ip, stream_port = truth.endpoint("aes67", "stream")
     sap_ip, sap_port = truth.endpoint("aes67", "sap")
-    text = Path(template).read_text()
+    template = Path(template)
+    sink = template.with_name(template.name.replace(".conf.in", "-sink.conf.in"))
+    names = ", ".join(f'"CH{k}"' for k in range(1, LEGACY_CHANNELS + 1))
+    text = template.read_text().replace("@RTP_SINKS@\n", sink.read_text())
     for placeholder, filled in (("@AUDIO_PORT@", port),
                                 ("@SENDER_NAME@", f"AES67 {hostname} out"),
                                 ("@STREAM_IP@", stream_ip),
                                 ("@STREAM_PORT@", str(stream_port)),
+                                ("@PTIME@", "0.5"),
+                                ("@CHANNELS@", str(LEGACY_CHANNELS)),
+                                ("@CHANNEL_NAMES@", names),
+                                ("@NODE_NAME@", "rtp-sink"),
                                 ("@SAP_IP@", sap_ip),
                                 ("@SAP_PORT@", str(sap_port))):
         text = text.replace(placeholder, filled)

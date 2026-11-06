@@ -165,6 +165,14 @@ TEST (Aes67Streams, NoTableMeansTheLegacyStreamOnly)
     EXPECT_EQ (streams[0].channelNames, numbered ("CH", 12));
 }
 
+TEST (Aes67Streams, TheLegacyStreamAloneNeedsNoLayout)
+{
+    const auto legacy = legacyTxStreams (shippedTruth(), "a3nuc1");
+    ASSERT_EQ (legacy.size(), 1u);
+    EXPECT_EQ (streamsSignature (legacy), streamsSignature ({ resolveTxStreams (shippedTruth(), sixOneSpatial(), "a3nuc1").front() }));
+    EXPECT_TRUE (legacy[0].legacy);
+}
+
 TEST (Aes67Streams, TheSignatureChangesWithTheSpeakerCountAndNotOtherwise)
 {
     const auto spatial = shippedSpatial();

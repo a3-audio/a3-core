@@ -96,6 +96,47 @@ std::string readText (const juce::File& file)
         throw RenderError { "not UTF-8: " + file.getFullPathName().toStdString() };
     return replaceAll (replaceAll (std::string (chars, block.getSize()), "\r\n", "\n"), "\r", "\n");
 }
+
+std::string fillIn (std::string text, const Pairs& placeholders)
+{
+    for (const auto& placeholder : placeholders)
+        text = replaceAll (text, placeholder.first, placeholder.second);
+    return text;
+}
+
+// The main template's line that the sink blocks take the place of.
+constexpr const char* rtpSinksLine = "@RTP_SINKS@\n";
+
+// pipewire-aes67.conf.in -> pipewire-aes67-sink.conf.in, beside it.
+juce::File sinkTemplateFor (const juce::File& aes67Template)
+{
+    const auto stem = aes67Template.getFileName().upToLastOccurrenceOf (".conf.in", false, false);
+    return aes67Template.getSiblingFile (stem + "-sink.conf.in");
+}
+
+// "CH1", "CH2", ... as node.channel-names lists them.
+std::string quotedList (const std::vector<std::string>& names)
+{
+    std::string list;
+    for (const auto& name : names)
+        list += (list.empty() ? "\"" : ", \"") + name + "\"";
+    return list;
+}
+
+// The legacy sender keeps the node name it always had; each other one needs its own.
+std::string nodeName (const StreamSpec& spec) { return spec.legacy ? "rtp-sink" : "rtp-sink-" + spec.key; }
+
+std::string sinkBlock (const std::string& sinkTemplate, const StreamSpec& spec, const std::string& audioPort)
+{
+    return fillIn (sinkTemplate, { { "@AUDIO_PORT@", audioPort },
+                                   { "@SENDER_NAME@", spec.session },
+                                   { "@STREAM_IP@", spec.group },
+                                   { "@STREAM_PORT@", std::to_string (spec.port) },
+                                   { "@PTIME@", pythonRepr (spec.ptimeMs) },
+                                   { "@CHANNELS@", std::to_string (spec.channelNames.size()) },
+                                   { "@CHANNEL_NAMES@", quotedList (spec.channelNames) },
+                                   { "@NODE_NAME@", nodeName (spec) } });
+}
 }
 
 bool carriesVu (const juce::var& route)
@@ -146,7 +187,8 @@ std::string analyzerBlock (const Truth& truth)
     return std::string (renderedHeader) + "\n" + lines (targets);
 }
 
-std::optional<std::string> aes67Conf (const Truth& truth, const std::string& hostname, const juce::File& aes67Template)
+std::optional<std::string> aes67Conf (const Truth& truth, const std::string&, const juce::File& aes67Template,
+                                      const std::vector<StreamSpec>& streams)
 {
     const auto network = truth.network();
     const auto port = network.hasProperty ("audio_port") ? network["audio_port"] : juce::var (juce::String());
@@ -154,18 +196,21 @@ std::optional<std::string> aes67Conf (const Truth& truth, const std::string& hos
         return std::nullopt;
     if (! port.isString())
         throw RenderError { "the audio port is not a text" };
+    const auto audioPort = port.toString().toStdString();
 
-    const auto stream = truth.endpoint ("aes67", "stream");
     const auto sap = truth.endpoint ("aes67", "sap");
-    auto text = readText (aes67Template);
-    const Pairs placeholders { { "@AUDIO_PORT@", port.toString().toStdString() },
-                               { "@SENDER_NAME@", "AES67 " + hostname + " out" },
-                               { "@STREAM_IP@", stream.host },
-                               { "@STREAM_PORT@", std::to_string (stream.port) },
-                               { "@SAP_IP@", sap.host },
-                               { "@SAP_PORT@", std::to_string (sap.port) } };
-    for (const auto& placeholder : placeholders)
-        text = replaceAll (text, placeholder.first, placeholder.second);
+    auto text = fillIn (readText (aes67Template), { { "@AUDIO_PORT@", audioPort },
+                                                    { "@SAP_IP@", sap.host },
+                                                    { "@SAP_PORT@", std::to_string (sap.port) } });
+    const auto marker = text.find (rtpSinksLine);
+    if (marker == std::string::npos)
+        throw RenderError { "no @RTP_SINKS@ line in " + aes67Template.getFullPathName().toStdString() };
+
+    const auto sinkTemplate = readText (sinkTemplateFor (aes67Template));
+    std::string sinks;
+    for (const auto& spec : streams)
+        sinks += sinkBlock (sinkTemplate, spec, audioPort);
+    text.replace (marker, std::strlen (rtpSinksLine), sinks);
     return std::string (renderedHeader) + "\n" + text;
 }
 
@@ -200,10 +245,11 @@ void replaceWhole (const juce::File& file, const std::string& text)
     }
 }
 
-std::string writeAes67Conf (const Truth& truth, const juce::File& home, const std::string& hostname, const juce::File& aes67Template)
+std::string writeAes67Conf (const Truth& truth, const juce::File& home, const std::string& hostname, const juce::File& aes67Template,
+                            const std::vector<StreamSpec>& streams)
 {
     const auto path = home.getChildFile (aes67ConfPath);
-    const auto text = aes67Conf (truth, hostname, aes67Template);
+    const auto text = aes67Conf (truth, hostname, aes67Template, streams);
     const std::string shown = std::string ("~/") + aes67ConfPath;
     if (path.exists() && ! isRendered (path))
         return "kept " + shown + ": not rendered by a3-osc-render";
@@ -216,16 +262,18 @@ std::string writeAes67Conf (const Truth& truth, const juce::File& home, const st
         return "removed " + shown + ": no audio port in the network";
     }
     replaceWhole (path, *text);
+    replaceWhole (home.getChildFile (aes67SignaturePath), streamsSignature (streams));
     return "rendered " + shown;
 }
 
-std::string writeUserFiles (const Truth& truth, const juce::File& home, const std::string& hostname, const juce::File& aes67Template)
+std::string writeUserFiles (const Truth& truth, const juce::File& home, const std::string& hostname, const juce::File& aes67Template,
+                            const std::vector<StreamSpec>& streams)
 {
     const auto envFile = home.getChildFile (envFilePath);
     makeParent (envFile);
     writeText (envFile, oscEnv (truth));
     replaceWhole (home.getChildFile (analyzerConfPath), analyzerBlock (truth));
-    return writeAes67Conf (truth, home, hostname, aes67Template);
+    return writeAes67Conf (truth, home, hostname, aes67Template, streams);
 }
 
 std::string networkFile (const Truth& truth)

@@ -37,8 +37,12 @@ SubcommandResult render (const juce::StringArray& words, const a3core::Platform&
     try
     {
         if (words == juce::StringArray ("user"))
-            result.out = "a3-osc-render: " + a3core::writeUserFiles (truth, platform.home(), platform.hostname(),
-                                                                       platform.packageShare().getChildFile ("pipewire/pipewire-aes67.conf.in")) + "\n";
+            // The legacy stream only: this subcommand reads no app config, so it has no speaker layout.
+            result.out = "a3-osc-render: "
+                         + a3core::writeUserFiles (truth, platform.home(), platform.hostname(),
+                                                   platform.packageShare().getChildFile ("pipewire/pipewire-aes67.conf.in"),
+                                                   a3core::legacyTxStreams (truth, platform.hostname()))
+                         + "\n";
         else if (words == juce::StringArray ("network-file"))
         {
             const auto path = platform.configDir().getChildFile ("network.json");

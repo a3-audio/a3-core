@@ -9,6 +9,7 @@
 
 #include "FakePlatform.h"
 #include "Json.h"
+#include "Render.h"
 #include "Subcommands.h"
 
 namespace
@@ -91,6 +92,7 @@ struct RecordedRun
         for (const auto& [name, value] : one.env)
             platform.env[name] = replaceAll (value, placeholder, home.getFullPathName().toStdString());
         write (platform.packageShare().getChildFile ("pipewire/pipewire-aes67.conf.in"), read (data.getChildFile ("aes67.conf.in")));
+        write (platform.packageShare().getChildFile ("pipewire/pipewire-aes67-sink.conf.in"), read (data.getChildFile ("aes67-sink.conf.in")));
         const auto before = data.getChildFile (juce::String (one.name)).getChildFile ("before");
         for (const auto& [relative, bytes] : filesBelow (before))
             write (home.getChildFile (juce::String (relative)), bytes);
@@ -107,11 +109,14 @@ struct RecordedRun
 
     std::string withoutHome (const std::string& text) const { return replaceAll (text, home.getFullPathName().toStdString(), placeholder); }
 
-    // The files the command left, the package's template and the truth aside.
+    // The files the command left, the package's templates, the truth and the streams' signature (not
+    // the Python renderer's; tests/core/Render.cpp) aside.
     std::map<std::string, std::string> left() const
     {
         auto all = filesBelow (home);
         all.erase (".local/share/a3-core/pipewire/pipewire-aes67.conf.in");
+        all.erase (".local/share/a3-core/pipewire/pipewire-aes67-sink.conf.in");
+        all.erase (a3core::aes67SignaturePath);
         return all;
     }
 

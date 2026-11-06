@@ -9,9 +9,11 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <juce_core/juce_core.h>
 
+#include "Aes67Streams.h"
 #include "Truth.h"
 
 namespace a3core
@@ -28,6 +30,8 @@ inline constexpr const char* envFilePath = ".config/a3/osc.env";
 inline constexpr const char* analyzerConfPath = ".config/beat-analyzer/conf.d/50-a3-osc.env";
 // PipeWire's AES67 instance (a3-aes67.service).
 inline constexpr const char* aes67ConfPath = ".config/pipewire/pipewire-aes67.conf";
+// streamsSignature() of the streams last rendered into it: what a later start compares against.
+inline constexpr const char* aes67SignaturePath = ".local/state/a3-core/aes67-streams.sig";
 // First line of every file we render; it is how a file of ours is told from one written by hand.
 inline constexpr const char* renderedHeader = "# rendered from a3-osc.json by a3-osc-render -- edit the truth, not this file";
 
@@ -39,18 +43,24 @@ std::string oscEnv (const Truth&);           // the ports of x11vnc and the scre
 std::string networkDefaults (const Truth&);  // the INTERFACE=... lines the postinst feeds networkd
 std::string analyzerBlock (const Truth&);
 
-// The AES67 config for this machine, or nullopt without an audio socket. Throws RenderError if the
-// template cannot be read.
-std::optional<std::string> aes67Conf (const Truth&, const std::string& hostname, const juce::File& aes67Template);
+// The AES67 config for this machine, or nullopt without an audio socket: one rtp-sink block per stream,
+// in their order, where the template's @RTP_SINKS@ line stands. The block comes from the sibling
+// template <name>-sink.conf.in (pipewire-aes67.conf.in: pipewire-aes67-sink.conf.in). Throws
+// RenderError if a template cannot be read or the main one has no @RTP_SINKS@ line.
+std::optional<std::string> aes67Conf (const Truth&, const std::string& hostname, const juce::File& aes67Template,
+                                      const std::vector<StreamSpec>& streams);
 
 bool isRendered (const juce::File&);
 
 // Render the AES67 config into PipeWire's folder; what happened, said. A config written by hand is
-// never replaced; without an audio socket a rendered one goes.
-std::string writeAes67Conf (const Truth&, const juce::File& home, const std::string& hostname, const juce::File& aes67Template);
+// never replaced; without an audio socket a rendered one goes. After a write the streams' signature
+// is stored at aes67SignaturePath.
+std::string writeAes67Conf (const Truth&, const juce::File& home, const std::string& hostname, const juce::File& aes67Template,
+                            const std::vector<StreamSpec>& streams);
 
 // osc.env, the analyzer's conf.d file and the AES67 config; the AES67 line is returned, to be said.
-std::string writeUserFiles (const Truth&, const juce::File& home, const std::string& hostname, const juce::File& aes67Template);
+std::string writeUserFiles (const Truth&, const juce::File& home, const std::string& hostname, const juce::File& aes67Template,
+                            const std::vector<StreamSpec>& streams);
 
 // Swap the new file in whole through a hidden temporary name (the analyzer's conf.d skips it).
 void replaceWhole (const juce::File&, const std::string& text);

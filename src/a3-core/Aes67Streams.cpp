@@ -110,27 +110,36 @@ StreamSpec resolveRow (const juce::var& row, const Truth& truth, const a3::Spati
 bool isCoreRow (const juce::var& row) { return row["sender"].toString() == coreSender; }
 
 bool isLegacyRow (const juce::var& row) { return row["key"].toString() == legacyKey; }
-}
 
-std::vector<StreamSpec> resolveTxStreams (const Truth& truth, const a3::SpatialConfig& spatial, const std::string& hostname)
+// The table's Core rows, the legacy one first (the built-in one when the table has none).
+std::vector<juce::var> coreRows (const Truth& truth)
 {
     const auto table = truth.streamTable();
-    auto legacy = builtInLegacyRow();
-    std::vector<juce::var> others;
+    std::vector<juce::var> rows { builtInLegacyRow() };
     for (const auto& row : *table.getArray())
     {
         if (! isCoreRow (row))
             continue;
         if (isLegacyRow (row))
-            legacy = row;
+            rows.front() = row;
         else
-            others.push_back (row);
+            rows.push_back (row);
     }
+    return rows;
+}
+}
 
-    std::vector<StreamSpec> streams { resolveRow (legacy, truth, spatial, hostname) };
-    for (const auto& row : others)
+std::vector<StreamSpec> resolveTxStreams (const Truth& truth, const a3::SpatialConfig& spatial, const std::string& hostname)
+{
+    std::vector<StreamSpec> streams;
+    for (const auto& row : coreRows (truth))
         streams.push_back (resolveRow (row, truth, spatial, hostname));
     return streams;
+}
+
+std::vector<StreamSpec> legacyTxStreams (const Truth& truth, const std::string& hostname)
+{
+    return { resolveRow (coreRows (truth).front(), truth, a3::SpatialConfig {}, hostname) };
 }
 
 std::string streamsSignature (const std::vector<StreamSpec>& streams)

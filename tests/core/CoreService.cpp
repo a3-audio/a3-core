@@ -357,6 +357,7 @@ public:
         stateDir.createDirectory();
         share.getChildFile ("pipewire").createDirectory();
         juce::File (A3_CORE_TEST_DATA "/parity/render/aes67.conf.in").copyFileTo (share.getChildFile ("pipewire/pipewire-aes67.conf.in"));
+        juce::File (A3_CORE_TEST_DATA "/parity/render/aes67-sink.conf.in").copyFileTo (share.getChildFile ("pipewire/pipewire-aes67-sink.conf.in"));
 
         setListenerPort (data, "core.vu-relay", vuPort);
         setListenerPort (data, "devices.announce", announced.port());
@@ -1058,7 +1059,8 @@ TEST (CoreService, CoreWritesTheUserFilesAtStart)
     ASSERT_TRUE (rig.start()) << rig.error;
     const auto other = rig.dir.getChildFile ("other-home");
     other.createDirectory();
-    const auto expected = writeAes67Conf (rig.truth(), other, "test-host", rig.share.getChildFile ("pipewire/pipewire-aes67.conf.in"));
+    const auto expected = writeAes67Conf (rig.truth(), other, "test-host", rig.share.getChildFile ("pipewire/pipewire-aes67.conf.in"),
+                                          legacyTxStreams (rig.truth(), "test-host"));
     const auto line = rig.said.find ("aes67: ");
     ASSERT_TRUE (line.has_value());
     EXPECT_EQ (line->text, "aes67: " + expected);

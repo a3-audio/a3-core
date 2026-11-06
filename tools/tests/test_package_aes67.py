@@ -146,7 +146,8 @@ class TheTruthNamesTheAudioNetwork(unittest.TestCase):
         self.assertEqual("9875", value(sap, "sap.port"))
 
     def test_the_template_writes_none_of_them(self):
-        template = a3_osc_render.AES67_TEMPLATE.read_text()
+        template = (a3_osc_render.AES67_TEMPLATE.read_text()
+                    + a3_osc_render.AES67_SINK_TEMPLATE.read_text())
         for written in ("239.69.150.243", "239.255.255.255", "5004", "9875"):
             self.assertNotIn(written, template)
 
@@ -239,6 +240,9 @@ class WhatTheRigSettledOn(unittest.TestCase):
             self.assertFalse(deck.search(name), name)
 
     def test_sender_part_is_unchanged(self):
+        # The sender block moved into pipewire-aes67-sink.conf.in (one per
+        # stream since 2026-11-06), so the rendered legacy sender is held
+        # against the baseline template rendered with the same values.
         marker = "    { name = libpipewire-module-rtp-sink"
         template = PACKAGE / "home/aaa/.local/share/a3-core/pipewire/pipewire-aes67.conf.in"
         before = subprocess.run(
@@ -246,8 +250,15 @@ class WhatTheRigSettledOn(unittest.TestCase):
             cwd=PACKAGE, capture_output=True, text=True)
         if before.returncode != 0:
             self.skipTest(f"{BASELINE} is not in this clone")
-        self.assertEqual(template.read_text()[template.read_text().index(marker):],
-                         before.stdout[before.stdout.index(marker):])
+        stream_ip, stream_port = TRUTH.endpoint("aes67", "stream")
+        baseline = before.stdout
+        for placeholder, filled in (("@AUDIO_PORT@", "enp9s0"),
+                                    ("@SENDER_NAME@", "AES67 core-x out"),
+                                    ("@STREAM_IP@", stream_ip),
+                                    ("@STREAM_PORT@", str(stream_port))):
+            baseline = baseline.replace(placeholder, filled)
+        self.assertEqual(self.text[self.text.index(marker):],
+                         baseline[baseline.index(marker):])
 
     def test_the_ptp_driver_outranks_the_others(self):
         driver = block(self.text, "factory = spa-node-factory")

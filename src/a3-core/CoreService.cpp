@@ -132,7 +132,9 @@ std::optional<std::string> CoreService::startUp()
         say ("network.json's meters refused, the package's are used: " + *truth.metersProblem, true);
     try
     {
-        say ("aes67: " + writeUserFiles (truth, options.home, options.hostname, options.packageShare.getChildFile ("pipewire/pipewire-aes67.conf.in")));
+        // The legacy stream only: the speaker layout is the engine's (app/AppArgs.cpp), not in ServiceOptions.
+        say ("aes67: " + writeUserFiles (truth, options.home, options.hostname, options.packageShare.getChildFile ("pipewire/pipewire-aes67.conf.in"),
+                                         legacyTxStreams (truth, options.hostname)));
     }
     catch (const RenderError& problem)
     {

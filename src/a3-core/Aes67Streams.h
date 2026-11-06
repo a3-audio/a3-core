@@ -30,6 +30,9 @@ struct StreamSpec
 // row the reader cannot resolve (an unknown source, a group that is neither an address nor a hosts key).
 std::vector<StreamSpec> resolveTxStreams (const Truth&, const a3::SpatialConfig&, const std::string& hostname);
 
+// The legacy stream alone (resolveTxStreams' first entry), for a caller without the layout: it needs none.
+std::vector<StreamSpec> legacyTxStreams (const Truth&, const std::string& hostname);
+
 // Changes iff a stream's session, group, port, ptime or channel names change.
 std::string streamsSignature (const std::vector<StreamSpec>&);
 }
