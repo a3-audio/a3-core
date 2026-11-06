@@ -135,6 +135,53 @@ void report (std::vector<std::string>* problems, const std::string& line)
         problems->push_back (line);
 }
 
+bool isNumber (const juce::var& value) { return value.isInt() || value.isInt64() || value.isDouble(); }
+
+std::string refusedRow (const juce::var& row, const std::string& why) { return "aes67_streams: '" + text (row, "key") + "' refused: " + why; }
+
+// Why a row cannot be sent as written (port, ptime, a fixed row's channels, a group), or nothing.
+std::optional<std::string> rowProblem (const juce::var& row)
+{
+    const auto port = row["port"];
+    if (! isNumber (port) || static_cast<int> (port) < 1 || static_cast<int> (port) > 65535)
+        return refusedRow (row, "port '" + port.toString().toStdString() + "' is not 1-65535");
+    if (! isNumber (row["ptime"]) || static_cast<double> (row["ptime"]) <= 0.0)
+        return refusedRow (row, "ptime '" + row["ptime"].toString().toStdString() + "' is not above 0");
+    if (text (row, "source") == "fixed" && (! isNumber (row["channels"]) || static_cast<int> (row["channels"]) <= 0))
+        return refusedRow (row, "a fixed stream's channels '" + row["channels"].toString().toStdString() + "' are not above 0");
+    if (text (row, "group").empty())
+        return refusedRow (row, "no group");
+    return std::nullopt;
+}
+
+// The legacy stream: the table's row when it is valid, resolves and fits one packet; else the built-in row (what
+// every receiver of the rig already knows) and a line that says why. Throws TruthError only when the built-in one
+// does not resolve either.
+StreamSpec legacyStream (const juce::var& row, const Truth& truth, const a3::SpatialConfig& spatial, const std::string& hostname,
+                         std::vector<std::string>* problems)
+{
+    std::string why;
+    try
+    {
+        if (const auto invalid = rowProblem (row))
+            why = *invalid;
+        else
+        {
+            auto spec = resolveRow (row, truth, spatial, hostname);
+            if (const auto tooBig = packetProblem (spec))
+                why = *tooBig;
+            else
+                return spec;
+        }
+    }
+    catch (const TruthError& problem)
+    {
+        why = refusedRow (row, problem.what);
+    }
+    report (problems, why + "; the built-in legacy stream is sent");
+    return resolveRow (builtInLegacyRow(), truth, spatial, hostname);
+}
+
 bool isCoreRow (const juce::var& row) { return row["sender"].toString() == coreSender; }
 
 bool isLegacyRow (const juce::var& row) { return row["key"].toString() == legacyKey; }
@@ -160,10 +207,16 @@ std::vector<juce::var> coreRows (const Truth& truth)
 std::vector<StreamSpec> resolveTxStreams (const Truth& truth, const a3::SpatialConfig& spatial, const std::string& hostname,
                                           std::vector<std::string>* problems)
 {
-    std::vector<StreamSpec> streams;
-    for (const auto& row : coreRows (truth))
+    const auto rows = coreRows (truth);
+    std::vector<StreamSpec> streams { legacyStream (rows.front(), truth, spatial, hostname, problems) };
+    for (std::size_t k = 1; k < rows.size(); ++k)
     {
-        auto spec = resolveRow (row, truth, spatial, hostname);
+        if (const auto invalid = rowProblem (rows[k]))
+        {
+            report (problems, *invalid);
+            continue;
+        }
+        auto spec = resolveRow (rows[k], truth, spatial, hostname);
         if (const auto tooBig = packetProblem (spec))
             report (problems, *tooBig);
         else
@@ -172,9 +225,9 @@ std::vector<StreamSpec> resolveTxStreams (const Truth& truth, const a3::SpatialC
     return streams;
 }
 
-std::vector<StreamSpec> legacyTxStreams (const Truth& truth, const std::string& hostname)
+std::vector<StreamSpec> legacyTxStreams (const Truth& truth, const std::string& hostname, std::vector<std::string>* problems)
 {
-    return { resolveRow (coreRows (truth).front(), truth, a3::SpatialConfig {}, hostname) };
+    return { legacyStream (coreRows (truth).front(), truth, a3::SpatialConfig {}, hostname, problems) };
 }
 
 std::string streamsSignature (const std::vector<StreamSpec>& streams)

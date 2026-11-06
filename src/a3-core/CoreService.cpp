@@ -132,10 +132,11 @@ std::optional<std::string> CoreService::startUp()
         say ("network.json's meters refused, the package's are used: " + *truth.metersProblem, true);
     try
     {
-        const auto streams = options.aes67Streams ? *options.aes67Streams : legacyTxStreams (truth, options.hostname);
+        auto problems = options.aes67Problems;
+        const auto streams = options.aes67Streams ? *options.aes67Streams : legacyTxStreams (truth, options.hostname, &problems);
         const auto written = writeUserFiles (truth, options.home, options.hostname,
                                              options.packageShare.getChildFile ("pipewire/pipewire-aes67.conf.in"), streams);
-        say ("aes67: " + aes67Said (written, options.aes67LegacyOnlyBecause, options.aes67Problems));
+        say ("aes67: " + aes67Said (written, options.aes67LegacyOnlyBecause, problems));
     }
     catch (const RenderError& problem)
     {

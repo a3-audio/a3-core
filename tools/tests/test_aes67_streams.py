@@ -115,6 +115,19 @@ class StreamTable(unittest.TestCase):
         self.assertEqual(self.hosts["aes67-core"], "239.69.150.243")
         self.assertEqual(self.hosts["aes67-deck-a"], "239.69.150.244")
 
+    def test_the_legacy_rows_are_the_old_listeners(self):
+        """legacy-out and deck say what aes67.stream and aes67.deck say: a
+        receiver set up from the listeners still finds both."""
+        names = {l["name"]: l for l in self.data["listeners"]}
+        legacy, stream = self.by_key["legacy-out"], names["aes67.stream"]
+        self.assertEqual(self.hosts[legacy["group"]], self.hosts[stream["host"]])
+        self.assertEqual(legacy["group"], "aes67-core")
+        self.assertEqual(legacy["port"], stream["port"])
+        deck, listener = self.by_key["deck"], names["aes67.deck"]
+        self.assertTrue(deck["session"].startswith("AES67 deck "))
+        self.assertEqual(deck["group_base"], self.hosts[listener["host"].format(deck="a")])
+        self.assertEqual(deck["port"], listener["port"])
+
 
 if __name__ == "__main__":
     unittest.main()

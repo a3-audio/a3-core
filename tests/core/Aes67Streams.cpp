@@ -3,7 +3,9 @@
 // The Core's AES67 transmit streams: the truth's table resolved against the live speaker layout.
 #include <gtest/gtest.h>
 
+#include <functional>
 #include <regex>
+#include <tuple>
 
 #include "Aes67Streams.h"
 
@@ -215,4 +217,81 @@ TEST (Aes67Streams, TwentyTwoChannelsStillFitOnePacket)
     const auto streams = resolveTxStreams (shippedTruth(), spatialWith (layout (1, 21), layout (1, 4)), "a3nuc1", &problems);
     EXPECT_EQ (stream (streams, "core-main").channelNames.size(), 22u);
     EXPECT_TRUE (problems.empty()) << problems.front();
+}
+
+namespace
+{
+// The shipped truth with one table row changed by `change`.
+Truth withRowChanged (const std::string& key, const std::function<void (juce::DynamicObject&)>& change)
+{
+    auto data = shippedTruth().data();
+    for (auto& row : *data["aes67_streams"].getArray())
+        if (row["key"].toString().toStdString() == key)
+            change (*row.getDynamicObject());
+    return Truth (data);
+}
+
+std::function<void (juce::DynamicObject&)> setting (const char* property, juce::var value)
+{
+    return [property, value] (juce::DynamicObject& row) { row.setProperty (property, value); };
+}
+
+void expectTheBuiltInLegacyStream (const StreamSpec& legacy)
+{
+    EXPECT_EQ (legacy.key, "legacy-out");
+    EXPECT_TRUE (legacy.legacy);
+    EXPECT_EQ (legacy.session, "AES67 a3nuc1 out");
+    EXPECT_EQ (legacy.group, "239.69.150.243");
+    EXPECT_EQ (legacy.port, 5004);
+    EXPECT_DOUBLE_EQ (legacy.ptimeMs, 0.5);
+    EXPECT_EQ (legacy.channelNames, numbered ("CH", 12));
+}
+}
+
+// F3 (2026-11-06): the table is validated. A legacy row that is invalid or does not resolve gives way to the built-in
+// one (the stream every receiver of the rig already knows) with a line saying so; never a Core without its sender.
+TEST (Aes67Streams, AnInvalidOrUnresolvableLegacyRowFallsBackToTheBuiltInOne)
+{
+    for (const auto& [why, truth] : std::vector<std::pair<std::string, Truth>> {
+             { "port 0", withRowChanged ("legacy-out", setting ("port", 0)) },
+             { "port 70000", withRowChanged ("legacy-out", setting ("port", 70000)) },
+             { "ptime 0", withRowChanged ("legacy-out", setting ("ptime", 0)) },
+             { "no channels", withRowChanged ("legacy-out", setting ("channels", 0)) },
+             { "no group", withRowChanged ("legacy-out", [] (juce::DynamicObject& row) { row.removeProperty ("group"); }) },
+             { "an unknown host", withRowChanged ("legacy-out", setting ("group", "no-such-host")) },
+             { "an unknown source", withRowChanged ("legacy-out", setting ("source", "zone:nowhere")) } })
+    {
+        std::vector<std::string> problems;
+        const auto streams = resolveTxStreams (truth, shippedSpatial(), "a3nuc1", &problems);
+        ASSERT_EQ (streams.size(), 5u) << why;
+        expectTheBuiltInLegacyStream (streams[0]);
+        ASSERT_EQ (problems.size(), 1u) << why;
+        EXPECT_NE (problems[0].find ("'legacy-out'"), std::string::npos) << why << ": " << problems[0];
+
+        std::vector<std::string> alone;
+        const auto legacy = legacyTxStreams (truth, "a3nuc1", &alone);
+        ASSERT_EQ (legacy.size(), 1u) << why;
+        expectTheBuiltInLegacyStream (legacy[0]);
+        EXPECT_EQ (alone, problems) << why;
+    }
+}
+
+TEST (Aes67Streams, AnInvalidCoreRowIsDroppedAndSaid)
+{
+    for (const auto& [why, key, truth] : std::vector<std::tuple<std::string, std::string, Truth>> {
+             { "port 0", "core-rec", withRowChanged ("core-rec", setting ("port", 0)) },
+             { "port 65536", "core-phones", withRowChanged ("core-phones", setting ("port", 65536)) },
+             { "ptime -1", "core-booth", withRowChanged ("core-booth", setting ("ptime", -1)) },
+             { "no group", "core-main", withRowChanged ("core-main", [] (juce::DynamicObject& row) { row.removeProperty ("group"); }) },
+             { "a fixed row without channels", "core-rec",
+               withRowChanged ("core-rec", [] (juce::DynamicObject& row) { row.setProperty ("source", "fixed"); row.setProperty ("channels", 0); }) } })
+    {
+        std::vector<std::string> problems;
+        const auto streams = resolveTxStreams (truth, shippedSpatial(), "a3nuc1", &problems);
+        EXPECT_EQ (streams.size(), 4u) << why;
+        for (const auto& spec : streams)
+            EXPECT_NE (spec.key, key) << why;
+        ASSERT_EQ (problems.size(), 1u) << why;
+        EXPECT_NE (problems[0].find ("'" + key + "'"), std::string::npos) << why << ": " << problems[0];
+    }
 }

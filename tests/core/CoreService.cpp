@@ -1088,6 +1088,21 @@ TEST (CoreService, CoreRendersTheStreamsItWasGiven)
     EXPECT_EQ (rig.home.getChildFile (aes67SignaturePath).loadFileAsString().toStdString(), streamsSignature (streams));
 }
 
+// F3: a legacy row that does not resolve gives way to the built-in one; the Core starts and says so.
+TEST (CoreService, ABadLegacyRowDoesNotStopTheCore)
+{
+    auto data = b0::truth().data();
+    data.getDynamicObject()->setProperty ("aes67_streams", juce::JSON::parse (R"([{ "key": "legacy-out", "session": "AES67 {host} out",
+        "sender": "core", "group": "no-such-host", "port": 5004, "ptime": 0.5, "source": "fixed", "channels": 12, "legacy": true }])"));
+    Rig rig (data);
+    ASSERT_TRUE (rig.start()) << rig.error;
+    const auto text = rig.home.getChildFile (aes67ConfPath).loadFileAsString();
+    EXPECT_TRUE (text.contains ("sess.name = \"AES67 test-host out\"")) << text;
+    const auto line = rig.said.find ("aes67: ");
+    ASSERT_TRUE (line.has_value());
+    EXPECT_NE (line->text.find ("'legacy-out'"), std::string::npos) << line->text;
+}
+
 TEST (CoreService, TheAes67LineNamesEveryRefusedStream)
 {
     Rig rig;

@@ -472,9 +472,19 @@ std::variant<a3core::ServiceOptions, std::string> coreOptions (const ProgramArgs
     return options;
 }
 
+namespace
+{
+CoreStreams legacyStreamOnly (const a3core::Truth& truth, const std::string& hostname, const std::string& because)
+{
+    CoreStreams legacy { {}, because, {} };
+    legacy.streams = a3core::legacyTxStreams (truth, hostname, &legacy.problems);
+    return legacy;
+}
+}
+
 CoreStreams coreStreams (const a3core::Truth& truth, const a3core::Platform& platform, const juce::File& packageConfig)
 {
-    const auto legacyOnly = [&] (const std::string& because) { return CoreStreams { a3core::legacyTxStreams (truth, platform.hostname()), because }; };
+    const auto legacyOnly = [&] (const std::string& because) { return legacyStreamOnly (truth, platform.hostname(), because); };
     int truthDecks = 0;
     try
     {
@@ -506,7 +516,7 @@ CoreStreams streamsFor (const a3core::Truth& truth, const a3::SpatialConfig& spa
     }
     catch (const a3core::TruthError& problem)
     {
-        return { a3core::legacyTxStreams (truth, hostname), problem.what };
+        return legacyStreamOnly (truth, hostname, problem.what);
     }
 }
 
