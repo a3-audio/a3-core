@@ -318,16 +318,14 @@ juce::Result EngineRole::restart (const AppConfig& config, juce::String& problem
     steps.pauseMs = [] (int ms) { juce::Thread::sleep (ms); };
 
     const auto result = runRestart (steps);
+    finishRestart (result.outcome, { [this] { startTiming(); }, [this] { reannounceStreams(); } });
     switch (result.outcome)
     {
         case RestartOutcome::applied:
             problem = {};
-            startTiming();
-            reannounceStreams();
             return juce::Result::ok();
         case RestartOutcome::previousRunning:
             problem = {};
-            startTiming();
             return juce::Result::fail (result.message + " (the previous setting is running again)");
         case RestartOutcome::nothingRunning:
             break;

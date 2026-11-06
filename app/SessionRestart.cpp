@@ -36,4 +36,13 @@ RestartResult runRestart (const RestartSteps& steps)
         return { RestartOutcome::previousRunning, opened.getErrorMessage() };
     return { RestartOutcome::nothingRunning, opened.getErrorMessage() + "; the previous setting did not open either: " + reopened.getErrorMessage() };
 }
+
+void finishRestart (RestartOutcome outcome, const FinishSteps& steps)
+{
+    if (outcome == RestartOutcome::nothingRunning)
+        return;
+    steps.startTiming();
+    if (outcome == RestartOutcome::applied)
+        steps.reannounceStreams();
+}
 }

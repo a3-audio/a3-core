@@ -3,6 +3,8 @@
 #include <gtest/gtest.h>
 #include "SessionRestart.h"
 
+#include <tuple>
+
 namespace
 {
 struct Script
@@ -72,4 +74,26 @@ TEST (SessionRestart, WhenNothingOpensNothingIsLeftHalfOpen)
     int opens = 0, drops = 0;
     for (const auto& entry : script.log) { opens += entry.startsWith ("open"); drops += entry == "dropNew"; }
     EXPECT_EQ (opens, drops);   // every failed open was dropped
+}
+
+// A Save re-announces the Core's streams only when the new config applied: the previous config running again (or
+// nothing running) leaves the rendered config, which announces the running streams, as it is.
+TEST (SessionRestart, OnlyAnAppliedSaveReannouncesTheStreams)
+{
+    for (const auto& [newFailures, previousFailures, outcome, timings, reannounced] :
+         std::vector<std::tuple<int, int, a3app::RestartOutcome, int, int>> {
+             { 0, 0, a3app::RestartOutcome::applied, 1, 1 },
+             { -1, 0, a3app::RestartOutcome::previousRunning, 1, 0 },
+             { -1, -1, a3app::RestartOutcome::nothingRunning, 0, 0 } })
+    {
+        Script script;
+        script.newFailures = newFailures;
+        script.previousFailures = previousFailures;
+        const auto result = a3app::runRestart (script.steps());
+        ASSERT_EQ (result.outcome, outcome);
+        int timingStarts = 0, reannounces = 0;
+        a3app::finishRestart (result.outcome, { [&] { ++timingStarts; }, [&] { ++reannounces; } });
+        EXPECT_EQ (timingStarts, timings) << static_cast<int> (outcome);
+        EXPECT_EQ (reannounces, reannounced) << static_cast<int> (outcome);
+    }
 }

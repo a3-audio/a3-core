@@ -28,4 +28,13 @@ struct RestartResult
 };
 
 RestartResult runRestart (const RestartSteps&);
+
+// What a Save does once runRestart is through: a session that runs (the new or the previous one) gets its timing;
+// only the applied config's streams are re-announced (the previous config's are what is announced already).
+struct FinishSteps
+{
+    std::function<void()> startTiming;
+    std::function<void()> reannounceStreams;
+};
+void finishRestart (RestartOutcome, const FinishSteps&);
 }
