@@ -17,7 +17,8 @@ juce::Result refuseBesideReaper (const std::vector<std::string>& clients, bool c
 // P40: rec_L/R -> "AES67 <hostname> out:send_CH1/2" (the name a3-osc-render gives this machine's sender),
 // added to whatever map was loaded, so a deck host records the REC bus even from an engine.json saved
 // before M10. Applied at link time only: the user's file is never rewritten. No host name, no link.
-void addRecToAes67Sender (a3::links::LinkMap&, const std::string& hostname);
+// With `legacy` (the legacy stream as resolved) the sender is named after its session instead.
+void addRecToAes67Sender (a3::links::LinkMap&, const std::string& hostname, const a3core::StreamSpec* legacy = nullptr);
 
 // The Core's other AES67 senders: for every non-legacy stream and channel k (1-based) the engine output
 // enginePorts[k-1] gains the peer "<session>:send_<channelNames[k-1]>" (the sender node is named after its

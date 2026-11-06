@@ -194,9 +194,27 @@ TEST (ConnectionPlan, NoSpecsMeansTheOldMap)
 {
     a3app::AppConfig config;
     config.io.jack["main_top_1"] = { "system:playback_1" };
-    EXPECT_EQ (a3app::linkMapFor (config, "a3nuc1", {}).jack, a3app::linkMapFor (config, "a3nuc1").jack);
-    EXPECT_EQ (a3app::linkMapFor (config, "a3nuc1", { legacyStream() }).jack, a3app::linkMapFor (config, "a3nuc1").jack)
+    const std::map<std::string, std::vector<std::string>> oldMap {
+        { "main_top_1", { "system:playback_1" } },
+        { "rec_L", { "beat-analyzer:bpm_1", "AES67 a3nuc1 out:send_CH1" } },
+        { "rec_R", { "AES67 a3nuc1 out:send_CH2" } } };
+    EXPECT_EQ (a3app::linkMapFor (config, "a3nuc1", {}).jack, oldMap);
+    EXPECT_EQ (a3app::linkMapFor (config, "a3nuc1", { legacyStream() }).jack, oldMap)
         << "the legacy stream adds nothing: its link is addRecToAes67Sender's";
+}
+
+// The legacy sender is named after the legacy stream's session when there is one (the table's, as the Core renders
+// it), and after the hostname as before when there is none.
+TEST (ConnectionPlan, TheLegacySenderIsTheLegacyStreamsSession)
+{
+    auto legacy = legacyStream();
+    legacy.session = "AES67 stage-left out";
+    a3app::AppConfig config;
+    const auto linked = a3app::linkMapFor (config, "a3nuc1", { legacy, recStream() });
+    EXPECT_EQ (linked.jack.at ("rec_L"), (std::vector<std::string> { "beat-analyzer:bpm_1", "AES67 stage-left out:send_CH1", "A3 Core REC:send_L" }));
+    EXPECT_EQ (linked.jack.at ("rec_R"), (std::vector<std::string> { "AES67 stage-left out:send_CH2", "A3 Core REC:send_R" }));
+    EXPECT_EQ (a3app::linkMapFor (config, "a3nuc1", { recStream() }).jack.at ("rec_R"),
+               (std::vector<std::string> { "AES67 a3nuc1 out:send_CH2", "A3 Core REC:send_R" }));
 }
 
 TEST (ConnectionPlan, EachLinkIsMadeOnce)

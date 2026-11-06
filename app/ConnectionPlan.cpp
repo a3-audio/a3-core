@@ -23,11 +23,11 @@ void addPeerOnce (a3::links::LinkMap& map, const std::string& port, const std::s
 }
 }
 
-void addRecToAes67Sender (a3::links::LinkMap& map, const std::string& hostname)
+void addRecToAes67Sender (a3::links::LinkMap& map, const std::string& hostname, const a3core::StreamSpec* legacy)
 {
-    if (hostname.empty())
+    if (legacy == nullptr && hostname.empty())
         return;
-    const auto sender = "AES67 " + hostname + " out:";
+    const auto sender = (legacy != nullptr ? legacy->session : "AES67 " + hostname + " out") + ":";
     for (const auto& [port, channel] : { std::pair<const char*, const char*> { "rec_L", "send_CH1" }, { "rec_R", "send_CH2" } })
         addPeerOnce (map, port, sender + channel);
 }
@@ -66,7 +66,8 @@ IoMap linkMapFor (const AppConfig& config, const std::string& hostname, const st
 {
     auto map = config.io;
     addBeatAnalyzerLink (map);
-    addRecToAes67Sender (map, hostname);
+    const auto legacy = std::find_if (streams.begin(), streams.end(), [] (const a3core::StreamSpec& spec) { return spec.legacy; });
+    addRecToAes67Sender (map, hostname, legacy != streams.end() ? &*legacy : nullptr);
     addStreamSenders (map, streams);
     addRoundTripLoopLinks (map);
     return map;
