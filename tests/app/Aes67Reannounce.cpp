@@ -186,3 +186,27 @@ TEST (Aes67Streams, AFailedRestartIsSaid)
     EXPECT_EQ (runner.ran.size(), 1u);
     EXPECT_NE (said.find ("a3-aes67 restart failed (exit 5)"), std::string::npos) << said;
 }
+
+// A restart that failed (or timed out: -1) leaves no signature, so the next Save of the same layout renders and
+// restarts again instead of trusting a config the senders never read.
+TEST (Aes67Streams, AFailedRestartIsRetriedOnTheNextSave)
+{
+    for (const int failedExit : { 1, -1 })
+    {
+        SCOPED_TRACE ("exit " + std::to_string (failedExit));
+        TempHome home;
+        FakeRunner runner;
+        runner.exitCode = failedExit;
+
+        a3app::reannounceStreams (renderAt (home.dir), sixOneStreams(), runner);
+        EXPECT_FALSE (signatureIn (home.dir).exists());
+
+        runner.exitCode = 0;
+        writeBytes (configIn (home.dir), bytesOf (configIn (home.dir)) + "# marked by the test\n");
+        const auto said = a3app::reannounceStreams (renderAt (home.dir), sixOneStreams(), runner);
+        EXPECT_EQ (runner.ran.size(), 2u);
+        EXPECT_EQ (bytesOf (configIn (home.dir)), renderedFor (sixOneStreams())) << "rendered again";
+        EXPECT_NE (said.find ("a3-aes67 restarted"), std::string::npos) << said;
+        EXPECT_EQ (bytesOf (signatureIn (home.dir)), a3core::streamsSignature (sixOneStreams())) << "a restart that worked keeps it";
+    }
+}
