@@ -23,7 +23,8 @@ class IemNode
 public:
     // Builds the processor and sets its bus layout explicitly (no host negotiation):
     // multiEncoder: numInputs discrete in, ambisonic order-3 out (16); decoders: 16 in, numOutputs out;
-    // dualDelay: 16 in, 16 out (order 3 both ways).
+    // dualDelay: 16 in, 16 out (order 3 both ways; a lower orderSetting runs on the first
+    // channels and clears the rest).
     // stereoEncoder: 2 in, ambisonic order-3 SN3D out (16), high quality.
     // Returns nullptr when the processor refuses that layout.
     static std::unique_ptr<IemNode> create (IemKind, int numInputs, int numOutputs);

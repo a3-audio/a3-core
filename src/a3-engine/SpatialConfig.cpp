@@ -21,10 +21,10 @@ public:
         auto phones = readParameters ("phones.parameters.json");
         if (! encoder || ! rec || ! fx || ! phones)
             return std::nullopt;
-        config.encoderParameters = withOrder (*encoder, "orderSetting");
-        config.recParameters = withOrder (*rec, "inputOrderSetting");
-        config.fxParameters = withOrder (*fx, "orderSetting");
-        config.phonesParameters = withOrder (*phones, "inputOrderSetting");
+        config.encoderParameters = withOrder (*encoder, "orderSetting", iemOrderThree);
+        config.recParameters = withOrder (*rec, "inputOrderSetting", iemOrderSetting (headphoneAndDelayOrder));
+        config.fxParameters = withOrder (*fx, "orderSetting", iemOrderSetting (headphoneAndDelayOrder));
+        config.phonesParameters = withOrder (*phones, "inputOrderSetting", iemOrderSetting (headphoneAndDelayOrder));
 
         auto main = readZone ("main");
         auto booth = readZone ("booth");
@@ -83,10 +83,10 @@ private:
         return parsed;
     }
 
-    static juce::var withOrder (const juce::var& parameters, const char* orderId)
+    static juce::var withOrder (const juce::var& parameters, const char* orderId, float iemOrder)
     {
         auto explicitOrder = parameters.clone();
-        explicitOrder.getDynamicObject()->setProperty (orderId, iemOrderThree);
+        explicitOrder.getDynamicObject()->setProperty (orderId, iemOrder);
         return explicitOrder;
     }
 
@@ -192,7 +192,7 @@ private:
 
         ZoneConfig zone;
         zone.layout = std::move (*layout);
-        zone.parameters = withOrder (*parameters, "inputOrderSetting");
+        zone.parameters = withOrder (*parameters, "inputOrderSetting", iemOrderThree);
         if (! readStages (zoneFileName, zoneFile->getProperty ("stages", {}), zone.fixedGainDb, zone.absorbedGainDb)
             || ! readDirections (zoneFileName, zoneFile->getProperty ("topDirections", {}),
                                  zone.layout.topChannels.size(), zone.topDirections))

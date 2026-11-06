@@ -86,6 +86,13 @@ libraries JUCE would `dlopen` for a window are not needed.
   `trims.rec`, never gated; phones: BinauralDecoder (`enc_fx` + `enc_phones`, which carries the stem cue) → PHONES → trim and gate. The
   `fixedGainDb` stages of `data/spatial/*.zone.json` are not applied: they are the MASTER/BOOTH knobs
   (R1). Every gain control at 0 is exact silence, every send at 0 too (R2, R18).
+- **Orders (2026-11-06).** The buses and the main/booth decoders are 3rd order. The two headphone
+  decoders (rec, phones) and the delay run at 2nd order (`headphoneAndDelayOrder` in
+  `src/a3-engine/SpatialConfig.h`, set as IEM's own order parameter): the BinauralDecoders read ACN
+  0..8 with IEM's 2nd-order HRIR set, and the DualDelay works on ACN 0..8 and leaves 9..15 at zero, so
+  its return adds nothing above 2nd order to main and booth. Why: the two BinauralDecoders were 65 % of
+  the engine's instructions, and a 64-frame block did not fit. The cost is spatial sharpness on the
+  headphones, on rec and in the echoes; the dry signal on the speakers is unchanged.
 - **Gate.** A fresh or re-prepared `Engine` has main, booth and phones closed (exactly 0). `gateOpen`
   ramps each to its trim over 1 s, linear in gain; closing reaches 0 within 10 ms. A zone without a
   trim in the config stays closed. `gateLevels()` / `startGateAt()` hand the level over to a rebuilt

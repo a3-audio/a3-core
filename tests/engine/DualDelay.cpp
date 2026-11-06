@@ -115,10 +115,10 @@ TEST (DualDelay, DataParametersAreLegal)
     }
 }
 
-TEST (DualDelay, TheEngineChoosesThirdOrderAndNoSync)
+TEST (DualDelay, TheEngineChoosesSecondOrderAndNoSync)
 {
     auto node = makeDualDelay();
-    EXPECT_FLOAT_EQ (node->rawParameter ("orderSetting")->load(), 4.0f);
+    EXPECT_FLOAT_EQ (node->rawParameter ("orderSetting")->load(), 3.0f);
     EXPECT_FLOAT_EQ (node->rawParameter ("syncL")->load(), 0.0f);
     EXPECT_FLOAT_EQ (node->rawParameter ("syncR")->load(), 0.0f);
     EXPECT_FLOAT_EQ (node->rawParameter ("lfoDepthL")->load(), 0.0f);

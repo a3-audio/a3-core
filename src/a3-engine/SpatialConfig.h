@@ -10,8 +10,14 @@
 
 namespace a3
 {
-// IEM's value for "3rd order" in the Ambisonic Order choice (0 = auto, 1 = 0th ... 4 = 3rd).
-constexpr float iemOrderThree = 4.0f;
+// IEM's value for an order in its Ambisonic Order choice (0 = auto, 1 = 0th ... 4 = 3rd).
+constexpr float iemOrderSetting (int order) { return (float) (order + 1); }
+constexpr float iemOrderThree = iemOrderSetting (3);
+
+// The bus is 3rd order (16 channels); the headphone decoders (rec, phones) and the delay run at 2nd
+// order on it: they read ACN 0..8 only, and the delay leaves ACN 9..15 at zero. The two binaural
+// decoders were 65 % of the engine's CPU (2026-11-06), and block 64 did not fit; main and booth stay 3rd order.
+constexpr int headphoneAndDelayOrder = 2;
 
 enum class Tap { moving, steady };
 
@@ -62,8 +68,9 @@ constexpr int firstBedSourceInFile = 4;
 struct BedSource { float azimuth, elevation, gainDb; int side; };   // side 0 = L, 1 = R
 std::array<BedSource, numBedSources> bedFrom (const SpatialConfig&);
 
-// The files keep the template's values; here the Ambisonic order is set to 3
-// explicitly (encoder orderSetting, decoder and rec inputOrderSetting), never "auto".
+// The files keep the template's values; here the Ambisonic order is set explicitly, never "auto":
+// 3 for the encoder (orderSetting) and the zone decoders (inputOrderSetting), headphoneAndDelayOrder
+// for rec and phones (inputOrderSetting) and the delay (orderSetting).
 // nullopt + error naming the file and the reason.
 std::optional<SpatialConfig> loadSpatialConfig (const juce::File& directory, juce::String& error);
 // `mainDirectory`'s config with its booth zone taken from `boothDirectory`'s (the same directory: one load).

@@ -80,7 +80,8 @@ private:
     std::vector<int> topChannels;
 };
 
-// IEM's BinauralDecoder (16 in, 2 out); out[0..1] are count samples long, nullptr = not written.
+// IEM's BinauralDecoder (16 in, 2 out) at the order its parameters set (the engine's: headphoneAndDelayOrder,
+// so it convolves ACN 0..8 only); out[0..1] are count samples long, nullptr = not written.
 class HeadphoneDecoder
 {
 public:

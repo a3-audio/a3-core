@@ -236,13 +236,13 @@ TEST (SpatialConfig, RefusesMissingPhonesParameters)
     EXPECT_TRUE (error.contains ("phones.parameters.json")) << error;
 }
 
-TEST (SpatialConfig, FxAndPhonesCarryTheOrderExplicitly)
+TEST (SpatialConfig, FxAndPhonesCarryTheSecondOrderExplicitly)
 {
     juce::String error;
     const auto config = a3::loadSpatialConfig (shippedDirectory, error);
     ASSERT_TRUE (config.has_value()) << error;
-    EXPECT_EQ ((float) (double) config->fxParameters.getProperty ("orderSetting", {}), a3::iemOrderThree);
-    EXPECT_EQ ((float) (double) config->phonesParameters.getProperty ("inputOrderSetting", {}), a3::iemOrderThree);
+    EXPECT_EQ ((float) (double) config->fxParameters.getProperty ("orderSetting", {}), 3.0f);
+    EXPECT_EQ ((float) (double) config->phonesParameters.getProperty ("inputOrderSetting", {}), 3.0f);
 }
 
 TEST (SpatialConfig, AnUnknownStageKindIsRefused)
@@ -280,7 +280,8 @@ TEST (SpatialConfig, AnUnknownParameterIdIsRefusedWhenAppliedToANode)
     EXPECT_TRUE (result.getErrorMessage().contains ("weightz")) << result.getErrorMessage();
 }
 
-TEST (SpatialConfig, TheAmbisonicOrderIsSetToThreeExplicitly)
+// The speakers' path is 3rd order; rec (a headphone decoder) is 2nd order like the phones.
+TEST (SpatialConfig, TheAmbisonicOrderIsSetExplicitly)
 {
     juce::String error;
     const auto config = a3::loadSpatialConfig (shippedDirectory, error);
@@ -297,7 +298,7 @@ TEST (SpatialConfig, TheAmbisonicOrderIsSetToThreeExplicitly)
 
     auto rec = a3::IemNode::create (a3::IemKind::binauralDecoder, 16, 2);
     ASSERT_TRUE (rec->setParameters (config->recParameters).wasOk());
-    EXPECT_EQ (rec->rawParameter ("inputOrderSetting")->load(), 4.0f);
+    EXPECT_EQ (rec->rawParameter ("inputOrderSetting")->load(), 3.0f);
 }
 
 namespace
