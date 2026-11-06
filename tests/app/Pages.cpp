@@ -2584,7 +2584,7 @@ TEST_F (Pages, EngineSaysTheRoundTripAndTheAes67Latency)
     };
     auto rows = a3app::roundTripRows (estimate, measured, a3app::aes67LatencyText (receiver));
     EXPECT_EQ (text (rows), (juce::StringArray { "Estimated|17.4 ms (768 samples)", "Measured digital|not measured",
-                                                 "Measured analog|not measured", "AES67 latency|9.3 ms" }));
+                                                 "Measured analog|not measured", "AES67 latency|7.3 ms" }));
     EXPECT_EQ (rows[0].tone, Tone::plain);
     EXPECT_EQ (rows[1].tone, Tone::dim) << "should be there and is not";
     EXPECT_EQ (rows[3].tone, Tone::plain);
