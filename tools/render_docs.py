@@ -110,13 +110,20 @@ def _stream_group(truth, stream):
     return f"{address}:{stream['port']}"
 
 
+#: A stream's source as resolveTxStreams (a3-core's Aes67Streams.cpp) knows them.
+ZONE_SOURCES = ("zone:main", "zone:booth")
+PAIR_SOURCES = ("pair:rec", "pair:phones")
+
+
 def _stream_channels(stream):
     source = stream["source"]
     if source == "fixed":
         return str(stream["channels"])
-    if source.startswith("zone:"):
+    if source in ZONE_SOURCES:
         return "n + 1"
-    return "2"
+    if source in PAIR_SOURCES:
+        return "2"
+    raise ValueError(f"aes67_streams: '{stream.get('key')}' has an unknown source '{source}'")
 
 
 def aes67_table(truth):

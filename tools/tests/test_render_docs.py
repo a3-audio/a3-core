@@ -118,6 +118,16 @@ class TheAes67Table(unittest.TestCase):
                if "Core MAIN" in r][0]
         self.assertIn("n + 1", row)
 
+    def test_a_pair_stream_has_two_channels(self):
+        for source in ("pair:rec", "pair:phones"):
+            self.assertEqual(render_docs._stream_channels({"source": source}), "2")
+
+    def test_an_unknown_source_is_refused_as_the_core_refuses_it(self):
+        with self.assertRaises(ValueError):
+            render_docs._stream_channels({"key": "x", "source": "zone:x"})
+        with self.assertRaises(ValueError):
+            render_docs._stream_channels({"key": "x", "source": "pair:monitor"})
+
 
 class TheMarkers(unittest.TestCase):
     def test_only_between_the_markers_is_replaced(self):
