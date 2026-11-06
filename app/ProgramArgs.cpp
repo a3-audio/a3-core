@@ -492,13 +492,18 @@ CoreStreams coreStreams (const a3core::Truth& truth, const a3core::Platform& pla
     const auto spatial = loadZonesSpatial (*config, error);
     if (! spatial)
         return legacyOnly ((config->spatialDirectory.getFullPathName() + ": " + error).toStdString());
+    return streamsFor (truth, *spatial, platform.hostname());
+}
+
+CoreStreams streamsFor (const a3core::Truth& truth, const a3::SpatialConfig& spatial, const std::string& hostname)
+{
     try
     {
-        return { a3core::resolveTxStreams (truth, *spatial, platform.hostname()), "" };
+        return { a3core::resolveTxStreams (truth, spatial, hostname), "" };
     }
     catch (const a3core::TruthError& problem)
     {
-        return legacyOnly (problem.what);
+        return { a3core::legacyTxStreams (truth, hostname), problem.what };
     }
 }
 
@@ -517,6 +522,17 @@ std::vector<a3core::StreamSpec> engineStreams (const a3core::Platform& platform,
     {
         return {};
     }
+}
+
+std::optional<Aes67Render> engineAes67Render (const a3core::Platform& platform)
+{
+    const auto files = coreFiles (platform);
+    auto loaded = a3core::Truth::load (files.truth, files.network);
+    auto* truth = std::get_if<a3core::Truth> (&loaded);
+    if (truth == nullptr)
+        return std::nullopt;
+    return Aes67Render { std::move (*truth), platform.home(), platform.packageShare().getChildFile ("pipewire/pipewire-aes67.conf.in"),
+                         platform.hostname() };
 }
 
 int fanoutPort (const ProgramArgs& args, const a3core::Platform& platform)

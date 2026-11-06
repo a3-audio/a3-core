@@ -52,6 +52,11 @@ std::optional<std::string> aes67Conf (const Truth&, const std::string& hostname,
 
 bool isRendered (const juce::File&);
 
+// The signature stored for the AES67 config under `home`, verbatim; nullopt unless the config is there and
+// rendered by us: a signature beside a config written by hand, or beside none, says nothing. Throws RenderError
+// for a signature that cannot be read.
+std::optional<std::string> renderedAes67Signature (const juce::File& home);
+
 // Render the AES67 config into PipeWire's folder; what happened, said. A config written by hand is
 // never replaced; without an audio socket a rendered one goes. After a write the streams' signature
 // is stored at aes67SignaturePath.

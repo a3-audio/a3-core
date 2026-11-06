@@ -11,7 +11,7 @@ add_library(a3-engine-app-lib STATIC EngineHost.cpp OscVocabulary.cpp HelloSende
     ui/ChannelsPage.cpp ui/ZonesPage.cpp ui/SpeakersPage.cpp ui/IoPage.cpp ui/CalibrationPage.cpp ui/FilterCard.cpp ui/SaveBar.cpp
     ui/KeyboardPolicy.cpp ui/OnboardLink.cpp ui/OnScreenKeyboard.cpp ui/look/Dropdown.cpp ui/look/A3LookAndFeel.cpp ui/SubPages.cpp ui/WorkspaceSwitch.cpp
     ui/SystemAbout.cpp ui/SystemCheckout.cpp ui/RigModel.cpp ui/RigPlan.cpp ui/SystemProbe.cpp ui/SystemPage.cpp ui/NativeWindow.cpp XrunCount.cpp RoundTripProbe.cpp RoundTripLoop.cpp
-    AudioTiming.cpp TimingControl.cpp CommandRunner.cpp SystemDevice.cpp)
+    AudioTiming.cpp TimingControl.cpp CommandRunner.cpp SystemDevice.cpp Aes67Reannounce.cpp)
 target_include_directories(a3-engine-app-lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/ui ${CMAKE_CURRENT_SOURCE_DIR}/ui/look)
 # The A3 logo (ui/assets/a3-logo.svg, the website's), drawn by the ABOUT page from its SVG.
 juce_add_binary_data(a3-core-assets NAMESPACE a3assets HEADER_NAME A3Assets.h SOURCES ui/assets/a3-logo.svg)

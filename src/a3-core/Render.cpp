@@ -231,6 +231,14 @@ bool isRendered (const juce::File& file)
     return first == header;
 }
 
+std::optional<std::string> renderedAes67Signature (const juce::File& home)
+{
+    const auto signature = home.getChildFile (aes67SignaturePath);
+    if (! isRendered (home.getChildFile (aes67ConfPath)) || ! signature.existsAsFile())
+        return std::nullopt;
+    return readText (signature);
+}
+
 void replaceWhole (const juce::File& file, const std::string& text)
 {
     makeParent (file);

@@ -17,6 +17,7 @@
 #include "EngineHost.h"
 #include "JackBackend.h"
 #include "OscVocabulary.h"
+#include "ProgramArgs.h"
 #include "SessionRestart.h"
 #include "UdpNet.h"
 
@@ -298,19 +299,22 @@ juce::Result EngineRole::restart (const AppConfig& config, juce::String& problem
     auto next = startup;
     next.config = config;
     next.spatial = *spatial;
-    const auto openWith = [this] (const StartupData& data)
+    const auto streamsBefore = streams;
+    const auto nextStreams = streamsOf (next.spatial);
+    const auto openWith = [this] (const StartupData& data, const std::vector<a3core::StreamSpec>& senders)
     {
         startup = data;
+        streams = senders;
         session = std::make_unique<EngineSession> (startup);
-        return session->open (! args.noConnect, args.hostname, args.streams);
+        return session->open (! args.noConnect, args.hostname, streams);
     };
 
     RestartSteps steps;
     steps.quietOld = [this] { if (session != nullptr) session->quiet(); };
     steps.dropOld = [this] { session.reset(); };
-    steps.openNew = [&] { return openWith (next); };
+    steps.openNew = [&] { return openWith (next, nextStreams); };
     steps.dropNew = [this] { session.reset(); };
-    steps.openPrevious = [&] { return openWith (before); };
+    steps.openPrevious = [&] { return openWith (before, streamsBefore); };
     steps.pauseMs = [] (int ms) { juce::Thread::sleep (ms); };
 
     const auto result = runRestart (steps);
@@ -319,6 +323,7 @@ juce::Result EngineRole::restart (const AppConfig& config, juce::String& problem
         case RestartOutcome::applied:
             problem = {};
             startTiming();
+            reannounceStreams();
             return juce::Result::ok();
         case RestartOutcome::previousRunning:
             problem = {};
@@ -332,6 +337,38 @@ juce::Result EngineRole::restart (const AppConfig& config, juce::String& problem
     sayEngine ("NO ENGINE RUNNING: " + problem);
     session = std::make_unique<EngineSession> (startup);
     return juce::Result::fail (result.message);
+}
+
+// The Core's streams for a layout: the saved one changes which channels the zone streams carry. Without the
+// Core's truth (it did not load at the start), or with a table that does not resolve at all, the streams the
+// engine runs with stay.
+std::vector<a3core::StreamSpec> EngineRole::streamsOf (const a3::SpatialConfig& spatial) const
+{
+    if (! args.aes67)
+        return streams;
+    try
+    {
+        auto resolved = streamsFor (args.aes67->truth, spatial, args.hostname);
+        if (! resolved.legacyOnlyBecause.empty())
+            sayEngine ("AES67: the legacy stream only: " + juce::String (resolved.legacyOnlyBecause));
+        return std::move (resolved.streams);
+    }
+    catch (const a3core::TruthError& problem)
+    {
+        sayEngine ("AES67: " + juce::String (problem.what));
+        return streams;
+    }
+}
+
+// The new session links to the new streams' senders; the config they come from is rendered again and a3-aes67
+// restarted only when the streams changed (Aes67Reannounce.h). Its ports come back after the restart, and the
+// backend links them as ports come (JackBackend::service).
+void EngineRole::reannounceStreams()
+{
+    if (! args.aes67 || streams.empty())
+        return;   // no streams resolved at all: an empty config would silence the legacy stream too
+    if (const auto said = a3app::reannounceStreams (*args.aes67, streams, runner); ! said.empty())
+        sayEngine (said);
 }
 
 // A refused or busy engine.control is said and the engine runs on: the audio never waits for its window.
@@ -389,7 +426,7 @@ std::variant<std::unique_ptr<EngineRole>, int> EngineRole::start (const AppArgs&
 }
 
 EngineRole::EngineRole (const AppArgs& argsToUse, StartupData data, const juce::File& home)
-    : args (argsToUse), startup (std::move (data)),
+    : args (argsToUse), startup (std::move (data)), streams (args.streams),
       timing ({ runner, periodsDropInFile (home), [this] (const AudioTiming& t) { return storeTiming (t); },
                 [this] { session->measureRoundTrip(); } }),
       session (std::make_unique<EngineSession> (startup))

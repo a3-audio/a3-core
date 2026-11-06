@@ -81,10 +81,18 @@ struct CoreStreams
 };
 CoreStreams coreStreams (const a3core::Truth&, const a3core::Platform&, const juce::File& packageConfig);
 
+// The streams of a layout already read (resolveTxStreams); a table that does not resolve gives the legacy stream
+// alone and says why. Throws TruthError when not even the legacy stream resolves.
+CoreStreams streamsFor (const a3core::Truth&, const a3::SpatialConfig&, const std::string& hostname);
+
 // The streams the engine links its outputs to: the Core's (coreStreams) for this machine, so both roles agree on
 // what is sent. A truth that does not load, or one with no streams, gives none: the engine then makes the
 // legacy rec link only.
 std::vector<a3core::StreamSpec> engineStreams (const a3core::Platform&, const juce::File& packageConfig);
+
+// What the engine renders the AES67 config with when a saved layout changes the streams (Aes67Reannounce.h):
+// the Core's truth and this machine's places. nullopt when the truth does not load: the engine then renders nothing.
+std::optional<Aes67Render> engineAes67Render (const a3core::Platform&);
 
 // The fan-out's port: --port, else A3_SCREENCAST_PORT (B1's default), else 0.
 int fanoutPort (const ProgramArgs&, const a3core::Platform&);

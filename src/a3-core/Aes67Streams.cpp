@@ -156,4 +156,9 @@ std::string streamsSignature (const std::vector<StreamSpec>& streams)
     }
     return signature;
 }
+
+bool streamsChanged (const std::string& renderedSignature, const std::vector<StreamSpec>& streams)
+{
+    return renderedSignature != streamsSignature (streams);
+}
 }

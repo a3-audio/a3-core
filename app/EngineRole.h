@@ -48,6 +48,8 @@ private:
     // new config does not open the old one is opened again; if even that fails the role stays up without an
     // engine and says so in `problem` (the STATUS page shows it).
     juce::Result restart (const AppConfig&, juce::String& problem);
+    std::vector<a3core::StreamSpec> streamsOf (const a3::SpatialConfig&) const;
+    void reannounceStreams();
     void serveControl();
     void storeConverterShare();
     bool runsOnPipeWire() const;
@@ -58,6 +60,7 @@ private:
 
     AppArgs args;
     StartupData startup;
+    std::vector<a3core::StreamSpec> streams;   // the senders the running session links to: args.streams, then the saved layout's
     SpawnRunner runner;
     TimingControl timing;
     // Declared in the order they are built: the server stops first, then the API, then the view, then the session.

@@ -35,4 +35,7 @@ std::vector<StreamSpec> legacyTxStreams (const Truth&, const std::string& hostna
 
 // Changes iff a stream's session, group, port, ptime or channel names change.
 std::string streamsSignature (const std::vector<StreamSpec>&);
+
+// True unless `renderedSignature` is the streams' signature: what a rendered config announces is out of date.
+bool streamsChanged (const std::string& renderedSignature, const std::vector<StreamSpec>&);
 }
