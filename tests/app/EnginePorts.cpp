@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 #include "EngineFixture.h"
 #include "EnginePorts.h"
+#include "Aes67Streams.h"
 
 namespace
 {
@@ -240,4 +241,25 @@ TEST (EnginePorts, SlotsBindAuxAndCue)
         *slots.inputs[i] = &marks[i];
     EXPECT_EQ (in.decks[1].aux[15], &marks[12 + 41 + 16 + 15]);
     EXPECT_EQ (in.decks[1].cue[8], &marks[12 + 41 + 32 + 8]);
+}
+
+// The AES67 streams link engine outputs by name (ConnectionPlan's addStreamSenders): every port a resolved stream
+// names must be one the engine registers, for the shipped 4.1 and for a 6.1 in both zones.
+TEST (EnginePorts, EveryAes67StreamPortIsAnEngineOutput)
+{
+    const auto truth = std::get<a3core::Truth> (a3core::Truth::load (juce::File (A3_PACKAGE_TRUTH), std::nullopt));
+    auto sixOne = a3test::loadedSpatialConfig (a3test::reaperBoothSpatialDirectory);
+    sixOne.main.layout = sixOne.booth.layout;
+    for (const auto& spatial : { a3test::loadedSpatialConfig (a3test::shippedSpatialDirectory), sixOne })
+    {
+        const auto outputs = a3app::enginePortNames (a3test::engineConfig (4, 0), spatial).outputs;
+        std::size_t checked = 0;
+        for (const auto& spec : a3core::resolveTxStreams (truth, spatial, "a3nuc1"))
+            for (const auto& port : spec.enginePorts)
+            {
+                EXPECT_NE (std::find (outputs.begin(), outputs.end(), port), outputs.end()) << spec.key << ": " << port;
+                ++checked;
+            }
+        EXPECT_GE (checked, 4u + 4u + 2u + 2u);   // a sub-less 4.0 would still name this many
+    }
 }

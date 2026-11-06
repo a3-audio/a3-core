@@ -116,6 +116,8 @@ std::vector<ZoneChannel> zoneChannels (const Layout& layout)
     return channels;
 }
 
+std::vector<ZoneChannel> pairChannels() { return { { "L", "L" }, { "R", "R" } }; }
+
 std::optional<Layout> parseLayout (const juce::String& decoderJson, const juce::var& parameters, juce::String& error)
 {
     ReferenceCountedDecoder::Ptr decoder;

@@ -14,8 +14,8 @@ void addZone (std::vector<std::string>& out, const std::string& zone, const a3::
 
 void addPair (std::vector<std::string>& out, const std::string& base)
 {
-    out.push_back (base + "_L");
-    out.push_back (base + "_R");
+    for (const auto& side : a3::pairChannels())
+        out.push_back (base + "_" + side.portSuffix);
 }
 }
 

@@ -67,10 +67,10 @@ void addZone (StreamSpec& spec, const std::string& zone, const a3::Layout& layou
 
 void addPair (StreamSpec& spec, const std::string& base)
 {
-    for (const char* side : { "L", "R" })
+    for (const auto& side : a3::pairChannels())
     {
-        spec.channelNames.push_back (side);
-        spec.enginePorts.push_back (base + "_" + side);
+        spec.channelNames.push_back (side.name);
+        spec.enginePorts.push_back (base + "_" + side.portSuffix);
     }
 }
 

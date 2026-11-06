@@ -31,6 +31,10 @@ struct ZoneChannel
 // the engine's ports and the AES67 streams both take.
 std::vector<ZoneChannel> zoneChannels (const Layout&);
 
+// A stereo bus's two outputs in the engine's order (rec, phones): "L" then "R", as the port's suffix and as the
+// name a stream announces. The one walk the engine's ports and the AES67 pair streams both take.
+std::vector<ZoneChannel> pairChannels();
+
 // Reads the routing through IEM's own decoder parser. The sub comes from the
 // zone's SimpleDecoder parameters (swMode 1 = discrete sub on swChannel,
 // swMode 0 = none), because the rig's decoder files carry no SubwooferChannel.

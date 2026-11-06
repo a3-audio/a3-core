@@ -7,6 +7,7 @@ namespace a3app
 {
 namespace
 {
+// The return comes in on analog 11/12 (the return-sources convention, 2026-10-07: analog 9/10 are the phones).
 constexpr int returnStereoFirstPort = 11;
 
 ReceiverGroup analogGroup (const std::string& name, int first)
