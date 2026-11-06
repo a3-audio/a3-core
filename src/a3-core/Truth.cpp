@@ -426,6 +426,14 @@ std::vector<juce::var> Truth::routes() const
     return routes;
 }
 
+juce::var Truth::streamTable() const
+{
+    const auto& table = truth.getProperty ("aes67_streams", juce::var());
+    if (table.getArray() == nullptr)
+        return juce::var (juce::Array<juce::var>());
+    return deepCopy (table);
+}
+
 juce::var Truth::entry (const std::string& key) const
 {
     const auto addresses = truth.getProperty ("addresses", juce::var());

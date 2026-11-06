@@ -8,10 +8,8 @@ namespace
 {
 void addZone (std::vector<std::string>& out, const std::string& zone, const a3::Layout& layout)
 {
-    if (layout.hasSub())
-        out.push_back (zone + "_sub");
-    for (size_t k = 1; k <= layout.topChannels.size(); ++k)
-        out.push_back (zone + "_top_" + std::to_string (k));
+    for (const auto& channel : a3::zoneChannels (layout))
+        out.push_back (zone + "_" + channel.portSuffix);
 }
 
 void addPair (std::vector<std::string>& out, const std::string& base)

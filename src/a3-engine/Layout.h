@@ -3,6 +3,7 @@
 #pragma once
 #include <juce_core/juce_core.h>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace a3
@@ -18,6 +19,17 @@ struct Layout
     bool hasSub() const { return subChannel > 0; }
     int numOutputs() const;              // max(subChannel, max(topChannels)): the decoder's output channel count
 };
+
+// One of a zone's outputs: its engine port's suffix ("sub", "top_1", ...) and the name a stream
+// announces for it ("SUB", "T1", ...).
+struct ZoneChannel
+{
+    std::string portSuffix, name;
+};
+
+// A zone's outputs in the engine's order: the sub if it has one, then tops 1..N. The one walk
+// the engine's ports and the AES67 streams both take.
+std::vector<ZoneChannel> zoneChannels (const Layout&);
 
 // Reads the routing through IEM's own decoder parser. The sub comes from the
 // zone's SimpleDecoder parameters (swMode 1 = discrete sub on swChannel,

@@ -66,6 +66,8 @@ public:
     Endpoint endpoint (const std::string& program, const std::string& role) const;   // "any" is reached as "local"
     juce::var listener (const std::string& program, const std::string& role) const;
     std::vector<juce::var> routes() const;
+    // A copy of the aes67_streams table as the file has it; an empty array when the file has none.
+    juce::var streamTable() const;
 
     std::string pattern (const std::string& key) const;
     // Whether the file has an entry for the address key (older truths, the recorded B0 one among them, lack the newer words).

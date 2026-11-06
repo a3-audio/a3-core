@@ -106,6 +106,16 @@ int Layout::numOutputs() const
     return highest;
 }
 
+std::vector<ZoneChannel> zoneChannels (const Layout& layout)
+{
+    std::vector<ZoneChannel> channels;
+    if (layout.hasSub())
+        channels.push_back ({ "sub", "SUB" });
+    for (size_t k = 1; k <= layout.topChannels.size(); ++k)
+        channels.push_back ({ "top_" + std::to_string (k), "T" + std::to_string (k) });
+    return channels;
+}
+
 std::optional<Layout> parseLayout (const juce::String& decoderJson, const juce::var& parameters, juce::String& error)
 {
     ReferenceCountedDecoder::Ptr decoder;
