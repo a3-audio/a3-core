@@ -502,6 +502,23 @@ CoreStreams coreStreams (const a3core::Truth& truth, const a3core::Platform& pla
     }
 }
 
+std::vector<a3core::StreamSpec> engineStreams (const a3core::Platform& platform, const juce::File& packageConfig)
+{
+    const auto files = coreFiles (platform);
+    const auto loaded = a3core::Truth::load (files.truth, files.network);
+    const auto* truth = std::get_if<a3core::Truth> (&loaded);
+    if (truth == nullptr)
+        return {};
+    try
+    {
+        return coreStreams (*truth, platform, packageConfig).streams;
+    }
+    catch (const a3core::TruthError&)
+    {
+        return {};
+    }
+}
+
 int fanoutPort (const ProgramArgs& args, const a3core::Platform& platform)
 {
     if (args.fanoutPort)

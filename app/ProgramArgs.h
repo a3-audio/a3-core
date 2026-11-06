@@ -81,6 +81,11 @@ struct CoreStreams
 };
 CoreStreams coreStreams (const a3core::Truth&, const a3core::Platform&, const juce::File& packageConfig);
 
+// The streams the engine links its outputs to: the Core's (coreStreams) for this machine, so both roles agree on
+// what is sent. A truth that does not load, or one with no streams, gives none: the engine then makes the
+// legacy rec link only.
+std::vector<a3core::StreamSpec> engineStreams (const a3core::Platform&, const juce::File& packageConfig);
+
 // The fan-out's port: --port, else A3_SCREENCAST_PORT (B1's default), else 0.
 int fanoutPort (const ProgramArgs&, const a3core::Platform&);
 // B1's parser.error for a port of 0 or no command; nullopt when the fan-out may start.

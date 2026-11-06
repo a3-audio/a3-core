@@ -32,6 +32,18 @@ void addRecToAes67Sender (a3::links::LinkMap& map, const std::string& hostname)
         addPeerOnce (map, port, sender + channel);
 }
 
+void addStreamSenders (a3::links::LinkMap& map, const std::vector<a3core::StreamSpec>& streams)
+{
+    for (const auto& spec : streams)
+    {
+        if (spec.legacy)
+            continue;
+        const auto channels = std::min (spec.enginePorts.size(), spec.channelNames.size());
+        for (std::size_t k = 0; k < channels; ++k)
+            addPeerOnce (map, spec.enginePorts[k], spec.session + ":send_" + spec.channelNames[k]);
+    }
+}
+
 void addBeatAnalyzerLink (a3::links::LinkMap& map) { addPeerOnce (map, "rec_L", beatAnalyzerInput); }
 
 bool hasAnalogTestPair (const IoMap& map) { return map.analogLoop && map.analogLoop->output > 0 && map.analogLoop->input > 0; }
@@ -50,11 +62,12 @@ void addRoundTripLoopLinks (IoMap& map)
     }
 }
 
-IoMap linkMapFor (const AppConfig& config, const std::string& hostname)
+IoMap linkMapFor (const AppConfig& config, const std::string& hostname, const std::vector<a3core::StreamSpec>& streams)
 {
     auto map = config.io;
     addBeatAnalyzerLink (map);
     addRecToAes67Sender (map, hostname);
+    addStreamSenders (map, streams);
     addRoundTripLoopLinks (map);
     return map;
 }

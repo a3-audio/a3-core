@@ -128,3 +128,83 @@ TEST (LinkPlanDue, APortRegistrationOrASecondAppliesTheMapAgain)
     EXPECT_TRUE (a3app::linkPlanDue (true, false, 11.0, 10.0)) << "the periodic fallback, a missed callback heals";
     EXPECT_FALSE (a3app::linkPlanDue (false, true, 11.0, 10.0)) << "--no-connect never links";
 }
+
+namespace
+{
+a3core::StreamSpec mainStream()
+{
+    a3core::StreamSpec spec;
+    spec.key = "main";
+    spec.session = "A3 Core MAIN";
+    spec.channelNames = { "SUB", "T1", "T2", "T3" };
+    spec.enginePorts = { "main_sub", "main_top_1", "main_top_2", "main_top_3" };
+    return spec;
+}
+
+a3core::StreamSpec recStream()
+{
+    a3core::StreamSpec spec;
+    spec.key = "rec";
+    spec.session = "A3 Core REC";
+    spec.channelNames = { "L", "R" };
+    spec.enginePorts = { "rec_L", "rec_R" };
+    return spec;
+}
+
+a3core::StreamSpec phonesStream()
+{
+    a3core::StreamSpec spec;
+    spec.key = "phones";
+    spec.session = "A3 Core PHONES";
+    spec.channelNames = { "L", "R" };
+    spec.enginePorts = { "phones_L", "phones_R" };
+    return spec;
+}
+
+a3core::StreamSpec legacyStream()
+{
+    a3core::StreamSpec spec;
+    spec.key = "legacy";
+    spec.session = "AES67 a3nuc1 out";
+    spec.legacy = true;
+    spec.channelNames = { "CH1", "CH2" };
+    return spec;
+}
+}
+
+TEST (ConnectionPlan, MainSubAndTopsGoToTheMainSender)
+{
+    a3app::AppConfig config;
+    const auto linked = a3app::linkMapFor (config, "a3nuc1", { legacyStream(), mainStream() });
+    EXPECT_EQ (linked.jack.at ("main_sub"), std::vector<std::string> { "A3 Core MAIN:send_SUB" });
+    EXPECT_EQ (linked.jack.at ("main_top_3"), std::vector<std::string> { "A3 Core MAIN:send_T3" });
+}
+
+TEST (ConnectionPlan, RecAndPhonesGoToTheirOwnStreams)
+{
+    a3app::AppConfig config;
+    const auto linked = a3app::linkMapFor (config, "a3nuc1", { legacyStream(), recStream(), phonesStream() });
+    EXPECT_TRUE (links (linked.jack.at ("rec_L"), "AES67 a3nuc1 out:send_CH1")) << "the legacy link stays";
+    EXPECT_TRUE (links (linked.jack.at ("rec_L"), "A3 Core REC:send_L"));
+    EXPECT_TRUE (links (linked.jack.at ("rec_R"), "A3 Core REC:send_R"));
+    EXPECT_EQ (linked.jack.at ("phones_R"), std::vector<std::string> { "A3 Core PHONES:send_R" });
+}
+
+TEST (ConnectionPlan, NoSpecsMeansTheOldMap)
+{
+    a3app::AppConfig config;
+    config.io.jack["main_top_1"] = { "system:playback_1" };
+    EXPECT_EQ (a3app::linkMapFor (config, "a3nuc1", {}).jack, a3app::linkMapFor (config, "a3nuc1").jack);
+    EXPECT_EQ (a3app::linkMapFor (config, "a3nuc1", { legacyStream() }).jack, a3app::linkMapFor (config, "a3nuc1").jack)
+        << "the legacy stream adds nothing: its link is addRecToAes67Sender's";
+}
+
+TEST (ConnectionPlan, EachLinkIsMadeOnce)
+{
+    a3app::AppConfig config;
+    config.io.jack["main_sub"] = { "A3 Core MAIN:send_SUB" };
+    const auto streams = std::vector<a3core::StreamSpec> { mainStream(), mainStream() };
+    const auto linked = a3app::linkMapFor (config, "a3nuc1", streams);
+    EXPECT_EQ (linked.jack.at ("main_sub"), std::vector<std::string> { "A3 Core MAIN:send_SUB" });
+    EXPECT_EQ (linked.jack.at ("main_top_1"), std::vector<std::string> { "A3 Core MAIN:send_T1" });
+}

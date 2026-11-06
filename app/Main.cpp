@@ -267,6 +267,7 @@ Started startEngine (const a3app::ProgramArgs& args, const a3core::Platform& pla
 {
     auto engineArgs = args.engine;
     engineArgs.hostname = platform.hostname();
+    engineArgs.streams = a3app::engineStreams (platform, engineArgs.packageConfig);
     auto started = a3app::EngineRole::start (engineArgs, platform.home());
     if (const auto* code = std::get_if<int> (&started))
         return *code;

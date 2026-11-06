@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Raphael Eismann
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+#include "Aes67Streams.h"
 #include "ConfigFile.h"
 #include "OscVocabulary.h"
 #include "SpatialConfig.h"
@@ -15,6 +16,7 @@ struct AppArgs
     juce::String config, spatial, truth = "/usr/share/a3/a3-osc.json";
     juce::File packageConfig = packageConfigFile;   // not a flag: the tests point it at a copy
     std::string hostname;                           // not a flag: Platform::hostname(), for linkMapFor
+    std::vector<a3core::StreamSpec> streams;        // not a flag: the Core's senders to link (engineStreams); empty: the legacy link only
 };
 
 // Refuses an unknown flag and a value flag without its value, naming it in `error`.

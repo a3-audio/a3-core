@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include "ConfigFile.h"
+#include "Aes67Streams.h"
 #include "a3-links/LinkMap.h"
 #include <juce_core/juce_core.h>
 #include <string>
@@ -18,6 +19,11 @@ juce::Result refuseBesideReaper (const std::vector<std::string>& clients, bool c
 // before M10. Applied at link time only: the user's file is never rewritten. No host name, no link.
 void addRecToAes67Sender (a3::links::LinkMap&, const std::string& hostname);
 
+// The Core's other AES67 senders: for every non-legacy stream and channel k (1-based) the engine output
+// enginePorts[k-1] gains the peer "<session>:send_<channelNames[k-1]>" (the sender node is named after its
+// session; its JACK ports after node.channel-names). The legacy stream is skipped: its link is the one above.
+void addStreamSenders (a3::links::LinkMap&, const std::vector<a3core::StreamSpec>&);
+
 // rec_L -> beat-analyzer:bpm_1, the beat clock's input, as the patchbay wired it. Built in like the sender link
 // (2026-10-30): the REC row of the I/O map stays free for an analog recorder, and the analyzer is always linked
 // while its port exists. An old file's REC entry naming the analyzer is dropped at load (ConfigFile.h).
@@ -31,8 +37,9 @@ void addRoundTripLoopLinks (IoMap&);
 bool hasAnalogTestPair (const IoMap&);   // an analog loop with both sides chosen
 
 // What the engine links and counts: the loaded io map plus the built-in links above. `hostname` is
-// Platform::hostname(), the source a3-osc-render names the sender from.
-IoMap linkMapFor (const AppConfig&, const std::string& hostname);
+// Platform::hostname(), the source a3-osc-render names the sender from. `streams`: the Core's resolved
+// transmit streams (empty: only the legacy sender link above).
+IoMap linkMapFor (const AppConfig&, const std::string& hostname, const std::vector<a3core::StreamSpec>& streams = {});
 
 // Whether JackBackend::service applies the map now: at once when a port registered or went
 // (a deck host booting after the Core, a3-aes67 restarting), and once a second in case a

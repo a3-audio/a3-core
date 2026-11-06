@@ -112,7 +112,7 @@ int runLinks (const a3core::Platform& platform)
     const auto map = engineMap (platform, facts.decks);
     std::optional<std::size_t> missing;
     if (map.known)
-        missing = a3::links::linksWithMissingTarget (linkMapFor (map.config, platform.hostname()), ports);
+        missing = a3::links::linksWithMissingTarget (linkMapFor (map.config, platform.hostname(), engineStreams (platform, packageConfigFile)), ports);
 
     const LinkMeanings meanings { map.config.engine, facts.meters };
     std::fputs (formatLinks ({ links, ports, missing }, meanings).c_str(), stdout);
