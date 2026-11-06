@@ -194,9 +194,14 @@ class WhatTheRigSettledOn(unittest.TestCase):
         self.assertEqual(keys["node.virtual"], "false")
         self.assertEqual(keys["media.class"], "Audio/Source")
         self.assertEqual(keys["device.api"], "aes67")
-        # 2026-10-30 on the rig, decks B and C: 4 ms clean, 2 ms crackled;
-        # 6 ms keeps one step of margin for a whole set.
-        self.assertEqual(keys["sess.latency.msec"], "6")
+        # The receive buffer must hold one 128-frame quantum (2.9 ms) plus the
+        # arrival jitter. 2026-10-30 on the lossy network, decks B and C:
+        # 4 ms clean, 2 ms crackled; 6 ms was chosen for that 7 % loss. Since
+        # the Cisco SG300 (VLAN 9, flow control off) nothing is lost, so the
+        # margin comes down to the 4 ms that was already proven. 4 ms is 16
+        # packets of 11 frames (176; the receiver sees ptime 10 and uses 170).
+        # Next step 3 ms (132), see .claude/notes/aes67-latency-runbook.md.
+        self.assertEqual(keys["sess.latency.msec"], "4")
 
     def test_every_receiver_keeps_its_resampler(self):
         # 2026-10-30, review of the one clock: with the clock role steering

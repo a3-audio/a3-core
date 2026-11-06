@@ -2565,8 +2565,8 @@ TEST_F (Pages, EngineSaysTheRoundTripAndTheAes67Latency)
     const auto conf = juce::File (A3_APP_SOURCE_DIR).getSiblingFile ("platform-config/debian-x86_64/a3-core/home/aaa/.local/share/a3-core/pipewire/pipewire-aes67.conf.in");
     const auto receiver = a3app::deckReceiveLatencyMs (conf.loadFileAsString());
     ASSERT_TRUE (receiver.has_value());
-    EXPECT_DOUBLE_EQ (*receiver, 6.0) << "the deck rule's sess.latency.msec, not the host senders' 12";
-    EXPECT_EQ (a3app::aes67LatencyText (receiver), "9.3 ms");
+    EXPECT_DOUBLE_EQ (*receiver, 4.0) << "the deck rule's sess.latency.msec, not the host senders' 12";
+    EXPECT_EQ (a3app::aes67LatencyText (receiver), "7.3 ms");
     EXPECT_FALSE (a3app::deckReceiveLatencyMs ("context.modules = []").has_value());
 
     a3app::RoundTrip estimate;

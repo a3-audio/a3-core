@@ -95,7 +95,9 @@ context.modules = [
                             node.virtual = false
                             media.class = "Audio/Source"
                             device.api = aes67
-                            sess.latency.msec = 6
+                            # One quantum (128 frames, 2.9 ms) plus arrival jitter. 4 ms was
+                            # clean on the lossy network too; 2 ms crackled there.
+                            sess.latency.msec = 4
                             # rtp-source's receive buffer is net.mtu bytes (default 1280);
                             # the deck's packet is 1365 B and was cut to 10 of 11 frames.
                             net.mtu = 1500
