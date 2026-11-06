@@ -143,7 +143,7 @@ TEST (Aes67Streams, GroupsAndNamesAreTheTablesAndTheLegacyStaysFirst)
         const auto& spec = streams[i + 1];
         EXPECT_EQ (spec.key, keys[i]);
         EXPECT_EQ (spec.session, sessions[i]);
-        EXPECT_EQ (spec.group, "239.69.151." + std::to_string (i + 1));
+        EXPECT_EQ (spec.group, "239.69.200." + std::to_string (i + 1));
         EXPECT_EQ (spec.port, 5004);
         EXPECT_DOUBLE_EQ (spec.ptimeMs, 0.5);
         EXPECT_FALSE (spec.legacy);

@@ -1076,7 +1076,7 @@ TEST (CoreService, CoreRendersTheStreamsItWasGiven)
     auto extra = streams.front();
     extra.key = "core-x";
     extra.session = "A3 Core X";
-    extra.group = "239.69.151.9";
+    extra.group = "239.69.200.9";
     extra.legacy = false;
     extra.channelNames = { "L", "R" };
     streams.push_back (extra);

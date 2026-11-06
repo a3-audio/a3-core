@@ -30,7 +30,7 @@
   "  (zone:main|zone:booth|pair:rec|pair:phones take their channels from the layout; fixed",
   "  has channels), legacy. Packets must fit MTU 1500: at most 22 channels at 0.5 ms, 44 at",
   "  0.25 ms. The legacy groups (aes67-core, decks from .244) do not move; new Core streams",
-  "  live in 239.69.151.x."
+  "  live in 239.69.200.x, out of reach of the deck slots (A = .244 ... ZZ = 239.69.153.177)."
  ],
  "version": 1,
  "network": {
@@ -123,13 +123,13 @@
    "port": 5004, "ptime": 0.5, "source": "fixed", "channels": 12, "legacy": true},
   {"key": "deck", "session": "AES67 deck {deck}", "sender": "deck", "group_base": "239.69.150.244",
    "group_step": 1, "port": 5004, "ptime": 0.25, "source": "fixed", "channels": 41, "legacy": true},
-  {"key": "core-main", "session": "A3 Core MAIN", "sender": "core", "group": "239.69.151.1",
+  {"key": "core-main", "session": "A3 Core MAIN", "sender": "core", "group": "239.69.200.1",
    "port": 5004, "ptime": 0.5, "source": "zone:main", "legacy": false},
-  {"key": "core-booth", "session": "A3 Core BOOTH", "sender": "core", "group": "239.69.151.2",
+  {"key": "core-booth", "session": "A3 Core BOOTH", "sender": "core", "group": "239.69.200.2",
    "port": 5004, "ptime": 0.5, "source": "zone:booth", "legacy": false},
-  {"key": "core-rec", "session": "A3 Core REC", "sender": "core", "group": "239.69.151.3",
+  {"key": "core-rec", "session": "A3 Core REC", "sender": "core", "group": "239.69.200.3",
    "port": 5004, "ptime": 0.5, "source": "pair:rec", "legacy": false},
-  {"key": "core-phones", "session": "A3 Core PHONES", "sender": "core", "group": "239.69.151.4",
+  {"key": "core-phones", "session": "A3 Core PHONES", "sender": "core", "group": "239.69.200.4",
    "port": 5004, "ptime": 0.5, "source": "pair:phones", "legacy": false}
  ],
  "routes": [

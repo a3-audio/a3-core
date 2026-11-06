@@ -585,7 +585,7 @@ TEST (Render, EachResolvedStreamGetsOneSinkBlock)
     EXPECT_EQ (valuesOf (blocks, "sess.name"),
                (Texts { "\"AES67 a3nuc1 out\"", "\"A3 Core MAIN\"", "\"A3 Core BOOTH\"", "\"A3 Core REC\"", "\"A3 Core PHONES\"" }));
     EXPECT_EQ (valuesOf (blocks, "destination.ip"),
-               (Texts { "239.69.150.243", "239.69.151.1", "239.69.151.2", "239.69.151.3", "239.69.151.4" }));
+               (Texts { "239.69.150.243", "239.69.200.1", "239.69.200.2", "239.69.200.3", "239.69.200.4" }));
     EXPECT_EQ (valuesOf (blocks, "destination.port"), Texts (5, "5004"));
     EXPECT_EQ (valuesOf (blocks, "audio.channels"), (Texts { "12", "7", "7", "2", "2" }));
     EXPECT_EQ (valuesOf (blocks, "sess.min-ptime"), Texts (5, "0.5"));

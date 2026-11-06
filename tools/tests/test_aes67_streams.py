@@ -6,7 +6,7 @@ Every stream the rig sends is one row: its SDP name, multicast group, packet
 time and where its channels come from. Core and StemDeck resolve the table
 instead of carrying addresses of their own. The legacy groups (Core
 239.69.150.243, decks from .244) must not move; the new Core streams live in
-239.69.151.x. Every packet has to fit one 1500-byte MTU frame.
+239.69.200.x, clear of every deck slot's group. Every packet has to fit one 1500-byte MTU frame.
 """
 
 import ipaddress
@@ -71,6 +71,21 @@ class StreamTable(unittest.TestCase):
         self.assertEqual(self.by_key["deck"]["group_base"], "239.69.150.244")
         self.assertEqual(self.by_key["deck"]["group_step"], 1)
         self.assertTrue(self.by_key["legacy-out"]["legacy"])
+
+    def test_the_new_core_groups_are_in_the_200_block(self):
+        for i, key in enumerate(["core-main", "core-booth", "core-rec", "core-phones"], 1):
+            self.assertEqual(self.by_key[key]["group"], "239.69.200.%d" % i, key)
+
+    def test_no_deck_slot_up_to_zz_reaches_another_stream(self):
+        deck = self.by_key["deck"]
+        base = int(ipaddress.ip_address(deck["group_base"]))
+        taken = {ipaddress.ip_address(resolved_group(s, self.hosts))
+                 for s in self.streams if "group_base" not in s}
+        taken.add(ipaddress.ip_address(self.hosts["aes67-core"]))
+        for index in range(702):   # A = 0 ... ZZ = 701
+            group = ipaddress.ip_address(base + deck["group_step"] * index)
+            self.assertIn(group, A3_RANGE, "slot %d" % index)
+            self.assertNotIn(group, taken, "slot %d" % index)
 
     def test_fixed_streams_fit_one_packet(self):
         fixed = [s for s in self.streams if s["source"] == "fixed"]
