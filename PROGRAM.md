@@ -655,7 +655,8 @@ Prerequisites: CMake 3.16 or newer, a C++17 compiler, JUCE 9.0.3 installed as a 
 JUCE's built-in fallback the engine needs about 1.7 times the time at a block of 64), and the JACK development files (`libjack-jackd2-dev`, found through
 pkg-config). JUCE's FFTW wrapper allocates in the audio callback unless it carries
 `cmake/patches/juce-9.0.3-fftw-realtime.patch` (`patch -p1 -d <JUCE include dir>/JUCE-9.0.3`); without it
-`FftBackend.TransformsAllocateNothing` and the `EngineAllocation` tests fail. Without JACK, configure with
+`FftBackend.TransformsAllocateNothing` and the `EngineAllocation` tests fail, so configure refuses an unpatched JUCE
+(`cmake/CheckJuceFftPatch.cmake`; `-DA3_ALLOW_UNPATCHED_JUCE_FFT=ON` builds anyway, for a machine that only runs tests). Without JACK, configure with
 `-DA3_ENGINE_BENCH=OFF` to build only the strip and its tests.
 
 `./test.sh` builds (at `nice -n 19`) and runs the tests, which compare the rebuilds against the

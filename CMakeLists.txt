@@ -13,6 +13,8 @@ if(CCACHE_PROGRAM)
 endif()
 
 find_package(JUCE CONFIG REQUIRED)
+include(cmake/CheckJuceFftPatch.cmake)
+a3_require_patched_juce_fft(juce::juce_dsp)
 
 if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/IEMPluginSuite/MultiEncoder/Source/PluginProcessor.cpp)
     message(FATAL_ERROR "third_party/IEMPluginSuite is not initialised: git submodule update --init third_party/IEMPluginSuite (not --recursive)")
