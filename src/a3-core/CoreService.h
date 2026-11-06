@@ -45,6 +45,7 @@ struct ServiceOptions
     juce::File departmentsFile;                // the window's stored departments; none: POST /api/departments is refused
     std::optional<std::vector<StreamSpec>> aes67Streams;   // the AES67 senders to render; none: the legacy stream only
     std::string aes67LegacyOnlyBecause;        // why the speaker layout was not read; said on the aes67 line
+    std::vector<std::string> aes67Problems;    // the streams the table refuses (resolveTxStreams); said on the aes67 line
 };
 
 class CoreService

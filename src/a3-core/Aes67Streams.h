@@ -28,7 +28,10 @@ struct StreamSpec
 // The legacy stream first (session "AES67 <hostname> out", group hosts["aes67-core"], CH1..CH12), then the
 // table's other Core rows in table order. Without a table: the legacy stream only. Throws TruthError for a
 // row the reader cannot resolve (an unknown source, a group that is neither an address nor a hosts key).
-std::vector<StreamSpec> resolveTxStreams (const Truth&, const a3::SpatialConfig&, const std::string& hostname);
+// A row whose packet would not fit one frame (channels * 3 * round(ptime * 44.1) + 12 > 1472 bytes) is left out
+// alone, and `problems` (when given) gains a line naming it and the limit.
+std::vector<StreamSpec> resolveTxStreams (const Truth&, const a3::SpatialConfig&, const std::string& hostname,
+                                          std::vector<std::string>* problems = nullptr);
 
 // The legacy stream alone (resolveTxStreams' first entry), for a caller without the layout: it needs none.
 std::vector<StreamSpec> legacyTxStreams (const Truth&, const std::string& hostname);

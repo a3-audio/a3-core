@@ -95,6 +95,9 @@ class StreamTable(unittest.TestCase):
                                  MTU - IP_UDP_HEADERS, s["key"])
 
     def test_zone_and_pair_streams_fit_the_largest_layout(self):
+        """The packet arithmetic only: 22 channels at 0.5 ms fit, 23 do not. The
+        limit itself is enforced in C++ (resolveTxStreams drops the one stream
+        above it; tests/core/Aes67Streams.cpp AZoneAboveThePacketLimitIsDroppedAloneAndSaid)."""
         self.assertLessEqual(packet_bytes(22, 0.5), MTU - IP_UDP_HEADERS)
         self.assertGreater(packet_bytes(23, 0.5), MTU - IP_UDP_HEADERS)
         self.assertLessEqual(packet_bytes(44, 0.25), MTU - IP_UDP_HEADERS)

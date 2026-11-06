@@ -135,7 +135,7 @@ std::optional<std::string> CoreService::startUp()
         const auto streams = options.aes67Streams ? *options.aes67Streams : legacyTxStreams (truth, options.hostname);
         const auto written = writeUserFiles (truth, options.home, options.hostname,
                                              options.packageShare.getChildFile ("pipewire/pipewire-aes67.conf.in"), streams);
-        say ("aes67: " + aes67Said (written, options.aes67LegacyOnlyBecause));
+        say ("aes67: " + aes67Said (written, options.aes67LegacyOnlyBecause, options.aes67Problems));
     }
     catch (const RenderError& problem)
     {

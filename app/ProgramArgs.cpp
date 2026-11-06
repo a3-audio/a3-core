@@ -463,6 +463,7 @@ std::variant<a3core::ServiceOptions, std::string> coreOptions (const ProgramArgs
         auto streams = coreStreams (truth, platform, args.engine.packageConfig);
         options.aes67Streams = std::move (streams.streams);
         options.aes67LegacyOnlyBecause = std::move (streams.legacyOnlyBecause);
+        options.aes67Problems = std::move (streams.problems);
     }
     catch (const a3core::TruthError& problem)   // not even the legacy stream: CoreService says it when it renders
     {
@@ -499,7 +500,9 @@ CoreStreams streamsFor (const a3core::Truth& truth, const a3::SpatialConfig& spa
 {
     try
     {
-        return { a3core::resolveTxStreams (truth, spatial, hostname), "" };
+        CoreStreams resolved;
+        resolved.streams = a3core::resolveTxStreams (truth, spatial, hostname, &resolved.problems);
+        return resolved;
     }
     catch (const a3core::TruthError& problem)
     {
@@ -535,6 +538,8 @@ EngineStreams engineStreamsFor (const AppArgs& args, const a3::SpatialConfig& sp
         EngineStreams result { std::move (resolved.streams), {} };
         if (! resolved.legacyOnlyBecause.empty())
             result.said.push_back (legacyOnly + resolved.legacyOnlyBecause);
+        for (const auto& problem : resolved.problems)
+            result.said.push_back ("AES67: " + problem);
         return result;
     }
     catch (const a3core::TruthError& problem)

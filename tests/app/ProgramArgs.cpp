@@ -420,3 +420,28 @@ TEST (EngineStreams, ATruthThatDoesNotLoadGivesTheReasonInsteadOfARender)
     ASSERT_TRUE (std::holds_alternative<std::string> (render));
     EXPECT_NE (std::get<std::string> (render).find ("/nowhere/a3-osc.json"), std::string::npos) << std::get<std::string> (render);
 }
+
+// F2: a zone above the packet limit is refused alone; the engine says which, as the Core does.
+TEST (EngineStreams, AStreamAboveThePacketLimitIsSaidAndLeftOut)
+{
+    const a3apptest::PackagedEngine packaged;
+    const auto args = engineWithSixOneBooth (packaged);
+    juce::String error;
+    const auto loaded = a3app::loadStartupData (args, packaged.dir, error);
+    ASSERT_TRUE (loaded.has_value()) << error;
+    auto spatial = loaded->spatial;
+    spatial.main.layout.subChannel = 1;
+    spatial.main.layout.topChannels.clear();
+    for (int k = 2; k <= 23; ++k)   // 22 tops and the sub: 23 channels at 0.5 ms
+        spatial.main.layout.topChannels.push_back (k);
+
+    const auto resolved = a3app::engineStreamsFor (args, spatial, {});
+    EXPECT_EQ (streamNamed (resolved.streams, "core-main"), nullptr);
+    EXPECT_NE (streamNamed (resolved.streams, "core-booth"), nullptr);
+    ASSERT_EQ (resolved.said.size(), 1u);
+    EXPECT_EQ (resolved.said[0].rfind ("AES67: aes67_streams: 'core-main'", 0), 0u) << resolved.said[0];
+
+    const auto core = a3app::streamsFor (packageTruth(), spatial, "a3nuc1");
+    ASSERT_EQ (core.problems.size(), 1u);
+    EXPECT_EQ ("AES67: " + core.problems[0], resolved.said[0]);
+}

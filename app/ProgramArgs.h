@@ -78,6 +78,7 @@ struct CoreStreams
 {
     std::vector<a3core::StreamSpec> streams;
     std::string legacyOnlyBecause;   // empty: the layout was read
+    std::vector<std::string> problems;   // the streams the table refuses (resolveTxStreams)
 };
 CoreStreams coreStreams (const a3core::Truth&, const a3core::Platform&, const juce::File& packageConfig);
 

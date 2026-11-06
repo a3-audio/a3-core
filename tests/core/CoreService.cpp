@@ -1088,6 +1088,18 @@ TEST (CoreService, CoreRendersTheStreamsItWasGiven)
     EXPECT_EQ (rig.home.getChildFile (aes67SignaturePath).loadFileAsString().toStdString(), streamsSignature (streams));
 }
 
+TEST (CoreService, TheAes67LineNamesEveryRefusedStream)
+{
+    Rig rig;
+    auto options = rig.options();
+    options.aes67Problems = { "aes67_streams: 'core-main' refused: too big", "aes67_streams: 'core-x' refused: no port" };
+    ASSERT_TRUE (rig.start (options)) << rig.error;
+    const auto line = rig.said.find ("aes67: ");
+    ASSERT_TRUE (line.has_value());
+    EXPECT_EQ (line->text, "aes67: rendered ~/.config/pipewire/pipewire-aes67.conf; aes67_streams: 'core-main' refused: too big; "
+                           "aes67_streams: 'core-x' refused: no port");
+}
+
 TEST (CoreService, TheAes67LineSaysWhyOnlyTheLegacyStreamIsSent)
 {
     Rig rig;

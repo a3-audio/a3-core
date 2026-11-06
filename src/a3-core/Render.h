@@ -63,9 +63,10 @@ std::optional<std::string> renderedAes67Signature (const juce::File& home);
 std::string writeAes67Conf (const Truth&, const juce::File& home, const std::string& hostname, const juce::File& aes67Template,
                             const std::vector<StreamSpec>& streams);
 
-// The AES67 line as said: `written` (writeAes67Conf's), and why only the legacy stream was rendered
-// when the speaker layout could not be read (`legacyOnlyBecause` not empty).
-std::string aes67Said (const std::string& written, const std::string& legacyOnlyBecause);
+// The AES67 line as said: `written` (writeAes67Conf's), why only the legacy stream was rendered
+// when the speaker layout could not be read (`legacyOnlyBecause` not empty), then every stream the table
+// refuses (`problems`, resolveTxStreams'), each after a "; ".
+std::string aes67Said (const std::string& written, const std::string& legacyOnlyBecause, const std::vector<std::string>& problems = {});
 
 // osc.env, the analyzer's conf.d file and the AES67 config; the AES67 line is returned, to be said.
 std::string writeUserFiles (const Truth&, const juce::File& home, const std::string& hostname, const juce::File& aes67Template,

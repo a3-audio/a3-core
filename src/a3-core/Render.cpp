@@ -275,11 +275,14 @@ std::string writeAes67Conf (const Truth& truth, const juce::File& home, const st
     return "rendered " + shown;
 }
 
-std::string aes67Said (const std::string& written, const std::string& legacyOnlyBecause)
+std::string aes67Said (const std::string& written, const std::string& legacyOnlyBecause, const std::vector<std::string>& problems)
 {
-    if (legacyOnlyBecause.empty())
-        return written;
-    return written + " (the legacy stream only: " + legacyOnlyBecause + ")";
+    auto said = written;
+    if (! legacyOnlyBecause.empty())
+        said += " (the legacy stream only: " + legacyOnlyBecause + ")";
+    for (const auto& problem : problems)
+        said += "; " + problem;
+    return said;
 }
 
 std::string writeUserFiles (const Truth& truth, const juce::File& home, const std::string& hostname, const juce::File& aes67Template,

@@ -42,7 +42,7 @@ SubcommandResult render (const juce::StringArray& words, const juce::File& packa
             const auto streams = coreStreams (truth, platform, packageConfig);
             const auto written = a3core::writeUserFiles (truth, platform.home(), platform.hostname(),
                                                          platform.packageShare().getChildFile ("pipewire/pipewire-aes67.conf.in"), streams.streams);
-            result.out = "a3-osc-render: " + a3core::aes67Said (written, streams.legacyOnlyBecause) + "\n";
+            result.out = "a3-osc-render: " + a3core::aes67Said (written, streams.legacyOnlyBecause, streams.problems) + "\n";
         }
         else if (words == juce::StringArray ("network-file"))
         {

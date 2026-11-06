@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "Aes67Streams.h"
 
+#include <cmath>
 #include <cstdio>
+#include <optional>
 
 namespace a3core
 {
@@ -107,6 +109,32 @@ StreamSpec resolveRow (const juce::var& row, const Truth& truth, const a3::Spati
     return spec;
 }
 
+// One RTP packet a 1500-byte frame: L24 at 44.1 kHz, the 12-byte RTP header, 28 bytes of IP and UDP.
+constexpr int packetLimitBytes = 1472;
+
+int packetBytes (const StreamSpec& spec)
+{
+    const auto samples = static_cast<int> (std::lround (spec.ptimeMs * 44.1));
+    return static_cast<int> (spec.channelNames.size()) * 3 * samples + 12;
+}
+
+std::optional<std::string> packetProblem (const StreamSpec& spec)
+{
+    const auto bytes = packetBytes (spec);
+    if (bytes <= packetLimitBytes)
+        return std::nullopt;
+    char ptime[32];
+    std::snprintf (ptime, sizeof (ptime), "%.6g", spec.ptimeMs);
+    return "aes67_streams: '" + spec.key + "' refused: " + std::to_string (spec.channelNames.size()) + " channels at " + ptime
+           + " ms are a " + std::to_string (bytes) + "-byte packet, above the " + std::to_string (packetLimitBytes) + "-byte limit";
+}
+
+void report (std::vector<std::string>* problems, const std::string& line)
+{
+    if (problems != nullptr)
+        problems->push_back (line);
+}
+
 bool isCoreRow (const juce::var& row) { return row["sender"].toString() == coreSender; }
 
 bool isLegacyRow (const juce::var& row) { return row["key"].toString() == legacyKey; }
@@ -129,11 +157,18 @@ std::vector<juce::var> coreRows (const Truth& truth)
 }
 }
 
-std::vector<StreamSpec> resolveTxStreams (const Truth& truth, const a3::SpatialConfig& spatial, const std::string& hostname)
+std::vector<StreamSpec> resolveTxStreams (const Truth& truth, const a3::SpatialConfig& spatial, const std::string& hostname,
+                                          std::vector<std::string>* problems)
 {
     std::vector<StreamSpec> streams;
     for (const auto& row : coreRows (truth))
-        streams.push_back (resolveRow (row, truth, spatial, hostname));
+    {
+        auto spec = resolveRow (row, truth, spatial, hostname);
+        if (const auto tooBig = packetProblem (spec))
+            report (problems, *tooBig);
+        else
+            streams.push_back (std::move (spec));
+    }
     return streams;
 }
 

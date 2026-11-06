@@ -193,3 +193,26 @@ TEST (Aes67Streams, AHostnameWithSpacesGivesALegacySessionThatEndsInOut)
     EXPECT_EQ (streams[0].session, "AES67 My Box out");
     EXPECT_TRUE (std::regex_search (streams[0].session, std::regex (" out$")));
 }
+
+// F2 (2026-11-06): one packet a frame (1472 bytes of UDP payload under a 1500-byte MTU). A layout above it refuses
+// just that stream and says so; the others are still sent.
+TEST (Aes67Streams, AZoneAboveThePacketLimitIsDroppedAloneAndSaid)
+{
+    std::vector<std::string> problems;
+    const auto streams = resolveTxStreams (shippedTruth(), spatialWith (layout (1, 22), layout (1, 4)), "a3nuc1", &problems);
+    Names keys;
+    for (const auto& spec : streams)
+        keys.push_back (spec.key);
+    EXPECT_EQ (keys, (Names { "legacy-out", "core-booth", "core-rec", "core-phones" }));
+    ASSERT_EQ (problems.size(), 1u);
+    EXPECT_NE (problems[0].find ("'core-main'"), std::string::npos) << problems[0];
+    EXPECT_NE (problems[0].find ("1472"), std::string::npos) << problems[0];
+}
+
+TEST (Aes67Streams, TwentyTwoChannelsStillFitOnePacket)
+{
+    std::vector<std::string> problems;
+    const auto streams = resolveTxStreams (shippedTruth(), spatialWith (layout (1, 21), layout (1, 4)), "a3nuc1", &problems);
+    EXPECT_EQ (stream (streams, "core-main").channelNames.size(), 22u);
+    EXPECT_TRUE (problems.empty()) << problems.front();
+}
