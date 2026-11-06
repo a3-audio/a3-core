@@ -23,7 +23,14 @@
   "external: vocabularies we speak but do not own (the IEM plug-ins).",
   "meters: how every display moves a meter bar (decided 2026-10-07). The sources",
   "  send raw peaks; each display applies these on its own clock: attack (0 =",
-  "  at once), release in dB per second, and how long the highest peak is held."
+  "  at once), release in dB per second, and how long the highest peak is held.",
+  "aes67_streams: every AES67 stream the rig sends, one row each: key, session (the SDP",
+  "  name; {host} and {deck} are filled in), sender (core|deck), group (a hosts key or an",
+  "  address) or group_base + group_step (+1 per deck slot), port, ptime in ms, source",
+  "  (zone:main|zone:booth|pair:rec|pair:phones take their channels from the layout; fixed",
+  "  has channels), legacy. Packets must fit MTU 1500: at most 22 channels at 0.5 ms, 33 at",
+  "  0.25 ms. The legacy groups (aes67-core, decks from .244) do not move; new Core streams",
+  "  live in 239.69.151.x."
  ],
  "version": 1,
  "network": {
@@ -110,6 +117,20 @@
    "carries": "PTP event messages; the Core is master on the audio socket; not OSC"},
   {"name": "ptp4l.general", "program": "ptp4l", "role": "general", "host": "ptp", "port": 320,
    "carries": "PTP general messages (announce, follow-up); not OSC"}
+ ],
+ "aes67_streams": [
+  {"key": "legacy-out", "session": "AES67 {host} out", "sender": "core", "group": "aes67-core",
+   "port": 5004, "ptime": 0.5, "source": "fixed", "channels": 12, "legacy": true},
+  {"key": "deck", "session": "AES67 deck {deck}", "sender": "deck", "group_base": "239.69.150.244",
+   "group_step": 1, "port": 5004, "ptime": 0.25, "source": "fixed", "channels": 41, "legacy": true},
+  {"key": "core-main", "session": "A3 Core MAIN", "sender": "core", "group": "239.69.151.1",
+   "port": 5004, "ptime": 0.5, "source": "zone:main", "legacy": false},
+  {"key": "core-booth", "session": "A3 Core BOOTH", "sender": "core", "group": "239.69.151.2",
+   "port": 5004, "ptime": 0.5, "source": "zone:booth", "legacy": false},
+  {"key": "core-rec", "session": "A3 Core REC", "sender": "core", "group": "239.69.151.3",
+   "port": 5004, "ptime": 0.5, "source": "pair:rec", "legacy": false},
+  {"key": "core-phones", "session": "A3 Core PHONES", "sender": "core", "group": "239.69.151.4",
+   "port": 5004, "ptime": 0.5, "source": "pair:phones", "legacy": false}
  ],
  "routes": [
   {"from": "mixer", "to": "core.osc"},
