@@ -28,7 +28,7 @@
   "  name; {host} and {deck} are filled in), sender (core|deck), group (a hosts key or an",
   "  address) or group_base + group_step (+1 per deck slot), port, ptime in ms, source",
   "  (zone:main|zone:booth|pair:rec|pair:phones take their channels from the layout; fixed",
-  "  has channels), legacy. Packets must fit MTU 1500: at most 22 channels at 0.5 ms, 33 at",
+  "  has channels), legacy. Packets must fit MTU 1500: at most 22 channels at 0.5 ms, 44 at",
   "  0.25 ms. The legacy groups (aes67-core, decks from .244) do not move; new Core streams",
   "  live in 239.69.151.x."
  ],
