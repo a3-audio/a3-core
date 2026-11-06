@@ -13,12 +13,14 @@ if(CCACHE_PROGRAM)
 endif()
 
 find_package(JUCE CONFIG REQUIRED)
-include(cmake/CheckJuceFftPatch.cmake)
-a3_require_patched_juce_fft(juce::juce_dsp)
 
 if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/IEMPluginSuite/MultiEncoder/Source/PluginProcessor.cpp)
     message(FATAL_ERROR "third_party/IEMPluginSuite is not initialised: git submodule update --init third_party/IEMPluginSuite (not --recursive)")
 endif()
+
+# After the checks of what the tree itself needs: JUCE's FFT has to carry the real-time patch (see the file).
+include(cmake/CheckJuceFftPatch.cmake)
+a3_require_patched_juce_fft(juce::juce_dsp)
 
 # JUCE's way for module code outside an app: a library of its own that carries
 # the modules and their definitions, as StemDeck's tests do. The modules are
