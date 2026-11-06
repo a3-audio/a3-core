@@ -25,7 +25,7 @@ Description: Gateway address
 
 Template: a3-core/dns
 Type: string
-Default: 192.168.8.1
+Default: 192.168.43.1
 Description: DNS server address
 
 Template: a3-core/headless-display

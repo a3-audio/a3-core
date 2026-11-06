@@ -30,6 +30,9 @@ VNC = PACKAGE / "home" / "aaa" / ".local" / "share" / "a3-core" / "recipes" / "a
 # https://a3-audio.github.io/a3-doc/ressources/ports.html
 CORE_ADDRESS = "192.168.8.10/24"
 GATEWAY = "192.168.8.1"
+# Not the gateway: the gateway (the Cisco SG300) does not answer DNS (measured 2026-11-06, a query times out), the
+# uplink router (MikroTik) does, in 1-2 ms from every machine on the 8-net.
+DNS = "192.168.43.1"
 MIXER = "192.168.8.11:7772"
 # Motion's UI runs on the Core machine, and listens on 7771.
 MOTION = "127.0.0.1:7771"
@@ -65,12 +68,12 @@ class TheInstallerOffersTheDocumentedNetwork(unittest.TestCase):
     def test_the_templates_default_to_the_documented_address(self):
         self.assertEqual(CORE_ADDRESS, template_default("address"))
         self.assertEqual(GATEWAY, template_default("gateway"))
-        self.assertEqual(GATEWAY, template_default("dns"))
+        self.assertEqual(DNS, template_default("dns"))
 
     def test_the_standard_network_is_the_documented_one(self):
         self.assertEqual(CORE_ADDRESS, postinst_standard("ADDR"))
         self.assertEqual(GATEWAY, postinst_standard("GATEWAY"))
-        self.assertEqual(GATEWAY, postinst_standard("DNS"))
+        self.assertEqual(DNS, postinst_standard("DNS"))
 
 
 class CoreSendsWhereThePortsPageSays(unittest.TestCase):

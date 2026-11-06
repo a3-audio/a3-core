@@ -49,7 +49,7 @@ class TheNetwork(unittest.TestCase):
         network = truth().network()
         self.assertEqual(network["address"], "192.168.8.10/24")
         self.assertEqual(network["gateway"], "192.168.8.1")
-        self.assertEqual(network["dns"], "192.168.8.1")
+        self.assertEqual(network["dns"], "192.168.43.1")   # the uplink router; the gateway (SG300) answers no DNS
 
 
 class TheHosts(unittest.TestCase):
