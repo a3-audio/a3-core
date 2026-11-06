@@ -21,7 +21,8 @@ std::variant<a3core::Truth, SubcommandResult> loadTruth (const a3core::Platform&
     return std::move (std::get<a3core::Truth> (loaded));
 }
 
-SubcommandResult render (const juce::StringArray& words, const a3core::Platform& platform)
+// packageConfig: the engine's, for the speaker layout the AES67 streams take their channels from.
+SubcommandResult render (const juce::StringArray& words, const juce::File& packageConfig, const a3core::Platform& platform)
 {
     auto loaded = loadTruth (platform);
     if (auto* failure = std::get_if<SubcommandResult> (&loaded))
@@ -37,12 +38,12 @@ SubcommandResult render (const juce::StringArray& words, const a3core::Platform&
     try
     {
         if (words == juce::StringArray ("user"))
-            // The legacy stream only: this subcommand reads no app config, so it has no speaker layout.
-            result.out = "a3-osc-render: "
-                         + a3core::writeUserFiles (truth, platform.home(), platform.hostname(),
-                                                   platform.packageShare().getChildFile ("pipewire/pipewire-aes67.conf.in"),
-                                                   a3core::legacyTxStreams (truth, platform.hostname()))
-                         + "\n";
+        {
+            const auto streams = coreStreams (truth, platform, packageConfig);
+            const auto written = a3core::writeUserFiles (truth, platform.home(), platform.hostname(),
+                                                         platform.packageShare().getChildFile ("pipewire/pipewire-aes67.conf.in"), streams.streams);
+            result.out = "a3-osc-render: " + a3core::aes67Said (written, streams.legacyOnlyBecause) + "\n";
+        }
         else if (words == juce::StringArray ("network-file"))
         {
             const auto path = platform.configDir().getChildFile ("network.json");
@@ -89,6 +90,6 @@ SubcommandResult query (const juce::StringArray& words, const a3core::Platform& 
 
 SubcommandResult runSubcommand (const ProgramArgs& args, const a3core::Platform& platform)
 {
-    return args.role == Role::truthQuery ? query (args.subcommand, platform) : render (args.subcommand, platform);
+    return args.role == Role::truthQuery ? query (args.subcommand, platform) : render (args.subcommand, args.engine.packageConfig, platform);
 }
 }

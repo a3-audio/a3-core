@@ -9,6 +9,7 @@
 
 #include "FakePlatform.h"
 #include "Json.h"
+#include "PackagedEngine.h"
 #include "Render.h"
 #include "Subcommands.h"
 
@@ -100,6 +101,7 @@ struct RecordedRun
         a3app::ProgramArgs args;
         args.role = a3app::Role::renderTruth;
         args.subcommand = one.argv;
+        args.engine.packageConfig = packaged.config;   // the layout is read; B0's truth has no table: the legacy stream
         result = a3app::runSubcommand (args, platform);
     }
     ~RecordedRun() { home.deleteRecursively(); }
@@ -120,6 +122,7 @@ struct RecordedRun
         return all;
     }
 
+    a3apptest::PackagedEngine packaged;
     fake::FakePlatform platform;
     juce::File home;
     a3app::SubcommandResult result;
@@ -254,4 +257,62 @@ TEST (Subcommands, AMissingValueIsOneAndSaysWhy)
     EXPECT_EQ (none.exitCode, 1);
     EXPECT_EQ (none.out, "");
     EXPECT_EQ (none.err.rfind ("a3-core: ", 0), 0u);
+}
+
+// `render user` with the package's truth and templates (2026-11-06): one rtp-sink block per stream of the
+// table, resolved against the engine's layout; without a readable layout the legacy one, said.
+namespace
+{
+struct ShippedRender
+{
+    explicit ShippedRender (const juce::File& packageConfig)
+    {
+        home = juce::File::createTempFile ("a3-render-shipped");
+        home.createDirectory();
+        platform.homeDir = home;
+        platform.host = "a3nuc1";
+        platform.env["A3_OSC_TRUTH"] = A3_PACKAGE_TRUTH;
+        const juce::File share (A3_PACKAGE_SHARE);
+        for (const char* name : { "pipewire/pipewire-aes67.conf.in", "pipewire/pipewire-aes67-sink.conf.in" })
+            write (platform.packageShare().getChildFile (name), read (share.getChildFile (name)));
+        a3app::ProgramArgs args;
+        args.role = a3app::Role::renderTruth;
+        args.subcommand = juce::StringArray ("user");
+        args.engine.packageConfig = packageConfig;
+        result = a3app::runSubcommand (args, platform);
+    }
+    ~ShippedRender() { home.deleteRecursively(); }
+
+    size_t sinkBlocks() const
+    {
+        const auto text = read (home.getChildFile (".config/pipewire/pipewire-aes67.conf"));
+        size_t count = 0;
+        for (auto at = text.find ("libpipewire-module-rtp-sink"); at != std::string::npos; at = text.find ("libpipewire-module-rtp-sink", at + 1))
+            ++count;
+        return count;
+    }
+
+    fake::FakePlatform platform;
+    juce::File home;
+    a3app::SubcommandResult result;
+};
+}
+
+TEST (Subcommands, RenderUserWritesOneSenderPerStreamForTheShippedData)
+{
+    const a3apptest::PackagedEngine packaged;
+    const ShippedRender run (packaged.config);
+    EXPECT_EQ (run.result.exitCode, 0) << run.result.err;
+    EXPECT_EQ (run.result.out, "a3-osc-render: rendered ~/.config/pipewire/pipewire-aes67.conf\n");
+    EXPECT_EQ (run.sinkBlocks(), 5u);
+}
+
+TEST (Subcommands, RenderUserSaysWhenItSendsTheLegacyStreamOnly)
+{
+    const a3apptest::PackagedEngine packaged;
+    const ShippedRender run (packaged.dir.getChildFile ("missing.json"));
+    EXPECT_EQ (run.result.exitCode, 0) << run.result.err;
+    EXPECT_EQ (run.result.out.rfind ("a3-osc-render: rendered ~/.config/pipewire/pipewire-aes67.conf (the legacy stream only: ", 0), 0u)
+        << run.result.out;
+    EXPECT_EQ (run.sinkBlocks(), 1u);
 }

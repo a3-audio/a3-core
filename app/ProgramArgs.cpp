@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdlib>
 
+#include "ConfigFile.h"
 #include "Truth.h"
 
 namespace a3app
@@ -457,7 +458,48 @@ std::variant<a3core::ServiceOptions, std::string> coreOptions (const ProgramArgs
     options.truthPath = files.truth;
     options.networkPath = files.network;
     options.departmentsFile = a3core::departmentsFile (platform.configDir());
+    try
+    {
+        auto streams = coreStreams (truth, platform, args.engine.packageConfig);
+        options.aes67Streams = std::move (streams.streams);
+        options.aes67LegacyOnlyBecause = std::move (streams.legacyOnlyBecause);
+    }
+    catch (const a3core::TruthError& problem)   // not even the legacy stream: CoreService says it when it renders
+    {
+        options.aes67LegacyOnlyBecause = problem.what;
+    }
     return options;
+}
+
+CoreStreams coreStreams (const a3core::Truth& truth, const a3core::Platform& platform, const juce::File& packageConfig)
+{
+    const auto legacyOnly = [&] (const std::string& because) { return CoreStreams { a3core::legacyTxStreams (truth, platform.hostname()), because }; };
+    int truthDecks = 0;
+    try
+    {
+        truthDecks = truth.indexRange ("stemdeck.deck-hello", "deck").second;
+    }
+    catch (const a3core::TruthError& problem)
+    {
+        return legacyOnly ("the truth gives no deck range: " + problem.what);
+    }
+
+    const auto file = chooseConfigFile ({}, platform.home(), [] (const juce::File& f) { return f.existsAsFile(); }, packageConfig);
+    juce::String error;
+    const auto config = loadAppConfig (file, error, truthDecks);   // names the file itself
+    if (! config)
+        return legacyOnly (error.toStdString());
+    const auto spatial = loadZonesSpatial (*config, error);
+    if (! spatial)
+        return legacyOnly ((config->spatialDirectory.getFullPathName() + ": " + error).toStdString());
+    try
+    {
+        return { a3core::resolveTxStreams (truth, *spatial, platform.hostname()), "" };
+    }
+    catch (const a3core::TruthError& problem)
+    {
+        return legacyOnly (problem.what);
+    }
 }
 
 int fanoutPort (const ProgramArgs& args, const a3core::Platform& platform)

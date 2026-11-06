@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include "FakePlatform.h"
+#include "PackagedEngine.h"
 #include "ProgramArgs.h"
 #include "Roles.h"
 #include "Truth.h"
@@ -285,4 +286,48 @@ TEST (ProgramArgs, ClockTakesADeviceAndObserve)
 TEST (ProgramArgs, TheClocksUnitIsSystemds)
 {
     EXPECT_EQ (a3app::unitOf (Role::clock), "a3-clock.service");
+}
+
+// The Core's AES67 senders (2026-11-06): the truth's table against the layout the engine starts with.
+TEST (ProgramArgs, CoreOptionsResolveTheFiveStreamsFromTheShippedConfig)
+{
+    const a3apptest::PackagedEngine packaged;
+    fake::FakePlatform platform;
+    platform.env["A3_OSC_TRUTH"] = A3_PACKAGE_TRUTH;
+    auto args = *parse ({ "--role", "core" });
+    args.engine.packageConfig = packaged.config;
+
+    const auto options = a3app::coreOptions (args, platform);
+    ASSERT_TRUE (std::holds_alternative<a3core::ServiceOptions> (options)) << std::get<std::string> (options);
+    const auto& o = std::get<a3core::ServiceOptions> (options);
+    ASSERT_TRUE (o.aes67Streams.has_value());
+    ASSERT_EQ (o.aes67Streams->size(), 5u);
+    EXPECT_EQ ((*o.aes67Streams)[0].session, "AES67 test-host out");
+    EXPECT_EQ ((*o.aes67Streams)[1].key, "core-main");
+    EXPECT_EQ ((*o.aes67Streams)[1].channelNames, (std::vector<std::string> { "SUB", "T1", "T2", "T3", "T4" }));   // Default 4.1
+    EXPECT_EQ (o.aes67LegacyOnlyBecause, "");
+}
+
+TEST (ProgramArgs, CoreOptionsFallBackToTheLegacyStreamWhenTheLayoutCannotBeLoaded)
+{
+    const a3apptest::PackagedEngine packaged;
+    fake::FakePlatform platform;
+    platform.env["A3_OSC_TRUTH"] = A3_PACKAGE_TRUTH;
+    auto args = *parse ({ "--role", "core" });
+
+    args.engine.packageConfig = packaged.dir.getChildFile ("missing.json");
+    const auto missing = std::get<a3core::ServiceOptions> (a3app::coreOptions (args, platform));
+    ASSERT_TRUE (missing.aes67Streams.has_value());
+    ASSERT_EQ (missing.aes67Streams->size(), 1u);
+    EXPECT_TRUE ((*missing.aes67Streams)[0].legacy);
+    EXPECT_NE (missing.aes67LegacyOnlyBecause.find ("missing.json"), std::string::npos) << missing.aes67LegacyOnlyBecause;
+
+    // A config whose spatial directory is not there.
+    const auto noSpatial = packaged.dir.getChildFile ("no-spatial.json");
+    noSpatial.replaceWithText ("{\"spatial\": \"nowhere\"}");
+    args.engine.packageConfig = noSpatial;
+    const auto unread = std::get<a3core::ServiceOptions> (a3app::coreOptions (args, platform));
+    ASSERT_TRUE (unread.aes67Streams.has_value());
+    EXPECT_EQ (unread.aes67Streams->size(), 1u);
+    EXPECT_NE (unread.aes67LegacyOnlyBecause.find ("nowhere"), std::string::npos) << unread.aes67LegacyOnlyBecause;
 }

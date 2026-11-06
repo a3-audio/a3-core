@@ -50,6 +50,8 @@ target_compile_definitions(a3-engine-tests PRIVATE
     A3_VU_POINTS="${CMAKE_CURRENT_SOURCE_DIR}/data/vu-points.json"
     A3_VU_BUNDLES="${CMAKE_CURRENT_SOURCE_DIR}/data/vu-bundles.json"
     A3_RENDER_CLI_DATA="${CMAKE_SOURCE_DIR}/tests/core/data/parity/render-cli"
+    A3_PACKAGE_TRUTH="${CMAKE_SOURCE_DIR}/platform-config/debian-x86_64/a3-core/usr/share/a3/a3-osc.json"
+    A3_PACKAGE_SHARE="${CMAKE_SOURCE_DIR}/platform-config/debian-x86_64/a3-core/home/aaa/.local/share/a3-core"
     A3_APP_SOURCE_DIR="${CMAKE_SOURCE_DIR}/app")
 include(GoogleTest)
 gtest_discover_tests(a3-engine-tests)

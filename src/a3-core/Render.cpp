@@ -262,8 +262,16 @@ std::string writeAes67Conf (const Truth& truth, const juce::File& home, const st
         return "removed " + shown + ": no audio port in the network";
     }
     replaceWhole (path, *text);
+    // Verbatim, one line per stream: a later start compares it as text with streamsSignature() of its streams.
     replaceWhole (home.getChildFile (aes67SignaturePath), streamsSignature (streams));
     return "rendered " + shown;
+}
+
+std::string aes67Said (const std::string& written, const std::string& legacyOnlyBecause)
+{
+    if (legacyOnlyBecause.empty())
+        return written;
+    return written + " (the legacy stream only: " + legacyOnlyBecause + ")";
 }
 
 std::string writeUserFiles (const Truth& truth, const juce::File& home, const std::string& hostname, const juce::File& aes67Template,

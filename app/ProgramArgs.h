@@ -70,6 +70,17 @@ CoreFiles coreFiles (const a3core::Platform&);
 // not load is the refusal CoreService would give ("a3-core: ...").
 std::variant<a3core::ServiceOptions, std::string> coreOptions (const ProgramArgs&, const a3core::Platform&);
 
+// The Core's AES67 streams: the truth's table resolved against the speaker layout the engine starts
+// with (its engine.json as loadStartupData chooses it: the user's, else `packageConfig`). A layout
+// that cannot be read gives the legacy stream alone, and legacyOnlyBecause says why. Throws TruthError
+// when not even the legacy stream resolves.
+struct CoreStreams
+{
+    std::vector<a3core::StreamSpec> streams;
+    std::string legacyOnlyBecause;   // empty: the layout was read
+};
+CoreStreams coreStreams (const a3core::Truth&, const a3core::Platform&, const juce::File& packageConfig);
+
 // The fan-out's port: --port, else A3_SCREENCAST_PORT (B1's default), else 0.
 int fanoutPort (const ProgramArgs&, const a3core::Platform&);
 // B1's parser.error for a port of 0 or no command; nullopt when the fan-out may start.

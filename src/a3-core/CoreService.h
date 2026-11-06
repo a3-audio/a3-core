@@ -27,6 +27,7 @@
 #include "HttpServer.h"
 #include "Net.h"
 #include "Truth.h"
+#include "Aes67Streams.h"
 #include "UdpNet.h"
 
 namespace a3core
@@ -42,6 +43,8 @@ struct ServiceOptions
     std::optional<juce::File> networkPath;     // the maintainer's network.json; none: no file
     Clock* clock = nullptr;                    // the one clock of every `now`; none: the system's
     juce::File departmentsFile;                // the window's stored departments; none: POST /api/departments is refused
+    std::optional<std::vector<StreamSpec>> aes67Streams;   // the AES67 senders to render; none: the legacy stream only
+    std::string aes67LegacyOnlyBecause;        // why the speaker layout was not read; said on the aes67 line
 };
 
 class CoreService

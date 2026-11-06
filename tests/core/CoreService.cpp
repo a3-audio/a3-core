@@ -1068,6 +1068,37 @@ TEST (CoreService, CoreWritesTheUserFilesAtStart)
     EXPECT_LT (rig.said.indexOf ("aes67: "), rig.said.indexOf ("announcing the truth to "));
 }
 
+TEST (CoreService, CoreRendersTheStreamsItWasGiven)
+{
+    Rig rig;
+    auto options = rig.options();
+    auto streams = legacyTxStreams (rig.truth(), "test-host");
+    auto extra = streams.front();
+    extra.key = "core-x";
+    extra.session = "A3 Core X";
+    extra.group = "239.69.151.9";
+    extra.legacy = false;
+    extra.channelNames = { "L", "R" };
+    streams.push_back (extra);
+    options.aes67Streams = streams;
+    ASSERT_TRUE (rig.start (options)) << rig.error;
+    const auto text = rig.home.getChildFile (aes67ConfPath).loadFileAsString();
+    EXPECT_TRUE (text.contains ("sess.name = \"A3 Core X\"")) << text;
+    EXPECT_TRUE (text.contains ("sess.name = \"AES67 test-host out\"")) << text;
+    EXPECT_EQ (rig.home.getChildFile (aes67SignaturePath).loadFileAsString().toStdString(), streamsSignature (streams));
+}
+
+TEST (CoreService, TheAes67LineSaysWhyOnlyTheLegacyStreamIsSent)
+{
+    Rig rig;
+    auto options = rig.options();
+    options.aes67LegacyOnlyBecause = "no engine.json";
+    ASSERT_TRUE (rig.start (options)) << rig.error;
+    const auto line = rig.said.find ("aes67: ");
+    ASSERT_TRUE (line.has_value());
+    EXPECT_EQ (line->text, "aes67: rendered ~/.config/pipewire/pipewire-aes67.conf (the legacy stream only: no engine.json)");
+}
+
 TEST (CoreService, AFailedRenderDoesNotStopCore)
 {
     Rig rig;
