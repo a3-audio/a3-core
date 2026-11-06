@@ -18,6 +18,7 @@ build-essential
 patch
 ccache
 libjack-jackd2-dev
+libfftw3-dev
 dpkg-dev
 gnupg
 python3
