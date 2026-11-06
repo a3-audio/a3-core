@@ -267,8 +267,11 @@ Started startEngine (const a3app::ProgramArgs& args, const a3core::Platform& pla
 {
     auto engineArgs = args.engine;
     engineArgs.hostname = platform.hostname();
-    engineArgs.streams = a3app::engineStreams (platform, engineArgs.packageConfig);
-    engineArgs.aes67 = a3app::engineAes67Render (platform);
+    auto render = a3app::engineAes67Render (platform);
+    if (auto* found = std::get_if<a3app::Aes67Render> (&render))
+        engineArgs.aes67 = std::move (*found);
+    else
+        engineArgs.aes67Missing = std::get<std::string> (render);
     auto started = a3app::EngineRole::start (engineArgs, platform.home());
     if (const auto* code = std::get_if<int> (&started))
         return *code;

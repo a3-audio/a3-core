@@ -339,25 +339,14 @@ juce::Result EngineRole::restart (const AppConfig& config, juce::String& problem
     return juce::Result::fail (result.message);
 }
 
-// The Core's streams for a layout: the saved one changes which channels the zone streams carry. Without the
-// Core's truth (it did not load at the start), or with a table that does not resolve at all, the streams the
-// engine runs with stay.
+// The Core's streams for a layout (engineStreamsFor): the start's and every saved one's, which changes the channels
+// the zone streams carry.
 std::vector<a3core::StreamSpec> EngineRole::streamsOf (const a3::SpatialConfig& spatial) const
 {
-    if (! args.aes67)
-        return streams;
-    try
-    {
-        auto resolved = streamsFor (args.aes67->truth, spatial, args.hostname);
-        if (! resolved.legacyOnlyBecause.empty())
-            sayEngine ("AES67: the legacy stream only: " + juce::String (resolved.legacyOnlyBecause));
-        return std::move (resolved.streams);
-    }
-    catch (const a3core::TruthError& problem)
-    {
-        sayEngine ("AES67: " + juce::String (problem.what));
-        return streams;
-    }
+    auto resolved = engineStreamsFor (args, spatial, streams);
+    for (const auto& line : resolved.said)
+        sayEngine (line);
+    return std::move (resolved.streams);
 }
 
 // The new session links to the new streams' senders; the config they come from is rendered again and a3-aes67
@@ -411,7 +400,8 @@ std::variant<std::unique_ptr<EngineRole>, int> EngineRole::start (const AppArgs&
         sayEngine (line);
 
     std::unique_ptr<EngineRole> role (new EngineRole (args, std::move (*loaded), home));
-    const auto opened = role->session->open (! args.noConnect, args.hostname, args.streams);
+    role->streams = role->streamsOf (role->startup.spatial);
+    const auto opened = role->session->open (! args.noConnect, args.hostname, role->streams);
     if (opened.failed())
     {
         sayEngine (opened.getErrorMessage());
@@ -426,7 +416,7 @@ std::variant<std::unique_ptr<EngineRole>, int> EngineRole::start (const AppArgs&
 }
 
 EngineRole::EngineRole (const AppArgs& argsToUse, StartupData data, const juce::File& home)
-    : args (argsToUse), startup (std::move (data)), streams (args.streams),
+    : args (argsToUse), startup (std::move (data)),
       timing ({ runner, periodsDropInFile (home), [this] (const AudioTiming& t) { return storeTiming (t); },
                 [this] { session->measureRoundTrip(); } }),
       session (std::make_unique<EngineSession> (startup))

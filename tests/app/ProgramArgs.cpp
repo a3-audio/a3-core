@@ -4,6 +4,10 @@
 // argparse took them (a3-core 7a7b244, a3-core.py's main block; a3_screencast_fanout.main).
 #include <gtest/gtest.h>
 
+#include <algorithm>
+
+#include "ConfigFile.h"
+#include "ConnectionPlan.h"
 #include "FakePlatform.h"
 #include "PackagedEngine.h"
 #include "ProgramArgs.h"
@@ -330,4 +334,89 @@ TEST (ProgramArgs, CoreOptionsFallBackToTheLegacyStreamWhenTheLayoutCannotBeLoad
     ASSERT_TRUE (unread.aes67Streams.has_value());
     EXPECT_EQ (unread.aes67Streams->size(), 1u);
     EXPECT_NE (unread.aes67LegacyOnlyBecause.find ("nowhere"), std::string::npos) << unread.aes67LegacyOnlyBecause;
+}
+
+namespace
+{
+const a3core::Truth& packageTruth()
+{
+    static const auto truth = std::get<a3core::Truth> (a3core::Truth::load (juce::File (A3_PACKAGE_TRUTH), std::nullopt));
+    return truth;
+}
+
+// The engine started with --spatial on the REAPER booth copy (a 6.1 booth): not the package config's 4.1.
+a3app::AppArgs engineWithSixOneBooth (const a3apptest::PackagedEngine& packaged)
+{
+    a3app::AppArgs args;
+    args.config = packaged.config.getFullPathName();
+    args.truth = A3_TRUTH_COPY;
+    args.spatial = a3test::reaperBoothSpatialDirectory.getFullPathName();
+    args.hostname = "a3nuc1";
+    args.aes67 = a3app::Aes67Render { packageTruth(), packaged.dir, juce::File (A3_PACKAGE_SHARE).getChildFile ("pipewire/pipewire-aes67.conf.in"),
+                                      "a3nuc1" };
+    return args;
+}
+
+const a3core::StreamSpec* streamNamed (const std::vector<a3core::StreamSpec>& streams, const std::string& key)
+{
+    for (const auto& spec : streams)
+        if (spec.key == key)
+            return &spec;
+    return nullptr;
+}
+}
+
+// F1 (2026-11-06): the engine resolves its streams from the layout it really runs (--config/--spatial as loaded), at
+// the start as at every Save, so the two agree.
+TEST (EngineStreams, StartAndSaveAgreeForANonDefaultLayout)
+{
+    const a3apptest::PackagedEngine packaged;
+    const auto args = engineWithSixOneBooth (packaged);
+    juce::String error;
+    const auto loaded = a3app::loadStartupData (args, packaged.dir, error);
+    ASSERT_TRUE (loaded.has_value()) << error;
+
+    const auto atStart = a3app::engineStreamsFor (args, loaded->spatial, {});
+    const auto* booth = streamNamed (atStart.streams, "core-booth");
+    ASSERT_NE (booth, nullptr);
+    EXPECT_EQ (booth->channelNames.size(), 7u) << "the --spatial 6.1 booth, not the package config's 4.1";
+    EXPECT_TRUE (atStart.said.empty());
+
+    const auto saved = a3app::loadZonesSpatial (loaded->config, error);   // what restart() reads for the same layout
+    ASSERT_TRUE (saved.has_value()) << error;
+    const auto afterSave = a3app::engineStreamsFor (args, *saved, atStart.streams);
+    EXPECT_EQ (a3core::streamsSignature (afterSave.streams), a3core::streamsSignature (atStart.streams));
+    EXPECT_EQ (a3core::streamsSignature (atStart.streams), a3core::streamsSignature (a3core::resolveTxStreams (packageTruth(), loaded->spatial, "a3nuc1")));
+}
+
+TEST (EngineStreams, WithoutTheCoresTruthTheReasonIsSaidAndOnlyTheLegacyRecIsLinked)
+{
+    const a3apptest::PackagedEngine packaged;
+    auto args = engineWithSixOneBooth (packaged);
+    args.aes67.reset();
+    args.aes67Missing = "a3-osc.json: not there";
+    juce::String error;
+    const auto loaded = a3app::loadStartupData (args, packaged.dir, error);
+    ASSERT_TRUE (loaded.has_value()) << error;
+
+    const auto atStart = a3app::engineStreamsFor (args, loaded->spatial, {});
+    EXPECT_TRUE (atStart.streams.empty());
+    ASSERT_EQ (atStart.said.size(), 1u);
+    EXPECT_EQ (atStart.said[0], "AES67: the legacy stream only: a3-osc.json: not there");
+
+    const auto linked = a3app::linkMapFor (loaded->config, args.hostname, atStart.streams);
+    for (const auto& [port, peers] : linked.jack)
+        for (const auto& peer : peers)
+            EXPECT_EQ (peer.rfind ("A3 Core ", 0), std::string::npos) << port << " -> " << peer;
+    const auto& recL = linked.jack.at ("rec_L");
+    EXPECT_NE (std::find (recL.begin(), recL.end(), "AES67 a3nuc1 out:send_CH1"), recL.end());
+}
+
+TEST (EngineStreams, ATruthThatDoesNotLoadGivesTheReasonInsteadOfARender)
+{
+    fake::FakePlatform platform;
+    platform.env["A3_OSC_TRUTH"] = "/nowhere/a3-osc.json";
+    const auto render = a3app::engineAes67Render (platform);
+    ASSERT_TRUE (std::holds_alternative<std::string> (render));
+    EXPECT_NE (std::get<std::string> (render).find ("/nowhere/a3-osc.json"), std::string::npos) << std::get<std::string> (render);
 }

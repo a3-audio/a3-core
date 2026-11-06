@@ -60,7 +60,7 @@ private:
 
     AppArgs args;
     StartupData startup;
-    std::vector<a3core::StreamSpec> streams;   // the senders the running session links to: args.streams, then the saved layout's
+    std::vector<a3core::StreamSpec> streams;   // the senders the running session links to: the start's layout's, then the saved one's
     SpawnRunner runner;
     TimingControl timing;
     // Declared in the order they are built: the server stops first, then the API, then the view, then the session.

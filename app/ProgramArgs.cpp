@@ -524,13 +524,33 @@ std::vector<a3core::StreamSpec> engineStreams (const a3core::Platform& platform,
     }
 }
 
-std::optional<Aes67Render> engineAes67Render (const a3core::Platform& platform)
+EngineStreams engineStreamsFor (const AppArgs& args, const a3::SpatialConfig& spatial, const std::vector<a3core::StreamSpec>& running)
+{
+    const std::string legacyOnly = "AES67: the legacy stream only: ";
+    if (! args.aes67)
+        return { running, { legacyOnly + (args.aes67Missing.empty() ? "the Core's truth did not load" : args.aes67Missing) } };
+    try
+    {
+        auto resolved = streamsFor (args.aes67->truth, spatial, args.hostname);
+        EngineStreams result { std::move (resolved.streams), {} };
+        if (! resolved.legacyOnlyBecause.empty())
+            result.said.push_back (legacyOnly + resolved.legacyOnlyBecause);
+        return result;
+    }
+    catch (const a3core::TruthError& problem)
+    {
+        return { running, { "AES67: " + problem.what } };
+    }
+}
+
+std::variant<Aes67Render, std::string> engineAes67Render (const a3core::Platform& platform)
 {
     const auto files = coreFiles (platform);
     auto loaded = a3core::Truth::load (files.truth, files.network);
     auto* truth = std::get_if<a3core::Truth> (&loaded);
     if (truth == nullptr)
-        return std::nullopt;
+        return "the Core's truth " + files.truth.getFullPathName().toStdString() + " did not load: "
+               + std::get<a3core::TruthError> (loaded).what;
     return Aes67Render { std::move (*truth), platform.home(), platform.packageShare().getChildFile ("pipewire/pipewire-aes67.conf.in"),
                          platform.hostname() };
 }

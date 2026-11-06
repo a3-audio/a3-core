@@ -85,14 +85,26 @@ CoreStreams coreStreams (const a3core::Truth&, const a3core::Platform&, const ju
 // alone and says why. Throws TruthError when not even the legacy stream resolves.
 CoreStreams streamsFor (const a3core::Truth&, const a3::SpatialConfig&, const std::string& hostname);
 
-// The streams the engine links its outputs to: the Core's (coreStreams) for this machine, so both roles agree on
-// what is sent. A truth that does not load, or one with no streams, gives none: the engine then makes the
-// legacy rec link only.
+// The streams `a3-core links` counts the engine's links against: the Core's (coreStreams) for this machine. A truth
+// that does not load, or one with no streams, gives none: the legacy rec link only. The engine itself resolves
+// its streams from the layout it runs (engineStreamsFor).
 std::vector<a3core::StreamSpec> engineStreams (const a3core::Platform&, const juce::File& packageConfig);
 
+// The streams the engine links its outputs to for the layout it runs (`spatial`, as loaded from its --config and
+// --spatial): the start and every Save resolve them here, so both agree. Without args.aes67 (the Core's truth did not
+// load) or with a table that does not resolve at all, `running` stays (at the start: none, the legacy rec link only).
+// `said`: the lines the engine logs, the reason whenever it falls back to the legacy stream.
+struct EngineStreams
+{
+    std::vector<a3core::StreamSpec> streams;
+    std::vector<std::string> said;
+};
+EngineStreams engineStreamsFor (const AppArgs&, const a3::SpatialConfig&, const std::vector<a3core::StreamSpec>& running);
+
 // What the engine renders the AES67 config with when a saved layout changes the streams (Aes67Reannounce.h):
-// the Core's truth and this machine's places. nullopt when the truth does not load: the engine then renders nothing.
-std::optional<Aes67Render> engineAes67Render (const a3core::Platform&);
+// the Core's truth and this machine's places. When the truth does not load: why (with its path), and the engine
+// renders nothing.
+std::variant<Aes67Render, std::string> engineAes67Render (const a3core::Platform&);
 
 // The fan-out's port: --port, else A3_SCREENCAST_PORT (B1's default), else 0.
 int fanoutPort (const ProgramArgs&, const a3core::Platform&);
