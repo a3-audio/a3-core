@@ -288,6 +288,21 @@ TEST (EngineAllocation, AtTheQuantumOnlyIemSimpleDecoderAllocates)
     EXPECT_EQ (engine.allocated, upstream.allocated);
 }
 
+// The AUDIO page's other blocks (a3app::pipewireBlocks, 32 to 1024): each gives the BinauralDecoders and their
+// headphone EQ other FFT sizes (orders 7 to 11). At 512 (order 10) FFTW's in-place real inverse malloced on every
+// call until the JUCE patch (cmake/patches/juce-9.0.3-fftw-realtime.patch) ran the real transforms out of place.
+TEST (EngineAllocation, AtEveryOfferedBlockOnlyIemSimpleDecoderAllocates)
+{
+    for (const int block : { 32, 64, 256, 512, 1024 })
+    {
+        const int blocks = 344 * quantum / block;
+        EngineRig rig (allocationConfig(), (size_t) (blocks * block), block, engineRate, false);
+        const auto engine = engineAllocations (rig, { block });
+        EXPECT_EQ (engine.allocated, 2 * blocks) << "block " << block;
+        EXPECT_EQ (engine.released, 2 * blocks) << "block " << block;
+    }
+}
+
 // Four deck channels, each running its aux strip into the delay (only the aux buses carry
 // signal, so a send seen proves the aux path ran): the engine adds nothing to IEM's own.
 TEST (EngineAllocation, DeckAuxStripsDoNotAllocate)

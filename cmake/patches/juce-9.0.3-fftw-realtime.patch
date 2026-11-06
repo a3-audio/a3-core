@@ -1,0 +1,98 @@
+--- a/modules/juce_dsp/frequency/juce_FFT.cpp
++++ b/modules/juce_dsp/frequency/juce_FFT.cpp
+@@ -579,7 +579,8 @@
+     {
+         measure   = 0,
+         unaligned = (1 << 1),
+-        estimate  = (1 << 6)
++        estimate  = (1 << 6),
++        noBuffering = (1 << 11)   // FFTW_NO_BUFFERING: no buffered solver, whose execute mallocs (a3-core patch)
+     };
+ 
+     struct Symbols
+@@ -662,11 +663,15 @@
+         auto n = (1u << order);
+         HeapBlock<Complex<float>> in (n), out (n);
+ 
+-        c2cForward = fftw.plan_dft_fftw (n, in.getData(), out.getData(), -1, unaligned | estimate);
+-        c2cInverse = fftw.plan_dft_fftw (n, in.getData(), out.getData(), +1, unaligned | estimate);
++        c2cForward = fftw.plan_dft_fftw (n, in.getData(), out.getData(), -1, unaligned | estimate | noBuffering);
++        c2cInverse = fftw.plan_dft_fftw (n, in.getData(), out.getData(), +1, unaligned | estimate | noBuffering);
+ 
+-        r2c = fftw.plan_r2c_fftw (n, (float*) in.getData(), in.getData(), unaligned | estimate);
+-        c2r = fftw.plan_c2r_fftw (n, in.getData(), (float*) in.getData(), unaligned | estimate);
++        // a3-core patch: the real transforms are planned and run out of place. In place, FFTW 3.3.11 picks a
++        // codelet with its own batch buffer (rdft-*-directbuf, n = 128) for c2r at n = 1024 and 16384 even with
++        // NO_BUFFERING; that buffer (66560 bytes) is over FFTW's 64 KiB alloca limit, so every execute mallocs.
++        // Out of place no size from 32 to 131072 allocates, and r2c runs faster than in place without buffering.
++        r2c = fftw.plan_r2c_fftw (n, (float*) in.getData(), out.getData(), unaligned | estimate | noBuffering);
++        c2r = fftw.plan_c2r_fftw (n, in.getData(), (float*) out.getData(), unaligned | estimate | noBuffering);
+     }
+ 
+     ~FFTWImpl() override
+@@ -698,11 +703,30 @@
+         if (order == 0)
+             return;
+ 
++        // The scratch follows FFTFallback's rule: on the stack below maxFFTScratchSpaceToAlloca (up to order 15).
++        const size_t scratchSize = ((size_t) (1u << order) / 2 + 1) * sizeof (Complex<float>);
++
++        if (scratchSize < maxFFTScratchSpaceToAlloca)
++        {
++            JUCE_BEGIN_IGNORE_WARNINGS_MSVC (6255)
++            performRealOnlyForwardTransform (static_cast<Complex<float>*> (alloca (scratchSize)), inputOutputData, ignoreNegativeFreqs);
++            JUCE_END_IGNORE_WARNINGS_MSVC
++        }
++        else
++        {
++            HeapBlock<char> heapSpace (scratchSize);
++            performRealOnlyForwardTransform (unalignedPointerCast<Complex<float>*> (heapSpace.getData()), inputOutputData, ignoreNegativeFreqs);
++        }
++    }
++
++    void performRealOnlyForwardTransform (Complex<float>* spectrum, float* inputOutputData, bool ignoreNegativeFreqs) const noexcept
++    {
+         auto* out = reinterpret_cast<Complex<float>*> (inputOutputData);
+ 
+-        fftw.execute_r2c_fftw (r2c, inputOutputData, out);
++        fftw.execute_r2c_fftw (r2c, inputOutputData, spectrum);
+ 
+         auto size = (1 << order);
++        std::copy (spectrum, spectrum + (size >> 1) + 1, out);
+ 
+         if (! ignoreNegativeFreqs)
+             for (int i = size >> 1; i < size; ++i)
+@@ -711,12 +735,31 @@
+ 
+     void performRealOnlyInverseTransform (float* inputOutputData) const noexcept override
+     {
++        const size_t scratchSize = (size_t) (1u << order) * sizeof (float);
++
++        if (scratchSize < maxFFTScratchSpaceToAlloca)
++        {
++            JUCE_BEGIN_IGNORE_WARNINGS_MSVC (6255)
++            performRealOnlyInverseTransform (static_cast<float*> (alloca (scratchSize)), inputOutputData);
++            JUCE_END_IGNORE_WARNINGS_MSVC
++        }
++        else
++        {
++            HeapBlock<char> heapSpace (scratchSize);
++            performRealOnlyInverseTransform (unalignedPointerCast<float*> (heapSpace.getData()), inputOutputData);
++        }
++    }
++
++    void performRealOnlyInverseTransform (float* samples, float* inputOutputData) const noexcept
++    {
+         auto n = (1u << order);
+ 
+-        fftw.execute_c2r_fftw (c2r, (Complex<float>*) inputOutputData, inputOutputData);
+-        FloatVectorOperations::multiply ((float*) inputOutputData, 1.0f / static_cast<float> (n), (int) n);
++        fftw.execute_c2r_fftw (c2r, (Complex<float>*) inputOutputData, samples);
++        FloatVectorOperations::multiply (inputOutputData, samples, 1.0f / static_cast<float> (n), (int) n);
+     }
+ 
++    static constexpr size_t maxFFTScratchSpaceToAlloca = 256 * 1024;
++
+     //==============================================================================
+     // fftw's plan_* and destroy_* methods are NOT thread safe. So we need to share
+     // a lock between all instances of FFTWImpl

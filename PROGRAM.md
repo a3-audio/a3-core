@@ -644,8 +644,11 @@ buffer size (Save).
 ## Build and test
 
 Prerequisites: CMake 3.16 or newer, a C++17 compiler, JUCE 9.0.3 installed as a CMake package
-(`JUCE_PREFIX_PATH`, default `~/local/juce`), `libgtest-dev`, and the JACK development files
-(`libjack-jackd2-dev`, found through pkg-config). Without JACK, configure with
+(`JUCE_PREFIX_PATH`, default `~/local/juce`), `libgtest-dev`, `libfftw3-dev` (JUCE's FFT runs on FFTW; on
+JUCE's built-in fallback the engine needs about 1.7 times the time at a block of 64), and the JACK development files (`libjack-jackd2-dev`, found through
+pkg-config). JUCE's FFTW wrapper allocates in the audio callback unless it carries
+`cmake/patches/juce-9.0.3-fftw-realtime.patch` (`patch -p1 -d <JUCE include dir>/JUCE-9.0.3`); without it
+`FftBackend.TransformsAllocateNothing` and the `EngineAllocation` tests fail. Without JACK, configure with
 `-DA3_ENGINE_BENCH=OFF` to build only the strip and its tests.
 
 `./test.sh` builds (at `nice -n 19`) and runs the tests, which compare the rebuilds against the

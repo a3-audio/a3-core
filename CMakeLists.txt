@@ -34,6 +34,14 @@ target_compile_definitions(a3-engine-juce PUBLIC JUCE_STANDALONE_APPLICATION=1
     JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_MODAL_LOOPS_PERMITTED=1)
 # The device backend is ALSA; JUCE's JACK device type is never compiled (the JACK backend is our own).
 target_compile_definitions(a3-engine-juce PUBLIC JUCE_JACK=0 JUCE_ALSA=1)
+# JUCE's FFT is a portable scalar fallback unless FFTW is built in, and the headphone decoder's convolution
+# (IEM BinauralDecoder) ran on it: 58 % of the engine's instructions at a block of 64 (callgrind, 2026-11-06).
+# STATIC: the symbols are resolved at link time, so dpkg-shlibdeps sees libfftw3f.so.3. SHARED would dlopen the
+# unversioned libfftw3f.so (libfftw3-dev) and fall back to the slow FFT, silently, on a machine without it.
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(FFTW3F REQUIRED IMPORTED_TARGET fftw3f)
+target_compile_definitions(a3-engine-juce PUBLIC JUCE_DSP_USE_STATIC_FFTW=1)
+target_link_libraries(a3-engine-juce PUBLIC PkgConfig::FFTW3F)
 target_compile_definitions(a3-engine-juce INTERFACE $<TARGET_PROPERTY:a3-engine-juce,COMPILE_DEFINITIONS>)
 target_include_directories(a3-engine-juce INTERFACE $<TARGET_PROPERTY:a3-engine-juce,INCLUDE_DIRECTORIES>)
 
