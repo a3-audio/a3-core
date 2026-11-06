@@ -19,20 +19,33 @@ void addPair (std::vector<std::string>& out, const std::string& base)
 }
 }
 
+std::string analogPortName (int number) { return "analog_" + std::to_string (number); }
+
+namespace
+{
+std::string deckPortName (int slot, const std::string& kind, int number)
+{
+    return "deck" + deckLetters (slot) + "_" + kind + std::to_string (number);
+}
+}
+
+std::string deckBFormatPortName (int slot, int number) { return deckPortName (slot, "", number); }
+std::string deckAuxPortName (int slot, int number) { return deckPortName (slot, "aux_", number); }
+std::string deckCuePortName (int slot, int number) { return deckPortName (slot, "cue_", number); }
+
 PortNames enginePortNames (const a3::EngineConfig& config, const a3::SpatialConfig& spatial)
 {
     PortNames ports;
     for (int i = 1; i <= config.analogInputs; ++i)
-        ports.inputs.push_back ("analog_" + std::to_string (i));
+        ports.inputs.push_back (analogPortName (i));
     for (int slot = 1; slot <= config.decks; ++slot)
     {
-        const auto deck = "deck" + deckLetters (slot);
         for (int i = 1; i <= deckInputChannels; ++i)
-            ports.inputs.push_back (deck + "_" + std::to_string (i));
+            ports.inputs.push_back (deckBFormatPortName (slot, i));
         for (int i = 1; i <= deckAuxChannels; ++i)
-            ports.inputs.push_back (deck + "_aux_" + std::to_string (i));
+            ports.inputs.push_back (deckAuxPortName (slot, i));
         for (int i = 1; i <= deckCueChannels; ++i)
-            ports.inputs.push_back (deck + "_cue_" + std::to_string (i));
+            ports.inputs.push_back (deckCuePortName (slot, i));
     }
 
     addZone (ports.outputs, "main", spatial.main.layout);

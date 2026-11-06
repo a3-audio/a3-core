@@ -21,6 +21,12 @@ PortNames enginePortNames (const a3::EngineConfig&, const a3::SpatialConfig&);
 constexpr int deckInputChannels = 16, deckAuxChannels = 16, deckCueChannels = 9;
 using a3::deckLetters;   // 1 = "A", 26 = "Z", 27 = "AA"
 
+// The name of one input port; enginePortNames and the receiver groups both build theirs here.
+std::string analogPortName (int number);
+std::string deckBFormatPortName (int slot, int number);
+std::string deckAuxPortName (int slot, int number);
+std::string deckCuePortName (int slot, int number);
+
 // The stereo pairs the slots had before aux and cue grew (deck{X}_cue_L/R, deck{X}_aux_L/R) for
 // `decks` slots: a saved config may still name them, and the loader drops those links.
 std::vector<std::string> retiredDeckPorts (int decks);

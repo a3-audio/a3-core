@@ -4,7 +4,7 @@
 # The app's pure parts (host, OSC vocabulary, hello, config file, port names, I/O map, connection plan,
 # the program's command line, its roles and the supervisor): always built, the tests link them.
 add_library(a3-engine-app-lib STATIC EngineHost.cpp OscVocabulary.cpp HelloSender.cpp DeckAudioReport.cpp
-    ConfigFile.cpp EnginePorts.cpp IoMap.cpp ConnectionPlan.cpp DeviceBackend.cpp AppArgs.cpp ConfigEdits.cpp SessionRestart.cpp
+    ConfigFile.cpp EnginePorts.cpp IoMap.cpp ConnectionPlan.cpp DeviceBackend.cpp AppArgs.cpp ConfigEdits.cpp SessionRestart.cpp ReceiverGroups.cpp
     ProgramArgs.cpp Roles.cpp ClockRole.cpp Supervisor.cpp Subcommands.cpp LinksOverview.cpp EngineControlApi.cpp WindowProcess.cpp ui/RemoteHostView.cpp ui/LoopbackHttp.cpp ui/CoreClient.cpp ui/MonitorTable.cpp
     ui/MonitorTrafficPage.cpp ui/MonitorTruthPage.cpp ui/MonitorUnknownPage.cpp ui/MonitorRegisterPage.cpp ui/MonitorBenchPage.cpp ui/DepartmentsPage.cpp
     ui/AudioPage.cpp ui/ClockPanel.cpp ui/StatusPage.cpp ui/MainWindow.cpp
