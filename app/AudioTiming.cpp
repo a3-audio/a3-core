@@ -24,9 +24,10 @@ AudioTiming timingOf (const BackendSettings& backend) { return { backend.blockSi
 
 Command forceQuantumCommand (int block)
 {
-    const int forced = block == defaultBlock ? 0 : block;
-    return { "pw-metadata", "-n", "settings", "0", "clock.force-quantum", std::to_string (forced) };
+    return { "pw-metadata", "-n", "settings", "0", "clock.force-quantum", std::to_string (block) };
 }
+
+Command releaseQuantumCommand() { return { "pw-metadata", "-n", "settings", "0", "clock.force-quantum", "0" }; }
 
 Command restartWirePlumberCommand() { return { "systemctl", "--user", "restart", "wireplumber" }; }
 

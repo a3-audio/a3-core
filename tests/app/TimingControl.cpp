@@ -65,7 +65,7 @@ struct Rig
 };
 }
 
-// At the start the engine sets the block it remembers; the shipped 64 releases any force (nothing changes).
+// At the start the engine sets the block it remembers; a stored block other than the shipped one is forced.
 TEST (TimingControl, TheStartSetsTheStoredBlock)
 {
     Rig rig;
@@ -77,6 +77,30 @@ TEST (TimingControl, TheStartSetsTheStoredBlock)
     EXPECT_FALSE (control.report().previous.has_value());
     EXPECT_TRUE (rig.runner.started.empty()) << "the periods are never applied at a start: WirePlumber read the file at its own";
     EXPECT_FALSE (rig.dropIn().exists());
+}
+
+// The shipped block at a start leaves PipeWire's own configuration alone: the force is released, nothing is set.
+TEST (TimingControl, TheStartReleasesTheForceAtTheShippedBlock)
+{
+    Rig rig;
+    auto control = rig.control();
+    control.start ({ a3app::defaultBlock, 3 });
+    EXPECT_EQ (rig.runner.ran, (std::vector<Command> { a3app::releaseQuantumCommand() }));
+    EXPECT_EQ (control.report().applied, (AudioTiming { a3app::defaultBlock, 3 }));
+}
+
+// 2026-11-07: from a forced 128 the page applied the shipped 64, the engine only released the force, and the graph (held
+// by nodes with node.lock-quantum) stayed at 128 while the page said "set". A live change always forces its value.
+TEST (TimingControl, ApplyingTheShippedBlockLiveForcesItAndDoesNotRelease)
+{
+    Rig rig;
+    auto control = rig.control();
+    control.start ({ 128, 3 });
+    rig.runner.ran.clear();
+    EXPECT_TRUE (control.apply ({ a3app::defaultBlock, 3 }, rig.io).wasOk());
+    EXPECT_EQ (rig.runner.ran, (std::vector<Command> { a3app::forceQuantumCommand (a3app::defaultBlock) }));
+    EXPECT_NE (rig.runner.ran[0].back(), "0") << "a release would leave a locked graph where it is";
+    EXPECT_EQ (rig.stored, (std::vector<AudioTiming> { { a3app::defaultBlock, 3 } }));
 }
 
 // A new block runs live: one pw-metadata, the file stores it, the old one is kept for Revert. No WirePlumber restart.

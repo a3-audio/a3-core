@@ -21,10 +21,14 @@ bool offered (const std::vector<int>& choices, int value) { return std::find (ch
 
 TimingControl::TimingControl (Hooks h) : hooks (std::move (h)) {}
 
+// At a start the shipped block leaves PipeWire's own configuration alone (the force is released, nothing else holds the
+// graph yet); any other stored block is forced.
 void TimingControl::start (const AudioTiming& stored)
 {
     applied = stored;
-    if (const auto result = applyBlock (stored.block); result.wasOk())
+    const auto result = stored.block == defaultBlock ? runBlockCommand (releaseQuantumCommand(), stored.block)
+                                                     : applyBlock (stored.block);
+    if (result.wasOk())
         message = {};
 }
 
@@ -34,9 +38,12 @@ juce::Result TimingControl::fail (const juce::String& why)
     return juce::Result::fail (why);
 }
 
-juce::Result TimingControl::applyBlock (int block)
+// A live change always forces its value, the shipped block too: nodes with node.lock-quantum keep a running graph where
+// it is when the force is merely released (2026-11-07: Block 64 "set" on the page, the graph stayed at 128).
+juce::Result TimingControl::applyBlock (int block) { return runBlockCommand (forceQuantumCommand (block), block); }
+
+juce::Result TimingControl::runBlockCommand (const Command& command, int block)
 {
-    const auto command = forceQuantumCommand (block);
     if (const auto ran = hooks.runner.run (command); ran.exitCode != 0)
         return fail ("block " + juce::String (block) + " not set: " + commandText (command) + " failed");
     return juce::Result::ok();

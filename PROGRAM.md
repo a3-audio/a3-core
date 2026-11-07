@@ -634,8 +634,9 @@ linked there (see "Who owns a link"; tested as a restart window in `tests/app/Sy
 that key, like the converters' share), no Save.
 
 **Block**: `pw-metadata -n settings 0 clock.force-quantum N`, live; the engine follows through its buffer-size
-callback and measures the round trip again. 64 writes 0 (no force), so PipeWire's own quantum from a3-core's
-`pipewire.conf.d` runs as shipped. PipeWire 1.6 does not clamp a forced quantum to `clock.min-quantum`
+callback and measures the round trip again. At an engine **start** the shipped 64 writes 0 (no force), so PipeWire's own quantum from a3-core's
+`pipewire.conf.d` runs as shipped; a **live** change from the page always writes its value, the shipped 64 too:
+nodes with `node.lock-quantum` keep a running graph where it is when the force is merely released (2026-11-07). PipeWire 1.6 does not clamp a forced quantum to `clock.min-quantum`
 (`settings.check-quantum` is off by default; the graph takes min = max = force), so min-quantum 64 stays untouched
 and nothing needs restoring. The engine forces its stored block at every start: it remembers it, nothing else sets
 it. The engine requests no `node.latency` of its own (jack.conf's 64 applies to every JACK client); a forced

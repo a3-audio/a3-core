@@ -37,6 +37,7 @@ public:
 
 private:
     juce::Result applyBlock (int block);
+    juce::Result runBlockCommand (const Command& command, int block);
     juce::Result applyPeriods (int periods, const IoMap& io);
     juce::Result fail (const juce::String& why);
 

@@ -45,7 +45,8 @@ struct TimingReport
 };
 
 using Command = std::vector<std::string>;
-Command forceQuantumCommand (int block);   // pw-metadata -n settings 0 clock.force-quantum <block, or 0 at 128>
+Command forceQuantumCommand (int block);   // pw-metadata -n settings 0 clock.force-quantum <block>
+Command releaseQuantumCommand();           // ... clock.force-quantum 0: PipeWire's own quantum, if nothing holds the graph elsewhere
 Command restartWirePlumberCommand();       // systemctl --user restart wireplumber
 struct DefaultNodes;   // SystemDevice.h: read with its defaultNodesCommand and parseDefaultNodes
 
