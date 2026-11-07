@@ -95,10 +95,10 @@ context.modules = [
                             node.virtual = false
                             media.class = "Audio/Source"
                             device.api = aes67
-                            # One quantum (64 frames, 1.45 ms) plus arrival jitter. Clean at
-                            # 2 ms on the rig at Block 64 (2026-11-07); at Block 128 it
-                            # crackled, so raise it with the block.
-                            sess.latency.msec = 2
+                            # One quantum plus arrival jitter. At Block 64 (2026-11-07): 2 ms
+                            # was clean for ~15 minutes, then artifacts on both decks; 3 ms had
+                            # artifacts; 4 ms is clean. At Block 128 it was 4 ms too.
+                            sess.latency.msec = 4
                             # rtp-source's receive buffer is net.mtu bytes (default 1280);
                             # the deck's packet is 1365 B and was cut to 10 of 11 frames.
                             net.mtu = 1500
