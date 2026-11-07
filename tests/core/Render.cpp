@@ -583,7 +583,7 @@ TEST (Render, EachResolvedStreamGetsOneSinkBlock)
     const auto blocks = sinkBlocks (text);
     ASSERT_EQ (blocks.size(), 5u);
     EXPECT_EQ (valuesOf (blocks, "sess.name"),
-               (Texts { "\"AES67 a3nuc1 out\"", "\"A3 Core MAIN\"", "\"A3 Core BOOTH\"", "\"A3 Core REC\"", "\"A3 Core PHONES\"" }));
+               (Texts { "\"AES67 a3nuc1 out\"", "\"AES67 Core MAIN\"", "\"AES67 Core BOOTH\"", "\"AES67 Core REC\"", "\"AES67 Core PHONES\"" }));
     EXPECT_EQ (valuesOf (blocks, "destination.ip"),
                (Texts { "239.69.150.243", "239.69.200.1", "239.69.200.2", "239.69.200.3", "239.69.200.4" }));
     EXPECT_EQ (valuesOf (blocks, "destination.port"), Texts (5, "5004"));

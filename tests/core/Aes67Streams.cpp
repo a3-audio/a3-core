@@ -139,7 +139,7 @@ TEST (Aes67Streams, GroupsAndNamesAreTheTablesAndTheLegacyStaysFirst)
     EXPECT_TRUE (legacy.enginePorts.empty());
 
     const Names keys { "core-main", "core-booth", "core-rec", "core-phones" };
-    const Names sessions { "A3 Core MAIN", "A3 Core BOOTH", "A3 Core REC", "A3 Core PHONES" };
+    const Names sessions { "AES67 Core MAIN", "AES67 Core BOOTH", "AES67 Core REC", "AES67 Core PHONES" };
     for (size_t i = 0; i < keys.size(); ++i)
     {
         const auto& spec = streams[i + 1];
