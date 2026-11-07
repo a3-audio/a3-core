@@ -100,6 +100,82 @@ struct Loop
 };
 
 constexpr double slewTolerance = 1e-9;
+
+// A phase error of hundreds of us with the PHC a few ppm off, as the rig showed it on 2026-11-07 after
+// a first loss of lock. Built through a holdover, so the loop's own state is what a real run leaves:
+// locked, then the PHC's rate moves by `ratePpm` while nothing is measured (nothing is written either),
+// and the loop resumes acquiring at about `errorNs` with that rate error. The test config lets the held
+// frequency drift by 5 ppm, so the walk is kept as error instead of being re-anchored as a step.
+struct Displaced
+{
+    int lockedAfter = -1;                 // seconds from the resume to the first lock, -1: not within the window
+    int lockLostAfter = -1;               // seconds from the first lock to a loss of it, -1: never
+    double worstAfterCrossing = 0.0;      // the largest |error| once the error first crossed zero
+};
+
+Displaced settleFrom (double errorNs, double ratePpm, double noiseNs, unsigned seed)
+{
+    SteeringConfig config;
+    config.heldDriftPpm = 5.0;
+    Loop run (config);
+    run.plant.noiseNs = noiseNs;
+    run.plant.random.seed (seed);
+    Displaced result;
+    if (run.untilLocked (30) < 0)
+        return result;
+    run.run (60);
+    run.plant.naturalPpm += ratePpm;
+    run.run ((int) std::lround (errorNs / (1000.0 * ratePpm)), false);
+
+    const double startSign = errorNs > 0.0 ? 1.0 : -1.0;
+    bool crossed = false;
+    const int window = 4 * 60, after = 30 * 60;
+    for (int i = 1; i <= window + after; ++i)
+    {
+        const auto decision = run.step();
+        if (i == 1)
+            EXPECT_NEAR (decision.errorNs, errorNs, 40'000.0) << "the displacement was not built as meant";   // plus the walk of the lock's residual
+        crossed = crossed || decision.errorNs * startSign < 0.0;
+        if (crossed)
+            result.worstAfterCrossing = std::max (result.worstAfterCrossing, std::abs (decision.errorNs));
+        const bool locked = decision.health == Health::locked;
+        if (result.lockedAfter < 0 && locked && i <= window)
+            result.lockedAfter = i;
+        if (result.lockedAfter > 0 && ! locked && result.lockLostAfter < 0)
+            result.lockLostAfter = i - result.lockedAfter;
+        if (result.lockedAfter < 0 && i > window)
+            break;
+    }
+    EXPECT_LE (run.maxSlew, 0.1 + slewTolerance);
+    EXPECT_LE (run.maxFrequency, 40.0 + slewTolerance);
+    EXPECT_GE (run.minFrequency, -40.0 - slewTolerance);
+    return result;
+}
+
+void expectSettles (const Displaced& result)
+{
+    EXPECT_GT (result.lockedAfter, 0) << "no lock within four minutes";
+    EXPECT_EQ (result.lockLostAfter, -1) << "the lock was lost " << result.lockLostAfter << " s after it was reached";
+    EXPECT_LT (result.worstAfterCrossing, 50'000.0) << "overshot past the lock threshold";
+}
+}
+
+// 2026-11-07, on the rig: from a few hundred us the slew-limited PI rang in a 3-minute limit cycle,
+// losing the lock at every overshoot. The loop has to brake in time: one approach, no overshoot.
+TEST (ClockSteering, SlewLimitedLoopSettlesFromALargePhaseError)
+{
+    expectSettles (settleFrom (370'000.0, 4.0, 0.0, 7));
+    expectSettles (settleFrom (-250'000.0, -4.0, 0.0, 7));
+}
+
+TEST (ClockSteering, SlewLimitedLoopSettlesFromALargePhaseErrorWithTheProfilersNoise)
+{
+    for (unsigned seed = 1; seed <= 8; ++seed)
+    {
+        SCOPED_TRACE (seed);
+        expectSettles (settleFrom (370'000.0, 4.0, 3'000.0, seed));
+        expectSettles (settleFrom (-250'000.0, -4.0, 3'000.0, seed));
+    }
 }
 
 // 2026-10-30, on the rig: the Scarlett's rate is there at once, so the clock has to be too. About 5 s

@@ -197,13 +197,69 @@ double ClockSteering::nextFrequency (double errorNs, double dtSeconds)
     const double low = cfg.centreFrequencyPpm - cfg.frequencyRangePpm, high = cfg.centreFrequencyPpm + cfg.frequencyRangePpm;
     const double candidate = std::clamp (integral - ki * errorUs * dtSeconds, low, high);
     const double desired = candidate - kp * errorUs;
-    const double maxStep = cfg.maxSlewPpmPerSecond * dtSeconds;
-    const double applied = frequency + std::clamp (std::clamp (desired, low, high) - frequency, -maxStep, maxStep);
+    const double applied = slewed (desired, dtSeconds);
     const bool heldBack = applied != desired;
     const bool integralPushesFurther = (desired - applied) * (candidate - integral) > 0.0;
     if (! (heldBack && integralPushesFurther))
         integral = candidate;
     return applied;
+}
+
+// Towards `desiredPpm`, inside the range and never faster than the slew limit.
+double ClockSteering::slewed (double desiredPpm, double dtSeconds) const
+{
+    const double low = cfg.centreFrequencyPpm - cfg.frequencyRangePpm, high = cfg.centreFrequencyPpm + cfg.frequencyRangePpm;
+    const double maxStep = cfg.maxSlewPpmPerSecond * dtSeconds;
+    return frequency + std::clamp (std::clamp (desiredPpm, low, high) - frequency, -maxStep, maxStep);
+}
+
+// The phase error and the Scarlett's rate (the frequency that would hold the phase), estimated from what
+// was measured and what was written: the PHC ran at `frequency` since the last update, so a change the
+// loop made is never mistaken for the Scarlett's. An alpha-beta estimator with a double pole at
+// exp(-dt/T): critically damped, and after a long gap (holdover) it trusts the measurement.
+void ClockSteering::observe (double errorNs, double dtSeconds)
+{
+    const double pole = std::exp (-dtSeconds / cfg.observerTimeConstantSeconds);
+    const double predicted = estimatedErrorNs + (frequency - scarlettPpm) * ppmAsNsPerSecond * dtSeconds;
+    const double innovation = errorNs - predicted;
+    estimatedErrorNs = predicted + (1.0 - pole * pole) * innovation;
+    scarlettPpm -= (1.0 - pole) * (1.0 - pole) * innovation / (ppmAsNsPerSecond * dtSeconds);
+}
+
+// Braking outside the lock, or at a rate whose braking distance alone exceeds it; the quiet PI only
+// where the error and the rate are both well inside (hysteresis, so the two never chatter). The PI
+// starts from the estimates, so the handover is bumpless.
+void ClockSteering::chooseLaw()
+{
+    const double size = std::abs (estimatedErrorNs);
+    const double rate = std::abs (frequency - scarlettPpm);
+    const double brakeRate = std::sqrt (2.0 * cfg.maxSlewPpmPerSecond * cfg.lockThresholdNs / nsPerUs);
+    if (! braking && (size > cfg.lockThresholdNs || rate > brakeRate))
+    {
+        braking = true;
+        return;
+    }
+    if (braking && size < 0.5 * cfg.lockThresholdNs && rate < 0.5 * brakeRate)
+    {
+        braking = false;
+        integral = scarlettPpm;
+        smoothed = estimatedErrorNs;
+    }
+}
+
+// The time-optimal law for a rate limit: the rate error allowed is the one that `a` can still brake to
+// zero before the error is gone, sqrt(2 a |e|) (us, ppm = us/s, ppm/s = us/s^2). Near zero it is linear
+// with the acquiring PI's gain, matched in value and slope, so it does not chatter on the noise.
+double ClockSteering::brakingFrequency (double dtSeconds) const
+{
+    const double a = cfg.brakingShare * cfg.maxSlewPpmPerSecond;
+    const double k = gainFor (cfg.acquireTimeConstantSeconds, true);
+    const double errorUs = estimatedErrorNs / nsPerUs;
+    const double size = std::abs (errorUs);
+    const double linearUs = a / (k * k);
+    const double allowed = size <= linearUs ? k * size : std::sqrt (2.0 * a * (size - 0.5 * linearUs));
+    const double rate = -std::copysign (std::min (allowed, cfg.maxRateErrorPpm), errorUs);
+    return slewed (scarlettPpm + rate, dtSeconds);
 }
 
 void ClockSteering::judge (double errorNs)
@@ -254,7 +310,12 @@ Decision ClockSteering::update (double nowSeconds, std::optional<Measurement> me
     const bool first = ! anchored;
     error = anchoredError (*measurement, sinceLast);
     if (first)
+    {
         why = "anchored: steering towards the lock";
+        estimatedErrorNs = 0.0;
+        scarlettPpm = frequency;   // what the acquisition measured (or found at the rate)
+        braking = false;
+    }
 
     const double size = std::abs (error);
     if (lockedOnce && size > cfg.faultNs)
@@ -267,6 +328,8 @@ Decision ClockSteering::update (double nowSeconds, std::optional<Measurement> me
         writeFailed ("could not acquire inside the frequency range: steering stopped, the last frequency is held");
         return hold();
     }
+    if (! first)
+        observe (error, sinceLast);   // the real time since the last measurement: the PHC ran all of it
 
     if (verifyingWarm && ! first)
     {
@@ -283,7 +346,7 @@ Decision ClockSteering::update (double nowSeconds, std::optional<Measurement> me
         if (corrected)
         {
             auto decision = hold();
-            frequency = integral = *corrected;   // the anchor and the error stay: the PI goes on from here
+            frequency = integral = scarlettPpm = *corrected;   // the anchor and the error stay: the PI goes on from here
             decision.write = *corrected;
             decision.jump = true;
             decision.frequencyPpm = *corrected;
@@ -298,7 +361,8 @@ Decision ClockSteering::update (double nowSeconds, std::optional<Measurement> me
     auto decision = hold();
     if (! first)
     {
-        const double next = nextFrequency (error, gap);
+        chooseLaw();
+        const double next = braking ? brakingFrequency (gap) : nextFrequency (error, gap);
         if (next != frequency)
         {
             frequency = next;

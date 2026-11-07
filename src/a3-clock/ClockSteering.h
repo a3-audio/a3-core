@@ -27,6 +27,9 @@
 //     are the only ones not slew-limited; once tracking, every change is.
 //   - Phase lock, not only frequency lock: the phase error is the FIFO fill walk of every receiver, so
 //     it has to stay bounded forever, not just stop growing.
+//   - Far from the lock it brakes in time (2026-11-07: a slew-limited PI rang in a 3-minute limit cycle
+//     from a few hundred us, overshooting by as much as it started with): the rate error it allows is
+//     the one the slew limit can still stop before the error is gone. Near the lock the quiet PI steers.
 //   - No measurement: hold the last frequency (holdover), never guess.
 //   - A Scarlett discontinuity (xrun, restart, replug) or a stepped PHC is re-anchored, keeping the
 //     error it had: a jump is never slewed into the PTP clock. What counts as a step is bounded by the
@@ -84,6 +87,13 @@ struct SteeringConfig
     double heldDriftPpm = 1.0;             // what the held frequency may drift by in a gap
     double faultNs = 1'000'000.0;          // locked once, then |error| above this: fault
     double acquireLimitNs = 2'000'000.0;   // never locked and |error| above this: fault
+    // Braking: outside the lock threshold (or at a rate whose braking distance alone exceeds it) the
+    // allowed rate error is sqrt(2 a |error|), a = brakingShare * maxSlewPpmPerSecond: the rest of the
+    // slew is the margin for the estimate. The phase and the Scarlett's rate are estimated with
+    // observerTimeConstantSeconds from what was measured and what was written.
+    double brakingShare = 0.5;
+    double maxRateErrorPpm = 10.0;         // |frequency - the Scarlett's| never planned beyond this
+    double observerTimeConstantSeconds = 10.0;
 };
 
 // One phase measurement: PHC time minus Scarlett time at the same instant, in ns. The Scarlett side
@@ -147,12 +157,18 @@ private:
     bool inRange (double ppm) const;
     double anchoredError (const Measurement&, double gapSeconds);
     double nextFrequency (double errorNs, double dtSeconds);
+    double slewed (double desiredPpm, double dtSeconds) const;
+    void observe (double errorNs, double dtSeconds);
+    void chooseLaw();
+    double brakingFrequency (double dtSeconds) const;
     void judge (double errorNs);
 
     SteeringConfig cfg;
     double gainFor (double timeConstant, bool proportional) const;
     double frequency, integral;
     double error = 0.0, smoothed = 0.0;
+    double estimatedErrorNs = 0.0, scarlettPpm = 0.0;   // the observer: phase, and the frequency that holds it
+    bool braking = false;
     double lastMeasurementAt;
     bool anchored = false, lockedOnce = false;
     std::uint64_t epoch = 0;
