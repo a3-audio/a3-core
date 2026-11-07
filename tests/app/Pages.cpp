@@ -2584,7 +2584,7 @@ TEST_F (Pages, EngineSaysTheRoundTripAndTheAes67Latency)
     };
     auto rows = a3app::roundTripRows (estimate, measured, a3app::aes67LatencyText (receiver));
     EXPECT_EQ (text (rows), (juce::StringArray { "Estimated|17.4 ms (768 samples)", "Measured digital|not measured",
-                                                 "Measured analog|not measured", "AES67 latency|7.3 ms" }));
+                                                 "Measured analog|not measured", "AES67 deck to Core, calculated|7.3 ms" }));
     EXPECT_EQ (rows[0].tone, Tone::plain);
     EXPECT_EQ (rows[1].tone, Tone::dim) << "should be there and is not";
     EXPECT_EQ (rows[3].tone, Tone::plain);
@@ -2639,7 +2639,7 @@ TEST_F (Pages, EngineValuesArePlainUnlessMissingOrAFault)
     EXPECT_EQ (toneOf ("Xruns"), Tone::fault);
     EXPECT_EQ (toneOf ("DSP load"), Tone::fault);
     EXPECT_EQ (toneOf ("Gate"), Tone::plain) << "a closed gate is a state";
-    EXPECT_EQ (toneOf ("AES67 latency"), Tone::dim);
+    EXPECT_EQ (toneOf ("AES67 deck to Core, calculated"), Tone::dim);
 }
 
 // The window's keys (2026-10-30): CHANNELS, ZONES and DEPARTMENTS have none (AUDIO's card, SPEAKERS' and I/O's

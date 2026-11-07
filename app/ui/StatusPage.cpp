@@ -237,7 +237,7 @@ std::vector<StatusRow> roundTripRows (const RoundTrip& estimate, const RoundTrip
     for (const auto& [caption, value] : { std::pair<juce::String, juce::String> { "Estimated", estimatedText (estimate) },
                                           { "Measured digital", measuredDigitalText (estimate, measured) },
                                           { "Measured analog", measuredAnalogText (estimate, measured) },
-                                          { "AES67 latency", aes67 } })
+                                          { "AES67 deck to Core, calculated", aes67 } })
         rows.push_back ({ caption, value, toneOf (value) });
     return rows;
 }
