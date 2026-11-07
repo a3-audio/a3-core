@@ -123,13 +123,13 @@
    "port": 5004, "ptime": 0.5, "source": "fixed", "channels": 12, "legacy": true},
   {"key": "deck", "session": "AES67 deck {deck}", "sender": "deck", "group_base": "239.69.150.244",
    "group_step": 1, "port": 5004, "ptime": 0.25, "source": "fixed", "channels": 41, "legacy": true},
-  {"key": "core-main", "session": "A3 Core MAIN", "sender": "core", "group": "239.69.200.1",
+  {"key": "core-main", "session": "AES67 Core MAIN", "sender": "core", "group": "239.69.200.1",
    "port": 5004, "ptime": 0.5, "source": "zone:main", "legacy": false},
-  {"key": "core-booth", "session": "A3 Core BOOTH", "sender": "core", "group": "239.69.200.2",
+  {"key": "core-booth", "session": "AES67 Core BOOTH", "sender": "core", "group": "239.69.200.2",
    "port": 5004, "ptime": 0.5, "source": "zone:booth", "legacy": false},
-  {"key": "core-rec", "session": "A3 Core REC", "sender": "core", "group": "239.69.200.3",
+  {"key": "core-rec", "session": "AES67 Core REC", "sender": "core", "group": "239.69.200.3",
    "port": 5004, "ptime": 0.5, "source": "pair:rec", "legacy": false},
-  {"key": "core-phones", "session": "A3 Core PHONES", "sender": "core", "group": "239.69.200.4",
+  {"key": "core-phones", "session": "AES67 Core PHONES", "sender": "core", "group": "239.69.200.4",
    "port": 5004, "ptime": 0.5, "source": "pair:phones", "legacy": false}
  ],
  "routes": [

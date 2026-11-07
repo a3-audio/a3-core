@@ -135,7 +135,7 @@ a3core::StreamSpec mainStream()
 {
     a3core::StreamSpec spec;
     spec.key = "main";
-    spec.session = "A3 Core MAIN";
+    spec.session = "AES67 Core MAIN";
     spec.channelNames = { "SUB", "T1", "T2", "T3" };
     spec.enginePorts = { "main_sub", "main_top_1", "main_top_2", "main_top_3" };
     return spec;
@@ -145,7 +145,7 @@ a3core::StreamSpec recStream()
 {
     a3core::StreamSpec spec;
     spec.key = "rec";
-    spec.session = "A3 Core REC";
+    spec.session = "AES67 Core REC";
     spec.channelNames = { "L", "R" };
     spec.enginePorts = { "rec_L", "rec_R" };
     return spec;
@@ -155,7 +155,7 @@ a3core::StreamSpec phonesStream()
 {
     a3core::StreamSpec spec;
     spec.key = "phones";
-    spec.session = "A3 Core PHONES";
+    spec.session = "AES67 Core PHONES";
     spec.channelNames = { "L", "R" };
     spec.enginePorts = { "phones_L", "phones_R" };
     return spec;
@@ -176,8 +176,8 @@ TEST (ConnectionPlan, MainSubAndTopsGoToTheMainSender)
 {
     a3app::AppConfig config;
     const auto linked = a3app::linkMapFor (config, "a3nuc1", { legacyStream(), mainStream() });
-    EXPECT_EQ (linked.jack.at ("main_sub"), std::vector<std::string> { "A3 Core MAIN:send_SUB" });
-    EXPECT_EQ (linked.jack.at ("main_top_3"), std::vector<std::string> { "A3 Core MAIN:send_T3" });
+    EXPECT_EQ (linked.jack.at ("main_sub"), std::vector<std::string> { "AES67 Core MAIN:send_SUB" });
+    EXPECT_EQ (linked.jack.at ("main_top_3"), std::vector<std::string> { "AES67 Core MAIN:send_T3" });
 }
 
 TEST (ConnectionPlan, RecAndPhonesGoToTheirOwnStreams)
@@ -185,9 +185,9 @@ TEST (ConnectionPlan, RecAndPhonesGoToTheirOwnStreams)
     a3app::AppConfig config;
     const auto linked = a3app::linkMapFor (config, "a3nuc1", { legacyStream(), recStream(), phonesStream() });
     EXPECT_TRUE (links (linked.jack.at ("rec_L"), "AES67 a3nuc1 out:send_CH1")) << "the legacy link stays";
-    EXPECT_TRUE (links (linked.jack.at ("rec_L"), "A3 Core REC:send_L"));
-    EXPECT_TRUE (links (linked.jack.at ("rec_R"), "A3 Core REC:send_R"));
-    EXPECT_EQ (linked.jack.at ("phones_R"), std::vector<std::string> { "A3 Core PHONES:send_R" });
+    EXPECT_TRUE (links (linked.jack.at ("rec_L"), "AES67 Core REC:send_L"));
+    EXPECT_TRUE (links (linked.jack.at ("rec_R"), "AES67 Core REC:send_R"));
+    EXPECT_EQ (linked.jack.at ("phones_R"), std::vector<std::string> { "AES67 Core PHONES:send_R" });
 }
 
 TEST (ConnectionPlan, NoSpecsMeansTheOldMap)
@@ -211,18 +211,18 @@ TEST (ConnectionPlan, TheLegacySenderIsTheLegacyStreamsSession)
     legacy.session = "AES67 stage-left out";
     a3app::AppConfig config;
     const auto linked = a3app::linkMapFor (config, "a3nuc1", { legacy, recStream() });
-    EXPECT_EQ (linked.jack.at ("rec_L"), (std::vector<std::string> { "beat-analyzer:bpm_1", "AES67 stage-left out:send_CH1", "A3 Core REC:send_L" }));
-    EXPECT_EQ (linked.jack.at ("rec_R"), (std::vector<std::string> { "AES67 stage-left out:send_CH2", "A3 Core REC:send_R" }));
+    EXPECT_EQ (linked.jack.at ("rec_L"), (std::vector<std::string> { "beat-analyzer:bpm_1", "AES67 stage-left out:send_CH1", "AES67 Core REC:send_L" }));
+    EXPECT_EQ (linked.jack.at ("rec_R"), (std::vector<std::string> { "AES67 stage-left out:send_CH2", "AES67 Core REC:send_R" }));
     EXPECT_EQ (a3app::linkMapFor (config, "a3nuc1", { recStream() }).jack.at ("rec_R"),
-               (std::vector<std::string> { "AES67 a3nuc1 out:send_CH2", "A3 Core REC:send_R" }));
+               (std::vector<std::string> { "AES67 a3nuc1 out:send_CH2", "AES67 Core REC:send_R" }));
 }
 
 TEST (ConnectionPlan, EachLinkIsMadeOnce)
 {
     a3app::AppConfig config;
-    config.io.jack["main_sub"] = { "A3 Core MAIN:send_SUB" };
+    config.io.jack["main_sub"] = { "AES67 Core MAIN:send_SUB" };
     const auto streams = std::vector<a3core::StreamSpec> { mainStream(), mainStream() };
     const auto linked = a3app::linkMapFor (config, "a3nuc1", streams);
-    EXPECT_EQ (linked.jack.at ("main_sub"), std::vector<std::string> { "A3 Core MAIN:send_SUB" });
-    EXPECT_EQ (linked.jack.at ("main_top_1"), std::vector<std::string> { "A3 Core MAIN:send_T1" });
+    EXPECT_EQ (linked.jack.at ("main_sub"), std::vector<std::string> { "AES67 Core MAIN:send_SUB" });
+    EXPECT_EQ (linked.jack.at ("main_top_1"), std::vector<std::string> { "AES67 Core MAIN:send_T1" });
 }

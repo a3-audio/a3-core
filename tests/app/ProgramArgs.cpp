@@ -407,7 +407,7 @@ TEST (EngineStreams, WithoutTheCoresTruthTheReasonIsSaidAndOnlyTheLegacyRecIsLin
     const auto linked = a3app::linkMapFor (loaded->config, args.hostname, atStart.streams);
     for (const auto& [port, peers] : linked.jack)
         for (const auto& peer : peers)
-            EXPECT_EQ (peer.rfind ("A3 Core ", 0), std::string::npos) << port << " -> " << peer;
+            EXPECT_EQ (peer.rfind ("AES67 Core ", 0), std::string::npos) << port << " -> " << peer;
     const auto& recL = linked.jack.at ("rec_L");
     EXPECT_NE (std::find (recL.begin(), recL.end(), "AES67 a3nuc1 out:send_CH1"), recL.end());
 }

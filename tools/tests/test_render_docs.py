@@ -98,8 +98,8 @@ class TheAes67Table(unittest.TestCase):
         rows = render_docs.aes67_table(TRUTH).splitlines()[2:]
         self.assertEqual(len(rows), 6)
         text = "\n".join(rows)
-        for session in ("AES67 {host} out", "AES67 deck {deck}", "A3 Core MAIN",
-                        "A3 Core BOOTH", "A3 Core REC", "A3 Core PHONES"):
+        for session in ("AES67 {host} out", "AES67 deck {deck}", "AES67 Core MAIN",
+                        "AES67 Core BOOTH", "AES67 Core REC", "AES67 Core PHONES"):
             self.assertIn(session, text)
         for endpoint in ("239.69.150.243:5004", "239.69.200.1:5004",
                          "239.69.200.4:5004"):
