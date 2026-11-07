@@ -504,6 +504,13 @@ role has soaked on the rig (zero rtp-source resyncs, lock held for hours), and o
 a healthy PTP lock (not the Pi). The deck C crackle measured on 2026-10-30 (one corrupted 11-sample
 packet about every 13) is a packetisation fault, not the clock.
 
+**The profiler's rate.** The role reads `pw-profiler -J`, and PipeWire's profiler module writes a record on every
+graph cycle by default: 689 a second at Block 64, each with every node in it. The role cannot drain that; the
+module's queue overflows (`mod.profiler: queue full`, ~80 a second from the real-time thread, 2026-11-07), the main
+PipeWire grows by ~10 MB a minute, the Scarlett node collects errors and the role loses records. The package ships
+`pipewire.conf.d/20-a3-profiler.conf` (`profile.interval.ms = 10`, 100 records a second, five times what the role
+uses); it applies when PipeWire starts.
+
 **Which clocks.** The PHC is the audio port's (the truth's `network.audio_port`, where `ptp4l@<port>`
 runs), found under `/sys/class/net/<port>/device/ptp/`; a `--device` that is not that clock, a port
 without a PHC or a truth without an audio port is a fault that steers nothing. The Scarlett is its
