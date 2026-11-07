@@ -197,11 +197,11 @@ class WhatTheRigSettledOn(unittest.TestCase):
         self.assertEqual(keys["device.api"], "aes67")
         # The receive buffer must hold one quantum plus the arrival jitter.
         # 2026-10-30 at Block 128 (2.9 ms) on the lossy network, decks B and C:
-        # 4 ms clean, 2 ms crackled. Since the Cisco SG300 (VLAN 9, flow
-        # control off) nothing is lost, and at Block 64 (1.45 ms) the
-        # maintainer heard 2 ms clean on the rig (2026-11-07). 2 ms is 8
-        # packets of 11 frames (88; the receiver sees ptime 10 and uses 85).
-        self.assertEqual(keys["sess.latency.msec"], "2")
+        # 4 ms clean, 2 ms crackled. At Block 64 on 2026-11-07 (clean network):
+        # 2 ms was clean for about 15 minutes, then artifacts on both decks;
+        # 3 ms had artifacts; 4 ms was clean. 4 ms is 16 packets of 11 frames
+        # (176; the receiver sees ptime 10 and uses 170).
+        self.assertEqual(keys["sess.latency.msec"], "4")
 
     def test_every_receiver_keeps_its_resampler(self):
         # 2026-10-30, review of the one clock: with the clock role steering
