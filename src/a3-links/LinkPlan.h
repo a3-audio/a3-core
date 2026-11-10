@@ -30,7 +30,9 @@ bool isInputPort (const std::string& ownPort, const std::vector<std::string>& ow
 bool linksItself (const std::string& port);
 
 // What the map wants (spec D9): every jack entry as a link between our port ("client:port") and
-// its peer, in the port's direction, plus every direct link.
+// its peer, in the port's direction, plus every direct link. A peer the graph lacks by name but has as
+// "<client>-<id>:<port>" is that port: pipewire-jack's rename of a node that appeared beside an old one of its
+// name (a recreated AES67 receiver); the highest id wins. missingPeers names the map's port, not the rename.
 // add: a wanted link whose ports both exist and that is not live. remove: a link we made that is live and no
 // longer wanted, and every live link on one of our own ports that is not wanted, whoever made it, unless its other
 // end linksItself(). The engine owns its ports' links to the device, AES67 and anything else it plans: when PipeWire

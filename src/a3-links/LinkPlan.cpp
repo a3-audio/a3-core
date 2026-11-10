@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "LinkPlan.h"
 #include <algorithm>
+#include <cctype>
 #include <cerrno>
+#include <map>
 #include <set>
 
 namespace a3::links
@@ -19,6 +21,51 @@ void addOnce (std::vector<std::string>& names, const std::string& name)
     if (std::find (names.begin(), names.end(), name) == names.end())
         names.push_back (name);
 }
+
+// The ports of the graph, and for a name the graph lacks, the port pipewire-jack renamed to "<client>-<id>:<port>"
+// (pipewire-jack.c 1.6.9, :3873: a node that appears while another of its name exists keeps the suffix for good).
+class GraphPorts
+{
+public:
+    explicit GraphPorts (const std::vector<std::string>& ports) : exact (ports.begin(), ports.end())
+    {
+        for (const auto& port : ports)
+            addIfRenamed (port);
+    }
+
+    // The exact name when the graph has it, else the renamed port with the highest id (the newest), else "".
+    std::string resolve (const std::string& wanted) const
+    {
+        if (exact.count (wanted) > 0)
+            return wanted;
+        const auto found = newestRename.find (wanted);
+        return found != newestRename.end() ? found->second.port : std::string();
+    }
+
+private:
+    struct Rename { unsigned long id; std::string port; };
+
+    void addIfRenamed (const std::string& port)
+    {
+        const auto colon = port.find (':');
+        if (colon == std::string::npos)
+            return;
+        const auto dash = port.rfind ('-', colon);
+        if (dash == std::string::npos || dash == 0 || dash + 1 == colon)
+            return;
+        const auto digits = port.substr (dash + 1, colon - dash - 1);
+        if (digits.size() > 9 || ! std::all_of (digits.begin(), digits.end(), [] (unsigned char c) { return std::isdigit (c) != 0; }))
+            return;
+        const auto id = std::stoul (digits);
+        const auto original = port.substr (0, dash) + port.substr (colon);
+        const auto known = newestRename.find (original);
+        if (known == newestRename.end() || id > known->second.id)
+            newestRename[original] = { id, port };
+    }
+
+    std::set<std::string> exact;
+    std::map<std::string, Rename> newestRename;
+};
 
 std::vector<Link> wantedLinks (const LinkMap& wanted, const std::vector<std::string>& ownInputs, const std::string& client)
 {
@@ -50,19 +97,21 @@ ConnectionPlan planConnections (const LinkMap& wanted, const std::vector<Link>& 
                                 const std::vector<std::string>& existingPorts, const std::vector<std::string>& ownInputs,
                                 const std::string& client)
 {
-    const std::set<std::string> existing (existingPorts.begin(), existingPorts.end());
-    const auto links = wantedLinks (wanted, ownInputs, client);
+    const GraphPorts graph (existingPorts);
 
     ConnectionPlan plan;
-    for (const auto& link : links)
+    std::vector<Link> links;
+    for (const auto& link : wantedLinks (wanted, ownInputs, client))
     {
-        const bool fromThere = existing.count (link.from) > 0, toThere = existing.count (link.to) > 0;
-        if (! fromThere)
+        const auto from = graph.resolve (link.from), to = graph.resolve (link.to);
+        if (from.empty())
             addOnce (plan.missingPeers, link.from);
-        if (! toThere)
+        if (to.empty())
             addOnce (plan.missingPeers, link.to);
-        if (fromThere && toThere && ! contains (live, link) && ! contains (plan.add, link))
-            plan.add.push_back (link);
+        const Link resolved { from.empty() ? link.from : from, to.empty() ? link.to : to };
+        links.push_back (resolved);
+        if (! from.empty() && ! to.empty() && ! contains (live, resolved) && ! contains (plan.add, resolved))
+            plan.add.push_back (resolved);
     }
     for (const auto& link : madeByUs)
         if (contains (live, link) && ! contains (links, link) && ! contains (plan.remove, link))
@@ -81,10 +130,10 @@ ConnectionPlan planConnections (const LinkMap& wanted, const std::vector<Link>& 
 
 std::size_t linksWithMissingTarget (const LinkMap& wanted, const std::vector<std::string>& existingPorts, const std::string& client)
 {
-    const std::set<std::string> existing (existingPorts.begin(), existingPorts.end());
+    const GraphPorts graph (existingPorts);
     const auto ownPrefix = client + ":";
     const auto strangerMissing = [&] (const std::string& port) {
-        return existing.count (port) == 0 && port.rfind (ownPrefix, 0) != 0;
+        return graph.resolve (port).empty() && port.rfind (ownPrefix, 0) != 0;
     };
     std::size_t count = 0;
     for (const auto& [port, peers] : wanted.jack)
