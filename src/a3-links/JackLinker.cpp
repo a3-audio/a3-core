@@ -28,7 +28,8 @@ void JackLinker::apply (const LinkMap& map)
 {
     const auto live = liveLinks();
     madeByUs = stillOwned (madeByUs, live);
-    const auto plan = planConnections (map, live, madeByUs, graphPorts(), ownInputs, clientName);
+    const auto ports = graphPorts();
+    const auto plan = planConnections (map, live, madeByUs, ports, ownInputs, clientName, portAges (ports));
     for (const auto& link : plan.add)
     {
         switch (connectOutcome (jack_connect (client, link.from.c_str(), link.to.c_str())))
@@ -62,6 +63,15 @@ void JackLinker::removeOwned()
 std::vector<std::string> JackLinker::graphPorts() const
 {
     return takeNames (jack_get_ports (client, nullptr, nullptr, 0));
+}
+
+PortAges JackLinker::portAges (const std::vector<std::string>& ports) const
+{
+    PortAges ages;
+    for (const auto& name : ports)
+        if (auto* port = jack_port_by_name (client, name.c_str()))
+            ages[name] = jack_port_uuid (port);
+    return ages;
 }
 
 std::vector<Link> JackLinker::liveLinks() const

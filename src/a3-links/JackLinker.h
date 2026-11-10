@@ -27,6 +27,8 @@ public:
     const std::vector<std::string>& missingPeers() const { return missing; }
     std::vector<std::string> graphPorts() const;
     std::vector<Link> liveLinks() const;
+    // Each port's jack_port_uuid: pipewire-jack makes it from the serial, so a recreated node's ports are newer.
+    PortAges portAges (const std::vector<std::string>& ports) const;
 
 private:
     jack_client_t* client;
