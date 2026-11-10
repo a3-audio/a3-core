@@ -249,8 +249,8 @@ TEST (LinkPlan, KeepsTheLinkItMadeToARenamedPeer)
     EXPECT_TRUE (plan.remove.empty());
 }
 
-// While the old node and its renamed successor both exist, the exact name is the one to link; the renamed one takes
-// over once the old one is gone.
+// While the old node and its renamed successor both exist and no ages are known, the exact name is the one to link;
+// the renamed one takes over once the old one is gone.
 TEST (LinkPlan, PrefersTheExactNameOverARenamedOne)
 {
     a3::links::LinkMap map;
@@ -264,7 +264,7 @@ TEST (LinkPlan, PrefersTheExactNameOverARenamedOne)
     EXPECT_EQ (plan.add, (Links { { "AES67 deck C:receive_MAIN1", "a3-engine:deckA_1" } }));
 }
 
-// Several renamed nodes at once (two recreations overlapping): the newest, the highest id, carries the stream.
+// Several renamed nodes at once and no ages known: the highest id is the best guess (see the aged tests below).
 TEST (LinkPlan, TakesTheNewestOfSeveralRenamedPeers)
 {
     a3::links::LinkMap map;
@@ -303,4 +303,90 @@ TEST (LinkPlan, CountsARenamedPeerAsPresent)
     ports.push_back ("AES67 deck C-633:receive_MAIN1");
 
     EXPECT_EQ (a3::links::linksWithMissingTarget (map, ports), 0u);
+}
+
+// The suffix pipewire-jack appends is the node's global id, and PipeWire reuses freed ids: a newer node can carry
+// a lower suffix, and an old node can carry the plain name while its successor is renamed or the other way round.
+// What orders them is the port's serial (jack_port_uuid, never reused); with it the newest port of a name wins.
+namespace
+{
+a3::links::ConnectionPlan planAged (const a3::links::LinkMap& map, const Links& live, const Links& made,
+                                    const Ports& ports, const a3::links::PortAges& ages)
+{
+    return a3::links::planConnections (map, live, made, ports, rigInputs, "a3-engine", ages);
+}
+
+a3::links::LinkMap deckCMap()
+{
+    a3::links::LinkMap map;
+    map.jack["deckA_1"] = { "AES67 deck C:receive_MAIN1" };
+    return map;
+}
+}
+
+// SAP brings deck C back while the old, silent node still exists: the new one is renamed and is the one to link.
+TEST (LinkPlan, LinksTheRenamedPeerWhenItIsNewerThanTheOldOne)
+{
+    auto ports = rigPorts();
+    ports.push_back ("AES67 deck C:receive_MAIN1");
+    ports.push_back ("AES67 deck C-633:receive_MAIN1");
+    const a3::links::PortAges ages { { "AES67 deck C:receive_MAIN1", 500 }, { "AES67 deck C-633:receive_MAIN1", 900 } };
+
+    const auto plan = planAged (deckCMap(), {}, {}, ports, ages);
+
+    EXPECT_EQ (plan.add, (Links { { "AES67 deck C-633:receive_MAIN1", "a3-engine:deckA_1" } }));
+}
+
+// Recreated again once the renamed one was alone: the newest node got the plain name back, the renamed one is stale.
+TEST (LinkPlan, LinksThePlainNameWhenItIsNewerThanARenamedOne)
+{
+    auto ports = rigPorts();
+    ports.push_back ("AES67 deck C-633:receive_MAIN1");
+    ports.push_back ("AES67 deck C:receive_MAIN1");
+    const a3::links::PortAges ages { { "AES67 deck C-633:receive_MAIN1", 900 }, { "AES67 deck C:receive_MAIN1", 1400 } };
+
+    const auto plan = planAged (deckCMap(), {}, {}, ports, ages);
+
+    EXPECT_EQ (plan.add, (Links { { "AES67 deck C:receive_MAIN1", "a3-engine:deckA_1" } }));
+}
+
+// A reused id: the newest of two renamed nodes has the lower suffix.
+TEST (LinkPlan, TakesTheNewestRenamedPeerByAgeNotBySuffix)
+{
+    auto ports = rigPorts();
+    ports.push_back ("AES67 deck C-633:receive_MAIN1");
+    ports.push_back ("AES67 deck C-98:receive_MAIN1");
+    const a3::links::PortAges ages { { "AES67 deck C-633:receive_MAIN1", 900 }, { "AES67 deck C-98:receive_MAIN1", 1200 } };
+
+    const auto plan = planAged (deckCMap(), {}, {}, ports, ages);
+
+    EXPECT_EQ (plan.add, (Links { { "AES67 deck C-98:receive_MAIN1", "a3-engine:deckA_1" } }));
+}
+
+// The link it made to the old node moves to the new one: one link on the port, never both.
+TEST (LinkPlan, MovesItsLinkFromTheOldNodeToTheNewOne)
+{
+    auto ports = rigPorts();
+    ports.push_back ("AES67 deck C:receive_MAIN1");
+    ports.push_back ("AES67 deck C-633:receive_MAIN1");
+    const a3::links::PortAges ages { { "AES67 deck C:receive_MAIN1", 500 }, { "AES67 deck C-633:receive_MAIN1", 900 } };
+    const Links live { { "AES67 deck C:receive_MAIN1", "a3-engine:deckA_1" } };
+
+    const auto plan = planAged (deckCMap(), live, live, ports, ages);
+
+    EXPECT_EQ (plan.add, (Links { { "AES67 deck C-633:receive_MAIN1", "a3-engine:deckA_1" } }));
+    EXPECT_EQ (plan.remove, live);
+}
+
+// Deck B's rename is not deck C's peer, however new it is.
+TEST (LinkPlan, ANewerRenameOfAnotherDeckIsNotThePeer)
+{
+    auto ports = rigPorts();
+    ports.push_back ("AES67 deck C:receive_MAIN1");
+    ports.push_back ("AES67 deck B-12:receive_MAIN1");
+    const a3::links::PortAges ages { { "AES67 deck C:receive_MAIN1", 500 }, { "AES67 deck B-12:receive_MAIN1", 900 } };
+
+    const auto plan = planAged (deckCMap(), {}, {}, ports, ages);
+
+    EXPECT_EQ (plan.add, (Links { { "AES67 deck C:receive_MAIN1", "a3-engine:deckA_1" } }));
 }

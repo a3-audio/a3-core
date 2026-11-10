@@ -5,7 +5,7 @@
 #include <cctype>
 #include <cerrno>
 #include <map>
-#include <set>
+#include <tuple>
 
 namespace a3::links
 {
@@ -22,49 +22,73 @@ void addOnce (std::vector<std::string>& names, const std::string& name)
         names.push_back (name);
 }
 
-// The ports of the graph, and for a name the graph lacks, the port pipewire-jack renamed to "<client>-<id>:<port>"
-// (pipewire-jack.c 1.6.9, :3873: a node that appears while another of its name exists keeps the suffix for good).
+// For each name the map may want, the port of the graph that is it: the port of that name, or one pipewire-jack renamed
+// to "<client>-<id>:<port>" (pipewire-jack.c 1.6.9, registry_event_global: a node that appears while another of its
+// name exists gets its global id as a suffix and keeps it for good). The suffix is no age: PipeWire reuses freed
+// ids. With ages (the ports' serials) the newest candidate wins; without, the plain name, then the highest suffix.
 class GraphPorts
 {
 public:
-    explicit GraphPorts (const std::vector<std::string>& ports) : exact (ports.begin(), ports.end())
+    GraphPorts (const std::vector<std::string>& ports, const PortAges& ages)
     {
         for (const auto& port : ports)
-            addIfRenamed (port);
+        {
+            const auto age = ageOf (ages, port);
+            offer (port, { age, true, 0, port });
+            if (const auto rename = renameOf (port); ! rename.original.empty())
+                offer (rename.original, { age, false, rename.suffix, port });
+        }
     }
 
-    // The exact name when the graph has it, else the renamed port with the highest id (the newest), else "".
+    // The port that is the wanted one, or "".
     std::string resolve (const std::string& wanted) const
     {
-        if (exact.count (wanted) > 0)
-            return wanted;
-        const auto found = newestRename.find (wanted);
-        return found != newestRename.end() ? found->second.port : std::string();
+        const auto found = best.find (wanted);
+        return found != best.end() ? found->second.port : std::string();
     }
 
 private:
-    struct Rename { unsigned long id; std::string port; };
+    struct Candidate
+    {
+        std::uint64_t age;
+        bool plain;
+        unsigned long suffix;
+        std::string port;
+        bool beats (const Candidate& other) const
+        {
+            return std::tie (age, plain, suffix) > std::tie (other.age, other.plain, other.suffix);
+        }
+    };
+    struct Rename { std::string original; unsigned long suffix = 0; };
 
-    void addIfRenamed (const std::string& port)
+    static std::uint64_t ageOf (const PortAges& ages, const std::string& port)
+    {
+        const auto found = ages.find (port);
+        return found != ages.end() ? found->second : 0;
+    }
+
+    static Rename renameOf (const std::string& port)
     {
         const auto colon = port.find (':');
         if (colon == std::string::npos)
-            return;
+            return {};
         const auto dash = port.rfind ('-', colon);
         if (dash == std::string::npos || dash == 0 || dash + 1 == colon)
-            return;
+            return {};
         const auto digits = port.substr (dash + 1, colon - dash - 1);
         if (digits.size() > 9 || ! std::all_of (digits.begin(), digits.end(), [] (unsigned char c) { return std::isdigit (c) != 0; }))
-            return;
-        const auto id = std::stoul (digits);
-        const auto original = port.substr (0, dash) + port.substr (colon);
-        const auto known = newestRename.find (original);
-        if (known == newestRename.end() || id > known->second.id)
-            newestRename[original] = { id, port };
+            return {};
+        return { port.substr (0, dash) + port.substr (colon), std::stoul (digits) };
     }
 
-    std::set<std::string> exact;
-    std::map<std::string, Rename> newestRename;
+    void offer (const std::string& name, Candidate candidate)
+    {
+        const auto known = best.find (name);
+        if (known == best.end() || candidate.beats (known->second))
+            best[name] = std::move (candidate);
+    }
+
+    std::map<std::string, Candidate> best;
 };
 
 std::vector<Link> wantedLinks (const LinkMap& wanted, const std::vector<std::string>& ownInputs, const std::string& client)
@@ -95,9 +119,9 @@ bool isInputPort (const std::string& ownPort, const std::vector<std::string>& ow
 
 ConnectionPlan planConnections (const LinkMap& wanted, const std::vector<Link>& live, const std::vector<Link>& madeByUs,
                                 const std::vector<std::string>& existingPorts, const std::vector<std::string>& ownInputs,
-                                const std::string& client)
+                                const std::string& client, const PortAges& ages)
 {
-    const GraphPorts graph (existingPorts);
+    const GraphPorts graph (existingPorts, ages);
 
     ConnectionPlan plan;
     std::vector<Link> links;
@@ -130,7 +154,7 @@ ConnectionPlan planConnections (const LinkMap& wanted, const std::vector<Link>& 
 
 std::size_t linksWithMissingTarget (const LinkMap& wanted, const std::vector<std::string>& existingPorts, const std::string& client)
 {
-    const GraphPorts graph (existingPorts);
+    const GraphPorts graph (existingPorts, {});
     const auto ownPrefix = client + ":";
     const auto strangerMissing = [&] (const std::string& port) {
         return graph.resolve (port).empty() && port.rfind (ownPrefix, 0) != 0;
