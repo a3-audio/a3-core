@@ -109,7 +109,7 @@ std::vector<Link> wantedLinks (const LinkMap& wanted, const std::vector<std::str
 bool linksItself (const std::string& port)
 {
     const auto client = port.substr (0, port.find (':'));
-    return client.rfind ("StemDeck", 0) == 0 || client == "beat-analyzer";
+    return client.rfind ("StemDeck", 0) == 0 || client == "beat-analyzer" || client == "a3-screencast";
 }
 
 bool isInputPort (const std::string& ownPort, const std::vector<std::string>& ownInputs)

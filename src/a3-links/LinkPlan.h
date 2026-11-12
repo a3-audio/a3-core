@@ -31,7 +31,7 @@ struct ConnectionPlan
 bool isInputPort (const std::string& ownPort, const std::vector<std::string>& ownInputs);
 
 // Whether a port belongs to a client that makes its own links to the engine: StemDeck-<X> (it links its recorder
-// from a3-engine:rec_L/R itself) and beat-analyzer. A link between one of the engine's ports and such a port is
+// from a3-engine:rec_L/R itself), beat-analyzer and a3-screencast (the screencast's ffmpeg, when it carries the REC bus). A link between one of the engine's ports and such a port is
 // that client's; the engine never removes it, planned or not.
 bool linksItself (const std::string& port);
 

@@ -96,6 +96,7 @@ TEST (LinkPlan, KeepsTheLinksOfClientsThatLinkThemselves)
     EXPECT_TRUE (planWith ({}, live, {}, rigPorts()).remove.empty());
     EXPECT_TRUE (a3::links::linksItself ("StemDeck-B:rec_R"));
     EXPECT_TRUE (a3::links::linksItself ("beat-analyzer:bpm_1"));
+    EXPECT_TRUE (a3::links::linksItself ("a3-screencast:in_1"));   // ffmpeg of the screencast, A3_SCREENCAST_AUDIO
     EXPECT_FALSE (a3::links::linksItself ("AES67 deck C:receive_MAIN1"));
     EXPECT_FALSE (a3::links::linksItself ("system:capture_1"));
 }

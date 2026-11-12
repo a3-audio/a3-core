@@ -83,11 +83,10 @@ on. Use it instead of qjackctl. Details in `PROGRAM.md`.
 ## Screencast for OBS
 
 `a3-screencast` streams the picture of this machine's screen (x264 on the CPU,
-MPEG-TS, no sound) as a listener on the port `screencast.stream` of
+MPEG-TS, picture only unless asked for sound) as a listener on the port `screencast.stream` of
 `a3-osc.json` (9930). It runs niced on core 0, which the audio units
 (`CPUAffinity=1 2 3`) leave free, with no muxer delay and a short grab queue, so
-the picture arrives within a frame or two. OBS takes the sound from AES67. The
-package does not enable it; per machine:
+the picture arrives within a frame or two. The package does not enable it; per machine:
 
 ```sh
 systemctl --user enable --now a3-screencast
@@ -96,6 +95,19 @@ systemctl --user enable --now a3-screencast
 Optional settings in `~/.config/a3/screencast.env`: `A3_SCREENCAST_CPUS`
 (default: 0), `A3_SCREENCAST_FPS` (30), `A3_SCREENCAST_CRF` (23, lower is
 better).
+
+- `A3_SCREENCAST_PUSH`: send to this target (`udp://<host>:<port>`) instead of listening. The script
+  waits until a route to the host exists (polling every 2 s, one log line) before it starts ffmpeg; if
+  ffmpeg dies later, the unit restarts it as before.
+- `A3_SCREENCAST_AUDIO=1` (default 0): Core's stereo REC bus (`a3-engine:rec_L`/`rec_R`) goes into the
+  same ffmpeg and the same MPEG-TS as AAC (128 kbit/s), through a JACK client `a3-screencast`. Both inputs run
+  on the wall clock and the sound passes `aresample=async`, so a restart or a stall cannot shift picture and
+  sound against each other. The script links the two ports itself (and again after every ffmpeg start);
+  `linksItself` keeps the engine from removing them. Only a machine with the engine has the ports: leave it
+  off elsewhere.
+- `A3_SCREENCAST_DELAY_MS` (default 20): delays the picture by this much, picture only, so with sound the
+  picture runs behind the sound. 20 ms is an untested start value: measure it with a click test and
+  correct it. 0 adds no filter.
 
 On the viewing machine, tunnel to the rigs and add a Media Source in OBS:
 
