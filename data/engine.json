@@ -23,28 +23,36 @@
  "io": {
   "jack": {
    "analog_1": [
-    "system:capture_1"
+    "system:capture_1",
+    "StemDeck-A:master_L"
    ],
    "analog_2": [
-    "system:capture_2"
+    "system:capture_2",
+    "StemDeck-A:master_R"
    ],
    "analog_3": [
-    "system:capture_3"
+    "system:capture_3",
+    "AES67 deck B:receive_MASTER_L"
    ],
    "analog_4": [
-    "system:capture_4"
+    "system:capture_4",
+    "AES67 deck B:receive_MASTER_R"
    ],
    "analog_5": [
-    "system:capture_5"
+    "system:capture_5",
+    "AES67 deck C:receive_MASTER_L"
    ],
    "analog_6": [
-    "system:capture_6"
+    "system:capture_6",
+    "AES67 deck C:receive_MASTER_R"
    ],
    "analog_7": [
-    "system:capture_7"
+    "system:capture_7",
+    "AES67 deck D:receive_MASTER_L"
    ],
    "analog_8": [
-    "system:capture_8"
+    "system:capture_8",
+    "AES67 deck D:receive_MASTER_R"
    ],
    "analog_11": [
     "system:capture_13"

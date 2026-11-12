@@ -390,3 +390,24 @@ TEST (LinkPlan, ANewerRenameOfAnotherDeckIsNotThePeer)
 
     EXPECT_EQ (plan.add, (Links { { "AES67 deck C:receive_MAIN1", "a3-engine:deckA_1" } }));
 }
+
+// An input with several peers (the card and a deck's stereo master): the peers that are in the graph are linked, the
+// absent one is skipped without a fault and named as missing.
+TEST (LinkPlan, AnAbsentPeerOnASharedInputIsSkippedTheOthersAreLinked)
+{
+    a3::links::LinkMap map;
+    map.jack["analog_1"] = { "system:capture_1", "StemDeck-A:master_L" };
+    const auto plan = planWith (map, {}, {}, rigPorts());
+    EXPECT_EQ (plan.add, (Links { { "system:capture_1", "a3-engine:analog_1" } }));
+    EXPECT_TRUE (plan.remove.empty());
+    EXPECT_EQ (plan.missingPeers, (Ports { "StemDeck-A:master_L" }));
+
+    // The deck appears: it is added beside the card, the card's link stays.
+    Ports withDeck = rigPorts();
+    withDeck.push_back ("StemDeck-A:master_L");
+    const Link card { "system:capture_1", "a3-engine:analog_1" };
+    const auto joined = planWith (map, { card }, { card }, withDeck);
+    EXPECT_EQ (joined.add, (Links { { "StemDeck-A:master_L", "a3-engine:analog_1" } }));
+    EXPECT_TRUE (joined.remove.empty());
+    EXPECT_TRUE (joined.missingPeers.empty());
+}
