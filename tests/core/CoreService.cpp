@@ -909,6 +909,9 @@ TEST (CoreService, StopFlushesStateAndEvening)
     const Socket engineSays;
     engineSays.osc (rig.port(), "/engine/hello", { pyStr ("boot-1") });
     ASSERT_TRUE (rig.engine.awaitAddress (rig.truth().address ("engine.open")).has_value());
+    // The recall that opens the engine also announces /channel/3/cue to Motion (lamp off): drain it, or
+    // the wait below can end on that and stop() can cut in before Core has read the mixer's cue.
+    rig.motion.messages (200);
     rig.mixer.osc (rig.port(), "/channel/3/gain", { pyFloat (0.375) });
     rig.mixer.osc (rig.port(), "/channel/3/cue", { pyStr ("1") });
     ASSERT_TRUE (rig.motion.awaitAddress ("/channel/3/cue").has_value());
