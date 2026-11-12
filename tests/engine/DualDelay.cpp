@@ -75,7 +75,7 @@ size_t firstEchoAt (float bpm)
 
 TEST (DualDelay, NeverListensForOscAndWritesNothingUnderHome)
 {
-    const auto fakeHome = juce::File ("/home/aaa/a3-system/wt").getChildFile ("dualdelay-home-test-" + juce::String (getpid()));
+    const auto fakeHome = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("dualdelay-home-test-" + juce::String (getpid()));
     ASSERT_TRUE (fakeHome.createDirectory().wasOk());
     const char* oldHome = std::getenv ("HOME");
     const std::string saved = oldHome != nullptr ? oldHome : "";

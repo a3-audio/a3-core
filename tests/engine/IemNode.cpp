@@ -116,7 +116,7 @@ TEST (IemNode, NeverListensForOsc)
 
 TEST (IemNode, WritesNothingUnderHome)
 {
-    const auto fakeHome = juce::File ("/home/aaa/a3-system/wt").getChildFile ("iem-node-home-test-" + juce::String (getpid()));
+    const auto fakeHome = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("iem-node-home-test-" + juce::String (getpid()));
     ASSERT_TRUE (fakeHome.createDirectory().wasOk());
     const char* oldHome = std::getenv ("HOME");
     const std::string saved = oldHome != nullptr ? oldHome : "";
