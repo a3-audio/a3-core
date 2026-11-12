@@ -2,7 +2,8 @@
 # The picture of this machine's screen as an MPEG-TS stream that OBS and the
 # pro-DJ app connect to: several viewers, one encode. ffmpeg writes to stdout
 # and the a3-core program's fan-out copies it to every viewer; ffmpeg starts with the
-# first viewer and stops 10 s after the last. No sound: OBS takes it from AES67.
+# first viewer and stops 10 s after the last. Picture only by default; with
+# A3_SCREENCAST_AUDIO=1 Core's stereo REC bus rides in the same stream.
 #
 # Settings (~/.config/a3/screencast.env, optional, read by the unit):
 #   A3_SCREENCAST_CPUS  cores for the encoder, default 0 (the audio units have 1-3)
@@ -10,17 +11,84 @@
 #   A3_SCREENCAST_CRF   quality, lower is better, default 23
 #   A3_SCREENCAST_PUSH  send to this target instead of listening, e.g. udp://<obs-host>:<port>;
 #                       OBS then listens (media source udp://@:<port>) and picks the picture up
-#                       again by itself after a restart on either side (2026-10-31)
+#                       again by itself after a restart on either side (2026-10-31). The script
+#                       waits until a route to the target exists before it starts ffmpeg.
+#   A3_SCREENCAST_AUDIO 1 = add a3-engine:rec_L/rec_R (JACK, AAC) to the same stream, default 0
+#                       (only the machine with the engine has them). The script links them itself.
+#                       Picture and sound then share one ffmpeg, so a restart cannot shift them.
+#   A3_SCREENCAST_DELAY_MS  delay the picture by this many ms (video only; against the sound
+#                       when there is any), default 20 -- an untested start value, set it with a
+#                       click test, 0 = none
 # The port is A3_SCREENCAST_PORT from osc.env, rendered from a3-osc.json.
+#
+# Modes for tests: --print-command (the ffmpeg arguments, one per line), --wait-only (just the
+# wait for the push target). Test overrides: A3_SCREENCAST_SIZE, A3_SCREENCAST_ROUTE_CHECK,
+# A3_SCREENCAST_WAIT_INTERVAL.
 set -euo pipefail
 
 : "${A3_SCREENCAST_PORT:?not set -- run a3-core --render-truth user}"
 CPUS="${A3_SCREENCAST_CPUS:-0}"
 FPS="${A3_SCREENCAST_FPS:-30}"
 CRF="${A3_SCREENCAST_CRF:-23}"
+AUDIO="${A3_SCREENCAST_AUDIO:-0}"
+DELAY_MS="${A3_SCREENCAST_DELAY_MS:-20}"
 export DISPLAY="${DISPLAY:-:0}"
 
-SIZE="$(xdpyinfo | awk '/dimensions:/ { print $2 }')"
+JACK_CLIENT=a3-screencast
+REC_PORTS=(a3-engine:rec_L a3-engine:rec_R)
+OWN_PORTS=(a3-screencast:in_1 a3-screencast:in_2)
+
+case "$DELAY_MS" in
+    ''|*[!0-9]*) echo "a3-screencast: A3_SCREENCAST_DELAY_MS must be whole milliseconds, got '$DELAY_MS'" >&2; exit 2 ;;
+esac
+
+# The host part of a push target such as udp://host:port?options.
+push_host() {
+    echo "$1" | sed -E 's|^[a-z0-9]+://([^/:?]*).*|\1|'
+}
+
+route_exists() {
+    local address
+    address="$(getent ahostsv4 "$1" | awk 'NR == 1 { print $1 }')"
+    [ -n "$address" ] || return 1
+    ${A3_SCREENCAST_ROUTE_CHECK:-ip route get} "$address" >/dev/null 2>&1
+}
+
+# ffmpeg dies with "Network is unreachable" while the target's network is down. Wait for the
+# route instead, so the unit does not restart-loop and the stream starts clean.
+wait_for_target() {
+    [ -n "${A3_SCREENCAST_PUSH:-}" ] || return 0
+    local host logged=0
+    host="$(push_host "$A3_SCREENCAST_PUSH")"
+    until route_exists "$host"; do
+        if [ "$logged" = 0 ]; then
+            echo "a3-screencast: waiting for a route to $host" >&2
+            logged=1
+        fi
+        sleep "${A3_SCREENCAST_WAIT_INTERVAL:-2}"
+    done
+}
+
+# ffmpeg's JACK input makes the ports but connects nothing. Linked here, not by hand, and every
+# 2 s again because the fan-out restarts ffmpeg with the viewers. The engine leaves them alone:
+# a3-screencast is one of the clients that link themselves (linksItself). It ends with the script:
+# exec keeps the process id, so the loop watches it.
+link_rec_bus() {
+    local parent="$1"
+    while kill -0 "$parent" 2>/dev/null; do
+        for i in 0 1; do
+            jack_connect "${REC_PORTS[$i]}" "${OWN_PORTS[$i]}" >/dev/null 2>&1 || true
+        done
+        sleep 2
+    done
+}
+
+if [ "${1:-}" = --wait-only ]; then
+    wait_for_target
+    exit 0
+fi
+
+SIZE="${A3_SCREENCAST_SIZE:-$(xdpyinfo | awk '/dimensions:/ { print $2 }')}"
 
 # The machine plays live: niced, on the core the audio units leave free (ffmpeg
 # inherits both from the fan-out). Not SCHED_IDLE: on 2026-10-17 it left the
@@ -30,16 +98,40 @@ SIZE="$(xdpyinfo | awk '/dimensions:/ { print $2 }')"
 # Latency: a short grab queue (a late grab is a fresh frame, not a queued one),
 # no muxer delay (the default held PCR 0.73 s behind the picture), every packet
 # written at once.
+# Sync: both inputs are stamped by the wall clock, so one stamp means one instant; aresample
+# async stretches or drops samples when JACK stalls instead of letting the sound slide. AAC:
+# every player reads it from MPEG-TS over UDP; mp2 would do as well.
+SOUND_IN=()
+SOUND_OUT=(-an)
+if [ "$AUDIO" = 1 ]; then
+    SOUND_IN=(-thread_queue_size 8 -use_wallclock_as_timestamps 1 -f jack -channels 2 -i "$JACK_CLIENT")
+    SOUND_OUT=(-c:a aac -b:a 128k -af aresample=async=1000)
+fi
+PICTURE_DELAY=()
+if [ "$DELAY_MS" -gt 0 ]; then
+    PICTURE_DELAY=(-vf "$(printf 'setpts=PTS+%d.%03d/TB' $(( DELAY_MS / 1000 )) $(( DELAY_MS % 1000 )))")
+fi
+
 ENCODE=(ffmpeg -hide_banner -loglevel warning -nostdin
-    -fflags nobuffer -thread_queue_size 4
+    -fflags nobuffer -thread_queue_size 4 -use_wallclock_as_timestamps 1
     -f x11grab -framerate "$FPS" -video_size "$SIZE" -draw_mouse 0 -i "$DISPLAY"
-    -an -fps_mode vfr
+    "${SOUND_IN[@]}"
+    "${SOUND_OUT[@]}" -fps_mode vfr "${PICTURE_DELAY[@]}"
     -c:v libx264 -preset veryfast -tune zerolatency -crf "$CRF" -pix_fmt yuv420p -g $(( FPS * 2 ))
     -muxdelay 0 -muxpreload 0 -flush_packets 1
     -f mpegts)
 
+case "${1:-}" in
+    --print-command) printf '%s\n' "${ENCODE[@]}"; exit 0 ;;
+esac
+
+if [ "$AUDIO" = 1 ]; then
+    link_rec_bus "$$" &
+fi
+
 if [ -n "${A3_SCREENCAST_PUSH:-}" ]; then
     # Sent, not served: ffmpeg runs all the time and writes to the target.
+    wait_for_target
     exec nice -n 19 taskset -c "$CPUS" "${ENCODE[@]}" "$A3_SCREENCAST_PUSH"
 fi
 exec nice -n 19 taskset -c "$CPUS" /usr/bin/a3-core --role screencast-fanout --port "$A3_SCREENCAST_PORT" -- \

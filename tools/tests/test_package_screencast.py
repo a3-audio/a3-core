@@ -4,14 +4,17 @@ The encoder runs on the machine that plays live, so it stays niced on the one
 core the audio units leave free, and it never uses the GPU: an encoder hung in
 a GPU reset on the rig's amdgpu on 2026-09-29.
 
-Picture only, and as fresh as possible: on 2026-10-17 OBS showed it 0.73 s to
+Picture (optionally with Core's REC bus), and as fresh as possible: on 2026-10-17 OBS showed it 0.73 s to
 1.4 s late at ~11 fps. The mpegts muxer held PCR 0.73 s behind the picture,
 idle scheduling on an audio core left the encoder waiting longer than it ran,
-and the JACK input stalled with xruns. OBS takes the sound from AES67."""
+and the JACK input stalled with xruns. The sound is optional (A3_SCREENCAST_AUDIO)."""
 
 import os
 import re
+import subprocess
 import sys
+import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -116,20 +119,17 @@ class TheScript(unittest.TestCase):
         self.assertNotIn(default, audio)
 
 
-class PictureOnly(unittest.TestCase):
-    """OBS takes the sound from AES67; a JACK input only stalled the picture."""
+class SoundOnlyOnRequest(unittest.TestCase):
+    """The default is picture only (a3nuc2 and the Pi have no engine); the sound is a setting."""
 
-    def test_it_takes_no_sound(self):
-        text = code(SCRIPT)
-        for part in ("-f jack", "-c:a", "aac"):
-            self.assertNotIn(part, text)
-        self.assertIn("-an", text.split())
-
-    def test_nothing_promises_sound(self):
+    def test_nothing_promises_sound_by_default(self):
         row = TRUTH.listener("screencast", "stream")["carries"]
         description = re.search(r"^Description=(.*)$", UNIT.read_text(), re.M).group(1)
-        for text in (row, description, SCRIPT.read_text().splitlines()[1]):
+        for text in (row, description):
             self.assertNotIn("sound", text.lower())
+
+    def test_the_header_no_longer_says_no_sound(self):
+        self.assertNotIn("No sound", SCRIPT.read_text())
 
 
 class AsFreshAsPossible(unittest.TestCase):
@@ -176,3 +176,132 @@ class APushTargetSendsInsteadOfListening(unittest.TestCase):
 
     def test_no_address_is_written_into_the_script(self):
         self.assertIsNone(re.search(r"\d+\.\d+\.\d+\.\d+", code(SCRIPT)))
+
+
+def print_command(**env):
+    """The ffmpeg command the script would run, one argument per line."""
+    full = {"PATH": os.environ["PATH"], "A3_SCREENCAST_PORT": "9930",
+            "A3_SCREENCAST_SIZE": "1920x1080", "DISPLAY": ":0"}
+    full.update(env)
+    out = subprocess.run([str(SCRIPT), "--print-command"], env=full, check=True,
+                         capture_output=True, text=True).stdout
+    return out.splitlines()
+
+
+def option(args, flag):
+    """Every value that follows the flag, in order."""
+    return [args[i + 1] for i, a in enumerate(args) if a == flag]
+
+
+class WithoutSound(unittest.TestCase):
+    def test_no_audio_input_and_an(self):
+        args = print_command()
+        self.assertEqual(1, args.count("-i"))
+        self.assertIn("-an", args)
+        self.assertNotIn("jack", option(args, "-f"))
+        self.assertNotIn("-c:a", args)
+
+    def test_off_when_set_to_zero(self):
+        self.assertIn("-an", print_command(A3_SCREENCAST_AUDIO="0"))
+
+
+class WithSound(unittest.TestCase):
+    def setUp(self):
+        self.args = print_command(A3_SCREENCAST_AUDIO="1")
+
+    def test_a_jack_input_beside_the_picture(self):
+        self.assertEqual(2, self.args.count("-i"))
+        self.assertEqual(["x11grab", "jack", "mpegts"], option(self.args, "-f"))
+        self.assertNotIn("-an", self.args)
+
+    def test_both_inputs_run_on_the_wall_clock(self):
+        self.assertEqual(["1", "1"], option(self.args, "-use_wallclock_as_timestamps"))
+
+    def test_the_jack_client_is_a_stereo_one_with_its_own_name(self):
+        i = self.args.index("jack")
+        self.assertEqual(["-channels", "2"], self.args[i + 1:i + 3])
+        self.assertEqual("a3-screencast", option(self.args, "-i")[1])
+
+    def test_a_stall_does_not_shift_the_sync(self):
+        self.assertTrue(option(self.args, "-af")[0].startswith("aresample=async="))
+
+    def test_aac_in_one_mpegts(self):
+        self.assertEqual(["aac"], option(self.args, "-c:a"))
+        self.assertEqual(1, self.args.count("mpegts"))
+        self.assertEqual("-f", self.args[-2])
+
+    def test_the_low_latency_flags_stay(self):
+        for flag, value in (("-muxdelay", "0"), ("-muxpreload", "0"), ("-flush_packets", "1")):
+            self.assertEqual([value], option(self.args, flag))
+
+    def test_the_script_links_the_rec_bus_itself(self):
+        text = code(SCRIPT)
+        for port in ("a3-engine:rec_L", "a3-engine:rec_R", "a3-screencast:in_1", "a3-screencast:in_2"):
+            self.assertIn(port, text)
+
+
+class TheVideoDelay(unittest.TestCase):
+    def filters(self, **env):
+        args = print_command(**env)
+        return option(args, "-vf")
+
+    def test_default_is_twenty_milliseconds(self):
+        self.assertEqual(["setpts=PTS+0.020/TB"], self.filters())
+
+    def test_the_setting_sets_it(self):
+        self.assertEqual(["setpts=PTS+0.150/TB"], self.filters(A3_SCREENCAST_DELAY_MS="150"))
+
+    def test_zero_adds_no_filter(self):
+        self.assertEqual([], self.filters(A3_SCREENCAST_DELAY_MS="0"))
+
+    def test_it_applies_without_sound_too(self):
+        self.assertEqual(["setpts=PTS+0.020/TB"], self.filters(A3_SCREENCAST_AUDIO="0"))
+
+    def test_a_non_number_is_refused(self):
+        full = {"PATH": os.environ["PATH"], "A3_SCREENCAST_PORT": "9930",
+                "A3_SCREENCAST_SIZE": "1x1", "A3_SCREENCAST_DELAY_MS": "soon"}
+        run = subprocess.run([str(SCRIPT), "--print-command"], env=full, capture_output=True, text=True)
+        self.assertNotEqual(0, run.returncode)
+
+
+class WaitingForThePushTarget(unittest.TestCase):
+    """A fake route check stands in for `ip route get`; it fails twice, then the target is reachable."""
+
+    def run_wait(self, target, fails):
+        with tempfile.TemporaryDirectory() as tmp:
+            counter = Path(tmp) / "n"
+            check = Path(tmp) / "check"
+            check.write_text(
+                "#!/bin/sh\n"
+                f'echo "$1" >> {tmp}/asked\n'
+                f'n=$(cat {counter} 2>/dev/null || echo 0); echo $((n+1)) > {counter}\n'
+                f'[ "$n" -ge {fails} ]\n')
+            check.chmod(0o755)
+            env = {"PATH": os.environ["PATH"], "A3_SCREENCAST_PORT": "9930",
+                   "A3_SCREENCAST_PUSH": target, "A3_SCREENCAST_ROUTE_CHECK": str(check),
+                   "A3_SCREENCAST_WAIT_INTERVAL": "0.05"}
+            start = time.monotonic()
+            run = subprocess.run([str(SCRIPT), "--wait-only"], env=env, capture_output=True,
+                                 text=True, timeout=20)
+            asked = (Path(tmp) / "asked").read_text().split()
+            return run, asked, time.monotonic() - start
+
+    def test_it_polls_until_the_route_exists_and_logs_once(self):
+        run, asked, _ = self.run_wait("udp://10.1.2.3:5000?pkt_size=1316", 3)
+        self.assertEqual(0, run.returncode, run.stderr)
+        self.assertEqual(4, len(asked))
+        self.assertEqual({"10.1.2.3"}, set(asked))
+        self.assertEqual(1, run.stderr.count("waiting"))
+
+    def test_a_reachable_target_does_not_wait_or_log(self):
+        run, asked, _ = self.run_wait("udp://10.1.2.3:5000", 0)
+        self.assertEqual(1, len(asked))
+        self.assertNotIn("waiting", run.stderr)
+
+    def test_no_push_target_means_no_waiting(self):
+        env = {"PATH": os.environ["PATH"], "A3_SCREENCAST_PORT": "9930"}
+        run = subprocess.run([str(SCRIPT), "--wait-only"], env=env, capture_output=True, text=True, timeout=5)
+        self.assertEqual(0, run.returncode)
+
+    def test_the_unit_still_restarts_ffmpeg_dying_later(self):
+        self.assertIn("Restart=always", UNIT.read_text())
