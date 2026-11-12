@@ -10,6 +10,7 @@
 #include "AppTruth.h"
 #include "ConfigFile.h"
 #include "ConnectionPlan.h"
+#include "DeckAudioReport.h"
 #include "EngineFixture.h"
 #include "EnginePorts.h"
 #include "SpatialTestData.h"
@@ -355,4 +356,40 @@ TEST (DefaultConfig, LeavesTheRoundTripLoopFree)
         EXPECT_EQ (config.io.jack.count (port), 0u) << port;
     EXPECT_EQ (config.io.jack.at ("analog_11"), std::vector<std::string> { "system:capture_13" });
     EXPECT_EQ (config.io.jack.at ("analog_12"), std::vector<std::string> { "system:capture_14" });
+}
+
+// A deck in stereo mode sends one master pair; it lands on the analog inputs of its channel (deck n -> analog 2n-1/2n), added
+// to what the card delivers there. A peer that is not in the graph is skipped, so the entries cost nothing in B-format mode.
+TEST (DefaultConfig, AStereoDeckLandsOnTheAnalogInputsOfItsChannel)
+{
+    const auto config = loadDefault();
+    const std::string clients[] = { "StemDeck-A", "AES67 deck B", "AES67 deck C", "AES67 deck D" };
+    for (int channel = 1; channel <= 4; ++channel)
+    {
+        const auto& client = clients[channel - 1];
+        const bool local = channel == 1;
+        for (const int side : { 0, 1 })
+        {
+            const auto analog = 2 * channel - 1 + side;
+            const std::string sides[] = { "L", "R" };
+            const auto deckPeer = client + ":" + (local ? "master_" : "receive_MASTER_") + sides[side];
+            const auto card = "system:capture_" + std::to_string (analog);
+            EXPECT_EQ (config.io.jack.at ("analog_" + std::to_string (analog)), (std::vector<std::string> { card, deckPeer }))
+                << "analog_" << analog << ": the card first, the deck added";
+        }
+    }
+}
+
+// The deck-audio light counts the deck's own deckX_ ports; the analog entries must not move it.
+TEST (DefaultConfig, TheStereoPeersAreNotDeckLinks)
+{
+    const auto config = loadDefault();
+    for (const auto& [port, peers] : config.io.jack)
+        if (startsWith (port, "deck"))
+            for (const auto& peer : peers)
+                EXPECT_EQ (peer.find ("MASTER"), std::string::npos) << port << " -> " << peer;
+    // Every deck slot is complete with only its own ports present, whatever the analog peers' state.
+    const auto map = static_cast<const a3app::IoMap&> (config.io);
+    std::vector<std::string> missing { "StemDeck-A:master_L", "StemDeck-A:master_R", "AES67 deck B:receive_MASTER_L" };
+    EXPECT_EQ (a3app::deckAudioLinked (map, 4, missing), a3app::deckAudioLinked (map, 4, {}));
 }
