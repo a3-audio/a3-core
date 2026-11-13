@@ -247,3 +247,33 @@ TEST (DeckAudioReport, TheModesReachTheEnginesControls)
     a3app::applyDeckModes (status, map, 2, controls);
     EXPECT_FALSE (controls.isDeckStereo (1));
 }
+
+// The same modes reach Core as /engine/deck/{k}/stereo, so Core treats a channel on a stereo deck as analog.
+TEST (DeckAudioReport, TheModesReachCoreWithTheHello)
+{
+    using Lines = std::vector<std::string>;
+    std::vector<juce::OSCMessage> toCore;
+    a3app::EngineHost host { a3test::engineConfig (4, 2), a3test::loadedSpatialConfig (a3test::shippedSpatialDirectory),
+                             a3apptest::engineTruth(), [&] (const juce::OSCMessage& m) { toCore.push_back (m); } };
+    a3app::IoMap map;
+    a3app::setDeckSource (map, 1, a3app::DeckSource::local);
+    a3app::setDeckSource (map, 2, a3app::DeckSource::local);
+    a3app::BackendStatus status;
+    status.connecting = true;
+    for (const auto& peer : bformatPeers (1, a3app::DeckSource::local))   // A in stereo
+        status.missingPeers.push_back (peer);
+    host.controlTick (0.0);
+    toCore.clear();
+
+    a3app::reportDeckModes (status, map, 2, host);
+    EXPECT_TRUE (toCore.empty()) << "nothing before the first link plan";
+
+    status.linksPlanned = true;
+    a3app::reportDeckModes (status, map, 2, host);
+    EXPECT_EQ (said (toCore), (Lines { "/engine/deck/1/stereo 1", "/engine/deck/2/stereo 0" }));
+
+    toCore.clear();
+    status.missingPeers.clear();   // A back in B-format
+    a3app::reportDeckModes (status, map, 2, host);
+    EXPECT_EQ (said (toCore), (Lines { "/engine/deck/1/stereo 0" }));
+}

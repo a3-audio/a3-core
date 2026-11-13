@@ -55,6 +55,7 @@ public:
     a3::EngineControls& controls();
     juce::String bootId() const;
     void setDeckAudio (const std::vector<bool>& linked);   // control thread; see HelloSender
+    void setDeckStereo (const std::vector<bool>& stereo);   // control thread; see HelloSender
     const a3::EngineConfig& engineConfig() const;     // what every rebuilt Engine is built from
     const a3::SpatialConfig& spatialConfig() const;   // (the backend names its ports after them)
 

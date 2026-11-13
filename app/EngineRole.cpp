@@ -107,6 +107,8 @@ public:
         reportDeckAudio (backend->status(), data.config.io, data.config.engine.decks, *host);
         // The same links tell the engine which decks send one stereo pair (StemDeck's Output: Stereo).
         applyDeckModes (backend->status(), data.config.io, data.config.engine.decks, host->controls());
+        // And Core, so that a channel on a stereo deck is controlled as an analog one.
+        reportDeckModes (backend->status(), data.config.io, data.config.engine.decks, *host);
     }
 
     bool lost() const

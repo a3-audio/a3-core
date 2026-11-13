@@ -237,6 +237,16 @@ TEST_F (EngineOsc, ATruthWithoutDeckAudioStillParsesAndSaysSo)
     EXPECT_TRUE (a3app::truthNote (*old).contains ("engine.deck-audio"));
 }
 
+TEST_F (EngineOsc, ATruthWithoutDeckStereoStillParses)
+{
+    EXPECT_EQ (engineTruth().deckStereoPattern, "/engine/deck/{deck}/stereo");
+
+    juce::String error;
+    const auto old = a3app::parseEngineTruth (a3apptest::truthText().replace ("\"engine.deck-stereo\"", "\"engine.deck-other\""), error);
+    ASSERT_TRUE (old.has_value()) << error;
+    EXPECT_TRUE (old->deckStereoPattern.isEmpty());
+}
+
 // The brief's list in one place; the tests after it go through each kind in turn.
 TEST_F (EngineOsc, GarbageIsRefusedOrClamped)
 {

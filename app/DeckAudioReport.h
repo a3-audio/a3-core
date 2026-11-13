@@ -30,6 +30,10 @@ std::vector<DeckMode> deckModes (const IoMap&, int decks, const std::vector<std:
 // per block. Nothing changes while deckAudioReport has nothing (no links made, or none planned yet).
 void applyDeckModes (const BackendStatus&, const IoMap&, int decks, a3::EngineControls&);
 
+// The control tick's step after applyDeckModes: the same modes to the host's hello, which sends them to Core
+// (engine.deck-stereo) with every hello and at once on a change. Nothing before the first link plan.
+void reportDeckModes (const BackendStatus&, const IoMap&, int decks, EngineHost&);
+
 // What the control tick tells Core: nothing (nullopt) while the backend makes no links or has not
 // planned them yet, because an empty missingPeers before the first plan would read as "all live".
 std::optional<std::vector<bool>> deckAudioReport (const BackendStatus&, const IoMap&, int decks);
