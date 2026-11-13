@@ -109,6 +109,16 @@ TEST (LinksOverview, StemDeckSlotsAreNamedAndItsDeckPortsExplained)
     EXPECT_TRUE (hasLine (text, "  cue 1–9      → deck A cue 1–9  (cue)")) << text;
 }
 
+// A deck in Output: Stereo feeds the slot's own stereo pair, and the line says so.
+TEST (LinksOverview, ADecksStereoPairIsCalledStereo)
+{
+    Graph graph;
+    graph.link ("StemDeck-A:master_L", "a3-engine:deckA_stereo_L");
+    graph.link ("StemDeck-A:master_R", "a3-engine:deckA_stereo_R");
+    const auto text = show (graph);
+    EXPECT_TRUE (hasLine (text, "  master L/R → deck A stereo L/R (stereo)")) << text;
+}
+
 // Deck C reads like deck A, and an AES67 stream into deck D names its slot the same way.
 TEST (LinksOverview, DecksCAndDReadLikeAAndB)
 {
