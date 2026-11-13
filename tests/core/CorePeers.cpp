@@ -1160,14 +1160,7 @@ TEST (CorePeers, EngineModeProdjLiveReachesEveryDeckOnce)
 namespace
 {
 // The recorded B0 truth with the one word it predates, taken from the package's truth.
-Truth b0WithDeckAudio()
-{
-    juce::String error;
-    auto data = parseJson (juce::JSON::toString (b0::truth().data()), error);
-    const auto packaged = std::get<Truth> (Truth::load (juce::File (A3_PACKAGE_TRUTH), std::nullopt)).data();
-    data["addresses"].getDynamicObject()->setProperty ("engine.deck-audio", packaged["addresses"]["engine.deck-audio"]);
-    return Truth (data);
-}
+Truth b0WithDeckAudio() { return b0::withPackagedWords ({ "engine.deck-audio" }); }
 }
 
 TEST (CorePeers, EngineDeckAudioReachesTheDeckSelector)

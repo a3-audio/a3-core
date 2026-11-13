@@ -166,6 +166,7 @@ private:
     void deviceVersion (const Endpoint& from, const OscMessage& message);
     void deckHello (const Endpoint& from, const OscMessage& message);
     void engineDeckAudio (const Endpoint& from, const OscMessage& message);
+    void engineDeckStereo (const Endpoint& from, const OscMessage& message);
     void recall (const Endpoint& from, const OscMessage& message);
     void beatHandler (const Endpoint& from, const OscMessage& message);
     void deckTempo (const Endpoint& from, const OscMessage& message);

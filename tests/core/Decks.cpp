@@ -260,6 +260,49 @@ TEST (Decks, AbsentDeckKeepsItsChannel)
     EXPECT_EQ (s.channelOf (1), std::optional<int> (1));
 }
 
+// TheStereoDecks: a deck in stereo plays through its channel's analog strip, so the channel acts as analog.
+
+TEST (Decks, ADeckIsBFormatUntilTheEngineSaysStereo)
+{
+    DeckSelector s (4, 2);
+    EXPECT_FALSE (s.stereo (1));
+    EXPECT_TRUE (s.heardStereo (1, true));
+    EXPECT_TRUE (s.stereo (1));
+    EXPECT_FALSE (s.stereo (2));
+}
+
+TEST (Decks, OnlyAChangedStereoReportCounts)
+{
+    DeckSelector s (4, 2);
+    EXPECT_FALSE (s.heardStereo (1, false));   // B-format was already assumed
+    EXPECT_TRUE (s.heardStereo (1, true));
+    EXPECT_FALSE (s.heardStereo (1, true));
+    EXPECT_TRUE (s.heardStereo (1, false));
+    EXPECT_FALSE (s.stereo (1));
+}
+
+TEST (Decks, AnAnalogChannelAndAChannelOnAStereoDeckActAsAnalog)
+{
+    DeckSelector s (4, 2);
+    pick (s, 1, 1);
+    pick (s, 2, 2);
+    s.heardStereo (2, true);
+    EXPECT_FALSE (s.actsAnalog (1));   // deck 1 in B-format: StemDeck places it
+    EXPECT_TRUE (s.actsAnalog (2));
+    EXPECT_TRUE (s.actsAnalog (3));
+    EXPECT_TRUE (s.deckChannel (2));   // still a deck on it, as the desk and Motion read it
+}
+
+TEST (Decks, TheModeFollowsTheDeckNotTheChannel)
+{
+    DeckSelector s (4, 2);
+    s.heardStereo (1, true);
+    pick (s, 3, 1);
+    EXPECT_TRUE (s.actsAnalog (3));
+    s.heardStereo (1, false);
+    EXPECT_FALSE (s.actsAnalog (3));
+}
+
 // OnDisk
 
 TEST (Decks, RoundTrip)

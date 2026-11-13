@@ -14,7 +14,7 @@ const std::set<std::string> sentAsTheyArrived {
     "master.phones-volume", "master.aux-return",
 };
 
-// A deck channel's own 3D and filter go to the deck or nowhere, never to the engine's analog path.
+// The 3D and filter of a channel on a B-format deck go to the deck or nowhere, never to the engine's analog path.
 const std::set<std::string> notForDeckChannels { "channel.3d", "channel.filter.frequency", "channel.filter.q" };
 
 int wire (int channelIndex) { return channelIndex + 1; }
@@ -36,7 +36,7 @@ void addPositions (const Truth& truth, const std::vector<ChannelInfo>& channels,
 {
     for (size_t index = 0; index < channels.size(); ++index)
     {
-        if (selector.deckChannel (wire (static_cast<int> (index))))
+        if (! selector.actsAnalog (wire (static_cast<int> (index))))
             continue;
         if (channels[index].azimuth)
             out.push_back (positionMessage (truth, Position::azimuth, static_cast<int> (index), *channels[index].azimuth));
@@ -59,7 +59,7 @@ std::vector<Message> engineChannelMessages (const Truth& truth, const DeckSelect
                                             const std::map<std::string, int>& fields, double value)
 {
     const auto channel = fields.find ("ch");
-    if (notForDeckChannels.count (key) && channel != fields.end() && selector.deckChannel (channel->second))
+    if (notForDeckChannels.count (key) && channel != fields.end() && ! selector.actsAnalog (channel->second))
         return {};
     return forwardMessages (truth, key, fields, value);
 }

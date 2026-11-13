@@ -76,6 +76,21 @@ int DeckSelector::source (int channel) const { return sources[static_cast<size_t
 
 bool DeckSelector::deckChannel (int channel) const { return source (channel) != analog; }
 
+bool DeckSelector::heardStereo (int deck, bool isStereo)
+{
+    if (isStereo == stereo (deck))
+        return false;
+    if (isStereo)
+        stereoDecks.insert (deck);
+    else
+        stereoDecks.erase (deck);
+    return true;
+}
+
+bool DeckSelector::stereo (int deck) const { return stereoDecks.count (deck) != 0; }
+
+bool DeckSelector::actsAnalog (int channel) const { return ! deckChannel (channel) || stereo (source (channel)); }
+
 std::optional<int> DeckSelector::channelOf (int deck) const
 {
     for (int channel = 1; channel <= channelCount; ++channel)

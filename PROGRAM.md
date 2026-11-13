@@ -57,7 +57,11 @@ libraries JUCE would `dlopen` for a window are not needed.
   B-format channels through the 16-channel deck strip: TRIM, EQ, filter, VOLUME). Analog ↔ deck
   crossfades over 10 ms, deck ↔ deck dips out and in. A path at gain 0 is not processed and is reset
   before it fades in (R14), the analog strip included. A channel without an analog pair is deck-only
-  and has no encoder source (R10). Positions, 3D, FREQ and Q do nothing on a deck channel.
+  and has no encoder source (R10). Positions, 3D, FREQ and Q do nothing on a deck channel, except on a
+  deck in stereo (StemDeck's Output: Stereo): its pair runs through the analog strip, the engine reports
+  the mode to Core (`engine.deck-stereo`), and Core sends that channel's position, 3D, FREQ and Q as for
+  an analog one and tells the devices (`stemdeck.stereo`). The values are the channel's, whatever plays:
+  when it turns analog again (a pick, or the deck's mode changing) Core first sends its current ones.
 - **Buses.** `enc_main`, `enc_fx` (AUX, into IEM's DualDelay) and `enc_phones` (cue pre-VOLUME, mix
   post-VOLUME), order 3. A deck's 16 post-VOLUME channels are added to `enc_main` directly and, times the
   channel's AUX send (post-fader, like an analog channel's), to `enc_fx`. Its 16-channel `aux` bus

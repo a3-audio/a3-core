@@ -192,7 +192,12 @@ std::string categoryOf (const Connection& link, const a3::EngineConfig& engine)
     if (own.base == "rec")
         return other.base == "bpm" ? "tempo" : "recording";
     if (startsWith (own.base, "deck "))
-        return own.base.find (" cue") != std::string::npos ? "cue" : own.base.find (" aux") != std::string::npos ? "aux" : "B-format";
+    {
+        for (const char* group : { "cue", "aux", "stereo" })
+            if (own.base.find (std::string (" ") + group) != std::string::npos)
+                return group;
+        return "B-format";
+    }
     if (startsWith (own.base, "ch") && own.number == 0 && (own.base.find ("_pre") != std::string::npos || own.base.find ("_post") != std::string::npos))
         return "channel tap";
     return "";

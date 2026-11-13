@@ -101,3 +101,40 @@ TEST (HelloSender, AnOldTruthWithoutDeckAudioSendsOnlyTheHello)
     ASSERT_EQ (sent.size(), 1u);
     EXPECT_EQ (sent[0].getAddressPattern().toString(), "/engine/hello");
 }
+
+TEST (HelloSender, SendsEachDecksStereoModeWithEachHelloAndOnChange)
+{
+    std::vector<juce::OSCMessage> sent;
+    a3app::HelloSender hello (a3apptest::engineTruth(), [&] (const juce::OSCMessage& m) { sent.push_back (m); });
+    hello.setDeckStereo ({ true, false });
+    EXPECT_TRUE (sent.empty()) << "nothing goes out before the first hello";
+
+    hello.tick (0.0);
+    ASSERT_EQ (sent.size(), 3u) << "one hello and one mode per deck";
+    EXPECT_EQ (sent[1].getAddressPattern().toString(), "/engine/deck/1/stereo");
+    EXPECT_EQ (sent[2].getAddressPattern().toString(), "/engine/deck/2/stereo");
+    ASSERT_TRUE (sent[1][0].isInt32());
+    EXPECT_EQ (sent[1][0].getInt32(), 1);
+    EXPECT_EQ (sent[2][0].getInt32(), 0);
+
+    sent.clear();
+    hello.setDeckStereo ({ true, false });
+    EXPECT_TRUE (sent.empty()) << "no change, no message";
+    hello.setDeckStereo ({ false, false });
+    ASSERT_EQ (sent.size(), 1u) << "only the deck that changed, before the next hello";
+    EXPECT_EQ (sent[0].getAddressPattern().toString(), "/engine/deck/1/stereo");
+    EXPECT_EQ (sent[0][0].getInt32(), 0);
+}
+
+TEST (HelloSender, AnOldTruthWithoutDeckStereoSendsNoMode)
+{
+    auto truth = a3apptest::engineTruth();
+    truth.deckStereoPattern.clear();
+    std::vector<juce::OSCMessage> sent;
+    a3app::HelloSender hello (truth, [&] (const juce::OSCMessage& m) { sent.push_back (m); });
+    hello.setDeckStereo ({ true });
+    hello.tick (0.0);
+    hello.setDeckStereo ({ false });
+    ASSERT_EQ (sent.size(), 1u);
+    EXPECT_EQ (sent[0].getAddressPattern().toString(), "/engine/hello");
+}

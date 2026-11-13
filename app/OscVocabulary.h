@@ -38,6 +38,7 @@ struct EngineTruth : a3bench::Truth
     juce::String coreHost;        // "core.osc"'s host; a wildcard listener is reached on loopback, as Core's endpoint()
     juce::String helloAddress;    // "engine.hello"
     juce::String deckAudioPattern;   // "engine.deck-audio", "{deck}" still in it; empty in a truth without the key
+    juce::String deckStereoPattern;  // "engine.deck-stereo", the same way
     int vuRelayPort = -1;         // "core.vu-relay": where the engine's /vu bundles go (O13); -1: none in this truth
     juce::String vuRelayHost;     // its host, a wildcard reached on loopback
     int controlPort = -1;         // "engine.control": where the window reaches the engine (loopback, HTTP); -1: none in this truth

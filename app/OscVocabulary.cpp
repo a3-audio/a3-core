@@ -236,6 +236,9 @@ std::optional<EngineTruth> parseEngineTruth (const juce::String& json, juce::Str
     truth.deckAudioPattern = addresses["engine.deck-audio"]["pattern"].toString();   // an older truth has none: no reports then
     if (! truth.deckAudioPattern.contains ("{deck}"))
         truth.deckAudioPattern.clear();
+    truth.deckStereoPattern = addresses["engine.deck-stereo"]["pattern"].toString();   // an older truth has none: no modes then
+    if (! truth.deckStereoPattern.contains ("{deck}"))
+        truth.deckStereoPattern.clear();
     truth.corePort = a3bench::listenerPort (root, "core.osc");
     truth.coreHost = a3bench::listenerHostAddress (root, "core.osc");
     if (truth.coreHost == root["hosts"]["any"].toString())   // a wildcard listener is reached on loopback (a3_osc endpoint)

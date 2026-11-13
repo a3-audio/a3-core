@@ -87,6 +87,17 @@ void applyDeckModes (const BackendStatus& status, const IoMap& map, int decks, a
         controls.setDeckStereo ((int) index + 1, modes[index] == DeckMode::stereo);
 }
 
+void reportDeckModes (const BackendStatus& status, const IoMap& map, int decks, EngineHost& host)
+{
+    const auto missing = plannedMissingPeers (status);
+    if (! missing)
+        return;
+    std::vector<bool> stereo;
+    for (const auto mode : deckModes (map, decks, *missing))
+        stereo.push_back (mode == DeckMode::stereo);
+    host.setDeckStereo (stereo);
+}
+
 std::vector<bool> deckAudioLinked (const IoMap& map, int decks, const std::vector<std::string>& missingPeers)
 {
     std::vector<bool> linked;

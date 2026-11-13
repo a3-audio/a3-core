@@ -56,6 +56,13 @@ public:
 
     int source (int channel) const;
     bool deckChannel (int channel) const;
+    // The engine's word on what deck k sends, as its links show it (engine.deck-stereo): one stereo pair, or
+    // B-format, which is what a deck is until the engine says otherwise. True when it changed the mode.
+    bool heardStereo (int deck, bool stereo);
+    bool stereo (int deck) const;
+    // Whether the channel plays through the engine's analog strip: the analog input, or a deck in stereo. Such a
+    // channel takes position, 3D, FREQ and Q as an analog one; a B-format deck is placed by StemDeck.
+    bool actsAnalog (int channel) const;
     std::optional<int> channelOf (int deck) const;
 
     void heard (int deck, double now);
@@ -86,6 +93,7 @@ private:
     std::vector<int> sources, cursors;
     std::map<int, double> lastHeard;
     std::map<int, std::pair<bool, double>> audioReports;
+    std::set<int> stereoDecks;
     std::set<int> heldBefore;
 };
 }

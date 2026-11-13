@@ -751,6 +751,26 @@ class TheDeckStreams(unittest.TestCase):
                          ("engine.deck-audio", {"deck": 2}))
         self.assertIsNone(self.truth.match("/engine/deck/5/audio"))
 
+    def test_engine_deck_stereo_is_engine_to_core(self):
+        """The engine tells Core what each deck slot sends (StemDeck's Output),
+        as its links show it: a channel on a stereo deck acts as analog."""
+        self.assertIn("engine.deck-stereo", self.truth.addresses())
+        entry = self.truth.addresses()["engine.deck-stereo"]
+        self.assertEqual((entry["pattern"], entry["args"], entry["deck"],
+                          entry["from"], entry["to"]),
+                         ("/engine/deck/{deck}/stereo", "i", [1, 4], ["engine"], ["core"]))
+        self.assertEqual(self.truth.match("/engine/deck/2/stereo"),
+                         ("engine.deck-stereo", {"deck": 2}))
+
+    def test_core_tells_the_devices_which_decks_are_stereo(self):
+        self.assertIn("stemdeck.stereo", self.truth.addresses())
+        entry = self.truth.addresses()["stemdeck.stereo"]
+        self.assertEqual((entry["pattern"], entry["args"], entry["deck"], entry["from"]),
+                         ("/stemdeck/{deck}/stereo", "i", [1, 4], ["core"]))
+        for receiver in ("mixer", "desk", "motion"):
+            self.assertIn(receiver, entry["to"])
+        self.assertIn("engine.deck-stereo", entry["meaning"])
+
     def test_present_means_hello_and_audio(self):
         """Since C2c (R11) Core says 0 while the engine reports the deck's audio
         missing, not only when its hello is stale."""

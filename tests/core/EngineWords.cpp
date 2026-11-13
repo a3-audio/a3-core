@@ -148,6 +148,17 @@ TEST (EngineWords, DeckChannelsSendNoPositionsThreeDFreqQToTheEngine)
         EXPECT_EQ (engineChannelMessages (truth(), s, key, { { "ch", 2 } }, 0.5).size(), 1u) << key;
 }
 
+TEST (EngineWords, AChannelOnAStereoDeckSendsPositionThreeDFreqQLikeAnalog)
+{
+    auto s = selectorWith ({ 0, 1, 2, 0 });
+    s.heardStereo (1, true);
+    for (const char* key : { "channel.3d", "channel.filter.frequency", "channel.filter.q" })
+    {
+        EXPECT_EQ (engineChannelMessages (truth(), s, key, { { "ch", 2 } }, 0.5).size(), 1u) << key;   // stereo deck 1
+        EXPECT_TRUE (engineChannelMessages (truth(), s, key, { { "ch", 3 } }, 0.5).empty()) << key;   // B-format deck 2
+    }
+}
+
 TEST (EngineWords, MasterWordsPassThroughTheChannelWrapper)
 {
     EXPECT_EQ (engineChannelMessages (truth(), DeckSelector (4, 2), "master.booth", {}, 0.3),
@@ -203,6 +214,18 @@ TEST (EngineWords, DeckChannelsHaveNoPositionsInTheState)
     for (const auto& message : got)
         EXPECT_FALSE (startsWith (message.first, "/channel/2/") && mentionsPosition (message.first)) << message.first;
     EXPECT_TRUE (contains (got, { "/channel/1/azimuth", pyFloat (5.0) }));
+}
+
+TEST (EngineWords, AChannelOnAStereoDeckHasItsPositionInTheState)
+{
+    auto chans = channels();
+    for (auto& c : chans)
+        c.azimuth = c.elevation = 5.0;
+    auto s = selectorWith ({ 0, 1, 0, 0 });
+    s.heardStereo (1, true);
+    const auto got = stateMessages (truth(), chans, master(), s, std::nullopt);
+    EXPECT_TRUE (contains (got, { "/channel/2/azimuth", pyFloat (5.0) }));
+    EXPECT_TRUE (contains (got, { "/channel/2/elevation", pyFloat (5.0) }));
 }
 
 // Words_in_the_truth
