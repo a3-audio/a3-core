@@ -37,7 +37,8 @@ const std::set<std::string>& forwarded();
 // `value` as a float, if `key` is one of the forwarded words.
 std::vector<Message> forwardMessages (const Truth& truth, const std::string& key, const std::map<std::string, int>& fields, double value);
 
-// The same, except that a deck channel's own 3D and filter go to the deck or nowhere, never to the engine's analog path.
+// The same, except that the 3D and filter of a channel on a B-format deck go to the deck or nowhere, never to the
+// engine's analog path. A channel on a stereo deck plays through that path and takes them as an analog one.
 std::vector<Message> engineChannelMessages (const Truth& truth, const DeckSelector& selector, const std::string& key,
                                             const std::map<std::string, int>& fields, double value);
 

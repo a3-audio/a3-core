@@ -291,6 +291,9 @@ void Core::reportDecks (bool full)
                                pyInt (decks.ring (channel)[static_cast<size_t> (decks.cursor (channel))]));
     for (int deck = 1; deck <= decks.decks(); ++deck)
         messages.emplace_back (truth.address ("stemdeck.present", { { "deck", deck } }), pyInt (decks.present (deck, now) ? 1 : 0));
+    if (truth.hasAddress ("stemdeck.stereo"))
+        for (int deck = 1; deck <= decks.decks(); ++deck)
+            messages.emplace_back (truth.address ("stemdeck.stereo", { { "deck", deck } }), pyInt (decks.stereo (deck) ? 1 : 0));
     for (const auto& [address, value] : messages)
     {
         const OscMessage message { address, { value } };
@@ -364,6 +367,10 @@ void Core::mapHandlers()
     if (truth.hasAddress ("engine.deck-audio"))
         for (int deck = firstDeck; deck <= lastDeck; ++deck)
             dispatcher.map (truth.address ("engine.deck-audio", { { "deck", deck } }), to (&Core::engineDeckAudio));
+    // Nor did it know the decks' stereo mode: without the word every deck is B-format, as before.
+    if (truth.hasAddress ("engine.deck-stereo"))
+        for (int deck = firstDeck; deck <= lastDeck; ++deck)
+            dispatcher.map (truth.address ("engine.deck-stereo", { { "deck", deck } }), to (&Core::engineDeckStereo));
     // Nor did it know the decks' tempo; without the word the delay follows the beat clock alone.
     if (truth.hasAddress ("stemdeck.tempo"))
     {

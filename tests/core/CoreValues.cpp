@@ -662,6 +662,101 @@ TEST (CoreValues, ADeckArrivingSendsTheEngineNoAnalogState)
     EXPECT_EQ (rig.to ("engine"), (std::vector<std::string> { "/channel/3/source i:1" }));
 }
 
+//==============================================================================
+// A stereo deck plays through its channel's analog strip: the channel takes its position, 3D, FREQ and Q as an
+// analog one does. Its source still says the deck.
+
+namespace
+{
+const Truth& stereoTruth()
+{
+    static const auto truth = b0::withPackagedWords ({ "engine.deck-stereo", "stemdeck.stereo" });
+    return truth;
+}
+
+CoreRig::Options withStereoTruth()
+{
+    CoreRig::Options options;
+    options.truth = &stereoTruth();
+    return options;
+}
+
+void engineSaysDeck1Is (CoreRig& rig, bool stereo) { rig.osc (rig.engine, "/engine/deck/1/stereo", { pyInt (stereo ? 1 : 0) }); }
+}
+
+TEST (CoreValues, AChannelOnAStereoDeckGetsPositionAnd3dLikeAnalog)
+{
+    CoreRig rig (CoreRig::WithOptions {}, withStereoTruth());
+    engineSaysDeck1Is (rig, true);
+    putDeckOnChannel3 (rig);
+    EXPECT_TRUE (has (rig.to ("motion"), "/channel/3/source i:1"));   // the desk and Motion still read D1 / DECK A
+    rig.clear();
+    rig.osc (rig.desk, "/channel/3/3d", { pyFloat (0.9) });
+    rig.osc (rig.desk, "/channel/3/filter/q", { pyFloat (0.5) });
+    rig.osc (rig.desk, "/channel/3/azimuth", { pyFloat (10.0) });
+    EXPECT_EQ (rig.to ("engine"), (std::vector<std::string> { "/channel/3/3d f:0.9", "/channel/3/filter/q f:0.5", "/channel/3/azimuth f:10" }));
+    EXPECT_TRUE (rig.to ("stemdeck-A").empty());
+}
+
+TEST (CoreValues, AChannelOnABFormatDeckGetsNoneOfThem)
+{
+    CoreRig rig (CoreRig::WithOptions {}, withStereoTruth());
+    engineSaysDeck1Is (rig, false);
+    putDeckOnChannel3 (rig);
+    rig.clear();
+    rig.osc (rig.desk, "/channel/3/3d", { pyFloat (0.9) });
+    rig.osc (rig.desk, "/channel/3/filter/q", { pyFloat (0.5) });
+    rig.osc (rig.desk, "/channel/3/azimuth", { pyFloat (10.0) });
+    EXPECT_TRUE (rig.to ("engine").empty());
+}
+
+TEST (CoreValues, PickingAStereoDeckBringsTheAnalogPathUpToDate)
+{
+    CoreRig rig (CoreRig::WithOptions {}, withStereoTruth());
+    engineSaysDeck1Is (rig, true);
+    putDeckOnChannel3 (rig);
+    EXPECT_EQ (rig.to ("engine"), (std::vector<std::string> { "/channel/3/source i:1", "/channel/3/filter/frequency f:0.25",
+                                                               "/channel/3/filter/q f:0.75", "/channel/3/azimuth f:40",
+                                                               "/channel/3/elevation f:-10" }));
+}
+
+TEST (CoreValues, ADeckTurningStereoOnItsChannelGetsTheChannelsCurrentState)
+{
+    CoreRig rig (CoreRig::WithOptions {}, withStereoTruth());
+    putDeckOnChannel3 (rig);   // B-format: nothing of the analog state goes
+    rig.osc (rig.desk, "/channel/3/azimuth", { pyFloat (-60.0) });   // kept, not sent, while StemDeck places the deck
+    rig.clear();
+    engineSaysDeck1Is (rig, true);
+    EXPECT_EQ (rig.to ("engine"), (std::vector<std::string> { "/channel/3/filter/frequency f:0.25", "/channel/3/filter/q f:0.75",
+                                                               "/channel/3/azimuth f:-60", "/channel/3/elevation f:-10" }));
+    EXPECT_TRUE (has (rig.to ("motion"), "/stemdeck/1/stereo i:1"));
+    rig.clear();
+    engineSaysDeck1Is (rig, true);   // the same report with the next hello: nothing again
+    EXPECT_TRUE (rig.to ("engine").empty());
+}
+
+TEST (CoreValues, ADeckBackInBFormatTakesTheChannelOffTheAnalogPathAgain)
+{
+    CoreRig rig (CoreRig::WithOptions {}, withStereoTruth());
+    engineSaysDeck1Is (rig, true);
+    putDeckOnChannel3 (rig);
+    engineSaysDeck1Is (rig, false);
+    EXPECT_TRUE (has (rig.to ("motion"), "/stemdeck/1/stereo i:0"));
+    rig.clear();
+    rig.osc (rig.desk, "/channel/3/azimuth", { pyFloat (10.0) });
+    EXPECT_TRUE (rig.to ("engine").empty());
+}
+
+TEST (CoreValues, AFullReportTellsEveryDecksMode)
+{
+    CoreRig rig (CoreRig::WithOptions {}, withStereoTruth());
+    engineSaysDeck1Is (rig, true);
+    rig.clear();
+    rig.osc (rig.motion, "/state/recall", { pyInt (1) });
+    EXPECT_TRUE (has (rig.to ("motion"), "/stemdeck/1/stereo i:1"));
+    EXPECT_TRUE (has (rig.to ("motion"), "/stemdeck/2/stereo i:0"));
+}
+
 TEST (CoreValues, ATurnReportsTheCursorAndAPushTheSource)
 {
     CoreRig rig;

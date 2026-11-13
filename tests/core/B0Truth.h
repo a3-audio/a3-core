@@ -4,6 +4,8 @@
 // the Python tests of the ported modules load with a3_osc.load(PACKAGE / "usr/share/a3/a3-osc.json").
 #pragma once
 
+#include <string>
+#include <variant>
 #include <vector>
 
 #include <juce_core/juce_core.h>
@@ -23,6 +25,17 @@ inline const a3core::Truth& truth()
         return a3core::Truth (a3core::parseJson (canonical.toString(), error));
     }();
     return loaded;
+}
+
+// The recorded B0 truth with words it predates, each taken as the package's truth has it.
+inline a3core::Truth withPackagedWords (const std::vector<std::string>& keys)
+{
+    juce::String error;
+    auto data = a3core::parseJson (juce::JSON::toString (truth().data()), error);
+    const auto packaged = std::get<a3core::Truth> (a3core::Truth::load (juce::File (A3_PACKAGE_TRUTH), std::nullopt)).data();
+    for (const auto& key : keys)
+        data["addresses"].getDynamicObject()->setProperty (key.c_str(), packaged["addresses"][key.c_str()]);
+    return a3core::Truth (data);
 }
 
 // B0 predates the engine.deck-audio word, so Core says so at start; the suites that pin B0's journal

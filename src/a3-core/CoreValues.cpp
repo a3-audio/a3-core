@@ -201,7 +201,7 @@ void Core::channelHandler (const Endpoint& from, const OscMessage& message)
         const double degrees = clamped (value, azimuth ? 180.0 : 90.0);
         auto& info = channels[static_cast<size_t> (index)];
         (azimuth ? info.azimuth : info.elevation) = degrees;
-        if (! decks.deckChannel (channel))
+        if (decks.actsAnalog (channel))
             sendToEngine ({ positionMessage (truth, azimuth ? Position::azimuth : Position::elevation, index, degrees) });
         sendPositionToProdj (key, index, degrees);
     }
@@ -410,7 +410,7 @@ bool Core::takeDeckWord (const std::string& parameter, int channel, double value
         selectDeck (parameter, channel, value);
         return true;
     }
-    if (parameter == "3d" && decks.deckChannel (channel))
+    if (parameter == "3d" && ! decks.actsAnalog (channel))
     {
         keepThreeD (channel - 1, value);
         sendToDeck (decks.threeDMessages (truth, channel, value));
@@ -441,9 +441,10 @@ void Core::selectDeck (const std::string& word, int channel, double value)
     }
     speakStems (false);
     sendToDeck (toDecks);
-    // The engine's analog path kept the values from before the deck came; the source word is out.
+    // The engine's analog path kept the values from before a B-format deck came; the source word is out. A channel
+    // that now plays through that path (its analog input, or a stereo deck) gets the channel's current ones.
     for (const auto& [onChannel, source] : changes)
-        if (source == DeckSelector::analog)
+        if (decks.actsAnalog (onChannel))
             sendToEngine (analogAgainMessages (truth, onChannel - 1, channels[static_cast<size_t> (onChannel - 1)], relayed));
 }
 

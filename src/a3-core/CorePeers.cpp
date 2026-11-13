@@ -146,6 +146,26 @@ void Core::engineDeckAudio (const Endpoint& from, const OscMessage& message)
     reportDecks (false);
 }
 
+// The engine's word on what a deck sends, with each hello and on change. A channel on a deck that turns stereo now
+// plays through the engine's analog path, which kept what it had before the deck came: it gets the channel's
+// current 3D, FREQ, Q and position. A deck back in B-format needs nothing: StemDeck places it again.
+void Core::engineDeckStereo (const Endpoint& from, const OscMessage& message)
+{
+    const auto found = knownAddress (from, message);
+    if (! found)
+        return;
+    seen (message, firstOrNone (message), peerName (from.host, peerHosts));
+    const auto stereo = message.args.empty() ? std::nullopt : pythonFloat (message.args[0]);
+    if (! stereo)
+        return;
+    const int deck = found->second.at ("deck");
+    if (! decks.heardStereo (deck, *stereo != 0.0))
+        return;
+    if (const auto channel = decks.channelOf (deck); channel && decks.actsAnalog (*channel))
+        sendToEngine (analogAgainMessages (truth, *channel - 1, channels[static_cast<size_t> (*channel - 1)], relayed));
+    reportDecks (false);
+}
+
 //==============================================================================
 // StemDeck.
 
