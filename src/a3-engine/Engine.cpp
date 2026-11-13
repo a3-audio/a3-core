@@ -105,7 +105,6 @@ struct EngineChannel
     juce::AudioBuffer<float> planes, deckPre, deckPost, deckAuxPost;
     bool analogRuns = false, deckRuns = false;   // in the current chunk, with a gain above 0 somewhere
     int analogStart = 0;                         // where in the chunk the analog path starts to run
-    bool resetAnalog = false;                    // it fades in from 0 there (R14)
     int preMeter = 0, postMeter = 0;             // PortMeters groups
 
     float* p (Plane plane) { return planes.getWritePointer (plane); }
@@ -119,9 +118,12 @@ struct Engine::Impl
     void processChunk (const EngineInputs&, const EngineOutputs&, int offset, int n, EngineControls&);
 
     void latchGlobals (EngineControls&);
-    void runChannel (EngineChannel&, ChannelControls&, const EngineInputs&, int offset, int n);
-    void selectPaths (EngineChannel&, const ChannelControls&, const EngineInputs&, int offset, int n);
-    void runAnalog (EngineChannel&, const ChannelControls&, const EngineInputs&, int offset, int n);
+    void runChannel (EngineChannel&, ChannelControls&, bool requestedDeckIsStereo, const EngineInputs&, int offset, int n);
+    void selectPaths (EngineChannel&, const ChannelControls&, bool requestedDeckIsStereo, const EngineInputs&, int offset, int n);
+    void latchStrip (EngineChannel&, const ChannelControls&);
+    void runAnalog (EngineChannel&, const EngineInputs&, int input, bool reset, int offset, int from, int to);
+    void finishAnalog (EngineChannel&, int n);
+    const float* analogPathInput (const EngineInputs&, const EngineChannel&, int input, int side, int offset) const;
     void runDeck (EngineChannel&, const ChannelControls&, const EngineInputs&, int slot, int offset, int at, int length);
     void buildSends (EngineChannel&, int n);
     void writeMeters (EngineChannel&, const EngineOutputs&, size_t channel, int offset, int n);
@@ -137,7 +139,8 @@ struct Engine::Impl
     bool placeVuTap (const std::string& name, VuTap&);
     bool placeZoneTap (const std::string& name, const std::string& zoneName, const ZoneDecoder&,
                        std::vector<std::pair<int, VuTap*>>&, VuTap&);
-    void pushVu (const EngineInputs&, int offset, int n);
+    void pushVu (const EngineInputs&, const EngineControls&, int offset, int n);
+    const float* deckLevel (const EngineInputs&, const EngineControls&, int slot, int offset, int n);
     void pushZoneVu (int n);
 
     const float* analogInput (const EngineInputs&, int index, int offset) const;
@@ -178,7 +181,7 @@ struct Engine::Impl
     juce::AudioBuffer<float> busMain, busFx, busPhones;
     enum ReturnPlane { returnGainCurve, returnMixCurve, returnPhonesCurve, stemCueCurve, numReturnPlanes };
     juce::AudioBuffer<float> returnPlanes;
-    std::vector<float> zeros;
+    std::vector<float> zeros, deckMiddle;   // deckMiddle: a stereo deck's (L + R) / 2 for its meter
     double sampleRate = 44100.0;
     int blockSize = 0;
     float fxSendPeak = 0.0f, analogEncoderPeak = 0.0f;   // this call's, published below at its end
@@ -296,6 +299,7 @@ void Engine::Impl::prepare (double rate, int newBlockSize)
         bus->setSize (busChannels, blockSize);
     returnPlanes.setSize (numReturnPlanes, blockSize);
     zeros.assign ((size_t) blockSize, 0.0f);
+    deckMiddle.assign ((size_t) blockSize, 0.0f);
 
     for (auto* bus : { encMain.get(), encFx.get(), encPhones.get() })
         bus->prepare (rate, blockSize);
@@ -321,7 +325,9 @@ void Engine::Impl::processChunk (const EngineInputs& in, const EngineOutputs& ou
     for (size_t c = 0; c < channels.size(); ++c)
     {
         auto& channel = *channels[c];
-        runChannel (channel, controls.channel ((int) c), in, offset, n);
+        auto& wire = controls.channel ((int) c);
+        const bool stereo = controls.isDeckStereo (wire.source.load (std::memory_order_relaxed));
+        runChannel (channel, wire, stereo, in, offset, n);
         writeMeters (channel, out, c, offset, n);
     }
     runReturn (n);
@@ -334,7 +340,7 @@ void Engine::Impl::processChunk (const EngineInputs& in, const EngineOutputs& ou
     playReturn (n);
     decode (in, out, offset, n);
     pushMeters (n);
-    pushVu (in, offset, n);
+    pushVu (in, controls, offset, n);
 }
 
 void Engine::Impl::latchGlobals (EngineControls& controls)
@@ -371,30 +377,45 @@ void Engine::Impl::latchGlobals (EngineControls& controls)
     }
 }
 
-void Engine::Impl::runChannel (EngineChannel& ch, ChannelControls& controls, const EngineInputs& in, int offset, int n)
+void Engine::Impl::runChannel (EngineChannel& ch, ChannelControls& controls, bool requestedDeckIsStereo, const EngineInputs& in,
+                               int offset, int n)
 {
-    selectPaths (ch, controls, in, offset, n);
-    runAnalog (ch, controls, in, offset, n);
+    latchStrip (ch, controls);
+    selectPaths (ch, controls, requestedDeckIsStereo, in, offset, n);
+    finishAnalog (ch, n);
     buildSends (ch, n);
 }
 
-// Walks the select's linear segments: the gain curves for both paths, and the deck
-// path run segment by segment (it may change slot or be reset between them).
-void Engine::Impl::selectPaths (EngineChannel& ch, const ChannelControls& controls, const EngineInputs& in, int offset, int n)
+// Walks the select's linear segments: the gain curves for both paths, and both paths run segment
+// by segment (the deck path may change slot, the analog path its input, either reset between them).
+// R14: the analog path runs from where its gain first leaves 0 to the end of the chunk, restarted
+// (reset, maybe on another input) only where it rises from 0 again.
+void Engine::Impl::selectPaths (EngineChannel& ch, const ChannelControls& controls, bool requestedDeckIsStereo,
+                                const EngineInputs& in, int offset, int n)
 {
     const int source = controls.source.load (std::memory_order_relaxed);
     ch.analogRuns = ch.deckRuns = false;
+    int runFrom = -1, runInput = 0;
+    bool runReset = false;
     for (int done = 0; done < n;)
     {
-        const auto s = ch.select.advance (source, n - done);
+        const auto s = ch.select.advance (source, n - done, requestedDeckIsStereo);
         const int length = s.length > 0 ? s.length : n - done;
         fillRamp (ch.p (EngineChannel::analogGain) + done, s.analogFrom, s.analogTo, length);
         fillRamp (ch.p (EngineChannel::deckGain) + done, s.deckFrom, s.deckTo, length);
-        if (ch.strip != nullptr && ! ch.analogRuns && (s.analogFrom > 0.0f || s.analogTo > 0.0f))
+        const bool analogLive = ch.strip != nullptr && (s.analogFrom > 0.0f || s.analogTo > 0.0f);
+        if (analogLive && (runFrom < 0 || s.resetAnalog))
         {
-            ch.analogRuns = true;
-            ch.analogStart = done;
-            ch.resetAnalog = s.resetAnalog;
+            if (runFrom >= 0)
+                runAnalog (ch, in, runInput, runReset, offset, runFrom, done);
+            else
+            {
+                ch.analogRuns = true;
+                ch.analogStart = done;
+            }
+            runFrom = done;
+            runInput = s.analogInput;
+            runReset = s.resetAnalog;
         }
         if (s.deckFrom > 0.0f || s.deckTo > 0.0f)
         {
@@ -414,6 +435,8 @@ void Engine::Impl::selectPaths (EngineChannel& ch, const ChannelControls& contro
         }
         done += length;
     }
+    if (runFrom >= 0)
+        runAnalog (ch, in, runInput, runReset, offset, runFrom, n);
     if (! ch.deckRuns)
         return;
     for (auto* taps : { &ch.deckPre, &ch.deckPost, &ch.deckAuxPost })
@@ -441,10 +464,46 @@ void Engine::Impl::runDeck (EngineChannel& ch, const ChannelControls& controls, 
     ch.deckAux.process (aux16, auxTaps, length, controls);
 }
 
-// R14: the analog strip runs only from where its select gain leaves 0 (reset first when
-// it fades in from 0); before that, and while it stays at 0, its taps are exact zeros and
-// the encoder sources silent.
-void Engine::Impl::runAnalog (EngineChannel& ch, const ChannelControls& controls, const EngineInputs& in, int offset, int n)
+void Engine::Impl::latchStrip (EngineChannel& ch, const ChannelControls& controls)
+{
+    if (ch.strip == nullptr)
+        return;
+    auto& state = ch.strip->controls();
+    for (auto [to, from] : { std::pair { &state.gain, &controls.gain }, { &state.volume, &controls.volume },
+                             { &state.eqHigh, &controls.eqHigh }, { &state.eqMid, &controls.eqMid },
+                             { &state.eqLow, &controls.eqLow }, { &state.frequency, &controls.frequency },
+                             { &state.q, &controls.q }, { &state.threeD, &controls.threeD },
+                             { &state.filterOn, &controls.filterOn } })
+        to->store (load (*from), std::memory_order_relaxed);
+}
+
+// The analog path's input: the channel's own pair, or deck slot `input`'s stereo pair (a deck in stereo mode).
+const float* Engine::Impl::analogPathInput (const EngineInputs& in, const EngineChannel& ch, int input, int side, int offset) const
+{
+    if (input == 0)
+        return analogInput (in, 2 * ch.analogPair - 2 + side, offset);
+    const auto* deck = deckInputs (in, input);
+    const float* plane = deck != nullptr ? deck->stereo[(size_t) side] : nullptr;
+    return plane != nullptr ? plane + offset : zeros.data();
+}
+
+// The strip over [from, to) of the chunk on one input, reset first when it fades in from 0 there.
+void Engine::Impl::runAnalog (EngineChannel& ch, const EngineInputs& in, int input, bool reset, int offset, int from, int to)
+{
+    using P = EngineChannel;
+    if (reset)
+        ch.strip->reset();
+    const float* source[2] { analogPathInput (in, ch, input, 0, offset + from), analogPathInput (in, ch, input, 1, offset + from) };
+    const auto plane = [&] (P::Plane p) { return ch.p (p) + from; };
+    StripBuffers out { { plane (P::movingL), plane (P::movingR) }, { plane (P::steadyL), plane (P::steadyR) },
+                       { plane (P::movingPreL), plane (P::movingPreR) }, { plane (P::steadyPreL), plane (P::steadyPreR) },
+                       { plane (P::preL), plane (P::preR) } };
+    ch.strip->process (source, out, to - from);
+}
+
+// R14: before the analog path starts in the chunk, and while it stays at 0, its taps are exact zeros
+// and the encoder sources silent; where it runs, its taps carry its select ramp.
+void Engine::Impl::finishAnalog (EngineChannel& ch, int n)
 {
     using P = EngineChannel;
     if (ch.strip == nullptr)
@@ -454,27 +513,8 @@ void Engine::Impl::runAnalog (EngineChannel& ch, const ChannelControls& controls
         clear (ch.p ((P::Plane) plane), at);
     if (! ch.analogRuns)
         return;
-    if (ch.resetAnalog)
-        ch.strip->reset();
-
-    auto& state = ch.strip->controls();
-    for (auto [to, from] : { std::pair { &state.gain, &controls.gain }, { &state.volume, &controls.volume },
-                             { &state.eqHigh, &controls.eqHigh }, { &state.eqMid, &controls.eqMid },
-                             { &state.eqLow, &controls.eqLow }, { &state.frequency, &controls.frequency },
-                             { &state.q, &controls.q }, { &state.threeD, &controls.threeD },
-                             { &state.filterOn, &controls.filterOn } })
-        to->store (load (*from), std::memory_order_relaxed);
-
-    const int first = 2 * ch.analogPair - 2;
-    const float* input[2] { analogInput (in, first, offset + at), analogInput (in, first + 1, offset + at) };
-    const auto plane = [&] (P::Plane p) { return ch.p (p) + at; };
-    StripBuffers out { { plane (P::movingL), plane (P::movingR) }, { plane (P::steadyL), plane (P::steadyR) },
-                       { plane (P::movingPreL), plane (P::movingPreR) }, { plane (P::steadyPreL), plane (P::steadyPreR) },
-                       { plane (P::preL), plane (P::preR) } };
-    ch.strip->process (input, out, n - at);
-
     for (int p = P::movingL; p <= P::preR; ++p)
-        multiply (plane ((P::Plane) p), plane (P::analogGain), n - at);
+        multiply (ch.p ((P::Plane) p) + at, ch.p (P::analogGain) + at, n - at);
 }
 
 // fx = post x aux; phones = pre x cue + post x mix. A silent weight writes exact zeros.
@@ -754,7 +794,7 @@ void Engine::Impl::pushZoneVu (int n)
 }
 
 // Audio thread: each other tap reads its point as this chunk leaves it.
-void Engine::Impl::pushVu (const EngineInputs& in, int offset, int n)
+void Engine::Impl::pushVu (const EngineInputs& in, const EngineControls& controls, int offset, int n)
 {
     for (const auto& [index, tap] : vuInputs)
         tap->processMono (analogInput (in, index, offset), n);
@@ -770,11 +810,23 @@ void Engine::Impl::pushVu (const EngineInputs& in, int offset, int n)
     for (const auto& strip : vuStrips)
         strip.tap->processMono (channels[strip.channel]->p (strip.plane), n);
     for (const auto& [slot, tap] : vuDecks)
-    {
-        const auto* deck = deckInputs (in, slot);
-        const float* w = deck != nullptr ? deck->bformat[0] : nullptr;
-        tap->processMono (w != nullptr ? w + offset : zeros.data(), n);
-    }
+        tap->processMono (deckLevel (in, controls, slot, offset, n), n);
+}
+
+// What a deck's bar reads: its W, or for a deck in stereo mode (no W) the middle of its pair, (L + R) / 2.
+const float* Engine::Impl::deckLevel (const EngineInputs& in, const EngineControls& controls, int slot, int offset, int n)
+{
+    const auto* deck = deckInputs (in, slot);
+    if (deck == nullptr)
+        return zeros.data();
+    if (! controls.isDeckStereo (slot))
+        return deck->bformat[0] != nullptr ? deck->bformat[0] + offset : zeros.data();
+    float* middle = deckMiddle.data();
+    clear (middle, n);
+    for (const float* side : deck->stereo)
+        if (side != nullptr)
+            juce::FloatVectorOperations::addWithMultiply (middle, side + offset, 0.5f, n);
+    return middle;
 }
 
 const float* Engine::Impl::analogInput (const EngineInputs& in, int index, int offset) const

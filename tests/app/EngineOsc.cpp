@@ -129,7 +129,7 @@ struct EngineOsc : ::testing::Test
 {
     a3app::EngineTruth truth = engineTruth();
     a3::EngineConfig config = fourChannelsTwoDecks();
-    a3::EngineControls controls { 4 };
+    a3::EngineControls controls { 4, 2 };
 
     bool apply (const juce::OSCMessage& m) { return a3app::applyEngineMessage (truth, config, m, controls); }
     bool apply (const char* address, float value) { return apply (message (address, juce::OSCArgument (value))); }
@@ -157,7 +157,7 @@ TEST_F (EngineOsc, EveryCarriedKeyIsUnderstood)
         const auto entry = root["addresses"][juce::Identifier (key)];
         const auto address = entry["pattern"].toString().replace ("{ch}", "2");
         const bool integer = entry["args"].toString() == "i";
-        a3::EngineControls controls (4);
+        a3::EngineControls controls (4, 2);
         const auto m = integer ? message (address, juce::OSCArgument ((juce::int32) 1))
                                : message (address, juce::OSCArgument (0.25f));
         EXPECT_TRUE (a3app::applyEngineMessage (truth, config, m, controls)) << key;
@@ -319,7 +319,7 @@ TEST_F (EngineOsc, ChannelsOutsideTheTruthAndTheEngineAreRefused)
     EXPECT_FALSE (apply ("/channel/01x/gain", 0.9f));
 
     config.channels = 3;
-    a3::EngineControls three (3);
+    a3::EngineControls three (3, 2);
     EXPECT_FALSE (a3app::applyEngineMessage (truth, config, message ("/channel/4/gain", juce::OSCArgument (0.9f)), three));
     EXPECT_TRUE (a3app::applyEngineMessage (truth, config, message ("/channel/3/gain", juce::OSCArgument (0.9f)), three));
 }

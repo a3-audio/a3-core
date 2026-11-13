@@ -32,9 +32,12 @@ struct GlobalControls
 class EngineControls
 {
 public:
-    explicit EngineControls (int numChannels)
-        : count (numChannels > 0 ? numChannels : 0), perChannel (std::make_unique<ChannelControls[]> ((size_t) count))
+    EngineControls (int numChannels, int numDecks)
+        : count (numChannels > 0 ? numChannels : 0), perChannel (std::make_unique<ChannelControls[]> ((size_t) count)),
+          deckCount (numDecks > 0 ? numDecks : 0), stereoDecks (std::make_unique<std::atomic<bool>[]> ((size_t) deckCount))
     {
+        for (int i = 0; i < deckCount; ++i)
+            stereoDecks[(size_t) i].store (false);
     }
 
     int channels() const { return count; }
@@ -46,9 +49,24 @@ public:
     GlobalControls& global() { return globals; }
     const GlobalControls& global() const { return globals; }
 
+    // Deck slot 1..decks sends one stereo pair (StemDeck's Output: Stereo), written by the control thread
+    // from the links (deckModes); a slot outside the range is never stereo.
+    int decks() const { return deckCount; }
+    void setDeckStereo (int slot, bool stereo)
+    {
+        if (slot >= 1 && slot <= deckCount)
+            stereoDecks[(size_t) slot - 1].store (stereo, std::memory_order_relaxed);
+    }
+    bool isDeckStereo (int slot) const
+    {
+        return slot >= 1 && slot <= deckCount && stereoDecks[(size_t) slot - 1].load (std::memory_order_relaxed);
+    }
+
 private:
     int count;
     std::unique_ptr<ChannelControls[]> perChannel;
+    int deckCount;
+    std::unique_ptr<std::atomic<bool>[]> stereoDecks;
     GlobalControls globals;
 };
 }

@@ -62,15 +62,15 @@ TEST (EnginePorts, FollowNAndTheLayouts)
         perChannel (6) }));
 }
 
-TEST (EnginePorts, DeckSlotHas41Inputs)
+TEST (EnginePorts, DeckSlotHas43Inputs)
 {
     const auto spatial = a3test::loadedSpatialConfig (a3test::shippedSpatialDirectory);
     EXPECT_EQ (a3app::enginePortNames (a3test::engineConfig (4, 0), spatial).inputs.size(), 12u);
     const auto two = a3app::enginePortNames (a3test::engineConfig (4, 2), spatial).inputs;
-    ASSERT_EQ (two.size(), 12u + 2 * 41u);
+    ASSERT_EQ (two.size(), 12u + 2 * 43u);
 
-    // Slot 2 is letter B in port names (R12): 16 channels, 16 aux, 9 cue.
-    const Names deckB (two.begin() + 12 + 41, two.end());
+    // Slot 2 is letter B in port names (R12): 16 channels, 16 aux, 9 cue, the stereo pair.
+    const Names deckB (two.begin() + 12 + 43, two.end());
     Names expected;
     for (int i = 1; i <= 16; ++i)
         expected.push_back ("deckB_" + std::to_string (i));
@@ -78,25 +78,29 @@ TEST (EnginePorts, DeckSlotHas41Inputs)
         expected.push_back ("deckB_aux_" + std::to_string (i));
     for (int i = 1; i <= 9; ++i)
         expected.push_back ("deckB_cue_" + std::to_string (i));
+    expected.push_back ("deckB_stereo_L");
+    expected.push_back ("deckB_stereo_R");
     EXPECT_EQ (deckB, expected);
     EXPECT_EQ (two[12], "deckA_1");
-    EXPECT_EQ (two.back(), "deckB_cue_9");
+    EXPECT_EQ (two[12 + 41], "deckA_stereo_L");
+    EXPECT_EQ (two.back(), "deckB_stereo_R");
+    EXPECT_EQ (a3app::deckStereoPortName (2, 1), "deckB_stereo_R");
     EXPECT_EQ (std::count (two.begin(), two.end(), "deckA_cue_L"), 0);
 }
 
-// A8: four slots (A-D) and six (A-F) are the same walk; 4 slots are 12 + 4 x 41 = 176 inputs.
+// A8: four slots (A-D) and six (A-F) are the same walk; 4 slots are 12 + 4 x 43 = 184 inputs.
 TEST (EnginePorts, FourAndSixSlotsFollowTheCount)
 {
     const auto spatial = a3test::loadedSpatialConfig (a3test::shippedSpatialDirectory);
     const auto four = a3app::enginePortNames (a3test::engineConfig (4, 4), spatial).inputs;
-    ASSERT_EQ (four.size(), 176u);
-    EXPECT_EQ (four[12 + 2 * 41], "deckC_1");
-    EXPECT_EQ (four[12 + 3 * 41 + 16], "deckD_aux_1");
-    EXPECT_EQ (four.back(), "deckD_cue_9");
+    ASSERT_EQ (four.size(), 184u);
+    EXPECT_EQ (four[12 + 2 * 43], "deckC_1");
+    EXPECT_EQ (four[12 + 3 * 43 + 16], "deckD_aux_1");
+    EXPECT_EQ (four.back(), "deckD_stereo_R");
     const auto six = a3app::enginePortNames (a3test::engineConfig (4, 6), spatial).inputs;
-    ASSERT_EQ (six.size(), 12u + 6 * 41u);
-    EXPECT_EQ (six[12 + 4 * 41], "deckE_1");
-    EXPECT_EQ (six.back(), "deckF_cue_9");
+    ASSERT_EQ (six.size(), 12u + 6 * 43u);
+    EXPECT_EQ (six[12 + 4 * 43], "deckE_1");
+    EXPECT_EQ (six.back(), "deckF_stereo_R");
 }
 
 // One pure function names a slot, with no cap (A..Z, AA, AB, ...), and reads it back in either case.
@@ -214,6 +218,8 @@ TEST (EnginePorts, SlotsFollowTheNames)
         EXPECT_EQ (in.decks[1].aux[15], inputNamed ("deckB_aux_16"));
         EXPECT_EQ (in.decks[0].aux[0], inputNamed ("deckA_aux_1"));
         EXPECT_EQ (in.decks[0].cue[0], inputNamed ("deckA_cue_1"));
+        EXPECT_EQ (in.decks[0].stereo[0], inputNamed ("deckA_stereo_L"));
+        EXPECT_EQ (in.decks[1].stereo[1], inputNamed ("deckB_stereo_R"));
 
         ASSERT_EQ (out.main.tops.size(), spatial.main.layout.topChannels.size());
         ASSERT_EQ (out.booth.tops.size(), spatial.booth.layout.topChannels.size());
@@ -239,8 +245,9 @@ TEST (EnginePorts, SlotsBindAuxAndCue)
     std::vector<float> marks (slots.inputs.size());
     for (size_t i = 0; i < slots.inputs.size(); ++i)
         *slots.inputs[i] = &marks[i];
-    EXPECT_EQ (in.decks[1].aux[15], &marks[12 + 41 + 16 + 15]);
-    EXPECT_EQ (in.decks[1].cue[8], &marks[12 + 41 + 32 + 8]);
+    EXPECT_EQ (in.decks[1].aux[15], &marks[12 + 43 + 16 + 15]);
+    EXPECT_EQ (in.decks[1].cue[8], &marks[12 + 43 + 32 + 8]);
+    EXPECT_EQ (in.decks[1].stereo[1], &marks[12 + 43 + 41 + 1]);
 }
 
 // The AES67 streams link engine outputs by name (ConnectionPlan's addStreamSenders): every port a resolved stream

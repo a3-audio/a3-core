@@ -131,7 +131,7 @@ TEST (AppArgs, TheDeckCountIsTheConfigsElseTheTruths)
     ASSERT_TRUE (four.has_value()) << error;
     EXPECT_EQ (four->config.engine.decks, 4);
     EXPECT_FALSE (four->config.engine.decksNamed);
-    EXPECT_EQ (a3app::enginePortNames (four->config.engine, four->spatial).inputs.size(), 176u);   // 12 + 4 x 41
+    EXPECT_EQ (a3app::enginePortNames (four->config.engine, four->spatial).inputs.size(), 184u);   // 12 + 4 x 43
 
     auto args = checkArgs (unnamed);
     args.truth = wideTruth.getFullPathName();

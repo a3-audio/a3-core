@@ -42,7 +42,7 @@ void silence (const a3::EngineOutputs& out, int n)
 EngineHost::EngineHost (a3::EngineConfig c, a3::SpatialConfig s, const EngineTruth& truth,
                         std::function<void (const juce::OSCMessage&)> sendToCore,
                         std::function<void (const Datagram&)> metersTo, a3::VuSettings settings)
-    : config (std::move (c)), spatial (std::move (s)), wire (config.channels), hello (truth, std::move (sendToCore)),
+    : config (std::move (c)), spatial (std::move (s)), wire (config.channels, config.decks), hello (truth, std::move (sendToCore)),
       vuSettings (settings), vuPattern (truth.vuPattern.toStdString()), sendMeters (std::move (metersTo))
 {
     std::vector<std::string> names;

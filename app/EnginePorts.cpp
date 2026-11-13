@@ -32,6 +32,10 @@ std::string deckPortName (int slot, const std::string& kind, int number)
 std::string deckBFormatPortName (int slot, int number) { return deckPortName (slot, "", number); }
 std::string deckAuxPortName (int slot, int number) { return deckPortName (slot, "aux_", number); }
 std::string deckCuePortName (int slot, int number) { return deckPortName (slot, "cue_", number); }
+std::string deckStereoPortName (int slot, int side)
+{
+    return "deck" + deckLetters (slot) + "_stereo_" + a3::pairChannels()[(size_t) side].portSuffix;
+}
 
 PortNames enginePortNames (const a3::EngineConfig& config, const a3::SpatialConfig& spatial)
 {
@@ -46,6 +50,8 @@ PortNames enginePortNames (const a3::EngineConfig& config, const a3::SpatialConf
             ports.inputs.push_back (deckAuxPortName (slot, i));
         for (int i = 1; i <= deckCueChannels; ++i)
             ports.inputs.push_back (deckCuePortName (slot, i));
+        for (int side = 0; side < deckStereoChannels; ++side)
+            ports.inputs.push_back (deckStereoPortName (slot, side));
     }
 
     addZone (ports.outputs, "main", spatial.main.layout);
@@ -105,6 +111,8 @@ PortSlots bindPortSlots (const a3::EngineConfig& config, const a3::SpatialConfig
             slots.inputs.push_back (&channel);
         for (auto& channel : deck.cue)
             slots.inputs.push_back (&channel);
+        for (auto& side : deck.stereo)
+            slots.inputs.push_back (&side);
     }
 
     bindZone (slots, out.main, spatial.main.layout);

@@ -227,7 +227,7 @@ std::unique_ptr<CpuBenchRig> CpuBenchRig::create (const CpuBenchOptions& options
     for (auto& g : open.gain)
         g = 1.0f;
     impl->engine->startGateAt (open);
-    impl->controls = std::make_unique<a3::EngineControls> (config.channels);
+    impl->controls = std::make_unique<a3::EngineControls> (config.channels, config.decks);
     impl->openEverything();
     impl->makeSignal();
     impl->makeOutputs();

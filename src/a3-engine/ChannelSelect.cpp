@@ -19,23 +19,37 @@ void ChannelSelect::prepare (double sampleRate, int numDecks, bool analogAvailab
     hasAnalog = analogAvailable;
     target = hasAnalog ? 0 : (decks > 0 ? 1 : 0);
     slot = target;
+    targetStereo = false;
+    input = 0;
     analogCount = hasAnalog ? fadeSamples : 0;
     deckCount = target > 0 ? fadeSamples : 0;
     analogGoal = analogCount;
     deckGoal = deckCount;
 }
 
-ChannelSelect::Step ChannelSelect::advance (int requested, int numSamples)
+ChannelSelect::Step ChannelSelect::advance (int requested, int numSamples, bool requestedDeckIsStereo)
 {
     const bool valid = requested >= 0 && requested <= decks && (requested > 0 || hasAnalog);
     if (valid)
+    {
         target = requested;
+        targetStereo = requested > 0 && requestedDeckIsStereo && hasAnalog;
+    }
 
     Step s;
-    if (target == 0)
+    if (target == 0 || targetStereo)
     {
-        analogGoal = fadeSamples;
+        const int wanted = targetStereo ? target : 0;
         deckGoal = 0;
+        if (input == wanted || analogCount == 0)
+        {
+            input = wanted;   // a dead path takes its new input before it fades in
+            analogGoal = fadeSamples;
+        }
+        else
+        {
+            analogGoal = 0;   // another input: dip out first, swap at zero
+        }
     }
     else if (slot == target || deckCount == 0)
     {
@@ -54,6 +68,7 @@ ChannelSelect::Step ChannelSelect::advance (int requested, int numSamples)
     s.resetAnalog = analogCount == 0 && analogGoal > 0;
     s.resetDeck = deckCount == 0 && deckGoal > 0;
     s.deckSlot = slot;
+    s.analogInput = input;
 
     int length = numSamples;
     if (analogCount != analogGoal)

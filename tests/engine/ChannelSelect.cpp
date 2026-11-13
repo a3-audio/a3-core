@@ -195,3 +195,132 @@ TEST (ChannelSelect, SplitsAcrossBlocks)
         }
     }
 }
+
+namespace
+{
+struct Routed { float analog, deck; int input, slot; bool resetAnalog, resetDeck; };
+struct Request { int source; bool stereo; };
+
+// One sample per entry; `switchAt` changes the request from `first` to `then`. Calls of `call` samples.
+std::vector<Routed> walkRouted (a3::ChannelSelect& sel, Request first, Request then, int switchAt, int total, int call)
+{
+    std::vector<Routed> out;
+    while ((int) out.size() < total)
+    {
+        const auto r = (int) out.size() < switchAt ? first : then;
+        int left = std::min (call, total - (int) out.size());
+        while (left > 0)
+        {
+            const auto s = sel.advance (r.source, left, r.stereo);
+            if (s.length <= 0)
+                return out;
+            for (int j = 0; j < s.length; ++j)
+            {
+                const float t = (float) (j + 1) / (float) s.length;
+                out.push_back ({ s.analogFrom + (s.analogTo - s.analogFrom) * t, s.deckFrom + (s.deckTo - s.deckFrom) * t,
+                                 s.analogInput, s.deckSlot, j == 0 && s.resetAnalog, j == 0 && s.resetDeck });
+            }
+            left -= s.length;
+        }
+    }
+    return out;
+}
+}
+
+// Analog -> a stereo deck: the analog path dips out on its own pair, swaps to the deck's pair at zero
+// (reset), and fades in; the deck path never runs.
+TEST (ChannelSelect, AStereoDeckRunsThroughTheAnalogPath)
+{
+    a3::ChannelSelect sel;
+    sel.prepare (rate, 2, true);
+    const auto g = walkRouted (sel, { 0, false }, { 1, true }, 100, 100 + 2 * fade + 50, 100);
+    for (const auto& s : g)
+        EXPECT_FLOAT_EQ (s.deck, 0.0f);
+    EXPECT_FLOAT_EQ (g[99].analog, 1.0f);
+    for (int i = 100; i < 100 + fade; ++i)
+    {
+        EXPECT_EQ (g[(size_t) i].input, 0) << i;
+        EXPECT_LE (g[(size_t) i].analog, g[(size_t) i - 1].analog + 1e-7f) << i;
+    }
+    EXPECT_FLOAT_EQ (g[100 + fade - 1].analog, 0.0f);
+    EXPECT_TRUE (g[100 + fade].resetAnalog);
+    for (int i = 100 + fade; i < 100 + 2 * fade; ++i)
+    {
+        EXPECT_EQ (g[(size_t) i].input, 1) << i;
+        EXPECT_GE (g[(size_t) i].analog, g[(size_t) i - 1].analog - 1e-7f) << i;
+    }
+    EXPECT_FLOAT_EQ (g.back().analog, 1.0f);
+    EXPECT_EQ (sel.analogInput(), 1);
+    EXPECT_FALSE (sel.deckActive());
+}
+
+// The deck changes mode while it is selected: stereo -> B-format is the analog <-> deck crossfade.
+TEST (ChannelSelect, AStereoDeckTurningBFormatCrossfadesToTheDeckPath)
+{
+    a3::ChannelSelect sel;
+    sel.prepare (rate, 2, true);
+    const int at = 1024;   // settled (> 2 x fade), on a call boundary of 64
+    const auto g = walkRouted (sel, { 1, true }, { 1, false }, at, at + fade + 50, 64);
+    EXPECT_FLOAT_EQ (g[(size_t) at - 1].analog, 1.0f);
+    EXPECT_EQ (g[(size_t) at - 1].input, 1);
+    for (int i = at; i < at + fade; ++i)
+    {
+        EXPECT_NEAR (g[(size_t) i].analog + g[(size_t) i].deck, 1.0f, 1e-5f) << i;
+        EXPECT_EQ (g[(size_t) i].input, 1) << i;
+        EXPECT_EQ (g[(size_t) i].slot, 1) << i;
+    }
+    EXPECT_TRUE (g[(size_t) at].resetDeck);
+    EXPECT_FLOAT_EQ (g.back().deck, 1.0f);
+    EXPECT_FLOAT_EQ (g.back().analog, 0.0f);
+
+    // And back: B-format -> stereo crossfades the other way, the analog path rising on the deck's pair.
+    const auto back = walkRouted (sel, { 1, true }, { 1, true }, 0, fade + 10, 64);
+    EXPECT_TRUE (back[0].resetAnalog);
+    for (int i = 0; i < fade; ++i)
+    {
+        EXPECT_NEAR (back[(size_t) i].analog + back[(size_t) i].deck, 1.0f, 1e-5f) << i;
+        EXPECT_EQ (back[(size_t) i].input, 1) << i;
+    }
+    EXPECT_FLOAT_EQ (back.back().analog, 1.0f);
+}
+
+// One stereo deck to another: the analog path dips and swaps its input, as deck -> deck does on the deck path.
+TEST (ChannelSelect, StereoDeckToStereoDeckDipsTheAnalogPath)
+{
+    a3::ChannelSelect sel;
+    sel.prepare (rate, 2, true);
+    const int at = 1024;   // settled (> 2 x fade), on a call boundary of 64
+    const auto g = walkRouted (sel, { 1, true }, { 2, true }, at, at + 2 * fade + 10, 64);
+    EXPECT_EQ (g[(size_t) at - 1].input, 1);
+    EXPECT_FLOAT_EQ (g[(size_t) at + fade - 1].analog, 0.0f);
+    EXPECT_EQ (g[(size_t) at + fade - 1].input, 1);
+    EXPECT_TRUE (g[(size_t) at + fade].resetAnalog);
+    EXPECT_EQ (g[(size_t) at + fade].input, 2);
+    EXPECT_FLOAT_EQ (g.back().analog, 1.0f);
+    for (const auto& s : g)
+        EXPECT_FLOAT_EQ (s.deck, 0.0f);
+}
+
+// A channel without an analog pair has no analog path: a stereo deck there takes the deck path, as before.
+TEST (ChannelSelect, ADeckOnlyChannelPlaysAStereoDeckOnItsDeckPath)
+{
+    a3::ChannelSelect sel;
+    sel.prepare (rate, 2, false);
+    const auto s = sel.advance (1, 64, true);
+    EXPECT_FLOAT_EQ (s.analogTo, 0.0f);
+    EXPECT_FLOAT_EQ (s.deckTo, 1.0f);
+    EXPECT_EQ (s.analogInput, 0);
+}
+
+// Back to analog from a stereo deck: dip, swap to the own pair, fade in.
+TEST (ChannelSelect, StereoDeckBackToAnalogSwapsToTheOwnPair)
+{
+    a3::ChannelSelect sel;
+    sel.prepare (rate, 2, true);
+    const int at = 1024;   // settled (> 2 x fade), on a call boundary of 64
+    const auto g = walkRouted (sel, { 1, true }, { 0, false }, at, at + 2 * fade + 10, 64);
+    EXPECT_EQ (g[(size_t) at - 1].input, 1);
+    EXPECT_TRUE (g[(size_t) at + fade].resetAnalog);
+    EXPECT_EQ (g.back().input, 0);
+    EXPECT_FLOAT_EQ (g.back().analog, 1.0f);
+}

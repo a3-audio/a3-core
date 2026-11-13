@@ -64,8 +64,11 @@ TEST (DeckAudioState, EverySlotOfTheCountIsReported)
     for (int slot = 1; slot <= 5; ++slot)
         a3app::setDeckSource (map, slot, slot == 2 ? a3app::DeckSource::aes67 : a3app::DeckSource::local);
     EXPECT_EQ (a3app::deckAudioLinked (map, 5, {}), (Bits { true, true, true, true, true }));
-    EXPECT_EQ (a3app::deckAudioLinked (map, 5, { "StemDeck-E:cue_9" }), (Bits { true, true, true, true, false }));
-    EXPECT_EQ (a3app::deckAudioLinked (map, 6, { "StemDeck-C:aux_1" }), (Bits { true, true, false, true, true, false }));
+    // A deck in B-format mode has no master pair: its stereo peers are missing too.
+    EXPECT_EQ (a3app::deckAudioLinked (map, 5, { "StemDeck-E:cue_9", "StemDeck-E:master_L", "StemDeck-E:master_R" }),
+               (Bits { true, true, true, true, false }));
+    EXPECT_EQ (a3app::deckAudioLinked (map, 6, { "StemDeck-C:aux_1", "StemDeck-C:master_L", "StemDeck-C:master_R" }),
+               (Bits { true, true, false, true, true, false }));
 }
 
 // A peer's ports vanish (its host restarts) and come back: the plan holds the links again.
@@ -152,10 +155,95 @@ TEST (DeckAudioReport, FourSlotsReachCoreAsOneToFour)
     a3app::BackendStatus status;
     status.connecting = true;
     status.linksPlanned = true;
-    status.missingPeers = { "StemDeck-C:bformat_1" };
+    status.missingPeers = { "StemDeck-C:bformat_1", "StemDeck-C:master_L", "StemDeck-C:master_R" };   // B-format: no pair
     host.controlTick (0.0);
     toCore.clear();
     a3app::reportDeckAudio (status, map, 4, host);
     EXPECT_EQ (said (toCore), (Lines { "/engine/deck/1/audio 1", "/engine/deck/2/audio 1", "/engine/deck/3/audio 0",
                                        "/engine/deck/4/audio 1" }));
+}
+
+namespace
+{
+// The peers of a slot's B-format group (16 + aux 16 + cue 9) from a source.
+std::vector<std::string> bformatPeers (int slot, a3app::DeckSource source)
+{
+    std::vector<std::string> peers;
+    for (const auto& [port, peer] : a3app::deckLinks (slot, source))
+        peers.push_back (peer);
+    return peers;
+}
+
+std::vector<std::string> joined (std::vector<std::string> a, const std::vector<std::string>& b)
+{
+    a.insert (a.end(), b.begin(), b.end());
+    return a;
+}
+}
+
+// Links are the truth, not the signal: stereo only when the pair is linked and the B-format is not.
+TEST (DeckAudioState, AStereoDeckIsOneWhosePairAloneIsLinked)
+{
+    using a3app::DeckMode;
+    EXPECT_EQ (a3app::deckModeOf (false, true), DeckMode::stereo);
+    EXPECT_EQ (a3app::deckModeOf (true, false), DeckMode::bformat);
+    EXPECT_EQ (a3app::deckModeOf (true, true), DeckMode::bformat) << "both: B-format, as before the pair existed";
+    EXPECT_EQ (a3app::deckModeOf (false, false), DeckMode::bformat) << "neither: unchanged";
+}
+
+// StemDeck in stereo mode has no B-format ports (a remote deck's 2-channel stream none of MAIN/AUX/CUE): the slot is
+// present through its pair, and in stereo mode; without the pair as well it is absent.
+TEST (DeckAudioState, AStereoDeckIsPresentAndTheModeFollowsTheGraph)
+{
+    using a3app::DeckMode;
+    using Modes = std::vector<DeckMode>;
+    a3app::IoMap map;
+    a3app::setDeckSource (map, 1, a3app::DeckSource::local);
+    a3app::setDeckSource (map, 2, a3app::DeckSource::aes67);
+    a3app::setDeckSource (map, 3, a3app::DeckSource::local);
+    const std::vector<std::string> stereoA { "StemDeck-A:master_L", "StemDeck-A:master_R" };
+    const std::vector<std::string> stereoB { "AES67 deck B:receive_MASTER_L", "AES67 deck B:receive_MASTER_R" };
+
+    // A in stereo (its B-format gone), B in B-format (its pair gone), C with both present.
+    const auto missing = joined (bformatPeers (1, a3app::DeckSource::local), stereoB);
+    EXPECT_EQ (a3app::deckModes (map, 3, missing), (Modes { DeckMode::stereo, DeckMode::bformat, DeckMode::bformat }));
+    EXPECT_EQ (a3app::deckAudioLinked (map, 3, missing), (Bits { true, true, true }));
+
+    // B goes stereo: its 2-channel stream has only the master pair.
+    const auto bStereo = joined (bformatPeers (1, a3app::DeckSource::local), bformatPeers (2, a3app::DeckSource::aes67));
+    EXPECT_EQ (a3app::deckModes (map, 3, bStereo), (Modes { DeckMode::stereo, DeckMode::stereo, DeckMode::bformat }));
+
+    // A gone altogether: absent, and B-format (no stereo pair to play).
+    const auto aGone = joined (missing, stereoA);
+    EXPECT_EQ (a3app::deckAudioLinked (map, 3, aGone), (Bits { false, true, true }));
+    EXPECT_EQ (a3app::deckModes (map, 3, aGone)[0], DeckMode::bformat);
+    // Half a pair is no pair.
+    EXPECT_EQ (a3app::deckModes (map, 3, joined (bformatPeers (1, a3app::DeckSource::local), { stereoA[1] }))[0],
+               DeckMode::bformat);
+}
+
+// The control tick hands each slot's mode to the engine's controls, once the links are planned.
+TEST (DeckAudioReport, TheModesReachTheEnginesControls)
+{
+    a3app::IoMap map;
+    a3app::setDeckSource (map, 1, a3app::DeckSource::local);
+    a3app::setDeckSource (map, 2, a3app::DeckSource::local);
+    a3::EngineControls controls (4, 2);
+    a3app::BackendStatus status;
+    status.connecting = true;
+    status.missingPeers.clear();
+    for (const auto& peer : bformatPeers (1, a3app::DeckSource::local))
+        status.missingPeers.push_back (peer);
+
+    a3app::applyDeckModes (status, map, 2, controls);
+    EXPECT_FALSE (controls.isDeckStereo (1)) << "nothing before the first link plan";
+
+    status.linksPlanned = true;
+    a3app::applyDeckModes (status, map, 2, controls);
+    EXPECT_TRUE (controls.isDeckStereo (1));
+    EXPECT_FALSE (controls.isDeckStereo (2));
+
+    status.missingPeers.clear();   // A back in B-format: both groups present
+    a3app::applyDeckModes (status, map, 2, controls);
+    EXPECT_FALSE (controls.isDeckStereo (1));
 }

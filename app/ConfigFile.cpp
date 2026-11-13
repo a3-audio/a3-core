@@ -237,6 +237,7 @@ AppConfig parse (const juce::File& file, int truthDecks)
 {
     auto config = parseRoot (parseFile (file), file.getParentDirectory(), truthDecks);
     linkUnnamedSlotsLocally (config.io, config.engine.decks);
+    linkUnnamedStereoPairs (config.io, config.engine.decks);   // a file from before the pair: each slot's source's
     return config;
 }
 }

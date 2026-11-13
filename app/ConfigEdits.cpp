@@ -309,6 +309,38 @@ void setDeckSource (IoMap& map, int slot, DeckSource source)
 {
     for (const auto& [port, peer] : deckLinks (slot, source))
         map.jack[port] = { peer };
+    for (const auto& [port, peer] : stereoDeckLinks (slot, source))
+        map.jack[port] = { peer };
+}
+
+std::vector<std::pair<std::string, std::string>> stereoDeckLinks (int slot, DeckSource source)
+{
+    const auto letter = deckLetters (slot);
+    const auto peerBase = source == DeckSource::local ? "StemDeck-" + letter + ":master_" : "AES67 deck " + letter + ":receive_MASTER_";
+    std::vector<std::pair<std::string, std::string>> links;
+    for (int side = 0; side < deckStereoChannels; ++side)
+    {
+        const auto port = deckStereoPortName (slot, side);
+        links.emplace_back (port, peerBase + port.substr (port.size() - 1));   // "L" or "R"
+    }
+    return links;
+}
+
+void linkUnnamedStereoPairs (IoMap& map, int decks)
+{
+    for (int slot = 1; slot <= decks; ++slot)
+    {
+        const auto links = stereoDeckLinks (slot, DeckSource::local);
+        const bool named = std::any_of (links.begin(), links.end(), [&] (const auto& link)
+        {
+            return map.jack.count (link.first) > 0 || map.deviceChannels.count (link.first) > 0;
+        });
+        const auto source = deckSourceOf (map, slot);
+        if (named || ! source)
+            continue;
+        for (const auto& [port, peer] : stereoDeckLinks (slot, *source))
+            map.jack[port] = { peer };
+    }
 }
 
 void linkUnnamedSlotLocally (IoMap& map, int slot)

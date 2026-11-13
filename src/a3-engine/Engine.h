@@ -18,6 +18,7 @@ struct DeckInputs   // one StemDeck slot; nullptr = silence
 {
     std::array<const float*, 16> bformat {}, aux {};
     std::array<const float*, 9> cue {};
+    std::array<const float*, 2> stereo {};   // a deck in stereo mode: its master pair, L/R
 };
 
 struct EngineInputs
@@ -38,7 +39,9 @@ struct EngineOutputs
 // The whole A3 graph (spec Part A, Scope 1-6; plan 4 rulings R1, R6, R11, R13, R14, R18):
 //
 //   channel c   ChannelSelect (source): analog pair -> ChannelStrip, or deck slot k -> DeckStrip,
-//               each path times its select ramp (both run during a crossfade)
+//               each path times its select ramp (both run during a crossfade); a deck slot the
+//               controls mark stereo feeds its stereo pair into the ChannelStrip instead, as an
+//               analog source (its positions, 3D, FREQ and Q apply)
 //   enc_main    analog: AmbiEncoderBus (moving/steady post-VOLUME) + deck: its 16 post-VOLUME channels
 //               added directly
 //   enc_fx      analog: the same sources x auxSendGain (no return); deck: its 16 post-VOLUME

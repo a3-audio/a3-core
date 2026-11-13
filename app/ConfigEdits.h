@@ -76,9 +76,17 @@ std::optional<AppConfig> withHeadphoneEq (const AppConfig&, const juce::String& 
 
 // Where a deck slot's 41 inputs come from: its local StemDeck, or the AES67 stream of that deck.
 enum class DeckSource { local, aes67 };
-// Replaces exactly the slot's 41 entries (deck{X}_1..16, _aux_1..16, _cue_1..9) with literal links;
-// every other entry stays.
+// Replaces exactly the slot's 41 entries (deck{X}_1..16, _aux_1..16, _cue_1..9) and its stereo pair
+// with literal links; every other entry stays.
 void setDeckSource (IoMap&, int slotOneBased, DeckSource);
+// The slot's 41 links from a source, (engine port, peer) in the engine's order; the stereo pair is not among them.
+std::vector<std::pair<std::string, std::string>> deckLinks (int slotOneBased, DeckSource);
+// The slot's stereo pair (deck{X}_stereo_L/R) from that source: StemDeck-X:master_L/R, or the
+// 2-channel AES67 stream's AES67 deck X:receive_MASTER_L/R.
+std::vector<std::pair<std::string, std::string>> stereoDeckLinks (int slotOneBased, DeckSource);
+// Each slot 1..decks whose stereo pair the map names neither port of, and whose 41 links are one
+// source's (deckSourceOf), gets that source's stereo links; any other slot stays as it is.
+void linkUnnamedStereoPairs (IoMap&, int decks);
 // Each slot 1..decks the map names none of the 41 ports of (no JACK peer, no device channel) gets its
 // local StemDeck's links; a slot it names any port of stays as it is.
 void linkUnnamedSlotsLocally (IoMap&, int decks);
