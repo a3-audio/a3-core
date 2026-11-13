@@ -21,6 +21,13 @@ a3app::AppConfig sample()
     config.io.directLinks = { { "system:capture_9", "analyzer:in_1" } };
     return config;
 }
+
+// A port's peers, none when the map does not name it (so a missing entry fails as a value, not a throw).
+std::vector<std::string> peersOf (const a3app::IoMap& map, const std::string& port)
+{
+    const auto found = map.jack.find (port);
+    return found == map.jack.end() ? std::vector<std::string> {} : found->second;
+}
 }
 
 TEST (ConfigEdits, ChannelsFollowTheAnalogPairsAndPruneTheMap)
@@ -171,17 +178,21 @@ TEST (ConfigEdits, SetHeadphoneEqWritesTheModel)
     EXPECT_NE (error.indexOf ("Acme-Buds"), -1);
 }
 
-TEST (ConfigEdits, DeckSourceWritesFortyOneLinks)
+TEST (ConfigEdits, DeckSourceWritesFortyOneLinksAndTheStereoPair)
 {
     a3app::IoMap map;
     a3app::setDeckSource (map, 2, a3app::DeckSource::aes67);
-    EXPECT_EQ (map.jack.size(), 41u);
+    EXPECT_EQ (map.jack.size(), 43u);
+    EXPECT_EQ (peersOf (map, "deckB_stereo_L"), std::vector<std::string> { "AES67 deck B:receive_MASTER_L" });
+    EXPECT_EQ (peersOf (map, "deckB_stereo_R"), std::vector<std::string> { "AES67 deck B:receive_MASTER_R" });
     EXPECT_EQ (map.jack.at ("deckB_1"), std::vector<std::string> { "AES67 deck B:receive_MAIN1" });
     EXPECT_EQ (map.jack.at ("deckB_16"), std::vector<std::string> { "AES67 deck B:receive_MAIN16" });
     EXPECT_EQ (map.jack.at ("deckB_aux_16"), std::vector<std::string> { "AES67 deck B:receive_AUX16" });
     EXPECT_EQ (map.jack.at ("deckB_cue_9"), std::vector<std::string> { "AES67 deck B:receive_CUE9" });
     a3app::setDeckSource (map, 2, a3app::DeckSource::local);
-    EXPECT_EQ (map.jack.size(), 41u);
+    EXPECT_EQ (map.jack.size(), 43u);
+    EXPECT_EQ (peersOf (map, "deckB_stereo_L"), std::vector<std::string> { "StemDeck-B:master_L" });
+    EXPECT_EQ (peersOf (map, "deckB_stereo_R"), std::vector<std::string> { "StemDeck-B:master_R" });
     EXPECT_EQ (map.jack.at ("deckB_1"), std::vector<std::string> { "StemDeck-B:bformat_1" });
     EXPECT_EQ (map.jack.at ("deckB_aux_3"), std::vector<std::string> { "StemDeck-B:aux_3" });
     EXPECT_EQ (map.jack.at ("deckB_cue_9"), std::vector<std::string> { "StemDeck-B:cue_9" });
@@ -200,7 +211,7 @@ TEST (ConfigEdits, DeckSourceLeavesOtherSlotsAndAnalogAlone)
     EXPECT_EQ (map.jack.at ("deckB_1"), std::vector<std::string> { "AES67 deck B:receive_MAIN1" });
     EXPECT_EQ (map.jack.count ("deckA_2"), 0u);
     EXPECT_EQ (map.deviceChannels.at ("analog_1"), 3);
-    EXPECT_EQ (map.jack.size(), 41u + 2u);
+    EXPECT_EQ (map.jack.size(), 43u + 2u);
 }
 
 TEST (ConfigEdits, DeckSourceOfNeedsAllFortyOneLinks)
@@ -229,6 +240,49 @@ TEST (ConfigEdits, DeckSourceOfNeedsAllFortyOneLinks)
 }
 
 // A17: the CHANNELS page sets the deck count beside N, 1..26 (one letter per slot A..Z).
+// A map from before the stereo pair (a user's saved file): each slot whose 41 links are one source's gets that
+// source's pair; a hand-edited slot and a pair the user named stay as they are.
+TEST (ConfigEdits, AnUnnamedStereoPairFollowsTheSlotsSource)
+{
+    a3app::IoMap map;
+    a3app::setDeckSource (map, 1, a3app::DeckSource::local);
+    a3app::setDeckSource (map, 2, a3app::DeckSource::aes67);
+    a3app::setDeckSource (map, 3, a3app::DeckSource::local);
+    a3app::setDeckSource (map, 4, a3app::DeckSource::local);
+    map.jack["deckC_1"] = { "elsewhere:out_1" };
+    for (const auto* port : { "deckA_stereo_L", "deckA_stereo_R", "deckB_stereo_L", "deckB_stereo_R", "deckC_stereo_L", "deckC_stereo_R" })
+        map.jack.erase (port);
+    map.jack["deckD_stereo_L"] = { "mine:left" };
+    map.jack.erase ("deckD_stereo_R");
+
+    a3app::linkUnnamedStereoPairs (map, 4);
+    using Peers = std::vector<std::string>;
+    EXPECT_EQ (peersOf (map, "deckA_stereo_L"), Peers { "StemDeck-A:master_L" });
+    EXPECT_EQ (peersOf (map, "deckA_stereo_R"), Peers { "StemDeck-A:master_R" });
+    EXPECT_EQ (peersOf (map, "deckB_stereo_R"), Peers { "AES67 deck B:receive_MASTER_R" });
+    EXPECT_EQ (map.jack.count ("deckC_stereo_L"), 0u) << "a hand-edited slot has no source to follow";
+    EXPECT_EQ (peersOf (map, "deckD_stereo_L"), Peers { "mine:left" });
+    EXPECT_EQ (map.jack.count ("deckD_stereo_R"), 0u) << "a pair the user named one side of is the user's";
+}
+
+// The loader fills the pair from the slot's source, so a file saved before the pair existed plays a stereo deck.
+TEST (ConfigEdits, ALoadedFileWithoutTheStereoPairGetsIt)
+{
+    juce::String error;
+    auto config = sample();   // two decks
+    a3app::setDeckSource (config.io, 1, a3app::DeckSource::local);
+    a3app::setDeckSource (config.io, 2, a3app::DeckSource::aes67);
+    for (const auto* port : { "deckA_stereo_L", "deckA_stereo_R", "deckB_stereo_L", "deckB_stereo_R" })
+        config.io.jack.erase (port);
+    const auto file = juce::File::createTempFile ("a3-stereo-pair");
+    ASSERT_TRUE (a3app::saveAppConfig (config, file).wasOk());
+    const auto loaded = a3app::loadAppConfig (file, error, a3apptest::truthDecks());
+    file.deleteFile();
+    ASSERT_TRUE (loaded) << error;
+    EXPECT_EQ (peersOf (loaded->io, "deckA_stereo_L"), std::vector<std::string> { "StemDeck-A:master_L" });
+    EXPECT_EQ (peersOf (loaded->io, "deckB_stereo_R"), std::vector<std::string> { "AES67 deck B:receive_MASTER_R" });
+}
+
 TEST (ConfigEdits, DecksAreBoundedAndNamedInTheFile)
 {
     juce::String error;

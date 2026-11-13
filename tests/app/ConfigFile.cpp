@@ -106,7 +106,7 @@ TEST (ConfigFile, MissingSectionsTakeTheDefaults)
     EXPECT_EQ (loaded->backend.blockSize, 64);    // the shipped quantum (2026-11-06; 128 before)
     EXPECT_EQ (loaded->backend.periods, 3);       // today's ALSA periods: no WirePlumber drop-in
     EXPECT_EQ (loaded->backend.sampleRate, 44100);
-    EXPECT_EQ (loaded->io.jack.size(), (size_t) defaults.decks * 41);   // only the slots' local StemDeck links
+    EXPECT_EQ (loaded->io.jack.size(), (size_t) defaults.decks * 43);   // only the slots' local StemDeck links, the stereo pair with them
     EXPECT_TRUE (loaded->io.directLinks.empty());
     EXPECT_TRUE (loaded->io.deviceChannels.empty());
 }

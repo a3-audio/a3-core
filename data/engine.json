@@ -23,36 +23,28 @@
  "io": {
   "jack": {
    "analog_1": [
-    "system:capture_1",
-    "StemDeck-A:master_L"
+    "system:capture_1"
    ],
    "analog_2": [
-    "system:capture_2",
-    "StemDeck-A:master_R"
+    "system:capture_2"
    ],
    "analog_3": [
-    "system:capture_3",
-    "AES67 deck B:receive_MASTER_L"
+    "system:capture_3"
    ],
    "analog_4": [
-    "system:capture_4",
-    "AES67 deck B:receive_MASTER_R"
+    "system:capture_4"
    ],
    "analog_5": [
-    "system:capture_5",
-    "AES67 deck C:receive_MASTER_L"
+    "system:capture_5"
    ],
    "analog_6": [
-    "system:capture_6",
-    "AES67 deck C:receive_MASTER_R"
+    "system:capture_6"
    ],
    "analog_7": [
-    "system:capture_7",
-    "AES67 deck D:receive_MASTER_L"
+    "system:capture_7"
    ],
    "analog_8": [
-    "system:capture_8",
-    "AES67 deck D:receive_MASTER_R"
+    "system:capture_8"
    ],
    "analog_11": [
     "system:capture_13"
@@ -204,6 +196,12 @@
    "deckA_cue_9": [
     "StemDeck-A:cue_9"
    ],
+   "deckA_stereo_L": [
+    "StemDeck-A:master_L"
+   ],
+   "deckA_stereo_R": [
+    "StemDeck-A:master_R"
+   ],
    "deckB_1": [
     "AES67 deck B:receive_MAIN1"
    ],
@@ -326,6 +324,12 @@
    ],
    "deckB_cue_9": [
     "AES67 deck B:receive_CUE9"
+   ],
+   "deckB_stereo_L": [
+    "AES67 deck B:receive_MASTER_L"
+   ],
+   "deckB_stereo_R": [
+    "AES67 deck B:receive_MASTER_R"
    ]
   },
   "directLinks": [],

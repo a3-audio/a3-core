@@ -8,6 +8,7 @@
 #include <map>
 #include <set>
 #include "AppTruth.h"
+#include "ConfigEdits.h"
 #include "ConfigFile.h"
 #include "ConnectionPlan.h"
 #include "DeckAudioReport.h"
@@ -226,16 +227,16 @@ TEST (DefaultConfig, DeckAIsLocalDeckBIsAes67EveryOtherSlotLocal)
             const auto letter = port.substr (4, port.find ('_') - 4);
             const auto tail = port.substr (port.find ('_') + 1);   // "7", "aux_3", "cue_9"
             const auto n = tail.substr (tail.find ('_') == std::string::npos ? 0 : tail.find ('_') + 1);
-            const auto kind = std::isdigit ((unsigned char) tail[0]) ? 0 : (startsWith (tail, "aux") ? 1 : 2);
-            const std::string local[] = { "bformat_", "aux_", "cue_" };
-            const std::string remote[] = { "receive_MAIN", "receive_AUX", "receive_CUE" };
+            const auto kind = std::isdigit ((unsigned char) tail[0]) ? 0 : (startsWith (tail, "aux") ? 1 : (startsWith (tail, "cue") ? 2 : 3));
+            const std::string local[] = { "bformat_", "aux_", "cue_", "master_" };
+            const std::string remote[] = { "receive_MAIN", "receive_AUX", "receive_CUE", "receive_MASTER_" };
             const auto expected = letter != "B" ? "StemDeck-" + letter + ":" + local[kind] + n
                                                 : "AES67 deck " + letter + ":" + remote[kind] + n;
             const auto found = config.io.jack.find (port);
             ASSERT_TRUE (found != config.io.jack.end()) << port;
             EXPECT_EQ (found->second, std::vector<std::string> { expected }) << port;
         }
-        EXPECT_EQ (deckPorts, truthDecks * 41);
+        EXPECT_EQ (deckPorts, truthDecks * 43);
         EXPECT_EQ (config.io.jack.at ("deckA_cue_9"), std::vector<std::string> { "StemDeck-A:cue_9" });
         EXPECT_EQ (config.io.jack.at ("deckB_aux_1"), std::vector<std::string> { "AES67 deck B:receive_AUX1" });
         EXPECT_EQ (config.io.jack.at ("deckC_1"), std::vector<std::string> { "StemDeck-C:bformat_1" });
@@ -358,38 +359,48 @@ TEST (DefaultConfig, LeavesTheRoundTripLoopFree)
     EXPECT_EQ (config.io.jack.at ("analog_12"), std::vector<std::string> { "system:capture_14" });
 }
 
-// A deck in stereo mode sends one master pair; it lands on the analog inputs of its channel (deck n -> analog 2n-1/2n), added
-// to what the card delivers there. A peer that is not in the graph is skipped, so the entries cost nothing in B-format mode.
-TEST (DefaultConfig, AStereoDeckLandsOnTheAnalogInputsOfItsChannel)
+// A deck in stereo mode sends one master pair; it has its own pair of inputs (deck{X}_stereo_L/R), linked from the
+// slot's source like its B-format: the desk's D1..D4 play it through the channel strip. The analog inputs carry only
+// the card, so a stereo deck does not add to the card's capture.
+TEST (DefaultConfig, AStereoDeckHasItsOwnPairNotTheAnalogInputs)
 {
     const auto config = loadDefault();
-    const std::string clients[] = { "StemDeck-A", "AES67 deck B", "AES67 deck C", "AES67 deck D" };
-    for (int channel = 1; channel <= 4; ++channel)
+    const auto peersOf = [&] (const std::string& port)
     {
-        const auto& client = clients[channel - 1];
-        const bool local = channel == 1;
-        for (const int side : { 0, 1 })
-        {
-            const auto analog = 2 * channel - 1 + side;
-            const std::string sides[] = { "L", "R" };
-            const auto deckPeer = client + ":" + (local ? "master_" : "receive_MASTER_") + sides[side];
-            const auto card = "system:capture_" + std::to_string (analog);
-            EXPECT_EQ (config.io.jack.at ("analog_" + std::to_string (analog)), (std::vector<std::string> { card, deckPeer }))
-                << "analog_" << analog << ": the card first, the deck added";
-        }
+        const auto found = config.io.jack.find (port);
+        return found == config.io.jack.end() ? std::vector<std::string> {} : found->second;
+    };
+    for (int analog = 1; analog <= 8; ++analog)
+        EXPECT_EQ (peersOf ("analog_" + std::to_string (analog)), std::vector<std::string> { "system:capture_" + std::to_string (analog) })
+            << "analog_" << analog << ": the card alone";
+    const std::string sides[] = { "L", "R" };
+    for (int side = 0; side < 2; ++side)
+    {
+        const auto& s = sides[side];
+        EXPECT_EQ (peersOf ("deckA_stereo_" + s), std::vector<std::string> { "StemDeck-A:master_" + s });
+        EXPECT_EQ (peersOf ("deckB_stereo_" + s), std::vector<std::string> { "AES67 deck B:receive_MASTER_" + s });
+        EXPECT_EQ (peersOf ("deckC_stereo_" + s), std::vector<std::string> { "StemDeck-C:master_" + s });
+        EXPECT_EQ (peersOf ("deckD_stereo_" + s), std::vector<std::string> { "StemDeck-D:master_" + s });
     }
 }
 
-// The deck-audio light counts the deck's own deckX_ ports; the analog entries must not move it.
-TEST (DefaultConfig, TheStereoPeersAreNotDeckLinks)
+// The deck-audio word (what greys out D<n> on the desk) counts a deck in stereo mode as present: StemDeck in stereo has
+// no B-format ports, only its pair. Without either it is absent, and a B-format deck is untouched by its missing pair.
+TEST (DefaultConfig, AStereoDeckIsPresentOnTheDesk)
 {
     const auto config = loadDefault();
-    for (const auto& [port, peers] : config.io.jack)
-        if (startsWith (port, "deck"))
-            for (const auto& peer : peers)
-                EXPECT_EQ (peer.find ("MASTER"), std::string::npos) << port << " -> " << peer;
-    // Every deck slot is complete with only its own ports present, whatever the analog peers' state.
     const auto map = static_cast<const a3app::IoMap&> (config.io);
-    std::vector<std::string> missing { "StemDeck-A:master_L", "StemDeck-A:master_R", "AES67 deck B:receive_MASTER_L" };
-    EXPECT_EQ (a3app::deckAudioLinked (map, 4, missing), a3app::deckAudioLinked (map, 4, {}));
+    std::vector<std::string> bformatA, stereoA { "StemDeck-A:master_L", "StemDeck-A:master_R" };
+    for (const auto& [port, peer] : a3app::deckLinks (1, a3app::DeckSource::local))
+        bformatA.push_back (peer);
+    const std::vector<std::string> stereoB { "AES67 deck B:receive_MASTER_L", "AES67 deck B:receive_MASTER_R" };
+
+    auto missing = bformatA;
+    missing.insert (missing.end(), stereoB.begin(), stereoB.end());
+    EXPECT_EQ (a3app::deckAudioLinked (map, 4, missing), (std::vector<bool> { true, true, true, true }));
+    EXPECT_EQ (a3app::deckModes (map, 4, missing)[0], a3app::DeckMode::stereo);
+    EXPECT_EQ (a3app::deckModes (map, 4, missing)[1], a3app::DeckMode::bformat);
+
+    missing.insert (missing.end(), stereoA.begin(), stereoA.end());
+    EXPECT_EQ (a3app::deckAudioLinked (map, 4, missing)[0], false);
 }

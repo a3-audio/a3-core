@@ -15,10 +15,11 @@ struct PortNames { std::vector<std::string> inputs, outputs; };
 // The engine's ports as the backend registers them. Outputs are in exactly the
 // order of Engine::outputMeters(): main (sub?, tops), booth (sub?, tops), rec L/R,
 // phones L/R, then per channel pre L/R, post L/R. Inputs: analog_1..A, then per
-// deck slot (letter A, B, ... in names, R12): deck{X}_1..16, deck{X}_aux_1..16, deck{X}_cue_1..9.
+// deck slot (letter A, B, ... in names, R12): deck{X}_1..16, deck{X}_aux_1..16, deck{X}_cue_1..9,
+// deck{X}_stereo_L/R (the master pair of a deck in stereo mode).
 PortNames enginePortNames (const a3::EngineConfig&, const a3::SpatialConfig&);
 
-constexpr int deckInputChannels = 16, deckAuxChannels = 16, deckCueChannels = 9;
+constexpr int deckInputChannels = 16, deckAuxChannels = 16, deckCueChannels = 9, deckStereoChannels = 2;
 using a3::deckLetters;   // 1 = "A", 26 = "Z", 27 = "AA"
 
 // The name of one input port; enginePortNames and the receiver groups both build theirs here.
@@ -26,6 +27,7 @@ std::string analogPortName (int number);
 std::string deckBFormatPortName (int slot, int number);
 std::string deckAuxPortName (int slot, int number);
 std::string deckCuePortName (int slot, int number);
+std::string deckStereoPortName (int slot, int side);   // side 0 = L, 1 = R
 
 // The stereo pairs the slots had before aux and cue grew (deck{X}_cue_L/R, deck{X}_aux_L/R) for
 // `decks` slots: a saved config may still name them, and the loader drops those links.

@@ -105,6 +105,8 @@ public:
         // Core hears each deck slot's link state with the hello. A backend that makes no links has
         // nothing to report: Core then counts the deck by its hello alone, as for an older engine.
         reportDeckAudio (backend->status(), data.config.io, data.config.engine.decks, *host);
+        // The same links tell the engine which decks send one stereo pair (StemDeck's Output: Stereo).
+        applyDeckModes (backend->status(), data.config.io, data.config.engine.decks, host->controls());
     }
 
     bool lost() const
