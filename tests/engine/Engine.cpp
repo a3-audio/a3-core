@@ -815,7 +815,7 @@ TEST (Engine, TheDelayIsTheEnginesWhateverTheSavedFilesSay)
     auto engine = a3::Engine::create (config, loadedSpatialConfig (reaperBoothSpatialDirectory), error);
     ASSERT_NE (engine, nullptr) << error;
     engine->prepare (engineRate, engineBlock);
-    a3::EngineControls controls (config.channels);
+    a3::EngineControls controls (config.channels, config.decks);
     auto& node = engine->delay();
     const auto expectTheEngines = [&]
     {
@@ -1402,4 +1402,113 @@ TEST (Engine, ZoneMetersReadAfterTheLevelBeforeTheTrim)
     }
     EXPECT_NEAR (quieter.meters.at ("main_top1") / unity.meters.at ("main_top1"), quieter.mainPort / unity.mainPort, 1e-3);
     EXPECT_NEAR (quieter.meters.at ("booth_top1") / unity.meters.at ("booth_top1"), quieter.boothPort / unity.boothPort, 1e-3);
+}
+
+// A deck in stereo mode on channel c: its pair runs through c's own strip (TRIM, EQ, filter, 3D, VOLUME, the analog
+// encoder at c's position), exactly as if it came in on c's analog pair; c's analog pair and the deck's B-format
+// reach nothing.
+TEST (Engine, AStereoDeckRunsThroughTheChannelStripOfAnyChannel)
+{
+    const size_t frames = oneSecond;
+    const auto deckSignal = pinkStereo (frames, 77);
+    for (const int channel : { 0, 2 })
+    {
+        const auto common = [&] (EngineRig& rig)
+        {
+            rig.controls.channel (channel).cue = 1.0f;
+            rig.controls.channel (channel).eqLow = 0.7f;
+            rig.controls.global().phonesMix = 0.5f;
+        };
+        EngineRig reference (engineConfig (4, 2), frames);
+        reference.setAnalogPair (channel + 1, deckSignal);
+        common (reference);
+        reference.run();
+
+        EngineRig rig (engineConfig (4, 2), frames);
+        rig.setAnalogPair (channel + 1, pinkStereo (frames, 5));
+        fillDeck (rig.decks[0], frames, 0.1f, 50);
+        rig.decks[0].stereo = { deckSignal.l, deckSignal.r };
+        rig.controls.setDeckStereo (1, true);
+        rig.controls.channel (channel).source = 1;
+        common (rig);
+        rig.run();
+
+        EXPECT_GT (peak (rig.post[(size_t) channel].l, settled), 1e-3) << channel;
+        EXPECT_GT (peak (rig.mainOutputs(), settled), 1e-3) << channel;
+        EXPECT_LT (maxDifference (rig.everyOutput(), reference.everyOutput(), settled), 1e-5) << "channel " << channel;
+    }
+}
+
+// A deck in B-format mode plays its B-format; its stereo pair, should it carry anything, reaches nothing.
+TEST (Engine, ABFormatDeckLeavesItsStereoPairAlone)
+{
+    const size_t frames = oneSecond / 2;
+    const auto run = [&] (bool stereoSignal)
+    {
+        auto rig = std::make_unique<EngineRig> (engineConfig (4, 2), frames);
+        fillDeck (rig->decks[0], frames, 0.1f, 50);
+        if (stereoSignal)
+        {
+            const auto s = pinkStereo (frames, 9);
+            rig->decks[0].stereo = { s.l, s.r };
+        }
+        rig->controls.channel (1).source = 1;
+        rig->run();
+        return rig;
+    };
+    EXPECT_EQ (maxDifference (run (true)->everyOutput(), run (false)->everyOutput()), 0.0);
+}
+
+// analog -> D1 stereo -> D1 B-format (the deck changes mode) -> D1 stereo -> D2 stereo -> analog: every switch a
+// 10 ms ramp, no step larger than the signals' own.
+TEST (Engine, SwitchesBetweenStereoBFormatAndAnalogAreClickFree)
+{
+    const size_t frames = oneSecond;
+    const float level = 0.5f;
+    EngineRig rig (engineConfig (4, 2), frames);
+    rig.setAnalogPair (1, sine (frames, 997.0, engineRate, level));
+    wOnly (rig.decks[0], sine (frames, 1499.0, engineRate, level).l);
+    const auto d1 = sine (frames, 1201.0, engineRate, level), d2 = sine (frames, 2003.0, engineRate, level);
+    rig.decks[0].stereo = { d1.l, d1.r };
+    rig.decks[1].stereo = { d2.l, d2.r };
+    rig.neutralStrip (0);
+    rig.run (0, 0, { engineBlock }, [&] (size_t start)
+    {
+        const int sixth = (int) (start / (frames / 6));
+        const int sources[] = { 0, 1, 1, 1, 2, 0 };
+        rig.controls.channel (0).source = sources[std::min (sixth, 5)];
+        rig.controls.setDeckStereo (1, sixth != 2);
+        rig.controls.setDeckStereo (2, true);
+    });
+
+    const double inputStep = 2.0 * juce::MathConstants<double>::pi * 2003.0 / engineRate * level;
+    EXPECT_GT (peak (rig.post[0].l, frames / 6 + afterTheCrossfade, frames / 3), 1e-3) << "D1 stereo is heard";
+    EXPECT_LE (maxStep (rig.post[0].l), 2.0 * inputStep);
+    EXPECT_LE (maxStep (rig.pre[0].l), 2.0 * inputStep);
+    for (const auto* channel : rig.mainOutputs())
+        EXPECT_LE (maxStep (*channel), 2.0 * inputStep);
+    for (const auto* channel : rig.recOutputs())
+        EXPECT_LE (maxStep (*channel), 2.0 * inputStep);
+}
+
+// A deck in stereo mode has no W: its bar reads the middle of its pair, (L + R) / 2, before any channel. A deck in
+// B-format mode reads its W as before, whatever its pair carries.
+TEST (Engine, AStereoDeckMetersTheMiddleOfItsPair)
+{
+    a3::VuTaps taps (truthVuMeters(), a3::VuSettings {});
+    EngineRig rig (engineConfig (4, 2), 4096);
+    rig.engine->attachVuTaps (taps);
+    rig.decks[0].stereo = { impulseAt (rig.frames, 100, 0.6f), impulseAt (rig.frames, 100, 0.2f) };
+    rig.decks[0].bformat[0] = impulseAt (rig.frames, 300, 0.9f);   // a stereo deck's W is not its level
+    rig.decks[1].stereo = { impulseAt (rig.frames, 100, 0.8f), {} };
+    rig.decks[1].bformat[0] = impulseAt (rig.frames, 200, 0.5f);
+    rig.controls.setDeckStereo (1, true);
+    rig.run();
+    std::vector<float> peaks, rms;
+    taps.take (peaks, rms);
+    std::map<std::string, float> byName;
+    for (size_t slot = 0; slot < taps.names().size(); ++slot)
+        byName[taps.names()[slot]] = peaks[slot];
+    EXPECT_FLOAT_EQ (byName.at ("deck_a"), 0.4f);
+    EXPECT_EQ (byName.at ("deck_b"), 0.5f);
 }

@@ -44,6 +44,7 @@ struct DeckSignals
 {
     std::array<std::vector<float>, deckChannels> bformat, aux;
     std::array<std::vector<float>, 9> cue;   // 2nd-order B-format, ACN 0..8
+    std::array<std::vector<float>, 2> stereo;   // the master pair of a deck in stereo mode
 };
 
 inline const float* pointerAt (const std::vector<float>& signal, size_t start)
@@ -60,7 +61,7 @@ public:
                double sampleRate = engineRate, bool gateOpenAtStart = true)
         : config (std::move (engineConfiguration)),
           spatial (loadedSpatialConfig (shippedSpatialDirectory)),
-          controls (config.channels),
+          controls (config.channels, config.decks),
           analog ((size_t) config.analogInputs),
           decks ((size_t) config.decks),
           frames (totalFrames),
@@ -187,6 +188,8 @@ public:
                 d.aux[(size_t) ch] = pointerAt (deck.aux[(size_t) ch], start);
             for (size_t acn = 0; acn < d.cue.size(); ++acn)
                 d.cue[acn] = pointerAt (deck.cue[acn], start);
+            for (size_t side = 0; side < d.stereo.size(); ++side)
+                d.stereo[side] = pointerAt (deck.stereo[side], start);
             in.decks.push_back (d);
         }
         return in;
