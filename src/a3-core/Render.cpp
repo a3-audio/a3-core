@@ -6,9 +6,12 @@
 #include <unistd.h>
 
 #include <cerrno>
+#include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <system_error>
 #include <utility>
 #include <vector>
@@ -126,16 +129,48 @@ std::string quotedList (const std::vector<std::string>& names)
 // The legacy sender keeps the node name it always had; each other one needs its own.
 std::string nodeName (const StreamSpec& spec) { return spec.legacy ? "rtp-sink" : "rtp-sink-" + spec.key; }
 
+// The group's address as one number, e.g. 239.69.200.1 -> 4014327809: unique per stream and the same on
+// every render. PipeWire puts it in the SDP origin, which a receiver keys a SAP session by; without it
+// every sink of the process shares one origin and a receiver takes the second stream for a repeat of the
+// first (the Core streams never got a node on the laptop, 2026-11-17). Nothing for a group that is no
+// dotted address.
+std::optional<std::uint32_t> groupAsNumber (const std::string& group)
+{
+    unsigned a = 0, b = 0, c = 0, d = 0;
+    char rest = 0;
+    if (std::sscanf (group.c_str(), "%u.%u.%u.%u%c", &a, &b, &c, &d, &rest) != 4 || a > 255 || b > 255 || c > 255 || d > 255)
+        return std::nullopt;
+    return (a << 24) | (b << 16) | (c << 8) | d;
+}
+
+// The legacy sender keeps the session it always announced (no sess.id: its line goes), so a receiver that
+// knows it still does; every other one names its own.
+std::string sessionIdLine (const StreamSpec& spec)
+{
+    const auto id = spec.legacy ? std::nullopt : groupAsNumber (spec.group);
+    return id ? "sess.id = " + std::to_string (*id) : std::string();
+}
+
+std::string withSessionId (std::string block, const std::string& line)
+{
+    constexpr const char* marked = "            @SESS_ID_LINE@\n";
+    const auto at = block.find (marked);
+    if (at == std::string::npos)
+        return block;
+    return block.replace (at, std::strlen (marked), line.empty() ? "" : "            " + line + "\n");
+}
+
 std::string sinkBlock (const std::string& sinkTemplate, const StreamSpec& spec, const std::string& audioPort)
 {
-    return fillIn (sinkTemplate, { { "@AUDIO_PORT@", audioPort },
+    return withSessionId (fillIn (sinkTemplate, { { "@AUDIO_PORT@", audioPort },
                                    { "@SENDER_NAME@", spec.session },
                                    { "@STREAM_IP@", spec.group },
                                    { "@STREAM_PORT@", std::to_string (spec.port) },
                                    { "@PTIME@", pythonRepr (spec.ptimeMs) },
                                    { "@CHANNELS@", std::to_string (spec.channelNames.size()) },
                                    { "@CHANNEL_NAMES@", quotedList (spec.channelNames) },
-                                   { "@NODE_NAME@", nodeName (spec) } });
+                                   { "@NODE_NAME@", nodeName (spec) } }),
+                          sessionIdLine (spec));
 }
 }
 

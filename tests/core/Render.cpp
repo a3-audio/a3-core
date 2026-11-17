@@ -597,6 +597,17 @@ TEST (Render, EachResolvedStreamGetsOneSinkBlock)
     EXPECT_EQ (text.find ('@'), std::string::npos);
 }
 
+TEST (Render, EveryNewStreamAnnouncesASessionOfItsOwn)
+{
+    // PipeWire gives every sink of one process the same SDP origin ("o=" line), and a receiver keys a SAP
+    // session by it: the Core streams were taken for repeats of the legacy one and got no node (2026-11-17).
+    // The group's address as a number is stable and unique per stream. The legacy stream is left as it was.
+    const auto blocks = sinkBlocks (rendered (resolveTxStreams (packageTruth(), sixOneSpatial(), hostname)));
+    ASSERT_EQ (blocks.size(), 5u);
+    EXPECT_EQ (valuesOf (blocks, "sess.id"),
+               (Texts { "<no sess.id>", "4014327809", "4014327810", "4014327811", "4014327812" }));
+}
+
 TEST (Render, ZoneChannelNamesAreAnnounced)
 {
     const auto blocks = sinkBlocks (rendered (resolveTxStreams (packageTruth(), sixOneSpatial(), hostname)));
