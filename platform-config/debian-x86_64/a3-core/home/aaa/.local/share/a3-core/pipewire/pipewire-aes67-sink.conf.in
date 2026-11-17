@@ -1,8 +1,8 @@
     { name = libpipewire-module-rtp-sink
         args = {
             local.ifname = "@AUDIO_PORT@"
-            # Group and port are the truth's aes67.stream (a3-osc.json); a second
-            # sender needs a listener of its own there, in the 239.69.x.x range.
+            # Group and port are the stream's row in the truth's aes67_streams
+            # (a3-osc.json); every sender has a group of its own.
             destination.ip = @STREAM_IP@
             destination.port = @STREAM_PORT@
             net.mtu = 1500

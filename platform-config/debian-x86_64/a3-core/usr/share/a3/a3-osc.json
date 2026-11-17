@@ -29,8 +29,8 @@
   "  address) or group_base + group_step (+1 per deck slot), port, ptime in ms, source",
   "  (zone:main|zone:booth|pair:rec|pair:phones take their channels from the layout; fixed",
   "  has channels), legacy. Packets must fit MTU 1500: at most 22 channels at 0.5 ms, 44 at",
-  "  0.25 ms. The legacy groups (aes67-core, decks from .244) do not move; new Core streams",
-  "  live in 239.69.200.x, out of reach of the deck slots (A = .244 ... ZZ = 239.69.153.177)."
+  "  0.25 ms. The deck groups (from .244) do not move; the Core streams live in",
+  "  239.69.200.x, out of reach of the deck slots (A = .244 ... ZZ = 239.69.153.177)."
  ],
  "version": 1,
  "network": {
@@ -107,8 +107,6 @@
    "carries": "Pro DJ Link beat packets (broadcast, not OSC)"},
   {"name": "prolink.status", "program": "prolink", "role": "status", "host": "any", "port": 50002,
    "carries": "Pro DJ Link status packets (broadcast, not OSC)"},
-  {"name": "aes67.stream", "program": "aes67", "role": "stream", "host": "aes67-core", "port": 5004,
-   "carries": "the Core's 12 channels as AES67 (RTP, L24, 44.1 kHz, 0.5 ms packets), multicast on the audio socket; not OSC"},
   {"name": "aes67.deck", "program": "aes67", "role": "deck", "host": "aes67-deck-{deck}", "port": 5004,
    "carries": "one deck's 41 channels: MAIN1-16, AUX1-16, CUE1-9 (L24, 44.1 kHz, ptime 0.25 ms), sess.name \"AES67 deck <X>\"; the receiver needs net.mtu = 1500 (the default 1280 truncates the 1365-byte RTP packet); not OSC"},
   {"name": "aes67.sap", "program": "aes67", "role": "sap", "host": "sap", "port": 9875,
@@ -119,8 +117,6 @@
    "carries": "PTP general messages (announce, follow-up); not OSC"}
  ],
  "aes67_streams": [
-  {"key": "legacy-out", "session": "AES67 {host} out", "sender": "core", "group": "aes67-core",
-   "port": 5004, "ptime": 0.5, "source": "fixed", "channels": 12, "legacy": true},
   {"key": "deck", "session": "AES67 deck {deck}", "sender": "deck", "group_base": "239.69.150.244",
    "group_step": 1, "port": 5004, "ptime": 0.25, "source": "fixed", "channels": 41, "legacy": true},
   {"key": "core-main", "session": "AES67 Core MAIN", "sender": "core", "group": "239.69.200.1",

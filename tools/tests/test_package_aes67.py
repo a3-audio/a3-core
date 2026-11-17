@@ -4,8 +4,10 @@ The Core sends AES67 on its audio socket -- the second one, the truth's
 network.audio_port -- and is PTP master there. Remote StemDecks play into it
 and record from it. PipeWire runs the AES67 side as a second instance
 (a3-aes67.service) with the config a3-osc-render renders from a template: the
-socket and the sender's name are this machine's, everything else is the
-package's.
+socket is this machine's, everything else is the package's. The senders are
+the aes67_streams table's Core rows, one rtp-sink block each from
+pipewire-aes67-sink.conf.in (the C++ renderer, tests/core/Render.cpp); this
+Python renderer renders the rest of the config and no sender.
 
 What the rig settled on (2026-10-13/14), each a test below: the sender is not
 in the PTP group -- the Scarlett drives it like the engine (then REAPER), so
@@ -62,6 +64,10 @@ def rendered(port="enp9s0", hostname="core-x"):
     return a3_osc_render.aes67_conf(TruthWithPort(port), hostname)
 
 
+def sink_template():
+    return a3_osc_render.AES67_SINK_TEMPLATE.read_text()
+
+
 def block(text, start):
     """The `{ ... }` block that opens on the first line matching `start`."""
     begin = re.search(start, text).start()
@@ -99,12 +105,15 @@ class TheConfigIsThisMachines(unittest.TestCase):
         text = rendered("enp9s0")
         named = [v for k, v in settings(text)
                  if k in ("local.ifname", "clock.interface")]
-        self.assertEqual(named, ["enp9s0"] * 3)
+        self.assertEqual(named, ["enp9s0"] * 2)
+        self.assertEqual(value(sink_template(), "local.ifname"), "@AUDIO_PORT@")
 
-    def test_the_sender_is_named_after_the_host(self):
-        self.assertEqual(value(block(rendered(hostname="core-x"),
-                                     "libpipewire-module-rtp-sink"), "sess.name"),
-                         "AES67 core-x out")
+    def test_no_sender_is_named_after_the_host(self):
+        # The 12-channel "AES67 <host> out" was retired on 2026-11-17.
+        text = rendered(hostname="core-x")
+        self.assertNotIn("core-x", text)
+        self.assertNotIn("libpipewire-module-rtp-sink", text)
+        self.assertEqual(value(sink_template(), "sess.name"), "@SENDER_NAME@")
 
     def test_nothing_is_left_unrendered(self):
         self.assertNotIn("@", rendered())
@@ -125,8 +134,9 @@ class TheTruthNamesTheAudioNetwork(unittest.TestCase):
         listener = TRUTH.listener(program, role)
         return TRUTH.host(listener["host"]), listener["port"]
 
-    def test_the_cores_stream(self):
-        self.assertEqual(("239.69.150.243", 5004), self.endpoint("aes67", "stream"))
+    def test_the_hosts_stream_is_gone(self):
+        with self.assertRaises(Exception):
+            TRUTH.listener("aes67", "stream")
 
     def test_the_announcements(self):
         self.assertEqual(("239.255.255.255", 9875), self.endpoint("aes67", "sap"))
@@ -135,10 +145,10 @@ class TheTruthNamesTheAudioNetwork(unittest.TestCase):
         self.assertEqual(("224.0.1.129", 319), self.endpoint("ptp4l", "event"))
         self.assertEqual(("224.0.1.129", 320), self.endpoint("ptp4l", "general"))
 
-    def test_the_config_takes_the_stream_from_the_truth(self):
-        sender = block(rendered(), "libpipewire-module-rtp-sink")
-        self.assertEqual("239.69.150.243", value(sender, "destination.ip"))
-        self.assertEqual("5004", value(sender, "destination.port"))
+    def test_the_sender_takes_the_stream_from_the_truth(self):
+        sender = block(sink_template(), "libpipewire-module-rtp-sink")
+        self.assertEqual("@STREAM_IP@", value(sender, "destination.ip"))
+        self.assertEqual("@STREAM_PORT@", value(sender, "destination.port"))
 
     def test_the_config_takes_the_announcements_from_the_truth(self):
         sap = block(rendered(), "libpipewire-module-rtp-sap")
@@ -148,26 +158,26 @@ class TheTruthNamesTheAudioNetwork(unittest.TestCase):
     def test_the_template_writes_none_of_them(self):
         template = (a3_osc_render.AES67_TEMPLATE.read_text()
                     + a3_osc_render.AES67_SINK_TEMPLATE.read_text())
-        for written in ("239.69.150.243", "239.255.255.255", "5004", "9875"):
+        for written in ("239.69.", "239.255.255.255", "5004", "9875"):
             self.assertNotIn(written, template)
 
 
 class WhatTheRigSettledOn(unittest.TestCase):
     def setUp(self):
         self.text = rendered()
-        self.sink = block(self.text, "libpipewire-module-rtp-sink")
+        self.sink = block(sink_template(), "libpipewire-module-rtp-sink")
 
-    def test_twelve_channels_at_the_rigs_rate(self):
-        self.assertEqual(value(self.sink, "audio.channels"), "12")
+    def test_each_streams_channels_at_the_rigs_rate(self):
+        self.assertEqual(value(self.sink, "audio.channels"), "@CHANNELS@")
         self.assertEqual(value(self.sink, "audio.rate"), "44100")
 
     def test_the_sender_is_outside_the_ptp_group(self):
         self.assertNotIn("node.group", dict(settings(block(self.sink, "stream.props"))))
 
     def rules(self):
-        """The stream.rules list: everything up to the sender module."""
-        begin = self.text.index("stream.rules")
-        return self.text[begin:self.text.index("libpipewire-module-rtp-sink")]
+        """The stream.rules list: everything from there on (the rendered
+        config has no sender module after it)."""
+        return self.text[self.text.index("stream.rules"):]
 
     def rule(self, name_pattern):
         """The stream rule whose match is `rtp.session = name_pattern`."""
@@ -184,7 +194,7 @@ class WhatTheRigSettledOn(unittest.TestCase):
         self.assertNotIn("sess.name", self.rules())
 
     def test_received_streams_are_in_the_ptp_group_with_12_ms(self):
-        create = self.rule("~ out$")
+        create = self.rule("~^AES67 Core ")
         self.assertEqual(value(create, "node.group"), "pipewire.ptp0")
         self.assertEqual(value(create, "sess.latency.msec"), "12")
 
@@ -225,23 +235,36 @@ class WhatTheRigSettledOn(unittest.TestCase):
 
     def test_deck_rule_comes_before_the_catch_all(self):
         rules = self.rules()
-        self.assertLess(rules.index("~^AES67 deck "), rules.index("~ out$"))
-        self.assertLess(rules.index("~ out$"), rules.index("sess.sap.announce"))
+        self.assertLess(rules.index("~^AES67 deck "), rules.index("~^AES67 Core "))
+        self.assertLess(rules.index("~^AES67 Core "), rules.index("sess.sap.announce"))
 
-    def test_catch_all_does_not_match_a_deck_name(self):
+    def test_the_core_rule_and_the_deck_rule_are_disjoint(self):
+        # Since 2026-11-17 the Core sends "AES67 Core MAIN|BOOTH|REC|PHONES";
+        # the retired "AES67 <host> out" is matched by neither rule.
         deck = re.compile(r"^AES67 deck ")
-        catch_all = re.compile(r" out$")
+        core = re.compile(r"^AES67 Core ")
         for name in ("AES67 deck A", "AES67 deck B"):
             self.assertTrue(deck.search(name), name)
-            self.assertFalse(catch_all.search(name), name)
-        for name in ("AES67 a3nuc2 out", "AES67 a3nuc1 out"):
-            self.assertTrue(catch_all.search(name), name)
+            self.assertFalse(core.search(name), name)
+        for name in ("AES67 Core MAIN", "AES67 Core BOOTH", "AES67 Core REC", "AES67 Core PHONES"):
+            self.assertTrue(core.search(name), name)
             self.assertFalse(deck.search(name), name)
+        for name in ("AES67 a3nuc1 out", "AES67 a3nuc2 out"):
+            self.assertFalse(core.search(name), name)
+            self.assertFalse(deck.search(name), name)
+
+    def test_the_core_rule_matches_every_core_row_of_the_table(self):
+        core = re.compile(r"^AES67 Core ")
+        for row in TRUTH.data()["aes67_streams"]:
+            if row["sender"] == "core":
+                self.assertTrue(core.search(row["session"]), row["key"])
 
     def test_sender_part_is_unchanged(self):
         # The sender block moved into pipewire-aes67-sink.conf.in (one per
-        # stream since 2026-11-06), so the rendered legacy sender is held
-        # against the baseline template rendered with the same values.
+        # stream since 2026-11-06), so the sink template, filled with the
+        # values the baseline wrote in place and without the session-id
+        # line (added 2026-11-17), is held against the baseline's sender,
+        # setting by setting.
         marker = "    { name = libpipewire-module-rtp-sink"
         template = PACKAGE / "home/aaa/.local/share/a3-core/pipewire/pipewire-aes67.conf.in"
         before = subprocess.run(
@@ -249,15 +272,15 @@ class WhatTheRigSettledOn(unittest.TestCase):
             cwd=PACKAGE, capture_output=True, text=True)
         if before.returncode != 0:
             self.skipTest(f"{BASELINE} is not in this clone")
-        stream_ip, stream_port = TRUTH.endpoint("aes67", "stream")
         baseline = before.stdout
-        for placeholder, filled in (("@AUDIO_PORT@", "enp9s0"),
-                                    ("@SENDER_NAME@", "AES67 core-x out"),
-                                    ("@STREAM_IP@", stream_ip),
-                                    ("@STREAM_PORT@", str(stream_port))):
-            baseline = baseline.replace(placeholder, filled)
-        self.assertEqual(self.text[self.text.index(marker):],
-                         baseline[baseline.index(marker):])
+        sink = sink_template().replace("            @SESS_ID_LINE@\n", "")
+        names = ", ".join(f'"CH{k}"' for k in range(1, 13))
+        for placeholder, filled in (("@PTIME@", "0.5"), ("@CHANNELS@", "12"),
+                                    ("@CHANNEL_NAMES@", names),
+                                    ("@NODE_NAME@", "rtp-sink")):
+            sink = sink.replace(placeholder, filled)
+        # Settings, not bytes: the comments may say what changed since.
+        self.assertEqual(settings(sink), settings(baseline[baseline.index(marker):]))
 
     def test_the_ptp_driver_outranks_the_others(self):
         driver = block(self.text, "factory = spa-node-factory")
