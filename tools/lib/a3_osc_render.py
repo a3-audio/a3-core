@@ -98,6 +98,9 @@ def aes67_conf(truth, hostname, template=AES67_TEMPLATE):
     sink = template.with_name(template.name.replace(".conf.in", "-sink.conf.in"))
     names = ", ".join(f'"CH{k}"' for k in range(1, LEGACY_CHANNELS + 1))
     text = template.read_text().replace("@RTP_SINKS@\n", sink.read_text())
+    # The legacy sender keeps the session it always announced: no sess.id (the C++ renderer gives
+    # every other stream one).
+    text = text.replace("            @SESS_ID_LINE@\n", "")
     for placeholder, filled in (("@AUDIO_PORT@", port),
                                 ("@SENDER_NAME@", f"AES67 {hostname} out"),
                                 ("@STREAM_IP@", stream_ip),
