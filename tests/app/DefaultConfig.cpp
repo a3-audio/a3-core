@@ -30,6 +30,14 @@ a3app::AppConfig loadDefault (int truthDecks = a3apptest::truthDecks())
     return config.value_or (a3app::AppConfig {});
 }
 
+// The shipped truth's Core streams that need no layout (REC, PHONES): what the engine links rec_L/R to.
+std::vector<a3core::StreamSpec> shippedLayoutFreeStreams()
+{
+    const auto loaded = a3core::Truth::load (juce::File (A3_PACKAGE_TRUTH), std::nullopt);
+    EXPECT_TRUE (std::holds_alternative<a3core::Truth> (loaded));
+    return a3core::layoutFreeTxStreams (std::get<a3core::Truth> (loaded), "a3nuc1");
+}
+
 a3app::PortNames portsOf (const a3app::AppConfig& config)
 {
     juce::String error;
@@ -198,10 +206,10 @@ TEST (DefaultConfig, ConnectsWhatThePatchbayConnectedForReaper)
     EXPECT_EQ (direct, 0);    // REAPER's raw meter outs (out25-26, out31-38) fed only those meters
     EXPECT_EQ (singleInstanceRecorders, 2);   // rec_L/R -> StemDeck:rec_L/R, now made by StemDeck itself
     EXPECT_EQ (beatInput, 1);
-    // P46: the sender link is built in (named after the host), never in the file.
-    const auto linked = a3app::linkMapFor (config, "a3nuc1");
-    for (const auto& [port, sender] : { std::pair<const char*, const char*> { "rec_L", "AES67 a3nuc1 out:send_CH1" },
-                                        { "rec_R", "AES67 a3nuc1 out:send_CH2" } })
+    // The sender link comes from the truth's REC stream (since 2026-11-17 "AES67 Core REC"), never from the file.
+    const auto linked = a3app::linkMapFor (config, shippedLayoutFreeStreams());
+    for (const auto& [port, sender] : { std::pair<const char*, const char*> { "rec_L", "AES67 Core REC:send_L" },
+                                        { "rec_R", "AES67 Core REC:send_R" } })
     {
         EXPECT_TRUE (contains (linked.jack.at (port), sender)) << port;
         if (const auto saved = config.io.jack.find (port); saved != config.io.jack.end())
@@ -278,19 +286,18 @@ TEST (DefaultConfig, NoLinkToTheAnalyzersMeters)
 }
 
 // The REC row on the OUTPUT page is free for an analog recorder: the default map names no REC peer; the beat
-// analyzer's input and this host's AES67 sender are built-in links.
+// analyzer's input is a built-in link and the AES67 REC sender comes from the truth's table.
 TEST (DefaultConfig, TheRecRowIsFreeAndTheBeatAnalyzerIsABuiltInLink)
 {
     const auto config = loadDefault();
     EXPECT_EQ (config.io.jack.count ("rec_L"), 0u);
     EXPECT_EQ (config.io.jack.count ("rec_R"), 0u);
     EXPECT_EQ (config.io.deviceChannels.count ("rec_L"), 0u);
-    EXPECT_TRUE (contains (a3app::linkMapFor (config, "a3nuc1").jack.at ("rec_L"), "beat-analyzer:bpm_1"));
+    EXPECT_TRUE (contains (a3app::linkMapFor (config).jack.at ("rec_L"), "beat-analyzer:bpm_1"));
 }
 
 // M10: every deck host records, and the source is always the REC bus. The default map is a3nuc1's:
-// the Core's AES67 sender (a patchbay socket "AES67 .* out", plugs send_CH1/2) carries the bus to the
-// other hosts. P39: every StemDeck links its own rec_L/R from a3-engine:rec_L/R, so no StemDeck recorder is in this map.
+// the Core's AES67 REC stream ("AES67 Core REC", send_L/R) carries the bus to the other hosts. P39: every StemDeck links its own rec_L/R from a3-engine:rec_L/R, so no StemDeck recorder is in this map.
 TEST (DefaultConfig, HasNoStemDeckRecorderEntries)
 {
     const auto config = loadDefault();
@@ -301,25 +308,14 @@ TEST (DefaultConfig, HasNoStemDeckRecorderEntries)
         EXPECT_FALSE (startsWith (to, "StemDeck") && startsWith (afterColon (to), "rec_")) << from << " -> " << to;
 }
 
-// P46: on any host the engine links the REC bus to that host's own sender, and to no other host's.
-TEST (DefaultConfig, RecBusFeedsThisHostsAes67ChannelsOneAndTwo)
-{
-    const auto linked = a3app::linkMapFor (loadDefault(), "a3nuc9");
-    EXPECT_TRUE (contains (linked.jack.at ("rec_L"), "AES67 a3nuc9 out:send_CH1"));
-    EXPECT_TRUE (contains (linked.jack.at ("rec_R"), "AES67 a3nuc9 out:send_CH2"));
-    for (const auto& [port, peers] : linked.jack)
-        for (const auto& peer : peers)
-            EXPECT_FALSE (startsWith (peer, "AES67 a3nuc1 out")) << port << " -> " << peer;
-}
-
 TEST (DefaultConfig, NothingButTheRecBusFeedsARecorder)
 {
     auto config = loadDefault();
-    static_cast<a3app::IoMap&> (config.io) = a3app::linkMapFor (config, "a3nuc1");   // what the engine links on a3nuc1
+    static_cast<a3app::IoMap&> (config.io) = a3app::linkMapFor (config, shippedLayoutFreeStreams());   // what the engine links
     const auto isRecorder = [] (const std::string& peer)
     {
         return (startsWith (peer, "StemDeck") && (afterColon (peer) == "rec_L" || afterColon (peer) == "rec_R"))
-            || startsWith (peer, "AES67 a3nuc1 out:send_CH");
+            || startsWith (peer, "AES67 Core REC:send_");
     };
     for (const auto& [port, peers] : config.io.jack)
         for (const auto& peer : peers)
@@ -336,8 +332,8 @@ TEST (DefaultConfig, NothingButTheRecBusFeedsARecorder)
                 found.insert (peer);
         return found;
     };
-    EXPECT_EQ (recorders ("rec_L"), (std::set<std::string> { "AES67 a3nuc1 out:send_CH1" }));
-    EXPECT_EQ (recorders ("rec_R"), (std::set<std::string> { "AES67 a3nuc1 out:send_CH2" }));
+    EXPECT_EQ (recorders ("rec_L"), (std::set<std::string> { "AES67 Core REC:send_L" }));
+    EXPECT_EQ (recorders ("rec_R"), (std::set<std::string> { "AES67 Core REC:send_R" }));
 }
 
 // The rig's S/PDIF out 11 is patched to S/PDIF in 11: the round-trip loop (decided 2026-10-30, one channel a side). The booth

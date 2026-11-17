@@ -123,56 +123,46 @@ TEST (Aes67Streams, RecAndPhonesAreStereoPairs)
     EXPECT_EQ (phones.enginePorts, (Names { "phones_L", "phones_R" }));
 }
 
-TEST (Aes67Streams, GroupsAndNamesAreTheTablesAndTheLegacyStaysFirst)
+TEST (Aes67Streams, TheStreamsAreTheTablesCoreRowsInTableOrder)
 {
     const auto streams = resolveTxStreams (shippedTruth(), shippedSpatial(), "a3nuc1");
-    ASSERT_EQ (streams.size(), 5u);
-
-    const auto& legacy = streams[0];
-    EXPECT_EQ (legacy.key, "legacy-out");
-    EXPECT_TRUE (legacy.legacy);
-    EXPECT_EQ (legacy.session, "AES67 a3nuc1 out");
-    EXPECT_EQ (legacy.group, "239.69.150.243");
-    EXPECT_EQ (legacy.port, 5004);
-    EXPECT_DOUBLE_EQ (legacy.ptimeMs, 0.5);
-    EXPECT_EQ (legacy.channelNames, numbered ("CH", 12));
-    EXPECT_TRUE (legacy.enginePorts.empty());
+    ASSERT_EQ (streams.size(), 4u);
 
     const Names keys { "core-main", "core-booth", "core-rec", "core-phones" };
     const Names sessions { "AES67 Core MAIN", "AES67 Core BOOTH", "AES67 Core REC", "AES67 Core PHONES" };
     for (size_t i = 0; i < keys.size(); ++i)
     {
-        const auto& spec = streams[i + 1];
+        const auto& spec = streams[i];
         EXPECT_EQ (spec.key, keys[i]);
         EXPECT_EQ (spec.session, sessions[i]);
         EXPECT_EQ (spec.group, "239.69.200." + std::to_string (i + 1));
         EXPECT_EQ (spec.port, 5004);
         EXPECT_DOUBLE_EQ (spec.ptimeMs, 0.5);
-        EXPECT_FALSE (spec.legacy);
     }
 }
 
-TEST (Aes67Streams, NoTableMeansTheLegacyStreamOnly)
+// Decided 2026-11-17: the 12-channel "AES67 <host> out" is gone; a truth without a table sends nothing.
+TEST (Aes67Streams, NoTableMeansNoStreams)
 {
     auto data = shippedTruth().data();
     data.getDynamicObject()->removeProperty ("aes67_streams");
     const Truth withoutTable (data);
     EXPECT_EQ (withoutTable.streamTable().size(), 0);
 
-    const auto streams = resolveTxStreams (withoutTable, shippedSpatial(), "a3nuc1");
-    ASSERT_EQ (streams.size(), 1u);
-    EXPECT_EQ (streams[0].key, "legacy-out");
-    EXPECT_EQ (streams[0].session, "AES67 a3nuc1 out");
-    EXPECT_EQ (streams[0].group, "239.69.150.243");
-    EXPECT_EQ (streams[0].channelNames, numbered ("CH", 12));
+    EXPECT_TRUE (resolveTxStreams (withoutTable, shippedSpatial(), "a3nuc1").empty());
+    EXPECT_TRUE (layoutFreeTxStreams (withoutTable, "a3nuc1").empty());
 }
 
-TEST (Aes67Streams, TheLegacyStreamAloneNeedsNoLayout)
+// Decided 2026-11-17: without a readable layout a machine sends the rows that need none (pairs, fixed), not the zones.
+TEST (Aes67Streams, TheLayoutFreeStreamsAreTheRowsWithoutAZone)
 {
-    const auto legacy = legacyTxStreams (shippedTruth(), "a3nuc1");
-    ASSERT_EQ (legacy.size(), 1u);
-    EXPECT_EQ (streamsSignature (legacy), streamsSignature ({ resolveTxStreams (shippedTruth(), sixOneSpatial(), "a3nuc1").front() }));
-    EXPECT_TRUE (legacy[0].legacy);
+    const auto free = layoutFreeTxStreams (shippedTruth(), "a3nuc1");
+    ASSERT_EQ (free.size(), 2u);
+    EXPECT_EQ (free[0].key, "core-rec");
+    EXPECT_EQ (free[1].key, "core-phones");
+    const auto all = resolveTxStreams (shippedTruth(), sixOneSpatial(), "a3nuc1");
+    EXPECT_EQ (streamsSignature (free), streamsSignature ({ stream (all, "core-rec"), stream (all, "core-phones") }));
+    EXPECT_EQ (free[0].enginePorts, (Names { "rec_L", "rec_R" }));
 }
 
 TEST (Aes67Streams, TheSignatureChangesWithTheSpeakerCountAndNotOtherwise)
@@ -188,14 +178,6 @@ TEST (Aes67Streams, TheSignatureChangesWithTheSpeakerCountAndNotOtherwise)
     EXPECT_NE (streamsSignature (resolveTxStreams (shippedTruth(), grown, "a3nuc1")), once);
 }
 
-TEST (Aes67Streams, AHostnameWithSpacesGivesALegacySessionThatEndsInOut)
-{
-    const auto streams = resolveTxStreams (shippedTruth(), shippedSpatial(), "My Box");
-    ASSERT_FALSE (streams.empty());
-    EXPECT_EQ (streams[0].session, "AES67 My Box out");
-    EXPECT_TRUE (std::regex_search (streams[0].session, std::regex (" out$")));
-}
-
 // F2 (2026-11-06): one packet a frame (1472 bytes of UDP payload under a 1500-byte MTU). A layout above it refuses
 // just that stream and says so; the others are still sent.
 TEST (Aes67Streams, AZoneAboveThePacketLimitIsDroppedAloneAndSaid)
@@ -205,7 +187,7 @@ TEST (Aes67Streams, AZoneAboveThePacketLimitIsDroppedAloneAndSaid)
     Names keys;
     for (const auto& spec : streams)
         keys.push_back (spec.key);
-    EXPECT_EQ (keys, (Names { "legacy-out", "core-booth", "core-rec", "core-phones" }));
+    EXPECT_EQ (keys, (Names { "core-booth", "core-rec", "core-phones" }));
     ASSERT_EQ (problems.size(), 1u);
     EXPECT_NE (problems[0].find ("'core-main'"), std::string::npos) << problems[0];
     EXPECT_NE (problems[0].find ("1472"), std::string::npos) << problems[0];
@@ -235,45 +217,32 @@ std::function<void (juce::DynamicObject&)> setting (const char* property, juce::
 {
     return [property, value] (juce::DynamicObject& row) { row.setProperty (property, value); };
 }
-
-void expectTheBuiltInLegacyStream (const StreamSpec& legacy)
-{
-    EXPECT_EQ (legacy.key, "legacy-out");
-    EXPECT_TRUE (legacy.legacy);
-    EXPECT_EQ (legacy.session, "AES67 a3nuc1 out");
-    EXPECT_EQ (legacy.group, "239.69.150.243");
-    EXPECT_EQ (legacy.port, 5004);
-    EXPECT_DOUBLE_EQ (legacy.ptimeMs, 0.5);
-    EXPECT_EQ (legacy.channelNames, numbered ("CH", 12));
-}
 }
 
-// F3 (2026-11-06): the table is validated. A legacy row that is invalid or does not resolve gives way to the built-in
-// one (the stream every receiver of the rig already knows) with a line saying so; never a Core without its sender.
-TEST (Aes67Streams, AnInvalidOrUnresolvableLegacyRowFallsBackToTheBuiltInOne)
+TEST (Aes67Streams, AHostPlaceholderInASessionIsFilledIn)
 {
-    for (const auto& [why, truth] : std::vector<std::pair<std::string, Truth>> {
-             { "port 0", withRowChanged ("legacy-out", setting ("port", 0)) },
-             { "port 70000", withRowChanged ("legacy-out", setting ("port", 70000)) },
-             { "ptime 0", withRowChanged ("legacy-out", setting ("ptime", 0)) },
-             { "no channels", withRowChanged ("legacy-out", setting ("channels", 0)) },
-             { "no group", withRowChanged ("legacy-out", [] (juce::DynamicObject& row) { row.removeProperty ("group"); }) },
-             { "an unknown host", withRowChanged ("legacy-out", setting ("group", "no-such-host")) },
-             { "an unknown source", withRowChanged ("legacy-out", setting ("source", "zone:nowhere")) } })
-    {
-        std::vector<std::string> problems;
-        const auto streams = resolveTxStreams (truth, shippedSpatial(), "a3nuc1", &problems);
-        ASSERT_EQ (streams.size(), 5u) << why;
-        expectTheBuiltInLegacyStream (streams[0]);
-        ASSERT_EQ (problems.size(), 1u) << why;
-        EXPECT_NE (problems[0].find ("'legacy-out'"), std::string::npos) << why << ": " << problems[0];
+    const auto truth = withRowChanged ("core-rec", setting ("session", "AES67 {host} REC"));
+    EXPECT_EQ (stream (resolveTxStreams (truth, shippedSpatial(), "My Box"), "core-rec").session, "AES67 My Box REC");
+}
 
-        std::vector<std::string> alone;
-        const auto legacy = legacyTxStreams (truth, "a3nuc1", &alone);
-        ASSERT_EQ (legacy.size(), 1u) << why;
-        expectTheBuiltInLegacyStream (legacy[0]);
-        EXPECT_EQ (alone, problems) << why;
-    }
+TEST (Aes67Streams, AFixedCoreRowNeedsNoLayout)
+{
+    const auto truth = withRowChanged ("core-rec", [] (juce::DynamicObject& row) {
+        row.setProperty ("source", "fixed");
+        row.setProperty ("channels", 4);
+    });
+    const auto& rec = stream (layoutFreeTxStreams (truth, "a3nuc1"), "core-rec");
+    EXPECT_EQ (rec.channelNames, numbered ("CH", 4));
+    EXPECT_TRUE (rec.enginePorts.empty());
+}
+
+TEST (Aes67Streams, ARowThatDoesNotResolveIsATruthError)
+{
+    EXPECT_THROW (resolveTxStreams (withRowChanged ("core-rec", setting ("group", "no-such-host")), shippedSpatial(), "a3nuc1"), TruthError);
+    EXPECT_THROW (resolveTxStreams (withRowChanged ("core-main", setting ("source", "zone:nowhere")), shippedSpatial(), "a3nuc1"), TruthError);
+    EXPECT_THROW (layoutFreeTxStreams (withRowChanged ("core-phones", setting ("group", "no-such-host")), "a3nuc1"), TruthError);
+    // A zone row is never resolved without the layout, so it cannot stop the layout-free streams.
+    EXPECT_EQ (layoutFreeTxStreams (withRowChanged ("core-main", setting ("group", "no-such-host")), "a3nuc1").size(), 2u);
 }
 
 TEST (Aes67Streams, AnInvalidCoreRowIsDroppedAndSaid)
@@ -288,7 +257,7 @@ TEST (Aes67Streams, AnInvalidCoreRowIsDroppedAndSaid)
     {
         std::vector<std::string> problems;
         const auto streams = resolveTxStreams (truth, shippedSpatial(), "a3nuc1", &problems);
-        EXPECT_EQ (streams.size(), 4u) << why;
+        EXPECT_EQ (streams.size(), 3u) << why;
         for (const auto& spec : streams)
             EXPECT_NE (spec.key, key) << why;
         ASSERT_EQ (problems.size(), 1u) << why;

@@ -280,13 +280,13 @@ TEST (Render, TheFileSaysWhoseItIs)
 TEST (Render, WrittenWholeAndTheSameAgain)
 {
     recorded::TempDir temp;
-    writeUserFiles (shipped(), temp.dir, hostname, aes67Template(), legacyTxStreams (shipped(), hostname));
+    writeUserFiles (shipped(), temp.dir, hostname, aes67Template(), layoutFreeTxStreams (shipped(), hostname));
     const auto once = analyzerOf (temp.dir);
     EXPECT_EQ (once, analyzerBlock (shipped()));
     auto stale = once;
     stale.replace (stale.find ('='), 1, "=stale");
     recorded::writeBytes (temp.dir.getChildFile (analyzerConfPath), stale);
-    writeUserFiles (shipped(), temp.dir, hostname, aes67Template(), legacyTxStreams (shipped(), hostname));
+    writeUserFiles (shipped(), temp.dir, hostname, aes67Template(), layoutFreeTxStreams (shipped(), hostname));
     EXPECT_EQ (analyzerOf (temp.dir), once);
 }
 
@@ -298,7 +298,7 @@ TEST (Render, AReaderNeverSeesAnEmptyFile)
     const auto conf = temp.dir.getChildFile (analyzerConfPath);
     recorded::writeBytes (conf, "OLD=1\n");
     std::ifstream reader (conf.getFullPathName().toStdString(), std::ios::binary);
-    writeUserFiles (shipped(), temp.dir, hostname, aes67Template(), legacyTxStreams (shipped(), hostname));
+    writeUserFiles (shipped(), temp.dir, hostname, aes67Template(), layoutFreeTxStreams (shipped(), hostname));
     std::stringstream seen;
     seen << reader.rdbuf();
     EXPECT_EQ (seen.str(), "OLD=1\n");
@@ -308,7 +308,7 @@ TEST (Render, AReaderNeverSeesAnEmptyFile)
 TEST (Render, NoTemporaryFileIsLeftForTheAnalyzerToRead)
 {
     recorded::TempDir temp;
-    writeUserFiles (shipped(), temp.dir, hostname, aes67Template(), legacyTxStreams (shipped(), hostname));
+    writeUserFiles (shipped(), temp.dir, hostname, aes67Template(), layoutFreeTxStreams (shipped(), hostname));
     juce::StringArray names;
     for (const auto& entry : juce::RangedDirectoryIterator (temp.dir.getChildFile (analyzerConfPath).getParentDirectory(), false))
         names.add (entry.getFile().getFileName());
@@ -321,7 +321,7 @@ TEST (Render, TheOldCheckoutEnvIsLeftAlone)
     recorded::TempDir temp;
     const auto old = temp.dir.getChildFile ("a3-system/beat-analyzer/build/.env");
     recorded::writeBytes (old, "LOG_LEVEL=1\n");
-    writeUserFiles (shipped(), temp.dir, hostname, aes67Template(), legacyTxStreams (shipped(), hostname));
+    writeUserFiles (shipped(), temp.dir, hostname, aes67Template(), layoutFreeTxStreams (shipped(), hostname));
     EXPECT_EQ (recorded::readBytes (old), "LOG_LEVEL=1\n");
 }
 
@@ -330,7 +330,7 @@ TEST (Render, TheOldCheckoutEnvIsLeftAlone)
 TEST (Render, UserWritesTheEnvFileAndTheAnalyzersFile)
 {
     recorded::TempDir temp;
-    writeUserFiles (shipped(), temp.dir, hostname, aes67Template(), legacyTxStreams (shipped(), hostname));
+    writeUserFiles (shipped(), temp.dir, hostname, aes67Template(), layoutFreeTxStreams (shipped(), hostname));
     EXPECT_EQ (recorded::readBytes (temp.dir.getChildFile (envFilePath)), oscEnv (shipped()));
     EXPECT_EQ (analyzerOf (temp.dir), analyzerBlock (shipped()));
     EXPECT_FALSE (temp.dir.getChildFile ("a3-system").exists());
@@ -458,7 +458,7 @@ void expectHomeAsPython (const char* name, const Truth& truth)
     const auto recordedCase = renderData.getChildFile ("homes").getChildFile (name);
     recorded::TempDir temp;
     copyTree (recordedCase.getChildFile ("before"), temp.dir);
-    const auto message = writeUserFiles (truth, temp.dir, hostname, aes67Template(), legacyTxStreams (truth, hostname));
+    const auto message = writeUserFiles (truth, temp.dir, hostname, aes67Template(), layoutFreeTxStreams (truth, hostname));
     EXPECT_EQ (message, recorded::readBytes (recordedCase.getChildFile ("message.txt")));
     // The streams' signature is ours, not the Python renderer's: its own tests below.
     auto got = filesUnder (temp.dir);
@@ -479,13 +479,17 @@ TEST (Render, UserFilesByteEqualToPython)
     expectHomeAsPython ("empty", withoutAudioPort());
 }
 
-TEST (Render, TheAes67NameCarriesTheHostname)
+// Decided 2026-11-17: B0's truth has no aes67_streams table, and a truth without one sends nothing; the receiving
+// side (SAP, PTP) is still rendered. No sender is named after the host any more.
+TEST (Render, ATruthWithoutATableRendersNoSender)
 {
-    const auto text = aes67Conf (shipped(), "a3nuc2", aes67Template(), legacyTxStreams (shipped(), "a3nuc2"));
+    const auto text = aes67Conf (shipped(), "a3nuc2", aes67Template(), layoutFreeTxStreams (shipped(), "a3nuc2"));
     ASSERT_TRUE (text.has_value());
-    EXPECT_NE (text->find ("sess.name = \"AES67 a3nuc2 out\""), std::string::npos);
+    EXPECT_EQ (text->find ("libpipewire-module-rtp-sink"), std::string::npos);
+    EXPECT_NE (text->find ("libpipewire-module-rtp-sap"), std::string::npos);
+    EXPECT_EQ (text->find ("a3nuc2"), std::string::npos);
     EXPECT_EQ (text->find ('@'), std::string::npos);
-    EXPECT_FALSE (aes67Conf (withoutAudioPort(), "a3nuc2", aes67Template(), legacyTxStreams (withoutAudioPort(), "a3nuc2")).has_value());
+    EXPECT_FALSE (aes67Conf (withoutAudioPort(), "a3nuc2", aes67Template(), layoutFreeTxStreams (withoutAudioPort(), "a3nuc2")).has_value());
 }
 
 TEST (Render, OnlyTheFirstLineSaysWhoseAFileIs)
@@ -570,52 +574,40 @@ std::vector<std::string> valuesOf (const std::vector<std::string>& blocks, const
 using Texts = std::vector<std::string>;
 }
 
-TEST (Render, TheLegacyStreamIsRenderedAsBefore)
-{
-    // The golden is what the code rendered from the shipped template before the sinks were split out.
-    EXPECT_EQ (rendered (legacyTxStreams (packageTruth(), hostname)),
-               recorded::readBytes (juce::File (A3_CORE_TEST_DATA "/aes67/legacy-shipped-template.conf")));
-}
-
 TEST (Render, EachResolvedStreamGetsOneSinkBlock)
 {
     const auto text = rendered (resolveTxStreams (packageTruth(), sixOneSpatial(), hostname));
     const auto blocks = sinkBlocks (text);
-    ASSERT_EQ (blocks.size(), 5u);
+    ASSERT_EQ (blocks.size(), 4u);
     EXPECT_EQ (valuesOf (blocks, "sess.name"),
-               (Texts { "\"AES67 a3nuc1 out\"", "\"AES67 Core MAIN\"", "\"AES67 Core BOOTH\"", "\"AES67 Core REC\"", "\"AES67 Core PHONES\"" }));
-    EXPECT_EQ (valuesOf (blocks, "destination.ip"),
-               (Texts { "239.69.150.243", "239.69.200.1", "239.69.200.2", "239.69.200.3", "239.69.200.4" }));
-    EXPECT_EQ (valuesOf (blocks, "destination.port"), Texts (5, "5004"));
-    EXPECT_EQ (valuesOf (blocks, "audio.channels"), (Texts { "12", "7", "7", "2", "2" }));
-    EXPECT_EQ (valuesOf (blocks, "sess.min-ptime"), Texts (5, "0.5"));
-    EXPECT_EQ (valuesOf (blocks, "sess.max-ptime"), Texts (5, "0.5"));
-    EXPECT_EQ (valuesOf (blocks, "local.ifname"), Texts (5, "\"enp5s0\""));
+               (Texts { "\"AES67 Core MAIN\"", "\"AES67 Core BOOTH\"", "\"AES67 Core REC\"", "\"AES67 Core PHONES\"" }));
+    EXPECT_EQ (valuesOf (blocks, "destination.ip"), (Texts { "239.69.200.1", "239.69.200.2", "239.69.200.3", "239.69.200.4" }));
+    EXPECT_EQ (valuesOf (blocks, "destination.port"), Texts (4, "5004"));
+    EXPECT_EQ (valuesOf (blocks, "audio.channels"), (Texts { "7", "7", "2", "2" }));
+    EXPECT_EQ (valuesOf (blocks, "sess.min-ptime"), Texts (4, "0.5"));
+    EXPECT_EQ (valuesOf (blocks, "sess.max-ptime"), Texts (4, "0.5"));
+    EXPECT_EQ (valuesOf (blocks, "local.ifname"), Texts (4, "\"enp5s0\""));
     EXPECT_EQ (valuesOf (blocks, "node.name"),
-               (Texts { "\"rtp-sink\"", "\"rtp-sink-core-main\"", "\"rtp-sink-core-booth\"", "\"rtp-sink-core-rec\"",
-                        "\"rtp-sink-core-phones\"" }));
+               (Texts { "\"rtp-sink-core-main\"", "\"rtp-sink-core-booth\"", "\"rtp-sink-core-rec\"", "\"rtp-sink-core-phones\"" }));
     EXPECT_EQ (text.find ('@'), std::string::npos);
 }
 
-TEST (Render, EveryNewStreamAnnouncesASessionOfItsOwn)
+TEST (Render, EveryStreamAnnouncesASessionOfItsOwn)
 {
     // PipeWire gives every sink of one process the same SDP origin ("o=" line), and a receiver keys a SAP
-    // session by it: the Core streams were taken for repeats of the legacy one and got no node (2026-11-17).
-    // The group's address as a number is stable and unique per stream. The legacy stream is left as it was.
+    // session by it: the Core streams were taken for repeats of another and got no node (2026-11-17).
+    // The group's address as a number is stable and unique per stream.
     const auto blocks = sinkBlocks (rendered (resolveTxStreams (packageTruth(), sixOneSpatial(), hostname)));
-    ASSERT_EQ (blocks.size(), 5u);
-    EXPECT_EQ (valuesOf (blocks, "sess.id"),
-               (Texts { "<no sess.id>", "4014327809", "4014327810", "4014327811", "4014327812" }));
+    ASSERT_EQ (blocks.size(), 4u);
+    EXPECT_EQ (valuesOf (blocks, "sess.id"), (Texts { "4014327809", "4014327810", "4014327811", "4014327812" }));
 }
 
 TEST (Render, ZoneChannelNamesAreAnnounced)
 {
     const auto blocks = sinkBlocks (rendered (resolveTxStreams (packageTruth(), sixOneSpatial(), hostname)));
-    ASSERT_EQ (blocks.size(), 5u);
-    EXPECT_EQ (valueOf (blocks[1], "node.channel-names"), R"(["SUB", "T1", "T2", "T3", "T4", "T5", "T6"])");
-    EXPECT_EQ (valueOf (blocks[3], "node.channel-names"), R"(["L", "R"])");
-    EXPECT_EQ (valueOf (blocks[0], "node.channel-names"),
-               R"(["CH1", "CH2", "CH3", "CH4", "CH5", "CH6", "CH7", "CH8", "CH9", "CH10", "CH11", "CH12"])");
+    ASSERT_EQ (blocks.size(), 4u);
+    EXPECT_EQ (valueOf (blocks[0], "node.channel-names"), R"(["SUB", "T1", "T2", "T3", "T4", "T5", "T6"])");
+    EXPECT_EQ (valueOf (blocks[2], "node.channel-names"), R"(["L", "R"])");
 }
 
 TEST (Render, AnUnchangedLayoutRendersTheSameBytes)
@@ -635,18 +627,18 @@ TEST (Render, ASavedLayoutChangesTheRenderedChannels)
     auto grown = sixOneSpatial();
     grown.main.layout.topChannels.push_back (grown.main.layout.numOutputs() + 1);
     const auto blocks = sinkBlocks (rendered (resolveTxStreams (packageTruth(), grown, hostname)));
-    ASSERT_EQ (blocks.size(), 5u);
-    EXPECT_EQ (valueOf (blocks[1], "audio.channels"), "8");
-    EXPECT_EQ (valueOf (blocks[1], "node.channel-names"), R"(["SUB", "T1", "T2", "T3", "T4", "T5", "T6", "T7"])");
-    EXPECT_EQ (valueOf (blocks[2], "audio.channels"), "7");
+    ASSERT_EQ (blocks.size(), 4u);
+    EXPECT_EQ (valueOf (blocks[0], "audio.channels"), "8");
+    EXPECT_EQ (valueOf (blocks[0], "node.channel-names"), R"(["SUB", "T1", "T2", "T3", "T4", "T5", "T6", "T7"])");
+    EXPECT_EQ (valueOf (blocks[1], "audio.channels"), "7");
 }
 
-TEST (Render, AHostnameWithSpacesStaysAValidSessionName)
+// Without a readable layout (decided 2026-11-17): the streams that need none, REC and PHONES, and not the zones.
+TEST (Render, TheLayoutFreeStreamsAreRecAndPhones)
 {
-    const auto blocks = sinkBlocks (rendered (resolveTxStreams (packageTruth(), sixOneSpatial(), "My Box"), "My Box"));
-    ASSERT_EQ (blocks.size(), 5u);
-    EXPECT_EQ (valueOf (blocks[0], "sess.name"), "\"AES67 My Box out\"");
-    EXPECT_EQ (valueOf (blocks[0], "node.name"), "\"rtp-sink\"");
+    const auto blocks = sinkBlocks (rendered (layoutFreeTxStreams (packageTruth(), hostname)));
+    EXPECT_EQ (valuesOf (blocks, "sess.name"), (Texts { "\"AES67 Core REC\"", "\"AES67 Core PHONES\"" }));
+    EXPECT_EQ (valuesOf (blocks, "sess.id"), (Texts { "4014327811", "4014327812" }));
 }
 
 TEST (Render, AWriteStoresTheStreamsSignature)
@@ -660,7 +652,7 @@ TEST (Render, AWriteStoresTheStreamsSignature)
 
 TEST (Render, AConfigKeptOrAbsentStoresNoSignature)
 {
-    const auto streams = legacyTxStreams (packageTruth(), hostname);
+    const auto streams = layoutFreeTxStreams (packageTruth(), hostname);
     recorded::TempDir handWritten;
     recorded::writeBytes (handWritten.dir.getChildFile (aes67ConfPath), "# mine\n");
     writeAes67Conf (packageTruth(), handWritten.dir, hostname, packageTemplate(), streams);
@@ -677,5 +669,5 @@ TEST (Render, ATemplateWithoutTheSinksLineIsRefused)
     const auto main = temp.dir.getChildFile ("pipewire-aes67.conf.in");
     recorded::writeBytes (main, "context.modules = [\n]\n");
     recorded::writeBytes (temp.dir.getChildFile ("pipewire-aes67-sink.conf.in"), "    { name = libpipewire-module-rtp-sink }\n");
-    EXPECT_THROW (aes67Conf (packageTruth(), hostname, main, legacyTxStreams (packageTruth(), hostname)), RenderError);
+    EXPECT_THROW (aes67Conf (packageTruth(), hostname, main, layoutFreeTxStreams (packageTruth(), hostname)), RenderError);
 }

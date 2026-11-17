@@ -16,7 +16,7 @@ struct AppArgs
     bool noWindow = false, noConnect = false, service = false, timing = false, checkConfig = false;
     juce::String config, spatial, truth = "/usr/share/a3/a3-osc.json";
     juce::File packageConfig = packageConfigFile;   // not a flag: the tests point it at a copy
-    std::string hostname;                           // not a flag: Platform::hostname(), for linkMapFor
+    std::string hostname;                           // not a flag: Platform::hostname(), fills {host} in a stream's session
     std::optional<Aes67Render> aes67;               // not a flag: re-renders the AES67 config after a saved layout; none: no render
     std::string aes67Missing;                       // not a flag: why there is no aes67 (the Core's truth did not load)
 };

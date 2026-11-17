@@ -101,7 +101,7 @@ struct RecordedRun
         a3app::ProgramArgs args;
         args.role = a3app::Role::renderTruth;
         args.subcommand = one.argv;
-        args.engine.packageConfig = packaged.config;   // the layout is read; B0's truth has no table: the legacy stream
+        args.engine.packageConfig = packaged.config;   // the layout is read; B0's truth has no table: no sender
         result = a3app::runSubcommand (args, platform);
     }
     ~RecordedRun() { home.deleteRecursively(); }
@@ -260,7 +260,7 @@ TEST (Subcommands, AMissingValueIsOneAndSaysWhy)
 }
 
 // `render user` with the package's truth and templates (2026-11-06): one rtp-sink block per stream of the
-// table, resolved against the engine's layout; without a readable layout the legacy one, said.
+// table, resolved against the engine's layout; without a readable layout the ones that need none, said.
 namespace
 {
 struct ShippedRender
@@ -304,15 +304,15 @@ TEST (Subcommands, RenderUserWritesOneSenderPerStreamForTheShippedData)
     const ShippedRender run (packaged.config);
     EXPECT_EQ (run.result.exitCode, 0) << run.result.err;
     EXPECT_EQ (run.result.out, "a3-osc-render: rendered ~/.config/pipewire/pipewire-aes67.conf\n");
-    EXPECT_EQ (run.sinkBlocks(), 5u);
+    EXPECT_EQ (run.sinkBlocks(), 4u);
 }
 
-TEST (Subcommands, RenderUserSaysWhenItSendsTheLegacyStreamOnly)
+TEST (Subcommands, RenderUserSaysWhenItSendsOnlyTheStreamsThatNeedNoLayout)
 {
     const a3apptest::PackagedEngine packaged;
     const ShippedRender run (packaged.dir.getChildFile ("missing.json"));
     EXPECT_EQ (run.result.exitCode, 0) << run.result.err;
-    EXPECT_EQ (run.result.out.rfind ("a3-osc-render: rendered ~/.config/pipewire/pipewire-aes67.conf (the legacy stream only: ", 0), 0u)
+    EXPECT_EQ (run.result.out.rfind ("a3-osc-render: rendered ~/.config/pipewire/pipewire-aes67.conf (only the streams that need no layout: ", 0), 0u)
         << run.result.out;
-    EXPECT_EQ (run.sinkBlocks(), 1u);
+    EXPECT_EQ (run.sinkBlocks(), 2u);
 }

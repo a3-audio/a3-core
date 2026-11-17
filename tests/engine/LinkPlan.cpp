@@ -75,7 +75,7 @@ TEST (LinkPlan, MakesWhatTheMapSays)
 TEST (LinkPlan, RemovesUnplannedLinksOnItsOwnPorts)
 {
     const Link wrongDevice { "AES67 deck C:receive_MAIN1", "a3-engine:analog_1" };
-    const Link wrongSender { "a3-engine:main_top_1", "AES67 a3nuc1 out:send_CH2" };
+    const Link wrongSender { "a3-engine:main_top_1", "AES67 Core MAIN:send_T2" };
     const Link wrongChannel { "system:capture_2", "a3-engine:analog_1" };
     const Links live { wrongDevice, wrongSender, wrongChannel, { "system:capture_1", "a3-engine:analog_1" } };
     const auto plan = planWith (rigMap(), live, {}, rigPorts());

@@ -126,8 +126,8 @@ std::string quotedList (const std::vector<std::string>& names)
     return list;
 }
 
-// The legacy sender keeps the node name it always had; each other one needs its own.
-std::string nodeName (const StreamSpec& spec) { return spec.legacy ? "rtp-sink" : "rtp-sink-" + spec.key; }
+// Every sender of the process needs a node name of its own.
+std::string nodeName (const StreamSpec& spec) { return "rtp-sink-" + spec.key; }
 
 // The group's address as one number, e.g. 239.69.200.1 -> 4014327809: unique per stream and the same on
 // every render. PipeWire puts it in the SDP origin, which a receiver keys a SAP session by; without it
@@ -143,11 +143,10 @@ std::optional<std::uint32_t> groupAsNumber (const std::string& group)
     return (a << 24) | (b << 16) | (c << 8) | d;
 }
 
-// The legacy sender keeps the session it always announced (no sess.id: its line goes), so a receiver that
-// knows it still does; every other one names its own.
+// Every sender names its own session. A group that is no dotted address has no number: its line goes.
 std::string sessionIdLine (const StreamSpec& spec)
 {
-    const auto id = spec.legacy ? std::nullopt : groupAsNumber (spec.group);
+    const auto id = groupAsNumber (spec.group);
     return id ? "sess.id = " + std::to_string (*id) : std::string();
 }
 
@@ -310,11 +309,11 @@ std::string writeAes67Conf (const Truth& truth, const juce::File& home, const st
     return "rendered " + shown;
 }
 
-std::string aes67Said (const std::string& written, const std::string& legacyOnlyBecause, const std::vector<std::string>& problems)
+std::string aes67Said (const std::string& written, const std::string& layoutFreeOnlyBecause, const std::vector<std::string>& problems)
 {
     auto said = written;
-    if (! legacyOnlyBecause.empty())
-        said += " (the legacy stream only: " + legacyOnlyBecause + ")";
+    if (! layoutFreeOnlyBecause.empty())
+        said += " (only the streams that need no layout: " + layoutFreeOnlyBecause + ")";
     for (const auto& problem : problems)
         said += "; " + problem;
     return said;

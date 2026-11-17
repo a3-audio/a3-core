@@ -241,12 +241,12 @@ TEST (RoundTripLoop, TheLoopsOwnPortsAreLinkedToItsChannels)
 {
     a3app::AppConfig config;
     config.io.roundTripLoop = a3app::RoundTripLoop { 11, 11 };
-    const auto map = a3app::linkMapFor (config, "");
+    const auto map = a3app::linkMapFor (config);
     EXPECT_EQ (map.jack.at (a3app::loopOutputPort), std::vector<std::string> { "system:playback_11" });
     EXPECT_EQ (map.jack.at (a3app::loopInputPort), std::vector<std::string> { "system:capture_11" });
     EXPECT_EQ (config.io.jack.count (a3app::loopOutputPort), 0u);
     config.io.roundTripLoop.reset();
-    EXPECT_EQ (a3app::linkMapFor (config, "").jack.count (a3app::loopOutputPort), 0u);
+    EXPECT_EQ (a3app::linkMapFor (config).jack.count (a3app::loopOutputPort), 0u);
 }
 
 // The I/O page chooses the digital loop (2026-10-30): a channel per side, 0 is no loop. A first choice sets both

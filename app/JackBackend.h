@@ -23,9 +23,8 @@ namespace a3app
 class JackBackend final : public AudioBackend
 {
 public:
-    // connecting false: --no-connect, the plan is never applied. hostname: Platform::hostname(),
-    // which names this machine's AES67 sender (linkMapFor).
-    JackBackend (bool connecting, std::string hostname, std::vector<a3core::StreamSpec> streams = {});
+    // connecting false: --no-connect, the plan is never applied. streams: the Core's AES67 senders (linkMapFor).
+    explicit JackBackend (bool connecting, std::vector<a3core::StreamSpec> streams = {});
     ~JackBackend() override;
 
     juce::Result open (EngineHost&, const AppConfig&) override;
@@ -56,7 +55,6 @@ private:
     void applyLinks();   // the map, minus the device while "system" is not the configured one (SystemDevice.h)
 
     const bool connecting;
-    const std::string hostname;
     const std::vector<a3core::StreamSpec> streams;   // the Core's senders the outputs are linked to
     jack_client_t* client = nullptr;
     EngineHost* host = nullptr;

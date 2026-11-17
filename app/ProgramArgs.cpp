@@ -462,29 +462,29 @@ std::variant<a3core::ServiceOptions, std::string> coreOptions (const ProgramArgs
     {
         auto streams = coreStreams (truth, platform, args.engine.packageConfig);
         options.aes67Streams = std::move (streams.streams);
-        options.aes67LegacyOnlyBecause = std::move (streams.legacyOnlyBecause);
+        options.aes67LayoutFreeOnlyBecause = std::move (streams.layoutFreeOnlyBecause);
         options.aes67Problems = std::move (streams.problems);
     }
-    catch (const a3core::TruthError& problem)   // not even the legacy stream: CoreService says it when it renders
+    catch (const a3core::TruthError& problem)   // not even the layout-free streams: CoreService resolves and says it
     {
-        options.aes67LegacyOnlyBecause = problem.what;
+        options.aes67LayoutFreeOnlyBecause = problem.what;
     }
     return options;
 }
 
 namespace
 {
-CoreStreams legacyStreamOnly (const a3core::Truth& truth, const std::string& hostname, const std::string& because)
+CoreStreams layoutFreeStreamsOnly (const a3core::Truth& truth, const std::string& hostname, const std::string& because)
 {
-    CoreStreams legacy { {}, because, {} };
-    legacy.streams = a3core::legacyTxStreams (truth, hostname, &legacy.problems);
-    return legacy;
+    CoreStreams layoutFree { {}, because, {} };
+    layoutFree.streams = a3core::layoutFreeTxStreams (truth, hostname, &layoutFree.problems);
+    return layoutFree;
 }
 }
 
 CoreStreams coreStreams (const a3core::Truth& truth, const a3core::Platform& platform, const juce::File& packageConfig)
 {
-    const auto legacyOnly = [&] (const std::string& because) { return legacyStreamOnly (truth, platform.hostname(), because); };
+    const auto layoutFreeOnly = [&] (const std::string& because) { return layoutFreeStreamsOnly (truth, platform.hostname(), because); };
     int truthDecks = 0;
     try
     {
@@ -492,17 +492,17 @@ CoreStreams coreStreams (const a3core::Truth& truth, const a3core::Platform& pla
     }
     catch (const a3core::TruthError& problem)
     {
-        return legacyOnly ("the truth gives no deck range: " + problem.what);
+        return layoutFreeOnly ("the truth gives no deck range: " + problem.what);
     }
 
     const auto file = chooseConfigFile ({}, platform.home(), [] (const juce::File& f) { return f.existsAsFile(); }, packageConfig);
     juce::String error;
     const auto config = loadAppConfig (file, error, truthDecks);   // names the file itself
     if (! config)
-        return legacyOnly (error.toStdString());
+        return layoutFreeOnly (error.toStdString());
     const auto spatial = loadZonesSpatial (*config, error);
     if (! spatial)
-        return legacyOnly ((config->spatialDirectory.getFullPathName() + ": " + error).toStdString());
+        return layoutFreeOnly ((config->spatialDirectory.getFullPathName() + ": " + error).toStdString());
     return streamsFor (truth, *spatial, platform.hostname());
 }
 
@@ -516,7 +516,7 @@ CoreStreams streamsFor (const a3core::Truth& truth, const a3::SpatialConfig& spa
     }
     catch (const a3core::TruthError& problem)
     {
-        return legacyStreamOnly (truth, hostname, problem.what);
+        return layoutFreeStreamsOnly (truth, hostname, problem.what);
     }
 }
 
@@ -539,15 +539,14 @@ std::vector<a3core::StreamSpec> engineStreams (const a3core::Platform& platform,
 
 EngineStreams engineStreamsFor (const AppArgs& args, const a3::SpatialConfig& spatial, const std::vector<a3core::StreamSpec>& running)
 {
-    const std::string legacyOnly = "AES67: the legacy stream only: ";
     if (! args.aes67)
-        return { running, { legacyOnly + (args.aes67Missing.empty() ? "the Core's truth did not load" : args.aes67Missing) } };
+        return { running, { "AES67: no streams resolved: " + (args.aes67Missing.empty() ? std::string ("the Core's truth did not load") : args.aes67Missing) } };
     try
     {
         auto resolved = streamsFor (args.aes67->truth, spatial, args.hostname);
         EngineStreams result { std::move (resolved.streams), {} };
-        if (! resolved.legacyOnlyBecause.empty())
-            result.said.push_back (legacyOnly + resolved.legacyOnlyBecause);
+        if (! resolved.layoutFreeOnlyBecause.empty())
+            result.said.push_back ("AES67: only the streams that need no layout: " + resolved.layoutFreeOnlyBecause);
         for (const auto& problem : resolved.problems)
             result.said.push_back ("AES67: " + problem);
         return result;

@@ -2156,7 +2156,7 @@ TEST_F (Pages, IoDropdownsNameTheDevicesPortsAndNothingStandsBesideThem)
     giveHardwarePorts (view);
     view.state.deviceName = "Scarlett 18i20 USB";
     view.cfg.io.jack["main_sub"] = { "system:playback_1" };
-    view.links = { { "a3-engine:main_sub", "AES67 a3nuc1 out:send_CH1" } };
+    view.links = { { "a3-engine:main_sub", "AES67 Core MAIN:send_SUB" } };
     a3app::IoPage page (view);
     page.setSize (a3apptest::portraitWidth, a3apptest::portraitHeight * 3 / 4);
     page.showSub (a3app::IoPage::Sub::output);

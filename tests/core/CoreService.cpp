@@ -1063,7 +1063,7 @@ TEST (CoreService, CoreWritesTheUserFilesAtStart)
     const auto other = rig.dir.getChildFile ("other-home");
     other.createDirectory();
     const auto expected = writeAes67Conf (rig.truth(), other, "test-host", rig.share.getChildFile ("pipewire/pipewire-aes67.conf.in"),
-                                          legacyTxStreams (rig.truth(), "test-host"));
+                                          layoutFreeTxStreams (rig.truth(), "test-host"));
     const auto line = rig.said.find ("aes67: ");
     ASSERT_TRUE (line.has_value());
     EXPECT_EQ (line->text, "aes67: " + expected);
@@ -1075,35 +1075,38 @@ TEST (CoreService, CoreRendersTheStreamsItWasGiven)
 {
     Rig rig;
     auto options = rig.options();
-    auto streams = legacyTxStreams (rig.truth(), "test-host");
-    auto extra = streams.front();
-    extra.key = "core-x";
-    extra.session = "A3 Core X";
-    extra.group = "239.69.200.9";
-    extra.legacy = false;
-    extra.channelNames = { "L", "R" };
-    streams.push_back (extra);
+    StreamSpec x;
+    x.key = "core-x";
+    x.session = "A3 Core X";
+    x.group = "239.69.200.9";
+    x.channelNames = { "L", "R" };
+    auto y = x;
+    y.key = "core-y";
+    y.session = "A3 Core Y";
+    y.group = "239.69.200.10";
+    const std::vector<StreamSpec> streams { x, y };
     options.aes67Streams = streams;
     ASSERT_TRUE (rig.start (options)) << rig.error;
     const auto text = rig.home.getChildFile (aes67ConfPath).loadFileAsString();
     EXPECT_TRUE (text.contains ("sess.name = \"A3 Core X\"")) << text;
-    EXPECT_TRUE (text.contains ("sess.name = \"AES67 test-host out\"")) << text;
+    EXPECT_TRUE (text.contains ("sess.name = \"A3 Core Y\"")) << text;
+    EXPECT_TRUE (text.contains ("node.name = \"rtp-sink-core-x\"")) << text;
     EXPECT_EQ (rig.home.getChildFile (aes67SignaturePath).loadFileAsString().toStdString(), streamsSignature (streams));
 }
 
-// F3: a legacy row that does not resolve gives way to the built-in one; the Core starts and says so.
-TEST (CoreService, ABadLegacyRowDoesNotStopTheCore)
+// F3: a row that does not resolve never stops the Core: it starts, sends nothing and says why.
+TEST (CoreService, ABadRowDoesNotStopTheCore)
 {
     auto data = b0::truth().data();
-    data.getDynamicObject()->setProperty ("aes67_streams", juce::JSON::parse (R"([{ "key": "legacy-out", "session": "AES67 {host} out",
-        "sender": "core", "group": "no-such-host", "port": 5004, "ptime": 0.5, "source": "fixed", "channels": 12, "legacy": true }])"));
+    data.getDynamicObject()->setProperty ("aes67_streams", juce::JSON::parse (R"([{ "key": "core-rec", "session": "AES67 Core REC",
+        "sender": "core", "group": "no-such-host", "port": 5004, "ptime": 0.5, "source": "pair:rec", "legacy": false }])"));
     Rig rig (data);
     ASSERT_TRUE (rig.start()) << rig.error;
     const auto text = rig.home.getChildFile (aes67ConfPath).loadFileAsString();
-    EXPECT_TRUE (text.contains ("sess.name = \"AES67 test-host out\"")) << text;
+    EXPECT_FALSE (text.contains ("libpipewire-module-rtp-sink")) << text;
     const auto line = rig.said.find ("aes67: ");
     ASSERT_TRUE (line.has_value());
-    EXPECT_NE (line->text.find ("'legacy-out'"), std::string::npos) << line->text;
+    EXPECT_NE (line->text.find ("no-such-host"), std::string::npos) << line->text;
 }
 
 TEST (CoreService, TheAes67LineNamesEveryRefusedStream)
@@ -1118,15 +1121,15 @@ TEST (CoreService, TheAes67LineNamesEveryRefusedStream)
                            "aes67_streams: 'core-x' refused: no port");
 }
 
-TEST (CoreService, TheAes67LineSaysWhyOnlyTheLegacyStreamIsSent)
+TEST (CoreService, TheAes67LineSaysWhyOnlyTheStreamsThatNeedNoLayoutAreSent)
 {
     Rig rig;
     auto options = rig.options();
-    options.aes67LegacyOnlyBecause = "no engine.json";
+    options.aes67LayoutFreeOnlyBecause = "no engine.json";
     ASSERT_TRUE (rig.start (options)) << rig.error;
     const auto line = rig.said.find ("aes67: ");
     ASSERT_TRUE (line.has_value());
-    EXPECT_EQ (line->text, "aes67: rendered ~/.config/pipewire/pipewire-aes67.conf (the legacy stream only: no engine.json)");
+    EXPECT_EQ (line->text, "aes67: rendered ~/.config/pipewire/pipewire-aes67.conf (only the streams that need no layout: no engine.json)");
 }
 
 TEST (CoreService, AFailedRenderDoesNotStopCore)

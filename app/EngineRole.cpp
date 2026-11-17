@@ -52,7 +52,7 @@ public:
     explicit EngineSession (const StartupData& startup) : data (startup) {}
     ~EngineSession() { close(); }
 
-    juce::Result open (bool connecting, const std::string& hostname, const std::vector<a3core::StreamSpec>& streams)
+    juce::Result open (bool connecting, const std::vector<a3core::StreamSpec>& streams)
     {
         if (! coreSender.connect (data.truth.coreHost, data.truth.corePort))
             return juce::Result::fail ("cannot send to " + data.truth.coreHost + ":" + juce::String (data.truth.corePort));
@@ -65,7 +65,7 @@ public:
         receiver.addListener (listener.get());
 
         if (data.config.backend.type == BackendSettings::Type::jack)
-            backend = std::make_unique<JackBackend> (connecting, hostname, streams);
+            backend = std::make_unique<JackBackend> (connecting, streams);
         else
             backend = std::make_unique<DeviceBackend>();
         const auto opened = backend->open (*host, data.config);
@@ -310,7 +310,7 @@ juce::Result EngineRole::restart (const AppConfig& config, juce::String& problem
         startup = data;
         streams = senders;
         session = std::make_unique<EngineSession> (startup);
-        return session->open (! args.noConnect, args.hostname, streams);
+        return session->open (! args.noConnect, streams);
     };
 
     RestartSteps steps;
@@ -357,7 +357,7 @@ std::vector<a3core::StreamSpec> EngineRole::streamsOf (const a3::SpatialConfig& 
 void EngineRole::reannounceStreams()
 {
     if (! args.aes67 || streams.empty())
-        return;   // no streams resolved at all: an empty config would silence the legacy stream too
+        return;   // no streams resolved at all: the config already rendered stays as it is
     if (const auto said = a3app::reannounceStreams (*args.aes67, streams, runner); ! said.empty())
         sayEngine (said);
 }
@@ -403,7 +403,7 @@ std::variant<std::unique_ptr<EngineRole>, int> EngineRole::start (const AppArgs&
 
     std::unique_ptr<EngineRole> role (new EngineRole (args, std::move (*loaded), home));
     role->streams = role->streamsOf (role->startup.spatial);
-    const auto opened = role->session->open (! args.noConnect, args.hostname, role->streams);
+    const auto opened = role->session->open (! args.noConnect, role->streams);
     if (opened.failed())
     {
         sayEngine (opened.getErrorMessage());

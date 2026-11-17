@@ -72,29 +72,29 @@ std::variant<a3core::ServiceOptions, std::string> coreOptions (const ProgramArgs
 
 // The Core's AES67 streams: the truth's table resolved against the speaker layout the engine starts
 // with (its engine.json as loadStartupData chooses it: the user's, else `packageConfig`). A layout
-// that cannot be read gives the legacy stream alone, and legacyOnlyBecause says why. Throws TruthError
-// when not even the legacy stream resolves.
+// that cannot be read gives the streams that need none (layoutFreeTxStreams), and layoutFreeOnlyBecause says
+// why. Throws TruthError when not even those resolve.
 struct CoreStreams
 {
     std::vector<a3core::StreamSpec> streams;
-    std::string legacyOnlyBecause;   // empty: the layout was read
+    std::string layoutFreeOnlyBecause;   // empty: the layout was read
     std::vector<std::string> problems;   // the streams the table refuses (resolveTxStreams)
 };
 CoreStreams coreStreams (const a3core::Truth&, const a3core::Platform&, const juce::File& packageConfig);
 
-// The streams of a layout already read (resolveTxStreams); a table that does not resolve gives the legacy stream
-// alone and says why. Throws TruthError when not even the legacy stream resolves.
+// The streams of a layout already read (resolveTxStreams); a table that does not resolve gives the streams that
+// need no layout and says why. Throws TruthError when not even those resolve.
 CoreStreams streamsFor (const a3core::Truth&, const a3::SpatialConfig&, const std::string& hostname);
 
 // The streams `a3-core links` counts the engine's links against: the Core's (coreStreams) for this machine. A truth
-// that does not load, or one with no streams, gives none: the legacy rec link only. The engine itself resolves
+// that does not load, or one with no streams, gives none: no sender link. The engine itself resolves
 // its streams from the layout it runs (engineStreamsFor).
 std::vector<a3core::StreamSpec> engineStreams (const a3core::Platform&, const juce::File& packageConfig);
 
 // The streams the engine links its outputs to for the layout it runs (`spatial`, as loaded from its --config and
 // --spatial): the start and every Save resolve them here, so both agree. Without args.aes67 (the Core's truth did not
-// load) or with a table that does not resolve at all, `running` stays (at the start: none, the legacy rec link only).
-// `said`: the lines the engine logs, the reason whenever it falls back to the legacy stream.
+// load) or with a table that does not resolve at all, `running` stays (at the start: none, no sender link).
+// `said`: the lines the engine logs, the reason whenever it falls back to the streams that need no layout.
 struct EngineStreams
 {
     std::vector<a3core::StreamSpec> streams;
