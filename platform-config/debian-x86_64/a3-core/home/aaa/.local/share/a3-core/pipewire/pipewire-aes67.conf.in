@@ -2,8 +2,9 @@
 # the second PipeWire instance a3-aes67.service runs.
 #
 # A template: a3-osc-render renders it into ~/.config/pipewire/ with the
-# audio network's socket (the truth's network.audio_port) and the sender's
-# name, "AES67 <hostname> out" -- the name JACK clients see.
+# audio network's socket (the truth's network.audio_port) and one sender per
+# Core row of the truth's aes67_streams ("AES67 Core MAIN", ... -- the names
+# JACK clients see), each from pipewire-aes67-sink.conf.in.
 # Rate and block come from pipewire-aes67.conf.d/10-a3-rate.conf.
 
 context.properties = {
@@ -108,10 +109,11 @@ context.modules = [
                     }
                 },
                 {
-                    # Every A³ host sender is named "AES67 <host> out".
+                    # The Core's streams, "AES67 Core MAIN|BOOTH|REC|PHONES" (the
+                    # Core rows of the truth's aes67_streams).
                     matches = [
                         {
-                            rtp.session = "~ out$"
+                            rtp.session = "~^AES67 Core "
                         }
                     ]
                     actions = {

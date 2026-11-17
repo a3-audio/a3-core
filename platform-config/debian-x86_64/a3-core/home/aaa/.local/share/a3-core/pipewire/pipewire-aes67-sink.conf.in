@@ -1,8 +1,8 @@
     { name = libpipewire-module-rtp-sink
         args = {
             local.ifname = "@AUDIO_PORT@"
-            # Group and port are the truth's aes67.stream (a3-osc.json); a second
-            # sender needs a listener of its own there, in the 239.69.x.x range.
+            # Group and port are the stream's row in the truth's aes67_streams
+            # (a3-osc.json); every sender has a group of its own.
             destination.ip = @STREAM_IP@
             destination.port = @STREAM_PORT@
             net.mtu = 1500
@@ -16,6 +16,7 @@
             ### Please change this, especially if you create multiple sinks
             sess.name = "@SENDER_NAME@"
             sess.media = "audio"
+            @SESS_ID_LINE@
             # This property is used if you aren't using ptp4l 4
             sess.ts-refclk = "ptp=traceable"
             sess.ts-offset = 0

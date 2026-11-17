@@ -305,14 +305,14 @@ TEST (ProgramArgs, CoreOptionsResolveTheFiveStreamsFromTheShippedConfig)
     ASSERT_TRUE (std::holds_alternative<a3core::ServiceOptions> (options)) << std::get<std::string> (options);
     const auto& o = std::get<a3core::ServiceOptions> (options);
     ASSERT_TRUE (o.aes67Streams.has_value());
-    ASSERT_EQ (o.aes67Streams->size(), 5u);
-    EXPECT_EQ ((*o.aes67Streams)[0].session, "AES67 test-host out");
-    EXPECT_EQ ((*o.aes67Streams)[1].key, "core-main");
-    EXPECT_EQ ((*o.aes67Streams)[1].channelNames, (std::vector<std::string> { "SUB", "T1", "T2", "T3", "T4" }));   // Default 4.1
-    EXPECT_EQ (o.aes67LegacyOnlyBecause, "");
+    ASSERT_EQ (o.aes67Streams->size(), 4u);
+    EXPECT_EQ ((*o.aes67Streams)[0].key, "core-main");
+    EXPECT_EQ ((*o.aes67Streams)[0].channelNames, (std::vector<std::string> { "SUB", "T1", "T2", "T3", "T4" }));   // Default 4.1
+    EXPECT_EQ (o.aes67LayoutFreeOnlyBecause, "");
 }
 
-TEST (ProgramArgs, CoreOptionsFallBackToTheLegacyStreamWhenTheLayoutCannotBeLoaded)
+// Decided 2026-11-17: without a readable layout the Core sends the streams that need none (REC, PHONES), not the zones.
+TEST (ProgramArgs, CoreOptionsFallBackToTheLayoutFreeStreamsWhenTheLayoutCannotBeLoaded)
 {
     const a3apptest::PackagedEngine packaged;
     fake::FakePlatform platform;
@@ -322,9 +322,10 @@ TEST (ProgramArgs, CoreOptionsFallBackToTheLegacyStreamWhenTheLayoutCannotBeLoad
     args.engine.packageConfig = packaged.dir.getChildFile ("missing.json");
     const auto missing = std::get<a3core::ServiceOptions> (a3app::coreOptions (args, platform));
     ASSERT_TRUE (missing.aes67Streams.has_value());
-    ASSERT_EQ (missing.aes67Streams->size(), 1u);
-    EXPECT_TRUE ((*missing.aes67Streams)[0].legacy);
-    EXPECT_NE (missing.aes67LegacyOnlyBecause.find ("missing.json"), std::string::npos) << missing.aes67LegacyOnlyBecause;
+    ASSERT_EQ (missing.aes67Streams->size(), 2u);
+    EXPECT_EQ ((*missing.aes67Streams)[0].key, "core-rec");
+    EXPECT_EQ ((*missing.aes67Streams)[1].key, "core-phones");
+    EXPECT_NE (missing.aes67LayoutFreeOnlyBecause.find ("missing.json"), std::string::npos) << missing.aes67LayoutFreeOnlyBecause;
 
     // A config whose spatial directory is not there.
     const auto noSpatial = packaged.dir.getChildFile ("no-spatial.json");
@@ -332,8 +333,8 @@ TEST (ProgramArgs, CoreOptionsFallBackToTheLegacyStreamWhenTheLayoutCannotBeLoad
     args.engine.packageConfig = noSpatial;
     const auto unread = std::get<a3core::ServiceOptions> (a3app::coreOptions (args, platform));
     ASSERT_TRUE (unread.aes67Streams.has_value());
-    EXPECT_EQ (unread.aes67Streams->size(), 1u);
-    EXPECT_NE (unread.aes67LegacyOnlyBecause.find ("nowhere"), std::string::npos) << unread.aes67LegacyOnlyBecause;
+    EXPECT_EQ (unread.aes67Streams->size(), 2u);
+    EXPECT_NE (unread.aes67LayoutFreeOnlyBecause.find ("nowhere"), std::string::npos) << unread.aes67LayoutFreeOnlyBecause;
 }
 
 namespace
@@ -389,7 +390,7 @@ TEST (EngineStreams, StartAndSaveAgreeForANonDefaultLayout)
     EXPECT_EQ (a3core::streamsSignature (atStart.streams), a3core::streamsSignature (a3core::resolveTxStreams (packageTruth(), loaded->spatial, "a3nuc1")));
 }
 
-TEST (EngineStreams, WithoutTheCoresTruthTheReasonIsSaidAndOnlyTheLegacyRecIsLinked)
+TEST (EngineStreams, WithoutTheCoresTruthTheReasonIsSaidAndNoSenderIsLinked)
 {
     const a3apptest::PackagedEngine packaged;
     auto args = engineWithSixOneBooth (packaged);
@@ -402,14 +403,14 @@ TEST (EngineStreams, WithoutTheCoresTruthTheReasonIsSaidAndOnlyTheLegacyRecIsLin
     const auto atStart = a3app::engineStreamsFor (args, loaded->spatial, {});
     EXPECT_TRUE (atStart.streams.empty());
     ASSERT_EQ (atStart.said.size(), 1u);
-    EXPECT_EQ (atStart.said[0], "AES67: the legacy stream only: a3-osc.json: not there");
+    EXPECT_EQ (atStart.said[0], "AES67: no streams resolved: a3-osc.json: not there");
 
-    const auto linked = a3app::linkMapFor (loaded->config, args.hostname, atStart.streams);
+    const auto linked = a3app::linkMapFor (loaded->config, atStart.streams);
     for (const auto& [port, peers] : linked.jack)
         for (const auto& peer : peers)
-            EXPECT_EQ (peer.rfind ("AES67 Core ", 0), std::string::npos) << port << " -> " << peer;
+            EXPECT_EQ (peer.find (":send_"), std::string::npos) << port << " -> " << peer;
     const auto& recL = linked.jack.at ("rec_L");
-    EXPECT_NE (std::find (recL.begin(), recL.end(), "AES67 a3nuc1 out:send_CH1"), recL.end());
+    EXPECT_EQ (recL, std::vector<std::string> { "beat-analyzer:bpm_1" }) << "the beat clock's input stays";
 }
 
 TEST (EngineStreams, ATruthThatDoesNotLoadGivesTheReasonInsteadOfARender)

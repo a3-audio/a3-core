@@ -29,6 +29,21 @@ std::string pythonAddress (const Endpoint& endpoint) { return "('" + endpoint.ho
 void nameThisThread (const char* name) { pthread_setname_np (pthread_self(), name); }
 
 std::string refusal (const std::string& why) { return "a3-core: " + why; }
+
+// The streams a Core started without resolved ones sends: those that need no layout. A row that does not resolve
+// sends nothing and is said, so the Core still starts.
+std::vector<StreamSpec> layoutFreeStreamsOrNone (const Truth& truth, const std::string& hostname, std::vector<std::string>& problems)
+{
+    try
+    {
+        return layoutFreeTxStreams (truth, hostname, &problems);
+    }
+    catch (const TruthError& problem)
+    {
+        problems.push_back ("aes67_streams: " + problem.what + "; no stream is sent");
+        return {};
+    }
+}
 }
 
 CoreService::CoreService (ServiceOptions serviceOptions, Journal journalToUse, Truth loaded)
@@ -133,10 +148,10 @@ std::optional<std::string> CoreService::startUp()
     try
     {
         auto problems = options.aes67Problems;
-        const auto streams = options.aes67Streams ? *options.aes67Streams : legacyTxStreams (truth, options.hostname, &problems);
+        const auto streams = options.aes67Streams ? *options.aes67Streams : layoutFreeStreamsOrNone (truth, options.hostname, problems);
         const auto written = writeUserFiles (truth, options.home, options.hostname,
                                              options.packageShare.getChildFile ("pipewire/pipewire-aes67.conf.in"), streams);
-        say ("aes67: " + aes67Said (written, options.aes67LegacyOnlyBecause, problems));
+        say ("aes67: " + aes67Said (written, options.aes67LayoutFreeOnlyBecause, problems));
     }
     catch (const RenderError& problem)
     {

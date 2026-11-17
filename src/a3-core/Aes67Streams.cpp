@@ -10,24 +10,7 @@ namespace a3core
 {
 namespace
 {
-const char* const legacyKey = "legacy-out";
 const char* const coreSender = "core";
-
-// The shipped table's legacy row: what a truth without a table still sends.
-juce::var builtInLegacyRow()
-{
-    auto* row = new juce::DynamicObject();
-    row->setProperty ("key", legacyKey);
-    row->setProperty ("session", "AES67 {host} out");
-    row->setProperty ("sender", coreSender);
-    row->setProperty ("group", "aes67-core");
-    row->setProperty ("port", 5004);
-    row->setProperty ("ptime", 0.5);
-    row->setProperty ("source", "fixed");
-    row->setProperty ("channels", 12);
-    row->setProperty ("legacy", true);
-    return juce::var (row);
-}
 
 std::string text (const juce::var& row, const char* property) { return row[property].toString().toStdString(); }
 
@@ -104,7 +87,6 @@ StreamSpec resolveRow (const juce::var& row, const Truth& truth, const a3::Spati
     spec.group = resolveGroup (truth, text (row, "group"));
     spec.port = static_cast<int> (row["port"]);
     spec.ptimeMs = static_cast<double> (row["ptime"]);
-    spec.legacy = static_cast<bool> (row["legacy"]);
     addChannels (spec, row, spatial);
     return spec;
 }
@@ -154,69 +136,27 @@ std::optional<std::string> rowProblem (const juce::var& row)
     return std::nullopt;
 }
 
-// The legacy stream: the table's row when it is valid, resolves and fits one packet; else the built-in row (what
-// every receiver of the rig already knows) and a line that says why. Throws TruthError only when the built-in one
-// does not resolve either.
-StreamSpec legacyStream (const juce::var& row, const Truth& truth, const a3::SpatialConfig& spatial, const std::string& hostname,
-                         std::vector<std::string>* problems)
-{
-    std::string why;
-    try
-    {
-        if (const auto invalid = rowProblem (row))
-            why = *invalid;
-        else
-        {
-            auto spec = resolveRow (row, truth, spatial, hostname);
-            if (const auto tooBig = packetProblem (spec))
-                why = *tooBig;
-            else
-                return spec;
-        }
-    }
-    catch (const TruthError& problem)
-    {
-        why = refusedRow (row, problem.what);
-    }
-    report (problems, why + "; the built-in legacy stream is sent");
-    return resolveRow (builtInLegacyRow(), truth, spatial, hostname);
-}
-
 bool isCoreRow (const juce::var& row) { return row["sender"].toString() == coreSender; }
 
-bool isLegacyRow (const juce::var& row) { return row["key"].toString() == legacyKey; }
+bool needsNoLayout (const juce::var& row) { return ! row["source"].toString().startsWith ("zone:"); }
 
-// The table's Core rows, the legacy one first (the built-in one when the table has none).
-std::vector<juce::var> coreRows (const Truth& truth)
+// The table's Core rows that `wanted` keeps, each resolved, checked and either kept or said.
+template <typename Wanted>
+std::vector<StreamSpec> resolveCoreRows (const Truth& truth, const a3::SpatialConfig& spatial, const std::string& hostname,
+                                         std::vector<std::string>* problems, Wanted wanted)
 {
+    std::vector<StreamSpec> streams;
     const auto table = truth.streamTable();
-    std::vector<juce::var> rows { builtInLegacyRow() };
     for (const auto& row : *table.getArray())
     {
-        if (! isCoreRow (row))
+        if (! isCoreRow (row) || ! wanted (row))
             continue;
-        if (isLegacyRow (row))
-            rows.front() = row;
-        else
-            rows.push_back (row);
-    }
-    return rows;
-}
-}
-
-std::vector<StreamSpec> resolveTxStreams (const Truth& truth, const a3::SpatialConfig& spatial, const std::string& hostname,
-                                          std::vector<std::string>* problems)
-{
-    const auto rows = coreRows (truth);
-    std::vector<StreamSpec> streams { legacyStream (rows.front(), truth, spatial, hostname, problems) };
-    for (std::size_t k = 1; k < rows.size(); ++k)
-    {
-        if (const auto invalid = rowProblem (rows[k]))
+        if (const auto invalid = rowProblem (row))
         {
             report (problems, *invalid);
             continue;
         }
-        auto spec = resolveRow (rows[k], truth, spatial, hostname);
+        auto spec = resolveRow (row, truth, spatial, hostname);
         if (const auto tooBig = packetProblem (spec))
             report (problems, *tooBig);
         else
@@ -224,10 +164,17 @@ std::vector<StreamSpec> resolveTxStreams (const Truth& truth, const a3::SpatialC
     }
     return streams;
 }
+}
 
-std::vector<StreamSpec> legacyTxStreams (const Truth& truth, const std::string& hostname, std::vector<std::string>* problems)
+std::vector<StreamSpec> resolveTxStreams (const Truth& truth, const a3::SpatialConfig& spatial, const std::string& hostname,
+                                          std::vector<std::string>* problems)
 {
-    return { legacyStream (coreRows (truth).front(), truth, a3::SpatialConfig {}, hostname, problems) };
+    return resolveCoreRows (truth, spatial, hostname, problems, [] (const juce::var&) { return true; });
+}
+
+std::vector<StreamSpec> layoutFreeTxStreams (const Truth& truth, const std::string& hostname, std::vector<std::string>* problems)
+{
+    return resolveCoreRows (truth, a3::SpatialConfig {}, hostname, problems, needsNoLayout);
 }
 
 std::string streamsSignature (const std::vector<StreamSpec>& streams)

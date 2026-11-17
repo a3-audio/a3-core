@@ -64,7 +64,7 @@ TEST (AudioTiming, TheDeviceIsTheOneTheIoMapUses)
     io.jack["main_sub"] = { "system:playback_1" };
     io.jack["analog_1"] = { "system:capture_1" };
     io.jack["deckA_1"] = { "StemDeck-A:bformat_1" };
-    io.jack["rec_L"] = { "beat-analyzer:bpm_1", "AES67 a3nuc1 out:send_CH1" };
+    io.jack["rec_L"] = { "beat-analyzer:bpm_1", "AES67 Core REC:send_L" };
     const a3app::DefaultNodes defaults { scarlettOut, scarlettIn, "", "" };
     EXPECT_EQ (a3app::alsaNodesOf (io, defaults), (std::vector<std::string> { scarlettIn, scarlettOut }));
 

@@ -50,7 +50,7 @@ a3app::IoMap rigIo()
     io.jack["analog_1"] = { "system:capture_1" };
     io.jack["main_sub"] = { "system:playback_1" };
     io.jack["deckA_1"] = { "StemDeck-A:bformat_1" };
-    io.jack["rec_L"] = { "AES67 a3nuc1 out:send_CH1" };
+    io.jack["rec_L"] = { "AES67 Core REC:send_L" };
     io.directLinks = { { "system:capture_9", "x:in" } };
     return io;
 }
@@ -88,7 +88,7 @@ TEST (SystemDevice, AnAbsentDeviceIsLinkedToNothing)
     EXPECT_EQ (none.jack.count ("analog_1"), 0u);
     EXPECT_EQ (none.jack.count ("main_sub"), 0u);
     EXPECT_EQ (none.jack.at ("deckA_1"), (std::vector<std::string> { "StemDeck-A:bformat_1" }));
-    EXPECT_EQ (none.jack.at ("rec_L"), (std::vector<std::string> { "AES67 a3nuc1 out:send_CH1" }));
+    EXPECT_EQ (none.jack.at ("rec_L"), (std::vector<std::string> { "AES67 Core REC:send_L" }));
     EXPECT_TRUE (none.directLinks.empty());
     EXPECT_EQ (dropped, (std::vector<std::string> { "system:capture_1", "system:playback_1", "system:capture_9" }));
 

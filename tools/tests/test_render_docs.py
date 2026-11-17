@@ -96,12 +96,13 @@ class TheTables(unittest.TestCase):
 class TheAes67Table(unittest.TestCase):
     def test_the_aes67_table_lists_every_stream(self):
         rows = render_docs.aes67_table(TRUTH).splitlines()[2:]
-        self.assertEqual(len(rows), 6)
+        self.assertEqual(len(rows), 5)
         text = "\n".join(rows)
-        for session in ("AES67 {host} out", "AES67 deck {deck}", "AES67 Core MAIN",
+        self.assertNotIn("AES67 {host} out", text)
+        for session in ("AES67 deck {deck}", "AES67 Core MAIN",
                         "AES67 Core BOOTH", "AES67 Core REC", "AES67 Core PHONES"):
             self.assertIn(session, text)
-        for endpoint in ("239.69.150.243:5004", "239.69.200.1:5004",
+        for endpoint in ("239.69.200.3:5004", "239.69.200.1:5004",
                          "239.69.200.4:5004"):
             self.assertIn(endpoint, text)
 

@@ -168,13 +168,13 @@ TEST (LinksOverview, GroupsRunInputsThenOutputsThenTheRest)
     graph.link ("a3-engine:rec_L", "beat-analyzer:bpm_1");
     graph.link ("a3-engine:phones_L", "system:playback_9");
     graph.link ("system:capture_1", "a3-engine:analog_1");
-    graph.link ("system:capture_9", "AES67 a3nuc1 out:in_1");
+    graph.link ("system:capture_9", "AES67 Core REC:in_1");
     const auto text = show (graph);
     const auto at = [&] (const char* heading) { return text.find (heading); };
     EXPECT_LT (at ("Scarlett inputs → engine"), at ("engine → Scarlett"));
     EXPECT_LT (at ("engine → Scarlett"), at ("engine → beat-analyzer"));
     EXPECT_LT (at ("engine → beat-analyzer"), at ("StemDeck A → engine"));
-    EXPECT_LT (at ("StemDeck A → engine"), at ("Scarlett → AES67 a3nuc1 out"));
+    EXPECT_LT (at ("StemDeck A → engine"), at ("Scarlett → AES67 Core REC"));
 }
 
 TEST (LinksOverview, TheLastLineCountsMissingTargetsAndPointsToTheStatusPage)
@@ -189,7 +189,7 @@ TEST (LinksOverview, TheLastLineCountsMissingTargetsAndPointsToTheStatusPage)
 TEST (LinksOverview, WithoutTheEngineInTheGraphTheMissingCountIsNotTheNews)
 {
     Graph graph;
-    graph.link ("system:capture_9", "AES67 a3nuc1 out:in_1");
+    graph.link ("system:capture_9", "AES67 Core REC:in_1");
     const auto text = show (graph, 40);
     EXPECT_NE (text.find ("The engine is not running"), std::string::npos) << text;
     EXPECT_EQ (text.find ("Not connected"), std::string::npos) << text;

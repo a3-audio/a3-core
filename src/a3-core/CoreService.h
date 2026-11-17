@@ -43,8 +43,8 @@ struct ServiceOptions
     std::optional<juce::File> networkPath;     // the maintainer's network.json; none: no file
     Clock* clock = nullptr;                    // the one clock of every `now`; none: the system's
     juce::File departmentsFile;                // the window's stored departments; none: POST /api/departments is refused
-    std::optional<std::vector<StreamSpec>> aes67Streams;   // the AES67 senders to render; none: the legacy stream only
-    std::string aes67LegacyOnlyBecause;        // why the speaker layout was not read; said on the aes67 line
+    std::optional<std::vector<StreamSpec>> aes67Streams;   // the AES67 senders to render; none: the layout-free ones
+    std::string aes67LayoutFreeOnlyBecause;    // why the speaker layout was not read; said on the aes67 line
     std::vector<std::string> aes67Problems;    // the streams the table refuses (resolveTxStreams); said on the aes67 line
 };
 

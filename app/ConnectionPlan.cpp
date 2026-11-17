@@ -23,21 +23,10 @@ void addPeerOnce (a3::links::LinkMap& map, const std::string& port, const std::s
 }
 }
 
-void addRecToAes67Sender (a3::links::LinkMap& map, const std::string& hostname, const a3core::StreamSpec* legacy)
-{
-    if (legacy == nullptr && hostname.empty())
-        return;
-    const auto sender = (legacy != nullptr ? legacy->session : "AES67 " + hostname + " out") + ":";
-    for (const auto& [port, channel] : { std::pair<const char*, const char*> { "rec_L", "send_CH1" }, { "rec_R", "send_CH2" } })
-        addPeerOnce (map, port, sender + channel);
-}
-
 void addStreamSenders (a3::links::LinkMap& map, const std::vector<a3core::StreamSpec>& streams)
 {
     for (const auto& spec : streams)
     {
-        if (spec.legacy)
-            continue;
         const auto channels = std::min (spec.enginePorts.size(), spec.channelNames.size());
         for (std::size_t k = 0; k < channels; ++k)
             addPeerOnce (map, spec.enginePorts[k], spec.session + ":send_" + spec.channelNames[k]);
@@ -62,12 +51,10 @@ void addRoundTripLoopLinks (IoMap& map)
     }
 }
 
-IoMap linkMapFor (const AppConfig& config, const std::string& hostname, const std::vector<a3core::StreamSpec>& streams)
+IoMap linkMapFor (const AppConfig& config, const std::vector<a3core::StreamSpec>& streams)
 {
     auto map = config.io;
     addBeatAnalyzerLink (map);
-    const auto legacy = std::find_if (streams.begin(), streams.end(), [] (const a3core::StreamSpec& spec) { return spec.legacy; });
-    addRecToAes67Sender (map, hostname, legacy != streams.end() ? &*legacy : nullptr);
     addStreamSenders (map, streams);
     addRoundTripLoopLinks (map);
     return map;
