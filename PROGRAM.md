@@ -278,13 +278,14 @@ every other slot to its local `StemDeck-<X>` by the rule above (a StemDeck's por
 installed; until then they are reported as missing, not an error). Since Task 24 the links into the
 analyzer's meter ports (`beat-analyzer:vu_*`, and the direct capture links that only fed them) are gone:
 the engine measures those meters itself. Left out on purpose: REAPER's inputs
-13-24 (StemDeck's stems and AES67's cue have no engine counterpart) and every link to the AES67 sender: its
-client name carries the machine's host name (`AES67 <host name> out`, as `a3-osc-render` names it), so the
-file cannot name it for every host. Instead the engine links `rec_L/R` to its own machine's sender,
-`AES67 <host name> out:send_CH1/2`, which carries the one recording source to the deck hosts: a built-in link
-(P40, P46), named from the same host name `a3-osc-render` uses, added to whatever map is loaded at link time and
-never written to the file, so it also holds for an `engine.json` saved before M10. STATUS and `a3-core links`
-count it like any other link (missing while the sender is not there). No StemDeck recorder is in the map (P39):
+13-24 (StemDeck's stems and AES67's cue have no engine counterpart) and every link to the AES67 senders: they
+come from the truth's `aes67_streams` table, one sender per Core row (`AES67 Core MAIN`, `BOOTH`, `REC`, `PHONES`),
+whose channels depend on the speaker layout, so the file cannot name them. Instead the engine links each stream's
+engine outputs to its sender (`addStreamSenders`): `rec_L/R -> AES67 Core REC:send_L/R` carries the one recording
+source to the deck hosts. These links are added to whatever map is loaded at link time and never written to the
+file, so they also hold for an `engine.json` saved before M10. STATUS and `a3-core links` count them like any other
+link (missing while a sender is not there). Until 2026-11-17 a 12-channel `AES67 <host name> out` carried the
+recording on CH1/2 (P40, P46); it is retired, `AES67 Core REC` carries the same signal. No StemDeck recorder is in the map (P39):
 every StemDeck links its own `rec_L/R` from `a3-engine:rec_L/R`; an old saved map that still names
 `StemDeck:rec_L/R` makes the same link, which is harmless. The beat-analyzer is a built-in link too
 (2026-10-30): `rec_L -> beat-analyzer:bpm_1`, planned whenever the map is linked (missing while the analyzer is not
@@ -305,7 +306,7 @@ recorder from `a3-engine:rec_L/R`) and `beat-analyzer`. Once a second (and at on
 makes what the plan wants and removes every owned link the plan does not name, whoever made it; links between two
 ports that are not its own (direct links) are removed only when it made them. So a link made by hand onto an engine
 port (qjackctl, `pw-link`) is gone within a second unless it goes to StemDeck or the analyzer. The plan is the I/O
-map plus the built-in links (the AES67 sender `rec_L/R -> send_CH1/2`, the analyzer, the loops).
+map plus the built-in links (the AES67 senders of the truth's streams, the analyzer, the loops).
 
 **The device** (`app/SystemDevice.h`): `system:playback_N` / `system:capture_N` are linked only while the default
 sink / source is the configured device (`pw-metadata -n default 0`: `default.audio.*` equals
