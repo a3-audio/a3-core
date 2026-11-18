@@ -282,26 +282,30 @@ std::optional<AppConfig> withHeadphoneEq (const AppConfig& config, const juce::S
 
 namespace
 {
-struct DeckBank { const char* inputInfix; const char* localPort; const char* aes67Port; int count; };
+// A deck's AES67 streams are one session each (2026-11-18): the bank's session ends in `aes67Session`.
+struct DeckBank { const char* inputInfix; const char* localPort; const char* aes67Session; const char* aes67Port; int count; };
 constexpr DeckBank deckBanks[] = {
-    { "_",     "bformat_", "receive_MAIN", deckInputChannels },
-    { "_aux_", "aux_",     "receive_AUX",  deckAuxChannels },
-    { "_cue_", "cue_",     "receive_CUE",  deckCueChannels },
+    { "_",     "bformat_", " MAIN", "receive_MAIN", deckInputChannels },
+    { "_aux_", "aux_",     " AUX",  "receive_AUX",  deckAuxChannels },
+    { "_cue_", "cue_",     " CUE",  "receive_CUE",  deckCueChannels },
 };
+constexpr const char* aes67StereoSession = " STEREO";
 }
 
 std::vector<std::pair<std::string, std::string>> deckLinks (int slot, DeckSource source)
 {
     std::vector<std::pair<std::string, std::string>> links;
     const auto letter = deckLetters (slot);
-    const auto client = source == DeckSource::local ? "StemDeck-" + letter : "AES67 deck " + letter;
     for (const auto& bank : deckBanks)
+    {
+        const auto client = source == DeckSource::local ? "StemDeck-" + letter : "AES67 deck " + letter + bank.aes67Session;
         for (int i = 1; i <= bank.count; ++i)
         {
             const auto n = std::to_string (i);
             const auto peerPort = std::string (source == DeckSource::local ? bank.localPort : bank.aes67Port) + n;
             links.emplace_back ("deck" + letter + bank.inputInfix + n, client + ":" + peerPort);
         }
+    }
     return links;
 }
 
@@ -316,7 +320,7 @@ void setDeckSource (IoMap& map, int slot, DeckSource source)
 std::vector<std::pair<std::string, std::string>> stereoDeckLinks (int slot, DeckSource source)
 {
     const auto letter = deckLetters (slot);
-    const auto peerBase = source == DeckSource::local ? "StemDeck-" + letter + ":master_" : "AES67 deck " + letter + ":receive_MASTER_";
+    const auto peerBase = source == DeckSource::local ? "StemDeck-" + letter + ":master_" : "AES67 deck " + letter + aes67StereoSession + ":receive_MASTER_";
     std::vector<std::pair<std::string, std::string>> links;
     for (int side = 0; side < deckStereoChannels; ++side)
     {

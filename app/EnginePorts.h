@@ -19,7 +19,7 @@ struct PortNames { std::vector<std::string> inputs, outputs; };
 // deck{X}_stereo_L/R (the master pair of a deck in stereo mode).
 PortNames enginePortNames (const a3::EngineConfig&, const a3::SpatialConfig&);
 
-constexpr int deckInputChannels = 16, deckAuxChannels = 16, deckCueChannels = 9, deckStereoChannels = 2;
+constexpr int deckInputChannels = 16, deckAuxChannels = 9, deckCueChannels = 9, deckStereoChannels = 2;
 using a3::deckLetters;   // 1 = "A", 26 = "Z", 27 = "AA"
 
 // The name of one input port; enginePortNames and the receiver groups both build theirs here.

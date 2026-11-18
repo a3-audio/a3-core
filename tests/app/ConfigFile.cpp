@@ -106,7 +106,7 @@ TEST (ConfigFile, MissingSectionsTakeTheDefaults)
     EXPECT_EQ (loaded->backend.blockSize, 64);    // the shipped quantum (2026-11-06; 128 before)
     EXPECT_EQ (loaded->backend.periods, 3);       // today's ALSA periods: no WirePlumber drop-in
     EXPECT_EQ (loaded->backend.sampleRate, 44100);
-    EXPECT_EQ (loaded->io.jack.size(), (size_t) defaults.decks * 43);   // only the slots' local StemDeck links, the stereo pair with them
+    EXPECT_EQ (loaded->io.jack.size(), (size_t) defaults.decks * 36);   // only the slots' local StemDeck links, the stereo pair with them
     EXPECT_TRUE (loaded->io.directLinks.empty());
     EXPECT_TRUE (loaded->io.deviceChannels.empty());
 }
@@ -117,7 +117,7 @@ TEST (ConfigFile, SlotsTheFileNamesNoPortOfLinkTheirLocalStemDeck)
 {
     Scratch scratch;
     juce::String error;
-    const auto file = scratch.write ("engine.json", withSpatial ("\"io\":{\"jack\":{\"deckB_1\":[\"AES67 deck B:receive_MAIN1\"]}}"));
+    const auto file = scratch.write ("engine.json", withSpatial ("\"io\":{\"jack\":{\"deckB_1\":[\"AES67 deck B MAIN:receive_MAIN1\"]}}"));
     for (const int truthDecks : { 4, 6 })
     {
         const auto loaded = a3app::loadAppConfig (file, error, truthDecks);
@@ -129,10 +129,10 @@ TEST (ConfigFile, SlotsTheFileNamesNoPortOfLinkTheirLocalStemDeck)
                 continue;
             EXPECT_EQ (a3app::deckSourceOf (loaded->io, slot), a3app::DeckSource::local) << slot;
         }
-        EXPECT_EQ (loaded->io.jack.at ("deckB_1"), std::vector<std::string> { "AES67 deck B:receive_MAIN1" });
+        EXPECT_EQ (loaded->io.jack.at ("deckB_1"), std::vector<std::string> { "AES67 deck B MAIN:receive_MAIN1" });
         EXPECT_EQ (loaded->io.jack.count ("deckB_2"), 0u);   // the file's own slot is not completed behind its back
     }
-    EXPECT_EQ (file.loadFileAsString(), withSpatial ("\"io\":{\"jack\":{\"deckB_1\":[\"AES67 deck B:receive_MAIN1\"]}}"));
+    EXPECT_EQ (file.loadFileAsString(), withSpatial ("\"io\":{\"jack\":{\"deckB_1\":[\"AES67 deck B MAIN:receive_MAIN1\"]}}"));
 }
 
 // A9: one rule whether or not the file names its count. The rig's file with "decks": 4 and only A/B linked
@@ -142,14 +142,14 @@ TEST (ConfigFile, ANamedDeckCountGetsLocalLinksForSlotsItLinksNowhere)
     Scratch scratch;
     juce::String error;
     const auto text = withSpatial ("\"engine\":{\"decks\":4},\"io\":{\"jack\":{\"deckA_1\":[\"StemDeck-A:bformat_1\"],"
-                                   "\"deckB_1\":[\"AES67 deck B:receive_MAIN1\"]}}");
+                                   "\"deckB_1\":[\"AES67 deck B MAIN:receive_MAIN1\"]}}");
     const auto file = scratch.write ("engine.json", text);
     const auto loaded = a3app::loadAppConfig (file, error, 6);
     ASSERT_TRUE (loaded.has_value()) << error;
     EXPECT_EQ (loaded->engine.decks, 4);
     EXPECT_EQ (a3app::deckSourceOf (loaded->io, 3), a3app::DeckSource::local);
     EXPECT_EQ (a3app::deckSourceOf (loaded->io, 4), a3app::DeckSource::local);
-    EXPECT_EQ (loaded->io.jack.at ("deckB_1"), std::vector<std::string> { "AES67 deck B:receive_MAIN1" });
+    EXPECT_EQ (loaded->io.jack.at ("deckB_1"), std::vector<std::string> { "AES67 deck B MAIN:receive_MAIN1" });
     EXPECT_EQ (loaded->io.jack.count ("deckA_2"), 0u);
     EXPECT_EQ (loaded->io.jack.count ("deckB_2"), 0u);
     EXPECT_EQ (loaded->io.jack.count ("deckE_1"), 0u);   // the named count, not the truth's

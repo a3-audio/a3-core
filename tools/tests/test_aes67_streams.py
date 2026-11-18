@@ -31,7 +31,7 @@ A3_RANGE = ipaddress.ip_network("239.69.0.0/16")
 DECK_KEYS = ["deck-main", "deck-aux", "deck-cue", "deck-stereo"]
 # key: (session ends in, channels, first group); 1024 groups apart, so no slot up to ZZ (702) reaches the next.
 DECK_STREAMS = {"deck-main": ("MAIN", 16, "239.69.160.0"),
-                "deck-aux": ("AUX", 16, "239.69.164.0"),
+                "deck-aux": ("AUX", 9, "239.69.164.0"),
                 "deck-cue": ("CUE", 9, "239.69.168.0"),
                 # "Output: Stereo" (a deck's setting) sends this one instead of the three.
                 "deck-stereo": ("STEREO", 2, "239.69.172.0")}

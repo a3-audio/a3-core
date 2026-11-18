@@ -1056,7 +1056,7 @@ TEST_F (Pages, EverySlotOfTheCountHasASourceChooser)
     page.deckSourceBox (3)->setSelectedId (1, juce::sendNotificationSync);
     EXPECT_EQ (view.cfg.io.jack.at ("deckC_cue_9"), std::vector<std::string> { "StemDeck-C:cue_9" });
     page.deckSourceBox (4)->setSelectedId (2, juce::sendNotificationSync);
-    EXPECT_EQ (view.cfg.io.jack.at ("deckD_aux_16"), std::vector<std::string> { "AES67 deck D:receive_AUX16" });
+    EXPECT_EQ (view.cfg.io.jack.at ("deckD_aux_9"), std::vector<std::string> { "AES67 deck D AUX:receive_AUX9" });
     page.deckSourceBox (5)->setSelectedId (1, juce::sendNotificationSync);
     EXPECT_EQ (view.cfg.io.jack.at ("deckE_1"), std::vector<std::string> { "StemDeck-E:bformat_1" });
     EXPECT_EQ (a3app::deckSourceOf (view.cfg.io, 5), a3app::DeckSource::local);
@@ -1074,7 +1074,7 @@ TEST_F (Pages, AnIncompleteDeckSlotShowsItAndOneChoiceCompletesIt)
 
     page.deckSourceBox (1)->setSelectedId (1, juce::sendNotificationSync);
     EXPECT_EQ (a3app::deckSourceOf (view.cfg.io, 1), a3app::DeckSource::local);
-    EXPECT_EQ (view.cfg.io.jack.at ("deckA_aux_16"), std::vector<std::string> { "StemDeck-A:aux_16" });
+    EXPECT_EQ (view.cfg.io.jack.at ("deckA_aux_9"), std::vector<std::string> { "StemDeck-A:aux_9" });
     EXPECT_EQ (view.cfg.io.jack.at ("deckA_cue_9"), std::vector<std::string> { "StemDeck-A:cue_9" });
     EXPECT_EQ (page.deckSourceBox (1)->getSelectedId(), 1);
 }

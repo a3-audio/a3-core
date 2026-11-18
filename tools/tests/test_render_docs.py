@@ -111,7 +111,7 @@ class TheAes67Table(unittest.TestCase):
         rows = {name: [r for r in render_docs.aes67_table(TRUTH).splitlines()
                        if f"deck {{deck}} {name}" in r][0]
                 for name in ("MAIN", "AUX", "CUE")}
-        for name, (group, channels) in {"MAIN": ("239.69.160.0", "16"), "AUX": ("239.69.164.0", "16"),
+        for name, (group, channels) in {"MAIN": ("239.69.160.0", "16"), "AUX": ("239.69.164.0", "9"),
                                         "CUE": ("239.69.168.0", "9")}.items():
             self.assertIn(group, rows[name])
             self.assertIn("slot", rows[name])

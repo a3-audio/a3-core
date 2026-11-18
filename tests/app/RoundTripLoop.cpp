@@ -119,7 +119,7 @@ TEST (RoundTripLoop, NamesTheDeviceChannelOfAPeer)
     EXPECT_EQ (deviceChannelOfPeer ("alsa_input.usb-Focusrite-00.pro-input-0:capture_AUX11")->channel, 12);
     EXPECT_FALSE (deviceChannelOfPeer ("StemDeck-A:bformat_11"));
     EXPECT_FALSE (deviceChannelOfPeer ("system:playback_x"));
-    EXPECT_FALSE (deviceChannelOfPeer ("AES67 deck B:receive_AUX10"));   // not a device's capture or playback port
+    EXPECT_FALSE (deviceChannelOfPeer ("AES67 deck B AUX:receive_AUX10"));   // not a device's capture or playback port
 }
 
 TEST (RoundTripLoop, ReservesItsChannelsOnTheirSideOnly)
@@ -208,7 +208,7 @@ TEST (RoundTripLoop, APeerIsNamedByTheDevice)
     EXPECT_EQ (a3app::peerLabel ("system:capture_3", "Scarlett 18i20 USB"), "Scarlett 18i20 USB in 3");
     EXPECT_EQ (a3app::peerLabel ("system:playback_12", "Scarlett 18i20 USB"), "Scarlett 18i20 USB out 12");
     EXPECT_EQ (a3app::peerLabel ("system:playback_1", ""), "Device out 1");
-    EXPECT_EQ (a3app::peerLabel ("AES67 deck B:receive_MAIN1", "Scarlett 18i20 USB"), "AES67 deck B:receive_MAIN1");
+    EXPECT_EQ (a3app::peerLabel ("AES67 deck B MAIN:receive_MAIN1", "Scarlett 18i20 USB"), "AES67 deck B MAIN:receive_MAIN1");
 }
 
 TEST (RoundTripLoop, TheIoPageNoticeNamesTheLoopAndWhatWasUnrouted)

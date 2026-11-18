@@ -98,15 +98,15 @@ TEST (LinksOverview, StemDeckSlotsAreNamedAndItsDeckPortsExplained)
     // A slot's 41 inputs, in the engine's order: B-format 16, aux 16, cue 9.
     for (int n = 1; n <= 16; ++n)
         graph.link ("StemDeck-A:bformat_" + std::to_string (n), "a3-engine:deckA_" + std::to_string (n));
-    for (int n = 1; n <= 16; ++n)
+    for (int n = 1; n <= 9; ++n)
         graph.link ("StemDeck-A:aux_" + std::to_string (n), "a3-engine:deckA_aux_" + std::to_string (n));
     for (int n = 1; n <= 9; ++n)
         graph.link ("StemDeck-A:cue_" + std::to_string (n), "a3-engine:deckA_cue_" + std::to_string (n));
     const auto text = show (graph);
     EXPECT_TRUE (hasLine (text, "StemDeck A → engine")) << text;
-    EXPECT_TRUE (hasLine (text, "  bformat 1–16 → deck A 1–16     (B-format)")) << text;
-    EXPECT_TRUE (hasLine (text, "  aux 1–16     → deck A aux 1–16 (aux)")) << text;
-    EXPECT_TRUE (hasLine (text, "  cue 1–9      → deck A cue 1–9  (cue)")) << text;
+    EXPECT_TRUE (hasLine (text, "  bformat 1–16 → deck A 1–16    (B-format)")) << text;
+    EXPECT_TRUE (hasLine (text, "  aux 1–9      → deck A aux 1–9 (aux)")) << text;
+    EXPECT_TRUE (hasLine (text, "  cue 1–9      → deck A cue 1–9 (cue)")) << text;
 }
 
 // A deck in Output: Stereo feeds the slot's own stereo pair, and the line says so.
@@ -125,14 +125,14 @@ TEST (LinksOverview, DecksCAndDReadLikeAAndB)
     Graph graph;
     for (int n = 1; n <= 9; ++n)
         graph.link ("StemDeck-C:cue_" + std::to_string (n), "a3-engine:deckC_cue_" + std::to_string (n));
-    for (int n = 1; n <= 16; ++n)
-        graph.link ("AES67 deck D:receive_AUX" + std::to_string (n), "a3-engine:deckD_aux_" + std::to_string (n));
+    for (int n = 1; n <= 9; ++n)
+        graph.link ("AES67 deck D AUX:receive_AUX" + std::to_string (n), "a3-engine:deckD_aux_" + std::to_string (n));
     const auto text = show (graph);
     EXPECT_TRUE (hasLine (text, "StemDeck C → engine")) << text;
     EXPECT_NE (text.find ("deck C cue 1–9"), std::string::npos) << text;
     EXPECT_NE (text.find ("(cue)"), std::string::npos) << text;
-    EXPECT_TRUE (hasLine (text, "AES67 deck D → engine")) << text;
-    EXPECT_NE (text.find ("deck D aux 1–16"), std::string::npos) << text;
+    EXPECT_TRUE (hasLine (text, "AES67 deck D AUX → engine")) << text;
+    EXPECT_NE (text.find ("deck D aux 1–9"), std::string::npos) << text;
     EXPECT_NE (text.find ("(aux)"), std::string::npos) << text;
 }
 

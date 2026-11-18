@@ -238,15 +238,16 @@ TEST (DefaultConfig, DeckAIsLocalDeckBIsAes67EveryOtherSlotLocal)
             const auto kind = std::isdigit ((unsigned char) tail[0]) ? 0 : (startsWith (tail, "aux") ? 1 : (startsWith (tail, "cue") ? 2 : 3));
             const std::string local[] = { "bformat_", "aux_", "cue_", "master_" };
             const std::string remote[] = { "receive_MAIN", "receive_AUX", "receive_CUE", "receive_MASTER_" };
+            const std::string session[] = { " MAIN", " AUX", " CUE", " STEREO" };
             const auto expected = letter != "B" ? "StemDeck-" + letter + ":" + local[kind] + n
-                                                : "AES67 deck " + letter + ":" + remote[kind] + n;
+                                                : "AES67 deck " + letter + session[kind] + ":" + remote[kind] + n;
             const auto found = config.io.jack.find (port);
             ASSERT_TRUE (found != config.io.jack.end()) << port;
             EXPECT_EQ (found->second, std::vector<std::string> { expected }) << port;
         }
-        EXPECT_EQ (deckPorts, truthDecks * 43);
+        EXPECT_EQ (deckPorts, truthDecks * 36);
         EXPECT_EQ (config.io.jack.at ("deckA_cue_9"), std::vector<std::string> { "StemDeck-A:cue_9" });
-        EXPECT_EQ (config.io.jack.at ("deckB_aux_1"), std::vector<std::string> { "AES67 deck B:receive_AUX1" });
+        EXPECT_EQ (config.io.jack.at ("deckB_aux_1"), std::vector<std::string> { "AES67 deck B AUX:receive_AUX1" });
         EXPECT_EQ (config.io.jack.at ("deckC_1"), std::vector<std::string> { "StemDeck-C:bformat_1" });
         EXPECT_EQ (config.io.jack.at ("deckD_cue_9"), std::vector<std::string> { "StemDeck-D:cue_9" });
         for (const auto& retired : a3app::retiredDeckPorts (truthDecks))
@@ -374,7 +375,7 @@ TEST (DefaultConfig, AStereoDeckHasItsOwnPairNotTheAnalogInputs)
     {
         const auto& s = sides[side];
         EXPECT_EQ (peersOf ("deckA_stereo_" + s), std::vector<std::string> { "StemDeck-A:master_" + s });
-        EXPECT_EQ (peersOf ("deckB_stereo_" + s), std::vector<std::string> { "AES67 deck B:receive_MASTER_" + s });
+        EXPECT_EQ (peersOf ("deckB_stereo_" + s), std::vector<std::string> { "AES67 deck B STEREO:receive_MASTER_" + s });
         EXPECT_EQ (peersOf ("deckC_stereo_" + s), std::vector<std::string> { "StemDeck-C:master_" + s });
         EXPECT_EQ (peersOf ("deckD_stereo_" + s), std::vector<std::string> { "StemDeck-D:master_" + s });
     }
@@ -389,7 +390,7 @@ TEST (DefaultConfig, AStereoDeckIsPresentOnTheDesk)
     std::vector<std::string> bformatA, stereoA { "StemDeck-A:master_L", "StemDeck-A:master_R" };
     for (const auto& [port, peer] : a3app::deckLinks (1, a3app::DeckSource::local))
         bformatA.push_back (peer);
-    const std::vector<std::string> stereoB { "AES67 deck B:receive_MASTER_L", "AES67 deck B:receive_MASTER_R" };
+    const std::vector<std::string> stereoB { "AES67 deck B STEREO:receive_MASTER_L", "AES67 deck B STEREO:receive_MASTER_R" };
 
     auto missing = bformatA;
     missing.insert (missing.end(), stereoB.begin(), stereoB.end());

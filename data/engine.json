@@ -148,27 +148,6 @@
    "deckA_aux_9": [
     "StemDeck-A:aux_9"
    ],
-   "deckA_aux_10": [
-    "StemDeck-A:aux_10"
-   ],
-   "deckA_aux_11": [
-    "StemDeck-A:aux_11"
-   ],
-   "deckA_aux_12": [
-    "StemDeck-A:aux_12"
-   ],
-   "deckA_aux_13": [
-    "StemDeck-A:aux_13"
-   ],
-   "deckA_aux_14": [
-    "StemDeck-A:aux_14"
-   ],
-   "deckA_aux_15": [
-    "StemDeck-A:aux_15"
-   ],
-   "deckA_aux_16": [
-    "StemDeck-A:aux_16"
-   ],
    "deckA_cue_1": [
     "StemDeck-A:cue_1"
    ],
@@ -203,133 +182,112 @@
     "StemDeck-A:master_R"
    ],
    "deckB_1": [
-    "AES67 deck B:receive_MAIN1"
+    "AES67 deck B MAIN:receive_MAIN1"
    ],
    "deckB_2": [
-    "AES67 deck B:receive_MAIN2"
+    "AES67 deck B MAIN:receive_MAIN2"
    ],
    "deckB_3": [
-    "AES67 deck B:receive_MAIN3"
+    "AES67 deck B MAIN:receive_MAIN3"
    ],
    "deckB_4": [
-    "AES67 deck B:receive_MAIN4"
+    "AES67 deck B MAIN:receive_MAIN4"
    ],
    "deckB_5": [
-    "AES67 deck B:receive_MAIN5"
+    "AES67 deck B MAIN:receive_MAIN5"
    ],
    "deckB_6": [
-    "AES67 deck B:receive_MAIN6"
+    "AES67 deck B MAIN:receive_MAIN6"
    ],
    "deckB_7": [
-    "AES67 deck B:receive_MAIN7"
+    "AES67 deck B MAIN:receive_MAIN7"
    ],
    "deckB_8": [
-    "AES67 deck B:receive_MAIN8"
+    "AES67 deck B MAIN:receive_MAIN8"
    ],
    "deckB_9": [
-    "AES67 deck B:receive_MAIN9"
+    "AES67 deck B MAIN:receive_MAIN9"
    ],
    "deckB_10": [
-    "AES67 deck B:receive_MAIN10"
+    "AES67 deck B MAIN:receive_MAIN10"
    ],
    "deckB_11": [
-    "AES67 deck B:receive_MAIN11"
+    "AES67 deck B MAIN:receive_MAIN11"
    ],
    "deckB_12": [
-    "AES67 deck B:receive_MAIN12"
+    "AES67 deck B MAIN:receive_MAIN12"
    ],
    "deckB_13": [
-    "AES67 deck B:receive_MAIN13"
+    "AES67 deck B MAIN:receive_MAIN13"
    ],
    "deckB_14": [
-    "AES67 deck B:receive_MAIN14"
+    "AES67 deck B MAIN:receive_MAIN14"
    ],
    "deckB_15": [
-    "AES67 deck B:receive_MAIN15"
+    "AES67 deck B MAIN:receive_MAIN15"
    ],
    "deckB_16": [
-    "AES67 deck B:receive_MAIN16"
+    "AES67 deck B MAIN:receive_MAIN16"
    ],
    "deckB_aux_1": [
-    "AES67 deck B:receive_AUX1"
+    "AES67 deck B AUX:receive_AUX1"
    ],
    "deckB_aux_2": [
-    "AES67 deck B:receive_AUX2"
+    "AES67 deck B AUX:receive_AUX2"
    ],
    "deckB_aux_3": [
-    "AES67 deck B:receive_AUX3"
+    "AES67 deck B AUX:receive_AUX3"
    ],
    "deckB_aux_4": [
-    "AES67 deck B:receive_AUX4"
+    "AES67 deck B AUX:receive_AUX4"
    ],
    "deckB_aux_5": [
-    "AES67 deck B:receive_AUX5"
+    "AES67 deck B AUX:receive_AUX5"
    ],
    "deckB_aux_6": [
-    "AES67 deck B:receive_AUX6"
+    "AES67 deck B AUX:receive_AUX6"
    ],
    "deckB_aux_7": [
-    "AES67 deck B:receive_AUX7"
+    "AES67 deck B AUX:receive_AUX7"
    ],
    "deckB_aux_8": [
-    "AES67 deck B:receive_AUX8"
+    "AES67 deck B AUX:receive_AUX8"
    ],
    "deckB_aux_9": [
-    "AES67 deck B:receive_AUX9"
-   ],
-   "deckB_aux_10": [
-    "AES67 deck B:receive_AUX10"
-   ],
-   "deckB_aux_11": [
-    "AES67 deck B:receive_AUX11"
-   ],
-   "deckB_aux_12": [
-    "AES67 deck B:receive_AUX12"
-   ],
-   "deckB_aux_13": [
-    "AES67 deck B:receive_AUX13"
-   ],
-   "deckB_aux_14": [
-    "AES67 deck B:receive_AUX14"
-   ],
-   "deckB_aux_15": [
-    "AES67 deck B:receive_AUX15"
-   ],
-   "deckB_aux_16": [
-    "AES67 deck B:receive_AUX16"
+    "AES67 deck B AUX:receive_AUX9"
    ],
    "deckB_cue_1": [
-    "AES67 deck B:receive_CUE1"
+    "AES67 deck B CUE:receive_CUE1"
    ],
    "deckB_cue_2": [
-    "AES67 deck B:receive_CUE2"
+    "AES67 deck B CUE:receive_CUE2"
    ],
    "deckB_cue_3": [
-    "AES67 deck B:receive_CUE3"
+    "AES67 deck B CUE:receive_CUE3"
    ],
    "deckB_cue_4": [
-    "AES67 deck B:receive_CUE4"
+    "AES67 deck B CUE:receive_CUE4"
    ],
    "deckB_cue_5": [
-    "AES67 deck B:receive_CUE5"
+    "AES67 deck B CUE:receive_CUE5"
    ],
    "deckB_cue_6": [
-    "AES67 deck B:receive_CUE6"
+    "AES67 deck B CUE:receive_CUE6"
    ],
    "deckB_cue_7": [
-    "AES67 deck B:receive_CUE7"
+    "AES67 deck B CUE:receive_CUE7"
    ],
    "deckB_cue_8": [
-    "AES67 deck B:receive_CUE8"
+    "AES67 deck B CUE:receive_CUE8"
    ],
    "deckB_cue_9": [
-    "AES67 deck B:receive_CUE9"
+    "AES67 deck B CUE:receive_CUE9"
    ],
    "deckB_stereo_L": [
-    "AES67 deck B:receive_MASTER_L"
+    "AES67 deck B STEREO:receive_MASTER_L"
    ],
    "deckB_stereo_R": [
-    "AES67 deck B:receive_MASTER_R"
+    "AES67 deck B STEREO:receive_MASTER_R"
    ]
   },
   "directLinks": [],
