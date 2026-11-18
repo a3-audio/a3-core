@@ -732,8 +732,8 @@ class TheDeckStreams(unittest.TestCase):
         self.assertEqual((listener["name"], listener["host"], listener["port"]),
                          ("aes67.deck", "aes67-deck-{deck}", 5004))
         carries = listener["carries"]
-        for word in ("deck-main 16", "deck-aux 16", "deck-cue 9", "L24",
-                     "44.1 kHz", "ptime 0.25 ms", 'sess.name "AES67 deck <X> MAIN|AUX|CUE"',
+        for word in ("deck-main 16", "deck-aux 16", "deck-cue 9", "deck-stereo 2", "L24",
+                     "44.1 kHz", "ptime 0.25 ms", 'sess.name "AES67 deck <X> MAIN|AUX|CUE|STEREO"',
                      "net.mtu = 1500"):
             with self.subTest(word=word):
                 self.assertIn(word, carries)

@@ -96,7 +96,7 @@ class TheTables(unittest.TestCase):
 class TheAes67Table(unittest.TestCase):
     def test_the_aes67_table_lists_every_stream(self):
         rows = render_docs.aes67_table(TRUTH).splitlines()[2:]
-        self.assertEqual(len(rows), 7)
+        self.assertEqual(len(rows), 8)
         text = "\n".join(rows)
         self.assertNotIn("AES67 {host} out", text)
         for session in ("AES67 deck {deck} MAIN", "AES67 deck {deck} AUX", "AES67 deck {deck} CUE",

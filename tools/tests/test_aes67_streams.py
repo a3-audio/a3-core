@@ -28,11 +28,13 @@ RTP_HEADER = 12
 BYTES_PER_SAMPLE = 3   # L24
 SAMPLE_RATE_KHZ = 44.1
 A3_RANGE = ipaddress.ip_network("239.69.0.0/16")
-DECK_KEYS = ["deck-main", "deck-aux", "deck-cue"]
+DECK_KEYS = ["deck-main", "deck-aux", "deck-cue", "deck-stereo"]
 # key: (session ends in, channels, first group); 1024 groups apart, so no slot up to ZZ (702) reaches the next.
 DECK_STREAMS = {"deck-main": ("MAIN", 16, "239.69.160.0"),
                 "deck-aux": ("AUX", 16, "239.69.164.0"),
-                "deck-cue": ("CUE", 9, "239.69.168.0")}
+                "deck-cue": ("CUE", 9, "239.69.168.0"),
+                # "Output: Stereo" (a deck's setting) sends this one instead of the three.
+                "deck-stereo": ("STEREO", 2, "239.69.172.0")}
 
 
 def samples_per_packet(ptime_ms):
@@ -81,7 +83,7 @@ class StreamTable(unittest.TestCase):
             group = ipaddress.ip_address(resolved_group(s, self.hosts))
             self.assertIn(group, A3_RANGE, s["key"])
 
-    def test_a_deck_sends_main_aux_and_cue_as_separate_sessions(self):
+    def test_a_deck_sends_main_aux_and_cue_as_separate_sessions_and_stereo_as_a_fourth(self):
         for key, (name, channels, base) in DECK_STREAMS.items():
             with self.subTest(key=key):
                 row = self.by_key[key]
