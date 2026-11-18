@@ -182,15 +182,15 @@ TEST (ConfigEdits, DeckSourceWritesFortyOneLinksAndTheStereoPair)
 {
     a3app::IoMap map;
     a3app::setDeckSource (map, 2, a3app::DeckSource::aes67);
-    EXPECT_EQ (map.jack.size(), 43u);
-    EXPECT_EQ (peersOf (map, "deckB_stereo_L"), std::vector<std::string> { "AES67 deck B:receive_MASTER_L" });
-    EXPECT_EQ (peersOf (map, "deckB_stereo_R"), std::vector<std::string> { "AES67 deck B:receive_MASTER_R" });
-    EXPECT_EQ (map.jack.at ("deckB_1"), std::vector<std::string> { "AES67 deck B:receive_MAIN1" });
-    EXPECT_EQ (map.jack.at ("deckB_16"), std::vector<std::string> { "AES67 deck B:receive_MAIN16" });
-    EXPECT_EQ (map.jack.at ("deckB_aux_16"), std::vector<std::string> { "AES67 deck B:receive_AUX16" });
-    EXPECT_EQ (map.jack.at ("deckB_cue_9"), std::vector<std::string> { "AES67 deck B:receive_CUE9" });
+    EXPECT_EQ (map.jack.size(), 36u);
+    EXPECT_EQ (peersOf (map, "deckB_stereo_L"), std::vector<std::string> { "AES67 deck B STEREO:receive_MASTER_L" });
+    EXPECT_EQ (peersOf (map, "deckB_stereo_R"), std::vector<std::string> { "AES67 deck B STEREO:receive_MASTER_R" });
+    EXPECT_EQ (map.jack.at ("deckB_1"), std::vector<std::string> { "AES67 deck B MAIN:receive_MAIN1" });
+    EXPECT_EQ (map.jack.at ("deckB_16"), std::vector<std::string> { "AES67 deck B MAIN:receive_MAIN16" });
+    EXPECT_EQ (map.jack.at ("deckB_aux_9"), std::vector<std::string> { "AES67 deck B AUX:receive_AUX9" });
+    EXPECT_EQ (map.jack.at ("deckB_cue_9"), std::vector<std::string> { "AES67 deck B CUE:receive_CUE9" });
     a3app::setDeckSource (map, 2, a3app::DeckSource::local);
-    EXPECT_EQ (map.jack.size(), 43u);
+    EXPECT_EQ (map.jack.size(), 36u);
     EXPECT_EQ (peersOf (map, "deckB_stereo_L"), std::vector<std::string> { "StemDeck-B:master_L" });
     EXPECT_EQ (peersOf (map, "deckB_stereo_R"), std::vector<std::string> { "StemDeck-B:master_R" });
     EXPECT_EQ (map.jack.at ("deckB_1"), std::vector<std::string> { "StemDeck-B:bformat_1" });
@@ -208,10 +208,10 @@ TEST (ConfigEdits, DeckSourceLeavesOtherSlotsAndAnalogAlone)
     a3app::setDeckSource (map, 2, a3app::DeckSource::aes67);
     EXPECT_EQ (map.jack.at ("analog_1"), std::vector<std::string> { "system:capture_1" });
     EXPECT_EQ (map.jack.at ("deckA_1"), std::vector<std::string> { "StemDeck-A:bformat_1" });
-    EXPECT_EQ (map.jack.at ("deckB_1"), std::vector<std::string> { "AES67 deck B:receive_MAIN1" });
+    EXPECT_EQ (map.jack.at ("deckB_1"), std::vector<std::string> { "AES67 deck B MAIN:receive_MAIN1" });
     EXPECT_EQ (map.jack.count ("deckA_2"), 0u);
     EXPECT_EQ (map.deviceChannels.at ("analog_1"), 3);
-    EXPECT_EQ (map.jack.size(), 43u + 2u);
+    EXPECT_EQ (map.jack.size(), 36u + 2u);
 }
 
 TEST (ConfigEdits, DeckSourceOfNeedsAllFortyOneLinks)
@@ -227,7 +227,7 @@ TEST (ConfigEdits, DeckSourceOfNeedsAllFortyOneLinks)
     missing.jack.erase ("deckA_cue_9");
     EXPECT_FALSE (a3app::deckSourceOf (missing, 1));
     auto mixed = map;
-    mixed.jack["deckA_aux_2"] = { "AES67 deck A:receive_AUX2" };
+    mixed.jack["deckA_aux_2"] = { "AES67 deck A AUX:receive_AUX2" };
     EXPECT_FALSE (a3app::deckSourceOf (mixed, 1));
     auto extra = map;
     extra.jack["deckA_1"].push_back ("other:port");
@@ -259,7 +259,7 @@ TEST (ConfigEdits, AnUnnamedStereoPairFollowsTheSlotsSource)
     using Peers = std::vector<std::string>;
     EXPECT_EQ (peersOf (map, "deckA_stereo_L"), Peers { "StemDeck-A:master_L" });
     EXPECT_EQ (peersOf (map, "deckA_stereo_R"), Peers { "StemDeck-A:master_R" });
-    EXPECT_EQ (peersOf (map, "deckB_stereo_R"), Peers { "AES67 deck B:receive_MASTER_R" });
+    EXPECT_EQ (peersOf (map, "deckB_stereo_R"), Peers { "AES67 deck B STEREO:receive_MASTER_R" });
     EXPECT_EQ (map.jack.count ("deckC_stereo_L"), 0u) << "a hand-edited slot has no source to follow";
     EXPECT_EQ (peersOf (map, "deckD_stereo_L"), Peers { "mine:left" });
     EXPECT_EQ (map.jack.count ("deckD_stereo_R"), 0u) << "a pair the user named one side of is the user's";
@@ -280,7 +280,7 @@ TEST (ConfigEdits, ALoadedFileWithoutTheStereoPairGetsIt)
     file.deleteFile();
     ASSERT_TRUE (loaded) << error;
     EXPECT_EQ (peersOf (loaded->io, "deckA_stereo_L"), std::vector<std::string> { "StemDeck-A:master_L" });
-    EXPECT_EQ (peersOf (loaded->io, "deckB_stereo_R"), std::vector<std::string> { "AES67 deck B:receive_MASTER_R" });
+    EXPECT_EQ (peersOf (loaded->io, "deckB_stereo_R"), std::vector<std::string> { "AES67 deck B STEREO:receive_MASTER_R" });
 }
 
 TEST (ConfigEdits, DecksAreBoundedAndNamedInTheFile)

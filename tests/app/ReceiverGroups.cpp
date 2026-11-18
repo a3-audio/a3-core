@@ -32,7 +32,7 @@ TEST (ReceiverGroups, EveryPortIsAnEngineInput)
     }
 }
 
-TEST (ReceiverGroups, BFormatAndReturnAreSixteenPorts)
+TEST (ReceiverGroups, BFormatIsSixteenPortsAndTheReturnNine)
 {
     const auto groups = a3app::receiverGroups (a3test::engineConfig (4, 2));
     const auto* bformat = find (groups, "deck B B-format");
@@ -40,11 +40,11 @@ TEST (ReceiverGroups, BFormatAndReturnAreSixteenPorts)
     ASSERT_NE (bformat, nullptr);
     ASSERT_NE (ret, nullptr);
     ASSERT_EQ (bformat->ports.size(), 16u);
-    ASSERT_EQ (ret->ports.size(), 16u);
+    ASSERT_EQ (ret->ports.size(), 9u);   // 2nd order since 2026-11-18
     EXPECT_EQ (bformat->ports.front(), "deckB_1");
     EXPECT_EQ (bformat->ports.back(), "deckB_16");
     EXPECT_EQ (ret->ports.front(), "deckB_aux_1");
-    EXPECT_EQ (ret->ports.back(), "deckB_aux_16");
+    EXPECT_EQ (ret->ports.back(), "deckB_aux_9");
     EXPECT_FALSE (bformat->sharedWithSoundCard);
     EXPECT_FALSE (ret->sharedWithSoundCard);
 }

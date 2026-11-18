@@ -202,7 +202,7 @@ TEST (DeckAudioState, AStereoDeckIsPresentAndTheModeFollowsTheGraph)
     a3app::setDeckSource (map, 2, a3app::DeckSource::aes67);
     a3app::setDeckSource (map, 3, a3app::DeckSource::local);
     const std::vector<std::string> stereoA { "StemDeck-A:master_L", "StemDeck-A:master_R" };
-    const std::vector<std::string> stereoB { "AES67 deck B:receive_MASTER_L", "AES67 deck B:receive_MASTER_R" };
+    const std::vector<std::string> stereoB { "AES67 deck B STEREO:receive_MASTER_L", "AES67 deck B STEREO:receive_MASTER_R" };
 
     // A in stereo (its B-format gone), B in B-format (its pair gone), C with both present.
     const auto missing = joined (bformatPeers (1, a3app::DeckSource::local), stereoB);

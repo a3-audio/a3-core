@@ -42,7 +42,21 @@ class BootChoice(unittest.TestCase):
         self.assertNotIn("Conflicts=", "\n".join(drop_in_lines(TWO_DECK_OFF)))
 
     def test_the_b_format_decks_run_unconditioned(self):
-        self.assertFalse((UNITS / "stemdeck@.service.d").exists())
+        """No drop-in on stemdeck@ conditions the instances: they run on a Core. (aes67-sender.conf
+        only binds each one to its AES67 senders.)"""
+        for drop_in in (UNITS / "stemdeck@.service.d").glob("*.conf"):
+            with self.subTest(drop_in=drop_in.name):
+                self.assertNotIn("ExecCondition", drop_in.read_text())
+
+    def test_a_core_deck_sends_over_aes67_and_its_senders_follow_the_cores_clock(self):
+        """2026-11-18: the Core's decks are senders like any deck host's; the PTP0 driver is a3-aes67."""
+        deck = (UNITS / "stemdeck@.service.d" / "aes67-sender.conf").read_text()
+        self.assertIn("Wants=a3-aes67-deck@%i.service", deck)
+        self.assertIn("After=a3-aes67-deck@%i.service", deck)
+        self.assertIn("Environment=STEMDECK_LINK_MAP=/usr/share/stemdeck/links-aes67-core.json", deck)
+        sender = (UNITS / "a3-aes67-deck@.service.d" / "core-clock.conf").read_text()
+        self.assertIn("Wants=a3-aes67.service", sender)
+        self.assertIn("After=a3-aes67.service", sender)
 
     def test_a3_main_wants_the_engine(self):
         self.assertIn("a3-engine.service", main_wants())

@@ -71,8 +71,12 @@ std::vector<std::string> retiredDeckPorts (int decks)
 {
     std::vector<std::string> names;
     for (int slot = 1; slot <= decks; ++slot)
+    {
         for (const char* base : { "_cue", "_aux" })
             addPair (names, "deck" + deckLetters (slot) + base);
+        for (int i = deckAuxChannels + 1; i <= 16; ++i)   // the AUX bus was 3rd order until 2026-11-18
+            names.push_back ("deck" + deckLetters (slot) + "_aux_" + std::to_string (i));
+    }
     return names;
 }
 
@@ -107,8 +111,8 @@ PortSlots bindPortSlots (const a3::EngineConfig& config, const a3::SpatialConfig
     {
         for (auto& channel : deck.bformat)
             slots.inputs.push_back (&channel);
-        for (auto& channel : deck.aux)
-            slots.inputs.push_back (&channel);
+        for (int i = 0; i < deckAuxChannels; ++i)   // 2nd order: the engine reads silence above
+            slots.inputs.push_back (&deck.aux[(size_t) i]);
         for (auto& channel : deck.cue)
             slots.inputs.push_back (&channel);
         for (auto& side : deck.stereo)
