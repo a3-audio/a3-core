@@ -4,9 +4,10 @@
 
 Every stream the rig sends is one row: its SDP name, multicast group, packet
 time and where its channels come from. Core and StemDeck resolve the table
-instead of carrying addresses of their own. The deck groups (from .244) must
-not move; the Core streams live in 239.69.200.x, clear of every deck slot's
-group. The 12-channel "AES67 <host> out" (239.69.150.243) was retired on
+instead of carrying addresses of their own. A deck sends three streams, MAIN,
+AUX and CUE (2026-11-18, the Core's way: one session each), every one in a block of
+its own with one group per deck slot; the Core streams live in 239.69.200.x, clear
+of every deck slot's group. The 12-channel "AES67 <host> out" (239.69.150.243) was retired on
 2026-11-17: "AES67 Core REC" carries what it carried. Every packet has to fit one 1500-byte MTU frame.
 """
 
@@ -27,6 +28,11 @@ RTP_HEADER = 12
 BYTES_PER_SAMPLE = 3   # L24
 SAMPLE_RATE_KHZ = 44.1
 A3_RANGE = ipaddress.ip_network("239.69.0.0/16")
+DECK_KEYS = ["deck-main", "deck-aux", "deck-cue"]
+# key: (session ends in, channels, first group); 1024 groups apart, so no slot up to ZZ (702) reaches the next.
+DECK_STREAMS = {"deck-main": ("MAIN", 16, "239.69.160.0"),
+                "deck-aux": ("AUX", 16, "239.69.164.0"),
+                "deck-cue": ("CUE", 9, "239.69.168.0")}
 
 
 def samples_per_packet(ptime_ms):
@@ -53,7 +59,7 @@ class StreamTable(unittest.TestCase):
     def test_the_table_exists_with_the_five_entries(self):
         self.assertEqual(
             [s["key"] for s in self.streams],
-            ["deck", "core-main", "core-booth", "core-rec", "core-phones"])
+            DECK_KEYS + ["core-main", "core-booth", "core-rec", "core-phones"])
 
     def test_the_hosts_stream_is_gone(self):
         self.assertNotIn("legacy-out", self.by_key)
@@ -75,25 +81,38 @@ class StreamTable(unittest.TestCase):
             group = ipaddress.ip_address(resolved_group(s, self.hosts))
             self.assertIn(group, A3_RANGE, s["key"])
 
-    def test_the_deck_addresses_did_not_move(self):
-        self.assertEqual(self.by_key["deck"]["group_base"], "239.69.150.244")
-        self.assertEqual(self.by_key["deck"]["group_step"], 1)
-        self.assertTrue(self.by_key["deck"]["legacy"])
+    def test_a_deck_sends_main_aux_and_cue_as_separate_sessions(self):
+        for key, (name, channels, base) in DECK_STREAMS.items():
+            with self.subTest(key=key):
+                row = self.by_key[key]
+                self.assertEqual(row["session"], "AES67 deck {deck} " + name)
+                self.assertEqual(row["sender"], "deck")
+                self.assertEqual(row["channels"], channels)
+                self.assertEqual(row["source"], "fixed")
+                self.assertEqual(row["group_base"], base)
+                self.assertEqual(row["group_step"], 1)
+                self.assertEqual(row["ptime"], 0.25)
+                self.assertFalse(row["legacy"])
+        self.assertNotIn("deck", self.by_key, "the 41-channel stream is gone")
 
     def test_the_new_core_groups_are_in_the_200_block(self):
         for i, key in enumerate(["core-main", "core-booth", "core-rec", "core-phones"], 1):
             self.assertEqual(self.by_key[key]["group"], "239.69.200.%d" % i, key)
 
     def test_no_deck_slot_up_to_zz_reaches_another_stream(self):
-        deck = self.by_key["deck"]
-        base = int(ipaddress.ip_address(deck["group_base"]))
         taken = {ipaddress.ip_address(resolved_group(s, self.hosts))
                  for s in self.streams if "group_base" not in s}
         taken.add(ipaddress.ip_address(self.hosts["aes67-core"]))
-        for index in range(702):   # A = 0 ... ZZ = 701
-            group = ipaddress.ip_address(base + deck["group_step"] * index)
-            self.assertIn(group, A3_RANGE, "slot %d" % index)
-            self.assertNotIn(group, taken, "slot %d" % index)
+        seen = set()
+        for key in DECK_KEYS:
+            deck = self.by_key[key]
+            base = int(ipaddress.ip_address(deck["group_base"]))
+            for index in range(702):   # A = 0 ... ZZ = 701
+                group = ipaddress.ip_address(base + deck["group_step"] * index)
+                self.assertIn(group, A3_RANGE, "%s slot %d" % (key, index))
+                self.assertNotIn(group, taken, "%s slot %d" % (key, index))
+                self.assertNotIn(group, seen, "%s slot %d" % (key, index))
+                seen.add(group)
 
     def test_fixed_streams_fit_one_packet(self):
         fixed = [s for s in self.streams if s["source"] == "fixed"]
@@ -116,20 +135,12 @@ class StreamTable(unittest.TestCase):
                 self.assertEqual(s["sender"], "core", s["key"])
 
     def test_the_deck_and_sap_listeners_are_still_there(self):
+        """The old listener and hosts keys stay: a renderer from before the table finds a deck by them."""
         names = {l["name"]: l for l in self.data["listeners"]}
         self.assertEqual(names["aes67.deck"]["host"], "aes67-deck-{deck}")
         self.assertEqual(names["aes67.sap"]["port"], 9875)
         self.assertEqual(self.hosts["aes67-core"], "239.69.150.243")
         self.assertEqual(self.hosts["aes67-deck-a"], "239.69.150.244")
-
-    def test_the_deck_row_is_the_deck_listener(self):
-        """deck says what aes67.deck says: a receiver set up from the
-        listener still finds it."""
-        names = {l["name"]: l for l in self.data["listeners"]}
-        deck, listener = self.by_key["deck"], names["aes67.deck"]
-        self.assertTrue(deck["session"].startswith("AES67 deck "))
-        self.assertEqual(deck["group_base"], self.hosts[listener["host"].format(deck="a")])
-        self.assertEqual(deck["port"], listener["port"])
 
 
 if __name__ == "__main__":

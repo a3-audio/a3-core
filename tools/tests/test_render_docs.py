@@ -96,10 +96,11 @@ class TheTables(unittest.TestCase):
 class TheAes67Table(unittest.TestCase):
     def test_the_aes67_table_lists_every_stream(self):
         rows = render_docs.aes67_table(TRUTH).splitlines()[2:]
-        self.assertEqual(len(rows), 5)
+        self.assertEqual(len(rows), 7)
         text = "\n".join(rows)
         self.assertNotIn("AES67 {host} out", text)
-        for session in ("AES67 deck {deck}", "AES67 Core MAIN",
+        for session in ("AES67 deck {deck} MAIN", "AES67 deck {deck} AUX", "AES67 deck {deck} CUE",
+                        "AES67 Core MAIN",
                         "AES67 Core BOOTH", "AES67 Core REC", "AES67 Core PHONES"):
             self.assertIn(session, text)
         for endpoint in ("239.69.200.3:5004", "239.69.200.1:5004",
@@ -107,12 +108,15 @@ class TheAes67Table(unittest.TestCase):
             self.assertIn(endpoint, text)
 
     def test_a_deck_stream_moves_one_group_a_slot(self):
-        row = [r for r in render_docs.aes67_table(TRUTH).splitlines()
-               if "deck {deck}" in r][0]
-        self.assertIn("239.69.150.244", row)
-        self.assertIn("slot", row)
-        self.assertIn("0.25", row)
-        self.assertIn("41", row)
+        rows = {name: [r for r in render_docs.aes67_table(TRUTH).splitlines()
+                       if f"deck {{deck}} {name}" in r][0]
+                for name in ("MAIN", "AUX", "CUE")}
+        for name, (group, channels) in {"MAIN": ("239.69.160.0", "16"), "AUX": ("239.69.164.0", "16"),
+                                        "CUE": ("239.69.168.0", "9")}.items():
+            self.assertIn(group, rows[name])
+            self.assertIn("slot", rows[name])
+            self.assertIn("0.25", rows[name])
+            self.assertIn(f"| {channels} |", rows[name])
 
     def test_a_zone_stream_counts_its_speakers_plus_the_sub(self):
         row = [r for r in render_docs.aes67_table(TRUTH).splitlines()

@@ -29,8 +29,9 @@
   "  address) or group_base + group_step (+1 per deck slot), port, ptime in ms, source",
   "  (zone:main|zone:booth|pair:rec|pair:phones take their channels from the layout; fixed",
   "  has channels), legacy. Packets must fit MTU 1500: at most 22 channels at 0.5 ms, 44 at",
-  "  0.25 ms. The deck groups (from .244) do not move; the Core streams live in",
-  "  239.69.200.x, out of reach of the deck slots (A = .244 ... ZZ = 239.69.153.177)."
+  "  0.25 ms. A deck sends deck-main, deck-aux and deck-cue (2026-11-18), one session each,",
+  "  groups 239.69.160.x / .164.x / .168.x from the deck's slot; the Core streams live in",
+  "  239.69.200.x, out of reach of the deck slots (A = first ... ZZ = first + 701)."
  ],
  "version": 1,
  "network": {
@@ -108,7 +109,7 @@
   {"name": "prolink.status", "program": "prolink", "role": "status", "host": "any", "port": 50002,
    "carries": "Pro DJ Link status packets (broadcast, not OSC)"},
   {"name": "aes67.deck", "program": "aes67", "role": "deck", "host": "aes67-deck-{deck}", "port": 5004,
-   "carries": "one deck's 41 channels: MAIN1-16, AUX1-16, CUE1-9 (L24, 44.1 kHz, ptime 0.25 ms), sess.name \"AES67 deck <X>\"; the receiver needs net.mtu = 1500 (the default 1280 truncates the 1365-byte RTP packet); not OSC"},
+   "carries": "one deck's three streams (aes67_streams: deck-main 16, deck-aux 16, deck-cue 9 channels; L24, 44.1 kHz, ptime 0.25 ms), sess.name \"AES67 deck <X> MAIN|AUX|CUE\"; the receiver needs net.mtu = 1500; not OSC"},
   {"name": "aes67.sap", "program": "aes67", "role": "sap", "host": "sap", "port": 9875,
    "carries": "AES67 stream announcements (SAP/SDP), multicast on the audio socket, every sender and receiver; not OSC"},
   {"name": "ptp4l.event", "program": "ptp4l", "role": "event", "host": "ptp", "port": 319,
@@ -117,8 +118,12 @@
    "carries": "PTP general messages (announce, follow-up); not OSC"}
  ],
  "aes67_streams": [
-  {"key": "deck", "session": "AES67 deck {deck}", "sender": "deck", "group_base": "239.69.150.244",
-   "group_step": 1, "port": 5004, "ptime": 0.25, "source": "fixed", "channels": 41, "legacy": true},
+  {"key": "deck-main", "session": "AES67 deck {deck} MAIN", "sender": "deck", "group_base": "239.69.160.0",
+   "group_step": 1, "port": 5004, "ptime": 0.25, "source": "fixed", "channels": 16, "legacy": false},
+  {"key": "deck-aux", "session": "AES67 deck {deck} AUX", "sender": "deck", "group_base": "239.69.164.0",
+   "group_step": 1, "port": 5004, "ptime": 0.25, "source": "fixed", "channels": 16, "legacy": false},
+  {"key": "deck-cue", "session": "AES67 deck {deck} CUE", "sender": "deck", "group_base": "239.69.168.0",
+   "group_step": 1, "port": 5004, "ptime": 0.25, "source": "fixed", "channels": 9, "legacy": false},
   {"key": "core-main", "session": "AES67 Core MAIN", "sender": "core", "group": "239.69.200.1",
    "port": 5004, "ptime": 0.5, "source": "zone:main", "legacy": false},
   {"key": "core-booth", "session": "AES67 Core BOOTH", "sender": "core", "group": "239.69.200.2",

@@ -727,13 +727,13 @@ class TheDeckStreams(unittest.TestCase):
         hosts = [self.truth.host(n) for n in ("aes67-core", "aes67-deck-a", "aes67-deck-b")]
         self.assertEqual(len(set(hosts)), 3, core)
 
-    def test_deck_stream_listener_names_41_channels(self):
+    def test_deck_stream_listener_names_the_three_streams(self):
         listener = self.truth.listener("aes67", "deck")
         self.assertEqual((listener["name"], listener["host"], listener["port"]),
                          ("aes67.deck", "aes67-deck-{deck}", 5004))
         carries = listener["carries"]
-        for word in ("41 channels", "MAIN1-16", "AUX1-16", "CUE1-9", "L24",
-                     "44.1 kHz", "ptime 0.25 ms", 'sess.name "AES67 deck <X>"',
+        for word in ("deck-main 16", "deck-aux 16", "deck-cue 9", "L24",
+                     "44.1 kHz", "ptime 0.25 ms", 'sess.name "AES67 deck <X> MAIN|AUX|CUE"',
                      "net.mtu = 1500"):
             with self.subTest(word=word):
                 self.assertIn(word, carries)
