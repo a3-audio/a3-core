@@ -40,6 +40,10 @@ DEPLOYMENT_UNIT_NAMES = {"a3-main.service", "a3-aes67.service", "a3-screencast.s
 DEPLOYMENT_DROP_INS = {"beat-analyzer.service.d/a3-core.conf",
                        "stemdeck.service.d/a3-core.conf",
                        "stemdeck.service.d/two-deck-off.conf"}
+# Shipped from the start under /usr/lib (2026-11-18): the deck's AES67 senders on a Core. No copy of
+# them ever lived in the home, so there is nothing for the migration to know about.
+NEW_DROP_INS = {"stemdeck@.service.d/aes67-sender.conf",
+                "a3-aes67-deck@.service.d/core-clock.conf"}
 PACKAGED = "/usr/lib/systemd/user"
 
 
@@ -92,7 +96,7 @@ class EveryUnitShipsOnce(unittest.TestCase):
 
     def test_the_deployment_ships_its_units_and_drop_ins_under_usr_lib(self):
         self.assertEqual(user_units_in(staged(self, DEPLOYMENT_STAGE)),
-                         DEPLOYMENT_UNIT_NAMES | DEPLOYMENT_DROP_INS)
+                         DEPLOYMENT_UNIT_NAMES | DEPLOYMENT_DROP_INS | NEW_DROP_INS)
 
     def test_no_unit_is_in_both_packages(self):
         app = user_units_in(staged(self, APP_STAGE))
